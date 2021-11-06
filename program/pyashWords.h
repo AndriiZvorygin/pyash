@@ -164,7 +164,7 @@
 #define moral_GRAMMAR 0x660F // mroh
 #define health_GRAMMAR 0x4B97 // glah
 #define paragraph_GRAMMAR 0x4E27 // prah
-#define social_GRAMMAR 0x404F // syih
+#define social_GRAMMAR 0x804F // syi7h
 #define cessative_aspect_GRAMMAR 0x273E // qa
 #define curious_GRAMMAR 0x4617 // krih
 #define intensifier_GRAMMAR 0x4457 // tfih
@@ -1018,6 +1018,7 @@
 #define heat_WORD 0xEA0D // cyuc
 #define remains_WORD 0xE82A // twic
 #define equally_WORD 0x4809 // syip
+#define equally_GRAMMAR 0x404F // syih
 #define box_WORD 0x2924 // pwak
 #define pointed_WORD 0xC8AA // tcif
 #define principle_WORD 0x4844 // psip
