@@ -123,7 +123,8 @@
 #define vialis_case_GRAMMAR 0x2CBE // we
 #define cold_GRAMMAR 0x436F // clih
 #define peace_GRAMMAR 0x4027 // pyih
-#define natural_GRAMMAR 0x4E57 // trah
+#define comparative_degree_GRAMMAR 0x4E57 // trah
+#define natural_GRAMMAR 0x8E57 // tra7h
 #define except_GRAMMAR 0x293E // su
 #define desire_GRAMMAR 0x4917 // kwah
 #define probability_GRAMMAR 0x323E // bo
@@ -6521,6 +6522,7 @@
 #define theorize_WORD 0x90CC // fri7s
 #define bergamot_WORD 0x1488 // hbo7m
 #define moo_WORD 0x0A21 // mwum
+#define moo_GRAMMAR 0x510F // mwuh
 #define square_rigged_WORD 0xAA39 // qwut
 #define genealogist_WORD 0xF17A // xla7c
 #define perihelion_WORD 0x7364 // ple7n
@@ -7717,6 +7719,7 @@
 #define marshallese_WORD 0xF101 // mya7c
 #define medially_WORD 0x9801 // myi2s
 #define miaow_WORD 0x1C08 // hmo2m
+#define miaow_GRAMMAR 0x880F // mya7h
 #define micron_WORD 0x3CC1 // mro2k
 #define nymphomania_WORD 0x7B21 // mwe2n
 #define quantifier_WORD 0xD982 // kfa2f
