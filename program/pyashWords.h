@@ -58,8 +58,7 @@
 #define illative_case_GRAMMAR 0x4157 // twih
 #define directive_mood_GRAMMAR 0x227E // di
 #define elective_quantifier_GRAMMAR 0x4B57 // tlah
-#define what_GRAMMAR 0x2C5E // ke
-#define question_word_GRAMMAR 0x4D57 // tcah
+#define question_GRAMMAR 0x2C5E // ke
 #define copula_GRAMMAR 0x26BE // ja
 #define person_GRAMMAR 0x486F // cyah
 #define other_GRAMMAR 0x4B6F // clah
@@ -370,6 +369,7 @@
 #define patient_case_GRAMMAR 0x41D7 // xwih
 #define prehodiernal_GRAMMAR 0x335E // xo
 #define pro_sentence_GRAMMAR 0x6327 // ploh
+#define containers_WORD 0x6BB0 // hven
 #define to_case_GRAMMAR 0x5F17 // kxeh
 #define causative_GRAMMAR 0x6A17 // ks6h
 #define binary_value_GRAMMAR 0x448F // bvih
@@ -461,7 +461,6 @@
 #define nth_power_GRAMMAR 0x6CDE // ne2
 #define dis__GRAMMAR 0x809F // dyi7h
 #define de__GRAMMAR 0x4E7E // de7
-#define who_GRAMMAR 0x6117 // kwoh
 #define com__GRAMMAR 0xA117 // kwo7h
 #define im__GRAMMAR 0x800F // myi7h
 #define _oid_GRAMMAR 0x629F // dzoh
@@ -2872,7 +2871,6 @@
 #define mail_carrier_WORD 0xA9D6 // vrat
 #define maturation_WORD 0x6DC9 // sr6n
 #define pro_sentence_WORD 0xECE4 // pxoc
-#define containers_WORD 0x6BB0 // hven
 #define disapproving_WORD 0x6993 // dvan
 #define projector_WORD 0x2B04 // pyek
 #define inhibition_WORD 0xA81A // xyit
@@ -3098,7 +3096,6 @@
 #define past_passive_participle_WORD 0x881A // xyis
 #define locative_directional_case_WORD 0x2B8A // tfek
 #define frequently_asked_questions_WORD 0x6939 // qwan
-#define given_WORD 0x6892 // gvin
 #define english_WORD 0x88D9 // qris
 #define french_WORD 0xEBCC // frec
 #define raised_WORD 0x49E2 // kxap
@@ -3170,7 +3167,6 @@
 #define salute_WORD 0x0973 // dlam
 #define jupiter_WORD 0x48B0 // hvip
 #define navigation_WORD 0x6BF1 // bxen
-#define gifted_WORD 0x89F3 // dxas
 #define poland_WORD 0x6D64 // pl6n
 #define synonymous_WORD 0xADC1 // mr6t
 #define bridle_WORD 0x09E4 // pxam
