@@ -46,7 +46,8 @@
 #define proximity_GRAMMAR 0x4A17 // ksah
 #define demonstrative_GRAMMAR 0x4A57 // tsah
 #define clause_tail_GRAMMAR 0x305E // ko
-#define but_GRAMMAR 0x4827 // pyah
+#define but_GRAMMAR 0x5027 // pyuh
+#define love_gender_GRAMMAR 0x4827 // pyah
 #define universal_quantifier_GRAMMAR 0x20BE // wi
 #define feminine_gender_GRAMMAR 0x22BE // ji
 #define plural_number_GRAMMAR 0x289E // pu
@@ -56,6 +57,7 @@
 #define there_GRAMMAR 0x4B17 // klah
 #define elative_case_GRAMMAR 0x4957 // twah
 #define illative_case_GRAMMAR 0x4157 // twih
+#define desire_gender_GRAMMAR 0x8157 // twi7h
 #define directive_mood_GRAMMAR 0x227E // di
 #define elective_quantifier_GRAMMAR 0x4B57 // tlah
 #define question_GRAMMAR 0x2C5E // ke
@@ -150,7 +152,7 @@
 #define henry_GRAMMAR 0x5E6F // creh
 #define pain_GRAMMAR 0x6557 // tcoh
 #define laugh_GRAMMAR 0x4877 // ryah
-#define wise_GRAMMAR 0x418F // bwih
+#define wise_gender_GRAMMAR 0x418F // bwih
 #define possessive_marker_GRAMMAR 0x2C7E // ye
 #define commissive_mood_GRAMMAR 0x283E // mu
 #define degree_GRAMMAR 0x469F // drih
@@ -199,7 +201,7 @@
 #define sacrifice_GRAMMAR 0x4C17 // kfah
 #define energy_GRAMMAR 0x5E37 // nreh
 #define hate_GRAMMAR 0x409F // dyih
-#define rational_gender_GRAMMAR 0x636F // cloh
+//#define rational_gender_GRAMMAR 0x636F // cloh
 #define enjoy_GRAMMAR 0x4B9F // dlah
 #define despair_GRAMMAR 0x4A27 // psah
 #define vegetal_gender_GRAMMAR 0x5B4F // sleh
@@ -222,7 +224,8 @@
 #define lonely_GRAMMAR 0x6317 // kloh
 #define charm_GRAMMAR 0x6617 // kroh
 #define enthusiasm_GRAMMAR 0x5557 // tcuh
-#define inductive_mood_GRAMMAR 0x5517 // kcuh
+#define inductive_mood_GRAMMAR 0x9517 // kcu7h
+#define choice_gender_GRAMMAR 0x5517 // kcuh
 #define discourse_context_GRAMMAR 0x275E // xa
 #define nervous_GRAMMAR 0x4997 // gwah
 #define aspect_GRAMMAR 0x5A27 // pseh
@@ -369,7 +372,6 @@
 #define patient_case_GRAMMAR 0x41D7 // xwih
 #define prehodiernal_GRAMMAR 0x335E // xo
 #define pro_sentence_GRAMMAR 0x6327 // ploh
-#define containers_WORD 0x6BB0 // hven
 #define to_case_GRAMMAR 0x5F17 // kxeh
 #define causative_GRAMMAR 0x6A17 // ks6h
 #define binary_value_GRAMMAR 0x448F // bvih
@@ -489,6 +491,8 @@
 #define _ible_GRAMMAR 0x363E // b6
 #define _naphthol_GRAMMAR 0x64DE // na2
 #define _ose_GRAMMAR 0x628F // bzoh
+#define equally_GRAMMAR 0x404F // syih
+#define containers_WORD 0x6BB0 // hven
 #define infinitive_WORD 0xA830 // hnit
 #define nominative_case_WORD 0x2930 // hnak
 #define accusative_case_WORD 0x2910 // hkak
@@ -1017,7 +1021,6 @@
 #define heat_WORD 0xEA0D // cyuc
 #define remains_WORD 0xE82A // twic
 #define equally_WORD 0x4809 // syip
-#define equally_GRAMMAR 0x404F // syih
 #define box_WORD 0x2924 // pwak
 #define pointed_WORD 0xC8AA // tcif
 #define principle_WORD 0x4844 // psip
@@ -1110,7 +1113,7 @@
 #define energy_WORD 0xA8C6 // nrit
 #define hate_WORD 0xAB68 // hcet
 #define centre_WORD 0xAB48 // hset
-#define rational_gender_WORD 0x6870 // hrin
+#define _gender_WORD 0x6870 // hrin
 #define enjoy_WORD 0xAC68 // hcot
 #define brief_WORD 0x4870 // hrip
 #define worship_WORD 0x4B50 // htep
@@ -3096,6 +3099,7 @@
 #define past_passive_participle_WORD 0x881A // xyis
 #define locative_directional_case_WORD 0x2B8A // tfek
 #define frequently_asked_questions_WORD 0x6939 // qwan
+#define given_WORD 0x6892 // gvin
 #define english_WORD 0x88D9 // qris
 #define french_WORD 0xEBCC // frec
 #define raised_WORD 0x49E2 // kxap
@@ -3167,6 +3171,7 @@
 #define salute_WORD 0x0973 // dlam
 #define jupiter_WORD 0x48B0 // hvip
 #define navigation_WORD 0x6BF1 // bxen
+#define gifted_WORD 0x89F3 // dxas
 #define poland_WORD 0x6D64 // pl6n
 #define synonymous_WORD 0xADC1 // mr6t
 #define bridle_WORD 0x09E4 // pxam
