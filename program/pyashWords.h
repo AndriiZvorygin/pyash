@@ -492,7 +492,6 @@
 #define _naphthol_GRAMMAR 0x64DE // na2
 #define _ose_GRAMMAR 0x628F // bzoh
 #define equally_GRAMMAR 0x404F // syih
-#define containers_WORD 0x6BB0 // hven
 #define infinitive_WORD 0xA830 // hnit
 #define nominative_case_WORD 0x2930 // hnak
 #define accusative_case_WORD 0x2910 // hkak
@@ -2874,6 +2873,7 @@
 #define mail_carrier_WORD 0xA9D6 // vrat
 #define maturation_WORD 0x6DC9 // sr6n
 #define pro_sentence_WORD 0xECE4 // pxoc
+#define containers_WORD 0x6BB0 // hven
 #define disapproving_WORD 0x6993 // dvan
 #define projector_WORD 0x2B04 // pyek
 #define inhibition_WORD 0xA81A // xyit
