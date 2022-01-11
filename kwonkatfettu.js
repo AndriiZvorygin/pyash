@@ -102,7 +102,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
         psas += (`${pyactlat}: ${pyacryan[1]} \\\\\n`);
       }
       if (pyacryan.length == 3) {
-        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${pyacryan[2]}\\\\\n`);
+	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
+        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));
@@ -127,7 +128,9 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
         psas +=(`${hnuctlat}: ${hnucryan[1]} \\\\\n`);
       }
       if (hnucryan.length == 3) {
-        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${hnucryan[2]}\\\\\n`);
+	const pyactlat = hnucryan[1];
+	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : hnucryan[3];
+        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));
@@ -178,7 +181,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
         if (/genitive_case_$|possessed_case_$/.test(psut[kwichkom])) {
           return false;
         }
-	return (/case_$/.test(psut[kwichkom]));
+	return (/case_$|intransitive_$/.test(psut[kwichkom]));
     });
     let grammatical_case_strings = grammatical_cases.map((psut) => {
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
