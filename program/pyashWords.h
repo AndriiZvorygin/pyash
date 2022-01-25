@@ -7538,6 +7538,7 @@
 #define franc_tireur_WORD 0xF160 // hfa7c
 #define hagiography_WORD 0xCDD0 // hx6f
 #define hexane_WORD 0x73A0 // hze7n
+#define isolationism_WORD 0x982B // lwi2s
 #define penetrations_WORD 0x8DE4 // px6s
 #define pluviometer_WORD 0x1358 // hle7m
 #define presbyopia_WORD 0x500E // ryi7p
@@ -7548,6 +7549,7 @@
 #define wormhole_WORD 0x7C28 // hwo2n
 #define aliphatic_WORD 0x3082 // kfi7k
 #define allyl_WORD 0xF06D // cli7c
+#define archived_WORD 0xB992 // gva2t
 #define asthenia_WORD 0x792C // fwa2n
 #define centuple_WORD 0x5248 // hsu7p
 #define detections_WORD 0xEDEA // tx6c
@@ -7572,6 +7574,7 @@
 #define boolean_GRAMMAR 0x538F // bluh
 #define brutalization_WORD 0xEA51 // bzuc
 #define coca_cola_WORD 0x3422 // kwo7k
+#define computerization_WORD 0xF8C1 // mri2c
 #define golliwog_WORD 0x3032 // gwi7k
 #define ido_WORD 0xB482 // kfo7t
 #define molly_guard_WORD 0x0C0B // lyom
