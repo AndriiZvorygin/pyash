@@ -5,4 +5,4 @@ cat body.tex >> kwon.tex
 cat footer.tex >> kwon.tex
 lualatex kwon.tex
 lualatex kwon.tex
-pdfbook2 kwon.pdf --paper=letterpaper  --top-margin=10 --bottom-margin=5 --outer-margin=20 --signature=48 --inner-margin=80
+pdfbook2 kwon.pdf -s --paper=letterpaper  --top-margin=10 --bottom-margin=5 --outer-margin=20 --signature=48 --inner-margin=80
