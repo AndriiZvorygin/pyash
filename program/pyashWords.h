@@ -463,7 +463,6 @@
 #define nth_power_GRAMMAR 0x6CDE // ne2
 #define dis__GRAMMAR 0x809F // dyi7h
 #define de__GRAMMAR 0x4E7E // de7
-#define com__GRAMMAR 0xA117 // kwo7h
 #define im__GRAMMAR 0x800F // myi7h
 #define _oid_GRAMMAR 0x629F // dzoh
 #define en__GRAMMAR 0x4C5E // ke7
@@ -4310,7 +4309,6 @@
 #define twenty_five_WORD 0x3048 // hsi7k
 #define disclaimers_WORD 0x9030 // hni7s
 #define opportunities_WORD 0x8AF2 // gxus
-#define n1st_WORD 0xB818 // hyi2t
 #define planted_WORD 0xB920 // hpa2t
 #define easier_WORD 0x9848 // hsi2s
 #define moonlight_WORD 0x7930 // hna2n
@@ -4381,7 +4379,6 @@
 #define duly_WORD 0xAD73 // dl6t
 #define nicholas_WORD 0x9830 // hni2s
 #define portuguese_WORD 0x3020 // hpi7k
-#define n4th_WORD 0xB9CA // tra2t
 #define faculties_WORD 0xB162 // kla7t
 #define hebrew_WORD 0x4ADA // xrup
 #define bits_WORD 0xB088 // hbi7t
@@ -4427,7 +4424,6 @@
 #define benjamin_WORD 0x1030 // hni7m
 #define nile_WORD 0xF830 // hni2c
 #define roared_WORD 0xB4C6 // nro7t
-#define n5th_WORD 0x3050 // hti7k
 #define constantinople_WORD 0x5048 // hsi7p
 #define inflicted_WORD 0x706A // tli7n
 #define matthew_WORD 0xB208 // hmu7t
@@ -4459,8 +4455,6 @@
 #define dominions_WORD 0x7069 // sli7n
 #define fuller_WORD 0x4A6C // flup
 #define asp_WORD 0x5942 // ksa2p
-#define n6th_WORD 0xB869 // sli2t
-#define n10th_WORD 0x984A // tsi2s
 #define arabic_WORD 0x5170 // hra7p
 #define admiral_WORD 0x79C1 // mra2n
 #define rags_WORD 0x3C70 // hro2k
@@ -4489,15 +4483,12 @@
 #define gallop_WORD 0x4D90 // hg6p
 #define dagger_WORD 0x9198 // hda7s
 #define thrice_WORD 0xB94A // tsa2t
-#define n7th_WORD 0xF848 // hsi2c
 #define selfishness_WORD 0x9048 // hsi7s
 #define tolerably_WORD 0x79CA // tra2n
 #define punctuation_WORD 0x7220 // hpu7n
 #define doe_WORD 0x7208 // hmu7n
 #define ascribed_WORD 0x5950 // hta2p
-#define n8th_WORD 0xF920 // hpa2c
 #define milan_WORD 0x7008 // hmi7n
-#define n9th_WORD 0xF430 // hno7c
 #define guides_WORD 0xB190 // hga7t
 #define statesmen_WORD 0x714A // tsa7n
 #define waistcoat_WORD 0xB028 // hwi7t
@@ -4511,7 +4502,6 @@
 #define ascending_WORD 0x79C8 // hqa2n
 #define dynasty_WORD 0x9930 // hna2s
 #define devised_WORD 0xB0AA // tci7t
-#define n12th_WORD 0xB8CA // tri2t
 #define duel_WORD 0xCA98 // hduf
 #define reluctantly_WORD 0x7308 // hme7n
 #define ridden_WORD 0x78D0 // hxi2n
@@ -4559,7 +4549,6 @@
 #define son_in_law_WORD 0x3130 // hna7k
 #define groom_WORD 0xD930 // hna2f
 #define noticing_WORD 0xB8EA // txi2t
-#define n3rd_WORD 0x784A // tsi2n
 #define proverb_WORD 0xB320 // hpe7t
 #define ridges_WORD 0xF870 // hri2c
 #define cairo_WORD 0xF110 // hka7c
@@ -5516,7 +5505,6 @@
 #define indubitably_WORD 0x5898 // hdi2p
 #define sententious_WORD 0x9330 // hne7s
 #define far_fetched_WORD 0xF1D0 // hxa7c
-#define com__WORD 0x1410 // hko7m
 #define geranium_WORD 0x0BD5 // jrem
 #define amidships_WORD 0x5948 // hsa2p
 #define recorder_WORD 0xB802 // kyi2t
@@ -6201,7 +6189,6 @@
 #define hashish_WORD 0xF9AA // tca2c
 #define half_inch_WORD 0x7884 // pfi2n
 #define irrelevance_WORD 0x6B34 // zwen
-#define n1980s_WORD 0xB344 // pse7t
 #define calends_WORD 0x9962 // kla2s
 #define indent_WORD 0xB409 // syo7t
 #define seychelles_WORD 0x9309 // sye7s
@@ -6883,7 +6870,6 @@
 #define genuflection_WORD 0x4B75 // jlep
 #define hawk_eyed_WORD 0xBBC8 // hqe2t
 #define imprecate_WORD 0x3344 // pse7k
-#define nth_WORD 0xF330 // hne7c
 #define backache_WORD 0x3418 // hyo7k
 #define circumpolar_WORD 0x5A10 // hku2p
 #define dachshund_WORD 0x79B3 // dja2n
@@ -7110,7 +7096,6 @@
 #define panache_WORD 0xED64 // pl6c
 #define semi_weekly_WORD 0x3944 // psa2k
 #define upholster_WORD 0x9924 // pwa2s
-#define n10_20_WORD 0x9829 // swi2s
 #define amniotic_WORD 0x3021 // mwi7k
 #define cyrillic_WORD 0x306D // cli7k
 #define discolouration_WORD 0x7464 // plo7n
@@ -7409,7 +7394,6 @@
 #define mottle_WORD 0xB191 // bva7t
 #define subsume_WORD 0x0AB0 // hvum
 #define _archy_WORD 0xF0CD // cri7c
-#define n10_4_WORD 0x9B98 // hde2s
 #define acute_angled_WORD 0x6A15 // jyun
 #define calligrapher_WORD 0xD162 // kla7f
 #define detoxification_WORD 0x3882 // kfi2k
@@ -7784,7 +7768,6 @@
 #define _ible_WORD 0x4D71 // bl6p
 #define _naphthol_WORD 0xD184 // pfa7f
 #define _ose_WORD 0x8D51 // bz6s
-#define n2000s_WORD 0x6D53 // dz6n
 #define aerodynamic_WORD 0x1C70 // hro2m
 #define anti_federalist_WORD 0x93CC // fre7s
 #define antitoxic_WORD 0x3926 // nwa2k
@@ -7870,7 +7853,6 @@
 #define workaholic_WORD 0x3CE2 // kxo2k
 #define yellowknife_WORD 0xCB2B // lwef
 #define mid_january_WORD 0x7C13 // dyo2n
-#define zhawenim_WORD 0x7335 // jwe7n
 #define _WORD 0xCBA0 // hzef
 #define _WORD 0xCBA0 // hzef
 #endif

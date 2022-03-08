@@ -64,82 +64,10 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     });
     const kwiclwat = kwicsoryanlwatkanyitli;
     //console.log(JSON.stringify(kwiclwat.length));
-    let lyat = ""
-    console.log(`\\section{English to Pyash}`);
-    //console.log(`\\subsection{  }`);
-    let psas = "";
-    for (let i = 0; i < kwiclwat.length; i++) {
-      const kwicryan = kwiclwat[i];
-      const kwictlat = kwicryan[0];
-      if (kwictlat && kwictlat[0].localeCompare(lyat) > 0 && kwicryan[1].length > 0) {
-        lyat = kwictlat[0];
-        psas += `\\subsection{ ${lyat} }\n`;
-      }
-      if (kwicryan.length == 2 && kwicryan[1].length > 0) {
-        psas += `${kwictlat}: ${kwicryan[1]} \\\\\n`;
-      }
-      if (kwicryan.length == 3) {
-        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
-      }
-    }
-    console.log(psas.replace(/_/g,"-"));
-    // pyacso kwon
-    const pyacsoryanlwatkanyitli = pyacsoryanlwat.sort((hyik, tyut) => {
-      return (hyik[0].localeCompare(tyut[0]));
-    });
-    const pyaclwat = pyacsoryanlwatkanyitli;
-    console.log("\\section{Pyash to English}");
-    lyat = "";
-    psas = "";
-    for (let i = 0; i < pyaclwat.length; i++) {
-      const pyacryan = pyaclwat[i];
-      const pyactlat = pyacryan[0];
-      if (pyactlat && pyactlat[0].localeCompare(lyat) > 0) {
-        lyat = pyactlat[0];
-        psas += (`\\subsection{ ${lyat} }\n`);
-      }
-      if (pyacryan.length == 2 && pyacryan[1].length > 0) {
-        psas += (`${pyactlat}: ${pyacryan[1]} \\\\\n`);
-      }
-      if (pyacryan.length == 3) {
-	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
-        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
-      }
-    }
-    console.log(psas.replace(/_/g,"-"));
-    // hnucso kwon
-    const hnucsoryanlwatkanyitli = hnucsoryanlwat.sort((hyik, tyut) => {
-      //console.log(`${hyik[0].substr(2)} ${parseInt(hyik[0].substr(2),16)} ${tyut[0].substr(2)} ${parseInt(tyut[0].substr(2),16)}`);
-      return parseInt(hyik[0].substr(2),16) > parseInt(tyut[0].substr(2),16)? 1 : -1;
-    });
-    const hnuclwat = hnucsoryanlwatkanyitli;
-    console.log("\\section{Pyash Numbers, Rhyming dictionary}");
-    psas = ""
-    lyat = "0";
-    console.log(`\\subsection{ 0 }`);
-    for (let i = 0; i < hnuclwat.length; i++) {
-      const hnucryan = hnuclwat[i];
-      const hnuctlat = hnucryan[0];
-      if (hnuctlat && parseInt(hnuctlat[2], 16) > parseInt(lyat, 16)) {
-        lyat = hnuctlat[2];
-        psas+=(`\\subsection{ ${lyat} }\n`);
-      }
-      if (hnucryan.length == 2 && hnucryan[1].length > 0) {
-        psas +=(`${hnuctlat}: ${hnucryan[1]} \\\\\n`);
-      }
-      if (hnucryan.length == 3) {
-	const pyactlat = hnucryan[1];
-	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : hnucryan[3];
-        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
-      }
-    }
-    console.log(psas.replace(/_/g,"-"));
-    // hgafkwonli
-    console.log("\\end{multicols}");
     console.log("\\begin{multicols}{2}");
     console.log("\\scriptsize");
 	
-    console.log("\\section{Appendix}");
+    console.log("\\section{Grammar}");
     console.log("\\subsection{Grammatical Mood}");
     let grammatical_moods = kwickwonlwat.filter((psut) => {
 	return (/mood_$|clause_$/.test(psut[kwichkom]));
@@ -264,6 +192,79 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	    return `\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${hnuckwon[pyactlat]}: ${kwictlat}\\\\`;
     });
     console.log(grammatical_si_units_strings.join("\n").replace(/_/g,"-"));
+    let lyat = ""
+    console.log(`\\section{English to Pyash}`);
+    //console.log(`\\subsection{  }`);
+    let psas = "";
+    for (let i = 0; i < kwiclwat.length; i++) {
+      const kwicryan = kwiclwat[i];
+      const kwictlat = kwicryan[0];
+      if (kwictlat && kwictlat[0].localeCompare(lyat) > 0 && kwicryan[1].length > 0) {
+        lyat = kwictlat[0];
+        psas += `\\subsection{ ${lyat} }\n`;
+      }
+      if (kwicryan.length == 2 && kwicryan[1].length > 0) {
+        psas += `${kwictlat}: ${kwicryan[1]} \\\\\n`;
+      }
+      if (kwicryan.length == 3) {
+        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
+      }
+    }
+    console.log(psas.replace(/_/g,"-"));
+    // pyacso kwon
+    const pyacsoryanlwatkanyitli = pyacsoryanlwat.sort((hyik, tyut) => {
+      return (hyik[0].localeCompare(tyut[0]));
+    });
+    const pyaclwat = pyacsoryanlwatkanyitli;
+    console.log("\\section{Pyash to English}");
+    lyat = "";
+    psas = "";
+    for (let i = 0; i < pyaclwat.length; i++) {
+      const pyacryan = pyaclwat[i];
+      const pyactlat = pyacryan[0];
+      if (pyactlat && pyactlat[0].localeCompare(lyat) > 0) {
+        lyat = pyactlat[0];
+        psas += (`\\subsection{ ${lyat} }\n`);
+      }
+      if (pyacryan.length == 2 && pyacryan[1].length > 0) {
+        psas += (`${pyactlat}: ${pyacryan[1]} \\\\\n`);
+      }
+	    // command = 'echo \"' + word.toString() + '\" | espeak-ng --stdin --ipa -q ' + ' -v ' + inLangCode;
+      if (pyacryan.length == 3) {
+	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
+        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
+      }
+    }
+    console.log(psas.replace(/_/g,"-"));
+    // hnucso kwon
+    const hnucsoryanlwatkanyitli = hnucsoryanlwat.sort((hyik, tyut) => {
+      //console.log(`${hyik[0].substr(2)} ${parseInt(hyik[0].substr(2),16)} ${tyut[0].substr(2)} ${parseInt(tyut[0].substr(2),16)}`);
+      return parseInt(hyik[0].substr(2),16) > parseInt(tyut[0].substr(2),16)? 1 : -1;
+    });
+    const hnuclwat = hnucsoryanlwatkanyitli;
+    console.log("\\section{Pyash Numbers, Rhyming dictionary}");
+    psas = ""
+    lyat = "0";
+    console.log(`\\subsection{ 0 }`);
+    for (let i = 0; i < hnuclwat.length; i++) {
+      const hnucryan = hnuclwat[i];
+      const hnuctlat = hnucryan[0];
+      if (hnuctlat && parseInt(hnuctlat[2], 16) > parseInt(lyat, 16)) {
+        lyat = hnuctlat[2];
+        psas+=(`\\subsection{ ${lyat} }\n`);
+      }
+      if (hnucryan.length == 2 && hnucryan[1].length > 0) {
+        psas +=(`${hnuctlat}: ${hnucryan[1]} \\\\\n`);
+      }
+      if (hnucryan.length == 3) {
+	const pyactlat = hnucryan[1];
+	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : hnucryan[3];
+        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
+      }
+    }
+    console.log(psas.replace(/_/g,"-"));
+    // hgafkwonli
+    console.log("\\end{multicols}");
     //console.log(flantlatlwat);
     //console.log(flantlatlwatmrut);
   });
