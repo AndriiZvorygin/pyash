@@ -15,7 +15,8 @@ function bvan(kwictlat) {
 }
 
 function ryan(kwickwonli, qristlatpu) {
-	return qristlatpu.split(" ").map((tlat) => {
+        let dluk = qristlatpu.includes(",")? ", " : " ";
+        return qristlatpu.split(dluk).map((tlat) => {
 		return kwickwonli[tlat];	
 	}).join(" ");
 }
@@ -51,20 +52,27 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 		let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
 		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
 	}
+	const kwickwon = qrissokwicmakwonli;
 
 fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) { 
   const qriskwonlwat = JSON.parse(pyashWords);
   let qrissopyacmakwonli = {};
   let qrissoryanlwat = [];
+  let kwicsoryanlwat = [];
   let pyacsoryanlwat = [];
   let hnucsoryanlwat = [];
   let pyackwon = {};
   let qriskwon = {};
   let hnuckwon = {};
+  let kwictlat = "";
 //  let pyacsoqrismakwonli = {};
   for (let i = 0; i < qriskwonlwat.length; i++) {
     if (qriskwonlwat[i].pya == null || qriskwonlwat[i][qrishkom].length <= 1) continue;
     qrissoryanlwat.push([qriskwonlwat[i][qrishkom], qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
+    kwictlat = ryan(kwickwon, qriskwonlwat[i][qrishkom]);
+    if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
+    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
+    }
     pyacsoryanlwat.push([qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i][qrishkom]]);
     hnucsoryanlwat.push([qriskwonlwat[i].hnuc, qriskwonlwat[i].pya, qriskwonlwat[i][qrishkom]]);
 //	  console.log(`${qrissokwicmakwonli[qriskwonlwat[i][qrishkom]]} ${qriskwonlwat[i][qrishkom]}`);
@@ -85,21 +93,32 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     if (err) return Error(err);
     let dictionary = JSON.parse(contents);
     //console.log(dictionary);
+	  // populate blacklist entries
     const bli2s = dictionary[qrishkom].blacklist;
     const bli2scigwic = Object.keys(bli2s);
     for (let i = 0; i < bli2scigwic.length; i++) {
-      qrissoryanlwat.push([bli2scigwic[i].slice(1).replace(/_/g,"-"), bli2s[bli2scigwic[i]].replace(/_/g,"-")]);
+      qrissoryanlwat.push([bli2scigwic[i].slice(1).replace(/_/g,"-"),]);
+      kwictlat = ryan(kwickwon, bli2scigwic[i].slice(1)) && 
+                 ryan(kwickwon, bli2scigwic[i].slice(1)).replace(/_/g,"-");
+      //if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
+      //kwicsoryanlwat.push([kwictlat,  ryan(kwictlat, bli2s[bli2scigwic[i]].replace(/_/g,"-"))]);
+      //}
     }
+	  // sort alphabetically
     const qrissoryanlwatkanyitli = qrissoryanlwat.sort((hyik, tyut) => {
       return (hyik[0].localeCompare(tyut[0]));
     });
+    const kwicsoryanlwatkanyitli = kwicsoryanlwat.sort((hyik, tyut) => {
+      return (hyik[0].localeCompare(tyut[0]));
+    });
     const qrislwat = qrissoryanlwatkanyitli;
+    const kwiclwat = kwicsoryanlwatkanyitli;
     //console.log(JSON.stringify(qrislwat.length));
     console.log("\\begin{multicols}{2}");
     console.log("\\scriptsize");
 	
     console.log(`\\section{${qrissokwicmakwonli["grammar"]}}`);
-    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical mood")}`);
+    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical mood")}}`);
     let grammatical_moods = qriskwonlwat.filter((psut) => {
 	return (/mood_$|clause_$/.test(psut[qrishkom]));
     });
@@ -165,7 +184,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     });
     console.log(grammatical_context_strings.join("\n").replace(/_/g,"-"));
 	  // gender
-    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical gender")}}}`);
+    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical gender")}}`);
     let grammatical_genders = qriskwonlwat.filter((psut) => {
 	return (/gender_$/.test(psut[qrishkom]));
     });
@@ -227,18 +246,18 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     console.log(`\\section{${kwichnim} -> ${kwicpyachnim}}`);
     //console.log(`\\subsection{  }`);
     let psas = "";
-    for (let i = 0; i < qrislwat.length; i++) {
-      const qrisryan = qrislwat[i];
-      const qristlat = qrisryan[0];
-      if (qristlat && qristlat[0].localeCompare(lyat) > 0 && qrisryan[1].length > 0) {
-        lyat = qristlat[0];
+    for (let i = 0; i < kwiclwat.length; i++) {
+      const kwicryan = kwiclwat[i];
+      const kwictlat = kwicryan[0];
+      if (kwictlat && kwictlat[0].localeCompare(lyat) > 0 && kwicryan[1].length > 0) {
+        lyat = kwictlat[0];
         psas += `\\subsection{ ${lyat} }\n`;
       }
-      if (qrisryan.length == 2 && qrisryan[1].length > 0) {
-        psas += `${qristlat}: ${qrisryan[1]} \\\\\n`;
+      if (kwicryan.length == 2 && kwicryan[1].length > 0) {
+        psas += `${kwictlat}: ${kwicryan[1]} \\\\\n`;
       }
-      if (qrisryan.length == 3) {
-        psas+=(`${qristlat}: \\textbf{${qrisryan[1]}} [\\emph{${fyek(qrisryan[1])}}] ${qrisryan[2]} \\\\\n`);
+      if (kwicryan.length == 3) {
+        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));
@@ -262,7 +281,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       }
 	    // command = 'echo \"' + word.toString() + '\" | espeak-ng --stdin --ipa -q ' + ' -v ' + inLangCode;
       if (pyacryan.length == 3) {
-	      console.log(`pyactlat ${pyactlat}`);
+	    //  console.log(`pyactlat ${pyactlat}`);
 	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
         psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
       }
