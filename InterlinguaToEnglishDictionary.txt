@@ -11027,6 +11027,7 @@ grano	(n) grain
 granoncle	(n) great-uncle	
 granose	(adj) grainy	
 granpatre	(n) grandfather	
+granparente     (n) grandparent
 granular	(adj) granular granular v to granulate	
 granulation	(n) granulation	
 granulator	(n) granulater	
