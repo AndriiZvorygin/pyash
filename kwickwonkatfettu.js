@@ -4,8 +4,8 @@
 const fs = require('fs');
 //const input = process.argv[2];
 const qrishkom = "en";
-const kwichkom = "ru";
-const kwichnim = "русский";
+const kwichkom = "qis";
+const kwichnim = "Меджусловјанскы";
 const kwicpyachnim = "пяш";
 const clattsen = require('child_process');
 
@@ -15,10 +15,14 @@ function bvan(kwictlat) {
 }
 
 function ryan(kwickwonli, qristlatpu) {
-        let dluk = qristlatpu.includes(",")? ", " : " ";
-        return qristlatpu.split(dluk).map((tlat) => {
-		return kwickwonli[tlat];	
-	}).join(" ");
+  let dluk = qristlatpu.includes(",")? ", " : " ";
+  const qristlatlwat = qristlatpu.split(dluk);
+  
+  const psas = qristlatlwat.map((tlat) => {
+    const syamtlat = tlat.replace(/-/g,"_").replace(/_$/,"");
+  	return kwickwonli[syamtlat];	
+  }).join(", ");
+  return psas;
 }
 
 function nyif(kwonlwat, tlat) {
@@ -100,9 +104,9 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       qrissoryanlwat.push([bli2scigwic[i].slice(1).replace(/_/g,"-"),]);
       kwictlat = ryan(kwickwon, bli2scigwic[i].slice(1)) && 
                  ryan(kwickwon, bli2scigwic[i].slice(1)).replace(/_/g,"-");
-      //if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
-      //kwicsoryanlwat.push([kwictlat,  ryan(kwictlat, bli2s[bli2scigwic[i]].replace(/_/g,"-"))]);
-      //}
+      if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
+      kwicsoryanlwat.push([kwictlat,  ryan(kwickwon, bli2s[bli2scigwic[i]].replace(/_/g,"-"))]);
+      }
     }
 	  // sort alphabetically
     const qrissoryanlwatkanyitli = qrissoryanlwat.sort((hyik, tyut) => {
@@ -219,7 +223,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
   	  xyektlatlwat.push(xyektlatlwatmrut[i]+"_");
         }
     }
-    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical emotions")}}`);
+    console.log(`\\subsection{${ryan(qrissokwicmakwonli,"grammatical emotion")}}`);
     let grammatical_emotion_strings = xyektlatlwat.sort().map((qristlat) => {
             const pyactlat = qriskwon[qristlat];
 	    return `\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${hnuckwon[pyactlat]}: ${qrissokwicmakwonli[qristlat.replace(/_$/g,"")]}\\\\`;
@@ -244,8 +248,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     console.log(grammatical_si_units_strings.join("\n").replace(/_/g,"-"));
     let lyat = ""
     console.log(`\\section{${kwichnim} -> ${kwicpyachnim}}`);
-    //console.log(`\\subsection{  }`);
     let psas = "";
+    //console.log(`kwiclwat.length ${kwiclwat.length}`);
     for (let i = 0; i < kwiclwat.length; i++) {
       const kwicryan = kwiclwat[i];
       const kwictlat = kwicryan[0];
@@ -260,6 +264,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
         psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
       }
     }
+    // 
     console.log(psas.replace(/_/g,"-"));
     // pyacso kwon
     const pyacsoryanlwatkanyitli = pyacsoryanlwat.sort((hyik, tyut) => {
@@ -281,8 +286,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       }
 	    // command = 'echo \"' + word.toString() + '\" | espeak-ng --stdin --ipa -q ' + ' -v ' + inLangCode;
       if (pyacryan.length == 3) {
-	    //  console.log(`pyactlat ${pyactlat}`);
-	const nyifhtin = pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
+	     //console.log(`pyactlat ${pyactlat}`);
+	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
         psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
       }
     }
@@ -309,7 +314,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       }
       if (hnucryan.length == 3) {
 	const pyactlat = hnucryan[1];
-	const nyifhtin = pyackwon[pyactlat].length > 0?  `${pyackwon[pyactlat]}`  : hnucryan[3];
+        console.log(pyactlat);
+	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  `${pyackwon[pyactlat]}`  : hnucryan[3];
         psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
       }
     }
