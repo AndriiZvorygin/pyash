@@ -201,7 +201,7 @@
 #define sacrifice_GRAMMAR 0x4C17 // kfah
 #define energy_GRAMMAR 0x5E37 // nreh
 #define hate_GRAMMAR 0x409F // dyih
-//#define rational_gender_GRAMMAR 0x636F // cloh
+#define rational_gender_GRAMMAR 0x636F // cloh
 #define enjoy_GRAMMAR 0x4B9F // dlah
 #define despair_GRAMMAR 0x4A27 // psah
 #define vegetal_gender_GRAMMAR 0x5B4F // sleh
