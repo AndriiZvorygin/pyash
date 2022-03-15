@@ -46,8 +46,6 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
-
-
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
 	let kwickwonlwat = JSON.parse(kwictlatpu);
 	let qrissokwicmakwonli = {};
