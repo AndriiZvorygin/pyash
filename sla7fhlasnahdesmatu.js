@@ -5,13 +5,23 @@ const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
 const kwichkom = "ru";
 const sla7fhkom = "qis";
+function cli7kryan(tlat) {
+  if (tlat == undefined || tlat.length == 0) return tlat;
+  const ryantlat = 
+    tlat.replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "је").replace(/[Її]/g, "ји")
+    .replace(/[Йй]/g, "иј").replace(/[Юю]/g, "ју").replace(/[Яяя]/g, "ја")
+    .replace(/[љ]/g, "лј").replace(/[њњ]/g, "нј");
+  //console.log(`${tlat} ${ryantlat}`);
+  return ryantlat;
+}
+
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
   let kwickwonlwat = JSON.parse(kwictlatpu);
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-  	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
+  	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
   }
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
     const pyackwonlwat = JSON.parse(pyactlatpu);
@@ -31,9 +41,9 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
       sla7fkwonlwat = sla7fkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
 	nyifhlas.forEach(qristlat => {
-		qrissokwicmakwonli[qristlat] = hlas[0];
+		qrissokwicmakwonli[qristlat] = cli7kryan(hlas[0]);
 	});
-        return {"qis": hlas[0], "en":nyifhlas[0]};
+        return {"qis": cli7kryan(hlas[0]), "en":nyifhlas[0]};
       });
 
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
