@@ -3,16 +3,21 @@
 const fs = require('fs');
 const hfas = "InterlinguaToEnglishDictionary.txt";
 const qrishkom = "en";
-const kwichkom = "fr";
+const kwichkom = "es";
 const hra7nhkom = "ia";
+function hra7nryan(tlat) {
+  const ryantlat =  tlat.replace(/le /, "lo ").replace(/é/g, "e")
+    .replace(/[Çç]/g, "se").replace(/[Éé]/g, "es").replace(/[Àà]/g, "ah")
+    .replace(/[Èè]/g, "eh").replace(/[Ùù]/g, "uh").replace(/[Ââ]/g, "as")
+    .replace(/[ê]/g, "es").replace(/[î]/g, "is").replace(/[û]/g, "eu")
+    .replace(/[ô]/g, "os").replace(/[ó]/g, "o");
+  return ryantlat;
+}
+
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
   let kwickwonlwat = JSON.parse(kwictlatpu);
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
-  for (let i = 0; i < kwickwonlwat.length; i++) {
-  	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-  	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
-  }
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
     const pyackwonlwat = JSON.parse(pyactlatpu);
     let qrissopyacmakwonli = {};
@@ -34,12 +39,28 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
     });
       // generate dictionary
       hra7nkwonlwat = hra7nkwonlwat.map(hlas => {
-        const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
+        const nyifhlas = hlas.slice(1);
 	nyifhlas.forEach(qristlat => {
-		qrissokwicmakwonli[qristlat] = hlas[0];
+          const kwictlat = hlas[0];
+          const tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
+            qrissokwicmakwonli[qristlat];
+          //if (kwictlat.localeCompare("saper") == 0) {
+          //  console.log(`${JSON.stringify(nyifhlas)} '${qristlat}' ${tyattlat} ${kwictlat}`);
+          //  console.log(`${tyattlat.length > kwictlat.length}`);
+          //}
+          if (tyattlat.length == 0 || tyattlat.length > kwictlat.length) {
+	      qrissokwicmakwonli[qristlat] = kwictlat;
+        }
 	});
-        return {"ia": hlas[0], "en":nyifhlas[0]};
+        return {"ia": hra7nryan(hlas[0]), "en":nyifhlas[0]};
       });
+  for (let i = 0; i < kwickwonlwat.length; i++) {
+  	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
+        let qristlat = kwickwonlwat[i][qrishkom].replace(/-/g,"_");
+        if (qrissokwicmakwonli[qristlat] == undefined) {
+  	  qrissokwicmakwonli[qristlat] = hra7nryan(kwictlat);
+        }
+  }
 
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
 	      const qristlat = psut.en.replace(/_$/, "");

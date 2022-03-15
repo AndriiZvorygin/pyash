@@ -46,13 +46,19 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
+function hra7nryan(tlat) {
+  const ryantlat =  tlat.replace(/le /, "lo ").replace(/é/g, "e");
+  console.log(`${tlat} ${ryantlat}`);
+  return ryantlat;
+}
+
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
 	let kwickwonlwat = JSON.parse(kwictlatpu);
 	let qrissokwicmakwonli = {};
 	let kwicsoqrismakwonli = {};
   	for (let i = 0; i < kwickwonlwat.length; i++) {
 		let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
+		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = hra7nryan(kwictlat);
 	}
 	const kwickwon = qrissokwicmakwonli;
 
@@ -73,7 +79,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     qrissoryanlwat.push([qriskwonlwat[i][qrishkom], qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
     kwictlat = ryan(kwickwon, qriskwonlwat[i][qrishkom]);
     if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
-    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
+    kwicsoryanlwat.push([hra7nryan(kwictlat), qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
     }
     pyacsoryanlwat.push([qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i][qrishkom]]);
     hnucsoryanlwat.push([qriskwonlwat[i].hnuc, qriskwonlwat[i].pya, qriskwonlwat[i][qrishkom]]);
@@ -87,7 +93,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
   fs.readFile("pyackwon.json", "utf8", function(err, pyackwonmrut) {
     const pyackwonlwat = JSON.parse(pyackwonmrut);
     for (let i = 0; i < pyackwonlwat.length; i++) {
-  	pyackwon[pyackwonlwat[i].pya] = pyackwonlwat[i][qrishkom];
+  	pyackwon[pyackwonlwat[i].pya] = hra7nryan(pyackwonlwat[i][qrishkom]);
     }
     
   
