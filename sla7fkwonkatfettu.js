@@ -46,6 +46,11 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
+function cli7kryan(tlat) {
+	return tlat == undefined || tlat.length == 0? tlat: 
+		tlat.replace(/[Ьь]/g, "ј").replace(/Єє/g, "је").replace(/Її/g, "ји").replace(/Йй/g, "иј").replace(/Юю/g, "ју").replace(/Яяя/g, "ја")
+}
+
 
 
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
@@ -54,7 +59,7 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 	let kwicsoqrismakwonli = {};
   	for (let i = 0; i < kwickwonlwat.length; i++) {
 		let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
+		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
 	}
 	const kwickwon = qrissokwicmakwonli;
 
