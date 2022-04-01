@@ -2944,7 +2944,7 @@
 дрємота f. nap, doze, slumber
 дрєн m. cornel, dogwood
 дресура f. animal training
-држава f. state, country
+држава f. country
 државник m.anim. statesman
 државност f. statehood
 државны adj. state
@@ -5337,7 +5337,7 @@
 крадеж f. theft, thievery
 краджа f. theft, thievery
 крадом adv. stealthily, furtively, surreptitiously
-крај m. country; edge
+крај m. edge
 крајевид m. landscape, landscaping
 крајец m. slice 
 крајина f. region, area; land, country 
@@ -5362,8 +5362,11 @@
 краснорєчивост f. eloquence
 краснорєчивы adj. eloquent
 красност f. beauty
-красны adj. beautiful, pretty
+уменьшительный v. dimunitive
+зменшувальний v. dimunitive
+деминутив v. dimunitive
 красопис m. calligraphy
+сравнительная-степень v. comparative-degree
 красописец m.anim. calligrapher
 красота f. beauty
 краста f. scab
