@@ -38,19 +38,24 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         });
     });
       // generate dictionary
+      let tyattlatlwat = [];
       hra7nkwonlwat = hra7nkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1);
 	nyifhlas.forEach(qristlat => {
+          qristlat = qristlat.trim();
           const kwictlat = hlas[0];
-          const tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
+          let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
             qrissokwicmakwonli[qristlat];
           //if (kwictlat.localeCompare("saper") == 0) {
           //  console.log(`${JSON.stringify(nyifhlas)} '${qristlat}' ${tyattlat} ${kwictlat}`);
           //  console.log(`${tyattlat.length > kwictlat.length}`);
           //}
-          if (tyattlat.length == 0 || tyattlat.length > kwictlat.length) {
-	      qrissokwicmakwonli[qristlat] = kwictlat;
-        }
+          if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length) 
+                && ! tyattlatlwat.includes(kwictlat)) {
+              tyattlat = kwictlat;
+	      qrissokwicmakwonli[qristlat] = tyattlat;
+          }
+          tyattlatlwat.push(tyattlat);
 	});
         return {"ia": hra7nryan(hlas[0]), "en":nyifhlas[0]};
       });

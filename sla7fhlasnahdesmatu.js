@@ -4,23 +4,37 @@ const fs = require('fs');
 const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
 const kwichkom = "ru";
-const sla7fhkom = "qis";
+const sla7fhkom = "isv";
 function cli7kryan(tlat) {
   if (tlat == undefined || tlat.length == 0) return tlat;
   const ryantlat = 
-    tlat.replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "је").replace(/[Її]/g, "ји")
+    tlat.toLowerCase().replace(/e$/,"") .replace(/e[ ]/g, " ")
+    .replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "је").replace(/[Її]/g, "ји")
     .replace(/[Йй]/g, "иј").replace(/[Юю]/g, "ју").replace(/[Яяя]/g, "ја")
-    .replace(/[љ]/g, "лј").replace(/[њњ]/g, "нј");
+    .replace(/[љ]/g, "лј").replace(/[њњ]/g, "нј").replace(/[Aa]/g, "а")
+    .replace(/[Bb]/g, "б").replace(/[Vv]/g, "в").replace(/,/g, "")
+    .replace(/[Dd]/g, "д").replace(/[Ee]/g, "е").replace(/[Jj]/g, "ж")
+    .replace(/[Zz]/g, "з").replace(/[Ii]/g, "и").replace(/[Kk]/g, "к")
+    .replace(/[Ll]/g, "л").replace(/[Ww]/g, "вј").replace(/Mm/g, "м")
+    .replace(/[Nn]/g, "н").replace(/[Oo]/g, "о").replace(/Pp/g, "п")
+    .replace(/[Rr]/g, "р").replace(/shch/g, "щ").replace(/ch/g, "ч")
+    .replace(/[]/g, "п").replace("&#39;","")
+    .replace(/ts/g, "ц").replace(/q/g, "кв").replace(/x/g, "кс")
+    .replace(/gh/g,"х").replace(/sh/g,"ш").replace(/t/g,"т").replace(/u/g,"у")
+    .replace(/f/g, "ф").replace(/h/g,"х").replace(/c/g,"ц").replace(/y/g, "ј")
+    .replace(/[Ss]/g, "с")
   //console.log(`${tlat} ${ryantlat}`);
   return ryantlat;
 }
 
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
   let kwickwonlwat = JSON.parse(kwictlatpu);
+  let kwiclwat = [];
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
+	kwiclwat.push(kwictlat);
   	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
   }
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
@@ -38,18 +52,42 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         });;
       });
       // generate dictionary
+      let tyattlatlwat = [];
       sla7fkwonlwat = sla7fkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
 	nyifhlas.forEach(qristlat => {
-		qrissokwicmakwonli[qristlat] = cli7kryan(hlas[0]);
-	});
-        return {"qis": cli7kryan(hlas[0]), "en":nyifhlas[0]};
+          qristlat = qristlat.trim();
+          let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
+            qrissokwicmakwonli[qristlat];
+          const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
+	  //if (kwictlat.localeCompare("држава") == 0) {
+	  //        console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
+          //        console.log(`tyattlat.length == 0 ${tyattlat.length == 0}\n` +
+          //          `tyattlat.length > kwictlat.length ${tyattlat.length > kwictlat.length}\n` + `kwiclwat.includes(tyattlat) ${kwiclwat.includes(tyattlat)}\n` +
+          //          ` kwictlat.length > 0 ${kwictlat.length > 0}\n` +
+          //     `/[0-9]/.test(tyattlat)  ${/[0-9]/.test(tyattlat)}\n` +
+          //     `! tyattlatlwat.includes(kwictlat) ${! tyattlatlwat.includes(kwictlat)}\n` + 
+          //     `! /[0-9]/.test(kwictlat) ${! /[0-9]/.test(kwictlat)}\n`);
+	  //}
+          if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
+		  || ( kwiclwat.includes(tyattlat) && kwictlat.length > 0)
+               || /[0-9]/.test(tyattlat)) 
+                && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
+	  //if (kwictlat.localeCompare("држава") == 0) {
+	  //        console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
+          //}
+              tyattlat = kwictlat;
+	      qrissokwicmakwonli[qristlat] = tyattlat;
+          }
+          tyattlatlwat.push(tyattlat);
+        });
+        return {"isv": cli7kryan(hlas[0]), "en":nyifhlas[0]};
       });
 
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
 	      const qristlat = psut.en.replace(/_$/, "");
-	      psut.qis = qrissokwicmakwonli[qristlat];
-//	      console.log(`${qristlat} ${psut.qis}`);
+	      psut.isv = qrissokwicmakwonli[qristlat];
+//	      console.log(`${qristlat} ${psut.isv}`);
 	      return psut;
       });
       sla7fkwonlwat.forEach((psut) => {

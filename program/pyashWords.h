@@ -461,12 +461,7 @@
 #define locative_directional_case_GRAMMAR 0x455E // ta7
 #define short_term_GRAMMAR 0x427E // di7
 #define nth_power_GRAMMAR 0x6CDE // ne2
-#define dis__GRAMMAR 0x809F // dyi7h
-#define de__GRAMMAR 0x4E7E // de7
-#define im__GRAMMAR 0x800F // myi7h
 #define _oid_GRAMMAR 0x629F // dzoh
-#define en__GRAMMAR 0x4C5E // ke7
-#define per__GRAMMAR 0x4C9E // pe7
 #define _ferous_GRAMMAR 0x6E67 // fr6h
 #define _fy_GRAMMAR 0x419E // fi7
 #define _um_GRAMMAR 0x2A5E // gu
@@ -476,8 +471,6 @@
 #define _ing_GRAMMAR 0x423E // bi7
 #define grand__GRAMMAR 0x4F97 // gxah
 #define _z_GRAMMAR 0x2E9E // ze
-#define ob__GRAMMAR 0x50DE // no7
-#define e__GRAMMAR 0x403E // mi7
 #define _ly_GRAMMAR 0x417E // li7
 #define _ic_GRAMMAR 0x40BE // wi7
 #define _oma_GRAMMAR 0x515E // to7
@@ -5248,7 +5241,6 @@
 #define captor_WORD 0xB104 // pya7t
 #define malacca_WORD 0x3101 // mya7k
 #define outlive_WORD 0x50DA // xri7p
-#define dis__WORD 0x9013 // dyi7s
 #define enliven_WORD 0x787A // xli2n
 #define scrawled_WORD 0xB3D2 // gre7t
 #define avenger_WORD 0xB3EA // txe7t
@@ -5444,7 +5436,6 @@
 #define shotgun_WORD 0x796D // cla2n
 #define malachi_WORD 0x317A // xla7k
 #define unchallenged_WORD 0x99AA // tca2s
-#define de__WORD 0xB313 // dye7t
 #define undeceive_WORD 0xF098 // hdi7c
 #define unsaid_WORD 0xB406 // nyo7t
 #define putty_WORD 0xB2E4 // pxu7t
@@ -5605,7 +5596,6 @@
 #define banns_WORD 0x3990 // hga2k
 #define batman_WORD 0x1988 // hba2m
 #define pantheism_WORD 0x1930 // hna2m
-#define im__WORD 0x0815 // jyim
 #define overrated_WORD 0x2BD9 // qrek
 #define eighty_four_WORD 0x8B24 // pwes
 #define ioc_WORD 0x3468 // hco7k
@@ -5837,7 +5827,6 @@
 #define repertory_WORD 0xBBC4 // pre2t
 #define shakespearean_WORD 0x5342 // kse7p
 #define woodcut_WORD 0xCCE2 // kxof
-#define en__WORD 0x7318 // hye7n
 #define seventy_seven_WORD 0xBD4A // ts62t
 #define unsociable_WORD 0x50C8 // hqi7p
 #define magnolia_WORD 0x7972 // gla2n
@@ -6015,7 +6004,6 @@
 #define muskrat_WORD 0x39C9 // sra2k
 #define saccharine_WORD 0xF0C2 // kri7c
 #define accentuation_WORD 0x7468 // hco7n
-#define per__WORD 0x33C4 // pre7k
 #define diphthong_WORD 0x7813 // dyi2n
 #define homosexuality_WORD 0x083A // xwim
 #define morgue_WORD 0x39C1 // mra2k
@@ -6455,7 +6443,6 @@
 #define anarchism_WORD 0x9530 // hn67s
 #define collodion_WORD 0xBC62 // klo2t
 #define errata_WORD 0x512E // rwa7p
-#define em__WORD 0x1318 // hye7m
 #define dahlia_WORD 0x3873 // dli2k
 #define pinky_WORD 0x30A4 // pci7k
 #define caviar_WORD 0xF102 // kya7c
@@ -6722,7 +6709,6 @@
 #define uvula_WORD 0x9218 // hyu7s
 #define cantonese_WORD 0x74E2 // kxo7n
 #define nihilism_WORD 0x907A // xli7s
-#define ob__WORD 0x5C30 // hno2p
 #define acclimatized_WORD 0x9862 // kli2s
 #define lubricate_WORD 0x0935 // jwam
 #define pietism_WORD 0x9520 // hp67s
