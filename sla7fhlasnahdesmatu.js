@@ -29,12 +29,12 @@ function cli7kryan(tlat) {
 
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
   let kwickwonlwat = JSON.parse(kwictlatpu);
-  let kwiclwat = [];
+  let sla7flwat = [];
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-	kwiclwat.push(kwictlat);
+	//sla7flwat.push(kwictlat);
   	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
   }
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
@@ -49,10 +49,13 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
       sla7fkwonlwat = sla7fkwonlwat.map( hlas => {
         return hlas.split(" ").filter(tlat => {
           return ! /\.$/.test(tlat);
-        });;
+        });
       });
       // generate dictionary
       let tyattlatlwat = [];
+      sla7flwat = sla7fkwonlwat.map(hlas => {
+        return hlas[0];
+      });
       sla7fkwonlwat = sla7fkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
 	nyifhlas.forEach(qristlat => {
@@ -60,20 +63,21 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
           let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
             qrissokwicmakwonli[qristlat];
           const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
-	  //if (kwictlat.localeCompare("држава") == 0) {
+	  //if (kwictlat.localeCompare("декују") == 0) {
 	  //        console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
           //        console.log(`tyattlat.length == 0 ${tyattlat.length == 0}\n` +
-          //          `tyattlat.length > kwictlat.length ${tyattlat.length > kwictlat.length}\n` + `kwiclwat.includes(tyattlat) ${kwiclwat.includes(tyattlat)}\n` +
+          //          `tyattlat.length > kwictlat.length ${tyattlat.length > kwictlat.length}\n` + 
+          //          `! sla7flwat.includes(tyattlat) ${! sla7flwat.includes(tyattlat)}\n` +
           //          ` kwictlat.length > 0 ${kwictlat.length > 0}\n` +
           //     `/[0-9]/.test(tyattlat)  ${/[0-9]/.test(tyattlat)}\n` +
           //     `! tyattlatlwat.includes(kwictlat) ${! tyattlatlwat.includes(kwictlat)}\n` + 
           //     `! /[0-9]/.test(kwictlat) ${! /[0-9]/.test(kwictlat)}\n`);
 	  //}
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
-		  || ( kwiclwat.includes(tyattlat) && kwictlat.length > 0)
+		  || (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)
                || /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
-	  //if (kwictlat.localeCompare("држава") == 0) {
+	  //if (kwictlat.localeCompare("декују") == 0) {
 	  //        console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
           //}
               tyattlat = kwictlat;

@@ -2508,7 +2508,7 @@
 деколт m. décolletage, neckline, cleavage
 декорација f. decoration
 декрет m. decree
-декују intj. thanks
+декују intj. thanks, thank
 декујучи prep.  thanks to
 дєл m. branch, section; piece; share
 дєланја n.pl. workings
@@ -5950,6 +5950,7 @@
 љнєны adj. linen, flaxen
 љстивы adj. sly, cunning
 љстити v.tr. ipf. flatter, cajole
+љуб f. love
 љуба f. love, darling, sweetheart
 љубезно adv. lovably, amiably, affably, courteously
 љубезны adj. kind, lovable, amiable, affable, courteous
@@ -11825,13 +11826,13 @@
 свєрјати се v.refl. ipf. confide
 свєст f. conscience
 свєстны adj. conscientious
-свєт m. world
-Свєт m. Earth
 свєтилка f. lamp
 свєтилник m. lighthouse
 светити v.tr. ipf. hallow
 светишче n. sanctuary, shrine
 свєтлофор m. traffic light
+свєтло n. light
+свєт n. light
 свєтлушка f. firefly
 свєтлы adj. luminous, bright
 свєтобєжник m.anim. globetrotter
