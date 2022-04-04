@@ -62,9 +62,9 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 		let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
 		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
                 if (kwickwonlwat[i].pya) {
-                  if (kwickwonlwat[i].pya.localeCompare("trah") == 0) {
-                  console.log(` pyackwon[${kwickwonlwat[i].pya}] = ${kwickwonlwat[i][kwichkom]}`);
-                  }
+                  //if (kwickwonlwat[i].pya.localeCompare("trah") == 0) {
+                  //console.log(` pyackwon[${kwickwonlwat[i].pya}] = ${kwickwonlwat[i][kwichkom]}`);
+                  //}
                   pyackwon[kwickwonlwat[i].pya] = kwickwonlwat[i][kwichkom];
                 }
                
