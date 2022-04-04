@@ -87,7 +87,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     qrissoryanlwat.push([qriskwonlwat[i][qrishkom], qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
     kwictlat = ryan(kwickwon, qriskwonlwat[i][qrishkom]);
     if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
-    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
+    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i].en]);
     }
     pyacsoryanlwat.push([qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i][qrishkom]]);
     hnucsoryanlwat.push([qriskwonlwat[i].hnuc, qriskwonlwat[i].pya, qriskwonlwat[i][qrishkom]]);
@@ -276,8 +276,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       if (kwicryan.length == 2 && kwicryan[1].length > 0) {
         psas += `${kwictlat}: ${kwicryan[1]} \\\\\n`;
       }
-      if (kwicryan.length == 3) {
-        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
+      if (kwicryan.length == 4) {
+        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} (${kwicryan[3]}) \\\\\n`);
       }
     }
     // 
@@ -306,10 +306,10 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
         if (nyifhtin == undefined) {
           console.log("error undefined word");
-          console.log(`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
+          console.log(`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]} (${pyacryan[3]}): ${nyifhtin}\\\\\n`);
           exit();
         }
-        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
+        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]} (${pyacryan[2]}): ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));
@@ -337,7 +337,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	const pyactlat = hnucryan[1];
         // console.log(pyactlat);
 	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  `${pyackwon[pyactlat]}`  : hnucryan[3];
-        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
+        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}] (${hnucryan[2]}): ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));

@@ -5681,7 +5681,7 @@
 легковєрны adj. credulous, gullible
 легкомысљны adj. frivolous
 легкост f. lightness
-легкы adj. easy, light, slight; легке пєнезы easy money
+легкы adj. easy, slight; легке пєнезы easy money
 леговишче n. den, lair
 легти v.intr. ipf. lie down; hatch
 легше adv. easier
@@ -6355,7 +6355,6 @@
 минус conj. minus
 минута f. minute
 минути v.tr. pf. elapse, pass, pass by
-мир m. peace; quiet
 мираж m. mirage
 мирити v.tr. ipf. reconcile
 мирны adj. peaceful
@@ -11832,7 +11831,7 @@
 светишче n. sanctuary, shrine
 свєтлофор m. traffic light
 свєтло n. light
-свєт n. light
+свєт n. world
 свєтлушка f. firefly
 свєтлы adj. luminous, bright
 свєтобєжник m.anim. globetrotter
