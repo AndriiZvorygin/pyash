@@ -22,7 +22,7 @@ function cli7kryan(tlat) {
     .replace(/ts/g, "ц").replace(/q/g, "кв").replace(/x/g, "кс")
     .replace(/gh/g,"х").replace(/sh/g,"ш").replace(/t/g,"т").replace(/u/g,"у")
     .replace(/f/g, "ф").replace(/h/g,"х").replace(/c/g,"ц").replace(/y/g, "ј")
-    .replace(/[Ss]/g, "с")
+    .replace(/[Ss]/g, "с").replace(/ии/g, "и").replace(/ее/,"ејо");
   //console.log(`${tlat} ${ryantlat}`);
   return ryantlat;
 }
