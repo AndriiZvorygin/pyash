@@ -7969,10 +7969,11 @@
 обхватити v.tr. pf. embrace, clasp
 обхвачати v.tr. ipf. embrace, clasp
 обход m. detour, bypass; patrol, round
-обчежитје n. community, communal life
+обчежитје n. cohousing, community, communal life
 обчесловјанскы adj. common Slavic
 обчи adj. common
 обчина f. community
+обчины f. communities
 обчудованје n. admiration
 обчудоватељ m.anim. admirer
 обчудовати v.tr. ipf. admire
@@ -12510,6 +12511,7 @@
 спокровњены adj. related
 сполеченство n. society
 сполечност f. community
+сполечности f. communities
 сполечны adj. common, social, mutual
 сполны adj. common, mutual, shared, joint
 сполупрацовати v.intr. ipf. work together
