@@ -56,8 +56,10 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
       sla7flwat = sla7fkwonlwat.map(hlas => {
         return hlas[0];
       });
+      let nyifhlaslwat = {};
       sla7fkwonlwat = sla7fkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
+        nyifhlaslwat[hlas[0]] = nyifhlas.length;
 	nyifhlas.forEach(qristlat => {
           qristlat = qristlat.trim();
           let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
@@ -74,7 +76,9 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
           //      `! tyattlatlwat.includes(kwictlat) ${! tyattlatlwat.includes(kwictlat)}\n` + 
           //      `! /[0-9]/.test(kwictlat) ${! /[0-9]/.test(kwictlat)}\n`);
 	  // }
+          /* TODO: prefer less ambigious words */
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
+                  || nyifhlaslwat[tyattlat] > nyifhlas.length
 		  || (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)
                || /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
