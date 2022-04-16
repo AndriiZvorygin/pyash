@@ -117,5 +117,10 @@
 {"pya":"ts6h", "en":"intransitive case, the subject of an intransitive verb."},
 {"pya":"ts6h", "en":"intransitive case, the subject of an intransitive verb."},
 {"pya":"xwih", "en":"patient case, the object of a transitive verb."},
+{"pya":"pe", "en":"aside, for making a comment."},
+{"pya":"fe", "en":"finally, for making a final or constant variable declaration."},
+{"pya":"pcoh", "en":"pointed, for the pointer type in C."},
+{"pya":"vyih", "en":"indirect speech, sentence is a paraphrasing of what someone said."},
+{"pya":"xyah", "en":"worldwide, for global or worldwide variable."},
 {"pya":"syi7h", "en":"existential clause, for asserting something that can be imagined."}
 ]
