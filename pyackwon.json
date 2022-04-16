@@ -32,6 +32,7 @@
 {"pya":"si", "en":"epistemic mood, to indicate that something is possible."},
 {"pya":"tu", "en":"deontic mood, to indicate what should be different."},
 {"pya":"pcih", "en":"imperative mood, to indicate direct commands."},
+{"pya":"di", "en":"directive-mood, indicates how to perform an action."},
 {"pya":"dwih", "en":"desiderative mood, to indicate what the speaker wants to happen."},
 {"pya":"pruh", "en":"imprecative mood, for uttering curses."},
 {"pya":"tcih", "en":"hortative mood, for pleading or begging."},
