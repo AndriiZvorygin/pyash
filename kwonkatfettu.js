@@ -22,6 +22,26 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
+fs.readFile("xyek.txt", "utf8", function(err, xyekhfas) { 
+  const xyeklwat = xyekhfas.split("\n");
+fs.readFile("drac.txt", "utf8", function(err, drachfas) { 
+  const draclwat = drachfas.split("\n");
+fs.readFile("hyan.txt", "utf8", function(err, hyanhfas) { 
+  const hyanlwat = hyanhfas.split("\n");
+fs.readFile("hcit.txt", "utf8", function(err, hcithfas) { 
+  const hcitlwat = hcithfas.split("\n");
+fs.readFile("hjep.txt", "utf8", function(err, hjephfas) { 
+  const hjeplwat = hjephfas.split("\n");
+fs.readFile("nyit.txt", "utf8", function(err, nyithfas) { 
+  const nyitlwat = nyithfas.split("\n");
+fs.readFile("hn6t.txt", "utf8", function(err, hn6thfas) { 
+  const hn6tlwat = hn6thfas.split("\n");
+fs.readFile("psam.txt", "utf8", function(err, psamhfas) { 
+  const psamlwat = psamhfas.split("\n");
+fs.readFile("hnim.txt", "utf8", function(err, hnimhfas) { 
+  const hnimlwat = hnimhfas.split("\n");
+fs.readFile("gvak.txt", "utf8", function(err, gvakhfas) { 
+  const gvaklwat = gvakhfas.split("\n");
 fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) { 
   const kwickwonlwat = JSON.parse(pyashWords);
   let kwicsopyacmakwonli = {};
@@ -72,7 +92,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 
     let used_grammar_words = [];
     let grammatical_moods = kwickwonlwat.filter((psut) => {
-	return (/mood_$|clause_$/.test(psut[kwichkom]));
+	return (/mood_$|clause_$/.test(psut[kwichkom]) 
+                || psamlwat.includes(psut.pya));
     });
     let grammatical_mood_strings = grammatical_moods.map((psut) => {
 	    used_grammar_words.push(psut.pya);
@@ -102,36 +123,36 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	  // evidential
     console.log("\\subsection{Grammatical Evidential}");
     let grammatical_evidentials = kwickwonlwat.filter((psut) => {
-	return (/evidential_$/.test(psut[kwichkom]));
+	return (/evidential_$|speech_$/.test(psut[kwichkom]));
     });
     let grammatical_evidential_strings = grammatical_evidentials.map((psut) => {
 	    used_grammar_words.push(psut.pya);
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
     });
     console.log(grammatical_evidential_strings.join("\n").replace(/_/g,"-"));
+    // dependent clauses
+    console.log("\\subsection{Grammatical Dependent Clauses}");
+    let grammatical_hyan = kwickwonlwat.filter((psut) => {
+	return (hyanlwat.includes(psut.pya));
+    });
+    let grammatical_hyan_strings = grammatical_hyan.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_hyan_strings.join("\n").replace(/_/g,"-"));
 	  // Cases
     console.log("\\subsection{Grammatical Cases}");
     let grammatical_cases = kwickwonlwat.filter((psut) => {
         if (/genitive_case_$|possessed_case_$/.test(psut[kwichkom])) {
           return false;
         }
-	return (/case_$|intransitive_$/.test(psut[kwichkom]));
+	return (/case_$|intransitive_$/.test(psut[kwichkom]) || gvaklwat.includes(psut.pya));
     });
     let grammatical_case_strings = grammatical_cases.map((psut) => {
 	    used_grammar_words.push(psut.pya);
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
     });
     console.log(grammatical_case_strings.join("\n").replace(/_/g,"-"));
-	  // Genitive Cases
-    console.log("\\subsection{Grammatical Possessive Markers}");
-    let grammatical_genitive_cases = kwickwonlwat.filter((psut) => {
-	return (/genitive_case_$|possession_$|possessed_case_$|possessive_marker_$/.test(psut[kwichkom]));
-    });
-    let grammatical_genitive_case_strings = grammatical_genitive_cases.map((psut) => {
-	    used_grammar_words.push(psut.pya);
-	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
-    });
-    console.log(grammatical_genitive_case_strings.join("\n").replace(/_/g,"-"));
 	  // Context
     console.log("\\subsection{Grammatical Contexts}");
     let grammatical_contexts = kwickwonlwat.filter((psut) => {
@@ -142,10 +163,51 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
     });
     console.log(grammatical_context_strings.join("\n").replace(/_/g,"-"));
+	  // Genitive Cases
+    console.log("\\subsection{Grammatical Possessive Markers}");
+    let grammatical_genitive_cases = kwickwonlwat.filter((psut) => {
+	return (/genitive_case_$|possession_$|possessed_case_$|possessive_marker_$/.test(psut[kwichkom]));
+    });
+    let grammatical_genitive_case_strings = grammatical_genitive_cases.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_genitive_case_strings.join("\n").replace(/_/g,"-"));
+	  // Adjective
+    console.log("\\subsection{Grammatical Adjectives}");
+    let grammatical_adjectives = kwickwonlwat.filter((psut) => {
+	return (hcitlwat.includes(psut.pya));
+    });
+    let grammatical_adjective_strings = grammatical_adjectives.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_adjective_strings.join("\n").replace(/_/g,"-"));
+	  // Connector
+    console.log("\\subsection{Grammatical Connectors}");
+    let grammatical_connectors = kwickwonlwat.filter((psut) => {
+	return (hn6tlwat.includes(psut.pya));
+    });
+    let grammatical_connector_strings = grammatical_connectors.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_connector_strings.join("\n").replace(/_/g,"-"));
+	  // Sort
+    console.log("\\subsection{Grammatical Sorts}");
+    let grammatical_sorts = kwickwonlwat.filter((psut) => {
+	return (nyitlwat.includes(psut.pya));
+    });
+    let grammatical_sort_strings = grammatical_sorts.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_sort_strings.join("\n").replace(/_/g,"-"));
 	  // gender
     console.log("\\subsection{Grammatical Gender}");
     let grammatical_genders = kwickwonlwat.filter((psut) => {
-	return (/gender_$/.test(psut[kwichkom]));
+	return (/gender_$/.test(psut[kwichkom]) ||
+                hjeplwat.includes(psut.pya));
     });
     let grammatical_gender_strings = grammatical_genders.map((psut) => {
 	    used_grammar_words.push(psut.pya);
@@ -165,13 +227,24 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	  // pronoun
     console.log("\\subsection{Grammatical Pronouns}");
     let grammatical_pronouns = kwickwonlwat.filter((psut) => {
-	return (/^me_$|^us_$|^you_$|^it_$|reflexive_voice_$|^proximity_$|distal_demonstrative_|^question_$|^other_$/.test(psut[kwichkom]));
+	return (/^me_$|^us_$|^you_$|^it_$|reflexive_voice_$|^proximity_$|distal_demonstrative_|^question_$|^other_$/.test(psut[kwichkom])
+                || hnimlwat.includes(psut.pya));
     });
     let grammatical_pronoun_strings = grammatical_pronouns.map((psut) => {
 	    used_grammar_words.push(psut.pya);
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
     });
     console.log(grammatical_pronoun_strings.join("\n").replace(/_/g,"-"));
+    // Discourse Particles
+    console.log("\\subsection{Grammatical Discourse}");
+    let grammatical_drac = kwickwonlwat.filter((psut) => {
+	return (draclwat.includes(psut.pya));
+    });
+    let grammatical_drac_strings = grammatical_drac.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_drac_strings.join("\n").replace(/_/g,"-"));
 	  // emotion
   fs.readFile("emotionWords.txt", "utf8", function(err, xyektlatmrut) {
     let xyektlatlwatmrut = xyektlatmrut.split('\n');
@@ -180,7 +253,13 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
         if (kwickwon[xyektlatlwatmrut[i]+"_"]) {
   	  xyektlatlwat.push(xyektlatlwatmrut[i]+"_");
         }
-    }
+    } 
+    kwickwonlwat.forEach((psut) => {
+	if (xyeklwat.includes(psut.pya)) {
+          xyektlatlwat.push(psut.en);
+        }
+    });
+
     console.log("\\subsection{Grammatical Emotions}");
     let grammatical_emotion_strings = xyektlatlwat.sort().map((kwictlat) => {
             const pyactlat = kwickwon[kwictlat];
@@ -297,6 +376,16 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     //console.log(flantlatlwat);
     //console.log(flantlatlwatmrut);
   });
+});
+});
+});
+});
+});
+});
+});
+});
+});
+});
 });
 });
 });

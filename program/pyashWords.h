@@ -215,7 +215,7 @@
 #define ignorant_GRAMMAR 0x4197 // gwih
 #define initiative_case_GRAMMAR 0x5837 // nyeh
 #define humble_GRAMMAR 0x596F // cweh
-#define delayed_imperative_GRAMMAR 0x2D7E // le
+#define delayed_imperative_GRAMMAR 0x4D7E // le7
 #define reported_evidential_GRAMMAR 0x6627 // proh
 #define melancholy_GRAMMAR 0x610F // mwoh
 #define singular_GRAMMAR 0x5357 // tluh
@@ -453,7 +453,7 @@
 #define epenthetic_morpheme_GRAMMAR 0x359E // f6
 #define remote_future_tense_GRAMMAR 0x8357 // tli7h
 #define postpositional_case_GRAMMAR 0xC257 // tsi2h
-#define else_if_GRAMMAR 0x4D7E // le7
+#define else_if_GRAMMAR 0x2D7E // le
 #define allocutive_agreement_GRAMMAR 0x345E // k6
 #define frequentative_aspect_GRAMMAR 0x65DE // ra2
 #define distributive_pronoun_GRAMMAR 0x848F // bvi7h
