@@ -22,6 +22,8 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
+fs.readFile("cwec.txt", "utf8", function(err, cwechfas) { 
+  const cweclwat = cwechfas.split("\n");
 fs.readFile("xyek.txt", "utf8", function(err, xyekhfas) { 
   const xyeklwat = xyekhfas.split("\n");
 fs.readFile("drac.txt", "utf8", function(err, drachfas) { 
@@ -103,7 +105,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	  // tense
     console.log("\\subsection{Grammatical Tense}");
     let grammatical_tenses = kwickwonlwat.filter((psut) => {
-	return (/tense_$/.test(psut[kwichkom]));
+	return (/tense_$|perfective_$|hodiernal_$/.test(psut[kwichkom]));
     });
     let grammatical_tense_strings = grammatical_tenses.map((psut) => {
 	    used_grammar_words.push(psut.pya);
@@ -113,13 +115,23 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
 	  // aspect
     console.log("\\subsection{Grammatical Aspect}");
     let grammatical_aspects = kwickwonlwat.filter((psut) => {
-	return (/aspect_$/.test(psut[kwichkom]));
+	return (/aspect_$|duration_$|perfective_$|term_$/.test(psut[kwichkom]));
     });
     let grammatical_aspect_strings = grammatical_aspects.map((psut) => {
 	    used_grammar_words.push(psut.pya);
 	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
     });
     console.log(grammatical_aspect_strings.join("\n").replace(/_/g,"-"));
+	  // verb
+    console.log("\\subsection{Grammatical Verbal Modifiers}");
+    let grammatical_cwec = kwickwonlwat.filter((psut) => {
+	return (cweclwat.includes(psut.pya));
+    });
+    let grammatical_cwec_strings = grammatical_cwec.map((psut) => {
+	    used_grammar_words.push(psut.pya);
+	    return `\\textbf{${psut.pya}} [\\emph{${fyek(psut.pya)}}] ${psut.hnuc}: ${nyif([pyackwon, psut], psut.pya)}\\\\`;
+    });
+    console.log(grammatical_cwec_strings.join("\n").replace(/_/g,"-"));
 	  // evidential
     console.log("\\subsection{Grammatical Evidential}");
     let grammatical_evidentials = kwickwonlwat.filter((psut) => {
@@ -376,6 +388,7 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     //console.log(flantlatlwat);
     //console.log(flantlatlwatmrut);
   });
+});
 });
 });
 });

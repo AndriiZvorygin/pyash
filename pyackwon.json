@@ -37,6 +37,7 @@
 {"pya":"pruh", "en":"imprecative mood, for uttering curses."},
 {"pya":"tcih", "en":"hortative mood, for pleading or begging."},
 {"pya":"ri", "en":"interrogative mood, for questions."},
+{"pya":"brih", "en":"base, numeric base being used in a number expression."},
 {"pya":"rwih", "en":"precative mood, for requests."},
 {"pya":"cu", "en":"conditional mood, for if then statements. The if clause comes before the `cu' the then clause comes after."},
 {"pya":"xi", "en":"habitual aspect, something that happens habitualy."},

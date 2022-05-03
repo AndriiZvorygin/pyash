@@ -79,3 +79,7 @@ femto
 atto
 zepto
 yocto
+electric_current
+energy
+luminous_intensity
+
