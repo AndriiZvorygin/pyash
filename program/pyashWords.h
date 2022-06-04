@@ -864,7 +864,7 @@
 #define author_WORD 0xAA58 // hlut
 #define brown_WORD 0x6A04 // pyun
 #define pain_WORD 0x2AAA // tcuk
-#define spring_WORD 0x6924 // pwan
+#define springtime_WORD 0x6924 // pwan
 #define soft_WORD 0x6A08 // hmun
 #define corner_WORD 0x6A02 // kyun
 #define trademark_WORD 0x2906 // nyak

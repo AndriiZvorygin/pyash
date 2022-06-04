@@ -8,9 +8,8 @@ const kwichkom = "ru";
 const sla7fhkom = "isv";
 
 function bvan(kwictlat) {
-	  //let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
-  	  //return(clattsen.execSync(myin).toString());
-	return kwictlat? kwictlat.replace("ф","f"): kwictlat;
+	  let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
+  	  return(clattsen.execSync(myin).toString());
 }
 
 function cli7kryan(tlat) {

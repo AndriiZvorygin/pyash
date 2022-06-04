@@ -4,13 +4,14 @@
 const fs = require('fs');
 //const input = process.argv[2];
 const qrishkom = "en";
+const fyekhkom = "ru";
 const kwichkom = "isv";
 const kwichnim = "Меджусловјанскы";
 const kwicpyachnim = "пјаш";
 const clattsen = require('child_process');
 
 function bvan(kwictlat) {
-	  let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
+	  let myin = `espeak-ng -x --ipa -q  -v${fyekhkom} "${kwictlat.replace(/[-_]/," ")}";`
   	  return(clattsen.execSync(myin).toString());
 }
 
