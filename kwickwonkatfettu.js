@@ -4,13 +4,14 @@
 const fs = require('fs');
 //const input = process.argv[2];
 const qrishkom = "en";
-const kwichkom = "qis";
+const fyekhkom = "ru";
+const kwichkom = "isv";
 const kwichnim = "Меджусловјанскы";
-const kwicpyachnim = "пяш";
+const kwicpyachnim = "пјаш";
 const clattsen = require('child_process');
 
 function bvan(kwictlat) {
-	  let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
+	  let myin = `espeak-ng -x --ipa -q  -v${fyekhkom} "${kwictlat.replace(/[-_]/," ")}";`
   	  return(clattsen.execSync(myin).toString());
 }
 
@@ -21,7 +22,7 @@ function ryan(kwickwonli, qristlatpu) {
   const psas = qristlatlwat.map((tlat) => {
     const syamtlat = tlat.replace(/-/g,"_").replace(/_$/,"");
   	return kwickwonli[syamtlat];	
-  }).join(", ");
+  }).join(dluk);
   return psas;
 }
 
@@ -46,15 +47,28 @@ function fyek(tlat) {
     .replace("h","ʰ").replace("y","j");
 }
 
+function cli7kryan(tlat) {
+	return tlat == undefined || tlat.length == 0? tlat: 
+		tlat.replace(/[Ьь]/g, "ј").replace(/Єє/g, "је").replace(/Її/g, "ји").replace(/Йй/g, "иј").replace(/Юю/g, "ју").replace(/Яяя/g, "ја")
+}
+
 
 
 fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
 	let kwickwonlwat = JSON.parse(kwictlatpu);
 	let qrissokwicmakwonli = {};
 	let kwicsoqrismakwonli = {};
+        let pyackwon = {};
   	for (let i = 0; i < kwickwonlwat.length; i++) {
 		let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = kwictlat;
+		qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
+                if (kwickwonlwat[i].pya) {
+                  //if (kwickwonlwat[i].pya.localeCompare("trah") == 0) {
+                  //console.log(` pyackwon[${kwickwonlwat[i].pya}] = ${kwickwonlwat[i][kwichkom]}`);
+                  //}
+                  pyackwon[kwickwonlwat[i].pya] = kwickwonlwat[i][kwichkom];
+                }
+               
 	}
 	const kwickwon = qrissokwicmakwonli;
 
@@ -65,7 +79,6 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
   let kwicsoryanlwat = [];
   let pyacsoryanlwat = [];
   let hnucsoryanlwat = [];
-  let pyackwon = {};
   let qriskwon = {};
   let hnuckwon = {};
   let kwictlat = "";
@@ -75,12 +88,14 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
     qrissoryanlwat.push([qriskwonlwat[i][qrishkom], qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
     kwictlat = ryan(kwickwon, qriskwonlwat[i][qrishkom]);
     if (kwictlat.length > 0 && kwictlat.split(" ").length == 1) {
-    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc]);
+    kwicsoryanlwat.push([kwictlat, qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i].en]);
     }
     pyacsoryanlwat.push([qriskwonlwat[i].pya, qriskwonlwat[i].hnuc, qriskwonlwat[i][qrishkom]]);
     hnucsoryanlwat.push([qriskwonlwat[i].hnuc, qriskwonlwat[i].pya, qriskwonlwat[i][qrishkom]]);
 //	  console.log(`${qrissokwicmakwonli[qriskwonlwat[i][qrishkom]]} ${qriskwonlwat[i][qrishkom]}`);
+    if (qrissokwicmakwonli[qriskwonlwat[i][qrishkom].replace(/_*$/g,"")]){
     pyackwon[qriskwonlwat[i].pya] = qrissokwicmakwonli[qriskwonlwat[i][qrishkom].replace(/_*$/g,"")];
+    }
     hnuckwon[qriskwonlwat[i].pya] = qriskwonlwat[i].hnuc;
     qriskwon[qriskwonlwat[i][qrishkom]] = qriskwonlwat[i].pya;
     qrissopyacmakwonli[qriskwonlwat[i][qrishkom]] = qriskwonlwat[i].pya;
@@ -89,7 +104,9 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
   fs.readFile("pyackwon.json", "utf8", function(err, pyackwonmrut) {
     const pyackwonlwat = JSON.parse(pyackwonmrut);
     for (let i = 0; i < pyackwonlwat.length; i++) {
+        if (pyackwonlwat[i][qrishkom].length > 0) {
   	pyackwon[pyackwonlwat[i].pya] = pyackwonlwat[i][qrishkom];
+        }
     }
     
   
@@ -260,8 +277,8 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       if (kwicryan.length == 2 && kwicryan[1].length > 0) {
         psas += `${kwictlat}: ${kwicryan[1]} \\\\\n`;
       }
-      if (kwicryan.length == 3) {
-        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} \\\\\n`);
+      if (kwicryan.length == 4) {
+        psas+=(`${kwictlat}: \\textbf{${kwicryan[1]}} [\\emph{${fyek(kwicryan[1])}}] ${kwicryan[2]} (${kwicryan[3]}) \\\\\n`);
       }
     }
     // 
@@ -288,7 +305,12 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       if (pyacryan.length == 3) {
 	     //console.log(`pyactlat ${pyactlat}`);
 	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  pyackwon[pyactlat] : pyacryan[3];
-        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]}: ${nyifhtin}\\\\\n`);
+        if (nyifhtin == undefined) {
+          console.log("error undefined word");
+          console.log(`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]} (${pyacryan[3]}): ${nyifhtin}\\\\\n`);
+          exit();
+        }
+        psas += (`\\textbf{${pyactlat}} [\\emph{${fyek(pyactlat)}}] ${pyacryan[1]} (${pyacryan[2]}): ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));
@@ -314,9 +336,9 @@ fs.readFile("pyashWords.json", "utf8", function(err, pyashWords) {
       }
       if (hnucryan.length == 3) {
 	const pyactlat = hnucryan[1];
-        console.log(pyactlat);
+        // console.log(pyactlat);
 	const nyifhtin = pyackwon[pyactlat] && pyackwon[pyactlat].length > 0?  `${pyackwon[pyactlat]}`  : hnucryan[3];
-        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}]: ${nyifhtin}\\\\\n`);
+        psas +=(`${hnuctlat} \\textbf{${hnucryan[1]}} [\\emph{${fyek(hnucryan[1])}}] (${hnucryan[2]}): ${nyifhtin}\\\\\n`);
       }
     }
     console.log(psas.replace(/_/g,"-"));

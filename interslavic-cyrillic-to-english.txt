@@ -1314,7 +1314,7 @@
 весељанје n. entertainment
 вєсити v.tr. ipf. hang 
 весло n. oar, paddle
-весна f. spring, springtime
+весна f. springtime
 вєст f. news
 вєсти f.pl. news
 вести  v.tr. ipf. lead
@@ -3271,6 +3271,7 @@
 жрец m.anim. priest , druid
 жрица f. priestess 
 жрло n. crater, muzzle ; source
+жрло падеж n. source case
 жртва f. prey; victim, sacrifice
 жртвовати v.tr. ipf. sacrifice
 жувати  v.intr. ipf. chew, masticate
@@ -6465,7 +6466,7 @@
 можны adj. possible, feasible
 Мозамбик m. Mozambique
 мозг m. brain
-мозољ f. corn, callus
+мозољ f. callus
 мој pron.poss. my
 мокнути v.intr. ipf. get wet
 мокрєти v.intr. ipf. get wet
@@ -10841,7 +10842,6 @@
 прст m. finger, toe, digit
 прстењ m. ring
 пруга f. stripe, streak
-пружина f. spring
 пружити v.tr. ipf. stretch, pull tight
 пружны adj. elastic
 Прусија f. Prussia

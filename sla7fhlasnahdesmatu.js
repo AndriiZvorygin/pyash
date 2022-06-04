@@ -1,10 +1,18 @@
 #!/usr/bin/env node
 'use strict';
 const fs = require('fs');
+const clattsen = require('child_process');
 const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
 const kwichkom = "ru";
 const sla7fhkom = "isv";
+
+function bvan(kwictlat) {
+	  //let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
+  	  //return(clattsen.execSync(myin).toString());
+	return kwictlat? kwictlat.replace("ф","f"): kwictlat;
+}
+
 function cli7kryan(tlat) {
   if (tlat == undefined || tlat.length == 0) return tlat;
   const ryantlat = 
@@ -65,32 +73,20 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
           let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
             qrissokwicmakwonli[qristlat];
           const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
-          // if (/свјет/.test(kwictlat)) { console.log(kwictlat);}
-	  // if (kwictlat.localeCompare("свјетскы") == 0) {
-	  //         console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
-          //         console.log(`tyattlat.length == 0 ${tyattlat.length == 0}\n` +
-          //           `tyattlat.length > kwictlat.length ${tyattlat.length > kwictlat.length}\n` + 
-          //           `! sla7flwat.includes(tyattlat) ${! sla7flwat.includes(tyattlat)}\n` +
-          //           ` kwictlat.length > 0 ${kwictlat.length > 0}\n` +
-          //      `/[0-9]/.test(tyattlat)  ${/[0-9]/.test(tyattlat)}\n` +
-          //      `! tyattlatlwat.includes(kwictlat) ${! tyattlatlwat.includes(kwictlat)}\n` + 
-          //      `! /[0-9]/.test(kwictlat) ${! /[0-9]/.test(kwictlat)}\n`);
-	  // }
-          /* TODO: prefer less ambigious words */
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
                   || nyifhlaslwat[tyattlat] > nyifhlas.length
 		  || (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)
                || /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
-	  //if (kwictlat.localeCompare("свєтскы") == 0) {
-	  //        console.log(`qristlat ${qristlat} tyattlat ${tyattlat} kwictlat ${kwictlat}`);
-          //}
               tyattlat = kwictlat;
 	      qrissokwicmakwonli[qristlat] = tyattlat;
           }
           tyattlatlwat.push(tyattlat);
         });
-        return {"isv": cli7kryan(hlas[0]), "en":nyifhlas[0]};
+	let psastlat = cli7kryan(hlas[0]);
+	let fyektlat = bvan(psastlat);
+	//console.log(`${psastlat} ${fyektlat}`);
+        return {"isv": psastlat, "isv_fyek": fyektlat, "en":nyifhlas[0]};
       });
 
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
