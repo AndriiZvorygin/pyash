@@ -4,7 +4,7 @@ const fs = require('fs');
 const clattsen = require('child_process');
 const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
-const kwichkom = "ru";
+const kwichkom = "uk";
 const sla7fhkom = "isv";
 
 function bvan(kwictlat) {
@@ -30,7 +30,24 @@ function cli7kryan(tlat) {
     .replace(/ts/g, "ц").replace(/q/g, "кв").replace(/x/g, "кс")
     .replace(/gh/g,"х").replace(/sh/g,"ш").replace(/t/g,"т").replace(/u/g,"у")
     .replace(/f/g, "ф").replace(/h/g,"х").replace(/c/g,"ц").replace(/y/g, "ј")
-    .replace(/[Ss]/g, "с").replace(/ии/g, "и").replace(/ее/,"ејо");
+    .replace(/[Ss]/g, "s").replace(/ии/g, "i").replace(/ее/,"ејо")
+	.replace(/\ дело$/, " падеж");
+//    tlat.toLowerCase().replace(/e$/,"") .replace(/e[ ]/g, " ")
+//    .replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "је").replace(/[Її]/g, "ји")
+//    .replace(/[Йй]/g, "иј").replace(/[Юю]/g, "ју").replace(/[Яяя]/g, "ја")
+//    .replace(/[љ]/g, "лј").replace(/[њњ]/g, "нј").replace(/[Aa]/g, "а")
+//    .replace(/[Bb]/g, "б").replace(/[Vv]/g, "в").replace(/,/g, "")
+//    .replace(/[Dd]/g, "д").replace(/[Ee]/g, "е").replace(/[Jj]/g, "ж")
+//    .replace(/[Zz]/g, "з").replace(/[Ii]/g, "и").replace(/[Kk]/g, "к")
+//    .replace(/[Ll]/g, "л").replace(/[Ww]/g, "вј").replace(/Mm/g, "м")
+//    .replace(/[Nn]/g, "н").replace(/[Oo]/g, "о").replace(/Pp/g, "п")
+//    .replace(/[Rr]/g, "р").replace(/shch/g, "щ").replace(/ch/g, "ч")
+//    .replace(/[]/g, "п").replace("&#39;","")
+//    .replace(/ts/g, "ц").replace(/q/g, "кв").replace(/x/g, "кс")
+//    .replace(/gh/g,"х").replace(/sh/g,"ш").replace(/t/g,"т").replace(/u/g,"у")
+//    .replace(/f/g, "ф").replace(/h/g,"х").replace(/c/g,"ц").replace(/y/g, "ј")
+//    .replace(/[Ss]/g, "с").replace(/ии/g, "и").replace(/ее/,"ејо")
+//	.replace(/\ дело$/, " падеж");
   //console.log(`${tlat} ${ryantlat}`);
   return ryantlat;
 }
@@ -62,24 +79,27 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
       // generate dictionary
       let tyattlatlwat = [];
       sla7flwat = sla7fkwonlwat.map(hlas => {
-        return hlas[0];
+        return cli7kryan(hlas[0]);
       });
       let nyifhlaslwat = {};
       sla7fkwonlwat = sla7fkwonlwat.map(hlas => {
         const nyifhlas = hlas.slice(1).join(" ").split(/[,;]/g);
-        nyifhlaslwat[hlas[0]] = nyifhlas.length;
+        //nyifhlaslwat[hlas[0]] = hlas[0].length;
 	nyifhlas.forEach(qristlat => {
           qristlat = qristlat.trim();
           let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
             qrissokwicmakwonli[qristlat];
           const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
+	 //if(qristlat == "love") { console.log(1+tyattlat+" "+kwictlat+" " +tyattlatlwat.includes(kwictlat) + (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)); }
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
-                  || nyifhlaslwat[tyattlat] > nyifhlas.length
+                  //|| nyifhlaslwat[qristlat] > kwictlat.length
 		  || (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)
-               || /[0-9]/.test(tyattlat)) 
+               ||  /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
               tyattlat = kwictlat;
+	  //if(qristlat == "love") console.log(2+tyattlat+" "+kwictlat+ "nyifhlaslwat[tyattlat]" + nyifhlaslwat[qristlat]);
 	      qrissokwicmakwonli[qristlat] = tyattlat;
+	      nyifhlaslwat[qristlat] = tyattlat.length;
           }
           tyattlatlwat.push(tyattlat);
         });

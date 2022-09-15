@@ -3271,7 +3271,7 @@
 жрец m.anim. priest , druid
 жрица f. priestess 
 жрло n. crater, muzzle ; source
-жрло падеж n. source case
+жрло-падеж n. source_case
 жртва f. prey; victim, sacrifice
 жртвовати v.tr. ipf. sacrifice
 жувати  v.intr. ipf. chew, masticate
@@ -10012,7 +10012,7 @@
 практичност f. practicality
 практичны adj. practical
 пралєс m. primeval forest
-прална машина f. washing machine
+прална-машина f. washing-machine
 праотец m.anim. forefather, progenitor
 прародитељ m.anim. grandparent
 прасе n. piglet
@@ -10020,7 +10020,7 @@
 прасловјанскы adj. Proto-Slavic
 прати  v.tr. ipf. wash , launder
 прах m. dust, powder
-прахососалник m. vacuum cleaner
+прахососалник m. vacuum-cleaner
 праца f. work, labour, labor
 працовати v.intr. ipf. work
 працовито adv. diligently
@@ -12056,6 +12056,8 @@
 симетричны adj. symmetrical
 симпатизант m.anim. sympathizer
 симпатија f. sympathy
+сочут m. sympathy
+сустраданје m. sympathy
 симпатичны adj. sympathetic
 симптом m. symptom
 симулација f. simulation
