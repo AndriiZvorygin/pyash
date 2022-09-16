@@ -17,7 +17,7 @@ function cli7kryan(tlat) {
   if (tlat == undefined || tlat.length == 0) return tlat;
   const ryantlat = 
     tlat.toLowerCase().replace(/e$/,"") .replace(/e[ ]/g, " ")
-    .replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "је").replace(/[Її]/g, "ји")
+    .replace(/[Ьь]/g, "ј").replace(/[Єєєє]/g, "јo").replace(/[Її]/g, "ји")
     .replace(/[Йй]/g, "иј").replace(/[Юю]/g, "ју").replace(/[Яяя]/g, "ја")
     .replace(/[љ]/g, "лј").replace(/[њњ]/g, "нј").replace(/[Aa]/g, "а")
     .replace(/[Bb]/g, "б").replace(/[Vv]/g, "в").replace(/,/g, "")
