@@ -4725,7 +4725,8 @@
 как, како adv. as; how
 как, како prep. like; како можно ранєјше as early as possible; како можно скорєје as soon as possible; како толико as soon as; како бы as if; како … тако и … both … and …; како се говори so to speak; како се тврди allegedly
 какао n.indecl. cacao, cocoa
-какати v.intr. ipf. poop, poo
+какати v.intr. ipf. poop, poo, feces
+какати ipf. feces
 какобы adv. in a way, kind of, as it were, sort of
 какоколи adv. anyway
 како-либо adv. anyway
@@ -7637,7 +7638,6 @@
 носити v.tr. ipf. carry , bear; wear
 носны adj. nasal
 носовка f. handkerchief
-носок m. toecap; spout
 носорог m.anim. rhinoceros
 носталгија f. nostalgia
 носталгичны adj. nostalgic

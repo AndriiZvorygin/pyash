@@ -65,8 +65,10 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
     const pyackwonlwat = JSON.parse(pyactlatpu);
     let qrissopyacmakwonli = {};
+    let qrispyaclwat = [];
     for (let i = 0; i < pyackwonlwat.length; i++) {
 	    qrissopyacmakwonli[pyackwonlwat[i].en] = pyackwonlwat[i].pya;
+	    qrispyaclwat.push(pyackwonlwat[i].en);
     }
     fs.readFile(file, "utf8", function(err, sla7fkwonhlas) { 
       let sla7fkwonlwat = sla7fkwonhlas.toString().split("\n");;
@@ -90,18 +92,25 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
           let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
             qrissokwicmakwonli[qristlat];
           const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
-	 //if(qristlat == "love") { console.log(1+tyattlat+" "+kwictlat+" " +tyattlatlwat.includes(kwictlat) + (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)); }
+	 //if(qristlat == "sock") { console.log(1+tyattlat+" "+kwictlat+" " + (sla7flwat.includes(tyattlat))+ 
+	 //        (! sla7flwat.includes(tyattlat) && kwictlat.length > 0 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat))); 
+	 //        console.log(sla7flwat.indexOf(kwictlat));
+	 //}
+
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
                   //|| nyifhlaslwat[qristlat] > kwictlat.length
 		  || (! sla7flwat.includes(tyattlat) && kwictlat.length > 0)
                ||  /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
               tyattlat = kwictlat;
-	  //if(qristlat == "love") console.log(2+tyattlat+" "+kwictlat+ "nyifhlaslwat[tyattlat]" + nyifhlaslwat[qristlat]);
+	 //if(qristlat == "sock") console.log(2+tyattlat+" "+kwictlat+ "nyifhlaslwat[tyattlat]" + nyifhlaslwat[qristlat]);
+	 // if(tyattlat == "какати") console.log(3+qristlat);
 	      qrissokwicmakwonli[qristlat] = tyattlat;
 	      nyifhlaslwat[qristlat] = tyattlat.length;
+	      if (qrispyaclwat.includes(qristlat)){
+              	tyattlatlwat.push(tyattlat);
+	      }
           }
-          tyattlatlwat.push(tyattlat);
         });
 	let psastlat = cli7kryan(hlas[0]);
 	let fyektlat = bvan(psastlat);
