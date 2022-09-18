@@ -10033,6 +10033,7 @@
 првенство n. championship
 првєсток m. element
 прво adv. firstly
+првы ord. first
 првобраз m. prototype
 првобытны adj. original, primal, primary, primeval
 првовзор m. prototype
