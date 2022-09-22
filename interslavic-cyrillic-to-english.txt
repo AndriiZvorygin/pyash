@@ -1,5 +1,24 @@
+все b. all
+пол m. gender
+против p. against
+дом m. house
+меджу m. between
+допрва a. until
+чрвены a. red
+мєста n. places
+взамєн a. instead
+лити i. cast
+минути p. passing
+молитисе i. pray
+боки i. sides
+проч i. aside
+светы i. holy
+бурја i. storm
 а conj. and, but
 а intj. ah
+љубпол p. love_gender
+мудрыпол p. wise_gender
+избрапол p. choice_gender
 абажур m. lampshare
 абдикација f. abdication
 абдиковати v.intr. ipf. abdicate
@@ -14620,3 +14639,6 @@
 впрєд adv. forward
 рабити pf. making
 учитсе pf. learn
+епошта b. email
+писати b. write
+
