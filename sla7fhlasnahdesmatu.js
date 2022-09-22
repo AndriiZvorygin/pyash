@@ -4,7 +4,7 @@ const fs = require('fs');
 const clattsen = require('child_process');
 const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
-const kwichkom = "uk";
+const kwichkom = "ru";
 const sla7fhkom = "isv";
 
 function bvan(kwictlat) {
@@ -48,7 +48,6 @@ function cli7kryan(tlat) {
 //    .replace(/f/g, "ф").replace(/h/g,"х").replace(/c/g,"ц").replace(/y/g, "ј")
 //    .replace(/[Ss]/g, "с").replace(/ии/g, "и").replace(/ее/,"ејо")
 //	.replace(/\ дело$/, " падеж");
-  //console.log(`${tlat} ${ryantlat}`);
   return ryantlat;
 }
 
@@ -57,10 +56,15 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
   let sla7flwat = [];
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
+  let kwiclwat = [];
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
 	//sla7flwat.push(kwictlat);
+//	if (! kwiclwat.includes(kwictlat)) { 
   	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
+//	kwiclwat.push(kwictlat);
+//	}
+	
   }
   fs.readFile("pyashWords.json", "utf8", function(err, pyactlatpu) { 
     const pyackwonlwat = JSON.parse(pyactlatpu);
@@ -71,6 +75,7 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 	    qrispyaclwat.push(pyackwonlwat[i].en);
     }
     fs.readFile(file, "utf8", function(err, sla7fkwonhlas) { 
+      let qrissosla7fmakwonli = {};
       let sla7fkwonlwat = sla7fkwonhlas.toString().split("\n");;
       // split into lines of words
       sla7fkwonlwat = sla7fkwonlwat.map( hlas => {
@@ -89,12 +94,12 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         //nyifhlaslwat[hlas[0]] = hlas[0].length;
 	nyifhlas.forEach(qristlat => {
           qristlat = qristlat.trim();
-          let tyattlat = qrissokwicmakwonli[qristlat] == undefined? "":
-            qrissokwicmakwonli[qristlat];
+          let tyattlat = qrissosla7fmakwonli[qristlat] == undefined? "":
+            qrissosla7fmakwonli[qristlat];
           const kwictlat = hlas[0] == undefined? "": cli7kryan(hlas[0]);
-	 //if(qristlat == "sock") { console.log(1+tyattlat+" "+kwictlat+" " + (sla7flwat.includes(tyattlat))+ 
-	 //        (! sla7flwat.includes(tyattlat) && kwictlat.length > 0 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat))); 
-	 //        console.log(sla7flwat.indexOf(kwictlat));
+	 //if(qristlat == "all") { console.log(1+qristlat+tyattlat+tyattlat.length+" "+kwictlat+" " + (tyattlatlwat.includes(kwictlat))+ 
+	 //        ( ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat))); 
+	 //        console.log(tyattlatlwat.indexOf(kwictlat) + tyattlatlwat[tyattlatlwat.indexOf(kwictlat)]);
 	 //}
 
           if ((tyattlat.length == 0 || tyattlat.length > kwictlat.length 
@@ -103,13 +108,14 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
                ||  /[0-9]/.test(tyattlat)) 
                 && ! tyattlatlwat.includes(kwictlat) && ! /[0-9]/.test(kwictlat)) {
               tyattlat = kwictlat;
-	 //if(qristlat == "sock") console.log(2+tyattlat+" "+kwictlat+ "nyifhlaslwat[tyattlat]" + nyifhlaslwat[qristlat]);
-	 // if(tyattlat == "какати") console.log(3+qristlat);
-	      qrissokwicmakwonli[qristlat] = tyattlat;
-	      nyifhlaslwat[qristlat] = tyattlat.length;
-	      if (qrispyaclwat.includes(qristlat)){
-              	tyattlatlwat.push(tyattlat);
-	      }
+	  //if(qristlat == "all") console.log(2+tyattlat+" "+kwictlat+ "nyifhlaslwat[tyattlat]" + nyifhlaslwat[qristlat]);
+	  //if(tyattlat == "лист") console.log(3+qristlat);
+	  qrissokwicmakwonli[qristlat] = tyattlat;
+	  qrissosla7fmakwonli[qristlat] = tyattlat;
+	  //    nyifhlaslwat[qristlat] = tyattlat.length;
+	  if (qrispyaclwat.includes(qristlat)){
+          	tyattlatlwat.push(tyattlat);
+	  }
           }
         });
 	let psastlat = cli7kryan(hlas[0]);
@@ -118,6 +124,13 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         return {"isv": psastlat, "isv_fyek": fyektlat, "en":nyifhlas[0]};
       });
 
+      qrispyaclwat.forEach((qristlat) => {
+	      qristlat = qristlat.replace(/_$/, "");
+	      let kwictlat = qrissokwicmakwonli[qristlat]; 
+	      if (kwictlat == undefined || kwictlat.length == 0) {
+		      console.log(`error ${qristlat} undefined`);
+	      }
+      });
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
 	      const qristlat = psut.en.replace(/_$/, "");
 	      psut.isv = qrissokwicmakwonli[qristlat];
@@ -130,7 +143,6 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         }
       });
 
-      let qrissosla7fmakwonli = {};
       for (let i = 0; i < sla7fkwonlwat.length; i++) {
   	let sla7ftlat = sla7fkwonlwat[i][sla7fhkom] && sla7fkwonlwat[i][sla7fhkom].replace(/\n/g,"");
 	if (sla7fkwonlwat[i][qrishkom]) {
