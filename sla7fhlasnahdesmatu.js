@@ -59,7 +59,6 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
   let kwiclwat = [];
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
-	//sla7flwat.push(kwictlat);
 //	if (! kwiclwat.includes(kwictlat)) { 
   	qrissokwicmakwonli[kwickwonlwat[i][qrishkom].replace(/-/g,"_")] = cli7kryan(kwictlat);
 //	kwiclwat.push(kwictlat);
