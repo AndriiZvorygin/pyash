@@ -6,6 +6,19 @@
 допрва a. until
 чрвены a. red
 мєста n. places
+убєджати i. suasion
+стегање i. constriction
+мармосет i. marmoset
+мєстныпадеж i. locative_case
+граматичныпадеж i. grammatical_case
+сентенциозен i. sententious
+тврдыварити i. hard_boiled
+субјунктив i. subjunctive
+бљуватны i. emetic
+мутити i. rumpus
+пристанишче i. waterfront
+инфлација i. insufflation
+петнистаја i. splotchy
 взамєн a. instead
 лити i. cast
 минути p. passing
@@ -16,6 +29,7 @@
 бурја i. storm
 једин i. one
 вугол i. angle
+внутрны i. inner
 спорты i. sports
 чудны i. oddly
 солнечник i. sunflower

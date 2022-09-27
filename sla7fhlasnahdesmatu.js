@@ -5,6 +5,7 @@ const clattsen = require('child_process');
 const file = "interslavic-cyrillic-to-english.txt";
 const qrishkom = "en";
 const kwichkom = "uk";
+const tyutkwichkom = "ru";
 const sla7fhkom = "isv";
 
 function bvan(kwictlat) {
@@ -65,6 +66,18 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
   let qrissokwicmakwonli = {};
   let kwicsoqrismakwonli = {};
   let kwiclwat = [];
+  for (let i = 0; i < kwickwonlwat.length; i++) {
+  	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
+	let qristlat = kwickwonlwat[i][qrishkom].replace(/-/g,"_");
+	if (! kwiclwat.includes(kwictlat)) { 
+  	  qrissokwicmakwonli[qristlat] = cli7kryan(kwictlat);
+	  if (qrispyaclwat.includes(qristlat)) {
+	  kwiclwat.push(kwictlat);
+	  }
+	}
+	
+  }
+fs.readFile("dictionary_" + tyutkwichkom + ".json", "utf8", function(err, kwictlatpu) {
   for (let i = 0; i < kwickwonlwat.length; i++) {
   	let kwictlat = kwickwonlwat[i][kwichkom] && kwickwonlwat[i][kwichkom].replace(/\n/g,"");
 	let qristlat = kwickwonlwat[i][qrishkom].replace(/-/g,"_");
@@ -156,6 +169,7 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 	console.log(JSON.stringify(syacpyackwonlwat));
     });
   });
+});
 });
 
 
