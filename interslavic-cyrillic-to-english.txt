@@ -3,11 +3,15 @@
 против p. against
 дом m. house
 меджу m. between
+првотны i. original
 допрва a. until
 чрвены a. red
 мєста n. places
+произвести i. manufacturer
+шити i. sewing
 убєджати i. suasion
 стегање i. constriction
+начне i. begin
 мармосет i. marmoset
 мєстныпадеж i. locative_case
 граматичныпадеж i. grammatical_case
@@ -19,6 +23,7 @@
 пристанишче i. waterfront
 инфлација i. insufflation
 петнистаја i. splotchy
+мєры i. measures
 взамєн a. instead
 лити i. cast
 минути p. passing
