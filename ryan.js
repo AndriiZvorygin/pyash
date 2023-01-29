@@ -6,6 +6,9 @@ const input = process.argv[2];
 fs.readFile("dictionary_ia.json", "utf8", function(err, ia) {
   if (err) return Error(err);
   let hra7nkwon = JSON.parse(ia);
+fs.readFile("kwon_fi.json", "utf8", function(err, fi) {
+  if (err) return Error(err);
+  let fl6nkwon = JSON.parse(fi);
 fs.readFile("dictionary_isv.json", "utf8", function(err, isv) {
   if (err) return Error(err);
   let sla7fkwon = JSON.parse(isv);
@@ -18,11 +21,11 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
   //console.log(dictionary);
   const bli2spsas = dictionary.en.blacklist['X' + input];
   if (bli2spsas == undefined || bli2spsas.length == 0) {
-   const kwonlwat = [pyackwon, sla7fkwon, hra7nkwon];
+   const kwonlwat = [pyackwon, sla7fkwon, fl6nkwon, hra7nkwon];
    kwonlwat.forEach((kwon) => {
 	let hkom = kwon[0].isv? "isv": 
-		   kwon[0].ia? "ia" :
-		   "en";
+		   kwon[0].ia? "ia" : 
+		   kwon[0].fi? "fi" : "en";
 	for (let i = 0; i< kwon.length; i++) {
 		if (!kwon[i].pya || !kwon[i][hkom] || !kwon[i].en) {
 			continue;
@@ -44,6 +47,7 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
    }else {
     console.log(JSON.stringify(bli2spsas));
   }
+});
 });
 });
 });
