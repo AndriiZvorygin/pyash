@@ -12,6 +12,9 @@ fs.readFile("kwon_fi.json", "utf8", function(err, fi) {
 fs.readFile("dictionary_isv.json", "utf8", function(err, isv) {
   if (err) return Error(err);
   let sla7fkwon = JSON.parse(isv);
+fs.readFile("kwon_zh.json", "utf8", function(err, zh) {
+  if (err) return Error(err);
+  let cyi7nkwon = JSON.parse(zh);
 fs.readFile("pyashWords.json", "utf8", function(err, pya) {
   if (err) return Error(err);
   let pyackwon = JSON.parse(pya);
@@ -21,17 +24,20 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
   //console.log(dictionary);
   const bli2spsas = dictionary.en.blacklist['X' + input];
   if (bli2spsas == undefined || bli2spsas.length == 0) {
-   const kwonlwat = [pyackwon, sla7fkwon, fl6nkwon, hra7nkwon];
+   const kwonlwat = [pyackwon, sla7fkwon, fl6nkwon, hra7nkwon, cyi7nkwon];
    kwonlwat.forEach((kwon) => {
 	let hkom = kwon[0].isv? "isv": 
 		   kwon[0].ia? "ia" : 
+		   kwon[0].zh? "zh" : 
 		   kwon[0].fi? "fi" : "en";
 	for (let i = 0; i< kwon.length; i++) {
 		if (!kwon[i].pya || !kwon[i][hkom] || !kwon[i].en) {
 			continue;
 		}
 		if (kwon[i].pya.indexOf(input) == 0 || kwon[i][hkom].indexOf(input) == 0 || kwon[i].en.indexOf(input) == 0) {
-			console.log(`${kwon[i].pya} ${hkom} ${kwon[i][hkom]}`);
+			let hwus = `${kwon[i].pya} ${hkom} ${kwon[i][hkom]}`;
+			if (kwon[i][`${hkom}_fyek`]) hwus += kwon[i][`${hkom}_fyek`];
+			console.log(hwus);
 		}
 	}
    });
@@ -47,6 +53,7 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
    }else {
     console.log(JSON.stringify(bli2spsas));
   }
+});
 });
 });
 });

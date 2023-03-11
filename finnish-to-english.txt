@@ -694,7 +694,7 @@ single 	single
 stick 	stick
 tasainen 	flat
 kaksikymmentä 	twenty
-iho 	skin
+kesi 	skin
 hymy 	smile
 prässi 	crease
 reikä 	hole
@@ -1012,5 +1012,4 @@ deminutiivi	dimunitive
 e	e
  	määrittelemätön
 error	virhe
-
 
