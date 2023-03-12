@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+const kwim = false;
 const fs = require('fs');
 const clattsen = require('child_process');
 const file = "finnish-to-english.txt";
@@ -7,10 +8,14 @@ const qrishkom = "en";
 const kwichkom = "fi";
 //const tyutkwichkom = "ru";
 const fl6nhkom = "fi";
+const bvanhkom = kwichkom;
 
 function bvan(kwictlat) {
-	  //let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
-  	  //return(clattsen.execSync(myin).toString());
+	  if (! kwictlat || kwictlat.length == 0) return "";
+	 let syamtlat = kwictlat.replace(/"/,"");
+	 let myin = `espeak-ng -x --ipa -q  -v${bvanhkom} "${syamtlat}";`
+	 let tlat = clattsen.execSync(myin).toString()
+  	 return(tlat);
 	return kwictlat;
 	//return kwictlat? kwictlat.replace("ф","f"): kwictlat;
 }
@@ -150,7 +155,10 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
       });
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
 	      const qristlat = psut.en.replace(/_*$/, "");
-	      psut.fi = qrissokwicmakwonli[qristlat];
+	      const kwictlat = qrissokwicmakwonli[qristlat];
+	      psut[kwichkom] = kwictlat;
+	      psut[`${kwichkom}_fyek`] = bvan(kwictlat);
+	      if (kwim == true) console.log("kwim" + JSON.stringify(psut));
 //	      console.log(`${qristlat} ${psut.fi}`);
 	      return psut;
       });
