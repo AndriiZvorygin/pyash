@@ -7,11 +7,15 @@ const qrishkom = "en";
 const kwichkom = "uk";
 const tyutkwichkom = "ru";
 const sla7fhkom = "isv";
+const bvanhkom = "ru";
 
 function bvan(kwictlat) {
+	 let myin = `espeak-ng -x --ipa -q  -v${bvanhkom} '${kwictlat}';`
+	 let tlat = clattsen.execSync(myin).toString()
+  	 return(tlat);
 	  //let myin = `espeak-ng -x --ipa -q  -v${kwichkom} "${kwictlat}";`
   	  //return(clattsen.execSync(myin).toString());
-	return kwictlat? kwictlat.replace("ф","f"): kwictlat;
+	//return kwictlat? kwictlat.replace("ф","f"): kwictlat;
 }
 
 function cli7kryan(tlat) {
@@ -135,8 +139,9 @@ fs.readFile("dictionary_" + tyutkwichkom + ".json", "utf8", function(err, kwictl
         });
 	let psastlat = cli7kryan(hlas[0]);
 	let fyektlat = bvan(psastlat);
-	//console.log(`${psastlat} ${fyektlat}`);
-        return {"isv": psastlat, "isv_fyek": fyektlat, "en":nyifhlas[0]};
+        let psut = {"isv": psastlat, "isv_fyek": fyektlat, "en":nyifhlas[0]};
+	//console.log(psut);
+	return psut;
       });
 
       qrispyaclwat.forEach((qristlat) => {
@@ -148,8 +153,10 @@ fs.readFile("dictionary_" + tyutkwichkom + ".json", "utf8", function(err, kwictl
       });
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
 	      const qristlat = psut.en.replace(/_*$/, "");
-	      psut.isv = qrissokwicmakwonli[qristlat];
-//	      console.log(`${qristlat} ${psut.isv}`);
+	      const kwictlat = qrissokwicmakwonli[qristlat];
+	      psut[sla7fhkom] = kwictlat;
+	      psut[`${sla7fhkom}_fyek`] = bvan(kwictlat);
+	      //console.log(`${qristlat} ${psut.isv}`);
 	      return psut;
       });
       sla7fkwonlwat.forEach((psut) => {

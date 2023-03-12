@@ -4,17 +4,13 @@ const fs = require('fs');
 const clattsen = require('child_process');
 const file = "chinese_to_english.txt";
 const qrishkom = "en";
-const kwim = false;
-
-const kwichkom =  process.argv[2]
+const kwichkom = "ar";
 //const tyutkwichkom = "ru";
-const cyi7nhkom = kwichkom;
-const bvanhkom = kwichkom;
+const cyi7nhkom = "ar";
+const bvanhkom = "ar";
 
 function bvan(kwictlat) {
-	  if (! kwictlat || kwictlat.length == 0) return "";
-	 let syamtlat = kwictlat.replace(/"/,"");
-	 let myin = `espeak-ng -x --ipa -q  -v${bvanhkom} "${syamtlat}";`
+	 let myin = `espeak-ng -x --ipa -q  -v${bvanhkom} "${kwictlat}";`
 	 let tlat = clattsen.execSync(myin).toString()
   	 return(tlat);
 	return kwictlat;
@@ -143,7 +139,7 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         });
 	let psastlat = cli7kryan(hlas[0]);
 	let fyektlat = bvan(psastlat);
-	//console.log(`${psastlat} ${fyektlat}`);
+	console.log(`${psastlat} ${fyektlat}`);
         return {"zh": psastlat, "zh_fyek": fyektlat, "en":nyifhlas[0]};
       });
 
@@ -159,7 +155,7 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
 	      const kwictlat = qrissokwicmakwonli[qristlat];
 	      psut[kwichkom] = kwictlat;
 	      psut[`${kwichkom}_fyek`] = bvan(kwictlat);
-	      if (kwim == true) console.log("kwim" + JSON.stringify(psut));
+	      console.log("kwim" + JSON.stringify(psut));
 //	      console.log(`${qristlat} ${psut.fi}`);
 	      return psut;
       });
