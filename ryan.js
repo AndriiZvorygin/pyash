@@ -9,7 +9,7 @@ fs.readFile("dictionary_ia.json", "utf8", function(err, ia) {
 fs.readFile("kwon_fi.json", "utf8", function(err, fi) {
   if (err) return Error(err);
   let fl6nkwon = JSON.parse(fi);
-fs.readFile("dictionary_isv.json", "utf8", function(err, isv) {
+fs.readFile("kwon_isv.json", "utf8", function(err, isv) {
   if (err) return Error(err);
   let sla7fkwon = JSON.parse(isv);
 fs.readFile("kwon_he.json", "utf8", function(err, he) {
