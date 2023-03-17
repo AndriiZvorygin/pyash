@@ -1,10 +1,24 @@
 #!/usr/bin/env node
 'use strict';
 const fs = require('fs');
+const kwim = false;
+const clattsen = require('child_process');
 const hfas = "InterlinguaToEnglishDictionary.txt";
 const qrishkom = "en";
 const kwichkom = "es";
 const hra7nhkom = "ia";
+const bvanhkom = "ia";
+
+function bvan(kwictlat) {
+	  if (! kwictlat || kwictlat.length == 0) return "";
+	 let syamtlat = kwictlat.replace(/"/,"");
+	 let myin = `espeak-ng -x --ipa -q  -v${bvanhkom} "${syamtlat}";`
+	 let tlat = clattsen.execSync(myin).toString()
+  	 return(tlat);
+	return kwictlat;
+	//return kwictlat? kwictlat.replace("ф","f"): kwictlat;
+}
+
 function hra7nryan(tlat) {
   const ryantlat =  tlat.replace(/le /, "lo ").replace(/é/g, "e")
     .replace(/[Çç]/g, "se").replace(/[Éé]/g, "es").replace(/[Àà]/g, "ah")
@@ -67,10 +81,19 @@ fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu
         }
   }
 
+//      let syacpyackwonlwat = pyackwonlwat.map((psut) => {
+//	      const qristlat = psut.en.replace(/_$/, "");
+//	      psut.ia = qrissokwicmakwonli[qristlat];
+////	      console.log(`${qristlat} ${psut.ia}`);
+//	      return psut;
+//      });
       let syacpyackwonlwat = pyackwonlwat.map((psut) => {
-	      const qristlat = psut.en.replace(/_$/, "");
-	      psut.ia = qrissokwicmakwonli[qristlat];
-//	      console.log(`${qristlat} ${psut.ia}`);
+	      const qristlat = psut.en.replace(/_*$/, "");
+	      const kwictlat = qrissokwicmakwonli[qristlat];
+	      psut[hra7nhkom] = kwictlat;
+	      psut[`${hra7nhkom}_fyek`] = bvan(kwictlat);
+	      if (kwim == true) console.log("kwim" + JSON.stringify(psut));
+	     // console.log(`${qristlat} ${psut.fi}`);
 	      return psut;
       });
       hra7nkwonlwat.forEach((psut) => {
