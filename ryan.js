@@ -3,7 +3,7 @@
 
 const fs = require('fs');
 const input = process.argv[2];
-fs.readFile("dictionary_ia.json", "utf8", function(err, ia) {
+fs.readFile("kwon_ia.json", "utf8", function(err, ia) {
   if (err) return Error(err);
   let hra7nkwon = JSON.parse(ia);
 fs.readFile("kwon_fi.json", "utf8", function(err, fi) {
@@ -24,6 +24,9 @@ fs.readFile("kwon_hi.json", "utf8", function(err, hi) {
 fs.readFile("kwon_zh.json", "utf8", function(err, zh) {
   if (err) return Error(err);
   let cyi7nkwon = JSON.parse(zh);
+fs.readFile("kwon_en.json", "utf8", function(err, en_f) {
+  if (err) return Error(err);
+  let qrisfyekkwon = JSON.parse(en_f);
 fs.readFile("pyashWords.json", "utf8", function(err, pya) {
   if (err) return Error(err);
   let pyackwon = JSON.parse(pya);
@@ -33,22 +36,24 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
   //console.log(dictionary);
   const bli2spsas = dictionary.en.blacklist['X' + input];
   if (bli2spsas == undefined || bli2spsas.length == 0) {
-   const kwonlwat = [pyackwon, cyi7nkwon, nr6tkwon, hra7nkwon, sla7fkwon, tru2kkwon, xrupkwon, fl6nkwon];
+   const kwonlwat = [pyackwon, qrisfyekkwon, cyi7nkwon, nr6tkwon, hra7nkwon, sla7fkwon, tru2kkwon, xrupkwon, fl6nkwon];
    kwonlwat.forEach((kwon) => {
 	let hkom = kwon[0].isv? "isv": 
 		   kwon[0].ia? "ia" : 
 		   kwon[0].hi? "hi" : 
 		   kwon[0].he? "he" : 
+		   kwon[0].es? "es" : 
 		   kwon[0].tr? "tr" : 
 		   kwon[0].zh? "zh" : 
-		   kwon[0].fi? "fi" : "en";
+		   kwon[0].fi? "fi" : 
+		   kwon[0].en? "en" : "";
 	for (let i = 0; i< kwon.length; i++) {
 		if (!kwon[i].pya || !kwon[i][hkom] || !kwon[i].en) {
 			continue;
 		}
 		if (kwon[i].pya.indexOf(input) == 0 || kwon[i][hkom].indexOf(input) == 0 || kwon[i].en.indexOf(input) == 0) {
 			let hwus = `${kwon[i].pya} ${hkom} ${kwon[i][hkom]}`;
-			if (kwon[i][`${hkom}_fyek`]) hwus += " fyek " + kwon[i][`${hkom}_fyek`].trim();
+			if (kwon[i][`${hkom}_fyek`]) hwus += " /" + kwon[i][`${hkom}_fyek`].trim() + "/";
 			console.log(hwus);
 		}
 	}
@@ -65,6 +70,7 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
    }else {
     console.log(JSON.stringify(bli2spsas));
   }
+});
 });
 });
 });
