@@ -1289,7 +1289,6 @@
 #define derive_WORD 0xE9C4 // prac
 #define hollow_WORD 0xEC68 // hcoc
 #define province_WORD 0x6C20 // hpon
-#define civilization_WORD 0x0828 // hwim
 #define hang_WORD 0x6933 // dwan
 #define shock_WORD 0x2C2D // cwok
 #define driving_WORD 0x2C98 // hdok
@@ -1501,7 +1500,7 @@
 #define atelic_aspect_WORD 0x2B58 // hlek
 #define continent_WORD 0x29C6 // nrak
 #define knock_WORD 0x2ACA // truk
-#define prohibitive_mood_WORD 0x08A8 // hjim
+#define prohibitive_mood_WORD 0x0828 // hwim
 #define tie_WORD 0xA92E // rwat
 #define cell_WORD 0x4B68 // hcep
 #define egg_WORD 0x6913 // dyan
@@ -1888,7 +1887,7 @@
 #define mentally_WORD 0x8861 // mlis
 #define inadequate_WORD 0xABC4 // pret
 #define architect_WORD 0x2B4A // tsek
-#define lemon_WORD 0x0C58 // hlom
+#define lemon_WORD 0x08A8 // hjim
 #define cough_WORD 0x8C42 // ksos
 #define headache_WORD 0x2CCD // crok
 #define carpenter_WORD 0x6AC1 // mrun
@@ -1914,7 +1913,7 @@
 #define submarine_WORD 0xE831 // bwic
 #define regardless_WORD 0x6B0E // ryen
 #define earthquake_WORD 0x0B68 // hcem
-#define laboratory_WORD 0x8C88 // hbos
+#define laboratory_WORD 0x0C58 // hlom
 #define worker_WORD 0x2BC6 // nrek
 #define rhythm_WORD 0x080E // ryim
 #define interpret_WORD 0xC80A // tyif
@@ -2291,7 +2290,7 @@
 #define banana_WORD 0x09A0 // hzam
 #define rib_WORD 0x2A2B // lwuk
 #define nickel_WORD 0x2B06 // nyek
-#define bus_WORD 0x8C71 // blos
+#define bus_WORD 0x8C88 // hbos
 #define censor_WORD 0x8B69 // sles
 #define tile_WORD 0xC86A // tlif
 #define sausage_WORD 0x8B42 // kses
@@ -2674,7 +2673,7 @@
 #define sophisticate_WORD 0x2B6C // flek
 #define template_WORD 0x4B61 // mlep
 #define radioactivity_WORD 0xEC0E // ryoc
-#define kilogram_WORD 0x08E2 // kxim
+#define kilogram_WORD 0x0C66 // nlom
 #define renter_WORD 0x6BD0 // hxen
 #define overeat_WORD 0xACD0 // hxot
 #define copier_WORD 0xC802 // kyif
@@ -3021,7 +3020,7 @@
 #define word_processor_WORD 0x8BD1 // bres
 #define cloud_computing_WORD 0x48C8 // hqip
 #define mid_summer_WORD 0x0D08 // hm6m
-#define gnomic_mood_WORD 0x6CE2 // kxon
+#define gnomic_mood_WORD 0x08E2 // kxim
 #define virtual_machine_WORD 0xE876 // vlic
 #define second_language_WORD 0x4913 // dyap
 #define self_confidence_WORD 0xED48 // hs6c
@@ -3048,7 +3047,7 @@
 #define exocentric_case_WORD 0x2BD4 // zrek
 #define past_perfective_WORD 0xA93A // xwat
 #define volubility_WORD 0xA876 // vlit
-#define collective_noun_WORD 0x8BEA // txes
+#define collective_noun_WORD 0x6CE2 // kxon
 #define attaching_WORD 0x6976 // vlan
 #define absolutive_case_WORD 0x2A91 // bvuk
 #define impersonal_verb_WORD 0xCB08 // hmef
@@ -3194,7 +3193,7 @@
 #define salute_WORD 0x0973 // dlam
 #define jupiter_WORD 0x48B0 // hvip
 #define navigation_WORD 0x6BF1 // bxen
-#define gifted_WORD 0x89F3 // dxas
+#define gifted_WORD 0x8BEA // txes
 #define poland_WORD 0x6D64 // pl6n
 #define synonymous_WORD 0xADC1 // mr6t
 #define bridle_WORD 0x09E4 // pxam
@@ -3232,7 +3231,7 @@
 #define diplomacy_WORD 0x0C73 // dlom
 #define wig_WORD 0x29D6 // vrak
 #define thermometer_WORD 0x0DCA // tr6m
-#define drawers_WORD 0xECD3 // droc
+#define drawers_WORD 0x89F3 // dxas
 #define renaissance_WORD 0x8D30 // hn6s
 #define butcher_WORD 0xCA10 // hkuf
 #define inhabit_WORD 0x28F1 // bxik
@@ -3702,7 +3701,7 @@
 #define horseradish_WORD 0xE91A // xyac
 #define starfish_WORD 0xE976 // vlac
 #define plasticity_WORD 0xCA44 // psuf
-#define sleeveless_WORD 0x8891 // bvis
+#define sleeveless_WORD 0x8C71 // blos
 #define namibia_WORD 0x4B01 // myep
 #define hydroxide_WORD 0x8ADA // xrus
 #define botswana_WORD 0xCC2A // twof
@@ -3887,7 +3886,7 @@
 #define dibble_WORD 0x4984 // pfap
 #define outboard_WORD 0x4952 // gzap
 #define non_living_WORD 0xC806 // nyif
-#define doctorate_WORD 0x4CD3 // drop
+#define doctorate_WORD 0xECD3 // droc
 #define metonymy_WORD 0x0821 // mwim
 #define pipette_WORD 0x4B24 // pwep
 #define bisect_WORD 0x2D88 // hb6k
@@ -4051,7 +4050,7 @@
 #define skincare_WORD 0x2A82 // kfuk
 #define beachfront_WORD 0x6BB1 // bjen
 #define staples_WORD 0x4B09 // syep
-#define hydroponic_WORD 0x2DD3 // dr6k
+#define hydroponic_WORD 0x4CD3 // drop
 #define panels_WORD 0x8B24 // pwes
 #define hatchback_WORD 0x4919 // qyap
 #define shipyard_WORD 0x8916 // vyas
@@ -4134,7 +4133,7 @@
 #define consumers_WORD 0x8CF1 // bxos
 #define roto_tiller_WORD 0xCD50 // ht6f
 #define velvet_worm_WORD 0x0B7A // xlem
-#define bikini_WORD 0x8831 // bwis
+#define bikini_WORD 0x8891 // bvis
 #define troposphere_WORD 0xCD70 // hr6f
 #define caspian_WORD 0x4DE2 // kx6p
 #define genotypic_WORD 0x4BA8 // hjep
@@ -4144,7 +4143,7 @@
 #define zero_impact_WORD 0x2914 // zyak
 #define parterre_WORD 0xCBC4 // pref
 #define pearls_WORD 0xAAD5 // jrut
-#define tweezer_WORD 0x8836 // vwis
+#define tweezer_WORD 0x8831 // bwis
 #define boxers_WORD 0x8C31 // bwos
 #define scalar_WORD 0x0D69 // sl6m
 #define pillowcase_WORD 0x2A24 // pwuk
@@ -4152,7 +4151,7 @@
 #define rower_WORD 0x8A2E // rwus
 #define inhaler_WORD 0x4875 // jlip
 #define lithosphere_WORD 0xCD58 // hl6f
-#define groundcover_WORD 0xD170 // hra7f
+#define groundcover_WORD 0xCC90 // hgof
 #define quark_WORD 0x3110 // hka7k
 #define two_thirds_WORD 0xB08A // tfi7t
 #define nightdress_WORD 0x9830 // hni2s
@@ -4733,7 +4732,7 @@
 #define thirty_two_WORD 0xB860 // hfi2t
 #define millionaire_WORD 0x702B // lwi7n
 #define empress_WORD 0x79DA // xra2n
-#define gout_WORD 0xCC90 // hgof
+#define gout_WORD 0xB490 // hgo7t
 #define marseilles_WORD 0x9908 // hma2s
 #define unarmed_WORD 0x9430 // hno7s
 #define wast_WORD 0x9028 // hwi7s
@@ -4910,7 +4909,7 @@
 #define ebony_WORD 0x7288 // hbu7n
 #define grandchildren_WORD 0xB230 // hnu7t
 #define well_dressed_WORD 0x5068 // hci7p
-#define thud_WORD 0xB490 // hgo7t
+#define thud_WORD 0x8C12 // gyos
 #define ajar_WORD 0x3198 // hda7k
 #define doublet_WORD 0xB473 // dlo7t
 #define dialects_WORD 0x3973 // dla2k
@@ -5034,7 +5033,7 @@
 #define jot_WORD 0xB16D // cla7t
 #define doze_WORD 0x8C53 // dzos
 #define castilian_WORD 0x7062 // kli7n
-#define decades_WORD 0x3998 // hda2k
+#define decades_WORD 0x2DD3 // dr6k
 #define hermitage_WORD 0xB1DA // xra7t
 #define stubble_WORD 0x50CA // tri7p
 #define antidote_WORD 0xF150 // hta7c
@@ -5245,7 +5244,7 @@
 #define leer_WORD 0x9858 // hli2s
 #define posthumous_WORD 0xB4C9 // sro7t
 #define lassitude_WORD 0xB944 // psa2t
-#define didactic_WORD 0xB9F3 // dxa2t
+#define didactic_WORD 0x3998 // hda2k
 #define eye_witness_WORD 0x3068 // hci7k
 #define mulberry_WORD 0x5908 // hma2p
 #define abeyance_WORD 0x710A // tya7n
@@ -5620,9 +5619,9 @@
 #define labeled_WORD 0xB318 // hye7t
 #define effeminacy_WORD 0x7BA8 // hje2n
 #define quintessence_WORD 0x9342 // kse7s
-#define anachronism_WORD 0x0C66 // nlom
+#define anachronism_WORD 0x0CD2 // grom
 #define syphilis_WORD 0x9861 // mli2s
-#define daunt_WORD 0xB953 // dza2t
+#define daunt_WORD 0xB9F3 // dxa2t
 #define spiritualism_WORD 0x0A29 // swum
 #define intertwined_WORD 0xB12A // twa7t
 #define glaze_WORD 0x9890 // hgi2s
@@ -5885,7 +5884,7 @@
 #define charwoman_WORD 0x7298 // hdu7n
 #define rhea_WORD 0x390E // rya2k
 #define theocracy_WORD 0x9BCA // tre2s
-#define drover_WORD 0xD370 // hre7f
+#define drover_WORD 0xD170 // hra7f
 #define sofia_WORD 0xD009 // syi7f
 #define conscripts_WORD 0x48D5 // jrip
 #define life_size_WORD 0xB115 // jya7t
@@ -6134,7 +6133,7 @@
 #define hydrate_WORD 0xB3DA // xre7t
 #define hypodermic_WORD 0x0BA4 // pcem
 #define disqualification_WORD 0x3102 // kya7k
-#define aorta_WORD 0x0CD2 // grom
+#define aorta_WORD 0x0CD6 // vrom
 #define breadfruit_WORD 0xD388 // hbe7f
 #define finches_WORD 0xF8A4 // pci2c
 #define thuringia_WORD 0x72CA // tru7n
@@ -7333,7 +7332,7 @@
 #define conformist_WORD 0x9082 // kfi7s
 #define hexadecimal_WORD 0x1B48 // hse2m
 #define marmoreal_WORD 0x19C1 // mra2m
-#define rectifier_WORD 0xD870 // hri2f
+#define rectifier_WORD 0xD370 // hre7f
 #define sure_fire_WORD 0xD0D0 // hxi7f
 #define undermentioned_WORD 0x6A93 // dvun
 #define counter_tenor_WORD 0x72C2 // kru7n
@@ -7371,7 +7370,7 @@
 #define bandoleer_WORD 0xD188 // hba7f
 #define catalysis_WORD 0x926A // tlu7s
 #define choo_choo_WORD 0xEA2D // cwuc
-#define horology_WORD 0x8C12 // gyos
+#define horology_WORD 0xEC12 // gyoc
 #define laotian_WORD 0xEC2B // lwoc
 #define matriarch_WORD 0xF1C1 // mra7c
 #define non_fiction_WORD 0x900C // fyi7s
@@ -7402,7 +7401,7 @@
 #define little_endian_WORD 0xB074 // zli7t
 #define ovulation_WORD 0x7176 // vla7n
 #define panicked_WORD 0x3124 // pwa7k
-#define recursive_WORD 0xD8C2 // kri2f
+#define recursive_WORD 0xD870 // hri2f
 #define snot_WORD 0xBCC8 // hqo2t
 #define tonsillitis_WORD 0x917A // xla7s
 #define all_american_WORD 0x30A0 // hzi7k
@@ -7552,7 +7551,7 @@
 #define mind_boggling_WORD 0x7875 // jli2n
 #define misspell_WORD 0x5844 // psi2p
 #define phlebitis_WORD 0x8B19 // qyes
-#define quartile_WORD 0x9822 // kwi2s
+#define quartile_WORD 0xD8C2 // kri2f
 #define staphylococcus_WORD 0x3CEA // txo2k
 #define ural_altaic_WORD 0x320B // lyu7k
 #define airmail_WORD 0xB919 // qya2t
@@ -7931,7 +7930,7 @@
 #define bootee_WORD 0xB891 // bvi2t
 #define colitis_WORD 0x996D // cla2s
 #define costed_WORD 0xB482 // kfo7t
-#define debt_laden_WORD 0xB974 // zla2t
+#define debt_laden_WORD 0xB953 // dza2t
 #define dichromatic_WORD 0x11D3 // dra7m
 #define extroversion_WORD 0xFBCA // tre2c
 #define flamethrower_WORD 0xB484 // pfo7t

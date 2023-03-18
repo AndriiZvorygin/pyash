@@ -998,6 +998,7 @@ nenä 	nose
 monikko 	plural
 viha 	anger
 vaatimus 	claim
+kastike		dressing
 maanosa 	continent
 kevätaika	springtime
 täyttää	fulfill
