@@ -3703,7 +3703,8 @@
 #define latvia_WORD 0xCC2B // lwof
 #define slovenia_WORD 0xCC29 // swof
 #define clef_WORD 0xCA62 // kluf
-#define diabetes_WORD 0x8B13 // dyes
+#define dressing_WORD 0x8B13 // dyes
+#define diabetes_WORD 0x9313 // dye7s
 #define discontinuous_WORD 0x6AC8 // hqun
 #define maldives_WORD 0xC901 // myaf
 #define baroque_WORD 0x8CD1 // bros

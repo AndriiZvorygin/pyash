@@ -9491,7 +9491,7 @@
 подлежати  v.intr. ipf. be subject to, be liable to
 подлец m.anim. fucker
 подливати v.tr. ipf. water, irrigate
-подливка f. sauce, gravy
+подливка f. sauce, gravy, dressing
 подлити  v.tr. pf. water, irrigate
 подлога f. floor; base, foundation
 подложити v.tr. pf. put under
@@ -14720,4 +14720,3 @@
 учитсе pf. learn
 епошта b. email
 писати b. write
-

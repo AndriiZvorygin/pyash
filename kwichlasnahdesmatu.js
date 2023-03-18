@@ -9,7 +9,8 @@ const kwim = false;
 const kwichkom =  process.argv[2]
 //const tyutkwichkom = "ru";
 const cyi7nhkom = kwichkom;
-const bvanhkom = "en-gb-scotland";
+const bvanhkom = kwichkom;
+//const bvanhkom = "en-gb-scotland";
 
 function bvan(kwictlat) {
 	  if (! kwictlat || kwictlat.length == 0) return "";
@@ -68,7 +69,7 @@ function cli7kryan(tlat) {
 	    qrissopyacmakwonli[pyackwonlwat[i].en] = pyackwonlwat[i].pya;
 	    qrispyaclwat.push(pyackwonlwat[i].en);
     }
-fs.readFile("lwat_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
+fs.readFile("dictionary_" + kwichkom + ".json", "utf8", function(err, kwictlatpu) {
   let kwickwonlwat = JSON.parse(kwictlatpu);
   let cyi7nlwat = [];
   let qrissokwicmakwonli = {};
