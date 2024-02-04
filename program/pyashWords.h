@@ -6897,6 +6897,7 @@
 #define anti_democratic_WORD 0xB0B3 // dji7t
 #define heterosexual_WORD 0x3CCA // tro2k
 #define overdraw_WORD 0xB4B0 // hvo7t
+#define loveable_WORD 0x54B0 // hvo7p
 #define trunnion_WORD 0xD470 // hro7f
 #define well_advised_WORD 0xF968 // hca2c
 #define biochemistry_WORD 0x0831 // bwim
