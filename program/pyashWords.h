@@ -2138,6 +2138,7 @@
 #define medieval_WORD 0x8813 // dyis
 #define sparrow_WORD 0xEBC1 // mrec
 #define footnote_WORD 0xAC0C // fyot
+#define measurement 0xAC0C // mlon
 #define ratification_WORD 0x8884 // pfis
 #define orbit_WORD 0xAC2E // rwot
 #define frugal_WORD 0x2C60 // hfok
