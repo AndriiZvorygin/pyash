@@ -1,65 +1,69 @@
 import { add } from "./verbs/add.mjs";
+import { giant } from "./verbs/giant.mjs";
+import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
 
-const verbs = { add };
-const memory = [];  // all sentences
+const verbs = { add, giant };
+let lastCondition = true; // default: execute until a false conditional blocks
 
-export function interpret(sentence) {
-  memory.push(sentence);
-  const { mood } = sentence;
+export async function interpret(sentence) {
+  const { mood, be, subj, obj, to, from } = sentence;
 
-  // --- Declarative (ya) ---
-  if (mood === "ya") {
-    // simply record; nothing else needed now
-    return { stored: true, mood };
+  // Skip any statement if previous condition was false and this isn't a new condition
+  if (!lastCondition && mood !== "then") {
+    lastCondition = true; // reset after skipping one line
+    return { skipped: true };
   }
 
-  // --- Imperative (do) ---
+  // --- Conditional ---
+  if (mood === "then") {
+    const fn = verbs[be];
+    if (!fn) throw new Error(`Unknown verb: ${be}`);
+    const target = getMemory(subj?.name);
+    if (!target) throw new Error(`Unknown subj: ${subj?.name}`);
+    const truth = await fn({ subj: target.obj, from });
+    lastCondition = truth;
+    return { condition: truth };
+  }
+
+  // --- Declarative ---
+  if (mood === "ya") {
+    const existing = getMemory(subj?.name);
+    if (existing) Object.assign(existing, sentence);
+    else setMemory(sentence);
+    return { stored: subj?.name };
+  }
+
+  // --- Imperative ---
   if (mood === "do") {
-    const { be, obj, to } = sentence;
     const fn = verbs[be];
     if (!fn) throw new Error(`Unknown verb: ${be}`);
 
-    // find the latest matching sentence with subj/to name
-    const target = memory
-      .slice()
-      .reverse()
-      .find(s => s.subj?.name === to?.name);
+    // the 'to' may be a variable name, not an in-memory object
+    let target = getMemory(to?.name);
+    if (!target && to?.name) {
+      // create placeholder if it doesn’t exist yet
+      target = { subj: { name: to.name }, be: "number", obj: { num: 0 } };
+      setMemory(target);
+    }
 
-    const currentVal = target?.obj?.num ?? 0;
-    const result = fn({ obj: obj.num, to: currentVal });
-
-    // create a new declarative sentence reflecting the result
-    const update = {
-      mood: "ya",
-      subj: { name: to.name },
-      obj: { num: result.obj },
-      be: target?.be ?? "number"
-    };
-    memory.push(update);
-
-    return update;
+    const result = await fn({ obj, to });
+    if (result?.obj !== undefined && target) {
+      target.obj = typeof result.obj === "object" ? result.obj : { num: result.obj };
+    }
+    return { acted: to?.name, value: result.obj };
   }
 
-  // --- Interrogative (que) ---
+  // --- Interrogative ---
   if (mood === "que") {
-    const { subj, be, obj } = sentence;
-    const target = memory
-      .slice()
-      .reverse()
-      .find(s => s.subj?.name === subj?.name && (!be || s.be === be));
-
-    if (!target)
-      return { answer: null };
-
-    if (obj?.num === "what" || obj?.name === "what")
-      return { answer: target.obj };
-
-    return { answer: target };
+    const fact = getMemory(subj?.name);
+    if (!fact) return { answer: null };
+    if (obj?.name === "what" || obj?.num === "what") {
+      return { answer: fact.obj };
+    }
+    return { answer: fact };
   }
 
   throw new Error(`Unknown mood: ${mood}`);
 }
 
-export function dumpMemory() {
-  return memory;
-}
+export { dumpMemory };
