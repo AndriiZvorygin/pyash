@@ -1,11 +1,16 @@
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
-import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
+import { getMemory, setMemory, dumpMemory, logSentence } from "./memory.mjs";
 
 const verbs = { add, giant };
 let lastCondition = true; // default: execute until a false conditional blocks
 
 export async function interpret(sentence) {
+  if (!sentence) return;
+
+  // log everything we see
+  logSentence(sentence);
+
   const { mood, be, subj, obj, to, from } = sentence;
 
   // Skip any statement if previous condition was false and this isn't a new condition
@@ -48,7 +53,8 @@ export async function interpret(sentence) {
 
     const result = await fn({ obj, to });
     if (result?.obj !== undefined && target) {
-      target.obj = typeof result.obj === "object" ? result.obj : { num: result.obj };
+      target.obj =
+        typeof result.obj === "object" ? result.obj : { num: result.obj };
     }
     return { acted: to?.name, value: result.obj };
   }

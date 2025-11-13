@@ -1,37 +1,24 @@
-export function parse(line) {
-  const tokens = line.trim().split(/\s+/);
-  const mood = tokens.at(-1);
-  const words = tokens.slice(0, -1);
-  const s = { mood };
-  let current = null;
+// program.mjs (future helper)
+import { parse } from "./parser.mjs";
 
-  for (let i = 0; i < words.length; i++) {
-    const t = words[i];
+export function buildProgram(source) {
+  const lines = source
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("#"));
 
-    if (t === "then") {
-      // everything after 'then' is the nested clause
-      const subline = words.slice(i + 1).join(" ");
-      s.consequence = parse(subline);
-      break;
-    }
+  const sentences = lines.map(parse);
+  const labels = new Map();
 
-    if (["subj", "obj", "to", "from"].includes(t)) {
-      current = t;
-      s[current] = {};
-      continue;
-    }
-
-    if (["name", "num"].includes(t)) {
-      s[current][t] = isNaN(Number(words[i + 1])) ? words[i + 1] : Number(words[i + 1]);
-      i++;
-      continue;
-    }
-
-    if (t === "be") {
-      s.be = words[i + 1];
-      i++;
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    if (s.be === "topic" && s.mood === "ya" && s.subj?.name) {
+      if (labels.has(s.subj.name)) {
+        throw new Error(`Duplicate label: ${s.subj.name}`);
+      }
+      labels.set(s.subj.name, i + 1); // pc = next sentence
     }
   }
 
-  return s;
+  return { sentences, labels };
 }
