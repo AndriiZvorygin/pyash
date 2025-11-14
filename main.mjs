@@ -3,14 +3,19 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "./parser.mjs";
-import { interpret, dumpMemory } from "./dispatcher.mjs";
-import { dumpHistory } from "./memory.mjs";
+import { interpret } from "./dispatcher.mjs";
+import { dumpMemory, resetMemory } from "./memory.mjs";
 
 async function repl() {
   const rl = readline.createInterface({ input, output });
 
   console.log("Pyash REPL");
-  console.log("Type a sentence, 'mem' to see state, 'hist' for history, 'quit' to exit.\n");
+  console.log("Commands:");
+  console.log("  mem    - show current memory (all sentences, last-write-wins)");
+  console.log("  reset  - clear memory");
+  console.log("  quit   - exit");
+  console.log("");
+  console.log("Type a Pyash sentence to interpret it.\n");
 
   while (true) {
     const line = await rl.question("> ");
@@ -27,8 +32,9 @@ async function repl() {
       continue;
     }
 
-    if (trimmed === "hist") {
-      console.log("History:", JSON.stringify(dumpHistory(), null, 2));
+    if (trimmed === "reset") {
+      resetMemory();
+      console.log("Memory cleared.");
       continue;
     }
 

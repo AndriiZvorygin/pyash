@@ -1,25 +1,21 @@
+// dispatcher.mjs (only the ya part needs a tweak)
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
-import { getMemory, setMemory, dumpMemory, logSentence } from "./memory.mjs";
+import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
 
 const verbs = { add, giant };
-let lastCondition = true; // default: execute until a false conditional blocks
+let lastCondition = true;
 
 export async function interpret(sentence) {
   if (!sentence) return;
 
-  // log everything we see
-  logSentence(sentence);
-
   const { mood, be, subj, obj, to, from } = sentence;
 
-  // Skip any statement if previous condition was false and this isn't a new condition
   if (!lastCondition && mood !== "then") {
-    lastCondition = true; // reset after skipping one line
+    lastCondition = true;
     return { skipped: true };
   }
 
-  // --- Conditional ---
   if (mood === "then") {
     const fn = verbs[be];
     if (!fn) throw new Error(`Unknown verb: ${be}`);
@@ -30,11 +26,9 @@ export async function interpret(sentence) {
     return { condition: truth };
   }
 
-  // --- Declarative ---
+  // --- Declarative: always append; getMemory will take the latest ---
   if (mood === "ya") {
-    const existing = getMemory(subj?.name);
-    if (existing) Object.assign(existing, sentence);
-    else setMemory(sentence);
+    setMemory(sentence);
     return { stored: subj?.name };
   }
 
@@ -43,10 +37,8 @@ export async function interpret(sentence) {
     const fn = verbs[be];
     if (!fn) throw new Error(`Unknown verb: ${be}`);
 
-    // the 'to' may be a variable name, not an in-memory object
     let target = getMemory(to?.name);
     if (!target && to?.name) {
-      // create placeholder if it doesn’t exist yet
       target = { subj: { name: to.name }, be: "number", obj: { num: 0 } };
       setMemory(target);
     }
@@ -55,6 +47,8 @@ export async function interpret(sentence) {
     if (result?.obj !== undefined && target) {
       target.obj =
         typeof result.obj === "object" ? result.obj : { num: result.obj };
+      // store updated fact as a new sentence
+      setMemory(target);
     }
     return { acted: to?.name, value: result.obj };
   }

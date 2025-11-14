@@ -1,24 +1,52 @@
-// program.mjs (future helper)
-import { parse } from "./parser.mjs";
+// parser.mjs
+export function parse(line) {
+  const tokens = line.trim().split(/\s+/);
+  if (tokens.length === 0) return null;
 
-export function buildProgram(source) {
-  const lines = source
-    .split("\n")
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith("#"));
+  const mood = tokens.at(-1);
+  const words = tokens.slice(0, -1);
+  const s = { mood };
+  let current = null;
 
-  const sentences = lines.map(parse);
-  const labels = new Map();
+  for (let i = 0; i < words.length; i++) {
+    const t = words[i];
 
-  for (let i = 0; i < sentences.length; i++) {
-    const s = sentences[i];
-    if (s.be === "topic" && s.mood === "ya" && s.subj?.name) {
-      if (labels.has(s.subj.name)) {
-        throw new Error(`Duplicate label: ${s.subj.name}`);
-      }
-      labels.set(s.subj.name, i + 1); // pc = next sentence
+    // --- special sugar: topic label ---
+    // "ta loop_head be topic ya"
+    if (t === "ta") {
+      // treat as "subj name <label>"
+      const name = words[++i];
+      s.subj = { name };
+      continue;
+    }
+
+    if (t === "then") {
+      // everything after 'then' is the nested clause
+      const subline = words.slice(i + 1).join(" ");
+      s.consequence = parse(subline);
+      break;
+    }
+
+    if (["subj", "obj", "to", "from"].includes(t)) {
+      current = t;
+      s[current] = {};
+      continue;
+    }
+
+    if (["name", "num"].includes(t)) {
+      const raw = words[i + 1];
+      const maybeNum = Number(raw);
+      s[current][t] = isNaN(maybeNum) ? raw : maybeNum;
+      i++;
+      continue;
+    }
+
+    if (t === "be") {
+      s.be = words[i + 1];
+      i++; // skip verb
+      // mood already taken from last token
     }
   }
 
-  return { sentences, labels };
+  return s;
 }
