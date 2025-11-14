@@ -1,7 +1,8 @@
-// dispatcher.mjs (only the ya part needs a tweak)
+// dispatcher.mjs
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
 import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
+import { sentenceToPyash } from "./pretty.mjs";
 
 const verbs = { add, giant };
 let lastCondition = true;
@@ -11,11 +12,13 @@ export async function interpret(sentence) {
 
   const { mood, be, subj, obj, to, from } = sentence;
 
+  // one-line skip after a false condition
   if (!lastCondition && mood !== "then") {
     lastCondition = true;
     return { skipped: true };
   }
 
+  // --- Conditional ---
   if (mood === "then") {
     const fn = verbs[be];
     if (!fn) throw new Error(`Unknown verb: ${be}`);
@@ -26,7 +29,7 @@ export async function interpret(sentence) {
     return { condition: truth };
   }
 
-  // --- Declarative: always append; getMemory will take the latest ---
+  // --- Declarative: append; last-write-wins via getMemory ---
   if (mood === "ya") {
     setMemory(sentence);
     return { stored: subj?.name };
@@ -39,28 +42,32 @@ export async function interpret(sentence) {
 
     let target = getMemory(to?.name);
     if (!target && to?.name) {
-      target = { subj: { name: to.name }, be: "number", obj: { num: 0 } };
+      // create default numeric fact if it doesn't exist
+      target = { subj: { name: to.name }, be: "number", obj: { num: 0 }, mood: "ya" };
       setMemory(target);
     }
 
-    const result = await fn({ obj, to });
+    // pass the current value, not the name
+    const result = await fn({ obj, to: target?.obj });
+
+    // expect verbs to return { obj: number | {num: number} }
     if (result?.obj !== undefined && target) {
       target.obj =
         typeof result.obj === "object" ? result.obj : { num: result.obj };
-      // store updated fact as a new sentence
+      // store updated fact as a new sentence so history is preserved
       setMemory(target);
     }
-    return { acted: to?.name, value: result.obj };
+
+    return { acted: to?.name, value: result?.obj };
   }
 
   // --- Interrogative ---
   if (mood === "que") {
     const fact = getMemory(subj?.name);
-    if (!fact) return { answer: null };
-    if (obj?.name === "what" || obj?.num === "what") {
-      return { answer: fact.obj };
-    }
-    return { answer: fact };
+    if (!fact) return null;
+
+    // For now your tests want the whole matching sentence as Pyash
+    return sentenceToPyash(fact);
   }
 
   throw new Error(`Unknown mood: ${mood}`);

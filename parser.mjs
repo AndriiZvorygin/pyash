@@ -11,17 +11,17 @@ export function parse(line) {
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
 
-    // --- special sugar: topic label ---
-    // "ta loop_head be topic ya"
+    // --- topic sugar: "ta loop_head be topic ya" ---
+    // sugar for: subj name loop_head be topic ya
     if (t === "ta") {
-      // treat as "subj name <label>"
       const name = words[++i];
       s.subj = { name };
       continue;
     }
 
     if (t === "then") {
-      // everything after 'then' is the nested clause
+      // (currently unused because 'then' is the mood word,
+      //  but we can keep this for future nested clauses)
       const subline = words.slice(i + 1).join(" ");
       s.consequence = parse(subline);
       break;
@@ -33,18 +33,33 @@ export function parse(line) {
       continue;
     }
 
-    if (["name", "num"].includes(t)) {
+    // --- interrogative pronoun sugar ---
+    // "obj what que" ⇒ obj: { name: "what" }
+    if (t === "what" && current === "obj") {
+      s.obj = { name: "what" };
+      continue;
+    }
+
+    // --- type tokens: name / num / number ---
+    if (["name", "num", "number"].includes(t)) {
       const raw = words[i + 1];
       const maybeNum = Number(raw);
-      s[current][t] = isNaN(maybeNum) ? raw : maybeNum;
-      i++;
+
+      if (t === "name") {
+        s[current].name = raw;
+      } else {
+        // num / number → numeric
+        s[current].num = isNaN(maybeNum) ? raw : maybeNum;
+      }
+
+      i++; // skip the value we just consumed
       continue;
     }
 
     if (t === "be") {
       s.be = words[i + 1];
-      i++; // skip verb
-      // mood already taken from last token
+      i++; // skip verb; mood already taken from last token
+      continue;
     }
   }
 

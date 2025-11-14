@@ -1,0 +1,48 @@
+// pretty.mjs
+
+// Render a NP like { name: "collector" } or { num: 7 }
+export function npToPyash(np = {}) {
+  if (np.name !== undefined) return `name ${np.name}`;
+  if (np.num !== undefined) return `num ${np.num}`;
+  return ""; // can refine later
+}
+
+// Render a full sentence object into surface Pyash
+export function sentenceToPyash(s = {}) {
+  const parts = [];
+
+  if (s.subj) {
+    parts.push("subj");
+    const np = npToPyash(s.subj);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.obj) {
+    parts.push("obj");
+    const np = npToPyash(s.obj);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.from) {
+    parts.push("from");
+    const np = npToPyash(s.from);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.to) {
+    parts.push("to");
+    const np = npToPyash(s.to);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.be) {
+    parts.push("be", s.be);
+  }
+
+  if (s.mood) {
+    parts.push(s.mood);
+  }
+
+  // flatten, because we sometimes push arrays
+  return parts.flat().join(" ");
+}

@@ -1,17 +1,17 @@
 // memory.mjs
 const memory = [];
+const history = []; // optional, for debugging / REPL
 
 export function setMemory(sentence) {
-  // append-only: keep all versions, like a log
   memory.push(sentence);
+  history.push(sentence);
 }
 
-// search from the end so the last matching fact wins
 export function getMemory(name) {
+  if (!name) return undefined;
   for (let i = memory.length - 1; i >= 0; i--) {
-    if (memory[i].subj?.name === name) {
-      return memory[i];
-    }
+    const s = memory[i];
+    if (s.subj?.name === name) return s;
   }
   return undefined;
 }
@@ -20,8 +20,12 @@ export function dumpMemory() {
   return memory;
 }
 
-// handy for tests / REPL reset
-export function resetMemory() {
-  memory.length = 0;
+export function dumpHistory() {
+  return history;
 }
 
+export function resetMemory() {
+  memory.length = 0;
+  // you can also clear history here if you want a “hard reset”
+  // history.length = 0;
+}
