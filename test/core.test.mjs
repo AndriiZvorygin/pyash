@@ -85,6 +85,19 @@ test("def mood stores definitional fact", async () => {
   assert.equal(fact.mood, "def");
 });
 
+test("prah mood marks end of paragraph and is stored", async () => {
+  resetMemory();
+
+  const res = await run("su paragraph_end be paragraph prah");
+  const mem = dumpMemory();
+  const fact = mem.find(s => s.mood === "prah");
+
+  assert.ok(res);
+  assert.ok(fact, "prah sentence should be recorded");
+  assert.equal(fact.subj.name, "paragraph_end");
+  assert.equal(fact.be, "paragraph");
+});
+
 test("do mood is stored in history and returns result", async () => {
   resetMemory();
 

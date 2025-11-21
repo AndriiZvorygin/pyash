@@ -21,6 +21,11 @@ export async function interpret(sentence) {
     return { skipped: true };
   }
 
+  if (mood === "prah") {
+    setMemory(sentence);
+    return { paragraphEnd: true };
+  }
+
   // --- Conditional ---
   if (mood === "then") {
     const fn = verbs[be];
