@@ -129,8 +129,8 @@ export function parse(line) {
       continue;
     }
 
-    // --- type tokens: name / num / number / text ---
-    if (["name", "num", "number", "text"].includes(t)) {
+    // --- type tokens: name / num / number / text / filename ---
+    if (["name", "num", "number", "text", "filename"].includes(t)) {
       const raw = words[i + 1];
       const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
       const maybeNum = Number(value);
@@ -139,6 +139,8 @@ export function parse(line) {
         s[current].name = value;
       } else if (t === "text") {
         s[current].text = value;
+      } else if (t === "filename") {
+        s[current].filename = value;
       } else {
         // num / number → numeric
         s[current].num = isNaN(maybeNum) ? value : maybeNum;

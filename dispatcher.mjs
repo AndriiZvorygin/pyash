@@ -2,10 +2,11 @@
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
 import compile from "./verbs/compile.mjs";
+import read from "./verbs/read.mjs";
 import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
 
-const verbs = { add, giant, compile };
+const verbs = { add, giant, compile, read };
 let lastCondition = true;
 
 export async function interpret(sentence) {
@@ -49,7 +50,7 @@ export async function interpret(sentence) {
     }
 
     // pass the current value, not the name
-    const result = await fn({ obj, to: target?.obj, sentence });
+    const result = await fn({ obj, to: target?.obj, from, sentence });
 
     // expect verbs to return { obj: number | {num: number} }
     if (result?.obj !== undefined) {
@@ -60,6 +61,13 @@ export async function interpret(sentence) {
           ? {
               subj: { name: to.name },
               be: sentence.to?.context || sentence.be || "result",
+              obj: {},
+              mood: "ya",
+            }
+          : sentence?.subj
+          ? {
+              subj: sentence.subj,
+              be: sentence.be === "read" ? "text" : sentence.be || "result",
               obj: {},
               mood: "ya",
             }
