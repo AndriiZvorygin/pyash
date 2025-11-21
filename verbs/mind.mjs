@@ -1,14 +1,15 @@
 // pyash/verbs/mind.mjs
 import ollama from "../motor/ollama.mjs";
 
-// sentence: full sentence object from workflow
-// inputs:   array of upstream outputs (in the same order as "from")
-// context:  full name → value map (optional, if you need it)
-export default async function mind(sentence, inputs, context) {
-  const model = sentence.obj?.model;
+// Accepts either (sentence, inputs, context) or an options object from dispatcher.
+export default async function mind(sentenceOrOpts, maybeInputs = [], context = {}) {
+  const sentence = sentenceOrOpts?.sentence ?? sentenceOrOpts;
+  const inputs = sentenceOrOpts?.inputs ?? maybeInputs;
+
+  const model = sentence?.obj?.model ?? sentenceOrOpts?.obj?.model;
   if (!model) throw new Error("mind: obj.model is required");
 
-  const prompt = sentence.with?.text || "";
+  const prompt = sentence?.with?.text ?? sentenceOrOpts?.with?.text ?? "";
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -26,6 +27,6 @@ export default async function mind(sentence, inputs, context) {
 
   const responseText = await ollama.generate(model, fullPrompt);
 
-  // Normalized output; your “mind” returns a text object
-  return { text: responseText };
+  // Normalized output as obj for dispatcher compatibility
+  return { obj: { text: responseText } };
 }

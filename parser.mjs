@@ -1,6 +1,18 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "with", "via"];
+const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse"];
+const AXIS_CONTEXT_TO_KEYWORD = {
+  space: { source: "from", way: "at", destination: "to" },
+  interior: { source: "outof", way: "inside", destination: "into" },
+  surface: { source: "offof", way: "along", destination: "onto" },
+  under: { source: "fromunder", way: "under", destination: "beneath" },
+  time: { source: "since", way: "during", destination: "until" },
+  state: { source: "fromstate", way: "via", destination: "become" },
+  person: { source: "fromperson", way: "with", destination: "for" },
+  social: { source: "fromgroup", way: "among", destination: "intogroup" },
+  discourse: { source: "fromtext", way: "accordingto", destination: "astext" }
+};
 function tokenize(line) {
   const tokens = [];
   let current = "";
@@ -71,6 +83,7 @@ export function parse(line) {
   const words = tokens.slice(0, -1);
   const s = { mood };
   let current = null;
+  let slot = null;
 
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
@@ -91,26 +104,44 @@ export function parse(line) {
       break;
     }
 
-    if (["subj", "su", "obj", "ob", "to", "from", "with", "via"].includes(t)) {
+    if (ROLE_KEYS.includes(t)) {
       const normalized =
         t === "su" ? "subj" :
         t === "ob" ? "obj" :
         t;
       current = normalized;
       if (!s[current]) s[current] = {};
+      slot = Array.isArray(s[current]) ? s[current][s[current].length - 1] : s[current];
       continue;
     }
 
     // --- compositional context tokens, e.g., "from state draft" ---
-    if (
-      current &&
-      ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse"].includes(t)
-    ) {
-      s[current].context = t;
+    if (current && CONTEXT_KEYS.includes(t)) {
+      const axis =
+        current === "from" ? "source" :
+        current === "to" ? "destination" :
+        (current === "via" || current === "with") ? "way" :
+        null;
+
+      if (slot && slot.context && !Array.isArray(s[current])) {
+        s[current] = [slot];
+      }
+
+      if (Array.isArray(s[current])) {
+        slot = {};
+        s[current].push(slot);
+      } else {
+        slot = s[current];
+      }
+
+      slot.context = t;
+      if (axis && AXIS_CONTEXT_TO_KEYWORD[t]?.[axis]) {
+        slot.keyword = AXIS_CONTEXT_TO_KEYWORD[t][axis];
+      }
 
       const next = words[i + 1];
-      if (next && !["subj", "obj", "to", "from", "with", "be", "then", "ta"].includes(next)) {
-        s[current].name = next;
+      if (next && !ROLE_KEYS.includes(next) && !["be", "then", "ta"].includes(next)) {
+        slot.name = next;
         i++; // consume the name token
       }
 
@@ -138,16 +169,18 @@ export function parse(line) {
       const raw = words[i + 1];
       const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
       const maybeNum = Number(value);
+      const target = slot || (current ? s[current] : null);
+      if (!target) continue;
 
       if (t === "name") {
-        s[current].name = value;
+        target.name = value;
       } else if (t === "text") {
-        s[current].text = value;
+        target.text = value;
       } else if (t === "filename") {
-        s[current].filename = value;
+        target.filename = value;
       } else {
         // num / number → numeric
-        s[current].num = isNaN(maybeNum) ? value : maybeNum;
+        target.num = isNaN(maybeNum) ? value : maybeNum;
       }
 
       i++; // skip the value we just consumed
@@ -155,8 +188,8 @@ export function parse(line) {
     }
 
     // --- bare value after a role defaults to name ---
-    if (current && s[current] && Object.keys(s[current]).length === 0) {
-      s[current].name = t;
+    if (current && slot && Object.keys(slot).length === 0) {
+      slot.name = t;
       continue;
     }
 

@@ -8,9 +8,9 @@ Every case is understood as:
 
 * The **axis** tells you *what role* the marked phrase plays:
 
-  * **SOURCE** → “from”
-  * **WAY** → “via / along / as”
-  * **DESTINATION** → “to / into / until”
+  * **SOURCE** → “from-like” (origins, sources)
+  * **WAY** → “via / at / with-like” (paths, manners, modes)
+  * **DESTINATION** → “to / into / for-like” (goals, targets, endpoints)
 
 * The **context** tells you *in what domain* that relation lives:
 
@@ -24,15 +24,15 @@ Every case is understood as:
   * **social** – groups, communities
   * **discourse** – text, speech, documents
 
-The **hex value** of the case (the `hnuc` field) is the canonical ID.
+The **hex value** of the case (the `hnuc` field) is the canonical ID.  
 The `(axis, context)` reading is provided by lookup tables.
 
-So for example:
+So for example (semantically):
 
 * “from file” is **SOURCE + space**
 * “to file” is **DESTINATION + space**
-* “as C” is **WAY + state**
-* “into LLVM IR” is **DESTINATION + state**
+* “as C” is **WAY + state** (canonical keyword `via`)
+* “into LLVM IR” is **DESTINATION + state** (canonical keyword `become`)
 
 All of those are backed by specific case codes, but the system thinks of them as part of a regular grid.
 
@@ -45,18 +45,18 @@ This file is the **raw dictionary of words** that Pyash knows, including all the
 Each entry looks like:
 
 ```json
-{"en":"source_case_", "hnuc":"0x313E", "pya":"so"}
-{"en":"way_case_", "hnuc":"0x265E", "pya":"ga"}
-{"en":"destination_case_", "hnuc":"0x243E", "pya":"ma"}
+{"en":"source_case_",       "hnuc":"0x313E", "pya":"so"}
+{"en":"way_case_",          "hnuc":"0x265E", "pya":"ga"}
+{"en":"destination_case_",  "hnuc":"0x243E", "pya":"ma"}
 
-{"en":"space_context_", "hnuc":"0x315E", "pya":"to"}
-{"en":"time_context_",  "hnuc":"0x2D3E", "pya":"se"}
-{"en":"state_context_", "hnuc":"0x31DE", "pya":"ro"}
-```
+{"en":"space_context_",     "hnuc":"0x315E", "pya":"to"}
+{"en":"time_context_",      "hnuc":"0x2D3E", "pya":"se"}
+{"en":"state_context_",     "hnuc":"0x31DE", "pya":"ro"}
+````
 
-* `en`  → English-ish name of the word (used as the stable key).
+* `en`   → English-ish name of the word (used as a stable key).
 * `hnuc` → 16-bit code in hex, the canonical symbol ID in the language.
-* `pya` → the Pyash phonological shape (your syllable / cluster).
+* `pya`  → the Pyash phonological shape (syllable / cluster).
 
 There are two versions of most cases:
 
@@ -65,7 +65,8 @@ There are two versions of most cases:
 
 The version with a trailing `_` is the **pure grammatical morpheme**. That is the one used in the compositional grid.
 
-`pyashWords.json` itself does **not** know about SOURCE / WAY / DESTINATION or contexts. It is just the base lexicon. The compositional meaning is layered on top.
+`pyashWords.json` itself does **not** know about SOURCE / WAY / DESTINATION or contexts.
+It is just the base lexicon. The compositional meaning is layered on top.
 
 ---
 
@@ -78,6 +79,10 @@ It exports three main things:
 1. `compositionalGrid`
 2. `compositionalByHnuc`
 3. `contextKeywords`
+
+and the keyword grid for axis + context + object.
+
+---
 
 #### `compositionalGrid`
 
@@ -92,7 +97,7 @@ Each cell chooses a canonical `*_case_` word from `pyashWords.json` and ties it 
 
 * its `hnuc` hex,
 * its `pya` syllable,
-* a simple English preposition to gloss it.
+* a single-token English-ish **keyword** used by the keyword layer (no spaces).
 
 Example (space and state rows, shortened):
 
@@ -106,7 +111,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from",
+      keyword: "from",   // SOURCE + space
     },
 
     way: {
@@ -114,7 +119,7 @@ export const compositionalGrid = {
       case: "way_case_",
       hnuc: "0x265E",
       pya: "ga",
-      prep: "via",
+      keyword: "at",     // WAY + space
     },
 
     destination: {
@@ -122,7 +127,7 @@ export const compositionalGrid = {
       case: "destination_case_",
       hnuc: "0x243E",
       pya: "ma",
-      prep: "to",
+      keyword: "to",     // DEST + space
     },
   },
 
@@ -131,10 +136,10 @@ export const compositionalGrid = {
 
     source: {
       axis: "source",
-      case: "exessive_case_",
+      case: "fromstate_case_",       // exessive family
       hnuc: "0x4757",
       pya: "txih",
-      prep: "out of (being)",
+      keyword: "fromstate",          // SOURCE + state
     },
 
     way: {
@@ -142,7 +147,7 @@ export const compositionalGrid = {
       case: "essive_case_",
       hnuc: "0x414F",
       pya: "swih",
-      prep: "as",
+      keyword: "via",                // WAY + state (semantically “as”)
     },
 
     destination: {
@@ -150,7 +155,7 @@ export const compositionalGrid = {
       case: "to_case_",
       hnuc: "0x5F17",
       pya: "kxeh",
-      prep: "into (being)",
+      keyword: "become",             // DEST + state (semantically “into (being)”)
     },
   },
 
@@ -164,7 +169,116 @@ This grid is **compositional first**:
 * then SOURCE / WAY / DESTINATION on top of that,
 * and only then picks a specific hex case code.
 
-The old human-style case names (elative, illative, essive, etc.) are used as building blocks inside this grid.
+The old human-style case names (elative, illative, essive, etc.) are used as building blocks *inside* this grid.
+
+---
+
+#### Axis + context + object keyword table
+
+For the keyword layer and JSON encoding, we use a regular grid of **single-token keywords** per `(axis, context)` plus an **object slot** per context.
+
+Columns:
+
+* `source` keyword (SOURCE axis)
+* `way` keyword (WAY axis)
+* `destination` keyword (DESTINATION axis)
+* `object` slot name (for `obj …` payloads)
+
+Rows:
+
+* contexts.
+
+```text
+| context     | source       | way          | destination | object   |
+|------------|--------------|-------------|-------------|----------|
+| space      | from         | at          | to          | obat     |
+| interior   | outof        | inside      | into        | obin     |
+| surface    | offof        | along       | onto        | obon     |
+| under      | fromunder    | under       | beneath     | obun     |
+| time       | since        | during      | until       | obti     |
+| state      | fromstate    | via         | become      | obsta    |
+| person     | fromperson   | with        | for         | obson    |
+| social     | fromgroup    | among       | intogroup   | obgroup  |
+| discourse  | fromtext     | accordingto | astext      | obtext   |
+```
+
+Usage patterns:
+
+* axis keywords (for adverbials etc.):
+
+  * `from space …`, `at space …`, `to space …`
+  * `via state "qwen3:8b"`, `become state "llvm_ir"`
+
+* object slots (JSON-side):
+
+  * `obj discourse message.content` → `obtext: "<content>"`
+  * `obj interior  message.thinking` → `obin: "<thinking>"`
+  * `via time time` → commonly serialised as `obti: "<timestamp>"` or a separate `time` field.
+
+Codex can round-trip like:
+
+```js
+export const axisContextToKeyword = {
+  space:     { source: "from",      way: "at",          destination: "to",        object: "obat" },
+  interior:  { source: "outof",     way: "inside",      destination: "into",      object: "obin" },
+  surface:   { source: "offof",     way: "along",       destination: "onto",      object: "obon" },
+  under:     { source: "fromunder", way: "under",       destination: "beneath",   object: "obun" },
+  time:      { source: "since",     way: "during",      destination: "until",     object: "obti" },
+  state:     { source: "fromstate", way: "via",         destination: "become",    object: "obsta" },
+  person:    { source: "fromperson",way: "with",        destination: "for",       object: "obson" },
+  social:    { source: "fromgroup", way: "among",       destination: "intogroup", object: "obgroup" },
+  discourse: { source: "fromtext",  way: "accordingto", destination: "astext",    object: "obtext" },
+};
+
+export const keywordToAxisContext = {
+  // source
+  from:        { axis: "source", context: "space" },
+  outof:       { axis: "source", context: "interior" },
+  offof:       { axis: "source", context: "surface" },
+  fromunder:   { axis: "source", context: "under" },
+  since:       { axis: "source", context: "time" },
+  fromstate:   { axis: "source", context: "state" },
+  fromperson:  { axis: "source", context: "person" },
+  fromgroup:   { axis: "source", context: "social" },
+  fromtext:    { axis: "source", context: "discourse" },
+
+  // way
+  at:          { axis: "way",    context: "space" },
+  inside:      { axis: "way",    context: "interior" },
+  along:       { axis: "way",    context: "surface" },
+  under:       { axis: "way",    context: "under" },
+  during:      { axis: "way",    context: "time" },
+  via:         { axis: "way",    context: "state" },
+  with:        { axis: "way",    context: "person" },
+  among:       { axis: "way",    context: "social" },
+  accordingto: { axis: "way",    context: "discourse" },
+
+  // destination
+  to:          { axis: "destination", context: "space" },
+  into:        { axis: "destination", context: "interior" },
+  onto:        { axis: "destination", context: "surface" },
+  beneath:     { axis: "destination", context: "under" },
+  until:       { axis: "destination", context: "time" },
+  become:      { axis: "destination", context: "state" },
+  for:         { axis: "destination", context: "person" },
+  intogroup:   { axis: "destination", context: "social" },
+  astext:      { axis: "destination", context: "discourse" },
+};
+
+export const objectKeyToContext = {
+  obat:    "space",
+  obin:    "interior",
+  obon:    "surface",
+  obun:    "under",
+  obti:    "time",
+  obsta:   "state",
+  obson:   "person",
+  obgroup: "social",
+  obtext:  "discourse",
+};
+```
+
+---
 
 #### `compositionalByHnuc`
 
@@ -179,14 +293,14 @@ export const compositionalByHnuc = {
     axis: "source",
     case: "source_case_",
     pya: "so",
-    prep: "from",
+    keyword: "from",
   },
   "0x5f17": {
     context: "state",
     axis: "destination",
     case: "to_case_",
     pya: "kxeh",
-    prep: "into (being)",
+    keyword: "become",
   },
   // ...
 };
@@ -199,7 +313,9 @@ This is what the Node code and Codex should use when they see a case hex coming 
 
    * which **context** it belongs to,
    * which **axis** it expresses,
-   * and how to gloss it (`prep`).
+   * and which canonical **keyword** it corresponds to.
+
+---
 
 #### `contextKeywords`
 
@@ -229,11 +345,14 @@ export const contextKeywords = {
     contextWord: "state_context_",
     hints: ["state", "condition", "mode", "type", "representation"],
   },
+  discourse: {
+    key: "discourse",
+    contextWord: "discourse_context_",
+    hints: ["text", "prompt", "quote", "document", "corpus", "message"],
+  },
   // others...
 };
 ```
-
-This keeps the compositional layer **discoverable** for the LLM and for any meta-tools you build later.
 
 ---
 
@@ -241,19 +360,20 @@ This keeps the compositional layer **discoverable** for the LLM and for any meta
 
 When generating or modifying Pyash-related code:
 
-1. **Prefer the compositional view.**
-   Choose **context** and **axis** first, then look up the case hex using `compositionalGrid`.
+1. **Pick context + axis first.**
+   Use `contextKeywords` + `axisContextToKeyword` to choose the right combination.
 
-2. **Use hex as the unifier.**
-   When you see a case coming out of parsing or JSON, treat `hnuc` as the truth and recover `(context, axis)` using `compositionalByHnuc`.
+2. **Use `compositionalGrid` / `compositionalByHnuc` for case codes.**
+   The hex `hnuc` is the canonical identity of a case.
 
-3. **Use `space` as the default context.**
-   If nothing is said about context, treat cases as “from / via / to” in space.
+3. **Use the object keywords for multi-object sentences.**
+   Map:
 
-4. **Use `state` context for types / representations.**
-   For things like `compile`, casting, or format conversions, use:
+   * `obj discourse X` → `obtext: X`
+   * `obj interior Y` → `obin: Y`
+   * etc.
 
-   * `state + way`  → “as TYPE” (source type)
-   * `state + destination` → “into TYPE” (target type)
+4. **Treat `space` as the default context**
+   when nothing else is specified.
 
-That is enough for Codex to follow the system without needing to know anything about ASTs or internals, while still keeping everything grounded in the hex codes and `pyashWords.json`.
+```

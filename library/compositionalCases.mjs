@@ -1,6 +1,7 @@
 // library/compositionalCases.mjs
 // Compositional case grid for Pyash.
-// Contexts + (source, way, destination) axes → canonical *_case_ hex.
+// Contexts + (source, way, destination) axes → canonical *_case_ hex
+// plus single-token keyword glosses for each (axis, context).
 
 export const compositionalGrid = {
   // Default context: if nothing is marked, assume "space".
@@ -12,7 +13,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from",
+      prep: "from", // SOURCE + space
     },
 
     way: {
@@ -20,7 +21,7 @@ export const compositionalGrid = {
       case: "way_case_",
       hnuc: "0x265E",
       pya: "ga",
-      prep: "via", // or "along"
+      prep: "at",   // WAY + space
     },
 
     destination: {
@@ -28,7 +29,7 @@ export const compositionalGrid = {
       case: "destination_case_",
       hnuc: "0x243E",
       pya: "ma",
-      prep: "to", // or "toward"
+      prep: "to",   // DEST + space
     },
   },
 
@@ -40,7 +41,7 @@ export const compositionalGrid = {
       case: "elative_case_",
       hnuc: "0x4957",
       pya: "twah",
-      prep: "out of", // "from inside"
+      prep: "outof", // SOURCE + interior
     },
 
     way: {
@@ -48,7 +49,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "through",
+      prep: "inside", // WAY + interior
     },
 
     destination: {
@@ -56,7 +57,7 @@ export const compositionalGrid = {
       case: "illative_case_",
       hnuc: "0x4157",
       pya: "twih",
-      prep: "into",
+      prep: "into",   // DEST + interior
     },
   },
 
@@ -68,7 +69,7 @@ export const compositionalGrid = {
       case: "delative_case_",
       hnuc: "0x415F",
       pya: "lwih",
-      prep: "off",
+      prep: "offof", // SOURCE + surface
     },
 
     way: {
@@ -76,7 +77,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "along", // or "across"
+      prep: "along", // WAY + surface
     },
 
     destination: {
@@ -84,7 +85,7 @@ export const compositionalGrid = {
       case: "sublative_case_",
       hnuc: "0x594F",
       pya: "sweh",
-      prep: "onto",
+      prep: "onto",  // DEST + surface
     },
   },
 
@@ -96,7 +97,7 @@ export const compositionalGrid = {
       case: "ablative_case_",
       hnuc: "0x4127",
       pya: "pwih",
-      prep: "from under",
+      prep: "fromunder", // SOURCE + under
     },
 
     way: {
@@ -104,7 +105,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "under", // or "along under"
+      prep: "under",     // WAY + under
     },
 
     destination: {
@@ -112,7 +113,7 @@ export const compositionalGrid = {
       case: "subessive_case_",
       hnuc: "0x5C8F",
       pya: "bveh",
-      prep: "to under", // or "underneath"
+      prep: "beneath",   // DEST + under
     },
   },
 
@@ -124,7 +125,7 @@ export const compositionalGrid = {
       case: "antessive_case_",
       hnuc: "0x8257",
       pya: "tsi7h",
-      prep: "before",
+      prep: "since", // SOURCE + time (before/since)
     },
 
     way: {
@@ -132,7 +133,7 @@ export const compositionalGrid = {
       case: "temporal_case_",
       hnuc: "0x480F",
       pya: "myah",
-      prep: "during",
+      prep: "during", // WAY + time
     },
 
     destination: {
@@ -140,7 +141,7 @@ export const compositionalGrid = {
       case: "terminative_case_",
       hnuc: "0x5957",
       pya: "tweh",
-      prep: "until", // or "up to"
+      prep: "until", // DEST + time
     },
   },
 
@@ -152,7 +153,7 @@ export const compositionalGrid = {
       case: "exessive_case_",
       hnuc: "0x4757",
       pya: "txih",
-      prep: "out of (being)",
+      prep: "fromstate", // SOURCE + state
     },
 
     way: {
@@ -160,7 +161,7 @@ export const compositionalGrid = {
       case: "essive_case_",
       hnuc: "0x414F",
       pya: "swih",
-      prep: "as", // "in the state of"
+      prep: "via",       // WAY + state (semantically “as”)
     },
 
     destination: {
@@ -168,7 +169,7 @@ export const compositionalGrid = {
       case: "to_case_",
       hnuc: "0x5F17",
       pya: "kxeh",
-      prep: "into (being)", // "to (being)"
+      prep: "become",    // DEST + state (into being)
     },
   },
 
@@ -180,7 +181,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from", // or "by"
+      prep: "fromperson", // SOURCE + person
     },
 
     way: {
@@ -188,7 +189,7 @@ export const compositionalGrid = {
       case: "comitative_case_",
       hnuc: "0x490F",
       pya: "mwah",
-      prep: "with",
+      prep: "with",       // WAY + person
     },
 
     destination: {
@@ -196,7 +197,7 @@ export const compositionalGrid = {
       case: "dative_case_",
       hnuc: "0x207E",
       pya: "yi",
-      prep: "to", // or "for"
+      prep: "for",        // DEST + person
     },
   },
 
@@ -208,7 +209,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from",
+      prep: "fromgroup", // SOURCE + social
     },
 
     way: {
@@ -216,7 +217,7 @@ export const compositionalGrid = {
       case: "associative_case_",
       hnuc: "0x453E",
       pya: "sa7",
-      prep: "with", // "as part of"
+      prep: "among",     // WAY + social
     },
 
     destination: {
@@ -224,7 +225,7 @@ export const compositionalGrid = {
       case: "benefactive_case_",
       hnuc: "0x4927",
       pya: "pwah",
-      prep: "for",
+      prep: "intogroup", // DEST + social (for/as part of group)
     },
   },
 
@@ -236,7 +237,7 @@ export const compositionalGrid = {
       case: "source_case_",
       hnuc: "0x313E",
       pya: "so",
-      prep: "from", // from this text/source
+      prep: "fromtext",   // SOURCE + discourse (from this text/source)
     },
 
     way: {
@@ -244,7 +245,7 @@ export const compositionalGrid = {
       case: "evidential_case_",
       hnuc: "0x4937",
       pya: "nwah",
-      prep: "according to",
+      prep: "accordingto", // WAY + discourse
     },
 
     destination: {
@@ -252,7 +253,7 @@ export const compositionalGrid = {
       case: "quotative_case_",
       hnuc: "0x6157",
       pya: "twoh",
-      prep: "as", // "in the words of"
+      prep: "astext",      // DEST + discourse (as text/quote)
     },
   },
 };
@@ -318,22 +319,21 @@ export const contextKeywords = {
   },
 };
 
-
+// Reverse lookup: hex → (context, axis, case, pya, keyword).
 export const compositionalByHnuc = Object.fromEntries(
   Object.entries(compositionalGrid).flatMap(([contextKey, ctx]) => {
-    return ["source", "way", "destination"].map(axis => {
+    return ["source", "way", "destination"].map((axis) => {
       const info = ctx[axis];
       return [
         info.hnuc.toLowerCase(),
         {
-          context: contextKey,         // "space", "time", "state", ...
-          axis: info.axis,             // "source" | "way" | "destination"
-          case: info.case,             // e.g. "source_case_"
+          context: contextKey,   // "space", "time", "state", ...
+          axis: info.axis,       // "source" | "way" | "destination"
+          case: info.case,       // e.g. "source_case_"
           pya: info.pya,
-          prep: info.prep,
+          prep: info.prep,       // canonical keyword ("from", "via", "become", etc.)
         },
       ];
     });
   })
 );
-

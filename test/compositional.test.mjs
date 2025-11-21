@@ -9,8 +9,8 @@ import { compositionalGrid } from "../library/compositionalCases.mjs";
 test("parse captures from/to state context for compile workflow", () => {
   const s = parse("subj name artifact from state draft to state json be compile do");
 
-  assert.deepEqual(s.from, { context: "state", name: "draft" });
-  assert.deepEqual(s.to, { context: "state", name: "json" });
+  assert.deepEqual(s.from, { context: "state", name: "draft", keyword: "fromstate" });
+  assert.deepEqual(s.to, { context: "state", name: "json", keyword: "become" });
 });
 
 // sanity: mapping exists in the compositional grid
@@ -42,6 +42,28 @@ test("compositional grid covers all contexts and axes", () => {
   }
 });
 
+test("compositional grid keywords match documentation table", () => {
+  const expected = {
+    space: { source: "from", way: "at", destination: "to" },
+    interior: { source: "outof", way: "inside", destination: "into" },
+    surface: { source: "offof", way: "along", destination: "onto" },
+    under: { source: "fromunder", way: "under", destination: "beneath" },
+    time: { source: "since", way: "during", destination: "until" },
+    state: { source: "fromstate", way: "via", destination: "become" },
+    person: { source: "fromperson", way: "with", destination: "for" },
+    social: { source: "fromgroup", way: "among", destination: "intogroup" },
+    discourse: { source: "fromtext", way: "accordingto", destination: "astext" }
+  };
+
+  for (const [ctx, axes] of Object.entries(expected)) {
+    const row = compositionalGrid[ctx];
+    assert.ok(row, `missing context ${ctx}`);
+    for (const [axis, keyword] of Object.entries(axes)) {
+      assert.equal(row[axis]?.prep, keyword, `keyword mismatch for ${ctx}.${axis}`);
+    }
+  }
+});
+
 test("parser captures all contexts for from/to", () => {
   const contexts = [
     "space",
@@ -57,10 +79,12 @@ test("parser captures all contexts for from/to", () => {
 
   for (const ctx of contexts) {
     const fromSentence = parse(`su item from ${ctx} origin be topic ya`);
-    assert.deepEqual(fromSentence.from, { context: ctx, name: "origin" });
+    const fromKeyword = compositionalGrid[ctx].source.prep;
+    assert.deepEqual(fromSentence.from, { context: ctx, name: "origin", keyword: fromKeyword });
 
     const toSentence = parse(`su item to ${ctx} goal be topic ya`);
-    assert.deepEqual(toSentence.to, { context: ctx, name: "goal" });
+    const toKeyword = compositionalGrid[ctx].destination.prep;
+    assert.deepEqual(toSentence.to, { context: ctx, name: "goal", keyword: toKeyword });
   }
 });
 
@@ -79,6 +103,7 @@ test("parser captures all contexts for via/way", () => {
 
   for (const ctx of contexts) {
     const viaSentence = parse(`su item via ${ctx} route be topic ya`);
-    assert.deepEqual(viaSentence.via, { context: ctx, name: "route" });
+    const viaKeyword = compositionalGrid[ctx].way.prep;
+    assert.deepEqual(viaSentence.via, { context: ctx, name: "route", keyword: viaKeyword });
   }
 });
