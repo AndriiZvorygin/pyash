@@ -50,8 +50,13 @@ export async function interpret(sentence) {
       setMemory(target);
     }
 
+    const toValue = target?.obj ?? to;
+
     // pass the current value, not the name
-    const result = await fn({ obj, to: target?.obj, from, sentence });
+    const result = await fn({ obj, to: toValue, from, sentence });
+
+    // record the command itself in history
+    setMemory(sentence);
 
     // expect verbs to return { obj: number | {num: number} }
     if (result?.obj !== undefined) {
@@ -74,19 +79,24 @@ export async function interpret(sentence) {
             }
           : null);
 
-      if (dest) {
-        dest.obj =
-          typeof result.obj === "object" ? result.obj : { num: result.obj };
-        // store updated fact as a new sentence so history is preserved
-        setMemory(dest);
-      } else if (!to?.name && !sentence?.subj?.name) {
-        // create a generic subj to hold the result
-        // no explicit destination; don't fabricate a result fact
-      }
-    }
+      const normalizedObj =
+        typeof result.obj === "object" ? result.obj : { num: result.obj };
+      const resultBe = result.be ?? sentence.be ?? "result";
 
-    // record the command itself in history
-    setMemory(sentence);
+      if (dest) {
+        dest.obj = normalizedObj;
+        if (!dest.be) dest.be = resultBe;
+        setMemory(dest);
+      }
+
+      // Always store a result fact for reference
+      setMemory({
+        subj: { name: "result" },
+        obj: normalizedObj,
+        be: resultBe,
+        mood: "ya"
+      });
+    }
 
     return { acted: to?.name, value: result?.obj };
   }

@@ -25,5 +25,6 @@ export default async function read({ from }) {
     throw new Error(`read: ${moduleName} missing default export`);
   }
 
-  return mod.default({ from });
+  const result = await mod.default({ from });
+  return { obj: result.obj, be: "text" };
 }

@@ -13,7 +13,7 @@ test("read verb loads file content into text obj", async () => {
   await interpret(sentence);
 
   const mem = dumpMemory();
-  const fact = mem.find(s => s.subj?.name === "file");
+  const fact = mem.find(s => s.subj?.name === "file" && s.be === "text");
 
   assert.ok(fact, "fact stored");
   assert.equal(fact.be, "text");
