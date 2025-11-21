@@ -117,26 +117,35 @@ export function parse(line) {
 
     // --- compositional context tokens, e.g., "from state draft" ---
     if (current && CONTEXT_KEYS.includes(t)) {
+      const origRole = current;
       const axis =
         current === "from" ? "source" :
         current === "to" ? "destination" :
         (current === "via" || current === "with") ? "way" :
         null;
 
-      if (slot && slot.context && !Array.isArray(s[current])) {
-        s[current] = [slot];
-      }
+      const keyword = axis ? AXIS_CONTEXT_TO_KEYWORD[t]?.[axis] : null;
 
-      if (Array.isArray(s[current])) {
-        slot = {};
-        s[current].push(slot);
-      } else {
+      if (keyword) {
+        current = keyword;
+        if (!s[current]) s[current] = {};
         slot = s[current];
-      }
+        if (origRole !== current) {
+          delete s[origRole];
+        }
+      } else {
+        if (slot && slot.context && !Array.isArray(s[current])) {
+          s[current] = [slot];
+        }
 
-      slot.context = t;
-      if (axis && AXIS_CONTEXT_TO_KEYWORD[t]?.[axis]) {
-        slot.keyword = AXIS_CONTEXT_TO_KEYWORD[t][axis];
+        if (Array.isArray(s[current])) {
+          slot = {};
+          s[current].push(slot);
+        } else {
+          slot = s[current];
+        }
+
+        slot.context = t;
       }
 
       const next = words[i + 1];
