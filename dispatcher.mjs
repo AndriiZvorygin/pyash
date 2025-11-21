@@ -4,11 +4,12 @@ import { giant } from "./verbs/giant.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
-import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
+import { getMemory, setMemory, dumpMemory, getDefinitionEntry } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
 
 const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
+const definitionStack = [];
 
 export async function interpret(sentence) {
   if (!sentence) return;
@@ -21,8 +22,21 @@ export async function interpret(sentence) {
     return { skipped: true };
   }
 
+  const isParagraphDef = mood === "def" && sentence.be === "ceremony";
+  const insideParagraph = definitionStack.length > 0;
+
+  if (isParagraphDef) {
+    definitionStack.push(subj?.name ?? null);
+  }
+
+  if (insideParagraph && mood !== "prah" && !isParagraphDef) {
+    setMemory(sentence);
+    return { recorded: true };
+  }
+
   if (mood === "prah") {
     setMemory(sentence);
+    if (definitionStack.length > 0) definitionStack.pop();
     return { paragraphEnd: true };
   }
 
@@ -46,6 +60,23 @@ export async function interpret(sentence) {
   // --- Imperative ---
   if (mood === "do") {
     const fn = verbs[be];
+    const defEntry = fn ? null : getDefinitionEntry(be);
+
+    if (!fn && defEntry) {
+      if (typeof defEntry.end !== "number") {
+        throw new Error(`Definition ${be} missing closing prah`);
+      }
+
+      const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
+      let lastResult;
+      for (const step of body) {
+        lastResult = await interpret(step);
+      }
+
+      setMemory(sentence);
+      return { invoked: be, result: lastResult };
+    }
+
     if (!fn) throw new Error(`Unknown verb: ${be}`);
 
     let target = getMemory(to?.name);

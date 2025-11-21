@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, dumpDefinitionIndex, getDefinition } from "../memory.mjs";
+import { resetMemory, dumpDefinitionIndex, getDefinition, getMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -48,4 +48,24 @@ test("redef updates index to latest memory position and reset clears", async () 
   idx = dumpDefinitionIndex().find(entry => entry.name === "alpha");
   assert.equal(idx, undefined, "reset should clear definition index");
   assert.equal(getDefinition("alpha"), undefined, "reset should clear stored definition lookup");
+});
+
+test("definition index captures end via prah and supports invoking the paragraph", async () => {
+  resetMemory();
+
+  await run("subj name result obj num 5 be number ya");
+  await run("subj name add_two be ceremony def");
+  await run("obj num 2 to name result be add do");
+  await run("subj name add_two be ceremony prah");
+
+  const entry = dumpDefinitionIndex().find(e => e.name === "add_two");
+  assert.ok(entry, "definition index should include add_two");
+  assert.equal(entry.index, 1, "start index should point to def sentence");
+  assert.equal(entry.end, 3, "end index should point to closing prah");
+
+  await run("to name result be add_two do");
+
+  const latestResult = getMemory("result");
+  assert.ok(latestResult, "result should be retrievable after function call");
+  assert.equal(latestResult.obj.num, 7, "function body should have added two");
 });

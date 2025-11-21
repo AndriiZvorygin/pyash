@@ -21,12 +21,13 @@ function findDefinitionSlot(name) {
   return low; // insertion point
 }
 
-function upsertDefinition(name, index) {
+function upsertDefinition(name, index, end = undefined) {
   const slot = findDefinitionSlot(name);
   if (definitionIndex[slot]?.name === name) {
-    definitionIndex[slot] = { name, index };
+    const prevEnd = definitionIndex[slot].end;
+    definitionIndex[slot] = { name, index, end: end ?? prevEnd };
   } else {
-    definitionIndex.splice(slot, 0, { name, index });
+    definitionIndex.splice(slot, 0, { name, index, end });
   }
 }
 
@@ -37,6 +38,13 @@ export function setMemory(sentence) {
 
   if (sentence?.mood === "def" && sentence.subj?.name) {
     upsertDefinition(sentence.subj.name, idx);
+  }
+
+  if (sentence?.mood === "prah" && sentence.subj?.name) {
+    const slot = findDefinitionSlot(sentence.subj.name);
+    if (definitionIndex[slot]?.name === sentence.subj.name) {
+      definitionIndex[slot] = { ...definitionIndex[slot], end: idx };
+    }
   }
 }
 
@@ -63,6 +71,14 @@ export function getDefinition(name) {
   const entry = definitionIndex[slot];
   if (!entry || entry.name !== name) return undefined;
   return memory[entry.index];
+}
+
+export function getDefinitionEntry(name) {
+  if (!name) return undefined;
+  const slot = findDefinitionSlot(name);
+  const entry = definitionIndex[slot];
+  if (!entry || entry.name !== name) return undefined;
+  return entry;
 }
 
 export function dumpDefinitionIndex() {
