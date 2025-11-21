@@ -131,6 +131,12 @@ export function parse(line) {
       continue;
     }
 
+    // --- bare value after a role defaults to name ---
+    if (current && s[current] && Object.keys(s[current]).length === 0) {
+      s[current].name = t;
+      continue;
+    }
+
     if (t === "be") {
       s.be = words[i + 1];
       i++; // skip verb; mood already taken from last token

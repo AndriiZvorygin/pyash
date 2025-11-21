@@ -17,3 +17,11 @@ test("supports escaped quotes inside text", () => {
 
   assert.equal(s.with.text, 'say "hi"');
 });
+
+test("parses minimal declarative sentence", () => {
+  const s = parse("subj hello be test ya");
+
+  assert.equal(s.mood, "ya");
+  assert.equal(s.subj.name, "hello");
+  assert.equal(s.be, "test");
+});
