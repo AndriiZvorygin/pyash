@@ -1,10 +1,11 @@
 // dispatcher.mjs
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
+import compile from "./verbs/compile.mjs";
 import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
 
-const verbs = { add, giant };
+const verbs = { add, giant, compile };
 let lastCondition = true;
 
 export async function interpret(sentence) {
@@ -48,14 +49,28 @@ export async function interpret(sentence) {
     }
 
     // pass the current value, not the name
-    const result = await fn({ obj, to: target?.obj });
+    const result = await fn({ obj, to: target?.obj, sentence });
 
     // expect verbs to return { obj: number | {num: number} }
-    if (result?.obj !== undefined && target) {
-      target.obj =
-        typeof result.obj === "object" ? result.obj : { num: result.obj };
-      // store updated fact as a new sentence so history is preserved
-      setMemory(target);
+    if (result?.obj !== undefined) {
+      // ensure a target fact exists if user addressed one
+      const dest =
+        target ||
+        (to?.name
+          ? {
+              subj: { name: to.name },
+              be: sentence.to?.context || sentence.be || "result",
+              obj: {},
+              mood: "ya",
+            }
+          : null);
+
+      if (dest) {
+        dest.obj =
+          typeof result.obj === "object" ? result.obj : { num: result.obj };
+        // store updated fact as a new sentence so history is preserved
+        setMemory(dest);
+      }
     }
 
     return { acted: to?.name, value: result?.obj };

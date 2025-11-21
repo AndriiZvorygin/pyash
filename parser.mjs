@@ -97,6 +97,22 @@ export function parse(line) {
       continue;
     }
 
+    // --- compositional context tokens, e.g., "from state draft" ---
+    if (
+      current &&
+      ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse"].includes(t)
+    ) {
+      s[current].context = t;
+
+      const next = words[i + 1];
+      if (next && !["subj", "obj", "to", "from", "with", "be", "then", "ta"].includes(next)) {
+        s[current].name = next;
+        i++; // consume the name token
+      }
+
+      continue;
+    }
+
     if (t === QUOTED_PLACEHOLDER && quotedText !== null) {
       if (current) {
         s[current].text = quotedText;
