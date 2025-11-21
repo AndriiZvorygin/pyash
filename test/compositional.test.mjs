@@ -25,3 +25,18 @@ test("to state maps to become keyword", () => {
   assert.deepEqual(s.become, { name: "json" });
   assert.ok(!s.to, "to should be normalized to become");
 });
+
+test("to discourse maps to totext keyword", () => {
+  const s = parse("su doc to discourse summary be topic ya");
+
+  assert.deepEqual(s.totext, { name: "summary" });
+  assert.ok(!s.to, "to should be normalized to totext");
+});
+
+test("compositional roles do not expose context field", () => {
+  const s = parse("su doc from discourse spec via time now to state json be topic ya");
+
+  assert.ok(!("context" in (s.fromtext || {})));
+  assert.ok(!("context" in (s.during || {})));
+  assert.ok(!("context" in (s.become || {})));
+});

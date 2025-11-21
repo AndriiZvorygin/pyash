@@ -253,7 +253,7 @@ export const compositionalGrid = {
       case: "quotative_case_",
       hnuc: "0x6157",
       pya: "twoh",
-      prep: "astext",      // DEST + discourse (as text/quote)
+      prep: "totext",      // DEST + discourse (as text/quote)
     },
   },
 };

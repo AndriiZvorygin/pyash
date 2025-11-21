@@ -3,10 +3,11 @@ import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
+import mind from "./verbs/mind.mjs";
 import { getMemory, setMemory, dumpMemory } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
 
-const verbs = { add, giant, compile, read };
+const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
 
 export async function interpret(sentence) {
@@ -31,8 +32,8 @@ export async function interpret(sentence) {
     return { condition: truth };
   }
 
-  // --- Declarative: append; last-write-wins via getMemory ---
-  if (mood === "ya") {
+  // --- Declarative (including definitions): append; last-write-wins via getMemory ---
+  if (mood === "ya" || mood === "def") {
     setMemory(sentence);
     return { stored: subj?.name };
   }

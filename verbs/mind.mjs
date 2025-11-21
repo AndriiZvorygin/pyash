@@ -1,15 +1,30 @@
 // pyash/verbs/mind.mjs
 import ollama from "../motor/ollama.mjs";
+import { getMemory } from "../memory.mjs";
 
-// Accepts either (sentence, inputs, context) or an options object from dispatcher.
-export default async function mind(sentenceOrOpts, maybeInputs = [], context = {}) {
-  const sentence = sentenceOrOpts?.sentence ?? sentenceOrOpts;
-  const inputs = sentenceOrOpts?.inputs ?? maybeInputs;
+export default async function mind({ sentence, obj = {}, to, inputs = [] }) {
+  const targetName = sentence?.to?.name ?? to?.name;
+  const config = targetName ? getMemory(targetName) : null;
 
-  const model = sentence?.obj?.model ?? sentenceOrOpts?.obj?.model;
+  // Model resolution: explicit on call or from config via state (keyword "as")
+  const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;
+  const configModel = config?.as?.name ?? null;
+  const model = explicitModel ?? configModel;
   if (!model) throw new Error("mind: obj.model is required");
 
-  const prompt = sentence?.with?.text ?? sentenceOrOpts?.with?.text ?? "";
+  // Prompt resolution: config accordingto (discourse) + call prompt/text
+  const configPrompt = config?.accordingto?.name ?? null;
+
+  const callPrompt =
+    sentence?.with?.text ??
+    sentence?.obj?.text ??
+    (sentence?.obj?.name && !sentence?.obj?.model ? sentence?.obj?.name : null) ??
+    obj?.text ??
+    (obj?.name && !obj?.model ? obj?.name : null);
+
+  const promptParts = [];
+  if (configPrompt) promptParts.push(configPrompt);
+  if (callPrompt) promptParts.push(callPrompt);
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -23,10 +38,9 @@ export default async function mind(sentenceOrOpts, maybeInputs = [], context = {
     }
   }
 
-  const fullPrompt = prompt + (inputText ? "\n\n" + inputText : "");
+  const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
 
-  const responseText = await ollama.generate(model, fullPrompt);
+  const responseText = await ollama.generate(model, fullPrompt.trim());
 
-  // Normalized output as obj for dispatcher compatibility
-  return { obj: { text: responseText } };
+  return { obj: { text: responseText, model } };
 }

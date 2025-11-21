@@ -8,10 +8,10 @@ const AXIS_CONTEXT_TO_KEYWORD = {
   surface: { source: "offof", way: "along", destination: "onto" },
   under: { source: "fromunder", way: "under", destination: "beneath" },
   time: { source: "since", way: "during", destination: "until" },
-  state: { source: "fromstate", way: "via", destination: "become" },
+  state: { source: "fromstate", way: "as", destination: "become" },
   person: { source: "fromperson", way: "with", destination: "for" },
   social: { source: "fromgroup", way: "among", destination: "intogroup" },
-  discourse: { source: "fromtext", way: "accordingto", destination: "astext" }
+  discourse: { source: "fromtext", way: "accordingto", destination: "totext" }
 };
 function tokenize(line) {
   const tokens = [];
@@ -128,24 +128,15 @@ export function parse(line) {
 
       if (keyword) {
         current = keyword;
-        if (!s[current]) s[current] = {};
+        s[current] = s[current] ?? {};
         slot = s[current];
         if (origRole !== current) {
           delete s[origRole];
         }
       } else {
-        if (slot && slot.context && !Array.isArray(s[current])) {
-          s[current] = [slot];
-        }
-
-        if (Array.isArray(s[current])) {
-          slot = {};
-          s[current].push(slot);
-        } else {
-          slot = s[current];
-        }
-
-        slot.context = t;
+        // Fallback: keep original role if no keyword found
+        s[current] = s[current] ?? {};
+        slot = s[current];
       }
 
       const next = words[i + 1];

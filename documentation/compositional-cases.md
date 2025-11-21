@@ -196,10 +196,10 @@ Rows:
 | surface    | offof        | along       | onto        | obon     |
 | under      | fromunder    | under       | beneath     | obun     |
 | time       | since        | during      | until       | obti     |
-| state      | fromstate    | via         | become      | obsta    |
+| state      | fromstate    | as          | become      | obsta    |
 | person     | fromperson   | with        | for         | obson    |
 | social     | fromgroup    | among       | intogroup   | obgroup  |
-| discourse  | fromtext     | accordingto | astext      | obtext   |
+| discourse  | fromtext     | accordingto | totext      | obtext   |
 ```
 
 Usage patterns:
@@ -227,7 +227,7 @@ export const axisContextToKeyword = {
   state:     { source: "fromstate", way: "via",         destination: "become",    object: "obsta" },
   person:    { source: "fromperson",way: "with",        destination: "for",       object: "obson" },
   social:    { source: "fromgroup", way: "among",       destination: "intogroup", object: "obgroup" },
-  discourse: { source: "fromtext",  way: "accordingto", destination: "astext",    object: "obtext" },
+  discourse: { source: "fromtext",  way: "accordingto", destination: "totext",    object: "obtext" },
 };
 
 export const keywordToAxisContext = {
@@ -262,7 +262,7 @@ export const keywordToAxisContext = {
   become:      { axis: "destination", context: "state" },
   for:         { axis: "destination", context: "person" },
   intogroup:   { axis: "destination", context: "social" },
-  astext:      { axis: "destination", context: "discourse" },
+  totext:      { axis: "destination", context: "discourse" },
 };
 
 export const objectKeyToContext = {

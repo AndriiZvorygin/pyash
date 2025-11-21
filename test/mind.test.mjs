@@ -20,12 +20,9 @@ test("mind registration stores engine/model/prompt contexts", async () => {
 
   assert.ok(fact);
   assert.equal(fact.be, "mind");
-  assert.equal(fact.from?.context, "space");
   assert.equal(fact.from?.name, "http://localhost:11434");
-  assert.deepEqual(fact.via, [
-    { context: "state", name: "qwen3:8b" },
-    { context: "discourse", name: "orchestrator" }
-  ]);
+  assert.equal(fact.as?.name, "qwen3:8b");
+  assert.equal(fact.accordingto?.name, "orchestrator");
 });
 
 test("mind invocation pulls model + prompt from registered mind", async () => {
@@ -39,7 +36,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
 
   // Register the mind
   await interpret(
-    parse('su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" do')
+    parse('su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
   );
 
   // Ask the mind (no model/prompt on the call; should resolve from memory)
@@ -48,7 +45,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
   await interpret(sentence);
 
   const mem = dumpMemory();
-  const fact = mem.find(s => s.subj?.name === "question");
+  const fact = mem.find(s => s.subj?.name === "generator");
 
   assert.ok(fact);
   assert.equal(fact.be, "mind");

@@ -72,3 +72,28 @@ test("topic sugar: ta label be topic ya", async () => {
   assert.equal(mem[0].subj.name, "loop_head");
   assert.equal(mem[0].be, "topic");
 });
+
+test("def mood stores definitional fact", async () => {
+  resetMemory();
+
+  const res = await run("su term be topic def");
+  const mem = dumpMemory();
+  const fact = mem.find(s => s.subj?.name === "term");
+
+  assert.ok(res);
+  assert.ok(fact);
+  assert.equal(fact.mood, "def");
+});
+
+test("do mood is stored in history and returns result", async () => {
+  resetMemory();
+
+  const res = await run("su add_demo obj num 3 to num 4 be add do");
+  const mem = dumpMemory();
+  const fact = mem.find(s => s.subj?.name === "add_demo");
+
+  assert.ok(res);
+  assert.ok(fact);
+  assert.equal(fact.mood, "do");
+  assert.deepEqual(fact.obj, { num: 7 });
+});
