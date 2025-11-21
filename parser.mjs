@@ -132,15 +132,16 @@ export function parse(line) {
     // --- type tokens: name / num / number / text ---
     if (["name", "num", "number", "text"].includes(t)) {
       const raw = words[i + 1];
-      const maybeNum = Number(raw);
+      const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+      const maybeNum = Number(value);
 
       if (t === "name") {
-        s[current].name = raw;
+        s[current].name = value;
       } else if (t === "text") {
-        s[current].text = raw;
+        s[current].text = value;
       } else {
         // num / number → numeric
-        s[current].num = isNaN(maybeNum) ? raw : maybeNum;
+        s[current].num = isNaN(maybeNum) ? value : maybeNum;
       }
 
       i++; // skip the value we just consumed
