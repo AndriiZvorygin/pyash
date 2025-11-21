@@ -88,12 +88,28 @@ test("def mood stores definitional fact", async () => {
 test("do mood is stored in history and returns result", async () => {
   resetMemory();
 
-  const res = await run("su add_demo obj num 3 to num 4 be add do");
+  await run("su target obj num 4 be number ya");
+  const res = await run("su add_demo obj num 3 to name target be add do");
   const mem = dumpMemory();
   const fact = mem.find(s => s.subj?.name === "add_demo");
+  const target = mem.find(s => s.subj?.name === "target");
 
   assert.ok(res);
   assert.ok(fact);
   assert.equal(fact.mood, "do");
-  assert.deepEqual(fact.obj, { num: 7 });
+  assert.ok(target);
+  assert.deepEqual(target.obj, { num: 7 });
+});
+
+test("bare add imperative without target name creates and stores result", async () => {
+  resetMemory();
+
+  await run("su temp obj num 4 be number ya");
+  const res = await run("su temp obj num 3 to name temp be add do");
+  const mem = dumpMemory();
+  const fact = mem.find(s => s.subj?.name === "temp" && s.obj?.num === 7);
+
+  assert.ok(res);
+  assert.ok(fact, "updated fact should be stored on target");
+  assert.equal(fact.obj.num, 7);
 });

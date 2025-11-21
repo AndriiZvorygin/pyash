@@ -79,8 +79,14 @@ export async function interpret(sentence) {
           typeof result.obj === "object" ? result.obj : { num: result.obj };
         // store updated fact as a new sentence so history is preserved
         setMemory(dest);
+      } else if (!to?.name && !sentence?.subj?.name) {
+        // create a generic subj to hold the result
+        // no explicit destination; don't fabricate a result fact
       }
     }
+
+    // record the command itself in history
+    setMemory(sentence);
 
     return { acted: to?.name, value: result?.obj };
   }
