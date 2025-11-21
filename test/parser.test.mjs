@@ -1,0 +1,19 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { parse } from "../parser.mjs";
+
+test("parses quoted text tokens", () => {
+  const s = parse('subj name prompt with text "hello world" be topic ya');
+
+  assert.equal(s.mood, "ya");
+  assert.equal(s.subj.name, "prompt");
+  assert.equal(s.with.text, "hello world");
+  assert.equal(s.be, "topic");
+});
+
+test("supports escaped quotes inside text", () => {
+  const s = parse('subj name note with text "say \\\"hi\\\"" be topic ya');
+
+  assert.equal(s.with.text, 'say "hi"');
+});

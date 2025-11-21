@@ -8,11 +8,6 @@ export default async function mind(sentence, inputs, context) {
   const model = sentence.obj?.model;
   if (!model) throw new Error("mind: obj.model is required");
 
-  const kind = sentence.be || "text"; // for now be = "text", later you can refine
-  if (kind !== "text") {
-    throw new Error(`mind: unsupported kind "${kind}"`);
-  }
-
   const prompt = sentence.with?.text || "";
 
   // Combine upstream inputs into a context string

@@ -3,19 +3,17 @@
     "sentences": [
       {
         "mood": "ya",
-        "verb": "chip",
         "subj": { "name": "chiper" },
-        "obj":  { "name": "chip" },
         "be":   "library",
+        "obj":  { "name": "chip" },
         "by":   { "format": "jsonl" },
         "from": { "path": "data/llresearch.jsonl" }
       },
       {
         "mood": "ya",
-        "verb": "mind",
+        "be":   "mind",
         "subj": { "name": "question" },
         "obj":  { "model": "qwen3" },
-        "be":   "text",
         "with": {
           "text": "You are a dataset-creation assistant. Read a chip and generate good questions."
         },
@@ -23,10 +21,9 @@
       },
       {
         "mood": "ya",
-        "verb": "mind",
+        "be":   "mind",
         "subj": { "name": "teacher" },
         "obj":  { "model": "qwen3" },
-        "be":   "text",
         "with": {
           "text": "You are a teacher model. Read the question and chip and respond with the best possible answer."
         },

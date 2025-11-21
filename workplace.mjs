@@ -1,4 +1,6 @@
 // pyash/workflow.mjs
+import fs from "node:fs/promises";
+
 import { setMemory, getMemory, dumpMemory, resetMemory } from "./memory.mjs";
 import mind from "./verbs/mind.mjs";
 import chip from "./verbs/chip.mjs";
@@ -74,9 +76,9 @@ function valueOf(name) {
 
 // Main entry
 export async function runWorkflow(workflow) {
-  const sentences = workflow.workflow?.sentences;
+  const sentences = workflow.workflow?.sentences ?? workflow.workplace?.sentences;
   if (!Array.isArray(sentences)) {
-    throw new Error("workflow.workflow.sentences must be an array");
+    throw new Error("workflow sentences must be an array");
   }
 
   // Reset Pyash memory for a clean run
@@ -94,7 +96,7 @@ export async function runWorkflow(workflow) {
 
   for (const name of order) {
     const sentence = byName.get(name);
-    const verb = sentence.verb || sentence.be; // allow either `verb` or `be` for now
+    const verb = sentence.verb || sentence.be; // allow either `verb` or `be`
 
     if (!verb) {
       // pure declaratives? just store them
@@ -126,4 +128,20 @@ export async function runWorkflow(workflow) {
   }
 
   return dumpMemory();
+}
+
+// Convenience wrapper: accepts a workflow object or a path to a JSON file.
+export async function runWorkplace(workplaceOrPath) {
+  let payload = workplaceOrPath;
+
+  if (typeof workplaceOrPath === "string") {
+    const raw = await fs.readFile(workplaceOrPath, "utf8");
+    payload = JSON.parse(raw);
+  }
+
+  if (!payload?.workplace) {
+    throw new Error("workplace object with .workplace is required");
+  }
+
+  return runWorkflow(payload);
 }
