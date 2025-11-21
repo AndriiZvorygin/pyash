@@ -26,6 +26,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Follow `node:test` with `assert/strict` (see `test/core.test.mjs`).
 - Name tests with readable sentences; reset memory between cases to avoid coupling.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.
+- Work red→green: write a failing test first, then implement the smallest change to make it pass, and keep tests fast.
 
 ## Commit & Pull Request Guidelines
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.

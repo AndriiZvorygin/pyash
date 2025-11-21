@@ -91,9 +91,13 @@ export function parse(line) {
       break;
     }
 
-    if (["subj", "obj", "to", "from", "with"].includes(t)) {
-      current = t;
-      s[current] = {};
+    if (["subj", "su", "obj", "ob", "to", "from", "with", "via"].includes(t)) {
+      const normalized =
+        t === "su" ? "subj" :
+        t === "ob" ? "obj" :
+        t;
+      current = normalized;
+      if (!s[current]) s[current] = {};
       continue;
     }
 

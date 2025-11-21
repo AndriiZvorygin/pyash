@@ -19,3 +19,66 @@ test("compositional grid exposes state source/destination cases", () => {
   assert.ok(compositionalGrid.state?.source?.hnuc, "state source case missing");
   assert.ok(compositionalGrid.state?.destination?.hnuc, "state destination case missing");
 });
+
+test("compositional grid covers all contexts and axes", () => {
+  const contexts = [
+    "space",
+    "interior",
+    "surface",
+    "under",
+    "time",
+    "state",
+    "person",
+    "social",
+    "discourse"
+  ];
+
+  for (const ctx of contexts) {
+    const row = compositionalGrid[ctx];
+    assert.ok(row, `missing context ${ctx}`);
+    for (const axis of ["source", "way", "destination"]) {
+      assert.ok(row[axis]?.hnuc, `missing ${ctx}.${axis}`);
+    }
+  }
+});
+
+test("parser captures all contexts for from/to", () => {
+  const contexts = [
+    "space",
+    "interior",
+    "surface",
+    "under",
+    "time",
+    "state",
+    "person",
+    "social",
+    "discourse"
+  ];
+
+  for (const ctx of contexts) {
+    const fromSentence = parse(`su item from ${ctx} origin be topic ya`);
+    assert.deepEqual(fromSentence.from, { context: ctx, name: "origin" });
+
+    const toSentence = parse(`su item to ${ctx} goal be topic ya`);
+    assert.deepEqual(toSentence.to, { context: ctx, name: "goal" });
+  }
+});
+
+test("parser captures all contexts for via/way", () => {
+  const contexts = [
+    "space",
+    "interior",
+    "surface",
+    "under",
+    "time",
+    "state",
+    "person",
+    "social",
+    "discourse"
+  ];
+
+  for (const ctx of contexts) {
+    const viaSentence = parse(`su item via ${ctx} route be topic ya`);
+    assert.deepEqual(viaSentence.via, { context: ctx, name: "route" });
+  }
+});
