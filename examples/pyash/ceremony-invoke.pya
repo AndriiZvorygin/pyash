@@ -1,0 +1,5 @@
+subj name result obj num 5 be number ya
+subj name add_two be ceremony def
+obj num 2 to name result be add do
+subj name add_two be ceremony prah
+to name result be add_two do

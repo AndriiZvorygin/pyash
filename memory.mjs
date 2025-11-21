@@ -31,21 +31,60 @@ function upsertDefinition(name, index, end = undefined) {
   }
 }
 
-export function setMemory(sentence) {
-  const idx = memory.length;
-  memory.push(sentence);
-  history.push(sentence);
+function isInsideDefinition(idx) {
+  for (const entry of definitionIndex) {
+    if (typeof entry.end === "number" && idx >= entry.index && idx <= entry.end) {
+      return true;
+    }
+  }
+  return false;
+}
 
-  if (sentence?.mood === "def" && sentence.subj?.name) {
-    upsertDefinition(sentence.subj.name, idx);
+function adjustDefinitionIndices(removedIdx) {
+  for (const entry of definitionIndex) {
+    if (entry.index > removedIdx) entry.index -= 1;
+    if (typeof entry.end === "number" && entry.end > removedIdx) entry.end -= 1;
+  }
+}
+
+export function setMemory(sentence) {
+  if (!sentence) return;
+
+  const subjName = sentence.subj?.name;
+  const isDef = sentence.mood === "def";
+  const isPrah = sentence.mood === "prah";
+
+  // For non-def/prah sentences with a subject, replace the most recent
+  // non-def/prah entry for that subject instead of appending, to keep
+  // last-write wins without pruning def/prah blocks. Removed entries
+  // shift definition indexes accordingly. New fact is appended to
+  // preserve chronological order after the triggering command.
+  if (subjName && !isDef && !isPrah) {
+    for (let i = memory.length - 1; i >= 0; i--) {
+      const existing = memory[i];
+      if (existing.subj?.name !== subjName) continue;
+      if (existing.mood === "def" || existing.mood === "prah") break;
+      if (isInsideDefinition(i)) continue; // protect entries recorded inside def/prah blocks
+      memory.splice(i, 1);
+      adjustDefinitionIndices(i);
+      break;
+    }
   }
 
-  if (sentence?.mood === "prah" && sentence.subj?.name) {
-    const slot = findDefinitionSlot(sentence.subj.name);
-    if (definitionIndex[slot]?.name === sentence.subj.name) {
+  const idx = memory.length;
+  memory.push(sentence);
+  if (isDef && subjName) {
+    upsertDefinition(subjName, idx);
+  }
+  if (isPrah && subjName) {
+    const slot = findDefinitionSlot(subjName);
+    if (definitionIndex[slot]?.name === subjName) {
       definitionIndex[slot] = { ...definitionIndex[slot], end: idx };
     }
   }
+
+  history.push(sentence);
+
 }
 
 export function getMemory(name) {

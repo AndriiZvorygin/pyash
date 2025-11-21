@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, dumpDefinitionIndex, getDefinition, getMemory } from "../memory.mjs";
+import { resetMemory, dumpMemory, dumpDefinitionIndex, getDefinition, getMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -68,4 +68,36 @@ test("definition index captures end via prah and supports invoking the paragraph
   const latestResult = getMemory("result");
   assert.ok(latestResult, "result should be retrievable after function call");
   assert.equal(latestResult.obj.num, 7, "function body should have added two");
+});
+
+test("last-write wins keeps updated fact after command and preserves def/prah block entries", async () => {
+  resetMemory();
+
+  await run("subj name result obj num 5 be number ya");
+  await run("obj num 2 to name result be add do");
+
+  const mem = dumpMemory();
+  const resultFacts = mem.filter(s => s.subj?.name === "result" && s.mood === "ya");
+
+  assert.equal(resultFacts.length, 1, "only one result fact should remain");
+  assert.equal(resultFacts[0].obj.num, 7, "result fact should be updated after add");
+  assert.equal(mem[0].mood, "do", "command should remain before updated fact");
+
+  // Protect facts inside def/prah blocks
+  await run("subj name block be ceremony def");
+  await run("subj name collector obj num 1 be number ya"); // inside block
+  await run("subj name block be ceremony prah");
+
+  await run("subj name collector obj num 10 be number ya"); // outside block update
+  const collectors = dumpMemory().filter(s => s.subj?.name === "collector");
+
+  assert.equal(
+    collectors.length >= 2,
+    true,
+    "collector fact inside def/prah block should not be removed"
+  );
+  const protectedCollector = collectors.find(s => s.obj?.num === 1);
+  const updatedCollector = collectors.find(s => s.obj?.num === 10);
+  assert.ok(protectedCollector, "collector inside def block should persist");
+  assert.ok(updatedCollector, "collector outside block should be stored");
 });
