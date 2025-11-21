@@ -10,6 +10,12 @@ node main.mjs
 ```
 Commands: `mem` (dump memory), `reset`, `quit`. Enter Pyash sentences to execute.
 
+## Trace a .pya file to memory
+```bash
+node scripts/read_pya_trace.mjs path/to/file.pya
+```
+Reads Pyash text, interprets each sentence, and prints the resulting memory as JSON.
+
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 
