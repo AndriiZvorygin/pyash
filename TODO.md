@@ -1,0 +1,16 @@
+# TODO
+
+## Now
+- Tighten verb dispatch to include missing `mind` routing from recorded minds into invocation responses, ensuring response facts are correctly typed for later backends.
+- Clarify compositional keyword mapping in parser/dispatcher (state → `as`, discourse → `totext/fromtext`) and remove any lingering context traces.
+- Ensure imperative result facts carry useful `be` types (text/number) and predictable subjects (e.g., `result`), matching REPL expectations.
+
+## Soon
+- Expand verb coverage with tests for additional nouns/classes hinted in `pyac.txt` (e.g., files/models/pipeline nodes) before adding code.
+- Add hnuc/code validation utilities for compositional cases to align runtime with `compositionalCases.mjs` and the longer-term spec.
+- Improve mind integration: streaming handling for Ollama responses and richer reply mapping (assistant/thinking/timestamps) per `mind.md`.
+
+## Later
+- Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.
+- Revisit broader spec features (phonology, noun classes, control constructs from `pyac.txt`) when the interpreter foundations are stable.
+- Introduce result tracking with per-command IDs instead of generic `result`, to support richer history and debugging.
