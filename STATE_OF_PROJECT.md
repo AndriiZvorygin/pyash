@@ -13,14 +13,15 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 ## Architecture at a glance
 - `main.mjs`: REPL wiring parser → dispatcher → memory.
 - `parser.mjs`: tokenization, quoted blocks, keywordized compositional roles (fromtext/during/become/totext/etc.), short role aliases (su/ob).
-- `dispatcher.mjs`: mood routing, verb dispatch, memory writes for declarative/def/do, result facts stored for imperatives.
+- `dispatcher.mjs`: mood routing, verb dispatch, memory writes for declarative/def/do/ret, result facts stored for imperatives, sandpit execution for ceremonies with multi-word names.
 - `verbs/`: dynamic dispatch (add/read) and direct verbs (giant, mind, compile). Mind pulls config from keyword roles (`as`, `accordingto`), read dispatches to handlers, compile builds program JSON.
-- `memory.mjs`: simple in-memory store with get/set/dump/reset.
+- `memory.mjs`: simple in-memory store with get/set/dump/reset, definition index, sandpit traces.
 - `library/compositionalCases.mjs`: axis/context grid and keyword mappings.
 
 ## What works now
-- All tests green (`node --test`): parser quoting/text, compositional keyword normalization, mind config/use, read filename handler, compile paths, add/generation of result facts, moods `ya/def/do` stored.
+- All tests green (`node --test`): parser quoting/text, compositional keyword normalization, mind config/use, read filename handler, compile paths, add/generation of result facts, moods `ya/def/do/ret` stored, sandpit execution for ceremonies.
 - Imperatives store both the command and a result fact; bare add (`obj num 3 to num 4 be add do`) produces `result` with `num 7` in memory.
+- Ceremonies run in a sandpit context; `this` bindings and `ret` update the evoke/target/result in main memory; multi-word ceremony names work end-to-end.
 - Mind resolves model/prompt from stored config (`as` state, `accordingto` discourse) and returns text; compositional parsing emits keyword roles without lingering `context` fields.
 
 ## What is half-finished / open edges

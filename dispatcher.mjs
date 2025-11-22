@@ -152,19 +152,12 @@ export async function interpret(sentence) {
   }
 
   // --- Declarative (including definitions): append; last-write-wins via getMemory ---
-  if (mood === "ya" && subj?.name === "this") {
+  if (mood === "ya" && (subj?.name === "this" || obj?.thisRef)) {
     const resolved = resolveThisValue(obj, currentEvoke);
     if (resolved != null) {
-      const targetName = obj?.name;
+      const targetName = subj?.name === "this" ? obj?.name : subj?.name;
       if (!targetName) throw new Error("this binding requires a target name");
       return interpret({ ...sentence, subj: { name: targetName }, obj: resolved, mood: "ya" });
-    }
-  }
-
-  if (mood === "ya" && obj?.thisRef) {
-    const resolved = resolveThisValue(obj, currentEvoke);
-    if (resolved != null) {
-      sentence = { ...sentence, obj: resolved };
     }
   }
 

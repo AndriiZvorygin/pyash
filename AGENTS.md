@@ -8,11 +8,13 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Output formatting sits in `pretty.mjs`; Ollama network I/O is in `motor/ollama.mjs`.
 - Tests are under `test/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `workplace.json` is example data/config; keep secrets out of the repo.
+- Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Test, and Development Commands
 - `npm test` (or `node --test`) runs the full suite; run it before pushing.
 - `node test/core.test.mjs` runs a targeted file while iterating.
 - `node main.mjs` starts the REPL to exercise new verbs interactively.
+- `node scripts/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions
