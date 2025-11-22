@@ -6,10 +6,12 @@ import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
 import { getMemory, setMemory, dumpMemory, getDefinitionEntry } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
+import { resolveThisValue } from "./library/thisBinding.mjs";
 
 const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
+let currentEvoke = null;
 
 function getTloh() {
   const fact = getMemory("tloh");
@@ -49,6 +51,7 @@ async function invokeLoop(defEntry, sentence) {
 
   const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
   let lastResult;
+  currentEvoke = sentence;
 
   while (true) {
     for (const step of body) {
@@ -72,6 +75,7 @@ async function invokeLoop(defEntry, sentence) {
     tloh = next;
   }
 
+  currentEvoke = null;
   return lastResult;
 }
 
@@ -116,6 +120,33 @@ export async function interpret(sentence) {
   }
 
   // --- Declarative (including definitions): append; last-write-wins via getMemory ---
+  if (mood === "ya" && subj?.name === "this") {
+    const resolved = resolveThisValue(obj, currentEvoke);
+    if (resolved != null) {
+      const targetName = obj?.name;
+      if (!targetName) throw new Error("this binding requires a target name");
+      return interpret({ ...sentence, subj: { name: targetName }, obj: resolved, mood: "ya" });
+    }
+  }
+
+  if (mood === "ya" && obj?.thisRef) {
+    const resolved = resolveThisValue(obj, currentEvoke);
+    if (resolved != null) {
+      sentence = { ...sentence, obj: resolved };
+    }
+  }
+
+  if (mood === "ret" && currentEvoke) {
+    const role = sentence?.ret?.role || "obj";
+    const sourceName = sentence?.ret?.name || sentence?.obj?.name;
+    if (!sourceName) throw new Error("ret requires a source name");
+    const fact = getMemory(sourceName);
+    if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
+    currentEvoke[role] = fact.obj ?? fact;
+    setMemory(currentEvoke);
+    return { returned: role, value: fact.obj ?? fact };
+  }
+
   if (mood === "ya" || mood === "def") {
     setMemory(sentence);
     return { stored: subj?.name };
@@ -135,7 +166,7 @@ export async function interpret(sentence) {
         throw new Error("tloh reserved for loop control");
       }
 
-      if (sentence.obj?.num != null || getMemory("tloh")) {
+      if (getMemory("tloh")) {
         const lastResult = await invokeLoop(defEntry, sentence);
         setMemory(sentence);
         return { invoked: be, result: lastResult };
@@ -147,9 +178,11 @@ export async function interpret(sentence) {
 
       const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
       let lastResult;
+      currentEvoke = sentence;
       for (const step of body) {
         lastResult = await interpret(step);
       }
+      currentEvoke = null;
 
       setMemory(sentence);
       return { invoked: be, result: lastResult };

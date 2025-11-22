@@ -164,6 +164,22 @@ export function parse(line) {
       continue;
     }
 
+    // ret target, e.g., "this obj name acc ret"
+    if (mood === "ret" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      current = "ret";
+      s.ret = { role: words[i + 1] };
+      slot = s.ret;
+      i++; // consume role token
+      continue;
+    }
+
+    // this reference inside a role, e.g., "obj this obj ..."
+    if (current === "obj" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      slot.thisRef = words[i + 1];
+      i++; // consume role token
+      continue;
+    }
+
     // --- type tokens: name / num / number / text / filename ---
     if (["name", "num", "number", "text", "filename"].includes(t)) {
       const target = slot || (current ? s[current] : null);
@@ -179,7 +195,8 @@ export function parse(line) {
             CONTEXT_KEYS.includes(look) ||
             look === "be" ||
             look === "then" ||
-            look === "ta";
+            look === "ta" ||
+            look === "ret";
           if (isBoundary) break;
           parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
           j++;
@@ -228,6 +245,13 @@ export function parse(line) {
       }
       s.be = parts.join(" ");
       i = j - 1; // skip consumed tokens
+      continue;
+    }
+
+    // Track this-reference inside obj context, e.g., "obj this obj ..."
+    if (current === "obj" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+      slot.thisRef = words[i + 1];
+      i++; // consume role token
       continue;
     }
   }
