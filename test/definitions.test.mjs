@@ -54,16 +54,16 @@ test("definition index captures end via prah and supports invoking the paragraph
   resetMemory();
 
   await run("subj name result obj num 5 be number ya");
-  await run("subj name add_two be ceremony def");
+  await run("subj name add two be ceremony def");
   await run("obj num 2 to name result be add do");
-  await run("subj name add_two be ceremony prah");
+  await run("subj name add two be ceremony prah");
 
-  const entry = dumpDefinitionIndex().find(e => e.name === "add_two");
-  assert.ok(entry, "definition index should include add_two");
+  const entry = dumpDefinitionIndex().find(e => e.name === "add two");
+  assert.ok(entry, "definition index should include add two");
   assert.equal(entry.index, 1, "start index should point to def sentence");
   assert.equal(entry.end, 3, "end index should point to closing prah");
 
-  await run("to name result be add_two do");
+  await run("to name result be add two do");
 
   const latestResult = getMemory("result");
   assert.ok(latestResult, "result should be retrievable after function call");

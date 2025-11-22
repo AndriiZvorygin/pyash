@@ -166,24 +166,42 @@ export function parse(line) {
 
     // --- type tokens: name / num / number / text / filename ---
     if (["name", "num", "number", "text", "filename"].includes(t)) {
-      const raw = words[i + 1];
-      const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
-      const maybeNum = Number(value);
       const target = slot || (current ? s[current] : null);
       if (!target) continue;
 
       if (t === "name") {
-        target.name = value;
-      } else if (t === "text") {
-        target.text = value;
-      } else if (t === "filename") {
-        target.filename = value;
+        const parts = [];
+        let j = i + 1;
+        while (j < words.length) {
+          const look = words[j];
+          const isBoundary =
+            ROLE_KEYS.includes(look) ||
+            CONTEXT_KEYS.includes(look) ||
+            look === "be" ||
+            look === "then" ||
+            look === "ta";
+          if (isBoundary) break;
+          parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
+          j++;
+        }
+        const nameValue = parts.join(" ");
+        if (nameValue) target.name = nameValue;
+        i = j - 1;
       } else {
-        // num / number → numeric
-        target.num = isNaN(maybeNum) ? value : maybeNum;
+        const raw = words[i + 1];
+        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        const maybeNum = Number(value);
+        if (t === "text") {
+          target.text = value;
+        } else if (t === "filename") {
+          target.filename = value;
+        } else {
+          // num / number → numeric
+          target.num = isNaN(maybeNum) ? value : maybeNum;
+        }
+        i++; // skip the value we just consumed
       }
 
-      i++; // skip the value we just consumed
       continue;
     }
 
@@ -194,8 +212,22 @@ export function parse(line) {
     }
 
     if (t === "be") {
-      s.be = words[i + 1];
-      i++; // skip verb; mood already taken from last token
+      const parts = [];
+      let j = i + 1;
+      while (j < words.length) {
+        const look = words[j];
+        const isBoundary =
+          ROLE_KEYS.includes(look) ||
+          CONTEXT_KEYS.includes(look) ||
+          look === "then" ||
+          look === "ta" ||
+          look === "be"; // unlikely consecutive be, but stop
+        if (isBoundary) break;
+        parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
+        j++;
+      }
+      s.be = parts.join(" ");
+      i = j - 1; // skip consumed tokens
       continue;
     }
   }

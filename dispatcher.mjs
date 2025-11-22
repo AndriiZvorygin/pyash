@@ -11,6 +11,45 @@ const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 
+function getTloh() {
+  const fact = getMemory("tloh");
+  return fact?.obj?.num ?? null;
+}
+
+function setTlohValue(num) {
+  setMemory({
+    subj: { name: "tloh" },
+    obj: { num },
+    be: "number",
+    mood: "ya"
+  });
+}
+
+async function invokeLoop(defEntry, sentence) {
+  let tloh = sentence.obj?.num ?? getTloh();
+  if (tloh == null) throw new Error("tloh is required to loop");
+
+  setTlohValue(tloh);
+
+  const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
+  let lastResult;
+
+  while (true) {
+    for (const step of body) {
+      lastResult = await interpret(step);
+    }
+
+    const current = getTloh();
+    const next = current != null ? current - 1 : tloh - 1;
+    setTlohValue(next);
+
+    if (next === 0) break;
+    tloh = next;
+  }
+
+  return lastResult;
+}
+
 export async function interpret(sentence) {
   if (!sentence) return;
 
@@ -63,6 +102,20 @@ export async function interpret(sentence) {
     const defEntry = fn ? null : getDefinitionEntry(be);
 
     if (!fn && defEntry) {
+      if (typeof defEntry.end !== "number") {
+        throw new Error(`Definition ${be} missing closing prah`);
+      }
+
+      if (sentence.subj?.name === "tloh" || sentence.be === "tloh") {
+        throw new Error("tloh reserved for loop control");
+      }
+
+      if (sentence.obj?.num != null || getMemory("tloh")) {
+        const lastResult = await invokeLoop(defEntry, sentence);
+        setMemory(sentence);
+        return { invoked: be, result: lastResult };
+      }
+
       if (typeof defEntry.end !== "number") {
         throw new Error(`Definition ${be} missing closing prah`);
       }

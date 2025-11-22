@@ -7,28 +7,28 @@
 - **REPL input**:
   ```
   subj name result obj num 5 be number ya
-  subj name add_two be ceremony def
+  subj name add two be ceremony def
   obj num 2 to name result be add do
-  subj name add_two be ceremony prah
-  to name result be add_two do
+  subj name add two be ceremony prah
+  to name result be add two do
   mem
   ```
 - **Expected output**:
   ```
   → { "stored": "result" }
-  → { "stored": "add_two" }
+  → { "stored": "add two" }
   → { "recorded": true }
   → { "paragraphEnd": true }
-  → { "invoked": "add_two", "result": { "acted": "result", "value": 7 } }
+  → { "invoked": "add two", "result": { "acted": "result", "value": 7 } }
   Memory: [
     { "subj": { "name": "result" }, "obj": { "num": 5 }, "be": "number", "mood": "ya" },
-    { "subj": { "name": "add_two" }, "be": "ceremony", "mood": "def" },
+    { "subj": { "name": "add two" }, "be": "ceremony", "mood": "def" },
     { "obj": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
-    { "subj": { "name": "add_two" }, "be": "ceremony", "mood": "prah" },
+    { "subj": { "name": "add two" }, "be": "ceremony", "mood": "prah" },
     { "obj": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
     { "subj": { "name": "result" }, "be": "number", "obj": { "num": 7 }, "mood": "ya" },
     { "subj": { "name": "result" }, "obj": { "num": 7 }, "be": "add", "mood": "ya" },
-    { "to": { "name": "result" }, "be": "add_two", "mood": "do" }
+    { "to": { "name": "result" }, "be": "add two", "mood": "do" }
   ]
   ```
-- **Notes**: Demonstrates definition indexing (`def`...`prah`) and invocation of the stored paragraph via `be add_two do`; memory shows recorded body, closing marker, and executed body on call.
+- **Notes**: Demonstrates definition indexing (`def`...`prah`) and invocation of the stored paragraph via `be add two do`; memory shows recorded body, closing marker, and executed body on call.
