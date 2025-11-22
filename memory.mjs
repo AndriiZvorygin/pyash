@@ -1,7 +1,10 @@
 // memory.mjs
-const memory = [];
-const history = []; // optional, for debugging / REPL
+let memory = [];
+let history = []; // optional, for debugging / REPL
 const definitionIndex = [];
+const contextStack = [];
+
+let sandpits = [];
 
 function findDefinitionSlot(name) {
   let low = 0;
@@ -59,7 +62,7 @@ export function setMemory(sentence) {
   // last-write wins without pruning def/prah blocks. Removed entries
   // shift definition indexes accordingly. New fact is appended to
   // preserve chronological order after the triggering command.
-  if (subjName && !isDef && !isPrah) {
+  if (subjName && !isDef && !isPrah && sentence.mood !== "then") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
       if (existing.subj?.name !== subjName) continue;
@@ -125,8 +128,31 @@ export function dumpDefinitionIndex() {
 }
 
 export function resetMemory() {
-  memory.length = 0;
-  // you can also clear history here if you want a “hard reset”
-  // history.length = 0;
+  memory = [];
+  history = [];
   definitionIndex.length = 0;
+  contextStack.length = 0;
+  sandpits = [];
+}
+
+export function pushMemoryContext({ seedFromCurrent = false } = {}) {
+  contextStack.push({ memory, history });
+  memory = seedFromCurrent ? [...memory] : [];
+  history = [];
+}
+
+export function popMemoryContext() {
+  const ctx = contextStack.pop();
+  if (ctx) {
+    memory = ctx.memory;
+    history = ctx.history;
+  }
+}
+
+export function recordSandpitTrace(trace) {
+  sandpits.push(trace);
+}
+
+export function dumpSandpits() {
+  return sandpits;
 }

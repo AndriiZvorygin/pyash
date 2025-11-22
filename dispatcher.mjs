@@ -4,7 +4,7 @@ import { giant } from "./verbs/giant.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
-import { getMemory, setMemory, dumpMemory, getDefinitionEntry } from "./memory.mjs";
+import { getMemory, setMemory, dumpMemory, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "./memory.mjs";
 import { sentenceToPyash } from "./pretty.mjs";
 import { resolveThisValue } from "./library/thisBinding.mjs";
 
@@ -12,6 +12,7 @@ const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 let currentEvoke = null;
+let executingBody = false;
 
 function getTloh() {
   const fact = getMemory("tloh");
@@ -46,16 +47,30 @@ async function invokeLoop(defEntry, sentence) {
   if (tloh == null) throw new Error("tloh is required to loop");
   const untilSeed = getUntil();
 
+  pushMemoryContext({ seedFromCurrent: true });
+  lastCondition = true;
   setTlohValue(tloh);
   if (untilSeed != null) setUntilValue(untilSeed);
 
-  const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
+  const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
   currentEvoke = sentence;
 
   while (true) {
     for (const step of body) {
       lastResult = await interpret(step);
+      if (step.mood === "then" && lastCondition === false) {
+        lastCondition = true;
+        recordSandpitTrace(dumpMemory());
+        popMemoryContext();
+        currentEvoke = null;
+        return lastResult;
+      }
+    }
+
+    if (lastCondition === false) {
+      lastCondition = true;
+      break;
     }
 
     const current = getTloh();
@@ -74,6 +89,23 @@ async function invokeLoop(defEntry, sentence) {
     if (done) break;
     tloh = next;
   }
+
+  const sandpit = dumpMemory().slice();
+  const destName = sentence.to?.name;
+  const updatedTarget = destName ? getMemory(destName) : null;
+  const latestTloh = getMemory("tloh");
+  const latestUntil = getMemory("until");
+
+  recordSandpitTrace(sandpit);
+  popMemoryContext();
+
+  if (updatedTarget?.obj) {
+    setMemory({ subj: { name: destName }, obj: updatedTarget.obj, be: updatedTarget.be || sentence.be || "result", mood: "ya" });
+    setMemory({ subj: { name: "result" }, obj: updatedTarget.obj, be: updatedTarget.be || sentence.be || "result", mood: "ya" });
+  }
+
+  if (latestTloh) setMemory(latestTloh);
+  if (latestUntil) setMemory(latestUntil);
 
   currentEvoke = null;
   return lastResult;
@@ -97,7 +129,7 @@ export async function interpret(sentence) {
     definitionStack.push(subj?.name ?? null);
   }
 
-  if (insideParagraph && mood !== "prah" && !isParagraphDef) {
+  if (insideParagraph && !executingBody && mood !== "prah" && !isParagraphDef) {
     setMemory(sentence);
     return { recorded: true };
   }
@@ -176,16 +208,45 @@ export async function interpret(sentence) {
         throw new Error(`Definition ${be} missing closing prah`);
       }
 
-      const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
+      // isolate execution in a sandpit to avoid cluttering main memory
+      const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
       let lastResult;
       currentEvoke = sentence;
+      executingBody = true;
+      pushMemoryContext({ seedFromCurrent: true });
       for (const step of body) {
         lastResult = await interpret(step);
+        if (step.mood === "then" && lastCondition === false) {
+          lastCondition = true;
+          break;
+        }
       }
+      const sandpit = dumpMemory().slice();
+      const updatedTarget = to?.name ? getMemory(to.name) : null;
+      recordSandpitTrace(sandpit);
+      popMemoryContext();
+      executingBody = false;
+      const evoke = currentEvoke || sentence;
       currentEvoke = null;
 
-      setMemory(sentence);
-      return { invoked: be, result: lastResult };
+      // merge updates from sandpit
+      const mergedObj = (lastResult?.value ?? lastResult?.obj) || updatedTarget?.obj || evoke.obj;
+      const mergedBe = evoke.be || updatedTarget?.be || "result";
+
+      if (mergedObj) {
+        const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
+        const updatedEvoke = { ...evoke, obj: normalizedObj };
+        setMemory(updatedEvoke);
+
+        if (to?.name) {
+          setMemory({ subj: { name: to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+          setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+        }
+      } else {
+        setMemory(evoke);
+      }
+
+      return { invoked: be, result: mergedObj ?? lastResult };
     }
 
     if (!fn) throw new Error(`Unknown verb: ${be}`);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, getMemory } from "../memory.mjs";
+import { resetMemory, getMemory, dumpMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -24,7 +24,10 @@ test("ceremony binds this obj into local and returns via ret", async () => {
   await run("obj num 5 to name result be add two do");
 
   const result = getMemory("result");
+  const retFact = dumpMemory().find(s => s.mood === "ret");
 
   assert.ok(result);
   assert.equal(result.obj.num, 7, "result should reflect returned acc");
+  assert.ok(retFact, "ret fact should be recorded in memory");
+  assert.equal(retFact.ret?.name ?? retFact.ret?.obj?.name, "acc");
 });

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, dumpMemory } from "../memory.mjs";
+import { resetMemory, dumpMemory, dumpSandpits } from "../memory.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 
 async function main() {
@@ -32,7 +32,7 @@ async function main() {
     }
   }
 
-  console.log(JSON.stringify(dumpMemory(), null, 2));
+  console.log(JSON.stringify({ memory: dumpMemory(), sandpits: dumpSandpits() }, null, 2));
 }
 
 main();

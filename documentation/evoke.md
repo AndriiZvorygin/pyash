@@ -128,8 +128,11 @@ Looping uses the same idea: `tloh` lives on the **evoke** as another register.
 * Default supervisor behaviour:
 
   * Run the ceremony body.
-  * If the ceremony didn’t explicitly change `this tloh`, decrement it by 1.
-  * Stop when `tloh` hits 0.
+  * If the ceremony didn’t explicitly change `this tloh`, move it **toward `until`**:
+    * if `until` is set and greater than `tloh`, increment by 1
+    * if `until` is set and less than `tloh`, decrement by 1
+    * if `until` is absent, decrement toward 0
+  * Stop when `tloh` equals `until` (or 0 when `until` is absent).
 
 Inside the ceremony, you can control it with `this`:
 
@@ -159,3 +162,7 @@ If you’d like, next we can:
 
 * Sketch how your `parser.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
 * Add tests to lock in that **surface Pyash never uses underscores**, while the dispatcher still finds the right JS verb modules.
+
+## 6. Examples
+
+See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until`.

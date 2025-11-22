@@ -1,4 +1,4 @@
-const MOODS = new Set(["ya", "def", "do", "que", "then", "prah"]);
+const MOODS = new Set(["ya", "def", "do", "que", "then", "prah", "ret"]);
 
 export function splitSentences(text) {
   const sentences = [];
