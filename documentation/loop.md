@@ -157,46 +157,20 @@ Codex must respect this:
 
 There are two levels.
 
-### 4.1. Level 1: simple countdown (no `until` used yet)
+### 4.1. Equilibrium with `until` (current)
 
-This is the minimal version that must work **now**:
-
-* The supervisor checks the `tloh` value after each iteration.
-* **Termination rule:**
-
-```text
-If tloh > 0 → run another iteration
-If tloh = 0 → stop looping
-```
-
-This alone is enough for:
-
-* “repeat N times” loops,
-* or `while`-style loops where the ceremony chooses to drive `tloh` to 0 when a condition fails.
-
-### 4.2. Level 2: equilibrium with `until` (future/optional)
-
-For richer range loops we also have an `until` register, also represented as a normal sentence in memory (e.g. “until is number”).
-
-The general rule becomes:
-
-* **Termination rule with equilibrium:**
-
-```text
-If tloh == until → stop looping
-Else             → continue
-```
+* `tloh` and `until` are both normal number facts.
+* The supervisor moves `tloh` toward `until`:
+  * if `tloh > until` → decrement by 1
+  * if `tloh < until` → increment by 1
+  * if `until` is absent → treat `until = 0` (default countdown)
+* Stop when `tloh == until`.
 
 You get:
 
 * descending loops: start > until, decrement towards it.
 * ascending loops: start < until, increment towards it.
-* dynamic loops: ceremony can move the target (`until`) or current (`tloh`) to re-shape behaviour.
-
-For Codex, this can be added as:
-
-* later helpers `getUntil` / `setUntil`
-* an upgraded supervisor guard that prefers equilibrium `tloh == until` when `until` is present, and falls back to `tloh == 0` when it isn’t.
+* dynamic loops: ceremony can move `until` or `tloh` mid-loop to reshape behaviour.
 
 ---
 

@@ -25,11 +25,27 @@ function setTlohValue(num) {
   });
 }
 
+function getUntil() {
+  const fact = getMemory("until");
+  return fact?.obj?.num ?? null;
+}
+
+function setUntilValue(num) {
+  setMemory({
+    subj: { name: "until" },
+    obj: { num },
+    be: "number",
+    mood: "ya"
+  });
+}
+
 async function invokeLoop(defEntry, sentence) {
   let tloh = sentence.obj?.num ?? getTloh();
   if (tloh == null) throw new Error("tloh is required to loop");
+  const untilSeed = getUntil();
 
   setTlohValue(tloh);
+  if (untilSeed != null) setUntilValue(untilSeed);
 
   const body = dumpMemory().slice(defEntry.index + 1, defEntry.end);
   let lastResult;
@@ -40,10 +56,19 @@ async function invokeLoop(defEntry, sentence) {
     }
 
     const current = getTloh();
-    const next = current != null ? current - 1 : tloh - 1;
+    const until = getUntil();
+    const direction =
+      until != null
+        ? (current ?? tloh) < until ? 1 : -1
+        : -1;
+    const next = (current != null ? current : tloh) + direction;
     setTlohValue(next);
 
-    if (next === 0) break;
+    const done =
+      until != null
+        ? next === until
+        : next === 0;
+    if (done) break;
     tloh = next;
   }
 

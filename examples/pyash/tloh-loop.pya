@@ -1,0 +1,6 @@
+subj name counter obj num 0 be number ya
+subj name loop body be ceremony def
+obj num 1 to name counter be add do
+subj name loop body be ceremony prah
+subj name tloh obj num 3 be number ya
+to name counter be loop body do

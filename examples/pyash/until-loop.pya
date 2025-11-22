@@ -1,0 +1,7 @@
+subj name counter obj num 0 be number ya
+subj name climb be ceremony def
+obj num 1 to name counter be add do
+subj name climb be ceremony prah
+subj name tloh obj num 1 be number ya
+subj name until obj num 3 be number ya
+to name counter be climb do
