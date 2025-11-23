@@ -8,13 +8,13 @@
 ```bash
 node main.mjs
 ```
-Commands: `mem` (dump memory), `reset`, `quit`. Enter Pyash sentences to execute.
+Commands: `mem` (dump memory), `reset`, `quit`, `paste` (multi-line). Enter Pyash sentences to execute; ceremonies/verbs are speakable (multi-word) and run in sandpits with `this`/`ret` support.
 
 ## Trace a .pya file to memory
 ```bash
 node scripts/read_pya_trace.mjs path/to/file.pya
 ```
-Reads Pyash text, interprets each sentence, and prints the resulting memory as JSON.
+Reads Pyash text, interprets each sentence, and prints `{ memory, sandpits }` as JSON.
 
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.

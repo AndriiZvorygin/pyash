@@ -318,7 +318,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 
    * After the sandpit finishes:
 
-     * If a `retResult` exists, it is written to main memory via `setMemory` like any other `ya` fact (a single sentence).
+     * If a `retResult` exists, it is written to main memory via `setMemory` like any other `ya` fact (a single sentence) derived from the updated evoker; register lookups (e.g., `tloh`, `until`) should be derived from that evoker rather than separate facts.
      * If no `ret` occurred, the sandpit may terminate with no result (implementation choice).
      * The sandpit frame is popped from the stack.
      * The sandpit trace (including the initial evoker, body sentences, and any `ret` mood) is kept in `memory.mjs` as a paragraph for debugging/inspection.
@@ -326,7 +326,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 7. **History**
 
    * Memory (`memory.mjs`) accumulates a top-level history of `ya`/`def`/`do` sentences and their `result` sentences.
-   * Sandpit execution adds separate trace paragraphs that reference the evoking sentence and the returned `ya` result.
+  * Sandpit execution adds separate trace paragraphs that reference the evoking sentence and the returned `ya` result; body sentences are not merged into main memory.
    * The **latest sentence per subject** is the authoritative one; older ones are historical and may later be garbage-collected.
 
 ---
@@ -359,4 +359,3 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 * Files: prefer `test/sandpit` for fixtures; keep dependencies minimal (built-in modules + optional Ollama HTTP).
 
 * Larger language features in `pyac.txt` (phonology, noun classes, additional control constructs, GPU/compiler path) are acknowledged but currently out of scope, but the sentence/paragraph data model is designed so those features can be added without changing the fundamental “everything is a sentence” interface.
-

@@ -24,7 +24,7 @@
 
 ## Examples and manual REPL verification
 - The `examples/` directory holds curated REPL transcripts and scenarios (`core/`, `features/`, `bugs/`, `docs/`) and a `TEMPLATE.md` for new entries.
-- Examples complement automated tests: use them to manually drive the REPL, confirm memory contents, and reproduce bugs/features that are hard to assert in code (streaming, UX).
+- Examples complement automated tests: use them to manually drive the REPL, confirm memory contents (and sandpit traces), and reproduce bugs/features that are hard to assert in code (streaming, UX).
 - When adding a new behavior, prefer adding an automated test first; if interactive steps are useful, add/update an example alongside the test and note its intent/status in `examples/`.
 - Keep examples small and deterministic; when an example exposes a bug, add an automated regression test to lock it in.
 

@@ -1,7 +1,7 @@
 # State of Project
 
 ## What the project is
-Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter, and a handful of verbs (add, giant, compile, mind, read). It treats case roles compositionally (axis + context mapped to keywords like `fromtext`, `as`, `become`) and stores every sentence as history in memory.
+Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter, and a handful of verbs (add, giant, compile, mind, read). It treats case roles compositionally (axis + context mapped to keywords like `fromtext`, `as`, `become`) and stores every sentence as history in memory. Ceremonies run in sandpits; the evoking sentence is the source of truth (including control cases like `tloh`/`until`), and returned state is carried by the updated evoker rather than separate register facts.
 
 ## Current goals
 - Keep a red→green flow: add tests before code.
@@ -21,7 +21,7 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 ## What works now
 - All tests green (`node --test`): parser quoting/text, compositional keyword normalization, mind config/use, read filename handler, compile paths, add/generation of result facts, moods `ya/def/do/ret` stored, sandpit execution for ceremonies.
 - Imperatives store both the command and a result fact; bare add (`obj num 3 to num 4 be add do`) produces `result` with `num 7` in memory.
-- Ceremonies run in a sandpit context; `this` bindings and `ret` update the evoke/target/result in main memory; multi-word ceremony names work end-to-end.
+- Ceremonies run in a sandpit context; `this` bindings and `ret` update the evoke/target/result in main memory; multi-word ceremony names work end-to-end. Registers should be read from the evoking sentence; separate register facts are being phased out.
 - Mind resolves model/prompt from stored config (`as` state, `accordingto` discourse) and returns text; compositional parsing emits keyword roles without lingering `context` fields.
 
 ## What is half-finished / open edges
@@ -30,6 +30,7 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 - Mind is stubbed against mocked generate in tests; real streaming/roles for replies aren’t modeled yet.
 - Parser still assumes keyword tables; no validation against hnuc codes yet.
 - Much of the 2019 spec (phonology, noun classes, tense/aspect, GPU/compiler ambitions) remains out-of-scope here.
+- Register facts (e.g., `tloh`/`until`) should ultimately be derived from the evoking sentence only; no separate register facts should be emitted long-term.
 
 ## Tried and rejected
 - Keeping `context` fields on parsed roles (removed in favor of keyword normalization).
