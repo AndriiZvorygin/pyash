@@ -159,7 +159,7 @@ There are two levels.
 
 ### 4.1. Equilibrium with `until` (current)
 
-* `tloh` and `until` are both normal number facts.
+* `tloh` and `until` live on the evoking sentence (treat that sentence as the source of truth; avoid separate register facts).
 * The supervisor moves `tloh` toward `until`:
   * if `tloh > until` → decrement by 1
   * if `tloh < until` → increment by 1

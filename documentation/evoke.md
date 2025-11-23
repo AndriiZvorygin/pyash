@@ -87,7 +87,7 @@ Meaning:
    evoke.obj = { num: 7 };
    ```
 
-3. Mark the ceremony as finished; the **final evoke sentence** is the return value.
+3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `tloh`, `until`, `to`) travel on the evoke sentence; no extra register facts are required.
 
 So a complete ceremony flow for “add two” in Pyash surface form looks like:
 
