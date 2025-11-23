@@ -23,12 +23,14 @@ async function main() {
 
   resetMemory();
   const sentences = splitSentences(text);
+  const outputs = [];
 
   for (const raw of sentences) {
     const line = raw.trim();
     if (!line) continue;
     const sentence = parse(line);
-    await interpret(sentence);
+    const res = await interpret(sentence);
+    if (sentence?.mood === "que") outputs.push(res);
   }
 
   const result = getMemory("result");
@@ -44,8 +46,14 @@ async function main() {
   }
 
   if (gross) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ outputs, result }, null, 2));
     return;
+  }
+
+  if (outputs.length) {
+    console.log("Outputs:");
+    outputs.forEach(o => console.log(o ?? "(null)"));
+    console.log("\nResult:");
   }
 
   try {

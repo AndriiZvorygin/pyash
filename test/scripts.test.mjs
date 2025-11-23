@@ -48,7 +48,9 @@ test("run_pya_program.mjs outputs result in gross mode", async () => {
   const { logs, errors } = await runScript("scripts/run_pya_program.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
   assert.equal(errors.join("\n"), "");
 
-  const result = JSON.parse(logs.join(""));
+  const payload = JSON.parse(logs.join(""));
+  assert.ok(Array.isArray(payload.outputs));
+  const result = payload.result;
   assert.equal(result.subj?.name, "result");
   assert.equal(result.obj?.num, 5);
   assert.equal(result.be, "worker");
