@@ -65,17 +65,13 @@ test("ceremony ret returns full sentence with multiple registers", async () => {
   await run("to name target be combo do");
 
   const target = getMemory("target");
-  const tloh = getMemory("tloh");
-  const until = getMemory("until");
   const result = getMemory("result");
 
   assert.ok(target?.obj);
   assert.equal(target.obj.num, 3, "ret sentence should update target obj");
 
-  // tloh/until may be stored as registers or only on invoke; tolerate either
-  if (tloh?.obj) assert.equal(tloh.obj.num, 4);
-  if (until?.obj) assert.equal(until.obj.num, 6);
-
   assert.ok(result?.obj);
   assert.equal(result.obj.num, 3, "result fact should mirror returned obj");
+  assert.equal(getMemory("tloh"), undefined, "tloh should remain on evoker, not as a register fact");
+  assert.equal(getMemory("until"), undefined, "until should remain on evoker, not as a register fact");
 });

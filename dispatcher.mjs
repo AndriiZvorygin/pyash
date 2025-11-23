@@ -14,113 +14,94 @@ const definitionStack = [];
 let currentEvoke = null;
 let executingBody = false;
 
-function getTloh() {
-  const fact = getMemory("tloh");
-  return fact?.obj?.num ?? null;
-}
-
-function setTlohValue(num) {
-  setMemory({
-    subj: { name: "tloh" },
-    obj: { num },
-    be: "number",
-    mood: "ya"
-  });
-}
-
-function getUntil() {
-  const fact = getMemory("until");
-  return fact?.obj?.num ?? null;
-}
-
-function setUntilValue(num) {
-  setMemory({
-    subj: { name: "until" },
-    obj: { num },
-    be: "number",
-    mood: "ya"
-  });
+function registerValue(reg) {
+  if (reg == null) return null;
+  if (typeof reg === "number") return reg;
+  if (typeof reg === "object" && typeof reg.num === "number") return reg.num;
+  return null;
 }
 
 async function invokeLoop(defEntry, sentence) {
-  let tloh = sentence.obj?.num ?? getTloh();
-  if (tloh == null) throw new Error("tloh is required to loop");
-  const untilSeed = getUntil();
-
-  pushMemoryContext({ seedFromCurrent: true });
-  lastCondition = true;
-  setMemory(currentEvoke);
-  setTlohValue(tloh);
-  if (untilSeed != null) setUntilValue(untilSeed);
+  const initialTloh = registerValue(sentence.tloh);
+  if (initialTloh == null) throw new Error("tloh is required to loop");
+  const untilSeed = registerValue(sentence.until);
 
   const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
-  currentEvoke = { ...sentence };
+  currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
-  while (true) {
-    for (const step of body) {
-      lastResult = await interpret(step);
-      if (step.mood === "then" && lastCondition === false) {
-        lastCondition = true;
+  pushMemoryContext({ seedFromCurrent: true });
+  executingBody = true;
+  lastCondition = true;
+
+  let sandpit = [];
+
+  try {
+    let currentTloh = registerValue(currentEvoke.tloh);
+    let currentUntil = untilSeed;
+
+    while (true) {
+      currentEvoke = { ...currentEvoke, tloh: currentTloh, until: currentUntil ?? currentEvoke.until };
+      setMemory(currentEvoke);
+
+      for (const step of body) {
+        lastResult = await interpret(step);
+        if (step.mood === "then" && lastCondition === false) {
+          lastCondition = true;
+          break;
+        }
+      }
+
+      const updatedTloh = registerValue(currentEvoke.tloh);
+      const updatedUntil = registerValue(currentEvoke.until ?? currentUntil);
+
+      const effectiveTloh = updatedTloh ?? currentTloh;
+      const effectiveUntil = updatedUntil ?? currentUntil;
+
+      const shouldStop = effectiveUntil != null ? effectiveTloh === effectiveUntil : effectiveTloh === 0;
+      if (shouldStop) {
+        currentTloh = effectiveTloh;
+        currentUntil = effectiveUntil;
+        currentEvoke = { ...currentEvoke, tloh: currentTloh, until: currentUntil };
+        break;
+      }
+
+      const direction = effectiveUntil != null ? (effectiveTloh < effectiveUntil ? 1 : -1) : -1;
+      const next = (effectiveTloh ?? currentTloh) + direction;
+      const reachedAfterStep = effectiveUntil != null ? next === effectiveUntil : next === 0;
+      currentTloh = next;
+      currentUntil = effectiveUntil;
+      if (reachedAfterStep) {
+        currentEvoke = { ...currentEvoke, tloh: next, until: effectiveUntil };
         break;
       }
     }
+    sandpit = dumpMemory().slice();
+  } finally {
+    recordSandpitTrace(sandpit);
+    popMemoryContext();
+    executingBody = false;
+  }
 
-    if (lastCondition === false) {
-      lastCondition = true;
-      break;
+  const finalEvoke = currentEvoke || sentence;
+  const mergedObj = (lastResult?.value ?? lastResult?.obj) || finalEvoke.obj;
+  const mergedBe = finalEvoke.be || "result";
+
+  if (mergedObj !== undefined) {
+    const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
+    const evokeWithResult = { ...finalEvoke, obj: normalizedObj };
+    setMemory(evokeWithResult);
+
+    if (finalEvoke.to?.name) {
+      setMemory({ subj: { name: finalEvoke.to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+      setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
-    const current = getTloh();
-    const until = getUntil();
-    const direction =
-      until != null
-        ? (current ?? tloh) < until ? 1 : -1
-        : -1;
-    const next = (current != null ? current : tloh) + direction;
-    setTlohValue(next);
-
-    const done =
-      until != null
-        ? next === until
-        : next === 0;
-    if (done) break;
-    tloh = next;
+    currentEvoke = null;
+    return { invoked: finalEvoke.be, result: normalizedObj };
   }
 
-  const sandpit = dumpMemory().slice();
-  const latestTloh = getMemory("tloh");
-  const latestUntil = getMemory("until");
-  recordSandpitTrace(sandpit);
-  popMemoryContext();
-
-  // pull the invoke sentence (first sentence of sandpit or currentEvoke) as ground truth
-  const sandpitInvoke = sandpit.find(s => s.be === sentence.be && s.mood === "do") || sandpit[0] || currentEvoke;
-  const normalizedInvoke = { ...currentEvoke, ...sandpitInvoke };
-  if (!normalizedInvoke.tloh && latestTloh) normalizedInvoke.tloh = latestTloh.obj ?? latestTloh;
-  if (!normalizedInvoke.until && latestUntil) normalizedInvoke.until = latestUntil.obj ?? latestUntil;
-
-  // normalize registers if present on invoke
-  if (normalizedInvoke.tloh && typeof normalizedInvoke.tloh === "number") {
-    setMemory({ subj: { name: "tloh" }, obj: { num: normalizedInvoke.tloh }, be: "number", mood: "ya" });
-  } else if (normalizedInvoke.tloh?.num !== undefined) {
-    setMemory({ subj: { name: "tloh" }, obj: normalizedInvoke.tloh, be: "number", mood: "ya" });
-  }
-  if (normalizedInvoke.until && typeof normalizedInvoke.until === "number") {
-    setMemory({ subj: { name: "until" }, obj: { num: normalizedInvoke.until }, be: "number", mood: "ya" });
-  } else if (normalizedInvoke.until?.num !== undefined) {
-    setMemory({ subj: { name: "until" }, obj: normalizedInvoke.until, be: "number", mood: "ya" });
-  }
-
-  setMemory(normalizedInvoke);
-
-  if (normalizedInvoke.to?.name && normalizedInvoke.obj) {
-    const destObj = typeof normalizedInvoke.obj === "object" ? normalizedInvoke.obj : { num: normalizedInvoke.obj };
-    const beType = normalizedInvoke.be || "result";
-    setMemory({ subj: { name: normalizedInvoke.to.name }, obj: destObj, be: beType, mood: "ya" });
-    setMemory({ subj: { name: "result" }, obj: destObj, be: beType, mood: "ya" });
-  }
-
+  setMemory(finalEvoke);
   currentEvoke = null;
   return lastResult;
 }
@@ -177,16 +158,37 @@ export async function interpret(sentence) {
 
   if (mood === "ret" && currentEvoke) {
     const sourceName = sentence?.ret?.name || sentence?.obj?.name;
-    if (!sourceName) throw new Error("ret requires a source name");
-    const fact = getMemory(sourceName);
-    if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
-    if (fact.obj) currentEvoke.obj = fact.obj;
-    if (fact.to) currentEvoke.to = fact.to;
-    if (fact.from) currentEvoke.from = fact.from;
-    if (fact.tloh) currentEvoke.tloh = fact.tloh;
-    if (fact.until) currentEvoke.until = fact.until;
+    let merged = { ...currentEvoke };
+
+    if (sourceName) {
+      const fact = getMemory(sourceName);
+      if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
+      merged = {
+        ...merged,
+        obj: fact.obj ?? merged.obj,
+        to: fact.to ?? merged.to,
+        from: fact.from ?? merged.from,
+        tloh: fact.tloh ?? merged.tloh,
+        until: fact.until ?? merged.until,
+        as: fact.as ?? merged.as
+      };
+    } else if (sentence.obj !== undefined) {
+      merged = { ...merged, obj: sentence.obj };
+    }
+
+    if (sentence.to) merged.to = sentence.to;
+    if (sentence.from) merged.from = sentence.from;
+    if (sentence.tloh !== undefined) merged.tloh = sentence.tloh;
+    if (sentence.until !== undefined) merged.until = sentence.until;
+    if (sentence.subj) merged.subj = sentence.subj;
+    if (sentence.as) merged.as = sentence.as;
+
+    merged.mood = currentEvoke.mood;
+    merged.be = currentEvoke.be;
+
+    currentEvoke = merged;
     setMemory(currentEvoke);
-    return { returned: "evoke", value: fact.obj ?? fact };
+    return { returned: "evoke", value: merged.obj ?? merged };
   }
 
   if (mood === "ya" || mood === "def") {
@@ -198,6 +200,7 @@ export async function interpret(sentence) {
   if (mood === "do") {
     const fn = verbs[be];
     const defEntry = fn ? null : getDefinitionEntry(be);
+    const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
 
     if (!fn && defEntry) {
       if (typeof defEntry.end !== "number") {
@@ -208,9 +211,8 @@ export async function interpret(sentence) {
         throw new Error("tloh reserved for loop control");
       }
 
-      if (getMemory("tloh")) {
+      if (hasLoopRegisters) {
         const lastResult = await invokeLoop(defEntry, sentence);
-        setMemory(sentence);
         return { invoked: be, result: lastResult };
       }
 

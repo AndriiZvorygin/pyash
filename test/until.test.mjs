@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, getMemory } from "../memory.mjs";
+import { resetMemory, getMemory, dumpMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -20,18 +20,15 @@ test("until register stops loop when tloh equals until", async () => {
   await run("obj num 1 to name counter be add do");
   await run("subj name loop body be ceremony prah");
 
-  // seed tloh and until (count down from 5 to 2)
-  await run("subj name tloh obj num 5 be number ya");
-  await run("subj name until obj num 2 be number ya");
-
-  // call to trigger loop
-  await run("to name counter be loop body do");
+  // call to trigger loop with registers on the evoker
+  await run("to name counter tloh num 5 until num 2 be loop body do");
 
   const counter = getMemory("counter");
-  const tloh = getMemory("tloh");
-  const until = getMemory("until");
+  const invoke = [...dumpMemory()].reverse().find(s => s.mood === "do" && s.be === "loop body");
 
-  assert.equal(until.obj.num, 2, "until should remain at target");
+  assert.equal(invoke?.until?.num ?? invoke?.until, 2, "until should remain on the invoke");
   assert.equal(counter.obj.num, 3, "counter should increment until reaching until gap");
-  assert.equal(tloh.obj.num, 2, "tloh should land on until value when loop stops");
+  assert.equal(invoke?.tloh?.num ?? invoke?.tloh, 2, "tloh should land on until value when loop stops");
+  assert.equal(getMemory("tloh"), undefined, "tloh register should not be stored as its own fact");
+  assert.equal(getMemory("until"), undefined, "until register should not be stored as its own fact");
 });

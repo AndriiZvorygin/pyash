@@ -1,6 +1,6 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "with", "via"];
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "with", "via", "tloh", "until"];
 const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse"];
 const AXIS_CONTEXT_TO_KEYWORD = {
   space: { source: "from", way: "at", destination: "to" },

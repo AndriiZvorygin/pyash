@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, dumpMemory, dumpSandpits } from "../memory.mjs";
+import { resetMemory, dumpMemory, dumpSandpits, getMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -25,7 +25,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   const mem = dumpMemory();
   const sandpit = dumpSandpits().at(-1);
 
-  const invoke = mem.find(s => s.be === "worker" && s.mood === "do");
+  const invoke = [...mem].reverse().find(s => s.be === "worker" && s.mood === "do");
   const result = mem.find(s => s.subj?.name === "result");
 
   assert.ok(invoke, "invoke sentence should be stored");
@@ -43,4 +43,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   // No additional body leakage into main memory beyond definition-time add
   const adds = mem.filter(s => s.be === "add" && s.mood === "do");
   assert.ok(adds.length <= 1, "sandpit body should not leak additional add commands");
+
+  assert.equal(getMemory("tloh"), undefined, "tloh should remain attached to the invoke only");
+  assert.equal(getMemory("until"), undefined, "until should remain attached to the invoke only");
 });
