@@ -3,6 +3,7 @@ import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
 import { tiny } from "./verbs/tiny.mjs";
 import { equally } from "./verbs/equally.mjs";
+import { subtract } from "./verbs/subtract.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
@@ -10,7 +11,7 @@ import { getMemory, setMemory, dumpMemory, getDefinitionEntry, pushMemoryContext
 import { sentenceToPyash } from "./pretty.mjs";
 import { resolveThisValue } from "./library/thisBinding.mjs";
 
-const verbs = { add, giant, tiny, equally, compile, read, mind };
+const verbs = { add, giant, tiny, equally, subtract, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 let currentEvoke = null;
@@ -281,10 +282,11 @@ export async function interpret(sentence) {
 
     if (!fn) throw new Error(`Unknown verb: ${be}`);
 
-    let target = getMemory(to?.name);
-    if (!target && to?.name) {
+    const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
+    let target = addressedName ? getMemory(addressedName) : getMemory(to?.name);
+    if (!target && addressedName) {
       // create default numeric fact if it doesn't exist
-      target = { subj: { name: to.name }, be: "number", obj: { num: 0 }, mood: "ya" };
+      target = { subj: { name: addressedName }, be: "number", obj: { num: 0 }, mood: "ya" };
       setMemory(target);
     }
 
@@ -301,7 +303,14 @@ export async function interpret(sentence) {
       // ensure a target fact exists if user addressed one
       const dest =
         target ||
-        (to?.name
+        (addressedName
+          ? {
+              subj: { name: addressedName },
+              be: sentence.to?.context || sentence.be || "result",
+              obj: {},
+              mood: "ya",
+            }
+          : to?.name
           ? {
               subj: { name: to.name },
               be: sentence.to?.context || sentence.be || "result",

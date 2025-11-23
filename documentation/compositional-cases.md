@@ -147,7 +147,7 @@ export const compositionalGrid = {
       case: "essive_case_",
       hnuc: "0x414F",
       pya: "swih",
-      keyword: "via",                // WAY + state (semantically “as”)
+      keyword: "as",                 // WAY + state (semantically “as”)
     },
 
     destination: {
@@ -173,7 +173,7 @@ The old human-style case names (elative, illative, essive, etc.) are used as bui
 
 ---
 
-#### Axis + context + object keyword table
+#### Axis + context keyword table (current implementation)
 
 For the keyword layer and JSON encoding, we use a regular grid of **single-token keywords** per `(axis, context)` plus an **object slot** per context.
 
@@ -189,45 +189,39 @@ Rows:
 * contexts.
 
 ```text
-| context     | source       | way          | destination | object   |
-|------------|--------------|-------------|-------------|----------|
-| space      | from         | at          | to          | obat     |
-| interior   | outof        | inside      | into        | obin     |
-| surface    | offof        | along       | onto        | obon     |
-| under      | fromunder    | under       | beneath     | obun     |
-| time       | since        | during      | until       | obti     |
-| state      | fromstate    | as          | become      | obsta    |
-| person     | fromperson   | with        | for         | obson    |
-| social     | fromgroup    | among       | intogroup   | obgroup  |
-| discourse  | fromtext     | accordingto | totext      | obtext   |
+| context     | source       | way          | destination |
+|------------|--------------|-------------|-------------|
+| space      | from         | at          | to          |
+| interior   | outof        | inside      | into        |
+| surface    | offof        | along       | onto        |
+| under      | fromunder    | under       | beneath     |
+| time       | since        | during      | until       |
+| state      | fromstate    | as          | become      |
+| person     | fromperson   | with        | for         |
+| social     | fromgroup    | among       | intogroup   |
+| discourse  | fromtext     | accordingto | totext      |
 ```
 
-Usage patterns:
+Usage patterns (current runtime):
 
 * axis keywords (for adverbials etc.):
 
-  * `from space …`, `at space …`, `to space …`
-  * `via state "qwen3:8b"`, `become state "llvm_ir"`
+  * `from state draft`, `as state final`, `become state json`
+  * `fromtext "prompt"`, `accordingto doc`, `totext output`
 
-* object slots (JSON-side):
-
-  * `obj discourse message.content` → `obtext: "<content>"`
-  * `obj interior  message.thinking` → `obin: "<thinking>"`
-  * `via time time` → commonly serialised as `obti: "<timestamp>"` or a separate `time` field.
-
-Codex can round-trip like:
+The object-slot column is not used in the current parser; `obj` is taken as the payload.
 
 ```js
 export const axisContextToKeyword = {
-  space:     { source: "from",      way: "at",          destination: "to",        object: "obat" },
-  interior:  { source: "outof",     way: "inside",      destination: "into",      object: "obin" },
-  surface:   { source: "offof",     way: "along",       destination: "onto",      object: "obon" },
-  under:     { source: "fromunder", way: "under",       destination: "beneath",   object: "obun" },
-  time:      { source: "since",     way: "during",      destination: "until",     object: "obti" },
-  state:     { source: "fromstate", way: "via",         destination: "become",    object: "obsta" },
-  person:    { source: "fromperson",way: "with",        destination: "for",       object: "obson" },
-  social:    { source: "fromgroup", way: "among",       destination: "intogroup", object: "obgroup" },
-  discourse: { source: "fromtext",  way: "accordingto", destination: "totext",    object: "obtext" },
+  space:     { source: "from",      way: "at",          destination: "to" },
+  interior:  { source: "outof",     way: "inside",      destination: "into" },
+  surface:   { source: "offof",     way: "along",       destination: "onto" },
+  under:     { source: "fromunder", way: "under",       destination: "beneath" },
+  time:      { source: "since",     way: "during",      destination: "until" },
+  state:     { source: "fromstate", way: "as",          destination: "become" },
+  person:    { source: "fromperson",way: "with",        destination: "for" },
+  social:    { source: "fromgroup", way: "among",       destination: "intogroup" },
+  discourse: { source: "fromtext",  way: "accordingto", destination: "totext" },
 };
 
 export const keywordToAxisContext = {
@@ -248,7 +242,7 @@ export const keywordToAxisContext = {
   along:       { axis: "way",    context: "surface" },
   under:       { axis: "way",    context: "under" },
   during:      { axis: "way",    context: "time" },
-  via:         { axis: "way",    context: "state" },
+  as:          { axis: "way",    context: "state" },
   with:        { axis: "way",    context: "person" },
   among:       { axis: "way",    context: "social" },
   accordingto: { axis: "way",    context: "discourse" },
@@ -263,18 +257,6 @@ export const keywordToAxisContext = {
   for:         { axis: "destination", context: "person" },
   intogroup:   { axis: "destination", context: "social" },
   totext:      { axis: "destination", context: "discourse" },
-};
-
-export const objectKeyToContext = {
-  obat:    "space",
-  obin:    "interior",
-  obon:    "surface",
-  obun:    "under",
-  obti:    "time",
-  obsta:   "state",
-  obson:   "person",
-  obgroup: "social",
-  obtext:  "discourse",
 };
 ```
 
