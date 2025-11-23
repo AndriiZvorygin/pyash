@@ -9,5 +9,6 @@ this ret
 subj name add two be ceremony prah
 
 to name result be add one do
+subj name result obj what que
 to name result be add two do
 subj name result obj what que

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
-import { resetMemory, getMemory } from "../memory.mjs";
+import { resetMemory, getMemory, dumpMemory } from "../memory.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -49,4 +49,21 @@ test("chaining ceremony defs using result as input", async () => {
 
   const result = getMemory("result");
   assert.equal(result.obj.num, 3, "chained ceremonies should produce 3");
+});
+
+test("ret merges additional fields into evoker and persists", async () => {
+  resetMemory();
+
+  await run("subj name mark be ceremony def");
+  await run("obj num 5 to name target ret");
+  await run("subj name mark be ceremony prah");
+
+  await run("to name target be mark do");
+
+  const evoker = [...dumpMemory()].reverse().find(s => s.be === "mark" && s.mood === "do");
+  const result = getMemory("result");
+
+  assert.ok(evoker, "evoker should be stored");
+  assert.equal(evoker.to?.name, "target", "ret fields should merge into evoker");
+  assert.equal(result.obj.num, 5, "result should reflect ret obj");
 });
