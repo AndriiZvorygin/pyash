@@ -1,6 +1,7 @@
 // dispatcher.mjs
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
+import { tiny } from "./verbs/tiny.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
@@ -8,7 +9,7 @@ import { getMemory, setMemory, dumpMemory, getDefinitionEntry, pushMemoryContext
 import { sentenceToPyash } from "./pretty.mjs";
 import { resolveThisValue } from "./library/thisBinding.mjs";
 
-const verbs = { add, giant, compile, read, mind };
+const verbs = { add, giant, tiny, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 let currentEvoke = null;
@@ -145,9 +146,13 @@ export async function interpret(sentence) {
   if (mood === "then") {
     const fn = verbs[be];
     if (!fn) throw new Error(`Unknown verb: ${be}`);
-    const target = getMemory(subj?.name);
-    if (!target) throw new Error(`Unknown subj: ${subj?.name}`);
-    const truth = await fn({ subj: target.obj, from });
+    let subjValue = subj;
+    if (subj?.name) {
+      const target = getMemory(subj.name);
+      if (!target) throw new Error(`Unknown subj: ${subj.name}`);
+      subjValue = target.obj;
+    }
+    const truth = await fn({ subj: subjValue ?? obj, from });
     lastCondition = truth;
     return { condition: truth };
   }
