@@ -2,6 +2,7 @@
 import { add } from "./verbs/add.mjs";
 import { giant } from "./verbs/giant.mjs";
 import { tiny } from "./verbs/tiny.mjs";
+import { equally } from "./verbs/equally.mjs";
 import compile from "./verbs/compile.mjs";
 import read from "./verbs/read.mjs";
 import mind from "./verbs/mind.mjs";
@@ -9,7 +10,7 @@ import { getMemory, setMemory, dumpMemory, getDefinitionEntry, pushMemoryContext
 import { sentenceToPyash } from "./pretty.mjs";
 import { resolveThisValue } from "./library/thisBinding.mjs";
 
-const verbs = { add, giant, tiny, compile, read, mind };
+const verbs = { add, giant, tiny, equally, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 let currentEvoke = null;
