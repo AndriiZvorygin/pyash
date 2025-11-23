@@ -167,7 +167,11 @@ export async function interpret(sentence) {
     if (!sourceName) throw new Error("ret requires a source name");
     const fact = getMemory(sourceName);
     if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
-    currentEvoke[role] = fact.obj ?? fact;
+    if (fact.obj) currentEvoke.obj = fact.obj;
+    if (fact.to) currentEvoke.to = fact.to;
+    if (fact.from) currentEvoke.from = fact.from;
+    if (fact.tloh) currentEvoke.tloh = fact.tloh;
+    if (fact.until) currentEvoke.until = fact.until;
     setMemory(currentEvoke);
     return { returned: role, value: fact.obj ?? fact };
   }

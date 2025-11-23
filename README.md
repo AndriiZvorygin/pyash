@@ -16,7 +16,7 @@ node --test   # equivalent direct invoke
 ```bash
 node main.mjs
 ```
-Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`).
+Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit and return an updated evoke (optionally via `ret`).
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`
@@ -24,13 +24,13 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - Query: `su collector obj what que`
 - Read file: `su file be read from filename "test/sandpit/compile.txt" do`
 - Compile text → JSON: see `USAGE.md` end-to-end example
-- Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the evoke sentence.
+- Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the invoke sentence.
 - Loops: seed `tloh` (and optional `until`) to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality.
 
 ## Key Files
 - `main.mjs` — REPL wiring parser/dispatcher/memory
 - `parser.mjs` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
-- `dispatcher.mjs` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates.
+- `dispatcher.mjs` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `verbs/` — verb implementations (`add`, `giant`, `compile`, `mind`, `read`, etc.) and dynamic handlers
 - `program.mjs` — build a program from text
 - `library/compositionalCases.mjs` — axis/context grid and keyword table

@@ -50,3 +50,30 @@ test("ceremony copies this obj into a named fact and returns that fact", async (
   assert.equal(holder.obj.num, 15, "ret of named fact should update caller");
   assert.equal(result.obj.num, 15, "result fact should mirror returned value");
 });
+
+test("ceremony ret returns full sentence with multiple registers", async () => {
+  resetMemory();
+
+  await run("subj name target obj num 1 be number ya");
+  await run("subj name limiter obj num 2 be number ya");
+
+  await run("subj name combo be ceremony def");
+  await run("subj name payload obj num 3 to name target tloh num 4 until num 6 be number ya");
+  await run("obj name payload ret");
+  await run("subj name combo be ceremony prah");
+
+  await run("to name target be combo do");
+
+  const target = getMemory("target");
+  const tloh = getMemory("tloh");
+  const until = getMemory("until");
+  const result = getMemory("result");
+
+  assert.ok(target?.obj);
+  assert.ok(tloh?.obj);
+  assert.ok(until?.obj);
+  assert.equal(target.obj.num, 3, "ret sentence should update target obj");
+  assert.equal(tloh.obj.num, 4, "ret sentence should update tloh register");
+  assert.equal(until.obj.num, 6, "ret sentence should update until register");
+  assert.equal(result.obj.num, 3, "result fact should mirror returned obj");
+});
