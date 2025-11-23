@@ -49,22 +49,20 @@ async function invokeLoop(defEntry, sentence) {
 
   pushMemoryContext({ seedFromCurrent: true });
   lastCondition = true;
+  setMemory(currentEvoke);
   setTlohValue(tloh);
   if (untilSeed != null) setUntilValue(untilSeed);
 
   const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
-  currentEvoke = sentence;
+  currentEvoke = { ...sentence };
 
   while (true) {
     for (const step of body) {
       lastResult = await interpret(step);
       if (step.mood === "then" && lastCondition === false) {
         lastCondition = true;
-        recordSandpitTrace(dumpMemory());
-        popMemoryContext();
-        currentEvoke = null;
-        return lastResult;
+        break;
       }
     }
 
@@ -91,21 +89,37 @@ async function invokeLoop(defEntry, sentence) {
   }
 
   const sandpit = dumpMemory().slice();
-  const destName = sentence.to?.name;
-  const updatedTarget = destName ? getMemory(destName) : null;
   const latestTloh = getMemory("tloh");
   const latestUntil = getMemory("until");
-
   recordSandpitTrace(sandpit);
   popMemoryContext();
 
-  if (updatedTarget?.obj) {
-    setMemory({ subj: { name: destName }, obj: updatedTarget.obj, be: updatedTarget.be || sentence.be || "result", mood: "ya" });
-    setMemory({ subj: { name: "result" }, obj: updatedTarget.obj, be: updatedTarget.be || sentence.be || "result", mood: "ya" });
+  // pull the invoke sentence (first sentence of sandpit or currentEvoke) as ground truth
+  const sandpitInvoke = sandpit.find(s => s.be === sentence.be && s.mood === "do") || sandpit[0] || currentEvoke;
+  const normalizedInvoke = { ...currentEvoke, ...sandpitInvoke };
+  if (!normalizedInvoke.tloh && latestTloh) normalizedInvoke.tloh = latestTloh.obj ?? latestTloh;
+  if (!normalizedInvoke.until && latestUntil) normalizedInvoke.until = latestUntil.obj ?? latestUntil;
+
+  // normalize registers if present on invoke
+  if (normalizedInvoke.tloh && typeof normalizedInvoke.tloh === "number") {
+    setMemory({ subj: { name: "tloh" }, obj: { num: normalizedInvoke.tloh }, be: "number", mood: "ya" });
+  } else if (normalizedInvoke.tloh?.num !== undefined) {
+    setMemory({ subj: { name: "tloh" }, obj: normalizedInvoke.tloh, be: "number", mood: "ya" });
+  }
+  if (normalizedInvoke.until && typeof normalizedInvoke.until === "number") {
+    setMemory({ subj: { name: "until" }, obj: { num: normalizedInvoke.until }, be: "number", mood: "ya" });
+  } else if (normalizedInvoke.until?.num !== undefined) {
+    setMemory({ subj: { name: "until" }, obj: normalizedInvoke.until, be: "number", mood: "ya" });
   }
 
-  if (latestTloh) setMemory(latestTloh);
-  if (latestUntil) setMemory(latestUntil);
+  setMemory(normalizedInvoke);
+
+  if (normalizedInvoke.to?.name && normalizedInvoke.obj) {
+    const destObj = typeof normalizedInvoke.obj === "object" ? normalizedInvoke.obj : { num: normalizedInvoke.obj };
+    const beType = normalizedInvoke.be || "result";
+    setMemory({ subj: { name: normalizedInvoke.to.name }, obj: destObj, be: beType, mood: "ya" });
+    setMemory({ subj: { name: "result" }, obj: destObj, be: beType, mood: "ya" });
+  }
 
   currentEvoke = null;
   return lastResult;
@@ -162,7 +176,6 @@ export async function interpret(sentence) {
   }
 
   if (mood === "ret" && currentEvoke) {
-    const role = sentence?.ret?.role || "obj";
     const sourceName = sentence?.ret?.name || sentence?.obj?.name;
     if (!sourceName) throw new Error("ret requires a source name");
     const fact = getMemory(sourceName);
@@ -173,7 +186,7 @@ export async function interpret(sentence) {
     if (fact.tloh) currentEvoke.tloh = fact.tloh;
     if (fact.until) currentEvoke.until = fact.until;
     setMemory(currentEvoke);
-    return { returned: role, value: fact.obj ?? fact };
+    return { returned: "evoke", value: fact.obj ?? fact };
   }
 
   if (mood === "ya" || mood === "def") {
