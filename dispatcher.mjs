@@ -152,7 +152,11 @@ export async function interpret(sentence) {
       if (!target) throw new Error(`Unknown subj: ${subj.name}`);
       subjValue = target.obj;
     }
-    const truth = await fn({ subj: subjValue ?? obj, from });
+    const fromValue =
+      from?.name && getMemory(from.name)?.obj !== undefined
+        ? getMemory(from.name).obj
+        : from;
+    const truth = await fn({ subj: subjValue ?? obj, from: fromValue });
     lastCondition = truth;
     return { condition: truth };
   }
