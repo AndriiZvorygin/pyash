@@ -8,11 +8,12 @@ import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../pretty.mjs";
 
 async function main() {
-  const [, , filePath, flag] = process.argv;
-  const pretty = flag === "--pretty";
+  const args = process.argv.slice(2);
+  const pretty = !args.includes("--gross");
 
-  if (!filePath || filePath === "--pretty") {
-    console.error("Usage: node scripts/read_pya_trace.mjs <path/to/file.pya> [--pretty]");
+  const filePath = args.find(a => !a.startsWith("--"));
+  if (!filePath) {
+    console.error("Usage: node scripts/read_pya_trace.mjs [--gross] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -35,9 +36,13 @@ async function main() {
     }
   }
 
-  console.log(JSON.stringify({ memory: dumpMemory(), sandpits: dumpSandpits() }, null, 2));
+  const mem = dumpMemory();
+  const pits = dumpSandpits();
+
   if (pretty) {
-    printPretty(dumpMemory(), dumpSandpits());
+    printPretty(mem, pits);
+  } else {
+    console.log(JSON.stringify({ memory: mem, sandpits: pits }, null, 2));
   }
 }
 
