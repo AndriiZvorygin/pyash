@@ -8,13 +8,20 @@
 ```bash
 node main.mjs
 ```
-Commands: `mem` (dump memory), `reset`, `quit`, `paste` (multi-line). Enter Pyash sentences to execute; ceremonies/verbs are speakable (multi-word) and run in sandpits with `this`/`ret` support.
+Commands: `mem` (dump memory), `reset`, `quit`, `paste` (multi-line). Enter Pyash sentences to execute; ceremonies/verbs are speakable (multi-word) and run in sandpits with `this`/`ret` support. Conditionals use `then` with `giant` (greater-than), `tiny` (less-than), or `equally` (equal-to), and can compare inline values or stored subjects (`subj name lhs be tiny from name rhs then`).
 
 ## Trace a .pya file to memory
 ```bash
 node scripts/read_pya_trace.mjs path/to/file.pya
 ```
 Reads Pyash text, interprets each sentence, and prints `{ memory, sandpits }` as JSON.
+Use `--gross` for raw JSON; without it, pretty trace output is printed.
+
+Run a program and see outputs:
+```bash
+node scripts/run_pya_program.mjs [--full] [--gross] path/to/file.pya
+```
+Pretty mode shows `Outputs` (from `que`) and final `Result`; `--gross` returns `{ outputs, result }` JSON; `--full` also prints the program.
 
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
@@ -25,6 +32,7 @@ Reads Pyash text, interprets each sentence, and prints `{ memory, sandpits }` as
 - Query: `su collector obj what que`
 - Text read: `su file be read from filename "test/sandpit/compile.txt" do` → stores text content
 - Compile text to JSON: see end-to-end example below
+- Conditionals: `obj num 3 be tiny from num 5 then ...`; `subj name lhs be giant from name rhs then ...`; `subj name x be equally from num 10 then ...`
 
 ## End-to-End Example (text compile)
 ```bash

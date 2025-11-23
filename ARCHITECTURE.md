@@ -206,7 +206,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * Patterns:
 
     * `add.mjs` / `read.mjs`: dynamic dispatch to type-specific handlers (`read_from_filename.mjs`, `add_obj_num_to_num.mjs`, etc.).
-    * `giant.mjs`: conditional control (operates over input sentences and outputs sentences according to conditions).
+    * `giant.mjs`, `tiny.mjs`, `equally.mjs`: conditional control (used with `then` mood; compares numbers/subjects).
     * `compile.mjs`: builds programs via `program.mjs` and writes JSON/text results to memory, wrapping them in result sentences.
     * `mind.mjs`: resolves model/prompt from stored mind config (sentences with keywords `as`, `accordingto`) and calls Ollama HTTP via `motor/ollama.mjs`, then packages responses back into result sentences.
 

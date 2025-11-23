@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`, `giant`, `compile`, `mind`, and `read` drive behavior. The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, test-driven slice of the broader language in `documentation/pyac.txt`.
+Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, and `read` drive behavior. The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, test-driven slice of the broader language in `documentation/pyac.txt`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
@@ -16,7 +16,7 @@ node --test   # equivalent direct invoke
 ```bash
 node main.mjs
 ```
-Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit and return an updated evoke (optionally via `ret`).
+Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit and return an updated evoke (optionally via `ret`). Conditionals use `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then`.
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`
@@ -31,11 +31,12 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - `main.mjs` — REPL wiring parser/dispatcher/memory
 - `parser.mjs` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
 - `dispatcher.mjs` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
-- `verbs/` — verb implementations (`add`, `giant`, `compile`, `mind`, `read`, etc.) and dynamic handlers
+- `verbs/` — verb implementations (`add`, `giant`, `tiny`, `equally`, `compile`, `mind`, `read`, etc.) and dynamic handlers
 - `program.mjs` — build a program from text
 - `library/compositionalCases.mjs` — axis/context grid and keyword table
 - `test/` — node:test suites (core, parser, compositional, mind, compile/read, pretty, motor)
 - `test/sandpit/` — sample input (e.g., `compile.txt`)
-- `scripts/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection.
+- `scripts/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (pretty by default; `--gross` for JSON).
+- `scripts/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
 See `ARCHITECTURE.md`, `STATE_OF_PROJECT.md`, `USAGE.md`, `TEST_PLAN.md`, and `GLOSSARY.md` for deeper guidance.
