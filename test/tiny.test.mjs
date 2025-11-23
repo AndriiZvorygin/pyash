@@ -59,3 +59,22 @@ test("tiny compares subj against another subj value", async () => {
   const res2 = await run("subj name lhs obj what que");
   assert.equal(res2, "subj name lhs obj num 6 be number ya");
 });
+
+test("giant compares subj against another subj value", async () => {
+  resetMemory();
+
+  await run("subj name lhs obj num 7 be number ya");
+  await run("subj name rhs obj num 5 be number ya");
+  await run("subj name lhs be giant from name rhs then");
+  await run("obj num 1 to name lhs be add do"); // should run (7 > 5)
+
+  const res = await run("subj name lhs obj what que");
+  assert.equal(res, "subj name lhs obj num 8 be number ya");
+
+  await run("subj name lhs obj num 4 be number ya");
+  await run("subj name lhs be giant from name rhs then");
+  await run("obj num 1 to name lhs be add do"); // should skip (4 > 5 false)
+
+  const res2 = await run("subj name lhs obj what que");
+  assert.equal(res2, "subj name lhs obj num 4 be number ya");
+});
