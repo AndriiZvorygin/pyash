@@ -12,6 +12,7 @@ const verbs = { add, giant, compile, read, mind };
 let lastCondition = true;
 const definitionStack = [];
 let currentEvoke = null;
+let currentEvokeRef = null; // points at the evoker stored as sentence 0 in the active sandpit
 let executingBody = false;
 
 function registerValue(reg) {
@@ -19,15 +20,6 @@ function registerValue(reg) {
   if (typeof reg === "number") return reg;
   if (typeof reg === "object" && typeof reg.num === "number") return reg.num;
   return null;
-}
-
-function recordSandpitWithEvoke(trace, evoke) {
-  if (!evoke) {
-    recordSandpitTrace(trace);
-    return;
-  }
-  const withEvoke = [evoke, ...trace.filter(entry => entry !== evoke)];
-  recordSandpitTrace(withEvoke);
 }
 
 async function invokeLoop(defEntry, sentence) {
@@ -39,19 +31,22 @@ async function invokeLoop(defEntry, sentence) {
   let lastResult;
   currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
-  pushMemoryContext({ seedFromCurrent: false });
+  pushMemoryContext({ seedFromCurrent: true });
+  const sandpitMem = dumpMemory();
+  sandpitMem.unshift(currentEvoke); // evoker is sentence 0 in the sandpit
+  currentEvokeRef = sandpitMem[0];
   executingBody = true;
   lastCondition = true;
 
   let sandpit = [];
 
   try {
-    let currentTloh = registerValue(currentEvoke.tloh);
+    let currentTloh = registerValue(currentEvokeRef.tloh);
     let currentUntil = untilSeed;
 
     while (true) {
-      currentEvoke = { ...currentEvoke, tloh: currentTloh, until: currentUntil ?? currentEvoke.until };
-      setMemory(currentEvoke);
+      currentEvokeRef.tloh = currentTloh;
+      currentEvokeRef.until = currentUntil ?? currentEvokeRef.until;
 
       for (const step of body) {
         lastResult = await interpret(step);
@@ -61,8 +56,8 @@ async function invokeLoop(defEntry, sentence) {
         }
       }
 
-      const updatedTloh = registerValue(currentEvoke.tloh);
-      const updatedUntil = registerValue(currentEvoke.until ?? currentUntil);
+      const updatedTloh = registerValue(currentEvokeRef.tloh);
+      const updatedUntil = registerValue(currentEvokeRef.until ?? currentUntil);
 
       const effectiveTloh = updatedTloh ?? currentTloh;
       const effectiveUntil = updatedUntil ?? currentUntil;
@@ -71,7 +66,8 @@ async function invokeLoop(defEntry, sentence) {
       if (shouldStop) {
         currentTloh = effectiveTloh;
         currentUntil = effectiveUntil;
-        currentEvoke = { ...currentEvoke, tloh: currentTloh, until: currentUntil };
+        currentEvokeRef.tloh = currentTloh;
+        currentEvokeRef.until = currentUntil;
         break;
       }
 
@@ -81,18 +77,19 @@ async function invokeLoop(defEntry, sentence) {
       currentTloh = next;
       currentUntil = effectiveUntil;
       if (reachedAfterStep) {
-        currentEvoke = { ...currentEvoke, tloh: next, until: effectiveUntil };
+        currentEvokeRef.tloh = next;
+        currentEvokeRef.until = effectiveUntil;
         break;
       }
     }
-    sandpit = prependEvokerTrace(dumpMemory().slice(), currentEvoke);
+    sandpit = dumpMemory().slice();
   } finally {
     recordSandpitTrace(sandpit);
     popMemoryContext();
     executingBody = false;
   }
 
-  const finalEvoke = currentEvoke || sentence;
+  const finalEvoke = currentEvokeRef || currentEvoke || sentence;
   const mergedObj = (lastResult?.value ?? lastResult?.obj) || finalEvoke.obj;
   const mergedBe = finalEvoke.be || "result";
 
@@ -101,17 +98,19 @@ async function invokeLoop(defEntry, sentence) {
     const evokeWithResult = { ...finalEvoke, obj: normalizedObj };
     setMemory(evokeWithResult);
 
-    if (finalEvoke.to?.name) {
-      setMemory({ subj: { name: finalEvoke.to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+    if (evokeWithResult.to?.name) {
+      setMemory({ subj: { name: evokeWithResult.to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
       setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
     currentEvoke = null;
+    currentEvokeRef = null;
     return { invoked: finalEvoke.be, result: normalizedObj };
   }
 
   setMemory(finalEvoke);
   currentEvoke = null;
+  currentEvokeRef = null;
   return lastResult;
 }
 
@@ -157,7 +156,7 @@ export async function interpret(sentence) {
 
   // --- Declarative (including definitions): append; last-write-wins via getMemory ---
   if (mood === "ya" && (subj?.name === "this" || obj?.thisRef)) {
-    const resolved = resolveThisValue(obj, currentEvoke);
+    const resolved = resolveThisValue(obj, currentEvokeRef || currentEvoke);
     if (resolved != null) {
       const targetName = subj?.name === "this" ? obj?.name : subj?.name;
       if (!targetName) throw new Error("this binding requires a target name");
@@ -165,9 +164,9 @@ export async function interpret(sentence) {
     }
   }
 
-  if (mood === "ret" && currentEvoke) {
+  if (mood === "ret" && currentEvokeRef) {
     const sourceName = sentence?.ret?.name || sentence?.obj?.name;
-    let merged = { ...currentEvoke };
+    let merged = { ...currentEvokeRef };
 
     if (sourceName) {
       const fact = getMemory(sourceName);
@@ -192,11 +191,10 @@ export async function interpret(sentence) {
     if (sentence.subj) merged.subj = sentence.subj;
     if (sentence.as) merged.as = sentence.as;
 
-    merged.mood = currentEvoke.mood;
-    merged.be = currentEvoke.be;
+    merged.mood = currentEvokeRef.mood;
+    merged.be = currentEvokeRef.be;
 
-    currentEvoke = merged;
-    setMemory(currentEvoke);
+    Object.assign(currentEvokeRef, merged);
     return { returned: "evoke", value: merged.obj ?? merged };
   }
 
@@ -232,9 +230,13 @@ export async function interpret(sentence) {
       // isolate execution in a sandpit to avoid cluttering main memory
       const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
       let lastResult;
-      currentEvoke = sentence;
+      const evokeSeed = { ...sentence };
+      currentEvoke = evokeSeed;
       executingBody = true;
       pushMemoryContext({ seedFromCurrent: true });
+      const sandpitMem = dumpMemory();
+      sandpitMem.unshift(evokeSeed);
+      currentEvokeRef = sandpitMem[0];
       for (const step of body) {
         lastResult = await interpret(step);
         if (step.mood === "then" && lastCondition === false) {
@@ -242,13 +244,14 @@ export async function interpret(sentence) {
           break;
         }
       }
-      const sandpit = prependEvokerTrace(dumpMemory().slice(), currentEvoke);
+      const sandpit = dumpMemory().slice();
       const updatedTarget = to?.name ? getMemory(to.name) : null;
       recordSandpitTrace(sandpit);
       popMemoryContext();
       executingBody = false;
-      const evoke = currentEvoke || sentence;
+      const evoke = currentEvokeRef || currentEvoke || sentence;
       currentEvoke = null;
+      currentEvokeRef = null;
 
       // merge updates from sandpit
       const mergedObj = (lastResult?.value ?? lastResult?.obj) || updatedTarget?.obj || evoke.obj;
@@ -343,10 +346,3 @@ export async function interpret(sentence) {
 }
 
 export { dumpMemory };
-function prependEvokerTrace(trace, evoke) {
-  if (!evoke) return trace;
-  const withoutEvoker = trace.filter(
-    s => !(s.mood === evoke.mood && s.be === evoke.be && s.to?.name === evoke.to?.name && s.subj?.name === evoke.subj?.name)
-  );
-  return [evoke, ...withoutEvoker];
-}

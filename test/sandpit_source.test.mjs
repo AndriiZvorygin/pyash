@@ -27,9 +27,13 @@ test("sandpit first sentence is the source of truth for returned registers", asy
 
   const invoke = [...mem].reverse().find(s => s.be === "worker" && s.mood === "do");
   const result = mem.find(s => s.subj?.name === "result");
+  const sandpitInvoke = sandpit?.[0];
 
   assert.ok(invoke, "invoke sentence should be stored");
   assert.ok(result, "result fact should be stored");
+  assert.ok(sandpitInvoke, "sandpit trace should have an evoke sentence first");
+  assert.equal(sandpitInvoke.mood, "do");
+  assert.equal(sandpitInvoke.be, "worker");
 
   assert.ok(sandpit, "sandpit trace should exist");
   const latestTarget = [...sandpit].reverse().find(s => s.subj?.name === "target");
@@ -37,8 +41,8 @@ test("sandpit first sentence is the source of truth for returned registers", asy
 
   assert.equal(invoke.obj?.num, latestTarget.obj?.num, "invoke obj mirrors sandpit source of truth");
   assert.equal(result.obj?.num, invoke.obj?.num, "result mirrors invoke obj");
-  assert.equal(invoke.tloh?.num ?? invoke.tloh, latestTarget.tloh?.num ?? latestTarget.tloh, "tloh retained from sandpit source");
-  assert.equal(invoke.until?.num ?? invoke.until, latestTarget.until?.num ?? latestTarget.until, "until retained from sandpit source");
+  assert.equal(sandpitInvoke.tloh?.num ?? sandpitInvoke.tloh, latestTarget.tloh?.num ?? latestTarget.tloh, "tloh retained on evoke sentence");
+  assert.equal(sandpitInvoke.until?.num ?? sandpitInvoke.until, latestTarget.until?.num ?? latestTarget.until, "until retained on evoke sentence");
 
   // No additional body leakage into main memory beyond definition-time add
   const adds = mem.filter(s => s.be === "add" && s.mood === "do");

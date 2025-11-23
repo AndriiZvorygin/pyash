@@ -5,11 +5,14 @@ import { parse } from "../parser.mjs";
 import { interpret } from "../dispatcher.mjs";
 import { resetMemory, dumpMemory, dumpSandpits } from "../memory.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
+import { sentenceToPyash } from "../pretty.mjs";
 
 async function main() {
-  const filePath = process.argv[2];
-  if (!filePath) {
-    console.error("Usage: node scripts/read_pya_trace.mjs <path/to/file.pya>");
+  const [, , filePath, flag] = process.argv;
+  const pretty = flag === "--pretty";
+
+  if (!filePath || filePath === "--pretty") {
+    console.error("Usage: node scripts/read_pya_trace.mjs <path/to/file.pya> [--pretty]");
     process.exit(1);
   }
 
@@ -33,6 +36,36 @@ async function main() {
   }
 
   console.log(JSON.stringify({ memory: dumpMemory(), sandpits: dumpSandpits() }, null, 2));
+  if (pretty) {
+    printPretty(dumpMemory(), dumpSandpits());
+  }
 }
 
 main();
+
+function printPretty(memory, sandpits) {
+  const safeSentence = s => {
+    try {
+      return sentenceToPyash(s);
+    } catch (err) {
+      return JSON.stringify(s);
+    }
+  };
+
+  console.log("\nPretty Trace");
+  console.log("============");
+  console.log("Memory:");
+  memory.forEach((s, i) => {
+    console.log(`  [${i}] ${safeSentence(s)}`);
+  });
+
+  if (sandpits.length) {
+    console.log("\nSandpits:");
+    sandpits.forEach((pit, idx) => {
+      console.log(`  Sandpit ${idx}:`);
+      pit.forEach((s, i) => {
+        console.log(`    [${i}] ${safeSentence(s)}`);
+      });
+    });
+  }
+}
