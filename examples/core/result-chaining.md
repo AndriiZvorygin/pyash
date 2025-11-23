@@ -1,0 +1,18 @@
+### Example: result-chaining
+
+- **id**: result-chaining
+- **status**: ready
+- **intent**: Show using the `result` fact from one invocation as input to the next.
+- **type**: REPL
+- **REPL input**:
+  ```
+  subj name a obj num 1 be number ya
+  obj num 2 to name a be add do
+  obj num 4 to name result be add do
+  subj name result obj what que
+  ```
+- **Expected output**:
+  ```
+  subj name result obj num 7 be add ya
+  ```
+- **Notes**: After the first add (1 + 2 = 3), the `result` fact is addressed by name in the next add, producing 7. Demonstrates chaining via `result`.

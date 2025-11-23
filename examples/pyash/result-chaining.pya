@@ -1,0 +1,4 @@
+subj name a obj num 1 be number ya
+obj num 2 to name a be add do
+obj num 4 to name result be add do
+subj name result obj what que

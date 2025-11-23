@@ -40,6 +40,7 @@ async function invokeLoop(defEntry, sentence) {
   lastCondition = true;
 
   let sandpit = [];
+  let updatedTarget = null;
 
   try {
     let currentTloh = registerValue(currentEvokeRef.tloh);
@@ -83,6 +84,7 @@ async function invokeLoop(defEntry, sentence) {
         break;
       }
     }
+    updatedTarget = sentence.to?.name ? getMemory(sentence.to.name) : null;
     sandpit = [currentEvokeRef, ...dumpMemory()];
   } finally {
     recordSandpitTrace(sandpit);
@@ -99,8 +101,11 @@ async function invokeLoop(defEntry, sentence) {
     const evokeWithResult = { ...finalEvoke, obj: normalizedObj };
     setMemory(evokeWithResult);
 
-    if (evokeWithResult.to?.name) {
-      setMemory({ subj: { name: evokeWithResult.to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+    const targetName = evokeWithResult.to?.name;
+    if (targetName) {
+      const targetObj = updatedTarget?.obj ?? normalizedObj;
+      const targetBe = updatedTarget?.be ?? mergedBe;
+      setMemory({ subj: { name: targetName }, obj: targetObj, be: targetBe, mood: "ya" });
       setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
@@ -261,10 +266,16 @@ export async function interpret(sentence) {
       currentEvokeRef = null;
 
       // merge updates from sandpit
-      const mergedObj = (lastResult?.value ?? lastResult?.obj) || updatedTarget?.obj || evoke.obj;
+      const mainTarget = to?.name ? getMemory(to.name) : null;
+      const lastVal = lastResult?.value ?? lastResult?.obj;
+      const preferredVal =
+        lastVal && typeof lastVal === "object" && lastVal.num === undefined && lastVal.mood
+          ? undefined // likely an evoker; ignore
+          : lastVal;
+      const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj ?? 0;
       const mergedBe = evoke.be || updatedTarget?.be || "result";
 
-      if (mergedObj) {
+      if (mergedObj !== undefined) {
         const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
         const updatedEvoke = { ...evoke, obj: normalizedObj };
         setMemory(updatedEvoke);
