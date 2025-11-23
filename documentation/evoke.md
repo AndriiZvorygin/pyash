@@ -16,7 +16,7 @@ This *is* the call frame. Internally you treat it as:
   be: "add two",       // ceremony being evoked (surface form, no underscore)
   obj: { num: 5 },
   to:  { name: "result" },
-  // later: tloh, until, etc.
+  // optional registers also live here: tloh, until, etc.
 }
 ```
 
@@ -87,7 +87,7 @@ Meaning:
    evoke.obj = { num: 7 };
    ```
 
-3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `tloh`, `until`, `to`) travel on the evoke sentence; no extra register facts are required.
+3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `tloh`, `until`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `tloh`/`until` facts.
 
 So a complete ceremony flow for “add two” in Pyash surface form looks like:
 
@@ -117,7 +117,7 @@ obj num 7 to name result be add two do
 
 ## 5. Loops with `tloh` (multiplicative register)
 
-Looping uses the same idea: `tloh` lives on the **evoke** as another register.
+Looping uses the same idea: `tloh` (and `until`, if present) live on the **evoke** as registers.
 
 * Example evoke:
 
@@ -148,7 +148,7 @@ or fancier patterns like:
 this tloh num 1 ya
 ```
 
-Again, verb phrases stay space-separated:
+Again, verb phrases stay space-separated, and registers stay attached to the evoke:
 
 * `be count up do`
 * `be add two do`
@@ -165,4 +165,4 @@ If you’d like, next we can:
 
 ## 6. Examples
 
-See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until`.
+See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts.

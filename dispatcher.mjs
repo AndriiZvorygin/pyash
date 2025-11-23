@@ -21,6 +21,15 @@ function registerValue(reg) {
   return null;
 }
 
+function recordSandpitWithEvoke(trace, evoke) {
+  if (!evoke) {
+    recordSandpitTrace(trace);
+    return;
+  }
+  const withEvoke = [evoke, ...trace.filter(entry => entry !== evoke)];
+  recordSandpitTrace(withEvoke);
+}
+
 async function invokeLoop(defEntry, sentence) {
   const initialTloh = registerValue(sentence.tloh);
   if (initialTloh == null) throw new Error("tloh is required to loop");
@@ -30,7 +39,7 @@ async function invokeLoop(defEntry, sentence) {
   let lastResult;
   currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
-  pushMemoryContext({ seedFromCurrent: true });
+  pushMemoryContext({ seedFromCurrent: false });
   executingBody = true;
   lastCondition = true;
 
@@ -76,7 +85,7 @@ async function invokeLoop(defEntry, sentence) {
         break;
       }
     }
-    sandpit = dumpMemory().slice();
+    sandpit = prependEvokerTrace(dumpMemory().slice(), currentEvoke);
   } finally {
     recordSandpitTrace(sandpit);
     popMemoryContext();
@@ -233,7 +242,7 @@ export async function interpret(sentence) {
           break;
         }
       }
-      const sandpit = dumpMemory().slice();
+      const sandpit = prependEvokerTrace(dumpMemory().slice(), currentEvoke);
       const updatedTarget = to?.name ? getMemory(to.name) : null;
       recordSandpitTrace(sandpit);
       popMemoryContext();
@@ -334,3 +343,10 @@ export async function interpret(sentence) {
 }
 
 export { dumpMemory };
+function prependEvokerTrace(trace, evoke) {
+  if (!evoke) return trace;
+  const withoutEvoker = trace.filter(
+    s => !(s.mood === evoke.mood && s.be === evoke.be && s.to?.name === evoke.to?.name && s.subj?.name === evoke.subj?.name)
+  );
+  return [evoke, ...withoutEvoker];
+}

@@ -25,7 +25,7 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - Read file: `su file be read from filename "test/sandpit/compile.txt" do`
 - Compile text → JSON: see `USAGE.md` end-to-end example
 - Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the invoke sentence.
-- Loops: seed `tloh` (and optional `until`) to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality.
+- Loops: seed `tloh` (and optional `until`) on the evoking sentence to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality (no standalone register facts are written).
 
 ## Key Files
 - `main.mjs` — REPL wiring parser/dispatcher/memory
