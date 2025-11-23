@@ -1,0 +1,6 @@
+subj name inspector be ceremony def
+subj name seen-tloh obj this tloh be number ya
+subj name seen-until obj this until be number ya
+this ret
+subj name inspector be ceremony prah
+to name sink tloh num 2 until num 2 be inspector do

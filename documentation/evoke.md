@@ -165,4 +165,4 @@ If you’d like, next we can:
 
 ## 6. Examples
 
-See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts.
+See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts. `this-registers` shows accessing `this tloh` / `this until` inside a ceremony body.
