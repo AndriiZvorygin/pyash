@@ -32,9 +32,7 @@ async function invokeLoop(defEntry, sentence) {
   currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
   pushMemoryContext({ seedFromCurrent: true });
-  const sandpitMem = dumpMemory();
-  sandpitMem.unshift(currentEvoke); // evoker is sentence 0 in the sandpit
-  currentEvokeRef = sandpitMem[0];
+  currentEvokeRef = currentEvoke;
   executingBody = true;
   lastCondition = true;
 
@@ -82,7 +80,7 @@ async function invokeLoop(defEntry, sentence) {
         break;
       }
     }
-    sandpit = dumpMemory().slice();
+    sandpit = [currentEvokeRef, ...dumpMemory()];
   } finally {
     recordSandpitTrace(sandpit);
     popMemoryContext();
@@ -234,9 +232,7 @@ export async function interpret(sentence) {
       currentEvoke = evokeSeed;
       executingBody = true;
       pushMemoryContext({ seedFromCurrent: true });
-      const sandpitMem = dumpMemory();
-      sandpitMem.unshift(evokeSeed);
-      currentEvokeRef = sandpitMem[0];
+      currentEvokeRef = evokeSeed;
       for (const step of body) {
         lastResult = await interpret(step);
         if (step.mood === "then" && lastCondition === false) {
@@ -244,7 +240,7 @@ export async function interpret(sentence) {
           break;
         }
       }
-      const sandpit = dumpMemory().slice();
+      const sandpit = [currentEvokeRef, ...dumpMemory()];
       const updatedTarget = to?.name ? getMemory(to.name) : null;
       recordSandpitTrace(sandpit);
       popMemoryContext();
