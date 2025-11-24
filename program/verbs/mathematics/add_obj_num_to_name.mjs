@@ -1,4 +1,4 @@
-import { remember } from "../remember/index.mjs";
+import { remember } from "../../remember/index.mjs";
 
 export default function add_obj_num_to_name({ obj, to }) {
   const target = remember(to.name);

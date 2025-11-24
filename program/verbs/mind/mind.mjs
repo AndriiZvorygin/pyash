@@ -1,6 +1,6 @@
 // pyash/verbs/mind.mjs
-import ollama from "../motor/ollama.mjs";
-import { remember } from "../remember/index.mjs";
+import ollama from "../../motor/ollama.mjs";
+import { remember } from "../../remember/index.mjs";
 
 export default async function mind({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;

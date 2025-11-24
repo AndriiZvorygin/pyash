@@ -1,5 +1,5 @@
-import { buildProgram } from "../program.mjs";
-import { remember, doRemember } from "../remember/index.mjs";
+import { buildProgram } from "../../program.mjs";
+import { remember, doRemember } from "../../remember/index.mjs";
 
 export default async function compile({ obj, sentence }) {
   const sourceName = sentence?.obj?.name ?? obj?.name;

@@ -1,0 +1,155 @@
+// Sandpit helpers for bridge
+function registerValue(reg) {
+  if (reg == null) return null;
+  if (typeof reg === "number") return reg;
+  if (typeof reg === "object" && typeof reg.num === "number") return reg.num;
+  return null;
+}
+
+export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const initialTloh = registerValue(sentence.tloh);
+  if (initialTloh == null) throw new Error("tloh is required to loop");
+  const untilSeed = registerValue(sentence.until);
+
+  const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
+  let lastResult;
+  state.currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
+
+  memory.pushMemoryContext({ seedFromCurrent: true });
+  state.currentEvokeRef = state.currentEvoke;
+  state.executingBody = true;
+  state.lastCondition = true;
+
+  let sandpit = [];
+  let updatedTarget = null;
+
+  try {
+    let currentTloh = registerValue(state.currentEvokeRef.tloh);
+    let currentUntil = untilSeed;
+
+    while (true) {
+      state.currentEvokeRef.tloh = currentTloh;
+      state.currentEvokeRef.until = currentUntil ?? state.currentEvokeRef.until;
+
+      for (const step of body) {
+        lastResult = await interpret(step);
+        if (step.mood === "then" && state.lastCondition === false) {
+          state.lastCondition = true;
+          break;
+        }
+      }
+
+      const updatedTloh = registerValue(state.currentEvokeRef.tloh);
+      const updatedUntil = registerValue(state.currentEvokeRef.until ?? currentUntil);
+
+      const effectiveTloh = updatedTloh ?? currentTloh;
+      const effectiveUntil = updatedUntil ?? currentUntil;
+
+      const shouldStop = effectiveUntil != null ? effectiveTloh === effectiveUntil : effectiveTloh === 0;
+      if (shouldStop) {
+        currentTloh = effectiveTloh;
+        currentUntil = effectiveUntil;
+        state.currentEvokeRef.tloh = currentTloh;
+        state.currentEvokeRef.until = currentUntil;
+        break;
+      }
+
+      const direction = effectiveUntil != null ? (effectiveTloh < effectiveUntil ? 1 : -1) : -1;
+      const next = (effectiveTloh ?? currentTloh) + direction;
+      const reachedAfterStep = effectiveUntil != null ? next === effectiveUntil : next === 0;
+      currentTloh = next;
+      currentUntil = effectiveUntil;
+      if (reachedAfterStep) {
+        state.currentEvokeRef.tloh = next;
+        state.currentEvokeRef.until = effectiveUntil;
+        break;
+      }
+    }
+    updatedTarget = sentence.to?.name ? memory.remember(sentence.to.name) : null;
+    sandpit = [state.currentEvokeRef, ...memory.allRemember()];
+  } finally {
+    recordSandpitTrace(sandpit);
+    memory.popMemoryContext();
+    state.executingBody = false;
+  }
+
+  const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
+  const mergedObj = (lastResult?.value ?? lastResult?.obj) ?? finalEvoke.obj;
+  const mergedBe = finalEvoke.be || "result";
+
+  if (mergedObj !== undefined) {
+    const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
+    const evokeWithResult = { ...(state.currentEvokeRef || finalEvoke), obj: normalizedObj };
+    memory.doRemember(evokeWithResult);
+
+    const targetName = evokeWithResult.to?.name;
+    if (targetName) {
+      const targetObj = updatedTarget?.obj ?? normalizedObj;
+      const targetBe = updatedTarget?.be ?? mergedBe;
+      memory.doRemember({ subj: { name: targetName }, obj: targetObj, be: targetBe, mood: "ya" });
+      memory.doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+    }
+
+    state.currentEvoke = null;
+    state.currentEvokeRef = null;
+    return { invoked: finalEvoke.be, result: normalizedObj };
+  }
+
+  memory.doRemember(finalEvoke);
+  state.currentEvoke = null;
+  state.currentEvokeRef = null;
+  return lastResult;
+}
+
+export async function runDefinitionBody({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const { to } = sentence;
+  const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
+  let lastResult;
+  const evokeSeed = { ...sentence };
+  state.currentEvoke = evokeSeed;
+  state.executingBody = true;
+  memory.pushMemoryContext({ seedFromCurrent: true });
+  state.currentEvokeRef = evokeSeed;
+
+  for (const step of body) {
+    lastResult = await interpret(step);
+    if (step.mood === "then" && state.lastCondition === false) {
+      state.lastCondition = true;
+      break;
+    }
+  }
+
+  const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
+  const updatedTarget = to?.name ? memory.remember(to.name) : null;
+  recordSandpitTrace(sandpit);
+  memory.popMemoryContext();
+  state.executingBody = false;
+  const evoke = state.currentEvokeRef || state.currentEvoke || sentence;
+  state.currentEvoke = null;
+  state.currentEvokeRef = null;
+
+  // merge updates from sandpit
+  const mainTarget = to?.name ? memory.remember(to.name) : null;
+  const lastVal = lastResult?.value ?? lastResult?.obj;
+  const preferredVal =
+    lastVal && typeof lastVal === "object" && lastVal.num === undefined && lastVal.mood
+      ? undefined // likely an evoker; ignore
+      : lastVal;
+  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj ?? 0;
+  const mergedBe = evoke.be || updatedTarget?.be || "result";
+
+  if (mergedObj !== undefined) {
+    const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
+    const updatedEvoke = { ...evoke, obj: normalizedObj };
+    memory.doRemember(updatedEvoke);
+
+    if (to?.name) {
+      memory.doRemember({ subj: { name: to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+      memory.doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+    }
+  } else {
+    memory.doRemember(evoke);
+  }
+
+  return { invoked: sentence.be, result: mergedObj ?? lastResult };
+}

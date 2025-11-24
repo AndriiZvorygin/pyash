@@ -33,7 +33,7 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - `program/understand/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
 - `program/bridge/` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `program/beautiful.mjs` — output formatting
-- `program/verbs/` — verb implementations (`add`, `giant`, `tiny`, `equally`, `compile`, `mind`, `read`, etc.) and dynamic handlers
+- `program/verbs/` — verb implementations grouped by domain: `mathematics/` (add/subtract), `exchange/` (read/compile), `regulation/` (giant/tiny/equally), `mind/` (mind); `program/verbs/index.mjs` re-exports the set.
 - `program/library/compositionalCases.mjs` — axis/context grid and keyword table
 - `quiz/` — node:test quizzes (core, parser, compositional, mind, compile/read, beautiful, motor)
 - `program/command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).

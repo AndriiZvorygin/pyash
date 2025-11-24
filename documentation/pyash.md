@@ -68,8 +68,24 @@ so Pyash becomes a stable **pivot language** between people and machines.
 8. **Concrete, JS-first runtime (for now)**
 
    * Today, Pyash dispatch lands in plain Node.js ES modules.
-   * The runtime is meant to be simple to read and hack.
-   * There is a clear path from high-level sentences to low-level data structures that future backends, including assembly-like targets, can consume.
+* The runtime is meant to be simple to read and hack.
+* There is a clear path from high-level sentences to low-level data structures that future backends, including assembly-like targets, can consume.
+
+---
+
+### Pyash vocabulary in this repo
+
+To keep code and commands closer to human speech, we use Pyash-flavoured names in the implementation:
+
+- `program/understand/` — the parser; turns text into sentences.
+- `program/bridge/` — the dispatcher; routes moods/verbs to handlers.
+- `program/remember/` — memory; functions are `doRemember`, `remember`, `allRemember`, `forget`.
+- `program/command/` — CLI helpers such as `run_pya_program.mjs`, `read_pya_trace.mjs`, `list_pyash_words.mjs`.
+- `program/beautiful.mjs` — rendering sentences back to readable Pyash strings.
+- `quiz/` — automated quizzes (tests) to pin behaviour.
+- `program/configure/` — example configuration data (e.g., `workplace.json`).
+
+The goal is to make the codebase read like controlled natural language, reducing translation overhead between human concepts (remember, understand, bridge) and their runtime responsibilities.
 
 ---
 
