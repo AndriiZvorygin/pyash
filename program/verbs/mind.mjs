@@ -1,10 +1,10 @@
 // pyash/verbs/mind.mjs
 import ollama from "../motor/ollama.mjs";
-import { getMemory } from "../memory/index.mjs";
+import { remember } from "../remember/index.mjs";
 
 export default async function mind({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
-  const config = targetName ? getMemory(targetName) : null;
+  const config = targetName ? remember(targetName) : null;
 
   // Model resolution: explicit on call or from config via state (keyword "as")
   const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, getMemory, dumpMemory } from "../program/memory/index.mjs";
+import { forget, remember, allRemember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("ceremony binds this obj into local and returns via ret", async () => {
-  resetMemory();
+  forget();
 
   // define ceremony add two: acc := this.obj; acc += 2; ret acc into evoke.obj
   await run("subj name add two be ceremony def");
@@ -23,8 +23,8 @@ test("ceremony binds this obj into local and returns via ret", async () => {
   // call
   await run("obj num 5 to name result be add two do");
 
-  const result = getMemory("result");
-  const retFact = dumpMemory().find(s => s.mood === "ret");
+  const result = remember("result");
+  const retFact = allRemember().find(s => s.mood === "ret");
 
   assert.ok(result);
   assert.equal(result.obj.num, 7, "result should reflect returned acc");
@@ -33,7 +33,7 @@ test("ceremony binds this obj into local and returns via ret", async () => {
 });
 
 test("ceremony copies this obj into a named fact and returns that fact", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name holder obj num 0 be number ya");
   await run("subj name copycat be ceremony def");
@@ -44,15 +44,15 @@ test("ceremony copies this obj into a named fact and returns that fact", async (
 
   await run("obj num 10 to name holder be copycat do");
 
-  const holder = getMemory("holder");
-  const result = getMemory("result");
+  const holder = remember("holder");
+  const result = remember("result");
 
   assert.equal(holder.obj.num, 15, "ret of named fact should update caller");
   assert.equal(result.obj.num, 15, "result fact should mirror returned value");
 });
 
 test("ceremony ret returns full sentence with multiple registers", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name target obj num 1 be number ya");
   await run("subj name limiter obj num 2 be number ya");
@@ -64,14 +64,14 @@ test("ceremony ret returns full sentence with multiple registers", async () => {
 
   await run("to name target be combo do");
 
-  const target = getMemory("target");
-  const result = getMemory("result");
+  const target = remember("target");
+  const result = remember("result");
 
   assert.ok(target?.obj);
   assert.equal(target.obj.num, 3, "ret sentence should update target obj");
 
   assert.ok(result?.obj);
   assert.equal(result.obj.num, 3, "result fact should mirror returned obj");
-  assert.equal(getMemory("tloh"), undefined, "tloh should remain on evoker, not as a register fact");
-  assert.equal(getMemory("until"), undefined, "until should remain on evoker, not as a register fact");
+  assert.equal(remember("tloh"), undefined, "tloh should remain on evoker, not as a register fact");
+  assert.equal(remember("until"), undefined, "until should remain on evoker, not as a register fact");
 });

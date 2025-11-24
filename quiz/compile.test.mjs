@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
-import { dumpMemory, resetMemory } from "../program/memory/index.mjs";
+import { allRemember, forget } from "../program/remember/index.mjs";
 
 test("compile verb reads Pyash file and stores JSON", async () => {
-  resetMemory();
+  forget();
 
   const program = [
     "subj name alpha obj num 1 be number ya",
@@ -23,7 +23,7 @@ test("compile verb reads Pyash file and stores JSON", async () => {
   );
   const result = await interpret(sentence);
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const out = mem.find(s => s.subj?.name === "output");
 
   assert.ok(result, "compile should return result");

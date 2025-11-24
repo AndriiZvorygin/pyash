@@ -1,4 +1,4 @@
-import { getMemory } from "../memory/index.mjs";
+import { remember } from "../remember/index.mjs";
 
 // Resolve "this" references inside a ceremony to fields on the current evoke sentence.
 // Supports patterns like:

@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { dumpMemory, resetMemory } from "../program/memory/index.mjs";
+import { allRemember, forget } from "../program/remember/index.mjs";
 import motor from "../program/motor/ollama.mjs";
 
 test("mind registration stores engine/model/prompt contexts", async () => {
-  resetMemory();
+  forget();
 
   const sentence = parse(
     'su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya'
@@ -15,7 +15,7 @@ test("mind registration stores engine/model/prompt contexts", async () => {
 
   await interpret(sentence);
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const fact = mem.find(s => s.subj?.name === "generator");
 
   assert.ok(fact);
@@ -26,7 +26,7 @@ test("mind registration stores engine/model/prompt contexts", async () => {
 });
 
 test("mind invocation pulls model + prompt from registered mind", async () => {
-  resetMemory();
+  forget();
 
   // Seed stub response
   const original = motor.generate;
@@ -44,7 +44,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
 
   await interpret(sentence);
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const fact = mem.find(s => s.subj?.name === "generator");
 
   assert.ok(fact);

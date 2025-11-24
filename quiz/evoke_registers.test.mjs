@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, getMemory, dumpSandpits } from "../program/memory/index.mjs";
+import { forget, remember, dumpSandpits } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("evoker with registers returns via ret and stays first in sandpit trace", async () => {
-  resetMemory();
+  forget();
 
   const lines = [
     "subj name worker be ceremony def",
@@ -26,8 +26,8 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
     await run(line);
   }
 
-  const target = getMemory("target");
-  const result = getMemory("result");
+  const target = remember("target");
+  const result = remember("result");
   const sandpit = dumpSandpits().at(-1);
   const evoker = sandpit?.[0];
 
@@ -42,6 +42,6 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
   assert.equal(evoker.tloh?.num ?? evoker.tloh, 3, "evoker carries tloh register");
   assert.equal(evoker.until?.num ?? evoker.until, 5, "evoker carries until register");
 
-  assert.equal(getMemory("tloh"), undefined, "registers should not be stored as separate facts");
-  assert.equal(getMemory("until"), undefined, "registers should not be stored as separate facts");
+  assert.equal(remember("tloh"), undefined, "registers should not be stored as separate facts");
+  assert.equal(remember("until"), undefined, "registers should not be stored as separate facts");
 });

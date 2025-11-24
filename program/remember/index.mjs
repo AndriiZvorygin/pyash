@@ -50,7 +50,7 @@ function adjustDefinitionIndices(removedIdx) {
   }
 }
 
-export function setMemory(sentence) {
+export function doRemember(sentence) {
   if (!sentence) return;
 
   const subjName = sentence.subj?.name;
@@ -90,7 +90,7 @@ export function setMemory(sentence) {
 
 }
 
-export function getMemory(name) {
+export function remember(name) {
   if (!name) return undefined;
   for (let i = memory.length - 1; i >= 0; i--) {
     const s = memory[i];
@@ -99,7 +99,7 @@ export function getMemory(name) {
   return undefined;
 }
 
-export function dumpMemory() {
+export function allRemember() {
   return memory;
 }
 
@@ -127,7 +127,7 @@ export function dumpDefinitionIndex() {
   return definitionIndex;
 }
 
-export function resetMemory() {
+export function forget() {
   memory = [];
   history = [];
   definitionIndex.length = 0;

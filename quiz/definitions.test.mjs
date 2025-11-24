@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, dumpMemory, dumpDefinitionIndex, getDefinition, getMemory } from "../program/memory/index.mjs";
+import { forget, allRemember, dumpDefinitionIndex, getDefinition, remember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("def sentences are indexed by subj name with position in memory", async () => {
-  resetMemory();
+  forget();
 
   await run("su alpha be paragraph def");
   await run("su beta be topic def");
@@ -32,7 +32,7 @@ test("def sentences are indexed by subj name with position in memory", async () 
 });
 
 test("redef updates index to latest memory position and reset clears", async () => {
-  resetMemory();
+  forget();
 
   await run("su alpha be paragraph def");
   await run("su alpha be topic def");
@@ -44,14 +44,14 @@ test("redef updates index to latest memory position and reset clears", async () 
   const alphaDef = getDefinition("alpha");
   assert.equal(alphaDef.be, "topic", "retrieved definition should follow last write");
 
-  resetMemory();
+  forget();
   idx = dumpDefinitionIndex().find(entry => entry.name === "alpha");
   assert.equal(idx, undefined, "reset should clear definition index");
   assert.equal(getDefinition("alpha"), undefined, "reset should clear stored definition lookup");
 });
 
 test("definition index captures end via prah and supports invoking the paragraph", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name result obj num 5 be number ya");
   await run("subj name add two be ceremony def");
@@ -65,18 +65,18 @@ test("definition index captures end via prah and supports invoking the paragraph
 
   await run("to name result be add two do");
 
-  const latestResult = getMemory("result");
+  const latestResult = remember("result");
   assert.ok(latestResult, "result should be retrievable after function call");
   assert.equal(latestResult.obj.num, 7, "function body should have added two");
 });
 
 test("last-write wins keeps updated fact after command and preserves def/prah block entries", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name result obj num 5 be number ya");
   await run("obj num 2 to name result be add do");
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const resultFacts = mem.filter(s => s.subj?.name === "result" && s.mood === "ya");
 
   assert.equal(resultFacts.length, 1, "only one result fact should remain");
@@ -89,7 +89,7 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
   await run("subj name block be ceremony prah");
 
   await run("subj name collector obj num 10 be number ya"); // outside block update
-  const collectors = dumpMemory().filter(s => s.subj?.name === "collector");
+  const collectors = allRemember().filter(s => s.subj?.name === "collector");
 
   assert.equal(
     collectors.length >= 2,

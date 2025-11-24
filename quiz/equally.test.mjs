@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory } from "../program/memory/index.mjs";
+import { forget } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("equally conditional controls next statement with inline values", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name collector obj num 1 be number ya");
   await run("obj num 5 be equally from num 5 then");
@@ -20,7 +20,7 @@ test("equally conditional controls next statement with inline values", async () 
   const res = await run("subj name collector obj what que");
   assert.equal(res, "subj name collector obj num 3 be number ya");
 
-  resetMemory();
+  forget();
   await run("subj name collector obj num 1 be number ya");
   await run("obj num 4 be equally from num 5 then"); // false
   await run("obj num 2 to name collector be add do"); // should be skipped
@@ -30,7 +30,7 @@ test("equally conditional controls next statement with inline values", async () 
 });
 
 test("equally compares subj against literal", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name collector obj num 4 be number ya");
   await run("subj name collector be equally from num 4 then");
@@ -41,7 +41,7 @@ test("equally compares subj against literal", async () => {
 });
 
 test("equally compares subj against another subj value", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name lhs obj num 5 be number ya");
   await run("subj name rhs obj num 5 be number ya");

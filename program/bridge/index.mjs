@@ -7,7 +7,7 @@ import { subtract } from "../verbs/subtract.mjs";
 import compile from "../verbs/compile.mjs";
 import read from "../verbs/read.mjs";
 import mind from "../verbs/mind.mjs";
-import { getMemory, setMemory, dumpMemory, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../memory/index.mjs";
+import { remember, doRemember, allRemember, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
 
@@ -30,7 +30,7 @@ async function invokeLoop(defEntry, sentence) {
   if (initialTloh == null) throw new Error("tloh is required to loop");
   const untilSeed = registerValue(sentence.until);
 
-  const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
+  const body = allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
   currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
@@ -84,8 +84,8 @@ async function invokeLoop(defEntry, sentence) {
         break;
       }
     }
-    updatedTarget = sentence.to?.name ? getMemory(sentence.to.name) : null;
-    sandpit = [currentEvokeRef, ...dumpMemory()];
+    updatedTarget = sentence.to?.name ? remember(sentence.to.name) : null;
+    sandpit = [currentEvokeRef, ...allRemember()];
   } finally {
     recordSandpitTrace(sandpit);
     popMemoryContext();
@@ -99,14 +99,14 @@ async function invokeLoop(defEntry, sentence) {
   if (mergedObj !== undefined) {
     const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
     const evokeWithResult = { ...(currentEvokeRef || finalEvoke), obj: normalizedObj };
-    setMemory(evokeWithResult);
+    doRemember(evokeWithResult);
 
     const targetName = evokeWithResult.to?.name;
     if (targetName) {
       const targetObj = updatedTarget?.obj ?? normalizedObj;
       const targetBe = updatedTarget?.be ?? mergedBe;
-      setMemory({ subj: { name: targetName }, obj: targetObj, be: targetBe, mood: "ya" });
-      setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+      doRemember({ subj: { name: targetName }, obj: targetObj, be: targetBe, mood: "ya" });
+      doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
     currentEvoke = null;
@@ -114,7 +114,7 @@ async function invokeLoop(defEntry, sentence) {
     return { invoked: finalEvoke.be, result: normalizedObj };
   }
 
-  setMemory(finalEvoke);
+  doRemember(finalEvoke);
   currentEvoke = null;
   currentEvokeRef = null;
   return lastResult;
@@ -139,12 +139,12 @@ export async function interpret(sentence) {
   }
 
   if (insideParagraph && !executingBody && mood !== "prah" && !isParagraphDef) {
-    setMemory(sentence);
+    doRemember(sentence);
     return { recorded: true };
   }
 
   if (mood === "prah") {
-    setMemory(sentence);
+    doRemember(sentence);
     if (definitionStack.length > 0) definitionStack.pop();
     return { paragraphEnd: true };
   }
@@ -155,20 +155,20 @@ export async function interpret(sentence) {
     if (!fn) throw new Error(`Unknown verb: ${be}`);
     let subjValue = subj;
     if (subj?.name) {
-      const target = getMemory(subj.name);
+      const target = remember(subj.name);
       if (!target) throw new Error(`Unknown subj: ${subj.name}`);
       subjValue = target.obj;
     }
     const fromValue =
-      from?.name && getMemory(from.name)?.obj !== undefined
-        ? getMemory(from.name).obj
+      from?.name && remember(from.name)?.obj !== undefined
+        ? remember(from.name).obj
         : from;
     const truth = await fn({ subj: subjValue ?? obj, from: fromValue });
     lastCondition = truth;
     return { condition: truth };
   }
 
-  // --- Declarative (including definitions): append; last-write-wins via getMemory ---
+  // --- Declarative (including definitions): append; last-write-wins via remember ---
   if (mood === "ya" && (subj?.name === "this" || obj?.thisRef)) {
     const resolved = resolveThisValue(obj, currentEvokeRef || currentEvoke);
     if (resolved != null) {
@@ -183,7 +183,7 @@ export async function interpret(sentence) {
     let merged = { ...currentEvokeRef };
 
     if (sourceName) {
-      const fact = getMemory(sourceName);
+      const fact = remember(sourceName);
       if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
       merged = {
         ...merged,
@@ -213,7 +213,7 @@ export async function interpret(sentence) {
   }
 
   if (mood === "ya" || mood === "def") {
-    setMemory(sentence);
+    doRemember(sentence);
     return { stored: subj?.name };
   }
 
@@ -242,7 +242,7 @@ export async function interpret(sentence) {
       }
 
       // isolate execution in a sandpit to avoid cluttering main memory
-      const body = dumpMemory().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
+      const body = allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
       let lastResult;
       const evokeSeed = { ...sentence };
       currentEvoke = evokeSeed;
@@ -256,8 +256,8 @@ export async function interpret(sentence) {
           break;
         }
       }
-      const sandpit = [currentEvokeRef, ...dumpMemory()];
-      const updatedTarget = to?.name ? getMemory(to.name) : null;
+      const sandpit = [currentEvokeRef, ...allRemember()];
+      const updatedTarget = to?.name ? remember(to.name) : null;
       recordSandpitTrace(sandpit);
       popMemoryContext();
       executingBody = false;
@@ -266,7 +266,7 @@ export async function interpret(sentence) {
       currentEvokeRef = null;
 
       // merge updates from sandpit
-      const mainTarget = to?.name ? getMemory(to.name) : null;
+      const mainTarget = to?.name ? remember(to.name) : null;
       const lastVal = lastResult?.value ?? lastResult?.obj;
       const preferredVal =
         lastVal && typeof lastVal === "object" && lastVal.num === undefined && lastVal.mood
@@ -278,14 +278,14 @@ export async function interpret(sentence) {
       if (mergedObj !== undefined) {
         const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
         const updatedEvoke = { ...evoke, obj: normalizedObj };
-        setMemory(updatedEvoke);
+        doRemember(updatedEvoke);
 
         if (to?.name) {
-          setMemory({ subj: { name: to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
-          setMemory({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+          doRemember({ subj: { name: to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+          doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
         }
       } else {
-        setMemory(evoke);
+        doRemember(evoke);
       }
 
       return { invoked: be, result: mergedObj ?? lastResult };
@@ -294,11 +294,11 @@ export async function interpret(sentence) {
     if (!fn) throw new Error(`Unknown verb: ${be}`);
 
     const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
-    let target = addressedName ? getMemory(addressedName) : getMemory(to?.name);
+    let target = addressedName ? remember(addressedName) : remember(to?.name);
     if (!target && addressedName) {
       // create default numeric fact if it doesn't exist
       target = { subj: { name: addressedName }, be: "number", obj: { num: 0 }, mood: "ya" };
-      setMemory(target);
+      doRemember(target);
     }
 
     const toValue = target?.obj ?? to;
@@ -307,7 +307,7 @@ export async function interpret(sentence) {
     const result = await fn({ obj, to: toValue, from, sentence });
 
     // record the command itself in history
-    setMemory(sentence);
+    doRemember(sentence);
 
     // expect verbs to return { obj: number | {num: number} }
     if (result?.obj !== undefined) {
@@ -344,11 +344,11 @@ export async function interpret(sentence) {
       if (dest) {
         dest.obj = normalizedObj;
         if (!dest.be) dest.be = resultBe;
-        setMemory(dest);
+        doRemember(dest);
       }
 
       // Always store a result fact for reference
-      setMemory({
+      doRemember({
         subj: { name: "result" },
         obj: normalizedObj,
         be: resultBe,
@@ -361,7 +361,7 @@ export async function interpret(sentence) {
 
   // --- Interrogative ---
   if (mood === "que") {
-    const fact = getMemory(subj?.name);
+    const fact = remember(subj?.name);
     if (!fact) return null;
 
     // For now your tests want the whole matching sentence as Pyash
@@ -371,4 +371,4 @@ export async function interpret(sentence) {
   throw new Error(`Unknown mood: ${mood}`);
 }
 
-export { dumpMemory };
+export { allRemember };

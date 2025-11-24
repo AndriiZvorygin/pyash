@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, dumpMemory, dumpSandpits, getMemory } from "../program/memory/index.mjs";
+import { forget, allRemember, dumpSandpits, remember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("ceremony runs in sandpit and merges results to main memory only", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name target obj num 1 be number ya");
   await run("subj name incrementer be ceremony def");
@@ -20,10 +20,10 @@ test("ceremony runs in sandpit and merges results to main memory only", async ()
 
   await run("to name target be incrementer do");
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const pits = dumpSandpits();
-  const target = getMemory("target");
-  const result = getMemory("result");
+  const target = remember("target");
+  const result = remember("result");
 
   assert.ok(target);
   assert.equal(target.obj.num, 3, "merged result should update target");

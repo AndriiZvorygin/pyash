@@ -4,7 +4,7 @@
 - **Case (axis × context)**: Compositional role system; mapped to keywords (e.g., `fromtext`, `during`, `become`, `totext`, `as`). Defined in `program/library/compositionalCases.mjs`.
 - **Mood**: Sentence force; supported moods here: `ya` (declarative), `def` (definition), `do` (imperative), `que` (query), `then` (conditional follow-up).
 - **Verb**: Action handler dispatched by `program/bridge/index.mjs` (e.g., `add`, `giant`, `compile`, `mind`, `read`). Dynamic dispatch verbs (add/read) load type-specific handlers.
-- **Memory**: In-memory history of sentences/facts (`program/memory/index.mjs`); `interpret` stores `ya/def/do` and result facts for imperatives.
+- **Memory**: In-memory history of sentences/facts (`program/remember/index.mjs`); `interpret` stores `ya/def/do` and result facts for imperatives.
 - **Result fact**: Generic fact stored after imperatives with `subj result`, normalized `obj`, and `be` from verb or `result`.
 - **Mind**: LLM-backed verb (`program/verbs/mind.mjs`) using config stored under a subject (`from` endpoint, `as` model, `accordingto` prompt) and calling Ollama HTTP (`program/motor/ollama.mjs`).
 - **Compile**: Verb turning Pyash text into parsed sentences + JSON via `program/program.mjs`; stores output in memory.

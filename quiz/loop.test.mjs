@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, getMemory, dumpMemory } from "../program/memory/index.mjs";
+import { forget, remember, allRemember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("ceremony repeats using tloh countdown until zero", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name counter obj num 0 be number ya");
 
@@ -23,10 +23,10 @@ test("ceremony repeats using tloh countdown until zero", async () => {
   // invoke with register on the evoker
   await run("to name counter tloh num 3 be loop_body do");
 
-  const counter = getMemory("counter");
-  const invoke = [...dumpMemory()].reverse().find(s => s.mood === "do" && s.be === "loop_body");
+  const counter = remember("counter");
+  const invoke = [...allRemember()].reverse().find(s => s.mood === "do" && s.be === "loop_body");
 
   assert.equal(counter.obj.num, 3, "counter should be incremented three times");
   assert.equal(invoke?.tloh?.num ?? invoke?.tloh, 0, "tloh should countdown to zero on the invoke");
-  assert.equal(getMemory("tloh"), undefined, "tloh should not be stored as a separate register fact");
+  assert.equal(remember("tloh"), undefined, "tloh should not be stored as a separate register fact");
 });

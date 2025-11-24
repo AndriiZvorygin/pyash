@@ -4,7 +4,7 @@ import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "./understand/index.mjs";
 import { interpret } from "./bridge/index.mjs";
-import { dumpMemory, resetMemory } from "./memory/index.mjs";
+import { allRemember, forget } from "./remember/index.mjs";
 import { splitSentences } from "./library/sentenceSplitter.mjs";
 
 async function repl() {
@@ -32,12 +32,12 @@ async function repl() {
       }
 
       if (trimmed === "mem") {
-        console.log("Memory:", JSON.stringify(dumpMemory(), null, 2));
+        console.log("Memory:", JSON.stringify(allRemember(), null, 2));
         continue;
       }
 
       if (trimmed === "reset") {
-        resetMemory();
+        forget();
         console.log("Memory cleared.");
         continue;
       }

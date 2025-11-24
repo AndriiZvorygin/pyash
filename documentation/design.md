@@ -150,7 +150,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * `ya` / `def`:
 
     * treated as facts/definitions,
-    * stored via `setMemory` as-is.
+    * stored via `doRemember` as-is.
   * `do`:
 
     * finds verb, resolves targets based on subject/name and existing sentences in memory,
@@ -175,9 +175,9 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
   In the presence of nested ceremonies, the implementation maintains a **stack of sandpit frames**. `this` always refers to the evoking sentence of the **innermost** active sandpit frame.
 
-* `program/memory/index.mjs`: In-memory store for sentences and paragraphs.
+* `program/remember/index.mjs`: In-memory store for sentences and paragraphs.
 
-  * Provides `setMemory`, `getMemory`, `dumpMemory`, `resetMemory`.
+  * Provides `doRemember`, `remember`, `allRemember`, `forget`.
   * Maintains a definition index and sandpit traces.
   * Supports nested contexts for sandpit execution via a **stack** of frames.
   * A sandpit frame tracks:
@@ -318,14 +318,14 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 
    * After the sandpit finishes:
 
-     * If a `retResult` exists, it is written to main memory via `setMemory` like any other `ya` fact (a single sentence) derived from the updated evoker; register lookups (e.g., `tloh`, `until`) should be derived from that evoker rather than separate facts.
+     * If a `retResult` exists, it is written to main memory via `doRemember` like any other `ya` fact (a single sentence) derived from the updated evoker; register lookups (e.g., `tloh`, `until`) should be derived from that evoker rather than separate facts.
      * If no `ret` occurred, the sandpit may terminate with no result (implementation choice).
      * The sandpit frame is popped from the stack.
-     * The sandpit trace (including the initial evoker, body sentences, and any `ret` mood) is kept in `program/memory/index.mjs` as a paragraph for debugging/inspection.
+     * The sandpit trace (including the initial evoker, body sentences, and any `ret` mood) is kept in `program/remember/index.mjs` as a paragraph for debugging/inspection.
 
 7. **History**
 
-   * Memory (`program/memory/index.mjs`) accumulates a top-level history of `ya`/`def`/`do` sentences and their `result` sentences.
+   * Memory (`program/remember/index.mjs`) accumulates a top-level history of `ya`/`def`/`do` sentences and their `result` sentences.
   * Sandpit execution adds separate trace paragraphs that reference the evoking sentence and the returned `ya` result; body sentences are not merged into main memory.
    * The **latest sentence per subject** is the authoritative one; older ones are historical and may later be garbage-collected.
 

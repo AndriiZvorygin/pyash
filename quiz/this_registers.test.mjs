@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, getMemory, dumpSandpits } from "../program/memory/index.mjs";
+import { forget, remember, dumpSandpits } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("this tloh/this until bindings inside sandpit preserve registers on evoker", async () => {
-  resetMemory();
+  forget();
 
   const lines = [
     "subj name inspector be ceremony def",
@@ -26,7 +26,7 @@ test("this tloh/this until bindings inside sandpit preserve registers on evoker"
     await run(line);
   }
 
-  const result = getMemory("result");
+  const result = remember("result");
   const sandpit = dumpSandpits().at(-1);
   const evoker = sandpit?.[0];
   const seenTloh = sandpit ? [...sandpit].reverse().find(s => s.subj?.name === "seen-tloh") : null;
@@ -41,6 +41,6 @@ test("this tloh/this until bindings inside sandpit preserve registers on evoker"
 
   assert.ok(result, "result fact should be present");
 
-  assert.equal(getMemory("tloh"), undefined, "no standalone tloh fact");
-  assert.equal(getMemory("until"), undefined, "no standalone until fact");
+  assert.equal(remember("tloh"), undefined, "no standalone tloh fact");
+  assert.equal(remember("until"), undefined, "no standalone until fact");
 });

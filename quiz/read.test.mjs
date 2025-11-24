@@ -4,15 +4,15 @@ import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { dumpMemory, resetMemory } from "../program/memory/index.mjs";
+import { allRemember, forget } from "../program/remember/index.mjs";
 
 test("read verb loads file content into text obj", async () => {
-  resetMemory();
+  forget();
 
   const sentence = parse('subj name file be read from filename "quiz/sandpit/compile.txt" do');
   await interpret(sentence);
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const fact = mem.find(s => s.subj?.name === "file" && s.be === "text");
 
   assert.ok(fact, "fact stored");

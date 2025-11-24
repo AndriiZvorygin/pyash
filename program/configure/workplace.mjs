@@ -1,7 +1,7 @@
 // pyash/workflow.mjs
 import fs from "node:fs/promises";
 
-import { setMemory, getMemory, dumpMemory, resetMemory } from "../memory/index.mjs";
+import { doRemember, remember, allRemember, forget } from "../remember/index.mjs";
 import mind from "../verbs/mind.mjs";
 import chip from "../verbs/chip.mjs";
 
@@ -69,7 +69,7 @@ function orderSentences(sentences) {
 
 // Lookup convenience: return the stored value for a subj.name
 function valueOf(name) {
-  const fact = getMemory(name);
+  const fact = remember(name);
   if (!fact) return undefined;
   return fact.value ?? fact.obj ?? fact.result ?? fact; // be generous for now
 }
@@ -82,7 +82,7 @@ export async function runWorkflow(workflow) {
   }
 
   // Reset Pyash memory for a clean run
-  resetMemory();
+  forget();
 
   // Index by subj.name
   const byName = new Map();
@@ -100,14 +100,14 @@ export async function runWorkflow(workflow) {
 
     if (!verb) {
       // pure declaratives? just store them
-      setMemory(sentence);
+      doRemember(sentence);
       continue;
     }
 
     const handler = VERB_HANDLERS[verb];
     if (!handler) {
       // unknown verb in workflow: still store as fact, maybe used by normal Pyash later
-      setMemory(sentence);
+      doRemember(sentence);
       continue;
     }
 
@@ -124,10 +124,10 @@ export async function runWorkflow(workflow) {
       result: output
     };
 
-    setMemory(fact);
+    doRemember(fact);
   }
 
-  return dumpMemory();
+  return allRemember();
 }
 
 // Convenience wrapper: accepts a workflow object or a path to a JSON file.

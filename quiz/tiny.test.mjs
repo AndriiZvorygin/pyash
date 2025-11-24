@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory } from "../program/memory/index.mjs";
+import { forget } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("tiny conditional controls next statement (less-than)", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name collector obj num 3 be number ya");
   await run("obj num 3 be tiny from num 5 then");
@@ -21,7 +21,7 @@ test("tiny conditional controls next statement (less-than)", async () => {
   assert.equal(res, "subj name collector obj num 5 be number ya");
 
   // now false condition should skip the next line
-  resetMemory();
+  forget();
   await run("subj name collector obj num 10 be number ya");
   await run("obj num 10 be tiny from num 5 then"); // 10 < 5 is false
   await run("obj num 2 to name collector be add do"); // should be skipped
@@ -31,7 +31,7 @@ test("tiny conditional controls next statement (less-than)", async () => {
 });
 
 test("tiny compares against stored subject value when subj provided", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name collector obj num 4 be number ya");
   await run("subj name collector be tiny from num 5 then");
@@ -42,7 +42,7 @@ test("tiny compares against stored subject value when subj provided", async () =
 });
 
 test("tiny compares subj against another subj value", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name lhs obj num 2 be number ya");
   await run("subj name rhs obj num 5 be number ya");
@@ -61,7 +61,7 @@ test("tiny compares subj against another subj value", async () => {
 });
 
 test("giant compares subj against another subj value", async () => {
-  resetMemory();
+  forget();
 
   await run("subj name lhs obj num 7 be number ya");
   await run("subj name rhs obj num 5 be number ya");

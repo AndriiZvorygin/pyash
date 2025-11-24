@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parse } from "../understand/index.mjs";
 import { interpret } from "../bridge/index.mjs";
-import { resetMemory, dumpMemory, dumpSandpits } from "../memory/index.mjs";
+import { forget, allRemember, dumpSandpits } from "../remember/index.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 
@@ -20,7 +20,7 @@ async function main() {
   const resolved = path.resolve(filePath);
   const text = await fs.readFile(resolved, "utf8");
 
-  resetMemory();
+  forget();
   const sentences = splitSentences(text);
 
   for (const raw of sentences) {
@@ -36,7 +36,7 @@ async function main() {
     }
   }
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const pits = dumpSandpits();
 
   if (beautiful) {

@@ -1,11 +1,11 @@
 import { buildProgram } from "../program.mjs";
-import { getMemory, setMemory } from "../memory/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
 
 export default async function compile({ obj, sentence }) {
   const sourceName = sentence?.obj?.name ?? obj?.name;
   if (!sourceName) throw new Error("compile: obj.name is required");
 
-  const src = getMemory(sourceName);
+  const src = remember(sourceName);
   const sourceText = src?.obj?.text ?? src?.text;
   if (typeof sourceText !== "string") {
     throw new Error(`compile: source text not found for "${sourceName}"`);
@@ -23,7 +23,7 @@ export default async function compile({ obj, sentence }) {
       obj: { text: json, sentences: program.sentences },
       mood: "ya",
     };
-    setMemory(fact);
+    doRemember(fact);
   }
 
   return { obj: { text: json, sentences: program.sentences } };

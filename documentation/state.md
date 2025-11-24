@@ -15,7 +15,7 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 - `program/understand/index.mjs`: tokenization, quoted blocks, keywordized compositional roles (fromtext/during/become/totext/etc.), short role aliases (su/ob).
 - `program/bridge/index.mjs`: mood routing, verb dispatch, memory writes for declarative/def/do/ret, result facts stored for imperatives, sandpit execution for ceremonies with multi-word names.
 - `program/verbs/`: dynamic dispatch (add/subtract/read) and direct verbs (giant, tiny, equally, mind, compile). Mind pulls config from keyword roles (`as`, `accordingto`), read dispatches to handlers, compile builds program JSON.
-- `program/memory/index.mjs`: simple in-memory store with get/set/dump/reset, definition index, sandpit traces.
+- `program/remember/index.mjs`: simple in-memory store with get/set/dump/reset, definition index, sandpit traces.
 - `program/library/compositionalCases.mjs`: axis/context grid and keyword mappings.
 
 ## What works now

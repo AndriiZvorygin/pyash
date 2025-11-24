@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { resetMemory, dumpMemory, dumpSandpits, getMemory } from "../program/memory/index.mjs";
+import { forget, allRemember, dumpSandpits, remember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -11,7 +11,7 @@ async function run(line) {
 }
 
 test("sandpit first sentence is the source of truth for returned registers", async () => {
-  resetMemory();
+  forget();
 
   // ceremony: start from invoke sentence with obj/tloh/until; mutate obj; return invoke
   await run("subj name worker be ceremony def");
@@ -22,7 +22,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   await run("subj name target obj num 1 tloh num 3 until num 5 be number ya");
   await run("to name target be worker do");
 
-  const mem = dumpMemory();
+  const mem = allRemember();
   const sandpit = dumpSandpits().at(-1);
 
   const invoke = [...mem].reverse().find(s => s.be === "worker" && s.mood === "do");
@@ -48,6 +48,6 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   const adds = mem.filter(s => s.be === "add" && s.mood === "do");
   assert.ok(adds.length <= 1, "sandpit body should not leak additional add commands");
 
-  assert.equal(getMemory("tloh"), undefined, "tloh should remain attached to the invoke only");
-  assert.equal(getMemory("until"), undefined, "until should remain attached to the invoke only");
+  assert.equal(remember("tloh"), undefined, "tloh should remain attached to the invoke only");
+  assert.equal(remember("until"), undefined, "until should remain attached to the invoke only");
 });

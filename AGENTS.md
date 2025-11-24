@@ -3,7 +3,7 @@
 This guide keeps contributions consistent for the Pyash codebase.
 
 ## Project Structure & Module Organization
-- `program/main.mjs` runs the REPL and wires the parser (`program/understand/`), bridge (`program/bridge/`), and memory helpers (`program/memory/`).
+- `program/main.mjs` runs the REPL and wires the parser (`program/understand/`), bridge (`program/bridge/`), and memory helpers (`program/remember/`).
 - Interpreter behaviors live in `program/bridge/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
@@ -20,7 +20,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 ## Coding Style & Naming Conventions
 - ESM modules, 2-space indentation, trailing semicolons, and double quotes for strings.
 - Functions/vars use `camelCase`; files and verb modules use short, descriptive snake/dash names (e.g., `add_obj_num_to_num.mjs`).
-- Favor small, pure functions; reset shared state explicitly (e.g., `resetMemory`) and keep side effects localized.
+- Favor small, pure functions; reset shared state explicitly (e.g., `forget`) and keep side effects localized.
 - Add brief, targeted comments only where behavior is non-obvious.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
 
