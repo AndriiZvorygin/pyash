@@ -39,4 +39,4 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - `scripts/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (pretty by default; `--gross` for JSON).
 - `scripts/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
-See `ARCHITECTURE.md`, `STATE_OF_PROJECT.md`, `USAGE.md`, `TEST_PLAN.md`, and `GLOSSARY.md` for deeper guidance.
+See `ARCHITECTURE.md`, `STATE_OF_PROJECT.md`, `USAGE.md`, `TEST_PLAN.md`, and `GLOSSARY.md` for deeper guidance. Examples live in `examples/` (conditionals, subtract, chaining, registers).

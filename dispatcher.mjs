@@ -93,12 +93,12 @@ async function invokeLoop(defEntry, sentence) {
   }
 
   const finalEvoke = currentEvokeRef || currentEvoke || sentence;
-  const mergedObj = (lastResult?.value ?? lastResult?.obj) || finalEvoke.obj;
+  const mergedObj = (lastResult?.value ?? lastResult?.obj) ?? finalEvoke.obj;
   const mergedBe = finalEvoke.be || "result";
 
   if (mergedObj !== undefined) {
     const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
-    const evokeWithResult = { ...finalEvoke, obj: normalizedObj };
+    const evokeWithResult = { ...(currentEvokeRef || finalEvoke), obj: normalizedObj };
     setMemory(evokeWithResult);
 
     const targetName = evokeWithResult.to?.name;

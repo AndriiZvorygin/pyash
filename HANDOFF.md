@@ -28,6 +28,7 @@
 - Conditionals: `obj num 3 be tiny from num 5 then ...`, `subj name lhs be giant from name rhs then ...`, `obj num 5 be equally from num 5 then ...`
 - Subtract: `obj num 3 from name collector be subtract do`, `obj name rhs from name lhs be subtract do`
 - Chaining program: `node scripts/run_pya_program.mjs --full examples/pyash/result-chaining.pya`
+- Def chaining: `examples/core/def-chaining.md` / `examples/pyash/def-chaining.pya`
 - Trace: `node scripts/read_pya_trace.mjs --gross examples/pyash/def-chaining.pya`
 
 ## Files of interest
