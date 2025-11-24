@@ -61,9 +61,9 @@ so Pyash becomes a stable **pivot language** between people and machines.
 
 7. **Evolutionary ecosystem**
 
-   * The test suite defines what each verb + case + noun-class pattern must do.
+   * The quiz suite defines what each verb + case + noun-class pattern must do.
    * New implementations can be proposed by LLMs or mutation.
-   * Only code that passes tests is kept, so behaviour is preserved while the internals evolve.
+   * Only code that passes quizzes is kept, so behaviour is preserved while the internals evolve.
 
 8. **Concrete, JS-first runtime (for now)**
 
@@ -79,7 +79,7 @@ When you, Codex, work on Pyash, optimise for:
 
 * Preserving the **grammar-driven, linguistically grounded dispatch model**.
 * Keeping verbs thin and focused, with clear mapping to underlying Node.js (and future) backends.
-* Growing Pyash toward **full, Turing-complete, general-purpose capability** through tests plus evolutionary improvements.
-* Strengthening and extending the **test suite** so new code can be proposed safely by models.
+* Growing Pyash toward **full, Turing-complete, general-purpose capability** through quizzes plus evolutionary improvements.
+* Strengthening and extending the **quiz suite** so new code can be proposed safely by models.
 * Keeping representations **serializable, explicit and backend-agnostic**, so successors can target new languages and IRs.
 * Preferring clarity over cleverness. Pyash is scaffolding for an ecosystem where humans and models co-create workflows, libraries and eventually full programs together.

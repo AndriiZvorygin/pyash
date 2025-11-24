@@ -1,0 +1,11 @@
+# Documentation Index
+
+- `documentation/design.md` — architecture overview and module layout.
+- `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
+- `documentation/state.md` — current scope, goals, and known edges.
+- `documentation/decisions.md` — recorded choices and trade-offs.
+- `documentation/quiz-plan.md` — quiz coverage, gaps, and how to run quizzes.
+- `documentation/examples.md` — notes about the curated `examples/` transcripts.
+- `documentation/pyash.md` — high-level design goals and interlanguage intent.
+- `documentation/pyac.txt` — broader 2019 language/spec background.
+- `documentation/compositional-cases.md` — axis/context grid and keyword mapping.

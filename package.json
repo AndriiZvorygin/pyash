@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test \"quiz/**/*.test.mjs\"",
+    "quiz": "node --test \"quiz/**/*.test.mjs\""
   }
 }

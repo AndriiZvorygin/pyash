@@ -21,7 +21,7 @@ This *is* the call frame. Internally you treat it as:
 ```
 
 > Implementation note for JS:
-> You can still map `"add two"` → `"add_two"` for module names (`verbs/add_two.mjs`), but that’s internal. On the Pyash side, it’s always `add two`.
+> You can still map `"add two"` → `"add_two"` for module names (`program/verbs/add_two.mjs`), but that’s internal. On the Pyash side, it’s always `add two`.
 
 ---
 
@@ -63,7 +63,7 @@ Now you can use existing verbs on `acc`:
 obj num 2 to name acc be add do
 ```
 
-(Your JS `add` dispatcher can still live in `verbs/add.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
+(Your JS `add` dispatcher can still live in `program/verbs/add.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
 
 ---
 
@@ -160,8 +160,8 @@ and your JS side is free to normalize them (e.g. `"count up"` → `count_up.mjs`
 
 If you’d like, next we can:
 
-* Sketch how your `parser.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
-* Add tests to lock in that **surface Pyash never uses underscores**, while the dispatcher still finds the right JS verb modules.
+* Sketch how your `program/parser/index.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
+* Add quizzes to lock in that **surface Pyash never uses underscores**, while the dispatcher still finds the right JS verb modules.
 
 ## 6. Examples
 

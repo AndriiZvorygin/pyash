@@ -3,18 +3,18 @@
 This guide keeps contributions consistent for the Pyash codebase.
 
 ## Project Structure & Module Organization
-- `main.mjs` runs the REPL and wires the parser (`parser.mjs`), dispatcher (`dispatcher.mjs`), and memory helpers (`memory.mjs`).
-- Interpreter behaviors live in `dispatcher.mjs`, `program.mjs`, and `verbs/` (one verb per file, small and composable).
-- Output formatting sits in `pretty.mjs`; Ollama network I/O is in `motor/ollama.mjs`.
-- Tests are under `test/*.test.mjs`; keep helpers near the code they cover.
-- Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `workplace.json` is example data/config; keep secrets out of the repo.
+- `program/main.mjs` runs the REPL and wires the parser (`program/parser/`), dispatcher (`program/dispatcher/`), and memory helpers (`program/memory/`).
+- Interpreter behaviors live in `program/dispatcher/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
+- Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
+- Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
+- Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `program/config/workplace.json` is example data/config; keep secrets out of the repo.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
-## Build, Test, and Development Commands
-- `npm test` (or `node --test`) runs the full suite; run it before pushing.
-- `node test/core.test.mjs` runs a targeted file while iterating.
-- `node main.mjs` starts the REPL to exercise new verbs interactively.
-- `node scripts/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
+## Build, Quiz, and Development Commands
+- `npm test` (or `node --test quiz`) runs the full suite; run it before pushing.
+- `node --test quiz/core.test.mjs` runs a targeted file while iterating.
+- `node program/main.mjs` starts the REPL to exercise new verbs interactively.
+- `node program/cli/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions
@@ -24,13 +24,13 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Add brief, targeted comments only where behavior is non-obvious.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
 
-## Testing Guidelines
-- Add tests for every new code path; mirror real REPL usage strings where possible.
-- Follow `node:test` with `assert/strict` (see `test/core.test.mjs`).
-- Name tests with readable sentences; reset memory between cases to avoid coupling.
+## Quiz Guidelines
+- Add quizzes for every new code path; mirror real REPL usage strings where possible.
+- Follow `node:test` with `assert/strict` (see `quiz/core.test.mjs`).
+- Name quizzes with readable sentences; reset memory between cases to avoid coupling.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.
-- Work red→green: write a failing test first, then implement the smallest change to make it pass, and keep tests fast.
-- Keep imperatives recording both the command and a result fact; update tests when adding verbs that should emit structured outputs.
+- Work red→green: write a failing quiz first, then implement the smallest change to make it pass, and keep runs fast.
+- Keep imperatives recording both the command and a result fact; update quizzes when adding verbs that should emit structured outputs.
 
 ## Commit & Pull Request Guidelines
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.

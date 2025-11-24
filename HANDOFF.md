@@ -4,13 +4,13 @@
 - Added conditionals: `giant` ( > ), `tiny` ( < ), `equally` ( == ) with support for inline values and subject-to-subject comparisons. Dispatcher resolves both `subj` and `from` by name when present.
 - Added `subtract` verb; handles inline numbers and subject-based subtraction (`obj num 3 from name collector be subtract do`, `obj name rhs from name lhs be subtract do`).
 - Improved sandpit write-back for loops: `to` targets mutated inside a sandpit are written back to main memory after loop invocation.
-- Chaining: `result` fact can feed subsequent calls. Added tests/examples for chaining simple calls and ceremony defs.
-- Script updates: `run_pya_program.mjs` shows `Outputs` (from `que`) and returns `{ outputs, result }` with `--gross`; `read_pya_trace.mjs` is pretty by default (`--gross` for JSON). Script tests cover both.
+- Chaining: `result` fact can feed subsequent calls. Added quizzes/examples for chaining simple calls and ceremony defs.
+- Script updates: `program/cli/run_pya_program.mjs` shows `Outputs` (from `que`) and returns `{ outputs, result }` with `--gross`; `program/cli/read_pya_trace.mjs` is beautiful by default (`--gross` for JSON). Script quizzes cover both.
 - Examples added/updated: conditional suites for `giant`/`tiny`/`equally`, subtract, result/def chaining.
 - Docs refreshed: conditional verbs mentioned in README/USAGE/ARCHITECTURE; compositional keyword table updated (`as` for state way, no object slots). TODO/STATE updated to reflect current scope.
 
-## Current test status
-- `npm test` passes (all suites green).
+## Current quiz status
+- `npm test` passes (all quizzes green).
 
 ## Notable behaviors/decisions
 - Sandpits: evoker stays at index 0 of sandpit traces; `this`/`ret` use it. Loop invocations now propagate mutated `to` targets back to main memory, but non-`to` sandpit mutations beyond evoker/result are still not auto-merged.
@@ -27,12 +27,12 @@
 ## Handy commands/examples
 - Conditionals: `obj num 3 be tiny from num 5 then ...`, `subj name lhs be giant from name rhs then ...`, `obj num 5 be equally from num 5 then ...`
 - Subtract: `obj num 3 from name collector be subtract do`, `obj name rhs from name lhs be subtract do`
-- Chaining program: `node scripts/run_pya_program.mjs --full examples/pyash/result-chaining.pya`
+- Chaining program: `node program/cli/run_pya_program.mjs --full examples/pyash/result-chaining.pya`
 - Def chaining: `examples/core/def-chaining.md` / `examples/pyash/def-chaining.pya`
-- Trace: `node scripts/read_pya_trace.mjs --gross examples/pyash/def-chaining.pya`
+- Trace: `node program/cli/read_pya_trace.mjs --gross examples/pyash/def-chaining.pya`
 
 ## Files of interest
-- `dispatcher.mjs`: conditional handling, sandpit write-back, loop merge logic.
-- `verbs/`: new `subtract.mjs`, `equally.mjs`, conditionals registered.
+- `program/dispatcher/index.mjs`: conditional handling, sandpit write-back, loop merge logic.
+- `program/verbs/`: new `subtract.mjs`, `equally.mjs`, conditionals registered.
 - Examples: `examples/core/giant-conditional.md`, `tiny-conditional.md`, `equally-conditional.md`, `subtract.md`, `result-chaining.md`, `def-chaining.md` (+ `.pya` counterparts).
-- Tests: `test/giant.test.mjs`, `tiny.test.mjs`, `equally.test.mjs`, `subtract.test.mjs`, `result_chaining.test.mjs`, `scripts.test.mjs`.
+- Quizzes: `quiz/giant.test.mjs`, `tiny.test.mjs`, `equally.test.mjs`, `subtract.test.mjs`, `result_chaining.test.mjs`, `scripts.test.mjs`.
