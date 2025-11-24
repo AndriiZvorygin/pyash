@@ -45,7 +45,7 @@ async function runScript(scriptRelPath, args) {
 }
 
 test("run_pya_program.mjs outputs result in gross mode", async () => {
-  const { logs, errors } = await runScript("program/cli/run_pya_program.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
+  const { logs, errors } = await runScript("program/command/run_pya_program.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
   assert.equal(errors.join("\n"), "");
 
   const payload = JSON.parse(logs.join(""));
@@ -58,7 +58,7 @@ test("run_pya_program.mjs outputs result in gross mode", async () => {
 });
 
 test("run_pya_program.mjs prints program with --full", async () => {
-  const { logs, errors } = await runScript("program/cli/run_pya_program.mjs", ["--full", "examples/pyash/evoke-registers.pya"]);
+  const { logs, errors } = await runScript("program/command/run_pya_program.mjs", ["--full", "examples/pyash/evoke-registers.pya"]);
   assert.equal(errors.join("\n"), "");
   const output = logs.join("\n");
   assert.match(output, /Program:\n/);
@@ -67,7 +67,7 @@ test("run_pya_program.mjs prints program with --full", async () => {
 });
 
 test("read_pya_trace.mjs emits beautiful trace by default and has evoker first", async () => {
-  const { logs, errors } = await runScript("program/cli/read_pya_trace.mjs", ["examples/pyash/evoke-registers.pya"]);
+  const { logs, errors } = await runScript("program/command/read_pya_trace.mjs", ["examples/pyash/evoke-registers.pya"]);
   assert.equal(errors.join("\n"), "");
   const output = logs.join("\n");
   assert.match(output, /Beautiful Trace/);
@@ -76,7 +76,7 @@ test("read_pya_trace.mjs emits beautiful trace by default and has evoker first",
 });
 
 test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
-  const { logs, errors } = await runScript("program/cli/read_pya_trace.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
+  const { logs, errors } = await runScript("program/command/read_pya_trace.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
   assert.equal(errors.join("\n"), "");
 
   const parsed = JSON.parse(logs.join(""));

@@ -1,4 +1,4 @@
-// dispatcher.mjs
+// bridge (formerly dispatcher)
 import { add } from "../verbs/add.mjs";
 import { giant } from "../verbs/giant.mjs";
 import { tiny } from "../verbs/tiny.mjs";

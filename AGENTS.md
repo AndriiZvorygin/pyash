@@ -3,8 +3,8 @@
 This guide keeps contributions consistent for the Pyash codebase.
 
 ## Project Structure & Module Organization
-- `program/main.mjs` runs the REPL and wires the parser (`program/parser/`), dispatcher (`program/dispatcher/`), and memory helpers (`program/memory/`).
-- Interpreter behaviors live in `program/dispatcher/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
+- `program/main.mjs` runs the REPL and wires the parser (`program/parser/`), dispatcher (`program/bridge/`), and memory helpers (`program/memory/`).
+- Interpreter behaviors live in `program/bridge/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `program/config/workplace.json` is example data/config; keep secrets out of the repo.
@@ -14,7 +14,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `npm test` (or `node --test quiz`) runs the full suite; run it before pushing.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
-- `node program/cli/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
+- `node program/command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parse } from "../program/parser/index.mjs";
-import { interpret } from "../program/dispatcher/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
 import { resetMemory } from "../program/memory/index.mjs";
 
 async function run(line) {

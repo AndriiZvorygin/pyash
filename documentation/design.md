@@ -92,7 +92,7 @@ Conventions:
   * nothing (pure side-effect, though this is rare).
 * Any cross-module communication still uses sentences/paragraphs, not arbitrary JS structures.
 
-The dispatcher is responsible for normalizing whatever the verb returns into the standard “command + result fact(s)” pattern in memory.
+The bridge (dispatcher) is responsible for normalizing whatever the verb returns into the standard “command + result fact(s)” pattern in memory.
 
 ### Ceremony / Sandpit ABI
 
@@ -116,7 +116,7 @@ Conventions:
 
   * creating or using a **sandpit frame**,
   * putting `evokerSentence` at index `0` in the sandpit paragraph,
-  * executing the body paragraph using the dispatcher,
+  * executing the body paragraph using the bridge (dispatcher),
   * honouring any `ret` mood sentences,
   * and returning the final `ya` sentence (or nothing).
 
@@ -145,7 +145,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
     ```
   * The parser’s output is the only “wire format” between text and the rest of the system.
 
-* `program/dispatcher/index.mjs`: Routes by `mood` and `be`, always taking and returning sentences or paragraphs.
+* `program/bridge/index.mjs`: Routes by `mood` and `be`, always taking and returning sentences or paragraphs.
 
   * `ya` / `def`:
 
@@ -240,7 +240,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
 2. **Dispatch**
 
-   * `program/dispatcher/index.mjs` receives a sentence and selects behaviour by `mood` (and `be` for `do`):
+   * `program/bridge/index.mjs` receives a sentence and selects behaviour by `mood` (and `be` for `do`):
 
      * For `ya`/`def`: passes the sentence straight to memory.
      * For `do`: passes the sentence to a verb module, which returns updated sentence(s).
@@ -285,7 +285,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 3. **Body execution**
 
    * The ceremony body is always a **paragraph of sentences**.
-   * The sandpit engine iterates that paragraph and dispatches each sentence via `program/dispatcher/index.mjs`.
+   * The sandpit engine iterates that paragraph and dispatches each sentence via `program/bridge/index.mjs`.
    * Internal `ya`/`def`/`do` sentences live only in the sandpit’s temporary memory but are recorded in its trace paragraph.
    * There are **no explicit loop constructs inside** a ceremony body; looping is expressed by how the evoking sentence is interpreted (e.g. repeated invocation based on `tloh`/`until`).
 

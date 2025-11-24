@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { parse } from "../parser/index.mjs";
-import { interpret } from "../dispatcher/index.mjs";
+import { interpret } from "../bridge/index.mjs";
 import { resetMemory, dumpMemory, dumpSandpits } from "../memory/index.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";

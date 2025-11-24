@@ -31,12 +31,12 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 ## Key Files
 - `program/main.mjs` — REPL wiring parser/dispatcher/memory
 - `program/parser/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
-- `program/dispatcher/` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
+- `program/bridge/` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `program/beautiful.mjs` — output formatting
 - `program/verbs/` — verb implementations (`add`, `giant`, `tiny`, `equally`, `compile`, `mind`, `read`, etc.) and dynamic handlers
 - `program/library/compositionalCases.mjs` — axis/context grid and keyword table
 - `quiz/` — node:test quizzes (core, parser, compositional, mind, compile/read, beautiful, motor)
-- `program/cli/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).
-- `program/cli/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
+- `program/command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).
+- `program/command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
 See `documentation/index.md` for deeper guidance and links to design, state, and glossary notes. Examples live in `examples/` (conditionals, subtract, chaining, registers).

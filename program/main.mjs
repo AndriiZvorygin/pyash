@@ -3,7 +3,7 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "./parser/index.mjs";
-import { interpret } from "./dispatcher/index.mjs";
+import { interpret } from "./bridge/index.mjs";
 import { dumpMemory, resetMemory } from "./memory/index.mjs";
 import { splitSentences } from "./library/sentenceSplitter.mjs";
 
