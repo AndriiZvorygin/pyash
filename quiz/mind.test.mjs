@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parse } from "../program/parser/index.mjs";
+import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { dumpMemory, resetMemory } from "../program/memory/index.mjs";
 import motor from "../program/motor/ollama.mjs";

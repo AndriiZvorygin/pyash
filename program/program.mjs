@@ -1,5 +1,5 @@
 // program.mjs (future helper)
-import { parse } from "./parser/index.mjs";
+import { parse } from "./understand/index.mjs";
 
 export function buildProgram(source) {
   const lines = source

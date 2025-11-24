@@ -29,8 +29,8 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 - Loops: seed `tloh` (and optional `until`) on the evoking sentence to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality (no standalone register facts are written).
 
 ## Key Files
-- `program/main.mjs` — REPL wiring parser/dispatcher/memory
-- `program/parser/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
+- `program/main.mjs` — REPL wiring understand/bridge/memory
+- `program/understand/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
 - `program/bridge/` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `program/beautiful.mjs` — output formatting
 - `program/verbs/` — verb implementations (`add`, `giant`, `tiny`, `equally`, `compile`, `mind`, `read`, etc.) and dynamic handlers

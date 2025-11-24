@@ -160,7 +160,7 @@ and your JS side is free to normalize them (e.g. `"count up"` → `count_up.mjs`
 
 If you’d like, next we can:
 
-* Sketch how your `program/parser/index.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
+* Sketch how your `program/understand/index.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
 * Add quizzes to lock in that **surface Pyash never uses underscores**, while the dispatcher still finds the right JS verb modules.
 
 ## 6. Examples

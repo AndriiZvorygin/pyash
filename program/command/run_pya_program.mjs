@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parse } from "../parser/index.mjs";
+import { parse } from "../understand/index.mjs";
 import { interpret } from "../bridge/index.mjs";
 import { resetMemory, getMemory } from "../memory/index.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";

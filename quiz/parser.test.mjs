@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parse } from "../program/parser/index.mjs";
+import { parse } from "../program/understand/index.mjs";
 
 test("parses quoted text tokens", () => {
   const s = parse('subj name prompt with text "hello world" be topic ya');

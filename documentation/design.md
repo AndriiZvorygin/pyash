@@ -134,7 +134,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * Supports `mem`, `reset`, `quit` commands.
   * At the boundary, it converts raw input strings into sentence objects and receives sentence/paragraph-shaped results.
 
-* `program/parser/index.mjs`: Tokenizes input and produces sentence objects.
+* `program/understand/index.mjs`: Tokenizes input and produces sentence objects.
 
   * Supports quoted blocks, short role aliases (`su/ob`), and compositional keyword mapping.
   * Context+axis pairs become keyword roles (`fromtext`, `during`, `become`, `totext`, `as`, `tloh`, `until`, etc.).
@@ -235,7 +235,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
 1. **Input as text → sentence**
 
-   * REPL/input line (string) → `program/parser/index.mjs` → a **sentence object** with keyworded roles.
+   * REPL/input line (string) → `program/understand/index.mjs` → a **sentence object** with keyworded roles.
    * The parser is the only place text is converted into sentences; after that, all modules speak in sentences/paragraphs.
 
 2. **Dispatch**

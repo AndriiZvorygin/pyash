@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parse } from "../program/parser/index.mjs";
+import { parse } from "../program/understand/index.mjs";
 
 // quoted.<lang>.contents ... .<lang>.quoted syntax should preserve inner spacing
 
