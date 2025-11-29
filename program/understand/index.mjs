@@ -187,6 +187,36 @@ export function parse(line) {
       continue;
     }
 
+    if (t === "ve" || t === "vec") {
+      const elemType = words[i + 1];
+      if (!elemType) continue;
+      const vector = { type: elemType, values: [] };
+      let j = i + 2;
+      while (
+        j < words.length &&
+        !ROLE_KEYS.includes(words[j]) &&
+        !CONTEXT_KEYS.includes(words[j]) &&
+        !["be", "then", "ta", "ret"].includes(words[j])
+      ) {
+        const token = words[j];
+        if (elemType === "num" || elemType === "number") {
+          const num = Number(token);
+          vector.values.push(Number.isNaN(num) ? token : num);
+        } else {
+          vector.values.push(token);
+        }
+        j++;
+      }
+
+      const target = slot || (current ? s[current] : null);
+      if (target) {
+        target.ve = vector;
+      }
+
+      i = j - 1;
+      continue;
+    }
+
     // --- type tokens: name / num / number / text / filename ---
     if (TYPE_TOKENS.includes(t)) {
       const target = slot || (current ? s[current] : null);

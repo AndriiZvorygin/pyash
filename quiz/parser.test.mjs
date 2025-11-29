@@ -32,3 +32,14 @@ test("supports short subj/obj aliases su/ob", () => {
   assert.equal(s.subj.name, "hello");
   assert.equal(s.obj.name, "world");
 });
+
+test("parses vector literals with element type", () => {
+  const sNum = parse("obj ve num 1 2 3 be topic ya");
+  assert.deepEqual(sNum.obj.ve, { type: "num", values: [1, 2, 3] });
+
+  const sText = parse('obj ve text "apple" "red maple" "pine" be topic ya');
+  assert.deepEqual(sText.obj.ve, { type: "text", values: ["apple", "red maple", "pine"] });
+
+  const sLetters = parse("obj ve letter a b c d be topic ya");
+  assert.deepEqual(sLetters.obj.ve, { type: "letter", values: ["a", "b", "c", "d"] });
+});

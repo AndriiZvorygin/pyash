@@ -51,3 +51,29 @@ test("divide by zero throws", async () => {
 
   await assert.rejects(() => run("obj num 1 by num 0 be divide do"), /by cannot be zero/);
 });
+
+test("multiply supports from/by named operands and target", async () => {
+  forget();
+
+  await run("subj name w obj num 2 be number ya");
+  await run("subj name x obj num 3 be number ya");
+  await run("from name w by name x to name z be multiply do");
+
+  const z = remember("z");
+  const result = remember("result");
+  assert.equal(z.obj.num, 6);
+  assert.equal(result.obj.num, 6);
+});
+
+test("divide supports from/by named operands and target", async () => {
+  forget();
+
+  await run("subj name w obj num 12 be number ya");
+  await run("subj name x obj num 4 be number ya");
+  await run("from name w by name x to name z be divide do");
+
+  const z = remember("z");
+  const result = remember("result");
+  assert.equal(z.obj.num, 3);
+  assert.equal(result.obj.num, 3);
+});

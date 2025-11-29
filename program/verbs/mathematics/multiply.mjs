@@ -19,7 +19,7 @@ function getOperand(v, label) {
 }
 
 export async function multiply({ obj, sentence }) {
-  const lhs = getOperand(obj, "obj");
+  const lhs = getOperand(obj ?? sentence?.from, "obj");
   const rhs = getOperand(sentence?.by, "by");
   const product = lhs * rhs;
 

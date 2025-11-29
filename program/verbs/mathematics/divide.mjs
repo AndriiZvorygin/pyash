@@ -19,7 +19,7 @@ function getOperand(v, label) {
 }
 
 export async function divide({ obj, sentence }) {
-  const numerator = getOperand(obj, "obj");
+  const numerator = getOperand(obj ?? sentence?.from, "obj");
   const denominator = getOperand(sentence?.by, "by");
   if (denominator === 0) throw new Error("divide: by cannot be zero");
 

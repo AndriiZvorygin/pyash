@@ -4,6 +4,7 @@ export { invert } from "./mathematics/invert.mjs";
 export { exponential } from "./mathematics/exponential.mjs";
 export { multiply } from "./mathematics/multiply.mjs";
 export { divide } from "./mathematics/divide.mjs";
+export { produce } from "./mathematics/produce.mjs";
 export { default as chip } from "./mathematics/chip.mjs";
 export { default as compile } from "./exchange/compile.mjs";
 export { default as read } from "./exchange/read.mjs";

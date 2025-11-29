@@ -1,0 +1,53 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, remember } from "../program/remember/index.mjs";
+
+async function run(line) {
+  const s = parse(line);
+  return interpret(s);
+}
+
+test("dot product from inline vectors", async () => {
+  forget();
+
+  await run("obj vec num 1 2 3 by vec num 4 5 6 to name z be produce do");
+
+  const z = remember("z");
+  const result = remember("result");
+
+  assert.equal(z.obj.num, 32);
+  assert.equal(result.obj.num, 32);
+});
+
+test("dot product from named vectors", async () => {
+  forget();
+
+  await run("subj name w obj vec num 1 1 1 be vector ya");
+  await run("subj name x obj vec num 2 3 4 be vector ya");
+
+  await run("from name w by name x to name z be produce do");
+
+  const z = remember("z");
+  const result = remember("result");
+
+  assert.equal(z.obj.num, 9);
+  assert.equal(result.obj.num, 9);
+});
+
+test("mismatched vector lengths throw", async () => {
+  forget();
+
+  await run("subj name w obj vec num 1 2 be vector ya");
+  await run("subj name x obj vec num 1 2 3 be vector ya");
+
+  await assert.rejects(() => run("from name w by name x be produce do"), /same length/);
+});
+
+test("vector elements must be numeric", async () => {
+  forget();
+
+  await assert.rejects(() => run("obj vec letter a b by vec num 1 2 to name z be produce do"), /numeric values/);
+});
