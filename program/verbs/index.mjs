@@ -1,5 +1,7 @@
 export { add } from "./mathematics/add.mjs";
 export { subtract } from "./mathematics/subtract.mjs";
+export { invert } from "./mathematics/invert.mjs";
+export { exponential } from "./mathematics/exponential.mjs";
 export { multiply } from "./mathematics/multiply.mjs";
 export { divide } from "./mathematics/divide.mjs";
 export { default as chip } from "./mathematics/chip.mjs";
