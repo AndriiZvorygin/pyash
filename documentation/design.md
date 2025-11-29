@@ -153,8 +153,8 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
     * stored via `doRemember` as-is.
   * `do`:
 
-    * finds verb, resolves targets based on subject/name and existing sentences in memory,
-    * invokes verb modules that accept a sentence and return sentence(s),
+    * finds verb, resolves operands/targets based on subject/name and existing sentences in memory,
+    * invokes verb modules with the **original sentence** plus a `resolved` helper `{ obj, to, from }` containing precomputed operands,
     * appends updated target sentences to memory,
     * always stores a `result` fact (a sentence),
     * stores the command sentence itself for history.

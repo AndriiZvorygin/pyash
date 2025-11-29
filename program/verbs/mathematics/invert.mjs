@@ -12,8 +12,8 @@ function resolveNumber(v) {
   return undefined;
 }
 
-export async function invert(sentence) {
-  const value = resolveNumber(sentence.resolved?.obj ?? sentence.obj);
+export async function invert(sentence, { remember }) {
+  const value = resolveNumber(sentence.obj, remember);
   if (value === undefined) throw new Error("invert: obj is required");
 
   return { obj: -value, be: sentence?.be ?? "number" };

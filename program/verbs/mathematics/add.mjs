@@ -6,8 +6,8 @@ function toNumber(v) {
   return 0;
 }
 
-export async function add(sentence) {
-  const a = toNumber(sentence.resolved?.obj ?? sentence.obj);
-  const b = toNumber(sentence.resolved?.to ?? sentence.to);
+export async function add(sentence, { remember }) {
+  const a = toNumber(sentence.obj);
+  const b = toNumber(sentence.to);
   return { obj: a + b, be: "number" };
 }

@@ -1,6 +1,4 @@
-import { remember } from "../../remember/index.mjs";
-
-function resolveNumber(v) {
+function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
@@ -12,15 +10,15 @@ function resolveNumber(v) {
   return undefined;
 }
 
-function getOperand(v, label) {
-  const n = resolveNumber(v);
+function getOperand(v, label, remember) {
+  const n = resolveNumber(v, remember);
   if (n === undefined) throw new Error(`divide: ${label} is required`);
   return n;
 }
 
-export async function divide(sentence) {
-  const numerator = getOperand(sentence.resolved?.obj ?? sentence.obj ?? sentence.from, "obj");
-  const denominator = getOperand(sentence.resolved?.by ?? sentence.by, "by");
+export async function divide(sentence, { remember }) {
+  const numerator = getOperand(sentence.obj ?? sentence.from, "obj", remember);
+  const denominator = getOperand(sentence.by, "by", remember);
   if (denominator === 0) throw new Error("divide: by cannot be zero");
 
   return { obj: numerator / denominator, be: sentence?.be ?? "number" };

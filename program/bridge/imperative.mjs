@@ -64,10 +64,10 @@ export async function handleImperative({
   }
 
   const toValue = target?.obj ?? to;
-  const callSentence = { ...sentence, resolved: { obj, to: toValue ?? to, from } };
+  const callSentence = { ...sentence, obj: obj ?? sentence.obj, to: toValue ?? to ?? sentence.to, from: from ?? sentence.from };
 
-  // pass a single enriched sentence payload (original roles + resolved values under resolved)
-  const result = await fn(callSentence);
+  // pass the raw sentence plus memory helpers
+  const result = await fn(callSentence, { remember: memory.remember });
 
   // record the command itself in history
   memory.doRemember(sentence);

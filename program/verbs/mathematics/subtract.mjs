@@ -12,13 +12,13 @@ function detectValue(v) {
   return 0;
 }
 
-export async function subtract(sentence) {
+export async function subtract(sentence, { remember }) {
   const targetName = sentence?.to?.name || sentence?.from?.name;
   if (!targetName) throw new Error("subtract: target name required (to name ... or from name ...)");
 
   const target = remember(targetName);
-  const targetVal = detectValue(target?.obj ?? sentence.resolved?.to ?? sentence.to);
-  const subtrahend = detectValue(sentence.resolved?.obj ?? sentence.obj);
+  const targetVal = detectValue(target?.obj ?? sentence.to);
+  const subtrahend = detectValue(sentence.obj);
   const result = targetVal - subtrahend;
 
   return { obj: result, be: sentence?.be ?? "number" };

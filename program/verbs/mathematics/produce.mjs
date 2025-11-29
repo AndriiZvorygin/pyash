@@ -1,6 +1,4 @@
-import { remember } from "../../remember/index.mjs";
-
-function resolveVector(v) {
+function resolveVector(v, remember) {
   if (!v) return undefined;
   if (v.ve?.values) return v.ve;
   if (v.values && v.type) return v;
@@ -18,10 +16,11 @@ function toNumeric(values) {
   return nums;
 }
 
-export async function produce(sentence) {
+export async function produce(sentence, { remember }) {
   const leftVec =
-    resolveVector(sentence.resolved?.obj ?? sentence.obj) || resolveVector(sentence.resolved?.from ?? sentence.from);
-  const rightVec = resolveVector(sentence.resolved?.by ?? sentence.by);
+    resolveVector(sentence.obj, remember) ||
+    resolveVector(sentence.from, remember);
+  const rightVec = resolveVector(sentence.by, remember);
 
   if (!leftVec || !rightVec) throw new Error("produce: both obj/from and by vectors are required");
   const left = toNumeric(leftVec.values);

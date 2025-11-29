@@ -1,6 +1,4 @@
-import { remember } from "../../remember/index.mjs";
-
-function resolveNumber(v) {
+function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
@@ -12,15 +10,15 @@ function resolveNumber(v) {
   return undefined;
 }
 
-function getOperand(v, label) {
-  const n = resolveNumber(v);
+function getOperand(v, label, remember) {
+  const n = resolveNumber(v, remember);
   if (n === undefined) throw new Error(`multiply: ${label} is required`);
   return n;
 }
 
-export async function multiply(sentence) {
-  const lhs = getOperand(sentence.resolved?.obj ?? sentence.obj ?? sentence.from, "obj");
-  const rhs = getOperand(sentence.resolved?.by ?? sentence.by, "by");
+export async function multiply(sentence, { remember }) {
+  const lhs = getOperand(sentence.obj ?? sentence.from, "obj", remember);
+  const rhs = getOperand(sentence.by, "by", remember);
   const product = lhs * rhs;
 
   return { obj: product, be: sentence?.be ?? "number" };
