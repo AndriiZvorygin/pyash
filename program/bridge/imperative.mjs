@@ -64,9 +64,10 @@ export async function handleImperative({
   }
 
   const toValue = target?.obj ?? to;
+  const callSentence = { ...sentence, obj, to: toValue ?? to, from, sentence };
 
-  // pass the current value, not the name
-  const result = await fn({ obj, to: toValue, from, sentence });
+  // pass a single enriched sentence payload
+  const result = await fn(callSentence);
 
   // record the command itself in history
   memory.doRemember(sentence);
