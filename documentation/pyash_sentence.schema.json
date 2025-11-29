@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/pyash_sentence.schema.json",
+  "title": "Pyash Sentence",
+  "description": "Flat Pyash sentence object: mood + be + case keywords. No AST, no extra metadata.",
+  "type": "object",
+
+  "required": ["mood", "be"],
+
+  "properties": {
+    "mood": {
+      "type": "string",
+      "description": "Sentence mood.",
+      "enum": ["ya", "def", "do", "que", "then", "ret", "error"]
+    },
+    "be": {
+      "type": "string",
+      "description": "Verb surface form (multi-word allowed, no underscores).",
+      "minLength": 1
+    },
+
+    "subj": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Canonical subject slot (preferred)."
+    },
+    "su": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Short alias for subject."
+    },
+
+    "obj": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Main object / payload."
+    },
+
+    "from": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + space (e.g. from location)."
+    },
+    "at": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + space (e.g. at location)."
+    },
+    "to": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + space (e.g. to location/target)."
+    },
+
+    "outof": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + interior."
+    },
+    "inside": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + interior."
+    },
+    "into": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + interior."
+    },
+
+    "offof": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + surface."
+    },
+    "along": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + surface."
+    },
+    "onto": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + surface."
+    },
+
+    "fromunder": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + under."
+    },
+    "under": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + under."
+    },
+    "beneath": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + under."
+    },
+
+    "since": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + time."
+    },
+    "during": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + time."
+    },
+    "until": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + time, or loop stop condition (evoker register)."
+    },
+
+    "fromstate": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + state."
+    },
+    "as": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + state (role / representation)."
+    },
+    "become": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + state (into being)."
+    },
+
+    "fromperson": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + person."
+    },
+    "with": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + person (comitative / accompaniment)."
+    },
+    "for": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + person (benefactive / addressee)."
+    },
+
+    "fromgroup": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + social group."
+    },
+    "among": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + social group."
+    },
+    "intogroup": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + social group."
+    },
+
+    "fromtext": {
+      "$ref": "#/$defs/caseValue",
+      "description": "SOURCE + discourse (e.g. from prompt / document)."
+    },
+    "accordingto": {
+      "$ref": "#/$defs/caseValue",
+      "description": "WAY + discourse (according to text)."
+    },
+    "totext": {
+      "$ref": "#/$defs/caseValue",
+      "description": "DESTINATION + discourse (write to / as text)."
+    },
+
+    "tloh": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Multiplicative / loop register on evoking sentence."
+    }
+  },
+
+  "additionalProperties": {
+    "$ref": "#/$defs/caseValue"
+  },
+
+  "allOf": [
+    {
+      "description": "No opaque IDs at sentence level.",
+      "not": { "required": ["id"] }
+    },
+    {
+      "description": "No generic metadata object at sentence level.",
+      "not": { "required": ["meta"] }
+    }
+  ],
+
+  "$defs": {
+    "caseValue": {
+      "description": "Any value a case slot may carry: scalar, structured object, or nested list.",
+      "anyOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "null" },
+        {
+          "type": "object",
+          "description": "Structured payload (e.g. {\"num\": 5}, nested data).",
+          "additionalProperties": true
+        },
+        {
+          "type": "array",
+          "description": "Lists of caseValues (paragraph-like or composite payload).",
+          "items": { "$ref": "#/$defs/caseValue" }
+        }
+      ]
+    }
+  }
+}

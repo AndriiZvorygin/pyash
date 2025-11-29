@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { allRemember, forget } from "../program/remember/index.mjs";
+import { allRemember, forget, remember } from "../program/remember/index.mjs";
 
 async function run(line) {
   const s = parse(line);
@@ -125,4 +125,43 @@ test("bare add imperative without target name creates and stores result", async 
   assert.ok(res);
   assert.ok(fact, "updated fact should be stored on target");
   assert.equal(fact.obj.num, 7);
+});
+
+test("que on unknown subject returns null", async () => {
+  forget();
+
+  const res = await run("subj name missing obj what que");
+  assert.equal(res, null);
+});
+
+test("false condition skips one statement and then resets", async () => {
+  forget();
+
+  await run("subj name counter obj num 1 be number ya");
+  await run("obj num 1 be tiny from num 0 then"); // false -> skip next statement
+  await run("obj num 10 to name counter be add do"); // should be skipped
+  await run("obj num 2 to name counter be add do"); // should run
+
+  const res = await run("subj name counter obj what que");
+  assert.equal(res, "subj name counter obj num 3 be number ya");
+});
+
+test("imperative creates default numeric target when missing", async () => {
+  forget();
+
+  await run("obj num 5 to name scratch be add do");
+
+  const scratch = remember("scratch");
+  assert.ok(scratch, "target should be created");
+  assert.equal(scratch.obj.num, 5, "target should start at 0 and receive addition");
+
+  const result = remember("result");
+  assert.ok(result, "result fact should be stored");
+  assert.equal(result.obj.num, 5, "result fact should mirror updated target");
+});
+
+test("unknown imperative verb throws", async () => {
+  forget();
+
+  await assert.rejects(() => run("obj num 1 be nowhere do"), /Unknown verb: nowhere/);
 });

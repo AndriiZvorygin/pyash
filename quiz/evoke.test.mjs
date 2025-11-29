@@ -75,3 +75,13 @@ test("ceremony ret returns full sentence with multiple registers", async () => {
   assert.equal(remember("tloh"), undefined, "tloh should remain on evoker, not as a register fact");
   assert.equal(remember("until"), undefined, "until should remain on evoker, not as a register fact");
 });
+
+test("ret errors when binding is unknown", async () => {
+  forget();
+
+  await run("subj name broken be ceremony def");
+  await run("obj name missing ret");
+  await run("subj name broken be ceremony prah");
+
+  await assert.rejects(() => run("be broken do"), /ret: unknown binding missing/);
+});

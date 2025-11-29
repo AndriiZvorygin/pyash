@@ -101,3 +101,16 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
   assert.ok(protectedCollector, "collector inside def block should persist");
   assert.ok(updatedCollector, "collector outside block should be stored");
 });
+
+test("invoking while definition is still open just records and does not run", async () => {
+  forget();
+
+  await run("subj name incomplete be ceremony def");
+  await run("obj num 1 to name result be add do"); // recorded inside open block
+
+  const before = allRemember().length;
+  const res = await run("be incomplete do");
+  assert.equal(res?.recorded, true, "invocation should be recorded while block is open");
+  assert.equal(allRemember().length, before + 1, "invocation should be appended to memory");
+  assert.equal(remember("result"), undefined, "body should not execute while definition remains open");
+});

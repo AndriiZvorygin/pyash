@@ -58,3 +58,15 @@ test("giant compares subj against another subj value", async () => {
   const res2 = await run("subj name lhs obj what que");
   assert.equal(res2, "subj name lhs obj num 4 be number ya");
 });
+
+test("giant errors when subj name is unknown", async () => {
+  forget();
+
+  await assert.rejects(() => run("subj name ghost be giant from num 1 then"), /Unknown subj: ghost/);
+});
+
+test("giant errors on unknown comparison verb", async () => {
+  forget();
+
+  await assert.rejects(() => run("obj num 1 be nonexistent from num 0 then"), /Unknown verb: nonexistent/);
+});
