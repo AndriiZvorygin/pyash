@@ -18,9 +18,9 @@ function getOperand(v, label) {
   return n;
 }
 
-export async function multiply({ obj, sentence }) {
-  const lhs = getOperand(obj ?? sentence?.from, "obj");
-  const rhs = getOperand(sentence?.by, "by");
+export async function multiply(sentence) {
+  const lhs = getOperand(sentence.resolved?.obj ?? sentence.obj ?? sentence.from, "obj");
+  const rhs = getOperand(sentence.resolved?.by ?? sentence.by, "by");
   const product = lhs * rhs;
 
   return { obj: product, be: sentence?.be ?? "number" };

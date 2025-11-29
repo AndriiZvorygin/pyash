@@ -18,9 +18,9 @@ function getOperand(v, label) {
   return n;
 }
 
-export async function divide({ obj, sentence }) {
-  const numerator = getOperand(obj ?? sentence?.from, "obj");
-  const denominator = getOperand(sentence?.by, "by");
+export async function divide(sentence) {
+  const numerator = getOperand(sentence.resolved?.obj ?? sentence.obj ?? sentence.from, "obj");
+  const denominator = getOperand(sentence.resolved?.by ?? sentence.by, "by");
   if (denominator === 0) throw new Error("divide: by cannot be zero");
 
   return { obj: numerator / denominator, be: sentence?.be ?? "number" };

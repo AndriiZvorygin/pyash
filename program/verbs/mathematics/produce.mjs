@@ -18,9 +18,10 @@ function toNumeric(values) {
   return nums;
 }
 
-export async function produce({ obj, sentence }) {
-  const leftVec = resolveVector(obj) || resolveVector(sentence?.from);
-  const rightVec = resolveVector(sentence?.by);
+export async function produce(sentence) {
+  const leftVec =
+    resolveVector(sentence.resolved?.obj ?? sentence.obj) || resolveVector(sentence.resolved?.from ?? sentence.from);
+  const rightVec = resolveVector(sentence.resolved?.by ?? sentence.by);
 
   if (!leftVec || !rightVec) throw new Error("produce: both obj/from and by vectors are required");
   const left = toNumeric(leftVec.values);

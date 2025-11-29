@@ -64,9 +64,9 @@ export async function handleImperative({
   }
 
   const toValue = target?.obj ?? to;
-  const callSentence = { ...sentence, obj, to: toValue ?? to, from, sentence };
+  const callSentence = { ...sentence, resolved: { obj, to: toValue ?? to, from } };
 
-  // pass a single enriched sentence payload
+  // pass a single enriched sentence payload (original roles + resolved values under resolved)
   const result = await fn(callSentence);
 
   // record the command itself in history

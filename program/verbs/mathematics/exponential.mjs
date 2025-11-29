@@ -12,8 +12,8 @@ function resolveNumber(v) {
   return undefined;
 }
 
-export async function exponential({ obj, sentence }) {
-  const value = resolveNumber(obj);
+export async function exponential(sentence) {
+  const value = resolveNumber(sentence.resolved?.obj ?? sentence.obj);
   if (value === undefined) throw new Error("exponential: obj is required");
 
   return { obj: Math.exp(value), be: sentence?.be ?? "number" };
