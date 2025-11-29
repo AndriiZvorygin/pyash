@@ -23,6 +23,7 @@ Every case is understood as:
   * **person** – individual people
   * **social** – groups, communities
   * **discourse** – text, speech, documents
+  * **quantity** – counts, rates, loop registers (`tloh`/`per`)
 
 The **hex value** of the case (the `hnuc` field) is the canonical ID.  
 The `(axis, context)` reading is provided by lookup tables.
@@ -200,6 +201,7 @@ Rows:
 | person     | fromperson   | with        | for         |
 | social     | fromgroup    | among       | intogroup   |
 | discourse  | fromtext     | accordingto | totext      |
+| quantity   | tloh         | by          | per         |
 ```
 
 Usage patterns (current runtime):

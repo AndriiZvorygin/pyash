@@ -256,6 +256,34 @@ export const compositionalGrid = {
       prep: "totext",      // DEST + discourse (as text/quote)
     },
   },
+
+  quantity: {
+    context: { name: "quantity_context_", hnuc: "0x0000", pya: "qty" },
+
+    source: {
+      axis: "source",
+      case: "multiplicative_case_",
+      hnuc: "0x6357",
+      pya: "tloh",
+      prep: "tloh",       // SOURCE + quantity (loop/multiplicative register)
+    },
+
+    way: {
+      axis: "way",
+      case: "quantity_way_case_",
+      hnuc: "0x0000",
+      pya: "by",
+      prep: "by",         // WAY + quantity (step/stride)
+    },
+
+    destination: {
+      axis: "destination",
+      case: "quantity_destination_case_",
+      hnuc: "0x0000",
+      pya: "per",
+      prep: "per",        // DEST + quantity (per-unit target)
+    },
+  },
 };
 
 // Canonical context keywords for Pyash compositional cases.
@@ -317,6 +345,12 @@ export const contextKeywords = {
     contextWord: "discourse_context_",
     hints: ["text", "discourse", "quote", "source", "document", "corpus"],
   },
+
+  quantity: {
+    key: "quantity",
+    contextWord: "quantity_context_",
+    hints: ["quantity", "count", "per", "by", "rate", "tloh"],
+  },
 };
 
 // Reverse lookup: hex → (context, axis, case, pya, keyword).
@@ -324,6 +358,7 @@ export const compositionalByHnuc = Object.fromEntries(
   Object.entries(compositionalGrid).flatMap(([contextKey, ctx]) => {
     return ["source", "way", "destination"].map((axis) => {
       const info = ctx[axis];
+      if (!info?.hnuc) return null;
       return [
         info.hnuc.toLowerCase(),
         {
@@ -335,5 +370,5 @@ export const compositionalByHnuc = Object.fromEntries(
         },
       ];
     });
-  })
+  }).filter(Boolean)
 );

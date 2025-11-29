@@ -1,7 +1,8 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "with", "via", "tloh", "until"];
-const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse"];
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "with", "via", "tloh", "until", "by", "per"];
+const TYPE_TOKENS = ["name", "num", "number", "text", "filename"];
+const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity"];
 const AXIS_CONTEXT_TO_KEYWORD = {
   space: { source: "from", way: "at", destination: "to" },
   interior: { source: "outof", way: "inside", destination: "into" },
@@ -11,7 +12,8 @@ const AXIS_CONTEXT_TO_KEYWORD = {
   state: { source: "fromstate", way: "as", destination: "become" },
   person: { source: "fromperson", way: "with", destination: "for" },
   social: { source: "fromgroup", way: "among", destination: "intogroup" },
-  discourse: { source: "fromtext", way: "accordingto", destination: "totext" }
+  discourse: { source: "fromtext", way: "accordingto", destination: "totext" },
+  quantity: { source: "tloh", way: "by", destination: "per" }
 };
 function tokenize(line) {
   const tokens = [];
@@ -140,7 +142,12 @@ export function parse(line) {
       }
 
       const next = words[i + 1];
-      if (next && !ROLE_KEYS.includes(next) && !["be", "then", "ta"].includes(next)) {
+      if (
+        next &&
+        !ROLE_KEYS.includes(next) &&
+        !["be", "then", "ta"].includes(next) &&
+        !TYPE_TOKENS.includes(next)
+      ) {
         slot.name = next;
         i++; // consume the name token
       }
@@ -181,7 +188,7 @@ export function parse(line) {
     }
 
     // --- type tokens: name / num / number / text / filename ---
-    if (["name", "num", "number", "text", "filename"].includes(t)) {
+    if (TYPE_TOKENS.includes(t)) {
       const target = slot || (current ? s[current] : null);
       if (!target) continue;
 
