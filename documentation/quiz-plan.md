@@ -1,8 +1,8 @@
 # Quiz Plan
 
 ## What is covered
-- Parser: quoted text and blocks, short aliases (`su/ob`), compositional keyword mapping (fromtext/during/become/totext/as), minimal declaratives, bare names.
-- Core interpreter: declaratives, last-write wins, add imperative, giant conditional, topic sugar, def mood, storing `do` commands and result facts, bare add without explicit target.
+- Parser: quoted text and blocks, short aliases (`su/ob`), compositional keyword mapping (fromtext/during/become/totext/as, plus quantity `tloh/by/per`), minimal declaratives, bare names.
+- Core interpreter: declaratives, last-write wins, add/subtract/multiply/divide imperatives, giant conditional, topic sugar, def mood, storing `do` commands and result facts, bare add without explicit target.
 - Compositional roles: keyword normalization across contexts/axes (fromtext/during/become/totext, etc.).
 - Mind: registration with state/discourse, invocation pulling config and calling a stubbed Ollama generate.
 - Read: filename handler loads sandpit file, stores text fact.

@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, and `read` drive behavior. The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
+Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, and `read` drive behavior. The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
