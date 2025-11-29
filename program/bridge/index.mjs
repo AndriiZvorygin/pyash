@@ -1,5 +1,5 @@
 // bridge (formerly dispatcher)
-import { add, subtract, chip, compile, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
+import { add, subtract, multiply, divide, chip, compile, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
 import { remember, doRemember, allRemember, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
@@ -7,7 +7,7 @@ import { handleThisBinding, handleReturn } from "./returns.mjs";
 import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
 
-const verbs = { add, subtract, chip, compile, read, mind, giant, tiny, equally };
+const verbs = { add, subtract, multiply, divide, chip, compile, read, mind, giant, tiny, equally };
 
 export async function interpret(sentence) {
   if (!sentence) return;
