@@ -154,7 +154,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * `do`:
 
     * finds verb, resolves operands/targets based on subject/name and existing sentences in memory,
-    * invokes verb modules with the **original sentence** plus a `resolved` helper `{ obj, to, from }` containing precomputed operands,
+    * invokes verb modules with the **original sentence** and a small helper `{ remember }` so verbs can pull values on demand,
     * appends updated target sentences to memory,
     * always stores a `result` fact (a sentence),
     * stores the command sentence itself for history.
