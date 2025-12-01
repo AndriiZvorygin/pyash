@@ -17,6 +17,8 @@ function getOperand(v, label, remember) {
 }
 
 export async function multiply(sentence, { remember }) {
+  if (!sentence.obj && !sentence.from) throw new Error("multiply: obj or from is required");
+  if (!sentence.by) throw new Error("multiply: by is required");
   const lhs = getOperand(sentence.obj ?? sentence.from, "obj", remember);
   const rhs = getOperand(sentence.by, "by", remember);
   const product = lhs * rhs;

@@ -77,3 +77,11 @@ test("divide supports from/by named operands and target", async () => {
   assert.equal(z.obj.num, 3);
   assert.equal(result.obj.num, 3);
 });
+
+test("missing operands or by triggers signature errors", async () => {
+  forget();
+
+  await assert.rejects(() => run("by num 2 be multiply do"), /signature/);
+  await assert.rejects(() => run("obj num 2 be multiply do"), /signature/);
+  await assert.rejects(() => run("obj num 2 be divide do"), /signature/);
+});

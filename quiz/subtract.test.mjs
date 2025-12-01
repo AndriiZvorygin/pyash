@@ -38,5 +38,5 @@ test("subtract using named subtrahend and target via from", async () => {
 test("subtract throws when target name is missing", async () => {
   forget();
 
-  await assert.rejects(() => run("obj num 1 be subtract do"), /target name required/);
+  await assert.rejects(() => run("obj num 1 be subtract do"), /signature/);
 });

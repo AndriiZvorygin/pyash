@@ -51,3 +51,20 @@ test("twice crescent activation can be called directly", async () => {
   const res = remember("result");
   assert.ok(closeEnough(res.obj.num, 0.5), "sigmoid(0) should be 0.5");
 });
+
+test("neuron throws on non-numeric vectors or missing bias", async () => {
+  forget();
+
+  await run("subj name weights obj vec letter a b c be vector ya");
+  await run("subj name inputs obj vec num 1 2 3 be vector ya");
+  await run("subj name bias obj num 0 be number ya");
+  await assert.rejects(
+    () => run("from name weights by name inputs fromstate name bias to name output be neuron do"),
+    /numeric/
+  );
+
+  forget();
+  await run("subj name weights obj vec num 1 2 3 be vector ya");
+  await run("subj name inputs obj vec num 1 2 3 be vector ya");
+  await assert.rejects(() => run("from name weights by name inputs to name output be neuron do"), /signature/);
+});

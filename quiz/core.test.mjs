@@ -165,3 +165,10 @@ test("unknown imperative verb throws", async () => {
 
   await assert.rejects(() => run("obj num 1 be nowhere do"), /Unknown verb: nowhere/);
 });
+
+test("add missing roles triggers signature error", async () => {
+  forget();
+
+  await assert.rejects(() => run("obj num 1 be add do"), /signature/);
+  await assert.rejects(() => run("to name target be add do"), /signature/);
+});

@@ -7,6 +7,8 @@ function toNumber(v) {
 }
 
 export async function add(sentence, { remember }) {
+  if (sentence.obj == null) throw new Error("add: obj is required");
+  if (sentence.to == null) throw new Error("add: to is required");
   const a = toNumber(sentence.obj);
   const b = toNumber(sentence.to);
   return { obj: a + b, be: "number" };
