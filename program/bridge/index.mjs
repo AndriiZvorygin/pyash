@@ -6,7 +6,7 @@ import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
 import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
-import { deriveSignatureFromDefinition } from "./signature.mjs";
+import { deriveSignatureFromDefinition, registerSignature } from "./signature.mjs";
 
 const verbs = { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, "twice crescent": twiceCrescent, chip, compile, read, mind, giant, tiny, equally };
 
@@ -58,7 +58,10 @@ export async function interpret(sentence) {
   if (mood === "ya" || mood === "def") {
     if (mood === "def" && be === "ceremony") {
       const sig = deriveSignatureFromDefinition(sentence);
-      if (sig) sentence.signatureWords = sig;
+      if (sig) {
+        sentence.signatureWords = sig;
+        registerSignature({ name: subj?.name, signatureWords: sig });
+      }
     }
 
     doRemember(sentence);

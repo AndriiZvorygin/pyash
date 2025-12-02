@@ -1,4 +1,6 @@
 // memory.mjs
+import { clearSignatureRegistry } from "../bridge/signature.mjs";
+
 let memory = [];
 let history = []; // optional, for debugging / REPL
 const definitionIndex = [];
@@ -133,6 +135,7 @@ export function forget() {
   definitionIndex.length = 0;
   contextStack.length = 0;
   sandpits = [];
+  clearSignatureRegistry();
 }
 
 export function pushMemoryContext({ seedFromCurrent = false } = {}) {

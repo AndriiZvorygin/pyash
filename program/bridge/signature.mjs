@@ -26,6 +26,34 @@ export function joinSignatureWords(words) {
   return normalized.join(" ");
 }
 
+// Registry for signature -> ceremony name lookups
+const signatureRegistry = new Map(); // key -> def name
+const nameToKeys = new Map(); // def name -> Set<key>
+
+export function registerSignature({ name, signatureWords }) {
+  if (!name || !signatureWords?.length) return;
+  const key = joinSignatureWords(signatureWords);
+
+  // Remove previous registrations for this name
+  const prev = nameToKeys.get(name);
+  if (prev) {
+    for (const k of prev) signatureRegistry.delete(k);
+    prev.clear();
+  }
+
+  signatureRegistry.set(key, name);
+  nameToKeys.set(name, new Set([key]));
+}
+
+export function lookupSignature(key) {
+  return signatureRegistry.get(key);
+}
+
+export function clearSignatureRegistry() {
+  signatureRegistry.clear();
+  nameToKeys.clear();
+}
+
 // Extract a signature from a ceremony definition sentence ("subj name X be ceremony def").
 export function deriveSignatureFromDefinition(sentence) {
   if (!sentence || sentence.mood !== "def" || sentence.be !== "ceremony") return null;
@@ -89,6 +117,62 @@ function caseTypeWords(value) {
   if (value.filename !== undefined) words.push("filename");
 
   return words.filter(Boolean);
+}
+
+// Build signature from an invocation sentence, using memory to refine type words.
+export function deriveSignatureFromCall(sentence, { remember } = {}) {
+  if (!sentence) return null;
+  const verb = normalizeWords(sentence.be);
+  if (!verb) return null;
+
+  const cases = [];
+  for (const [key, value] of Object.entries(sentence)) {
+    if (NON_CASE_FIELDS.has(key)) continue;
+    const typeWords = caseTypeWordsWithMemory(value, remember);
+    if (typeWords.length === 0) {
+      return null; // cannot derive fully-typed signature
+    }
+    cases.push({ case: key, typeWords });
+  }
+
+  return makeSignatureWords({ be: verb, cases });
+}
+
+function caseTypeWordsWithMemory(value, remember) {
+  if (value == null) return [];
+
+  if (Array.isArray(value)) {
+    return value.length > 0 ? caseTypeWordsWithMemory(value[0], remember) : [];
+  }
+
+  if (typeof value !== "object") {
+    const normalized = normalizeWords(String(value));
+    return normalized ? [normalized] : [];
+  }
+
+  if (value.ve) {
+    const inner = normalizeWords(value.ve.type);
+    return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
+  }
+
+  if (value.name) {
+    const inferred = remember ? remember(value.name) : null;
+    const factObj = inferred?.obj;
+    const vecType = factObj?.ve?.type;
+
+    if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
+    if (factObj?.num !== undefined) return ["name", "num"];
+    if (factObj?.text !== undefined) return ["name", "text"];
+    if (factObj?.filename !== undefined) return ["name", "filename"];
+    return ["name"];
+  }
+
+  if (value.num !== undefined) return ["num"];
+  if (value.text !== undefined) return ["text"];
+  if (value.filename !== undefined) return ["filename"];
+
+  const fallback = caseTypeWords(value);
+  return fallback;
 }
 
 function normalizeWords(value) {
