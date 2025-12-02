@@ -12,7 +12,6 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const untilSeed = registerValue(sentence.until);
 
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
-  const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
   state.currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
@@ -76,7 +75,6 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 
   const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
   const returnVal = lastResult?.value ?? lastResult?.obj;
-  const numericSignature = signatureImpliesNumeric(defSigWords);
   const mergedObj = returnVal ?? finalEvoke.obj;
   const mergedBe = finalEvoke.be || "result";
 
