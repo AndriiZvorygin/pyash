@@ -194,7 +194,7 @@ function caseTypeWordsWithMemory(value, remember) {
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.text !== undefined) return ["name", "text"];
     if (factObj?.filename !== undefined) return ["name", "filename"];
-    return ["name", "num"]; // default to numeric name when unknown
+    return ["name"];
   }
 
   if (value.num !== undefined) return ["num"];

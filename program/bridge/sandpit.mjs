@@ -12,6 +12,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const untilSeed = registerValue(sentence.until);
 
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
+  const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
   state.currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
 
@@ -74,7 +75,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   }
 
   const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
-  const mergedObj = (lastResult?.value ?? lastResult?.obj) ?? finalEvoke.obj;
+  const returnVal = lastResult?.value ?? lastResult?.obj;
+  const numericSignature = signatureImpliesNumeric(defSigWords);
+  const mergedObj = returnVal ?? finalEvoke.obj ?? (numericSignature ? 0 : undefined);
   const mergedBe = finalEvoke.be || "result";
 
   if (mergedObj !== undefined) {
@@ -104,6 +107,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 export async function runDefinitionBody({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
   const { to } = sentence;
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
+  const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
   const evokeSeed = { ...sentence };
   state.currentEvoke = evokeSeed;
@@ -131,15 +135,19 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   // merge updates from sandpit
   const mainTarget = to?.name ? memory.remember(to.name) : null;
   const lastVal = lastResult?.value ?? lastResult?.obj;
+  const returnValue =
+    lastVal && typeof lastVal === "object" && lastVal.obj !== undefined ? lastVal.obj : lastVal;
   const preferredVal =
-    lastVal && typeof lastVal === "object" && lastVal.num === undefined && lastVal.mood
-      ? undefined // likely an evoker; ignore
-      : lastVal;
-  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj ?? 0;
+    returnValue && typeof returnValue === "object" && returnValue.num === undefined && returnValue.mood
+      ? returnValue.obj ?? undefined // evoker-like; take its obj if present
+      : returnValue;
+  const numericSignature = signatureImpliesNumeric(defSigWords);
+  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj ?? (numericSignature ? 0 : undefined);
+  const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
   const mergedBe = evoke.be || updatedTarget?.be || "result";
 
-  if (mergedObj !== undefined) {
-    const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
+  if (mergedObj !== undefined || preferredVal !== undefined || numericSignature) {
+    const normalizedObj = typeof effectiveObj === "object" ? effectiveObj : { num: effectiveObj };
     const updatedEvoke = { ...evoke, obj: normalizedObj };
     memory.doRemember(updatedEvoke);
 
@@ -152,4 +160,9 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   }
 
   return { invoked: sentence.be, result: mergedObj ?? lastResult };
+}
+
+function signatureImpliesNumeric(signatureWords) {
+  if (!Array.isArray(signatureWords) || signatureWords.length === 0) return false;
+  return signatureWords.includes("num");
 }
