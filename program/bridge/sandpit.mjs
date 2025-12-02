@@ -77,7 +77,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
   const returnVal = lastResult?.value ?? lastResult?.obj;
   const numericSignature = signatureImpliesNumeric(defSigWords);
-  const mergedObj = returnVal ?? finalEvoke.obj ?? (numericSignature ? 0 : undefined);
+  const mergedObj = returnVal ?? finalEvoke.obj;
   const mergedBe = finalEvoke.be || "result";
 
   if (mergedObj !== undefined) {
@@ -142,11 +142,15 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
       ? returnValue.obj ?? undefined // evoker-like; take its obj if present
       : returnValue;
   const numericSignature = signatureImpliesNumeric(defSigWords);
-  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj ?? (numericSignature ? 0 : undefined);
+  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj;
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
   const mergedBe = evoke.be || updatedTarget?.be || "result";
 
-  if (mergedObj !== undefined || preferredVal !== undefined || numericSignature) {
+  if (mergedObj === undefined && preferredVal === undefined && numericSignature) {
+    throw new Error(`ceremony ${sentence.be} returned no value for numeric signature`);
+  }
+
+  if (mergedObj !== undefined || preferredVal !== undefined) {
     const normalizedObj = typeof effectiveObj === "object" ? effectiveObj : { num: effectiveObj };
     const updatedEvoke = { ...evoke, obj: normalizedObj };
     memory.doRemember(updatedEvoke);
