@@ -1,5 +1,5 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
-import { deriveSignatureFromCall, joinSignatureWords, lookupSignature } from "./signature.mjs";
+import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 
 export async function handleImperative({
   sentence,
@@ -13,14 +13,18 @@ export async function handleImperative({
   const { mood, be, obj, to, from, subj } = sentence;
   if (mood !== "do") return null;
 
-  const fn = verbs[be];
+  let fn = verbs[be];
   let defEntry = fn ? null : getDefinitionEntry(be);
   const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
 
-  if (!fn && !defEntry) {
-    const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
-    if (sigWords) {
-      const key = joinSignatureWords(sigWords);
+  const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
+  if (sigWords) {
+    const key = joinSignatureWords(sigWords);
+    if (!fn) {
+      const handler = lookupSignatureHandler(key);
+      if (handler) fn = handler;
+    }
+    if (!fn && !defEntry) {
       const defName = lookupSignature(key);
       if (defName) defEntry = getDefinitionEntry(defName);
     }

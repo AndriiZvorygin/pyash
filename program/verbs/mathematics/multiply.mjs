@@ -16,7 +16,7 @@ function getOperand(v, label, remember) {
   return n;
 }
 
-export async function multiply(sentence, { remember }) {
+export async function multiply_by_num_from_name_num_to_name_num(sentence, { remember }) {
   if (!sentence.obj && !sentence.from) throw new Error("multiply: obj or from is required");
   if (!sentence.by) throw new Error("multiply: by is required");
   const lhs = getOperand(sentence.obj ?? sentence.from, "obj", remember);
@@ -25,3 +25,12 @@ export async function multiply(sentence, { remember }) {
 
   return { obj: product, be: sentence?.be ?? "number" };
 }
+
+export const multiply = multiply_by_num_from_name_num_to_name_num;
+
+export const signatures = [
+  {
+    signatureWords: ["be", "multiply", "by", "num", "from", "name", "num", "to", "name", "num"],
+    handler: multiply_by_num_from_name_num_to_name_num
+  }
+];

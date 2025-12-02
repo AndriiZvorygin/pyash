@@ -30,6 +30,9 @@ export function joinSignatureWords(words) {
 const signatureRegistry = new Map(); // key -> def name
 const nameToKeys = new Map(); // def name -> Set<key>
 
+// Registry for signature -> handler (built-in verbs)
+const signatureHandlers = new Map(); // key -> fn
+
 export function registerSignature({ name, signatureWords }) {
   if (!name || !signatureWords?.length) return;
   const key = joinSignatureWords(signatureWords);
@@ -45,13 +48,24 @@ export function registerSignature({ name, signatureWords }) {
   nameToKeys.set(name, new Set([key]));
 }
 
+export function registerSignatureHandler({ signatureWords, handler }) {
+  if (!signatureWords?.length || typeof handler !== "function") return;
+  const key = joinSignatureWords(signatureWords);
+  signatureHandlers.set(key, handler);
+}
+
 export function lookupSignature(key) {
   return signatureRegistry.get(key);
+}
+
+export function lookupSignatureHandler(key) {
+  return signatureHandlers.get(key);
 }
 
 export function clearSignatureRegistry() {
   signatureRegistry.clear();
   nameToKeys.clear();
+  signatureHandlers.clear();
 }
 
 // Extract a signature from a ceremony definition sentence ("subj name X be ceremony def").

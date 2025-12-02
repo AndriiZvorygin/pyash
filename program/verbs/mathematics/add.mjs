@@ -6,10 +6,17 @@ function toNumber(v) {
   return 0;
 }
 
-export async function add(sentence, { remember }) {
+export async function add_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.obj == null) throw new Error("add: obj is required");
   if (sentence.to == null) throw new Error("add: to is required");
   const a = toNumber(sentence.obj);
   const b = toNumber(sentence.to);
   return { obj: a + b, be: "number" };
 }
+
+// Backwards-compatible export until dispatch switches to signature names.
+export const add = add_obj_num_to_name_num;
+
+export const signatures = [
+  { signatureWords: ["be", "add", "obj", "num", "to", "name", "num"], handler: add_obj_num_to_name_num }
+];

@@ -6,9 +6,14 @@ import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
 import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
-import { deriveSignatureFromDefinition, registerSignature } from "./signature.mjs";
+import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
+import { builtInSignatures } from "../verbs/index.mjs";
 
 const verbs = { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, "twice crescent": twiceCrescent, chip, compile, read, mind, giant, tiny, equally };
+
+for (const sig of builtInSignatures) {
+  registerSignatureHandler(sig);
+}
 
 export async function interpret(sentence) {
   if (!sentence) return;
