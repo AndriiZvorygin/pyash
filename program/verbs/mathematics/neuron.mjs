@@ -25,7 +25,7 @@ function sigmoid(z) {
   return 1 / (1 + Math.exp(-z));
 }
 
-export async function neuron(sentence, { remember }) {
+export async function neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num(sentence, { remember }) {
   const weights = resolveVector(sentence.from, remember);
   const inputs = resolveVector(sentence.by, remember);
   if (weights.length !== inputs.length) throw new Error("neuron: weights and inputs length mismatch");
@@ -37,3 +37,18 @@ export async function neuron(sentence, { remember }) {
 
   return { obj: activated, be: sentence?.be ?? "number" };
 }
+
+export const neuron = neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num;
+
+export const signatures = [
+  {
+    signatureWords: [
+      "be", "neuron",
+      "by", "name", "vec", "num",
+      "from", "name", "vec", "num",
+      "fromstate", "num",
+      "to", "name", "num"
+    ],
+    handler: neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num
+  }
+];

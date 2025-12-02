@@ -16,10 +16,8 @@ function toNumeric(values) {
   return nums;
 }
 
-export async function produce(sentence, { remember }) {
-  const leftVec =
-    resolveVector(sentence.obj, remember) ||
-    resolveVector(sentence.from, remember);
+export async function produce_by_name_vec_num_from_name_vec_num_to_name_num(sentence, { remember }) {
+  const leftVec = resolveVector(sentence.obj ?? sentence.from, remember);
   const rightVec = resolveVector(sentence.by, remember);
 
   if (!leftVec || !rightVec) throw new Error("produce: both obj/from and by vectors are required");
@@ -30,3 +28,12 @@ export async function produce(sentence, { remember }) {
   const sum = left.reduce((acc, v, idx) => acc + v * right[idx], 0);
   return { obj: sum, be: sentence?.be ?? "number" };
 }
+
+export const produce = produce_by_name_vec_num_from_name_vec_num_to_name_num;
+
+export const signatures = [
+  {
+    signatureWords: ["be", "produce", "by", "name", "vec", "num", "from", "name", "vec", "num", "to", "name", "num"],
+    handler: produce_by_name_vec_num_from_name_vec_num_to_name_num
+  }
+];

@@ -1,6 +1,4 @@
-import { remember } from "../../remember/index.mjs";
-
-function detectValue(v) {
+function detectValue(v, remember) {
   if (v == null) return 0;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
@@ -12,14 +10,23 @@ function detectValue(v) {
   return 0;
 }
 
-export async function subtract(sentence, { remember }) {
+export async function subtract_by_num_from_name_num_to_name_num(sentence, { remember }) {
   const targetName = sentence?.to?.name || sentence?.from?.name;
   if (!targetName) throw new Error("subtract: target name required (to name ... or from name ...)");
 
   const target = remember(targetName);
-  const targetVal = detectValue(target?.obj ?? sentence.to);
-  const subtrahend = detectValue(sentence.obj);
+  const targetVal = detectValue(target?.obj ?? sentence.to, remember);
+  const subtrahend = detectValue(sentence.obj, remember);
   const result = targetVal - subtrahend;
 
   return { obj: result, be: sentence?.be ?? "number" };
 }
+
+export const subtract = subtract_by_num_from_name_num_to_name_num;
+
+export const signatures = [
+  {
+    signatureWords: ["be", "subtract", "by", "num", "from", "name", "num", "to", "name", "num"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  }
+];

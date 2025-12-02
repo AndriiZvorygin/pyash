@@ -1,7 +1,7 @@
 import { buildProgram } from "../../program.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
-export default async function compile({ obj, sentence }) {
+export async function compile_from_name_text_to_name_text({ obj, sentence }) {
   const sourceName = sentence?.obj?.name ?? obj?.name;
   if (!sourceName) throw new Error("compile: obj.name is required");
 
@@ -28,3 +28,12 @@ export default async function compile({ obj, sentence }) {
 
   return { obj: { text: json, sentences: program.sentences } };
 }
+
+export default compile_from_name_text_to_name_text;
+
+export const signatures = [
+  {
+    signatureWords: ["be", "compile", "from", "name", "text", "to", "name", "text"],
+    handler: compile_from_name_text_to_name_text
+  }
+];

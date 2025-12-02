@@ -11,20 +11,24 @@ function detectType(value) {
   return "unknown";
 }
 
-export default async function read({ from }) {
-  const fromType = detectType(from);
-  const moduleName = `read_from_${fromType}.mjs`;
-  const modulePath = path.join(__dirname, moduleName);
-
+export async function read_from_filename({ from }) {
+  const modulePath = path.join(__dirname, "read_from_filename.mjs");
   if (!fs.existsSync(modulePath)) {
-    throw new Error(`read: no handler for ${moduleName}`);
+    throw new Error("read: no handler for filename");
   }
-
   const mod = await import(modulePath);
-  if (typeof mod.default !== "function") {
-    throw new Error(`read: ${moduleName} missing default export`);
-  }
-
   const result = await mod.default({ from });
   return { obj: result.obj, be: "text" };
 }
+
+export default async function read({ from }) {
+  const fromType = detectType(from);
+  if (fromType === "filename") {
+    return read_from_filename({ from });
+  }
+  throw new Error(`read: no handler for ${fromType}`);
+}
+
+export const signatures = [
+  { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename }
+];

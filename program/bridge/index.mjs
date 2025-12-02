@@ -9,7 +9,7 @@ import { state } from "./state.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 
-const verbs = { subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, "twice crescent": twiceCrescent, chip, compile, read, mind, giant, tiny, equally };
+const verbs = {};
 
 for (const sig of builtInSignatures) {
   registerSignatureHandler(sig);

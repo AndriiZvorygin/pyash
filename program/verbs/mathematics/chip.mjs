@@ -1,7 +1,7 @@
 // pyash/verbs/chip.mjs
 import fs from "node:fs/promises";
 
-export default async function chip(sentence, inputs, context) {
+export async function chip_from_filename_text(sentence) {
   const filepath = sentence.from?.path;
   if (!filepath) throw new Error("chip: from.path is required");
 
@@ -23,3 +23,12 @@ export default async function chip(sentence, inputs, context) {
 
   return { chips };
 }
+
+export default chip_from_filename_text;
+
+export const signatures = [
+  {
+    signatureWords: ["be", "chip", "from", "filename", "text"],
+    handler: chip_from_filename_text
+  }
+];

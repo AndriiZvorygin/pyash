@@ -2,7 +2,7 @@
 import ollama from "../../motor/ollama.mjs";
 import { remember } from "../../remember/index.mjs";
 
-export default async function mind({ sentence, obj = {}, to, inputs = [] }) {
+export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
 
@@ -44,3 +44,9 @@ export default async function mind({ sentence, obj = {}, to, inputs = [] }) {
 
   return { obj: { text: responseText, model } };
 }
+
+export default mind_to_name_text;
+
+export const signatures = [
+  { signatureWords: ["be", "mind", "to", "name", "text"], handler: mind_to_name_text }
+];
