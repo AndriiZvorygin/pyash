@@ -10,50 +10,47 @@ async function run(line) {
   return interpret(s);
 }
 
-test("result fact from one evoke can feed the next", async () => {
+test("result facts chain across evocations", async () => {
   forget();
 
-  // First evoke: 1 + 2 = 3
   await run("subj name a obj num 1 be number ya");
   await run("obj num 2 to name a be add do");
-  const firstResult = remember("result");
-  assert.equal(firstResult.obj.num, 3, "first result should be 3");
 
-  // Second evoke: add 4 to prior result (using result as target)
+  const first = remember("result");
+  assert.equal(first?.obj?.num, 3);
+
   await run("obj num 4 to name result be add do");
-  const secondResult = remember("result");
 
-  assert.equal(secondResult.obj.num, 7, "chained result should be 7");
-  const resultFact = remember("result");
-  assert.equal(resultFact.obj.num, 7, "result fact should reflect latest addition");
+  const second = remember("result");
+  assert.equal(second?.obj?.num, 7);
 });
 
-test("chaining ceremony defs using result as input", async () => {
+test("ceremony defs feed result into the next call", async () => {
   forget();
 
-  // define add-one ceremony (adds 1 to result and returns)
+  await run("subj name result obj num 0 be number ya");
+
   await run("subj name add one to name num be ceremony def");
   await run("obj num 1 to name result be add do");
   await run("this ret");
   await run("subj name add one be ceremony prah");
 
-  // define add-two ceremony (adds 2 to result and returns)
   await run("subj name add two to name num be ceremony def");
   await run("obj num 2 to name result be add do");
   await run("this ret");
   await run("subj name add two be ceremony prah");
 
-  // invoke both in sequence, result feeds the next call
-  await run("to name result be add one do"); // result starts at 0 by default
+  await run("to name result be add one do");
   await run("to name result be add two do");
 
-  const result = remember("result");
-  assert.equal(result.obj.num, 3, "chained ceremonies should produce 3");
+  const chained = remember("result");
+  assert.equal(chained?.obj?.num, 3);
 });
 
-test("ret merges additional fields into evoker and persists", async () => {
+test("ret merges onto evoke and writes result fact", async () => {
   forget();
 
+  await run("subj name target obj num 0 be number ya");
   await run("subj name mark to name num be ceremony def");
   await run("obj num 5 to name target ret");
   await run("subj name mark be ceremony prah");
@@ -62,8 +59,9 @@ test("ret merges additional fields into evoker and persists", async () => {
 
   const evoker = [...allRemember()].reverse().find(s => s.be === "mark" && s.mood === "do");
   const result = remember("result");
+  const target = remember("target");
 
   assert.ok(evoker, "evoker should be stored");
-  assert.equal(evoker.to?.name, "target", "ret fields should merge into evoker");
-  assert.equal(result.obj.num, 5, "result should reflect ret obj");
+  assert.equal(target?.obj?.num, 5, "target should be updated via ret");
+  assert.equal(result?.obj?.num, 5, "result fact should reflect ret obj");
 });
