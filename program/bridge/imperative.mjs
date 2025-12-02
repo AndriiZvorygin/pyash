@@ -1,5 +1,5 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
-import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
+import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler, lookupHandlersForVerb } from "./signature.mjs";
 
 export async function handleImperative({
   sentence,
@@ -27,6 +27,13 @@ export async function handleImperative({
     if (!fn && !defEntry) {
       const defName = lookupSignature(key);
       if (defName) defEntry = getDefinitionEntry(defName);
+    }
+
+    if (!fn && !defEntry) {
+      const verbHandlers = lookupHandlersForVerb(be);
+      if (verbHandlers.size === 1) {
+        fn = [...verbHandlers][0];
+      }
     }
   }
 
