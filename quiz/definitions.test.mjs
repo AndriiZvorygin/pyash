@@ -54,7 +54,7 @@ test("definition index captures end via prah and supports invoking the paragraph
   forget();
 
   await run("subj name result obj num 5 be number ya");
-  await run("subj name add two be ceremony def");
+  await run("subj name add two to name num be ceremony def");
   await run("obj num 2 to name result be add do");
   await run("subj name add two be ceremony prah");
 
@@ -114,3 +114,15 @@ test("invoking while definition is still open just records and does not run", as
   assert.equal(allRemember().length, before + 1, "invocation should be appended to memory");
   assert.equal(remember("result"), undefined, "body should not execute while definition remains open");
 });
+
+test.todo("ceremony def headers declare signature cases/types (new signature style)");
+// Target behaviour (per documentation/signature.md):
+// be add two def
+//   to name num
+// ceremony
+//   ...
+// end
+//
+// After parsing, the def entry should expose a signature:
+// ["be","add two","to","name","num"]
+// and runtime dispatch should use that signature rather than the bare verb map.

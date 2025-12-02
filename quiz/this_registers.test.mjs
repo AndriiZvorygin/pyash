@@ -14,7 +14,7 @@ test("this tloh/this until bindings inside sandpit preserve registers on evoker"
   forget();
 
   const lines = [
-    "subj name inspector be ceremony def",
+    "subj name inspector to name num tloh num 0 until num 0 be ceremony def",
     "subj name seen-tloh obj this tloh be number ya",
     "subj name seen-until obj this until be number ya",
     "this ret",

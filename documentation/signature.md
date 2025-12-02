@@ -1,35 +1,39 @@
-Here’s a complete rewrite of `signature.md` in the “all words, no weird symbols” style, and with ceremonies using the same case/type identifiers.
+Here’s a cleaned-up `signature.md` focused only on signatures, with no `typeWords`, no mood assumptions, and using `name num` / `name vec num` so it lines up with C/C++ pointer semantics and your JS naming convention.
 
-You can just replace the file contents with this.
+You can paste this straight over the old file.
 
 ---
 
 ````markdown
 # Signature Matching in Pyash
 
-This note defines how **signatures** work in Pyash and how we use them for fast, deterministic verb dispatch.
+This note defines how **signatures** work in Pyash and how we use them for deterministic verb dispatch.
 
 The goal:
 
 - Every Pyash **sentence** has a **canonical signature**.
-- Every **ceremony definition** (a `be ... def` block) declares one or more **signatures** it implements.
-- Dispatch is just: *build the sentence signature → look it up in a table → run that ceremony*.
+- Every **ceremony definition** (a `be ... def` block) declares one **signature** it implements.
+- Dispatch conceptually is: *build the sentence signature → look it up → run that ceremony*.
 
 There are **no optional cases** at the signature level.  
 If a verb supports multiple patterns, each pattern has its **own** signature and ceremony.
 
 ---
 
-## 1. Sentences at runtime
+## 1. Sentences at runtime (shape only)
 
-At the bridge level (JS/TS), a parsed sentence is a plain object:
+At the JS bridge level, a sentence is a plain object:
 
 ```ts
+type NameRef = {
+  name: string; // e.g. "w", "inputs", "acc"
+};
+
 type Sentence = {
   mood: string; // e.g. "do", "ya", ...
   be: string;   // the verb, e.g. "add", "neuron", "twice crescent"
 
-  // cases as properties; may or may not be present
+  // cases as properties; may or may not be present on a given sentence
   subj?: any;
   obj?: any;
   from?: any;
@@ -43,14 +47,17 @@ type Sentence = {
 ````
 
 The important idea: the **verb** is in `be`, and **cases** are fields like `obj`, `from`, `by`, `fromstate`, `to`, etc.
+Names are represented simply as `{ name: "variable name" }`.
+
+This document only specifies the **signature format**; it does not dictate how the rest of the runtime works.
 
 ---
 
 ## 2. Signature format (canonical word list)
 
-A **signature** is defined as a flat list of **words**, in the same spirit as Pyash sentences:
+A **signature** is a flat list of **words**, in the same spirit as Pyash sentences:
 
-> `["be", VERB, CASE₁, TYPE₁..., CASE₂, TYPE₂..., ...]`
+> `["be", VERB, CASE₁, TYPE WORDS..., CASE₂, TYPE WORDS..., ...]`
 
 Rules:
 
@@ -66,11 +73,12 @@ Rules:
    CASE, TYPE WORDS...
    ```
 
-   where **TYPE WORDS** is one or more words, like:
+   where **TYPE WORDS** is one or more words, such as:
 
    * `["num"]`
    * `["vec","num"]`
-   * `["name"]`
+   * `["name","num"]`
+   * `["name","vec","num"]`
    * `["text"]`
 
 3. The **case chunks are sorted by case name** so that the original word order in the sentence does not matter.
@@ -78,45 +86,75 @@ Rules:
 4. There are **no optional cases** inside a single signature.
    If a sentence omits or adds a case, it produces a different signature.
 
-### Examples
+The signature is defined by the **ceremony** (see below). Sentences that match a ceremony’s cases and types share that ceremony’s signature.
 
-#### Neuron
+---
 
-Sentence (roughly):
+## 3. Type words and C compatibility
+
+Type information is expressed as **words**, never with extra symbols.
+
+Some core examples:
+
+* Scalar number value: `num`
+* Vector of numbers (value): `vec num`
+* Name pointing to a number: `name num`
+* Name pointing to a vector of numbers: `name vec num`
+* Text string value: `text`
+
+These can be mapped naturally to C/C++:
+
+| Pyash type words | C/C++ style            | Meaning                  |
+| ---------------- | ---------------------- | ------------------------ |
+| `num`            | `double` (etc.)        | numeric value            |
+| `name num`       | `double *`             | pointer to numeric value |
+| `vec num`        | `double *` + length    | vector of values         |
+| `name vec num`   | `double **` or similar | pointer to vector        |
+| `text`           | `const char *`         | string value             |
+
+This document does not enforce a particular C type, only the **word shapes**.
+
+---
+
+## 4. Examples of signatures
+
+### 4.1. Neuron
+
+Conceptual sentence (roughly):
 
 ```text
-from name weights
-by name inputs
-fromstate num bias
-to name output
+from      name vec num weights
+by        name vec num inputs
+fromstate num         bias
+to        name num    output
 be neuron
-do
+<some mood>
 ```
 
 Type expectations:
 
-* `from`: vector of numbers → `vec num`
-* `by`: vector of numbers → `vec num`
-* `fromstate`: number → `num`
-* `to`: name → `name`
+* `from`: `name vec num`
+* `by`: `name vec num`
+* `fromstate`: `num`
+* `to`: `name num`
 
-Signature:
+Signature (cases sorted: `by`, `from`, `fromstate`, `to`):
 
 ```txt
 ["be","neuron",
- "by","vec","num",
- "from","vec","num",
+ "by","name","vec","num",
+ "from","name","vec","num",
  "fromstate","num",
- "to","name"]
+ "to","name","num"]
 ```
 
-#### Add
+### 4.2. Add
 
 ```text
 obj num 3
-to name acc
+to  name num acc
 be add
-do
+<mood>
 ```
 
 Signature:
@@ -124,34 +162,34 @@ Signature:
 ```txt
 ["be","add",
  "obj","num",
- "to","name"]
+ "to","name","num"]
 ```
 
-#### Divide
+### 4.3. Divide
 
 ```text
-from name w
-by name x
-to name z
+from name num w
+by   num       x
+to   name num  z
 be divide
-do
+<mood>
 ```
 
-Assuming both `from` and `by` refer to numbers:
+Signature:
 
 ```txt
 ["be","divide",
  "by","num",
- "from","num",
- "to","name"]
+ "from","name","num",
+ "to","name","num"]
 ```
 
-#### Activation (“twice crescent”)
+### 4.4. Activation (“twice crescent”)
 
 ```text
 obj num 0
 be twice crescent
-do
+<mood>
 ```
 
 Signature:
@@ -163,278 +201,169 @@ Signature:
 
 ---
 
-## 3. Type words
-
-Type information is also expressed as **words**, never with angle brackets or symbols.
-
-Some basic examples:
-
-* Scalar number: `num`
-* Vector of numbers: `vec num`
-* Name: `name`
-* Text string: `text`
-
-In JS/TS you can keep this as either:
-
-* A list of words for each case (e.g. `["vec","num"]`), or
-* Flattened into the global signature word list.
-
-Internally, the bridge can use a helper like:
-
-```ts
-function typeWords(value: any): string[] {
-  // These rules can be adjusted as the runtime grows.
-  if (value?.ve && value.ve.type === "num") return ["vec","num"]; // Pyash vector literal
-  if (typeof value === "number") return ["num"];
-  if (value?.kind === "name" || value?.type === "name") return ["name"];
-  if (typeof value === "string") return ["text"];
-
-  return ["unknown"];
-}
-```
-
----
-
-## 4. Building a signature from a sentence
-
-We only consider a fixed set of case names for now:
-
-```ts
-const CASE_NAMES = ["subj","obj","from","by","fromstate","to"] as const;
-```
-
-Algorithm in words:
-
-1. Take the verb from `sentence.be` and normalise it (for example, lower case).
-2. For each known case name:
-
-   * If `sentence[caseName]` exists:
-
-     * Compute its type words with `typeWords(...)`.
-     * Form a **case chunk**: `[caseName, ...typeWords]`.
-3. Sort the chunks by the case name.
-4. Start the signature as `["be", verb]`.
-5. Append each chunk’s words in order.
-
-Pseudocode:
-
-```ts
-type Sentence = { mood: string; be: string; [k: string]: any };
-
-export function makeSignatureWords(sentence: Sentence): string[] {
-  const verb = sentence.be.trim().toLowerCase();
-
-  const caseChunks: string[][] = [];
-
-  for (const caseName of CASE_NAMES) {
-    const v = sentence[caseName];
-    if (v === undefined) continue;
-
-    const tw = typeWords(v); // e.g. ["vec","num"]
-    caseChunks.push([caseName, ...tw]);
-  }
-
-  // Canonical order
-  caseChunks.sort((a, b) => a[0].localeCompare(b[0]));
-
-  const sig: string[] = ["be", verb];
-  for (const chunk of caseChunks) {
-    for (const w of chunk) sig.push(w);
-  }
-
-  return sig;
-}
-```
-
-Any two sentences that are the “same pattern” should produce the same `sig`.
-
----
-
 ## 5. Ceremonies and signatures
 
-A **ceremony definition** for a verb should declare the **same cases and types** it expects to receive.
+A **ceremony definition** for a verb declares the **cases and types** it expects to receive, using the same words that appear in signatures.
 
-Conceptually, in Pyash you might write something like:
+Example neuron ceremonies:
 
 ```text
 be neuron def
-  from vec num
-  by vec num
+  from      name vec num
+  by        name vec num
   fromstate num
-  to name
+  to        name num
 ceremony
   ...
 end
-```
 
-This simply says:
-
-* There is a ceremony for the verb `neuron`.
-* It expects the signature:
-
-  ```txt
-  ["be","neuron",
-   "by","vec","num",
-   "from","vec","num",
-   "fromstate","num",
-   "to","name"]
-  ```
-
-Another ceremony for a different pattern could exist under the same verb:
-
-```text
 be neuron def
-  from vec num
-  by vec num
-  to name
+  from      name vec num
+  by        name vec num
+  to        name num
 ceremony
   ...
 end
 ```
 
-This describes a **different** signature:
+These define two distinct signatures:
 
 ```txt
 ["be","neuron",
- "by","vec","num",
- "from","vec","num",
- "to","name"]
+ "by","name","vec","num",
+ "from","name","vec","num",
+ "fromstate","num",
+ "to","name","num"]
+
+["be","neuron",
+ "by","name","vec","num",
+ "from","name","vec","num",
+ "to","name","num"]
 ```
 
-There are **no optional cases** inside a single signature.
-Instead, you have **multiple ceremonies** for different case/type combinations.
+There are **no optional cases** inside a single signature:
+each ceremony is tied to **exactly one** verb/case/type pattern.
 
-In the JS/TS bridge, the compiler / loader should:
+A loader or compiler can:
 
 1. Read each `be ... def` block.
-2. Extract its signature words from the case and type lines.
-3. Register that ceremony in the dispatch table under that signature.
+2. Collect its case + type words.
+3. Sort those cases by case name.
+4. Form the flat signature word list.
+5. Register the ceremony implementation under that signature.
+
+The runtime uses the same signature shape when matching sentences to ceremonies.
 
 ---
 
-## 6. Dispatch table
+## 6. Core function naming (JS and C)
 
-At runtime we maintain a dispatch table from signatures to implementation functions.
+Core implementations can be named directly from the signature words, using underscores between words and keeping the order of the signature (after sorting cases).
 
-We treat the **word list** as the canonical shape and turn it into a simple string key inside JS/TS for lookup.
+Pattern:
 
-```ts
-type SignatureWords = string[];
-type ImplFn = (sentence: Sentence, ctx: { remember: any }) => any;
-
-const DISPATCH = new Map<string, ImplFn>();
-
-function sigKey(words: SignatureWords): string {
-  // Internal representation only; you never see this in Pyash.
-  // We just join on a space to get a stable key.
-  return words.join(" ");
-}
-
-export function registerSignature(words: SignatureWords, impl: ImplFn) {
-  DISPATCH.set(sigKey(words), impl);
-}
-
-export function dispatch(sentence: Sentence, ctx: { remember: any }) {
-  if (sentence.mood !== "do") {
-    throw new Error(`dispatch only handles mood "do" for now`);
-  }
-
-  const sig = makeSignatureWords(sentence);
-  const key = sigKey(sig);
-
-  const impl = DISPATCH.get(key);
-  if (!impl) {
-    throw new Error(`no implementation for signature: ${key}`);
-  }
-
-  return impl(sentence, ctx);
-}
+```text
+core_<verb>_<case>_<typeWords>_<case>_<typeWords>_...
 ```
 
-Registering ceremonies by hand (for now) looks like:
+Examples:
 
-```ts
-registerSignature(
-  ["be","add","obj","num","to","name"],
-  implAddNumToName
-);
+* Signature:
 
-registerSignature(
+  ```txt
+  ["be","add",
+   "obj","num",
+   "to","name","num"]
+  ```
+
+  JS/TS core:
+
+  ```ts
+  function core_add_obj_num_to_name_num(/* ... */) { /* ... */ }
+  ```
+
+* Signature:
+
+  ```txt
+  ["be","divide",
+   "by","num",
+   "from","name","num",
+   "to","name","num"]
+  ```
+
+  Core:
+
+  ```ts
+  function core_divide_by_num_from_name_num_to_name_num(/* ... */) { /* ... */ }
+  ```
+
+* Signature:
+
+  ```txt
   ["be","neuron",
-   "by","vec","num",
-   "from","vec","num",
+   "by","name","vec","num",
+   "from","name","vec","num",
    "fromstate","num",
-   "to","name"],
-  implNeuron
-);
+   "to","name","num"]
+  ```
 
-registerSignature(
-  ["be","twice crescent","obj","num"],
-  implTwiceCrescent
+  Core:
+
+  ```ts
+  function core_neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num(/* ... */) { /* ... */ }
+  ```
+
+A C or C++ implementation can export functions with **the same names** so linkage and dispatch stay consistent across JS and C:
+
+```c
+void core_add_obj_num_to_name_num(double obj, double *to);
+void core_divide_by_num_from_name_num_to_name_num(double by, double *from, double *to);
+void core_neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num(
+    double *by,
+    double *from,
+    double  fromstate,
+    double *to
 );
 ```
 
-Later, this registration should be generated automatically from the `def` blocks.
+This document does not prescribe the argument order or const-ness; the key point is that the **function names** are derived from the same signature words.
 
 ---
 
-## 7. Key choice: plain sentence vs fixed-length hash
+## 7. Signature keys and lookup
 
-Internally, we need a **key** for the `Map`. There are two main options:
+The **canonical form** of a signature is the flat word list:
 
-### Option A (recommended for now): use the flat word sentence
-
-This is what the example above does:
-
-```ts
-function sigKey(words: string[]): string {
-  return words.join(" ");
-}
+```txt
+["be","neuron",
+ "by","name","vec","num",
+ "from","name","vec","num",
+ "fromstate","num",
+ "to","name","num"]
 ```
 
-Pros:
+An implementation can choose how to use this list as a **key**:
 
-* Very simple to implement.
-* Easy to debug (you can log the key and see the verb + cases directly).
-* JavaScript engines already hash string keys internally for `Map`,
-  so you still get O(1)-ish lookup.
+* Join the words into a single string, for example:
 
-Cons:
+  ```txt
+  "be neuron by name vec num from name vec num fromstate num to name num"
+  ```
 
-* Keys are longer strings, so they take a bit more memory than a short hash.
-* The cost of `join` + hashing the resulting string may be slightly higher if you have **huge** numbers of signatures.
+* Or store the list as-is and use a custom comparison.
 
-In practice, this is more than fine for a language runtime like Pyash.
+Possible lookup structures include:
 
-### Option B: fixed-length hash of the signature sentence
+* A hash map / dictionary keyed by the joined string.
+* A sorted array of `[key, implementation]` pairs, using binary search on the key.
+* Any other structure that uses the same canonical word sequence as the basis of equality.
 
-If we ever find that string keys are a problem, we can swap `sigKey` for a small hash:
+This document does not require a particular data structure; it only specifies:
 
-```ts
-function hashString(s: string): string {
-  // some small non-crypto hash, returning a short hex string
-  // (e.g. a 32-bit integer turned into hex)
-}
+* The **word order**.
+* The **content** of the signature.
 
-function sigKey(words: string[]): string {
-  return hashString(words.join(" "));
-}
-```
-
-Pros:
-
-* Keys are shorter.
-* Slightly smaller memory footprint in the dispatch table.
-
-Cons:
-
-* Harder to debug (you see `a3f9c7e2` instead of `"be neuron by vec num ..."`).
-* You have to trust the hash; collisions must be rare but are possible.
-
-**Recommended path:**
-
-* Start with **Option A**: join the words into a string key.
-* Only switch to a fixed-length hash later if profiling shows it matters.
+Any lookup mechanism that treats the same word sequence as the same signature is valid.
 
 ---
 
@@ -446,18 +375,45 @@ Cons:
   ["be", verb, case₁, type words..., case₂, type words..., ...]
   ```
 
-* Cases are sorted, types are word sequences like `num`, `vec num`, `name`.
+* Cases are sorted by case name.
+  Types are word sequences like `num`, `vec num`, `name num`.
 
-* **No optional cases** inside a signature: each verb/case/type pattern is its own signature and ceremony.
+* **Names** are represented by `name ...` type words (for example `name num`), which can map cleanly to pointers in C/C++.
 
-* **Ceremony definitions** use the same case and type identifiers, and generate signatures that match this format.
+* There are **no optional cases** inside a signature: each verb/case/type pattern corresponds to one ceremony and one signature.
 
-* The JS/TS bridge builds the sentence’s signature, converts it to a key, and looks up the correct ceremony in a `Map`.
+* **Ceremony definitions** use the same case and type words, and their `def` blocks directly determine the signature.
 
-You can implement this step by step:
+* Core JS and C functions are named from the signature words using underscores, so the whole pipeline stays consistent and readable.
 
-1. Add `makeSignatureWords(sentence)`.
-2. Use `"be", verb, case, type words...` as the canonical format.
-3. Add `registerSignature` and `dispatch` using a simple string key (`words.join(" ")`).
-4. Gradually move ceremonies to declare their own signatures so they can be registered automatically.
+```
 
+---
+
+## 9. Current runtime status (July 2024)
+
+The runtime does **not** yet use signature-based dispatch. Imperatives currently:
+
+- Use the classic verb map (`program/bridge/index.mjs`).
+- Resolve targets and defaults in `handleImperative`.
+- Call the verb directly and perform write-backs (target fact + `result` fact).
+- Verbs perform their own argument validation and numeric/type checks.
+
+The signature registry/key code was removed after a failed refactor. Tests expect the classic behaviour (unknown verbs throw `Unknown verb: X`; guard errors come from verbs).
+
+---
+
+## 10. TODO for future Codex
+
+1. Reintroduce signature-driven dispatch:
+   - Implement `makeSignatureWords` matching this doc.
+   - Add a registry (`registerSignature`, `dispatch`) and integrate into the bridge without breaking write-backs.
+   - Register signatures derived from sentences (or, ideally, generated from `def` blocks).
+2. Extract write-back logic so it remains intact when dispatch changes:
+   - Resolve/create targets.
+   - Update target + result facts, preserve ordering.
+3. Add type-aware signature entries (e.g., `name vec num` vs `name num`) and cover read/compile/mind cases.
+4. Extend tests to cover signature errors vs verb guard errors; add multi-word verb dispatch tests.
+5. (Later) Generate signatures from ceremony `def` headers once they carry case/type info.
+
+Document decisions in `documentation/decisions.md` when signature dispatch lands to avoid repeating regressions.

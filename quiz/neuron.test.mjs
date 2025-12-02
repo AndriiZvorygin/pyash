@@ -66,5 +66,5 @@ test("neuron throws on non-numeric vectors or missing bias", async () => {
   forget();
   await run("subj name weights obj vec num 1 2 3 be vector ya");
   await run("subj name inputs obj vec num 1 2 3 be vector ya");
-  await assert.rejects(() => run("from name weights by name inputs to name output be neuron do"), /signature/);
+  await assert.rejects(() => run("from name weights by name inputs to name output be neuron do"), /bias is required/);
 });

@@ -32,13 +32,13 @@ test("chaining ceremony defs using result as input", async () => {
   forget();
 
   // define add-one ceremony (adds 1 to result and returns)
-  await run("subj name add one be ceremony def");
+  await run("subj name add one to name num be ceremony def");
   await run("obj num 1 to name result be add do");
   await run("this ret");
   await run("subj name add one be ceremony prah");
 
   // define add-two ceremony (adds 2 to result and returns)
-  await run("subj name add two be ceremony def");
+  await run("subj name add two to name num be ceremony def");
   await run("obj num 2 to name result be add do");
   await run("this ret");
   await run("subj name add two be ceremony prah");
@@ -54,7 +54,7 @@ test("chaining ceremony defs using result as input", async () => {
 test("ret merges additional fields into evoker and persists", async () => {
   forget();
 
-  await run("subj name mark be ceremony def");
+  await run("subj name mark to name num be ceremony def");
   await run("obj num 5 to name target ret");
   await run("subj name mark be ceremony prah");
 

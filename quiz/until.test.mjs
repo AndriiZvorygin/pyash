@@ -16,7 +16,7 @@ test("until register stops loop when tloh equals until", async () => {
   await run("subj name counter obj num 0 be number ya");
 
   // define ceremony: add 1 to counter
-  await run("subj name loop body be ceremony def");
+  await run("subj name loop body to name num tloh num 0 until num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop body be ceremony prah");
 

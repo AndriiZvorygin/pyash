@@ -14,7 +14,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   forget();
 
   // ceremony: start from invoke sentence with obj/tloh/until; mutate obj; return invoke
-  await run("subj name worker be ceremony def");
+  await run("subj name worker to name num be ceremony def");
   await run("obj num 4 to name target be add do");
   await run("this obj name target ret");
   await run("subj name worker be ceremony prah");

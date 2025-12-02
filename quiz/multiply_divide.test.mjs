@@ -81,7 +81,7 @@ test("divide supports from/by named operands and target", async () => {
 test("missing operands or by triggers signature errors", async () => {
   forget();
 
-  await assert.rejects(() => run("by num 2 be multiply do"), /signature/);
-  await assert.rejects(() => run("obj num 2 be multiply do"), /signature/);
-  await assert.rejects(() => run("obj num 2 be divide do"), /signature/);
+  await assert.rejects(() => run("by num 2 be multiply do"), /obj or from is required/);
+  await assert.rejects(() => run("obj num 2 be multiply do"), /by is required/);
+  await assert.rejects(() => run("obj num 2 be divide do"), /by is required/);
 });

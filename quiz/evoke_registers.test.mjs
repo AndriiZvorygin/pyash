@@ -14,7 +14,7 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
   forget();
 
   const lines = [
-    "subj name worker be ceremony def",
+    "subj name worker to name num be ceremony def",
     "obj num 4 to name target be add do",
     "this obj name target ret",
     "subj name worker be ceremony prah",

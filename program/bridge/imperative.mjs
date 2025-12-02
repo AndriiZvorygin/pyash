@@ -1,5 +1,4 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
-import { validateSignature } from "./signatures.mjs";
 
 export async function handleImperative({
   sentence,
@@ -65,12 +64,10 @@ export async function handleImperative({
   }
 
   const toValue = target?.obj ?? to;
+
+  // pass the current value, not the name
   const callSentence = { ...sentence, obj: obj ?? sentence.obj, to: toValue ?? to ?? sentence.to, from: from ?? sentence.from };
 
-  const signatureError = validateSignature(callSentence);
-  if (signatureError) throw new Error(signatureError);
-
-  // pass the raw sentence plus memory helpers
   const result = await fn(callSentence, { remember: memory.remember });
 
   // record the command itself in history

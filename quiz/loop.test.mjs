@@ -16,7 +16,7 @@ test("ceremony repeats using tloh countdown until zero", async () => {
   await run("subj name counter obj num 0 be number ya");
 
   // define ceremony: add 1 to counter
-  await run("subj name loop_body be ceremony def");
+  await run("subj name loop_body to name num tloh num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop_body be ceremony prah");
 

@@ -15,3 +15,5 @@
 - **Minimal JS-first runtime**: Native ESM, built-in `node:test`, no DB. Chosen for hackability and clarity; heavier frameworks and persistence are deferred.
 
 - **Out-of-scope (for now)**: Phonology, noun classes, tense/aspect controls, GPU/IR compiler path from `pyac.txt`. Acknowledged but postponed to keep the current interpreter slice small and testable.
+
+- **Signature dispatch postponed**: A refactor toward signature-based dispatch was attempted and rolled back. For now, the bridge uses the classic verb map and imperative write-backs; signatures remain a documented goal (`documentation/signature.md`) to reintroduce later.

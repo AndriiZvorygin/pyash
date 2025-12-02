@@ -7,25 +7,7 @@ import { handleThisBinding, handleReturn } from "./returns.mjs";
 import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
 
-const verbs = {
-  add,
-  subtract,
-  invert,
-  exponential,
-  multiply,
-  divide,
-  produce,
-  neuron,
-  twiceCrescent,
-  "twice crescent": twiceCrescent,
-  chip,
-  compile,
-  read,
-  mind,
-  giant,
-  tiny,
-  equally
-};
+const verbs = { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, "twice crescent": twiceCrescent, chip, compile, read, mind, giant, tiny, equally };
 
 export async function interpret(sentence) {
   if (!sentence) return;
