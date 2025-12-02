@@ -115,6 +115,20 @@ test("invoking while definition is still open just records and does not run", as
   assert.equal(remember("result"), undefined, "body should not execute while definition remains open");
 });
 
+test("ceremony def captures signature words from typed header", async () => {
+  forget();
+
+  await run("subj name loop body to name num tloh num 0 until num 0 be ceremony def");
+  await run("subj name loop body be ceremony prah");
+
+  const def = getDefinition("loop body");
+  assert.ok(def?.signatureWords, "definition should carry signatureWords");
+  assert.deepEqual(
+    def.signatureWords,
+    ["be", "loop body", "tloh", "num", "to", "name", "num", "until", "num"]
+  );
+});
+
 test.todo("ceremony def headers declare signature cases/types (new signature style)");
 // Target behaviour (per documentation/signature.md):
 // be add two def

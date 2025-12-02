@@ -26,6 +26,71 @@ export function joinSignatureWords(words) {
   return normalized.join(" ");
 }
 
+// Extract a signature from a ceremony definition sentence ("subj name X be ceremony def").
+export function deriveSignatureFromDefinition(sentence) {
+  if (!sentence || sentence.mood !== "def" || sentence.be !== "ceremony") return null;
+
+  const verb = normalizeWords(sentence.subj?.name);
+  if (!verb) return null;
+
+  const cases = [];
+  for (const [key, value] of Object.entries(sentence)) {
+    if (NON_CASE_FIELDS.has(key)) continue;
+    const typeWords = caseTypeWords(value);
+    if (typeWords.length === 0) continue;
+    cases.push({ case: key, typeWords });
+  }
+
+  return makeSignatureWords({ be: verb, cases });
+}
+
+const NON_CASE_FIELDS = new Set([
+  "mood",
+  "be",
+  "subj",
+  "su",
+  "signatureWords",
+  "signature",
+  "ret",
+  "this",
+  "consequence"
+]);
+
+function caseTypeWords(value) {
+  if (value == null) return [];
+
+  if (Array.isArray(value)) {
+    // Best-effort: derive from first element.
+    return value.length > 0 ? caseTypeWords(value[0]) : [];
+  }
+
+  if (typeof value !== "object") {
+    const normalized = normalizeWords(String(value));
+    return normalized ? [normalized] : [];
+  }
+
+  if (value.ve) {
+    const inner = normalizeWords(value.ve.type);
+    return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
+  }
+
+  const words = [];
+
+  if (value.name) {
+    words.push("name");
+    const tail = normalizeWords(value.name);
+    if (tail) {
+      words.push(...tail.split(" ").filter(Boolean));
+    }
+  }
+
+  if (value.num !== undefined) words.push("num");
+  if (value.text !== undefined) words.push("text");
+  if (value.filename !== undefined) words.push("filename");
+
+  return words.filter(Boolean);
+}
+
 function normalizeWords(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
 }
