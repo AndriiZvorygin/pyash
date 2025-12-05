@@ -81,7 +81,7 @@ export function deriveSignatureFromDefinition(sentence) {
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
-    const typeWords = caseTypeWords(value);
+    const typeWords = normalizeDefinitionTypeWords(caseTypeWords(value));
     if (typeWords.length === 0) continue;
     cases.push({ case: key, typeWords });
   }
@@ -124,7 +124,7 @@ function caseTypeWords(value) {
   if (value.name) {
     words.push("name");
     const tail = normalizeWords(value.name);
-    if (tail) {
+    if (tail && tail !== "num" && tail !== "text" && tail !== "vec") {
       words.push(...tail.split(" ").filter(Boolean));
     }
   }
@@ -134,6 +134,22 @@ function caseTypeWords(value) {
   if (value.filename !== undefined) words.push("filename");
 
   return words.filter(Boolean);
+}
+
+function normalizeDefinitionTypeWords(typeWords) {
+  if (!typeWords || typeWords.length === 0) return [];
+
+  if (typeWords[0] === "name") {
+    // Drop concrete variable names in definitions; keep the type
+    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "vec" || t === "filename")];
+    if (withoutTail.length === 1) {
+      // default to numeric if no explicit type after name
+      return ["name", "num"];
+    }
+    return withoutTail;
+  }
+
+  return typeWords;
 }
 
 // Build signature from an invocation sentence, using memory to refine type words.
