@@ -8,5 +8,8 @@ export function tiny_subj_num_from_num({ subj, from }) {
 export const tiny = tiny_subj_num_from_num;
 
 export const signatures = [
-  { signatureWords: ["be", "tiny", "from", "num", "subj", "num"], handler: tiny_subj_num_from_num }
+  { signatureWords: ["be", "tiny", "from", "num", "subj", "num"], handler: tiny_subj_num_from_num },
+  { signatureWords: ["be", "tiny", "from", "num", "obj", "num"], handler: tiny_subj_num_from_num },
+  { signatureWords: ["be", "tiny", "from", "name", "num"], handler: tiny_subj_num_from_num },
+  { signatureWords: ["be", "tiny", "from", "name", "num", "obj", "num"], handler: tiny_subj_num_from_num }
 ];
