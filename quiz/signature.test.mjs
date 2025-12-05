@@ -94,10 +94,10 @@ test("deriveSignatureFromCall uses memory for named vectors in produce", () => {
   ]);
 });
 
-test("deriveSignatureFromCall carries fromstate/become for compile with text types", () => {
+test("deriveSignatureFromCall carries fromstate/become for understand with text types", () => {
   const sentence = {
     mood: "do",
-    be: "compile",
+    be: "understand",
     obj: { name: "input" },
     fromstate: { name: "pyash" },
     become: { name: "JSON" },
@@ -114,7 +114,7 @@ test("deriveSignatureFromCall carries fromstate/become for compile with text typ
   const sig = deriveSignatureFromCall(sentence, { remember });
 
   assert.deepEqual(sig, [
-    "be", "compile",
+    "be", "understand",
     "become", "name", "text",
     "fromstate", "name", "text",
     "obj", "name", "text",

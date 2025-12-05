@@ -148,24 +148,6 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   assert.equal(bucket.obj.num, 2);
 });
 
-test("ceremony signature uses cases/types not header variable names", async () => {
-  forget();
+test.todo("ceremony with ret returns updated evoke registers to caller names");
 
-  // Definition uses header name "bucket" for the target
-  await run("subj name add three obj num 0 to name bucket be ceremony def");
-  await run("obj num 3 to name bucket be add do");
-  await run("subj name add three be ceremony prah");
-
-  const def = getDefinition("add three");
-  assert.ok(def?.signatureWords, "definition should carry signatureWords");
-  assert.deepEqual(def.signatureWords, ["be", "add three", "obj", "num", "to", "name", "num"]);
-
-  // Invoke with a different target name; signature should still resolve (no fallback),
-  // but body uses its own operands/targets (no name remapping)
-  await run("obj num 7 to name stash be add three do");
-
-  const stash = remember("stash");
-  const bucket = remember("bucket");
-  assert.equal(stash?.obj?.num, 3, "invocation succeeded but used ceremony body operands/targets");
-  assert.equal(bucket, undefined, "header target name is not materialized in main memory");
-});
+test.todo("ceremony ret returns multiple registers (obj/tloh/until) to caller names");

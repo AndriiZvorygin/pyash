@@ -31,16 +31,16 @@ Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` return
 - Imperative (add): `obj num 3 to num 4 be add do` → stores command + `result` with `num 7`
 - Query: `su collector obj what que`
 - Text read: `su file be read from filename "quiz/sandpit/compile.txt" do` → stores text content
-- Compile text to JSON: see end-to-end example below
+- Parse text to JSON: see end-to-end example below
 - Conditionals: `obj num 3 be tiny from num 5 then ...`; `subj name lhs be giant from name rhs then ...`; `subj name x be equally from num 10 then ...`
 
-## End-to-End Example (text compile)
+## End-to-End Example (text understand)
 ```bash
 # Provide a program as text
 su input obj text "subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya" be text ya
 su output be text ya
 
-# Compile from state pyash to JSON
-su artifact obj name input from state pyash to state JSON name output be compile do
+# Parse from state pyash to JSON
+su artifact obj name input from state pyash to state JSON name output be understand do
 ```
-This stores parsed sentences and JSON under `output`; memory keeps the command, result, and prior facts for inspection.
+This stores parsed sentences and JSON under `output`; memory keeps the command, result, and prior facts for inspection. This “understand” step is parse-only; it does not emit JavaScript.

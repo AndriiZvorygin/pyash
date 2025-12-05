@@ -1,5 +1,5 @@
 // bridge (formerly dispatcher)
-import { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, compile, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
+import { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
 import { remember, doRemember, allRemember, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";

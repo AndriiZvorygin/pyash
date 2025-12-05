@@ -6,7 +6,7 @@
 
 - **Result facts for imperatives**: Always store a `result` fact with normalized `obj` (and `be` from verb or `result`). Chosen to make REPL/testing expectations explicit; fabricating ad-hoc subjects per verb was deferred.
 
-- **Dynamic verb dispatch for type combos**: `add`/`read` load handlers based on operand types/inputs (e.g., `add_obj_num_to_num.mjs`, `read_from_filename.mjs`). Chosen for extensibility; a monolithic switch was rejected.
+- **Dynamic verb dispatch for type combos**: `add`/`read` load handlers based on operand types/inputs (e.g., `add_obj_num_to_num.mjs`, `read_from_filename.mjs`). Chosen for extensibility; a monolithic switch was rejected. The `understand` verb is parse-to-JSON only; no JS emission yet.
 
 - **Mind configuration as declarative fact**: Register minds with keyword roles (`from`, `as`, `accordingto`) and reuse on invocation. Chosen to align with `mind.md` and compositional mapping; embedding config per call was rejected.
 

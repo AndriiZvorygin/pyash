@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
+Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `understand` (parse to JSON), `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
@@ -25,7 +25,7 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 - Imperative (add): `obj num 3 to num 4 be add do` → stores command + result fact (`num 7`)
 - Query: `su collector obj what que`
 - Read file: `su file be read from filename "quiz/sandpit/compile.txt" do`
-- Compile text → JSON: see `documentation/reference.md` end-to-end example
+- Parse text → JSON program: see `documentation/reference.md` end-to-end example
 - Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the evoke sentence.
 - Loops: seed `tloh` (and optional `until`) on the evoking sentence to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality (no standalone register facts are written).
 
@@ -34,9 +34,9 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 - `program/understand/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
 - `program/bridge/` — signature-first dispatch (registry in `program/bridge/signature.mjs`), mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `program/beautiful.mjs` — output formatting
-- `program/verbs/` — verb implementations grouped by domain: `mathematics/` (add/subtract), `exchange/` (read/compile), `regulation/` (giant/tiny/equally), `mind/` (mind); `program/verbs/index.mjs` re-exports the set.
+- `program/verbs/` — verb implementations grouped by domain: `mathematics/` (add/subtract), `exchange/` (read/understand), `regulation/` (giant/tiny/equally), `mind/` (mind); `program/verbs/index.mjs` re-exports the set.
 - `program/library/compositionalCases.mjs` — axis/context grid and keyword table
-- `quiz/` — node:test quizzes (core, parser, compositional, mind, compile/read, beautiful, motor)
+- `quiz/` — node:test quizzes (core, parser, compositional, mind, understand/read, beautiful, motor)
 - `program/command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).
 - `program/command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 

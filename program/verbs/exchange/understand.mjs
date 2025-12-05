@@ -1,14 +1,14 @@
 import { buildProgram } from "../../program.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
-export async function compile_from_name_text_to_name_text({ obj, sentence }) {
+export async function understand_from_name_text_to_name_text({ obj, sentence }) {
   const sourceName = sentence?.obj?.name ?? obj?.name;
-  if (!sourceName) throw new Error("compile: obj.name is required");
+  if (!sourceName) throw new Error("understand: obj.name is required");
 
   const src = remember(sourceName);
   const sourceText = src?.obj?.text ?? src?.text;
   if (typeof sourceText !== "string") {
-    throw new Error(`compile: source text not found for "${sourceName}"`);
+    throw new Error(`understand: source text not found for \"${sourceName}\"`);
   }
 
   const program = buildProgram(sourceText);
@@ -29,19 +29,19 @@ export async function compile_from_name_text_to_name_text({ obj, sentence }) {
   return { obj: { text: json, sentences: program.sentences } };
 }
 
-export default compile_from_name_text_to_name_text;
+export default understand_from_name_text_to_name_text;
 
 export const signatures = [
   {
-    signatureWords: ["be", "compile", "become", "name", "text", "fromstate", "name", "text", "obj", "name", "text", "to", "name", "text"],
-    handler: compile_from_name_text_to_name_text
+    signatureWords: ["be", "understand", "become", "name", "text", "fromstate", "name", "text", "obj", "name", "text", "to", "name", "text"],
+    handler: understand_from_name_text_to_name_text
   },
   {
-    signatureWords: ["be", "compile", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "name", "num"],
-    handler: compile_from_name_text_to_name_text
+    signatureWords: ["be", "understand", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "name", "num"],
+    handler: understand_from_name_text_to_name_text
   },
   {
-    signatureWords: ["be", "compile", "obj", "name", "to", "name"],
-    handler: compile_from_name_text_to_name_text
+    signatureWords: ["be", "understand", "obj", "name", "to", "name"],
+    handler: understand_from_name_text_to_name_text
   }
 ];

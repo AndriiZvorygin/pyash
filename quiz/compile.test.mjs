@@ -4,7 +4,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 
-test("compile verb reads Pyash file and stores JSON", async () => {
+test("understand verb reads Pyash text and stores JSON", async () => {
   forget();
 
   const program = [
@@ -19,15 +19,15 @@ test("compile verb reads Pyash file and stores JSON", async () => {
   await interpret(parse("subj name output be text ya"));
 
   const sentence = parse(
-    "obj name input from state pyash to state JSON to name output be compile do"
+    "obj name input from state pyash to state JSON to name output be understand do"
   );
   const result = await interpret(sentence);
 
   const mem = allRemember();
   const out = mem.find(s => s.subj?.name === "output");
 
-  assert.ok(result, "compile should return result");
-  assert.ok(out, "compile should store to output");
+  assert.ok(result, "understand should return result");
+  assert.ok(out, "understand should store to output");
   assert.ok(Array.isArray(out.obj?.sentences));
   assert.equal(out.obj.sentences.length, 2);
   assert.match(out.obj.text, /alpha/);

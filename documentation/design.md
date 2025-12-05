@@ -207,13 +207,13 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
     * `add.mjs` / `read.mjs`: dynamic dispatch to type-specific handlers (`read_from_filename.mjs`, `add_obj_num_to_num.mjs`, etc.).
     * `giant.mjs`, `tiny.mjs`, `equally.mjs`: conditional control (used with `then` mood; compares numbers/subjects).
-    * `compile.mjs`: builds programs via `program/program.mjs` and writes JSON/text results to memory, wrapping them in result sentences.
+    * `understand.mjs`: builds programs via `program/program.mjs` and writes JSON/text results to memory, wrapping them in result sentences.
     * `mind.mjs`: resolves model/prompt from stored mind config (sentences with keywords `as`, `accordingto`) and calls Ollama HTTP via `program/motor/ollama.mjs`, then packages responses back into result sentences.
 
 * `program/program.mjs`: Program builder.
 
   * Builds a **paragraph** (sentences + labels) from plain text.
-  * Used by `compile` and by ceremony runners as body definitions.
+  * Used by `understand` and by ceremony runners as body definitions.
   * A ceremony body is always a paragraph; there are no ad-hoc loop constructs *inside* a ceremony. Looping, when needed, is achieved by repeatedly invoking the same ceremony based on control cases on the evoking sentence.
 
 * `program/library/compositionalCases.mjs`: Compositional roles table.
