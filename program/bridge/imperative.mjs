@@ -18,15 +18,23 @@ export async function handleImperative({
   const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
+  let sigKey = null;
   if (sigWords) {
-    const key = joinSignatureWords(sigWords);
+    sigKey = joinSignatureWords(sigWords);
     if (!fn) {
-      const handler = lookupSignatureHandler(key);
+      const handler = lookupSignatureHandler(sigKey);
       if (handler) fn = handler;
     }
     if (!fn && !defEntry) {
-      const defName = lookupSignature(key);
+      const defName = lookupSignature(sigKey);
       if (defName) defEntry = getDefinitionEntry(defName);
+    }
+  }
+
+  if (!fn && !defEntry && sigKey) {
+    const verbHandlers = lookupHandlersForVerb(be);
+    if (verbHandlers.size > 0) {
+      throw new Error(`No handler for signature: ${sigKey}`);
     }
   }
 

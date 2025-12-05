@@ -37,6 +37,34 @@ export const signatures = [
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
+    signatureWords: ["be", "divide", "by", "num", "obj", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "name", "num", "obj", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "name", "num", "obj", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "obj", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "obj", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
     signatureWords: ["be", "divide", "by", "num", "obj", "name", "num", "to", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },

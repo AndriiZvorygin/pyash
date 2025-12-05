@@ -33,6 +33,14 @@ export default compile_from_name_text_to_name_text;
 
 export const signatures = [
   {
+    signatureWords: ["be", "compile", "become", "name", "text", "fromstate", "name", "text", "obj", "name", "text", "to", "name", "text"],
+    handler: compile_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "name", "num"],
+    handler: compile_from_name_text_to_name_text
+  },
+  {
     signatureWords: ["be", "compile", "obj", "name", "to", "name"],
     handler: compile_from_name_text_to_name_text
   }
