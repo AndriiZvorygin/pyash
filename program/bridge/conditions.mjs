@@ -1,5 +1,5 @@
 // Conditional handling for "then" mood
-import { deriveSignatureFromCall, joinSignatureWords, lookupSignatureHandler, lookupHandlersForVerb } from "./signature.mjs";
+import { deriveSignatureFromCall, joinSignatureWords, lookupSignatureHandler } from "./signature.mjs";
 
 export async function handleCondition(sentence, { state, remember }) {
   const { be, subj, obj, from } = sentence;
@@ -12,10 +12,7 @@ export async function handleCondition(sentence, { state, remember }) {
   }
   if (!fn && sigWords) {
     const key = joinSignatureWords(sigWords);
-    const handlers = lookupHandlersForVerb(be);
-    if (handlers.size > 0) {
-      throw new Error(`No handler for signature: ${key}`);
-    }
+    throw new Error(`Unknown verb: ${be}`);
   }
   if (!fn) throw new Error(`Unknown verb: ${be}`);
 

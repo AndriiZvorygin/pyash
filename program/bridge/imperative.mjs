@@ -1,5 +1,5 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
-import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler, lookupHandlersForVerb } from "./signature.mjs";
+import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 
 export async function handleImperative({
   sentence,
@@ -31,10 +31,7 @@ export async function handleImperative({
   }
 
   if (!fn && !defEntry && sigKey) {
-    const verbHandlers = lookupHandlersForVerb(be);
-    if (verbHandlers.size > 0) {
-      throw new Error(`No handler for signature: ${sigKey}`);
-    }
+    throw new Error(`Unknown verb: ${be}`);
   }
 
   if (!fn && defEntry) {

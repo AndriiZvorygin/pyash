@@ -32,7 +32,6 @@ const nameToKeys = new Map(); // def name -> Set<key>
 
 // Registry for signature -> handler (built-in verbs)
 const signatureHandlers = new Map(); // key -> fn
-const verbHandlers = new Map(); // verb -> Set<fn>
 
 export function registerSignature({ name, signatureWords }) {
   if (!name || !signatureWords?.length) return;
@@ -53,18 +52,10 @@ export function registerSignatureHandler({ signatureWords, handler }) {
   if (!signatureWords?.length || typeof handler !== "function") return;
   const key = joinSignatureWords(signatureWords);
   signatureHandlers.set(key, handler);
-
-  const verb = signatureWords[1];
-  if (verb) {
-    const set = verbHandlers.get(verb) ?? new Set();
-    set.add(handler);
-    verbHandlers.set(verb, set);
-  }
 }
 
 export function clearSignatureHandlers() {
   signatureHandlers.clear();
-  verbHandlers.clear();
 }
 
 export function lookupSignature(key) {
@@ -73,10 +64,6 @@ export function lookupSignature(key) {
 
 export function lookupSignatureHandler(key) {
   return signatureHandlers.get(key);
-}
-
-export function lookupHandlersForVerb(verb) {
-  return verbHandlers.get(verb) ?? new Set();
 }
 
 export function clearSignatureDefinitions() {
