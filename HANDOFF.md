@@ -1,38 +1,32 @@
 # Handoff Summary
 
 ## Changes since last checkpoint
-- Added conditionals: `giant` ( > ), `tiny` ( < ), `equally` ( == ) with support for inline values and subject-to-subject comparisons. Dispatcher resolves both `subj` and `from` by name when present.
-- Added `subtract` verb; handles inline numbers and subject-based subtraction (`obj num 3 from name collector be subtract do`, `obj name rhs from name lhs be subtract do`).
-- Improved sandpit write-back for loops: `to` targets mutated inside a sandpit are written back to main memory after loop invocation.
-- Chaining: `result` fact can feed subsequent calls. Added quizzes/examples for chaining simple calls and ceremony defs.
-- Script updates: `program/command/run_pya_program.mjs` shows `Outputs` (from `que`) and returns `{ outputs, result }` with `--gross`; `program/command/read_pya_trace.mjs` is beautiful by default (`--gross` for JSON). Script quizzes cover both.
-- Examples added/updated: conditional suites for `giant`/`tiny`/`equally`, subtract, result/def chaining.
-- Docs refreshed: conditional verbs mentioned in README/USAGE/ARCHITECTURE; compositional keyword table updated (`as` for state way, no object slots). TODO/STATE updated to reflect current scope.
+- Signature-first dispatch is back on: `handleImperative`/`handleCondition` derive signatures from calls, look up registered signature handlers first, and definitions register signatures on `def`. The verb map is empty and built-ins register through `program/verbs/index.mjs`.
+- `deriveSignatureFromCall` now throws if any case cannot yield type words; name lookups default to `["name","num"]` when the fact is missing, so undefined names can still build a signature key.
+- Built-in signature tables tweaked: regulation verbs list `subj num` + `from num`; `produce` now registers `by/obj vec num to name num`; `compile` uses `obj name to name`; `mind` uses `obj text to name text`.
+- Docs: README now notes signature-first dispatch and mentions `chip`; `documentation/decisions.md` updated to say signature dispatch restored. (But `documentation/signature.md` still has older caveats at the bottom—see gaps.)
+- Tests: `npm test` currently green.
 
 ## Current quiz status
-- `npm test` passes (all quizzes green).
+- `npm test` → pass.
 
 ## Notable behaviors/decisions
-- Sandpits: evoker stays at index 0 of sandpit traces; `this`/`ret` use it. Loop invocations now propagate mutated `to` targets back to main memory, but non-`to` sandpit mutations beyond evoker/result are still not auto-merged.
-- `result` chaining: dispatcher merges lastResult/targets; we guard against treating returned evoker objects as values when merging results.
-- Conditionals: `then` uses verb-specific comparisons; `subj`/`from` names are resolved to their latest facts, falling back to inline values otherwise.
-- Subtract uses `from` (preferred) or `to` to pick the target name.
+- Signature registry exists, but if no handler matches the derived signature, the bridge falls back to the single registered handler for that verb (via `lookupHandlersForVerb`). Because several signatures are mismatched, this fallback is currently how most verbs resolve.
+- `deriveSignatureFromCall` now throws on missing type words; this will surface if a call lacks type info that can be inferred.
+- Conditionals still resolve `subj`/`from` names to facts before comparison; errors if `subj` is unknown.
 
 ## Remaining gaps / follow-ups
-- Broader sandpit write-back: if body mutates arbitrary subjects (not evoker or `to` target), those aren’t merged to main memory; loops now handle `to` targets, but general merging would need design.
-- Mind verb still stubbed for real streaming/richer reply mapping.
-- No hnuc/context validation beyond keyword mapping; compositional validation remains a TODO.
-- `result` is generic; no per-command IDs yet.
+- Align built-in `signatureWords` with actual call shapes so dispatch doesn’t rely on the single-handler fallback. Mismatches: `produce` (should include `from name vec num` as used in tests), `compile` (tests use `obj name ... from state ... to state ... to name ...`), `mind` (registration/invocation currently omits `obj`), regulation verbs probably want `name num` cases instead of bare `num`, etc.
+- Once signatures align, decide whether to drop/limit the single-handler fallback to make signature dispatch meaningful.
+- `documentation/signature.md` still ends with text saying signature dispatch was removed/TODO to reintroduce; update section 9/10 to reflect the restored implementation and remove the stale TODO list.
+- Check type inference defaults (`["name","num"]` for unknown names) and whether they match the intended signature scheme (text/vec cases may need better inference).
 
 ## Handy commands/examples
-- Conditionals: `obj num 3 be tiny from num 5 then ...`, `subj name lhs be giant from name rhs then ...`, `obj num 5 be equally from num 5 then ...`
-- Subtract: `obj num 3 from name collector be subtract do`, `obj name rhs from name lhs be subtract do`
-- Chaining program: `node program/command/run_pya_program.mjs --full examples/pyash/result-chaining.pya`
-- Def chaining: `examples/core/def-chaining.md` / `examples/pyash/def-chaining.pya`
-- Trace: `node program/command/read_pya_trace.mjs --gross examples/pyash/def-chaining.pya`
+- Run all quizzes: `npm test`
+- REPL sanity: `node program/main.mjs`
 
 ## Files of interest
-- `program/bridge/index.mjs`: conditional handling, sandpit write-back, loop merge logic.
-- `program/verbs/`: new `subtract.mjs`, `equally.mjs`, conditionals registered.
-- Examples: `examples/core/giant-conditional.md`, `tiny-conditional.md`, `equally-conditional.md`, `subtract.md`, `result-chaining.md`, `def-chaining.md` (+ `.pya` counterparts).
-- Quizzes: `quiz/giant.test.mjs`, `tiny.test.mjs`, `equally.test.mjs`, `subtract.test.mjs`, `result_chaining.test.mjs`, `scripts.test.mjs`.
+- `program/bridge/imperative.mjs`, `program/bridge/conditions.mjs`: signature-first dispatch with single-handler fallback.
+- `program/bridge/signature.mjs`: signature derivation/registry; stricter type-word enforcement.
+- Verb signatures to audit: `program/verbs/mathematics/produce.mjs`, `program/verbs/exchange/compile.mjs`, `program/verbs/mind/mind.mjs`, `program/verbs/regulation/*.mjs`.
+- Doc drift: `documentation/signature.md` (section 9/10), `README.md`, `documentation/decisions.md`.
