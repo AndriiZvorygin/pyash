@@ -3,14 +3,20 @@ import { buildProgram } from "../../program.mjs";
 import { doRemember } from "../../remember/index.mjs";
 
 function transpileSentence(sentence, { lang }) {
-  const name = sentence?.subj?.name;
-  const mood = sentence?.mood;
-  if (!name || mood !== "ya") return null;
-
   const obj = sentence.obj ?? {};
   const beWords = (sentence.be || "").split(" ").filter(Boolean);
   const isPermanent = beWords[0] === "permanent";
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : sentence.be;
+
+  // Imperative add
+  if (sentence.be === "add" && obj.num !== undefined && sentence.to?.name) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+  }
+
+  const name = sentence?.subj?.name;
+  const mood = sentence?.mood;
+  if (!name || mood !== "ya") return null;
 
   if (baseBe === "number" && typeof obj.num !== "undefined") {
     const value = typeof obj.num === "number" ? obj.num : Number(obj.num);
@@ -31,6 +37,12 @@ function transpileSentence(sentence, { lang }) {
     }
     const decl = isPermanent ? "const" : "let";
     return `${decl} ${name} = ${value};`;
+  }
+
+  // Simple add to target name
+  if (sentence.be === "add" && obj.num !== undefined && sentence.to?.name) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
   return null;

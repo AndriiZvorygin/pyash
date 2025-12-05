@@ -141,3 +141,23 @@ test("compile converts inline Pyash text to C text", async () => {
   assert.match(c, /double alpha = 1;/);
   assert.match(c, /const char \* beta = "hello";/);
 });
+
+test("compile emits JS for simple add", async () => {
+  forget();
+
+  const program = [
+    "subj name collector obj num 0 be number ya",
+    "obj num 2 to name collector be add do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let collector = 0;/);
+  assert.match(js, /collector = collector \+ 2;/);
+});
