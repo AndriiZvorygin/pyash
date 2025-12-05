@@ -126,3 +126,18 @@ test("compile converts inline Pyash text to JavaScript text with const for perma
   assert.match(js, /const alpha = 1;/);
   assert.match(js, /const beta = \"hello\";/);
 });
+
+test("compile converts inline Pyash text to C text", async () => {
+  forget();
+
+  const program = "subj name alpha obj num 1 be number ya\nsubj name beta obj text hello be permanent text ya";
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state c to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const c = result?.obj?.text ?? result?.value?.text;
+  assert.ok(c, `compile returned: ${JSON.stringify(result)}`);
+  assert.match(c, /double alpha = 1;/);
+  assert.match(c, /const char \* beta = "hello";/);
+});
