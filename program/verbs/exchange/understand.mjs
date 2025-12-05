@@ -3,14 +3,21 @@ import { buildProgram } from "../../program.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
 export async function understand_from_name_text_to_name_text(sentence) {
-  const { obj } = sentence ?? {};
+  const { obj, from } = sentence ?? {};
   const sourceName = sentence?.obj?.name ?? obj?.name;
-  if (!sourceName) throw new Error("understand: obj.name is required");
+  const sourceFilename = sentence?.from?.filename ?? from?.filename ?? sentence?.obj?.filename ?? obj?.filename;
 
-  const src = remember(sourceName);
-  const sourceText = src?.obj?.text ?? src?.text;
+  let sourceText = null;
+
+  if (sourceFilename) {
+    sourceText = await fs.readFile(sourceFilename, "utf8");
+  } else if (sourceName) {
+    const src = remember(sourceName);
+    sourceText = src?.obj?.text ?? src?.text;
+  }
+
   if (typeof sourceText !== "string") {
-    throw new Error(`understand: source text not found for \"${sourceName}\"`);
+    throw new Error(`understand: source text not found for \"${sourceName ?? sourceFilename ?? "unknown"}\"`);
   }
 
   const program = buildProgram(sourceText);
@@ -69,6 +76,14 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "understand", "fromstate", "name", "num", "obj", "name", "text", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "from", "filename", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "obj", "filename", "to", "filename"],
     handler: understand_from_name_text_to_name_text
   }
 ];

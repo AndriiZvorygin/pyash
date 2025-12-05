@@ -5,6 +5,16 @@
       "name": "alpha"
     },
     "obj": {
+      "num": 1
+    },
+    "be": "number"
+  },
+  {
+    "mood": "ya",
+    "subj": {
+      "name": "beta"
+    },
+    "obj": {
       "num": 2
     },
     "be": "number"

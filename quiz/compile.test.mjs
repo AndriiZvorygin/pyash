@@ -67,3 +67,26 @@ test("understand can write parsed JSON to filename", async () => {
 
   await fs.rm(outputFile, { force: true });
 });
+
+test("understand can read from filename and write JSON to filename", async () => {
+  forget();
+
+  const inputFile = "quiz/sandpit/compile.txt";
+  const outputFile = "quiz/sandpit/understand-output.json";
+  await fs.rm(outputFile, { force: true });
+
+  const sentence = parse(
+    `from filename "${inputFile}" to filename "${outputFile}" be understand do`
+  );
+
+  const result = await interpret(sentence);
+  assert.ok(result?.value?.text);
+
+  const fileText = await fs.readFile(outputFile, "utf8");
+  const parsed = JSON.parse(fileText);
+
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].subj.name, "alpha");
+
+  await fs.rm(outputFile, { force: true });
+});
