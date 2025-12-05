@@ -28,12 +28,12 @@ export async function handleImperative({
       const defName = lookupSignature(key);
       if (defName) defEntry = getDefinitionEntry(defName);
     }
+  }
 
-    if (!fn && !defEntry) {
-      const verbHandlers = lookupHandlersForVerb(be);
-      if (verbHandlers.size === 1) {
-        fn = [...verbHandlers][0];
-      }
+  if (!fn && !defEntry) {
+    const verbHandlers = lookupHandlersForVerb(be);
+    if (verbHandlers.size === 1) {
+      fn = [...verbHandlers][0];
     }
   }
 

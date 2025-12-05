@@ -160,7 +160,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     if (NON_CASE_FIELDS.has(key)) continue;
     const typeWords = caseTypeWordsWithMemory(value, remember);
     if (typeWords.length === 0) {
-      return null; // cannot derive fully-typed signature
+      throw new Error(`Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`);
     }
     cases.push({ case: key, typeWords });
   }
@@ -194,7 +194,7 @@ function caseTypeWordsWithMemory(value, remember) {
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.text !== undefined) return ["name", "text"];
     if (factObj?.filename !== undefined) return ["name", "filename"];
-    return ["name"];
+    return ["name", "num"];
   }
 
   if (value.num !== undefined) return ["num"];
@@ -202,6 +202,7 @@ function caseTypeWordsWithMemory(value, remember) {
   if (value.filename !== undefined) return ["filename"];
 
   const fallback = caseTypeWords(value);
+  if (fallback.length === 0) throw new Error("Cannot derive type words for case");
   return fallback;
 }
 

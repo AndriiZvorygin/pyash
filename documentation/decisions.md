@@ -16,4 +16,4 @@
 
 - **Out-of-scope (for now)**: Phonology, noun classes, tense/aspect controls, GPU/IR compiler path from `pyac.txt`. Acknowledged but postponed to keep the current interpreter slice small and testable.
 
-- **Signature dispatch postponed**: A refactor toward signature-based dispatch was attempted and rolled back. For now, the bridge uses the classic verb map and imperative write-backs; signatures remain a documented goal (`documentation/signature.md`) to reintroduce later.
+- **Signature dispatch restored**: The bridge now dispatches imperatives and conditions via signature handlers first (builtin signatures registered at startup, ceremony `def` headers register their signatures), with legacy verb-map fallback removed for math/exchange/regulation/mind verbs. Write-backs run through sandpits with strict return handling (numeric signatures must return a value).

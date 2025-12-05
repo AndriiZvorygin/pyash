@@ -48,5 +48,5 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
 export default mind_to_name_text;
 
 export const signatures = [
-  { signatureWords: ["be", "mind", "to", "name", "text"], handler: mind_to_name_text }
+  { signatureWords: ["be", "mind", "obj", "text", "to", "name", "text"], handler: mind_to_name_text }
 ];

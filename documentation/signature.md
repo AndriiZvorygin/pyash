@@ -390,14 +390,15 @@ Any lookup mechanism that treats the same word sequence as the same signature is
 
 ---
 
-## 9. Current runtime status (July 2024)
+## 9. Current runtime status (January 2025)
 
-The runtime does **not** yet use signature-based dispatch. Imperatives currently:
+The runtime now uses **signature-first dispatch**:
 
-- Use the classic verb map (`program/bridge/index.mjs`).
-- Resolve targets and defaults in `handleImperative`.
-- Call the verb directly and perform write-backs (target fact + `result` fact).
-- Verbs perform their own argument validation and numeric/type checks.
+- Built-in verbs register their signatures at startup (`program/verbs/index.mjs` → `builtInSignatures` → registry in `program/bridge/signature.mjs`).
+- Imperatives derive a signature from the call (case/type words, sorted by case) and dispatch to the registered handler; ceremony `def` headers register their signatures and are invoked the same way.
+- Conditionals (`then` mood) use the same signature registry for truth-evaluable verbs (`giant`/`tiny`/`equally`).
+- Legacy verb-map fallback has been removed for math/exchange/regulation/mind verbs; only signature handlers are used.
+- Sandpit write-back is strict: numeric signatures must return/merge a value; non-numeric signatures do not get fabricated defaults.
 
 The signature registry/key code was removed after a failed refactor. Tests expect the classic behaviour (unknown verbs throw `Unknown verb: X`; guard errors come from verbs).
 

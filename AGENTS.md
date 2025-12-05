@@ -5,6 +5,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 ## Project Structure & Module Organization
 - `program/main.mjs` runs the REPL and wires the parser (`program/understand/`), bridge (`program/bridge/`), and memory helpers (`program/remember/`).
 - Interpreter behaviors live in `program/bridge/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
+- Dispatch is signature-first: built-in verb signatures register via `program/verbs/index.mjs`, ceremonies register their signatures on `def`, and `program/bridge/signature.mjs` hosts the registry/lookups.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `program/configure/workplace.json` is example data/config; keep secrets out of the repo.

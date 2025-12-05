@@ -8,5 +8,5 @@ export function giant_subj_num_from_num({ subj, from }) {
 export const giant = giant_subj_num_from_num;
 
 export const signatures = [
-  { signatureWords: ["be", "giant", "from", "num"], handler: giant_subj_num_from_num }
+  { signatureWords: ["be", "giant", "from", "num", "subj", "num"], handler: giant_subj_num_from_num }
 ];

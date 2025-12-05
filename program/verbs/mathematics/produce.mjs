@@ -33,7 +33,7 @@ export const produce = produce_by_name_vec_num_from_name_vec_num_to_name_num;
 
 export const signatures = [
   {
-    signatureWords: ["be", "produce", "by", "name", "vec", "num", "from", "name", "vec", "num", "to", "name", "num"],
+    signatureWords: ["be", "produce", "by", "vec", "num", "obj", "vec", "num", "to", "name", "num"],
     handler: produce_by_name_vec_num_from_name_vec_num_to_name_num
   }
 ];

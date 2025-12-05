@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, and `read` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
+Pyash is a tiny experimental language built as an interlanguage between humans and machines. Sentences use a compact subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `compile`, `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a small, quiz-driven slice of the broader language in `documentation/pyac.txt`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
@@ -31,7 +31,7 @@ Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-li
 ## Key Files
 - `program/main.mjs` — REPL wiring understand/bridge/memory
 - `program/understand/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
-- `program/bridge/` — verb dispatch, mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
+- `program/bridge/` — signature-first dispatch (registry in `program/bridge/signature.mjs`), mood handling (`ya/def/do/que/then/ret`), stores commands + result facts; executes ceremonies in a sandpit context and merges returned evoke/target updates (speakable multi-word verbs).
 - `program/beautiful.mjs` — output formatting
 - `program/verbs/` — verb implementations grouped by domain: `mathematics/` (add/subtract), `exchange/` (read/compile), `regulation/` (giant/tiny/equally), `mind/` (mind); `program/verbs/index.mjs` re-exports the set.
 - `program/library/compositionalCases.mjs` — axis/context grid and keyword table
