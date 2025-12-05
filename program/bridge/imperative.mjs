@@ -3,7 +3,6 @@ import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSig
 
 export async function handleImperative({
   sentence,
-  verbs,
   state,
   memory,
   recordSandpitTrace,
@@ -13,8 +12,8 @@ export async function handleImperative({
   const { mood, be, obj, to, from, subj } = sentence;
   if (mood !== "do") return null;
 
-  let fn = verbs[be];
-  let defEntry = fn ? null : getDefinitionEntry(be);
+  let fn = null;
+  let defEntry = getDefinitionEntry(be);
   const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
@@ -39,10 +38,6 @@ export async function handleImperative({
   }
 
   if (!fn && defEntry) {
-    if (typeof defEntry.end !== "number") {
-      throw new Error(`Definition ${be} missing closing prah`);
-    }
-
     if (subj?.name === "tloh" || sentence.be === "tloh") {
       throw new Error("tloh reserved for loop control");
     }

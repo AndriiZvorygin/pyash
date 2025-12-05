@@ -9,8 +9,6 @@ import { state } from "./state.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 
-const verbs = {};
-
 for (const sig of builtInSignatures) {
   registerSignatureHandler(sig);
 }
@@ -46,7 +44,7 @@ export async function interpret(sentence) {
 
   // --- Conditional ---
   if (mood === "then") {
-    return handleCondition(sentence, { state, verbs, remember });
+    return handleCondition(sentence, { state, remember });
   }
 
   // --- Declarative (including definitions): append; last-write-wins via remember ---
@@ -77,7 +75,6 @@ export async function interpret(sentence) {
   if (mood === "do") {
     const imperativeResult = await handleImperative({
       sentence,
-      verbs,
       state,
       memory: { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext },
       recordSandpitTrace,

@@ -1,10 +1,10 @@
 // Conditional handling for "then" mood
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignatureHandler, lookupHandlersForVerb } from "./signature.mjs";
 
-export async function handleCondition(sentence, { state, verbs, remember }) {
+export async function handleCondition(sentence, { state, remember }) {
   const { be, subj, obj, from } = sentence;
 
-  let fn = verbs[be];
+  let fn = null;
   const sigWords = deriveSignatureFromCall(sentence, { remember });
   if (sigWords) {
     const key = joinSignatureWords(sigWords);
