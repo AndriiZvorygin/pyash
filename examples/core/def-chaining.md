@@ -6,15 +6,15 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name add one be ceremony def
-  obj num 1 to name result be add do
-  this ret
-  subj name add one be ceremony prah
+subj name add one to name result be ceremony def
+obj num 1 to name result be add do
+this ret
+subj name add one be ceremony prah
 
-  subj name add two be ceremony def
-  obj num 2 to name result be add do
-  this ret
-  subj name add two be ceremony prah
+subj name add two to name result be ceremony def
+obj num 2 to name result be add do
+this ret
+subj name add two be ceremony prah
 
   to name result be add one do
   to name result be add two do

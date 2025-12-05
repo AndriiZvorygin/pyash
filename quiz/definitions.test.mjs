@@ -129,14 +129,21 @@ test("ceremony def captures signature words from typed header", async () => {
   );
 });
 
-test.todo("ceremony def headers declare signature cases/types (new signature style)");
-// Target behaviour (per documentation/signature.md):
-// be add two def
-//   to name num
-// ceremony
-//   ...
-// end
-//
-// After parsing, the def entry should expose a signature:
-// ["be","add two","to","name","num"]
-// and runtime dispatch should use that signature rather than the bare verb map.
+test("ceremony def headers declare signature cases/types (new signature style)", async () => {
+  forget();
+
+  await run("subj name add two to name bucket be ceremony def");
+  await run("obj num 2 to name bucket be add do");
+  await run("subj name add two be ceremony prah");
+
+  const def = getDefinition("add two");
+  assert.deepEqual(
+    def.signatureWords,
+    ["be", "add two", "to", "name", "bucket"]
+  );
+
+  // Invocation should resolve by signature (not bare name) and update target
+  await run("to name bucket be add two do");
+  const bucket = remember("bucket");
+  assert.equal(bucket.obj.num, 2);
+});

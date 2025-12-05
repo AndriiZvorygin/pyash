@@ -18,6 +18,7 @@ node --test quiz  # direct invoke
 node program/main.mjs
 ```
 Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit and return an updated evoke (optionally via `ret`). Conditionals use `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then`.
+Dispatch is signature-only: if a call’s cases/types do not match a registered signature, you’ll see `Unknown verb: <name>`.
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`

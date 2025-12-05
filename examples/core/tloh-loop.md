@@ -7,9 +7,9 @@
 - **REPL input**:
   ```
   subj name counter obj num 0 be number ya
-  subj name loop body be ceremony def
-  obj num 1 to name counter be add do
-  subj name loop body be ceremony prah
+subj name loop body to name counter be ceremony def
+obj num 1 to name counter be add do
+subj name loop body be ceremony prah
   to name counter tloh num 3 be loop body do
   mem
   ```

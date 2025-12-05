@@ -1,4 +1,4 @@
-subj name inspector be ceremony def
+subj name inspector to name seen-tloh to name seen-until be ceremony def
 subj name seen-tloh obj this tloh be number ya
 subj name seen-until obj this until be number ya
 this ret

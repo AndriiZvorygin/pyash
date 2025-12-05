@@ -6,11 +6,11 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name add two be ceremony def
-  subj name acc obj this obj be number ya
-  obj num 2 to name acc be add do
-  this obj name acc ret
-  subj name add two be ceremony prah
+subj name add two to name acc be ceremony def
+subj name acc obj this obj be number ya
+obj num 2 to name acc be add do
+this obj name acc ret
+subj name add two be ceremony prah
   obj num 5 to name result be add two do
   mem
   ```

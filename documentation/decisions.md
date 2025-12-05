@@ -16,4 +16,4 @@
 
 - **Out-of-scope (for now)**: Phonology, noun classes, tense/aspect controls, GPU/IR compiler path from `pyac.txt`. Acknowledged but postponed to keep the current interpreter slice small and testable.
 
-- **Signature dispatch restored**: The bridge now dispatches imperatives and conditions via signature handlers first (builtin signatures registered at startup, ceremony `def` headers register their signatures), with legacy verb-map fallback removed for math/exchange/regulation/mind verbs. Write-backs run through sandpits with strict return handling (numeric signatures must return a value).
+- **Signature dispatch restored**: The bridge now dispatches imperatives and conditions via signature handlers first (builtin signatures registered at startup, ceremony `def` headers register their signatures), with legacy verb-map fallback removed entirely. Unknown/mismatched signatures surface as `Unknown verb: ...`. Write-backs run through sandpits with strict return handling (numeric signatures must return a value).

@@ -1,4 +1,4 @@
-subj name worker be ceremony def
+subj name worker to name target be ceremony def
 obj num 4 to name target be add do
 this obj name target ret
 subj name worker be ceremony prah

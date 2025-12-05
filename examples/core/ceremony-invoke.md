@@ -7,9 +7,9 @@
 - **REPL input**:
   ```
   subj name result obj num 5 be number ya
-  subj name add two be ceremony def
-  obj num 2 to name result be add do
-  subj name add two be ceremony prah
+subj name add two to name result be ceremony def
+obj num 2 to name result be add do
+subj name add two be ceremony prah
   to name result be add two do
   mem
   ```

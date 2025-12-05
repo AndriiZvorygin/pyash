@@ -397,24 +397,13 @@ The runtime now uses **signature-first dispatch**:
 - Built-in verbs register their signatures at startup (`program/verbs/index.mjs` → `builtInSignatures` → registry in `program/bridge/signature.mjs`).
 - Imperatives derive a signature from the call (case/type words, sorted by case) and dispatch to the registered handler; ceremony `def` headers register their signatures and are invoked the same way.
 - Conditionals (`then` mood) use the same signature registry for truth-evaluable verbs (`giant`/`tiny`/`equally`).
-- Legacy verb-map fallback has been removed for math/exchange/regulation/mind verbs; only signature handlers are used.
+- Legacy verb-map fallback has been removed entirely; only signature handlers/definitions are used. A missing signature now throws `Unknown verb: X`.
 - Sandpit write-back is strict: numeric signatures must return/merge a value; non-numeric signatures do not get fabricated defaults.
-
-The signature registry/key code was removed after a failed refactor. Tests expect the classic behaviour (unknown verbs throw `Unknown verb: X`; guard errors come from verbs).
 
 ---
 
 ## 10. TODO for future Codex
 
-1. Reintroduce signature-driven dispatch:
-   - Implement `makeSignatureWords` matching this doc.
-   - Add a registry (`registerSignature`, `dispatch`) and integrate into the bridge without breaking write-backs.
-   - Register signatures derived from sentences (or, ideally, generated from `def` blocks).
-2. Extract write-back logic so it remains intact when dispatch changes:
-   - Resolve/create targets.
-   - Update target + result facts, preserve ordering.
-3. Add type-aware signature entries (e.g., `name vec num` vs `name num`) and cover read/compile/mind cases.
-4. Extend tests to cover signature errors vs verb guard errors; add multi-word verb dispatch tests.
-5. (Later) Generate signatures from ceremony `def` headers once they carry case/type info.
-
-Document decisions in `documentation/decisions.md` when signature dispatch lands to avoid repeating regressions.
+1. Reduce signature variant sprawl by improving type inference (e.g., names → vec/text when remembered) and pruning unused variants.
+2. Generate signatures from ceremony `def` headers once case/type info is captured there.
+3. Keep docs/examples in sync with strict signature dispatch (unknown/mismatched signatures surface as `Unknown verb`).
