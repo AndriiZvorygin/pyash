@@ -28,5 +28,21 @@ export const signatures = [
   {
     signatureWords: ["be", "subtract", "by", "num", "from", "name", "num", "to", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "num"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "name", "num"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "num", "to", "name", "num"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "name", "num", "to", "name", "num"],
+    handler: subtract_by_num_from_name_num_to_name_num
   }
 ];

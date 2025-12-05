@@ -20,5 +20,6 @@ export async function invert_obj_num_to_name_num(sentence, { remember }) {
 export const invert = invert_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "invert", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num }
+  { signatureWords: ["be", "invert", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "obj", "name", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num }
 ];

@@ -32,5 +32,17 @@ export const signatures = [
   {
     signatureWords: ["be", "multiply", "by", "num", "from", "name", "num", "to", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "multiply", "by", "num", "obj", "num"],
+    handler: multiply_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "multiply", "by", "num", "obj", "name", "num", "to", "name", "num"],
+    handler: multiply_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "multiply", "by", "name", "num", "from", "name", "num", "to", "name", "num"],
+    handler: multiply_by_num_from_name_num_to_name_num
   }
 ];

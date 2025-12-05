@@ -20,5 +20,6 @@ export async function exponential_obj_num_to_name_num(sentence, { remember }) {
 export const exponential = exponential_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "exponential", "obj", "num", "to", "name", "num"], handler: exponential_obj_num_to_name_num }
+  { signatureWords: ["be", "exponential", "obj", "num", "to", "name", "num"], handler: exponential_obj_num_to_name_num },
+  { signatureWords: ["be", "exponential", "obj", "name", "num", "to", "name", "num"], handler: exponential_obj_num_to_name_num }
 ];

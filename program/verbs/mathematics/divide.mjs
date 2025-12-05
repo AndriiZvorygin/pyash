@@ -31,5 +31,21 @@ export const signatures = [
   {
     signatureWords: ["be", "divide", "by", "num", "from", "name", "num", "to", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "num", "obj", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "num", "obj", "name", "num", "to", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "name", "num", "from", "name", "num", "to", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "by", "name", "num", "obj", "num", "to", "name", "num"],
+    handler: divide_by_num_from_name_num_to_name_num
   }
 ];
