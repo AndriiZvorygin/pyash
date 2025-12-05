@@ -90,3 +90,39 @@ test("understand can read from filename and write JSON to filename", async () =>
 
   await fs.rm(outputFile, { force: true });
 });
+
+test("compile converts Pyash file to JavaScript file", async () => {
+  forget();
+
+  const inputFile = "quiz/sandpit/compile.txt";
+  const outputFile = "quiz/sandpit/compile-output.js";
+  await fs.rm(outputFile, { force: true });
+
+  const sentence = parse(
+    `from filename "${inputFile}" from state pyash to filename "${outputFile}" to state javascript be compile do`
+  );
+
+  const result = await interpret(sentence);
+  assert.ok(result?.obj?.text ?? result?.value?.text);
+
+  const fileText = await fs.readFile(outputFile, "utf8");
+  assert.match(fileText, /let alpha = 1;/);
+  assert.match(fileText, /let beta = 2;/);
+
+  await fs.rm(outputFile, { force: true });
+});
+
+test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
+  forget();
+
+  const program = "subj name alpha obj num 1 be permanent number ya\nsubj name beta obj text hello be permanent text ya";
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted become javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+  assert.ok(js);
+  assert.match(js, /const alpha = 1;/);
+  assert.match(js, /const beta = \"hello\";/);
+});

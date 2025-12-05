@@ -71,8 +71,9 @@ export async function handleImperative({
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
-  if (!target && addressedName) {
-    // create default numeric fact if it doesn't exist
+  const shouldBootstrapNumber = addressedName && ["add", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent"].includes((be || "").replace(/\s+/g, "").toLowerCase());
+  if (!target && shouldBootstrapNumber) {
+    // create default numeric fact if it doesn't exist for math-like verbs
     target = { subj: { name: addressedName }, be: "number", obj: { num: 0 }, mood: "ya" };
     memory.doRemember(target);
   }
@@ -90,26 +91,27 @@ export async function handleImperative({
   // expect verbs to return { obj: number | {num: number} }
   if (result?.obj !== undefined) {
     // ensure a target fact exists if user addressed one
+    const targetBe = sentence.to?.context || sentence.become?.name || sentence.be || "result";
     const dest =
       target ||
       (addressedName
         ? {
             subj: { name: addressedName },
-            be: sentence.to?.context || sentence.be || "result",
+            be: targetBe,
             obj: {},
             mood: "ya",
           }
         : to?.name
         ? {
             subj: { name: to.name },
-            be: sentence.to?.context || sentence.be || "result",
+            be: targetBe,
             obj: {},
             mood: "ya",
           }
         : sentence?.subj
         ? {
             subj: sentence.subj,
-            be: sentence.be === "read" ? "text" : sentence.be || "result",
+            be: sentence.be === "read" ? "text" : targetBe,
             obj: {},
             mood: "ya",
           }
@@ -117,7 +119,7 @@ export async function handleImperative({
 
     const normalizedObj =
       typeof result.obj === "object" ? result.obj : { num: result.obj };
-    const resultBe = result.be ?? sentence.be ?? "result";
+    const resultBe = result.be ?? targetBe;
 
     if (dest) {
       dest.obj = normalizedObj;

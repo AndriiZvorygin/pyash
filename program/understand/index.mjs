@@ -133,7 +133,10 @@ export function parse(line) {
         s[current] = s[current] ?? {};
         slot = s[current];
         if (origRole !== current) {
-          delete s[origRole];
+          const origValue = s[origRole];
+          if (origValue && Object.keys(origValue).length === 0) {
+            delete s[origRole];
+          }
         }
       } else {
         // Fallback: keep original role if no keyword found

@@ -4,6 +4,8 @@
 export function npToPyash(np = {}) {
   if (np.name !== undefined) return `name ${np.name}`;
   if (np.num !== undefined) return `num ${np.num}`;
+  if (np.text !== undefined) return `text ${JSON.stringify(np.text)}`;
+  if (np.filename !== undefined) return `filename ${np.filename}`;
   return ""; // can refine later
 }
 
