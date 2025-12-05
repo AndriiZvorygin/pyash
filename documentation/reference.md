@@ -44,3 +44,9 @@ su output be text ya
 su artifact obj name input from state pyash to state JSON name output be understand do
 ```
 This stores parsed sentences and JSON under `output`; memory keeps the command, result, and prior facts for inspection. To persist the JSON to disk instead, point `to filename "quiz/sandpit/understand-output.json"` when invoking `understand`. This “understand” step is parse-only; it does not emit JavaScript.
+
+### Compiling Pyash to code
+- JavaScript: `from filename "quiz/sandpit/compile.txt" to state javascript to filename "quiz/sandpit/compile-output.js" be compile do`
+- Inline to JS text: see `examples/pyash/compile-text-to-js-text.pya`
+- Inline to C text: see `examples/pyash/compile-text-to-c-text.pya`
+- Translate Pyash text to English text: see `examples/pyash/translate-text-to-english.pya`

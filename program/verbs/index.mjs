@@ -9,6 +9,7 @@ import { neuron, signatures as neuronSignatures } from "./mathematics/neuron.mjs
 import { twiceCrescent, signatures as twiceCrescentSignatures } from "./mathematics/twice_crescent.mjs";
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import compile, { signatures as compileSignatures } from "./exchange/compile.mjs";
+import translation, { signatures as translationSignatures } from "./exchange/translation.mjs";
 import understand, { signatures as understandSignatures } from "./exchange/understand.mjs";
 import read, { signatures as readSignatures } from "./exchange/read.mjs";
 import mind, { signatures as mindSignatures } from "./mind/mind.mjs";
@@ -28,6 +29,7 @@ export {
   twiceCrescent,
   chip,
   compile,
+  translation,
   understand,
   read,
   mind,
@@ -48,6 +50,7 @@ export const builtInSignatures = [
   ...twiceCrescentSignatures,
   ...chipSignatures,
   ...compileSignatures,
+  ...translationSignatures,
   ...understandSignatures,
   ...readSignatures,
   ...mindSignatures,
