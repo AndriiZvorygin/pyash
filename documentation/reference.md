@@ -43,4 +43,4 @@ su output be text ya
 # Parse from state pyash to JSON
 su artifact obj name input from state pyash to state JSON name output be understand do
 ```
-This stores parsed sentences and JSON under `output`; memory keeps the command, result, and prior facts for inspection. This “understand” step is parse-only; it does not emit JavaScript.
+This stores parsed sentences and JSON under `output`; memory keeps the command, result, and prior facts for inspection. To persist the JSON to disk instead, point `to filename "quiz/sandpit/understand-output.json"` when invoking `understand`. This “understand” step is parse-only; it does not emit JavaScript.

@@ -1,0 +1,12 @@
+[
+  {
+    "mood": "ya",
+    "subj": {
+      "name": "alpha"
+    },
+    "obj": {
+      "num": 2
+    },
+    "be": "number"
+  }
+]

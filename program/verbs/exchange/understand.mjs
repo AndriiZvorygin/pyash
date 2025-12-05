@@ -1,7 +1,9 @@
+import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
-export async function understand_from_name_text_to_name_text({ obj, sentence }) {
+export async function understand_from_name_text_to_name_text(sentence) {
+  const { obj } = sentence ?? {};
   const sourceName = sentence?.obj?.name ?? obj?.name;
   if (!sourceName) throw new Error("understand: obj.name is required");
 
@@ -14,8 +16,13 @@ export async function understand_from_name_text_to_name_text({ obj, sentence }) 
   const program = buildProgram(sourceText);
   const json = JSON.stringify(program.sentences, null, 2);
 
-  // Decide where to store result: target name (to.name) if provided, else subject name
   const targetName = sentence?.to?.name ?? sentence?.subj?.name;
+  const targetFilename = sentence?.to?.filename;
+
+  if (targetFilename) {
+    await fs.writeFile(targetFilename, json, "utf8");
+  }
+
   if (targetName) {
     const fact = {
       subj: { name: targetName },
@@ -42,6 +49,26 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "understand", "obj", "name", "to", "name"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "num", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "obj", "name", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "fromstate", "name", "num", "obj", "name", "num", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "fromstate", "name", "num", "obj", "name", "text", "to", "filename"],
     handler: understand_from_name_text_to_name_text
   }
 ];
