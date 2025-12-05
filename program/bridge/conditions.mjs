@@ -10,9 +10,12 @@ export async function handleCondition(sentence, { state, verbs, remember }) {
     const key = joinSignatureWords(sigWords);
     fn = lookupSignatureHandler(key) ?? fn;
   }
-  if (!fn) {
+  if (!fn && sigWords) {
+    const key = joinSignatureWords(sigWords);
     const handlers = lookupHandlersForVerb(be);
-    if (handlers.size === 1) fn = [...handlers][0];
+    if (handlers.size > 0) {
+      throw new Error(`No handler for signature: ${key}`);
+    }
   }
   if (!fn) throw new Error(`Unknown verb: ${be}`);
 

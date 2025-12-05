@@ -38,13 +38,6 @@ export async function handleImperative({
     }
   }
 
-  if (!fn && !defEntry) {
-    const verbHandlers = lookupHandlersForVerb(be);
-    if (verbHandlers.size === 1) {
-      fn = [...verbHandlers][0];
-    }
-  }
-
   if (!fn && defEntry) {
     if (typeof defEntry.end !== "number") {
       throw new Error(`Definition ${be} missing closing prah`);
