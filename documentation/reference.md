@@ -50,3 +50,4 @@ This stores parsed sentences and JSON under `output`; memory keeps the command, 
 - Inline to JS text: see `examples/pyash/compile-text-to-js-text.pya`
 - Inline to C text: see `examples/pyash/compile-text-to-c-text.pya`
 - Translate Pyash text to English text: see `examples/pyash/translate-text-to-english.pya`
+- Translate English text back to Pyash sentences: see `examples/pyash/translate-add-to-english.pya` and related translation examples.

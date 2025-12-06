@@ -14,6 +14,22 @@ function transpileSentence(sentence, { lang }) {
     return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
+  if (sentence.be === "subtract" && obj.num !== undefined && sentence.to?.name) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+  }
+
+  if (sentence.be === "multiply" && obj.num !== undefined && sentence.to?.name) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    return `${sentence.to.name} = ${sentence.to.name} * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+  }
+
+  if (sentence.be === "divide" && obj.num !== undefined && sentence.to?.name) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    const divisor = Number.isNaN(safeValue) ? 1 : safeValue;
+    return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
+  }
+
   const name = sentence?.subj?.name;
   const mood = sentence?.mood;
   if (!name || mood !== "ya") return null;

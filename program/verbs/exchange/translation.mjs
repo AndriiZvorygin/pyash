@@ -7,7 +7,27 @@ function sentenceToEnglish(sentence) {
   const mood = sentence.mood;
   const beWords = (sentence.be || "").split(" ").filter(Boolean);
   const beLabel = beWords.length ? beWords.join(" ") : "something";
-  if (!subj || mood !== "ya") return JSON.stringify(sentence);
+  if (!subj && mood !== "do") return JSON.stringify(sentence);
+
+  if (mood === "do") {
+    const numVal = obj.num !== undefined ? obj.num : undefined;
+    const textVal = obj.text !== undefined ? obj.text : undefined;
+    const verb = beLabel;
+    const targetTo = sentence.to?.name;
+    const targetFrom = sentence.from?.name;
+    if (numVal !== undefined && targetTo) {
+      return `do ${verb} ${numVal} to ${targetTo}.`;
+    }
+    if (numVal !== undefined && targetFrom) {
+      return `do ${verb} ${numVal} from ${targetFrom}.`;
+    }
+    if (textVal !== undefined && targetTo) {
+      return `do ${verb} "${textVal}" to ${targetTo}.`;
+    }
+    return `do ${verb}.`;
+  }
+
+  if (mood !== "ya") return JSON.stringify(sentence);
 
   if (obj.num !== undefined) {
     return `${subj} is ${beLabel} ${obj.num}.`;
@@ -17,7 +37,49 @@ function sentenceToEnglish(sentence) {
     return `${subj} is ${beLabel} "${obj.text}".`;
   }
 
-  return `${subj} is ${beLabel}.`;
+  return `${subj} is ${beLabel}`;
+}
+
+function englishLineToSentence(line) {
+  const trimmed = line.trim();
+
+  // Imperative form: "do subtract 2 from collector"
+  const doMatch = trimmed.match(/^do ([A-Za-z0-9_]+) ([0-9.+-]+) (to|from) ([A-Za-z0-9_]+)\.?$/i);
+  if (doMatch) {
+    const [, verb, numRaw, dir, target] = doMatch;
+    const cleanNum = numRaw.replace(/\.$/, "");
+    const n = Number(cleanNum);
+    const obj = { num: Number.isNaN(n) ? cleanNum : n };
+    const sentence = {
+      mood: "do",
+      be: verb.toLowerCase(),
+      obj,
+    };
+    if (dir.toLowerCase() === "to") {
+      sentence.to = { name: target };
+    } else {
+      sentence.from = { name: target };
+    }
+    return sentence;
+  }
+
+  // Expect format: "<name> is <be> <value>."
+  const match = trimmed.match(/^([A-Za-z0-9_]+) is ([A-Za-z0-9_ ]+?)(?: "([^"]*)")?(?: ([0-9.+-]+))?\.?$/);
+  if (!match) return null;
+
+  const [, name, bePart, textVal, numVal] = match;
+  const be = bePart.trim();
+  const sentence = { mood: "ya", subj: { name }, be };
+
+  if (textVal !== undefined) {
+    sentence.obj = { text: textVal };
+  } else if (numVal !== undefined) {
+    const clean = numVal.replace(/\.$/, "");
+    const n = Number(clean);
+    sentence.obj = { num: Number.isNaN(n) ? numVal : n };
+  }
+
+  return sentence;
 }
 
 export async function translation_from_text_to_name_text(sentence) {
@@ -31,21 +93,37 @@ export async function translation_from_text_to_name_text(sentence) {
     throw new Error("translation: source text is required");
   }
 
-  const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
-  const lines = program.sentences.map(sentenceToEnglish);
-  const translation = lines.join("\n");
+  const isEnglishSource = (sentence?.fromstate?.name || "").toLowerCase() === "english";
+  let translation = "";
+  let sentences = [];
+
+  if (isEnglishSource) {
+    sentences = sourceText
+      .replaceAll("\\n", "\n")
+      .split("\n")
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(englishLineToSentence)
+      .filter(Boolean);
+    translation = sentences.map(s => JSON.stringify(s)).join("\n");
+  } else {
+    const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
+    sentences = program.sentences;
+    const lines = program.sentences.map(sentenceToEnglish);
+    translation = lines.join("\n");
+  }
 
   const targetName = sentence?.to?.name ?? sentence?.subj?.name;
   if (targetName) {
     doRemember({
       subj: { name: targetName },
-      be: sentence?.become?.name ?? "english",
-      obj: { text: translation },
+      be: sentence?.become?.name ?? (isEnglishSource ? "pyash" : "english"),
+      obj: { text: translation, sentences },
       mood: "ya"
     });
   }
 
-  return { obj: { text: translation }, be: sentence?.become?.name ?? "english" };
+  return { obj: { text: translation, sentences }, be: sentence?.become?.name ?? (isEnglishSource ? "pyash" : "english") };
 }
 
 export default translation_from_text_to_name_text;

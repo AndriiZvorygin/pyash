@@ -161,3 +161,25 @@ test("compile emits JS for simple add", async () => {
   assert.match(js, /let collector = 0;/);
   assert.match(js, /collector = collector \+ 2;/);
 });
+
+test("compile emits JS for simple multiply and divide", async () => {
+  forget();
+
+  const program = [
+    "subj name collector obj num 10 be number ya",
+    "obj num 3 to name collector be multiply do",
+    "obj num 2 to name collector be divide do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let collector = 10;/);
+  assert.match(js, /collector = collector \* 3;/);
+  assert.match(js, /collector = collector \/ 2;/);
+});
