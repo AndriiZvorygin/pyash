@@ -2,29 +2,42 @@ import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
 import { doRemember } from "../../remember/index.mjs";
 
-function transpileSentence(sentence, { lang }) {
+function transpileSentence(sentence, { lang, declare = true }) {
   const obj = sentence.obj ?? {};
-  const beWords = (sentence.be || "").split(" ").filter(Boolean);
+  const verb = sentence.be || sentence.mood || "";
+  const beWords = verb.split(" ").filter(Boolean);
   const isPermanent = beWords[0] === "permanent";
-  const baseBe = isPermanent ? beWords.slice(1).join(" ") : sentence.be;
+  const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
+  const effectiveBe = baseBe || sentence.mood;
+
+  // Conditionals (tiny/giant/equally) with then consequence
+  if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
+    const lhs = obj.num ?? obj.name ?? "lhs";
+    const rhs = sentence.from?.num ?? sentence.from?.name ?? "rhs";
+    const op = baseBe === "tiny" ? "<" : baseBe === "giant" ? ">" : "===";
+    const consequence = sentence.consequence;
+    const body = transpileSentence(consequence, { lang, declare: false }) ?? `// TODO: ${JSON.stringify(consequence)}`;
+    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
+    return `if (${lhs} ${op} ${rhs}) {\n${finalBody}\n}`;
+  }
 
   // Imperative add
-  if (sentence.be === "add" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "add" && obj.num !== undefined && sentence.to?.name) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (sentence.be === "subtract" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "subtract" && obj.num !== undefined && sentence.to?.name) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (sentence.be === "multiply" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "multiply" && obj.num !== undefined && sentence.to?.name) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     return `${sentence.to.name} = ${sentence.to.name} * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (sentence.be === "divide" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "divide" && obj.num !== undefined && sentence.to?.name) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     const divisor = Number.isNaN(safeValue) ? 1 : safeValue;
     return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
@@ -32,33 +45,31 @@ function transpileSentence(sentence, { lang }) {
 
   const name = sentence?.subj?.name;
   const mood = sentence?.mood;
-  if (!name || mood !== "ya") return null;
+  if (!name || mood === "do") return null;
 
-  if (baseBe === "number" && typeof obj.num !== "undefined") {
+  if (effectiveBe === "number" && typeof obj.num !== "undefined") {
     const value = typeof obj.num === "number" ? obj.num : Number(obj.num);
     const safeValue = Number.isNaN(value) ? 0 : value;
     if (lang === "c") {
+      if (!declare) return `${name} = ${safeValue};`;
       const decl = isPermanent ? "const double" : "double";
       return `${decl} ${name} = ${safeValue};`;
     }
+    if (!declare) return `${name} = ${safeValue};`;
     const decl = isPermanent ? "const" : "let";
     return `${decl} ${name} = ${safeValue};`;
   }
 
-  if (baseBe === "text" && typeof obj.text === "string") {
+  if (effectiveBe === "text" && typeof obj.text === "string") {
     const value = JSON.stringify(obj.text);
     if (lang === "c") {
+      if (!declare) return `${name} = ${value};`;
       const decl = isPermanent ? "const char *" : "char *";
       return `${decl} ${name} = ${value};`;
     }
+    if (!declare) return `${name} = ${value};`;
     const decl = isPermanent ? "const" : "let";
     return `${decl} ${name} = ${value};`;
-  }
-
-  // Simple add to target name
-  if (sentence.be === "add" && obj.num !== undefined && sentence.to?.name) {
-    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
-    return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
   return null;
@@ -121,6 +132,7 @@ async function compile_from_filename_to_filename(sentence) {
 }
 
 export default compile_from_filename_to_filename;
+export { transpileSentence };
 
 export const signatures = [
   {
@@ -145,6 +157,18 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "compile", "from", "text", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "fromtext", "text", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "fromtext", "text", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "obj", "num", "to", "name", "num"],
     handler: compile_from_filename_to_filename
   }
 ];

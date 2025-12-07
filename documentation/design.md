@@ -94,6 +94,8 @@ Conventions:
 
 The bridge (dispatcher) is responsible for normalizing whatever the verb returns into the standard “command + result fact(s)” pattern in memory.
 
+Compile/translation verbs follow the same ABI: they accept a `Sentence` (often with `from`/`to` cases) and return a `Sentence`/`Paragraph`. Newer helpers (compile, translation) still emit sentence-based results so compiled/translated flows can be swapped with interpreted ones.
+
 ### Ceremony / Sandpit ABI
 
 A **ceremony** or **compiled program** is also exposed as a function, operating over sentences and paragraphs.

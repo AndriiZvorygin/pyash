@@ -183,3 +183,23 @@ test("compile emits JS for simple multiply and divide", async () => {
   assert.match(js, /collector = collector \* 3;/);
   assert.match(js, /collector = collector \/ 2;/);
 });
+
+test("compile emits JS if-statement for tiny then", async () => {
+  forget();
+
+  const program = [
+    "subj name total obj num 0 be number ya",
+    "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let total = 0;/);
+  assert.match(js, /if\s*\(3 < 5\)\s*\{\s*total = total \+ 1;/s);
+});

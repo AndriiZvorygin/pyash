@@ -5,7 +5,8 @@ import { parse } from "../understand/index.mjs";
 import { interpret } from "../bridge/index.mjs";
 import { forget, remember } from "../remember/index.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
-import { registerSignatureHandler } from "../bridge/signature.mjs";
+import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
+import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 
@@ -24,7 +25,10 @@ async function main() {
   const text = await fs.readFile(resolved, "utf8");
 
   forget();
-  for (const sig of builtInSignatures) registerSignatureHandler(sig);
+  clearSignatureHandlers();
+  for (const sig of [...builtInSignatures, ...compileSignatures]) {
+    registerSignatureHandler(sig);
+  }
   const sentences = splitSentences(text);
   const outputs = [];
 
