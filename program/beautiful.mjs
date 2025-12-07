@@ -13,6 +13,10 @@ export function npToPyash(np = {}) {
 export function sentenceToPyash(s = {}) {
   const parts = [];
 
+  if (s.exists) {
+    parts.push("exists");
+  }
+
   if (s.subj) {
     parts.push("subj");
     const np = npToPyash(s.subj);

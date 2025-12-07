@@ -15,7 +15,7 @@ test("understand verb reads Pyash text and stores JSON", async () => {
 
   // store input text and placeholder output
   await interpret(
-    parse(`subj name input obj text quoted.pyash.${program}.pyash.quoted be text ya`)
+    parse(`exists subj name input obj text "${program}" be text ya`)
   );
   await interpret(parse("subj name output be text ya"));
 
@@ -115,7 +115,7 @@ test("compile converts Pyash file to JavaScript file", async () => {
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
   forget();
 
-  const program = "subj name alpha obj num 1 be permanent number ya\nsubj name beta obj text hello be permanent text ya";
+  const program = "exists subj name alpha obj num 1 be permanent number ya\nexists subj name beta obj text hello be permanent text ya";
   const sentence = parse(
     `from text quoted.pyash.${program}.pyash.quoted become javascript to text output be compile do`
   );
@@ -130,7 +130,7 @@ test("compile converts inline Pyash text to JavaScript text with const for perma
 test("compile converts inline Pyash text to C text", async () => {
   forget();
 
-  const program = "subj name alpha obj num 1 be number ya\nsubj name beta obj text hello be permanent text ya";
+  const program = "exists subj name alpha obj num 1 be number ya\nexists subj name beta obj text hello be permanent text ya";
   const sentence = parse(
     `from text quoted.pyash.${program}.pyash.quoted to state c to text output be compile do`
   );
@@ -146,7 +146,7 @@ test("compile emits C if-statement for tiny then", async () => {
   forget();
 
   const program = [
-    "subj name total obj num 0 be number ya",
+    "exists subj name total obj num 0 be number ya",
     "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
   ].join("\\n");
 
@@ -166,7 +166,7 @@ test("compile emits JS for simple add", async () => {
   forget();
 
   const program = [
-    "subj name collector obj num 0 be number ya",
+    "exists subj name collector obj num 0 be number ya",
     "obj num 2 to name collector be add do"
   ].join("\\n");
 
@@ -182,11 +182,32 @@ test("compile emits JS for simple add", async () => {
   assert.match(js, /collector = collector \+ 2;/);
 });
 
+test("compile reassigns without redeclaring when name already exists", async () => {
+  forget();
+
+  const program = [
+    "exists subj name alpha obj num 1 be number ya",
+    "subj name alpha obj num 2 be number ya"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let alpha = 1;/);
+  assert.match(js, /alpha = 2;/);
+  assert.doesNotMatch(js, /let alpha = 2;/);
+});
+
 test("compile emits JS for simple multiply and divide", async () => {
   forget();
 
   const program = [
-    "subj name collector obj num 10 be number ya",
+    "exists subj name collector obj num 10 be number ya",
     "obj num 3 to name collector be multiply do",
     "obj num 2 to name collector be divide do"
   ].join("\\n");
@@ -208,7 +229,7 @@ test("compile emits JS if-statement for tiny then", async () => {
   forget();
 
   const program = [
-    "subj name total obj num 0 be number ya",
+    "exists subj name total obj num 0 be number ya",
     "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
   ].join("\\n");
 
@@ -228,7 +249,7 @@ test("compile emits JS if-statement for giant then subtract", async () => {
   forget();
 
   const program = [
-    "subj name total obj num 10 be number ya",
+    "exists subj name total obj num 10 be number ya",
     "obj num 7 be giant from num 5 then obj num 2 to name total be subtract do"
   ].join("\\n");
 
@@ -248,7 +269,7 @@ test("compile emits JS if-statement for equally then multiply", async () => {
   forget();
 
   const program = [
-    "subj name total obj num 5 be number ya",
+    "exists subj name total obj num 5 be number ya",
     "obj num 5 be equally from num 5 then obj num 2 to name total be multiply do"
   ].join("\\n");
 
@@ -268,7 +289,7 @@ test("compile emits nested conditionals", async () => {
   forget();
 
   const program = [
-    "subj name counter obj num 0 be number ya",
+    "exists subj name counter obj num 0 be number ya",
     "obj num 2 be tiny from num 3 then obj num 4 be giant from num 1 then obj num 1 to name counter be add do"
   ].join("\\n");
 

@@ -1,2 +1,2 @@
-subj name alpha obj num 1 be number ya
-subj name beta obj num 2 be number ya
+exists subj name alpha obj num 1 be number ya
+exists subj name beta obj num 2 be number ya

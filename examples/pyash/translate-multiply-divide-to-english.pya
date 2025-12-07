@@ -1,3 +1,3 @@
-subj name output be english ya
+exists subj name output be english ya
 from text quoted.pyash.subj name collector obj num 10 be number ya\nobj num 3 to name collector be multiply do\nobj num 2 to name collector be divide do.pyash.quoted from state pyash to state english to name output be translation do
 subj name output be english que

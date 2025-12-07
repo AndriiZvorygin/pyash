@@ -1,6 +1,6 @@
 subj name inspector to name seen-tloh to name seen-until be ceremony def
-subj name seen-tloh obj this tloh be number ya
-subj name seen-until obj this until be number ya
+exists subj name seen-tloh obj be number ya
+exists subj name seen-until obj be number ya
 this ret
 subj name inspector be ceremony prah
 to name sink tloh num 2 until num 2 be inspector do

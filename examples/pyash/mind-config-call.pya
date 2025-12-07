@@ -1,2 +1,2 @@
-su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya
+exists subj name generator be mind from name http://localhost:11434 ya
 su question obj discourse "Hello" to generator be mind do

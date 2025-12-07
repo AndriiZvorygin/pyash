@@ -2,5 +2,5 @@ subj name worker to name target be ceremony def
 obj num 4 to name target be add do
 this obj name target ret
 subj name worker be ceremony prah
-subj name target obj num 1 tloh num 3 until num 5 be number ya
+exists subj name target obj num 1 be number ya
 to name target be worker do

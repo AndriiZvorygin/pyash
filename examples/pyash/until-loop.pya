@@ -1,4 +1,4 @@
-subj name counter obj num 0 be number ya
+exists subj name counter obj num 0 be number ya
 subj name climb to name counter be ceremony def
 obj num 1 to name counter be add do
 subj name climb be ceremony prah

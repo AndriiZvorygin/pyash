@@ -86,9 +86,15 @@ export function parse(line) {
   const s = { mood };
   let current = null;
   let slot = null;
+  let exists = false;
 
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
+
+    if (t === "exists") {
+      exists = true;
+      continue;
+    }
 
     // --- topic sugar: "ta loop_head be topic ya" ---
     // sugar for: subj name loop_head be topic ya
@@ -297,6 +303,10 @@ export function parse(line) {
       i++; // consume role token
       continue;
     }
+  }
+
+  if (exists) {
+    s.exists = true;
   }
 
   return s;

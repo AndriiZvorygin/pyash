@@ -1,4 +1,4 @@
-subj name counter obj num 0 be number ya
+exists subj name counter obj num 0 be number ya
 subj name loop body to name counter be ceremony def
 obj num 1 to name counter be add do
 subj name loop body be ceremony prah
