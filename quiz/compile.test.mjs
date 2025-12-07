@@ -245,6 +245,68 @@ test("compile emits JS for simple multiply and divide", async () => {
   assert.match(js, /collector = collector \/ 2;/);
 });
 
+test("compile emits JS ceremony with no params", async () => {
+  forget();
+
+  const program = [
+    "subj name noop be ceremony def",
+    "subj name noop be ceremony prah"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /function\s+noop\(sentence\)[\s\S]*return\s*sentence;/);
+});
+
+test("compile emits JS ceremony with param and body", async () => {
+  forget();
+
+  const program = [
+    "exists subj name bucket obj num 0 be number ya",
+    "subj name add two to name bucket be ceremony def",
+    "obj num 2 to name bucket be add do",
+    "subj name add two be ceremony prah"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let bucket = 0;/);
+  assert.match(js, /function\s+add_two\(sentence\)[\s\S]*sentence\.to\?.num = \(sentence\.to\?.num \?\? 0\) \+ 2;[\s\S]*return sentence;/);
+});
+
+test("compile emits JS ceremony mutating this.obj.num via genitive", async () => {
+  forget();
+
+  const program = [
+    "exists subj name bump obj num of obj of this be number ya", // ignored; placeholder
+    "subj name bump be ceremony def",
+    "obj num 2 to num of obj of this be add do",
+    "subj name bump be ceremony prah"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /function\s+bump\(sentence\)[\s\S]*sentence\.obj\?.num = \(sentence\.obj\?.num \?\? 0\) \+ 2;[\s\S]*return sentence;/);
+});
+
 test("compile emits JS if-statement for tiny then", async () => {
   forget();
 

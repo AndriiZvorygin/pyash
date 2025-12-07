@@ -1,0 +1,9 @@
+exists subj name bucket obj num 0 be number ya
+
+subj name add two to name bucket be ceremony def
+obj num 2 to name bucket be add do
+subj name add two be ceremony prah
+
+subj name output be javascript ya
+from text "exists subj name bucket obj num 0 be number ya\nsubj name add two to name bucket be ceremony def\nobj num 2 to name bucket be add do\nsubj name add two be ceremony prah" to state javascript to name output be compile do
+subj name output be javascript que

@@ -231,6 +231,24 @@ export function parse(line) {
 
     // --- type tokens: name / num / number / text / filename ---
     if (TYPE_TOKENS.includes(t)) {
+      // Genitive chain: e.g., "num of obj of this"
+      if (words[i + 1] === "of") {
+        const chain = [t];
+        let j = i + 1;
+        while (j < words.length && words[j] === "of") {
+          const next = words[j + 1];
+          if (!next) break;
+          chain.push(next);
+          j += 2;
+        }
+        if (chain.length > 1) {
+          const rootFirst = chain.slice().reverse();
+          slot.genitive = rootFirst; // ["this", "obj", "num"]
+          i = j - 1;
+          continue;
+        }
+      }
+
       const target = slot || (current ? s[current] : null);
       if (!target) continue;
 
