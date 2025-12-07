@@ -203,3 +203,81 @@ test("compile emits JS if-statement for tiny then", async () => {
   assert.match(js, /let total = 0;/);
   assert.match(js, /if\s*\(3 < 5\)\s*\{\s*total = total \+ 1;/s);
 });
+
+test("compile emits JS if-statement for giant then subtract", async () => {
+  forget();
+
+  const program = [
+    "subj name total obj num 10 be number ya",
+    "obj num 7 be giant from num 5 then obj num 2 to name total be subtract do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let total = 10;/);
+  assert.match(js, /if\s*\(7 > 5\)\s*\{\s*total = total - 2;/s);
+});
+
+test("compile emits JS if-statement for equally then multiply", async () => {
+  forget();
+
+  const program = [
+    "subj name total obj num 5 be number ya",
+    "obj num 5 be equally from num 5 then obj num 2 to name total be multiply do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let total = 5;/);
+  assert.match(js, /if\s*\(5 === 5\)\s*\{\s*total = total \* 2;/s);
+});
+
+test("compile emits nested conditionals", async () => {
+  forget();
+
+  const program = [
+    "subj name counter obj num 0 be number ya",
+    "obj num 2 be tiny from num 3 then obj num 4 be giant from num 1 then obj num 1 to name counter be add do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /let counter = 0;/);
+  assert.match(js, /if\s*\(2 < 3\)\s*{\s*if\s*\(4 > 1\)\s*{\s*counter = counter \+ 1;/s);
+});
+
+test("compile leaves TODO for malformed conditional without consequence", async () => {
+  forget();
+
+  const program = [
+    "obj num 1 be tiny from num 2 ya"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(js);
+  assert.match(js, /TODO: .*\"be\":\"tiny\"/);
+});

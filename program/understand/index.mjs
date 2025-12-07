@@ -101,7 +101,10 @@ export function parse(line) {
     if (t === "then") {
       // (currently unused because 'then' is the mood word,
       //  but we can keep this for future nested clauses)
-      const subline = words.slice(i + 1).join(" ");
+      const subTokens = words.slice(i + 1);
+      // Re-attach the mood token so nested clauses retain their own mood word
+      if (mood) subTokens.push(mood);
+      const subline = subTokens.join(" ");
       s.consequence = parse(subline);
       break;
     }
