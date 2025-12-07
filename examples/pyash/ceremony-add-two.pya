@@ -1,9 +1,19 @@
 exists subj name bucket obj num 0 be number ya
 
-subj name add two to name bucket be ceremony def
-obj num 2 to name bucket be add do
+subj name add two to name num be ceremony def
+obj this ti to be remember to name produce exists do
+obj num 2 to num ti obj ti produce be add do
+subj name produce ret
 subj name add two be ceremony prah
 
 subj name output be javascript ya
-from text "exists subj name bucket obj num 0 be number ya\nsubj name add two to name bucket be ceremony def\nobj num 2 to name bucket be add do\nsubj name add two be ceremony prah" to state javascript to name output be compile do
+subj name program obj text quoted.pyash.
+exists subj name bucket obj num 0 be number ya
+subj name add two to name num be ceremony def
+obj this ti to be remember to name produce exists do
+obj num 2 to num ti obj ti produce be add do
+subj name produce ret
+subj name add two be ceremony prah
+.pyash.quoted be text ya
+obj name program from state pyash to state javascript to name output be compile do
 subj name output be javascript que

@@ -231,19 +231,21 @@ export function parse(line) {
 
     // --- type tokens: name / num / number / text / filename ---
     if (TYPE_TOKENS.includes(t)) {
-      // Genitive chain: e.g., "num of obj of this"
-      if (words[i + 1] === "of") {
+      // Genitive chains:
+      //   backward: "num of obj of this"   => chain ["this","obj","num"]
+      //   forward:  "num ti obj ti this"   => chain ["this","obj","num"]
+      if (words[i + 1] === "of" || words[i + 1] === "ti") {
         const chain = [t];
         let j = i + 1;
-        while (j < words.length && words[j] === "of") {
+        while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
           const next = words[j + 1];
           if (!next) break;
           chain.push(next);
           j += 2;
         }
         if (chain.length > 1) {
-          const rootFirst = chain.slice().reverse();
-          slot.genitive = rootFirst; // ["this", "obj", "num"]
+          const ordered = chain.slice().reverse(); // store root-first
+          slot.genitive = { chain: ordered };
           i = j - 1;
           continue;
         }
@@ -287,6 +289,26 @@ export function parse(line) {
       }
 
       continue;
+    }
+
+    // Forward root-first genitive starting with "this" (e.g., "this ti obj ti num")
+    if (t === "this" && words[i + 1] === "ti") {
+      const chain = [t];
+      let j = i + 1;
+      while (j < words.length && words[j] === "ti") {
+        const next = words[j + 1];
+        if (!next) break;
+        chain.push(next);
+        j += 2;
+      }
+      if (chain.length > 1) {
+        slot = slot || (current ? s[current] : null);
+        if (slot) {
+          slot.genitive = { chain };
+          i = j - 1;
+          continue;
+        }
+      }
     }
 
     // --- bare value after a role defaults to name ---

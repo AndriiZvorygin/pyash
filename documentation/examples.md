@@ -20,6 +20,7 @@ This folder collects runnable/walkthrough examples to help future assistants and
 - `examples/pyash/compile-multiply-divide-to-c-text.pya` — compiles inline multiply/divide to C.
 - `examples/pyash/translate-multiply-divide-to-english.pya` — translates inline multiply/divide to English.
 - `examples/pyash/translate-english-to-pyash.pya` — translates controlled English lines back into Pyash sentences.
+- `examples/pyash/translate-javascript-to-pyash.pya` — translates simple JavaScript assignments/arithmetic back into Pyash sentences.
 - `examples/pyash/compile-conditional-to-js-text.pya` / `compile-conditional-to-c-text.pya` — compile a tiny/then add into JS/C.
 - `examples/pyash/compile-mixed-to-js-text.pya` — shows `exists` declaration, reassignment, and conditional add compiled to JS.
 - `examples/pyash/translate-conditional-to-english.pya` / `translate-conditional-from-english.pya` — translate conditionals between Pyash and English.

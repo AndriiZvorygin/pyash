@@ -113,6 +113,110 @@ function englishLineToSentence(line) {
   return sentence;
 }
 
+function parseNumberToken(token) {
+  const n = Number(token);
+  return Number.isNaN(n) ? token : n;
+}
+
+function javascriptLineToSentence(line) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("//")) return null;
+  const withoutSemi = trimmed.replace(/;$/, "");
+
+  // Declarations with numbers
+  let match = withoutSemi.match(/^(let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([0-9.+-]+)$/);
+  if (match) {
+    const [, kind, name, numRaw] = match;
+    const num = parseNumberToken(numRaw);
+    const be =
+      kind === "const" ? "permanent number" :
+      "number";
+    return {
+      mood: "ya",
+      subj: { name },
+      obj: { num },
+      be,
+      exists: true
+    };
+  }
+
+  // Declarations with text
+  match = withoutSemi.match(/^(let|const|var)\s+([A-Za-z_$][\w$]*)\s*=\s*["']([^"']*)["']$/);
+  if (match) {
+    const [, kind, name, text] = match;
+    const be =
+      kind === "const" ? "permanent text" :
+      "text";
+    return {
+      mood: "ya",
+      subj: { name },
+      obj: { text },
+      be,
+      exists: true
+    };
+  }
+
+  // Simple assignment number
+  match = withoutSemi.match(/^([A-Za-z_$][\w$]*)\s*=\s*([0-9.+-]+)$/);
+  if (match) {
+    const [, name, numRaw] = match;
+    return {
+      mood: "ya",
+      subj: { name },
+      obj: { num: parseNumberToken(numRaw) },
+      be: "number"
+    };
+  }
+
+  // Simple assignment text
+  match = withoutSemi.match(/^([A-Za-z_$][\w$]*)\s*=\s*["']([^"']*)["']$/);
+  if (match) {
+    const [, name, text] = match;
+    return {
+      mood: "ya",
+      subj: { name },
+      obj: { text },
+      be: "text"
+    };
+  }
+
+  // Add/subtract/multiply/divide with explicit left reference
+  match = withoutSemi.match(/^([A-Za-z_$][\w$]*)\s*=\s*\1\s*([+\-*/])\s*([0-9.+-]+)$/);
+  if (match) {
+    const [, name, op, numRaw] = match;
+    const verb =
+      op === "+" ? "add" :
+      op === "-" ? "subtract" :
+      op === "*" ? "multiply" :
+      "divide";
+    return {
+      mood: "do",
+      be: verb,
+      obj: { num: parseNumberToken(numRaw) },
+      to: { name }
+    };
+  }
+
+  // Compound assignment (+=, -=, *=, /=)
+  match = withoutSemi.match(/^([A-Za-z_$][\w$]*)\s*([+\-*/])=\s*([0-9.+-]+)$/);
+  if (match) {
+    const [, name, op, numRaw] = match;
+    const verb =
+      op === "+" ? "add" :
+      op === "-" ? "subtract" :
+      op === "*" ? "multiply" :
+      "divide";
+    return {
+      mood: "do",
+      be: verb,
+      obj: { num: parseNumberToken(numRaw) },
+      to: { name }
+    };
+  }
+
+  return null;
+}
+
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.obj?.name ?? sentence?.from?.name;
   const sourceText =
@@ -124,17 +228,20 @@ export async function translation_from_text_to_name_text(sentence) {
     throw new Error("translation: source text is required");
   }
 
-  const isEnglishSource = (sentence?.fromstate?.name || "").toLowerCase() === "english";
+  const sourceLang = (sentence?.fromstate?.name || "").toLowerCase();
+  const isEnglishSource = sourceLang === "english";
+  const isJavaScriptSource = sourceLang === "javascript" || sourceLang === "js";
   let translation = "";
   let sentences = [];
 
-  if (isEnglishSource) {
+  if (isEnglishSource || isJavaScriptSource) {
+    const mapper = isEnglishSource ? englishLineToSentence : javascriptLineToSentence;
     sentences = sourceText
       .replaceAll("\\n", "\n")
       .split("\n")
       .map(l => l.trim())
       .filter(Boolean)
-      .map(englishLineToSentence)
+      .map(mapper)
       .filter(Boolean);
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
@@ -150,13 +257,13 @@ export async function translation_from_text_to_name_text(sentence) {
   if (targetName) {
     doRemember({
       subj: { name: targetName },
-      be: sentence?.become?.name ?? (isEnglishSource ? "pyash" : "english"),
+      be: sentence?.become?.name ?? (isEnglishSource || isJavaScriptSource ? "pyash" : "english"),
       obj: { text: translation, sentences },
       mood: "ya"
     });
   }
 
-  return { obj: { text: translation, sentences }, be: sentence?.become?.name ?? (isEnglishSource ? "pyash" : "english") };
+  return { obj: { text: translation, sentences }, be: sentence?.become?.name ?? (isEnglishSource || isJavaScriptSource ? "pyash" : "english") };
 }
 
 export default translation_from_text_to_name_text;

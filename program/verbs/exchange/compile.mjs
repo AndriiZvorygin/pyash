@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
-import { doRemember } from "../../remember/index.mjs";
+import { doRemember, remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 
 function sanitizeName(name = "") {
@@ -11,10 +11,12 @@ function sanitizeName(name = "") {
 }
 
 function pathFromGenitive(genitive = [], sentenceArg) {
-  if (!sentenceArg || genitive.length === 0) return null;
-  const chain = genitive[0] === "this" ? genitive.slice(1) : genitive;
+  if (!sentenceArg) return null;
+  const chainArr = Array.isArray(genitive) ? genitive : genitive?.chain;
+  if (!chainArr || chainArr.length === 0) return null;
+  const chain = chainArr[0] === "this" ? chainArr.slice(1) : chainArr;
   if (chain.length === 0) return sentenceArg;
-  return `${sentenceArg}.${chain.join(genitive.some(() => true) ? "?.":"." )}`;
+  return [sentenceArg, ...chain.map(part => `.${part}`)].join("");
 }
 
 function valueForRole(role, sentenceArg, field = "num", slot = {}) {
@@ -31,7 +33,7 @@ function targetPath(role, sentenceArg, field = "num", slot = {}) {
   if (slot.genitive) {
     return pathFromGenitive(slot.genitive, sentenceArg);
   }
-  return `${sentenceArg}.${role}?.${field}`;
+  return `${sentenceArg}.${role}.${field}`;
 }
 
 function transpileSentence(sentence, { lang, sentenceArg } = {}) {
@@ -41,6 +43,10 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
   const isPermanent = beWords[0] === "permanent";
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
   const effectiveBe = baseBe || sentence.mood;
+
+  const rememberTarget = sentenceArg
+    ? (name) => `((typeof remember === "function" ? remember(${name}) : null) || { subj: { name: ${name} }, obj: {} })`
+    : null;
 
   // Conditionals (tiny/giant/equally) with then consequence
   if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
@@ -63,8 +69,20 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
   if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
-      const target = targetPath("to", sentenceArg, "num", sentence.to) ?? sentence.to?.name;
-      return `${target} = (${target} ?? 0) + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+      const targetName =
+        sentence.to?.name
+          ? `${sentenceArg}.to.name`
+          : sentence.subj?.name
+            ? `${sentenceArg}.subj.name`
+            : `"${sentence.subj?.name ?? sentence.to?.name ?? "target"}"`;
+      const targetBase = rememberTarget ? rememberTarget(targetName) : `{ subj: { name: ${targetName} }, obj: {} }`;
+      const targetVar = "target";
+      const baseObj = `${targetVar}.obj ?? (${targetVar}.obj = {})`;
+      const fieldPath = sentence.to?.genitive
+        ? pathFromGenitive(sentence.to.genitive, targetVar) || `${targetVar}.obj.num`
+        : `${baseObj}.num`;
+      const newVal = `${fieldPath} ?? 0`;
+      return `const ${targetVar} = ${targetBase};\n${fieldPath} = (${newVal}) + ${Number.isNaN(safeValue) ? 0 : safeValue};\nreturn ${targetVar};`;
     }
     return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
@@ -143,23 +161,29 @@ function transpileCeremony(defSentence, bodySentences, { lang }) {
   const fnName = sanitizeName(defSentence?.subj?.name || "ceremony");
 
   const bodyLines = [];
+  let hasReturn = false;
   for (const s of bodySentences) {
     const line = transpileSentence(s, { lang, sentenceArg: "sentence" });
-    if (line) bodyLines.push(line);
+    if (line) {
+      bodyLines.push(line);
+      if (line.includes("return")) hasReturn = true;
+    }
   }
 
   const retLine =
-    lang === "c"
-      ? "return;"
-      : "return sentence;";
+    hasReturn
+      ? null
+      : lang === "c"
+        ? "return;"
+        : "return sentence;";
 
   if (lang === "c") {
     const paramList = "void";
-    const body = [...bodyLines, retLine].map(l => `  ${l}`).join("\n");
+    const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
     return `void ${fnName}(${paramList}) {\n${body}\n}`;
   }
 
-  const body = [...bodyLines, retLine].map(l => `  ${l}`).join("\n");
+  const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
   return `function ${fnName}(sentence) {\n${body}\n}`;
 }
 
@@ -208,6 +232,11 @@ async function compile_from_filename_to_filename(sentence) {
     sentence?.filename;
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.obj?.text;
+
+  if (!sourceText && sentence?.obj?.name) {
+    const recalled = remember(sentence.obj.name);
+    sourceText = recalled?.obj?.text;
+  }
 
   if (!sourceText && sourceFilename) {
     sourceText = await fs.readFile(sourceFilename, "utf8");
@@ -280,6 +309,30 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "compile", "become", "name", "num", "obj", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "obj", "name", "fromstate", "name", "tostate", "name", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "obj", "name", "fromstate", "name", "become", "name", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "obj", "name", "num", "fromstate", "name", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "obj", "name", "num", "fromstate", "name", "num", "tostate", "name", "num", "to", "name", "num"],
     handler: compile_from_filename_to_filename
   }
 ];
