@@ -55,7 +55,7 @@ test("sentenceToPyash prints all NP slots correctly", () => {
 
   assert.equal(
     out,
-    "subj name x obj num 2 from num 3 to name y be add do"
+    "subj name x obj num 2 to name y be add from num 3 do"
   );
 });
 

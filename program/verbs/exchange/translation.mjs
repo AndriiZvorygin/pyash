@@ -1,4 +1,5 @@
 import { buildProgram } from "../../program.mjs";
+import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
 function sentenceToEnglish(sentence) {
@@ -7,6 +8,16 @@ function sentenceToEnglish(sentence) {
   const mood = sentence.mood;
   const beWords = (sentence.be || "").split(" ").filter(Boolean);
   const beLabel = beWords.length ? beWords.join(" ") : "something";
+
+  // Conditional
+  const isComparator = ["tiny", "giant", "equally"].includes(beLabel);
+  if (sentence.consequence && isComparator) {
+    const lhs = obj.num !== undefined ? obj.num : obj.name ?? "lhs";
+    const rhs = sentence.from?.num !== undefined ? sentence.from.num : sentence.from?.name ?? "rhs";
+    const consequence = sentenceToEnglish(sentence.consequence);
+    return `if ${lhs} is ${beLabel} from ${rhs} then ${consequence}`.replace(/\.$/, "") + ".";
+  }
+
   if (!subj && mood !== "do") return JSON.stringify(sentence);
 
   if (mood === "do") {
@@ -42,6 +53,26 @@ function sentenceToEnglish(sentence) {
 
 function englishLineToSentence(line) {
   const trimmed = line.trim();
+
+  // Conditional: "if 3 is tiny from 5 then do add 1 to total."
+  const condMatch = trimmed.match(/^if\s+(.+?)\s+is\s+(tiny|giant|equally)\s+(?:from\s+)?(.+?)\s+then\s+(.+?)\.?$/i);
+  if (condMatch) {
+    const [, lhsRaw, cmp, rhsRaw, consequenceRaw] = condMatch;
+    const lhsNum = Number(lhsRaw);
+    const rhsNum = Number(rhsRaw);
+    const obj = {};
+    if (!Number.isNaN(lhsNum)) obj.num = lhsNum; else obj.name = lhsRaw.trim();
+    const from = {};
+    if (!Number.isNaN(rhsNum)) from.num = rhsNum; else from.name = rhsRaw.trim();
+    const consequence = englishLineToSentence(consequenceRaw) ?? null;
+    return {
+      mood: "do",
+      be: cmp.toLowerCase(),
+      obj,
+      from,
+      consequence
+    };
+  }
 
   // Imperative form: "do subtract 2 from collector"
   const doMatch = trimmed.match(/^do ([A-Za-z0-9_]+) ([0-9.+-]+) (to|from) ([A-Za-z0-9_]+)\.?$/i);
@@ -105,7 +136,9 @@ export async function translation_from_text_to_name_text(sentence) {
       .filter(Boolean)
       .map(englishLineToSentence)
       .filter(Boolean);
-    translation = sentences.map(s => JSON.stringify(s)).join("\n");
+    translation = sentences
+      .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
+      .join("\n");
   } else {
     const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
     sentences = program.sentences;

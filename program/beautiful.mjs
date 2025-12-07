@@ -25,12 +25,6 @@ export function sentenceToPyash(s = {}) {
     if (np) parts.push(np.split(" "));
   }
 
-  if (s.from) {
-    parts.push("from");
-    const np = npToPyash(s.from);
-    if (np) parts.push(np.split(" "));
-  }
-
   if (s.to) {
     parts.push("to");
     const np = npToPyash(s.to);
@@ -41,7 +35,19 @@ export function sentenceToPyash(s = {}) {
     parts.push("be", s.be);
   }
 
-  if (s.mood) {
+  if (s.from) {
+    parts.push("from");
+    const np = npToPyash(s.from);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.consequence) {
+    parts.push("then");
+    const rendered = sentenceToPyash(s.consequence);
+    if (rendered) parts.push(rendered);
+  }
+
+  if (s.mood && !s.consequence) {
     parts.push(s.mood);
   }
 
