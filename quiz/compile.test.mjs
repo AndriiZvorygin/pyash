@@ -142,6 +142,26 @@ test("compile converts inline Pyash text to C text", async () => {
   assert.match(c, /const char \* beta = "hello";/);
 });
 
+test("compile emits C if-statement for tiny then", async () => {
+  forget();
+
+  const program = [
+    "subj name total obj num 0 be number ya",
+    "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state c to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const c = result?.obj?.text ?? result?.value?.text;
+
+  assert.ok(c);
+  assert.match(c, /double total = 0;/);
+  assert.match(c, /if\s*\(3 < 5\)\s*\{\s*total = total \+ 1;/s);
+});
+
 test("compile emits JS for simple add", async () => {
   forget();
 
