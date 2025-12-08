@@ -36,5 +36,5 @@ test("ceremony-add-two example runs via run_pya_program flow", async () => {
     }
   }
 
-  assert.match(lastOutput, /function add_two/);
+  assert.match(lastOutput, /function be_add_two_to_name_num/);
 });

@@ -1,3 +1,7 @@
 exists subj name output be c ya
-from text quoted.pyash.subj name collector obj num 10 be number ya\nobj num 3 to name collector be multiply do\nobj num 2 to name collector be divide do.pyash.quoted to state c to name output be compile do
+from text quoted.pyash.
+exists subj name collector obj num 10 be number ya
+obj num 3 to name collector be multiply do
+obj num 2 to name collector be divide do
+.pyash.quoted to state c to name output be compile do
 subj name output be c que

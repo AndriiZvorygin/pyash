@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
+import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 
 function sanitizeName(name = "") {
@@ -44,10 +45,6 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
   const effectiveBe = baseBe || sentence.mood;
 
-  const rememberTarget = sentenceArg
-    ? (name) => `((typeof remember === "function" ? remember(${name}) : null) || { subj: { name: ${name} }, obj: {} })`
-    : null;
-
   // Conditionals (tiny/giant/equally) with then consequence
   if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
     const lhs =
@@ -69,47 +66,77 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
   if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
-      const targetName =
-        sentence.to?.name
-          ? `${sentenceArg}.to.name`
+      const genitiveChain = sentence.to?.genitive?.chain || [];
+      const genitiveHint = genitiveChain.find(part => part !== "this");
+      const targetNameLiteral = sentence.to?.name
+        ? `"${sentence.to.name}"`
+        : genitiveHint
+          ? `"${genitiveHint}"`
           : sentence.subj?.name
-            ? `${sentenceArg}.subj.name`
-            : `"${sentence.subj?.name ?? sentence.to?.name ?? "target"}"`;
-      const targetBase = rememberTarget ? rememberTarget(targetName) : `{ subj: { name: ${targetName} }, obj: {} }`;
-      const targetVar = "target";
-      const baseObj = `${targetVar}.obj ?? (${targetVar}.obj = {})`;
+            ? `"${sentence.subj.name}"`
+            : "\"\"";
+      const targetVarName = sanitizeName((sentence.to?.name || genitiveHint || sentence.subj?.name || "sentence"));
+      const isThisGenitive = sentence.to?.genitive?.chain?.[0] === "this";
+      const targetVar = isThisGenitive ? sentenceArg : targetVarName || "sentence";
+      const targetExpr = sentence.to
+        ? `${sentenceArg}.to ?? { subj: { name: ${targetNameLiteral} }, obj: {} }`
+        : sentenceArg;
+      const lines = [];
+      if (!isThisGenitive) {
+        lines.push(`const ${targetVar} = remember(${targetExpr});`);
+      }
+      lines.push(`${targetVar}.obj = ${targetVar}.obj ?? {};`);
       const fieldPath = sentence.to?.genitive
         ? pathFromGenitive(sentence.to.genitive, targetVar) || `${targetVar}.obj.num`
-        : `${baseObj}.num`;
+        : `${targetVar}.obj.num`;
       const newVal = `${fieldPath} ?? 0`;
-      return `const ${targetVar} = ${targetBase};\n${fieldPath} = (${newVal}) + ${Number.isNaN(safeValue) ? 0 : safeValue};\nreturn ${targetVar};`;
+      lines.push(`${fieldPath} = (${newVal}) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+      lines.push(`return ${targetVar};`);
+      return lines.join("\n");
     }
     return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (baseBe === "subtract" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "remember" && sentenceArg) {
+    const genitiveChain = sentence.obj?.genitive?.chain || [];
+    const genitiveHint = genitiveChain.filter(part => part !== "this").at(-1);
+    const rawName = sentence.to?.name?.split(" ")[0] || genitiveHint || "remembered";
+    const targetVar = sanitizeName(rawName) || "remembered";
+    const source = sentence.obj?.genitive
+      ? pathFromGenitive(sentence.obj.genitive, sentenceArg) || `${sentenceArg}.obj`
+      : `${sentenceArg}.to`;
+    const lines = [];
+    if (sentence.exists || sentence.to?.name) {
+      lines.push(`let ${targetVar};`);
+    }
+    lines.push(`${targetVar} = remember(${source});`);
+    lines.push(`return ${targetVar};`);
+    return lines.join("\n");
+  }
+
+  if (baseBe === "subtract" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
-      const target = targetPath("to", sentenceArg) ?? sentence.to.name;
+      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (baseBe === "multiply" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "multiply" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
-      const target = targetPath("to", sentenceArg) ?? sentence.to.name;
+      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     return `${sentence.to.name} = ${sentence.to.name} * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
-  if (baseBe === "divide" && obj.num !== undefined && sentence.to?.name) {
+  if (baseBe === "divide" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     const divisor = Number.isNaN(safeValue) ? 1 : safeValue;
     if (sentenceArg) {
-      const target = targetPath("to", sentenceArg) ?? sentence.to.name;
+      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) / ${divisor};`;
     }
     return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
@@ -158,7 +185,11 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
 }
 
 function transpileCeremony(defSentence, bodySentences, { lang }) {
-  const fnName = sanitizeName(defSentence?.subj?.name || "ceremony");
+  const signatureWords = deriveSignatureFromDefinition(defSentence);
+  const fnBaseName = signatureWords
+    ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
+    : (defSentence?.subj?.name || "ceremony");
+  const fnName = sanitizeName(fnBaseName);
 
   const bodyLines = [];
   let hasReturn = false;
@@ -166,7 +197,10 @@ function transpileCeremony(defSentence, bodySentences, { lang }) {
     const line = transpileSentence(s, { lang, sentenceArg: "sentence" });
     if (line) {
       bodyLines.push(line);
-      if (line.includes("return")) hasReturn = true;
+      if (line.includes("return")) {
+        hasReturn = true;
+        break; // stop emitting after first return
+      }
     }
   }
 
@@ -193,6 +227,7 @@ function transpileProgram(sentences, { lang }) {
       ? "/* Generated by Pyash compile */"
       : "// Generated by Pyash compile";
   const lines = [header];
+  let usesRememberShim = false;
   const declared = new Set();
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i];
@@ -206,6 +241,9 @@ function transpileProgram(sentences, { lang }) {
         body.push(sentences[j]);
       }
       const fn = transpileCeremony(sentence, body, { lang });
+      if (typeof fn === "string" && fn.includes("remember(")) {
+        usesRememberShim = true;
+      }
       lines.push(fn);
       i = j; // skip to end of block
       continue;
@@ -217,11 +255,20 @@ function transpileProgram(sentences, { lang }) {
     }
 
     const line = transpileSentence(sentence, { lang });
+    if (typeof line === "string" && line.includes("remember(")) {
+      usesRememberShim = true;
+    }
     const todoPrefix = lang === "c" ? "/* TODO" : "// TODO";
     const todoSuffix = lang === "c" ? " */" : "";
     lines.push(line ?? `${todoPrefix}: ${JSON.stringify(sentence)}${todoSuffix}`);
     if (name && sentence.mood === "ya") declared.add(name);
   }
+
+  if (usesRememberShim && lang !== "c") {
+    const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  return { subj: { name: ref }, obj: {} };\n});`;
+    lines.splice(1, 0, rememberShim);
+  }
+
   return lines.join("\n") + "\n";
 }
 
@@ -252,6 +299,7 @@ async function compile_from_filename_to_filename(sentence) {
 
   const targetLang = (sentence?.become?.name || "javascript").toLowerCase();
   const body = transpileProgram(program.sentences, { lang: targetLang });
+  const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;
 
   const targetFilename = sentence?.to?.filename;
   if (targetFilename) {
@@ -263,12 +311,12 @@ async function compile_from_filename_to_filename(sentence) {
     doRemember({
       subj: { name: targetName },
       be: sentence?.become?.name ?? "javascript",
-      obj: { text: body, sentences: program.sentences },
+      obj: { text: wrappedText, sentences: program.sentences },
       mood: "ya",
     });
   }
 
-  return { obj: { text: body, sentences: program.sentences }, be: sentence?.become?.name ?? "javascript" };
+  return { obj: { text: wrappedText, sentences: program.sentences }, be: sentence?.become?.name ?? "javascript" };
 }
 
 export default compile_from_filename_to_filename;

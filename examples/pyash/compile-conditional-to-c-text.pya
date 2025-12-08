@@ -1,3 +1,6 @@
 exists subj name output be c ya
-from text "exists subj name total obj num 0 be number ya\nobj num 3 be tiny from num 5 then obj num 1 to name total be add do" to state c to name output be compile do
+from text quoted.pyash.
+exists subj name total obj num 0 be number ya
+obj num 3 be tiny from num 5 then obj num 1 to name total be add do
+.pyash.quoted to state c to name output be compile do
 subj name output be c que

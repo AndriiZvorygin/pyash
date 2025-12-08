@@ -35,6 +35,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Commit & Pull Request Guidelines
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.
+- Make a git commit after every major change so history stays reviewable.
 - PRs should describe behavior changes, list new verbs/grammar, and link issues. Include proof (screenshots/logs/transcripts) for REPL-facing changes.
 - Mention added tests and any known gaps. Call out external needs (e.g., Ollama server availability) so reviewers can reproduce.
 

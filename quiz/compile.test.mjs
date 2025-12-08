@@ -262,7 +262,7 @@ test("compile emits JS ceremony with no params", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /function\s+noop\(sentence\)[\s\S]*return\s*sentence;/);
+  assert.match(js, /function\s+be_noop\(sentence\)[\s\S]*return\s*sentence;/);
 });
 
 test("compile emits JS ceremony with param and body", async () => {
@@ -284,8 +284,9 @@ test("compile emits JS ceremony with param and body", async () => {
 
   assert.ok(js);
   assert.match(js, /let bucket = 0;/);
-  assert.match(js, /function\s+add_two\(sentence\)[\s\S]*const target = .*remember/s);
-  assert.match(js, /return target;/);
+  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*const bucket = remember\(sentence\.to/s);
+  assert.match(js, /const remember = /, "remember shim should be emitted");
+  assert.match(js, /return bucket;/);
 });
 
 test("compiled ceremony function can be invoked (JS)", async () => {
@@ -307,10 +308,13 @@ test("compiled ceremony function can be invoked (JS)", async () => {
 
   const sandbox = { remember: name => ({ subj: { name }, obj: { num: 0 } }) };
   vm.createContext(sandbox);
-  vm.runInContext(js, sandbox);
+  const unwrapped = js
+    .replace(/^quoted\.javascript\.\n?/, "")
+    .replace(/\.javascript\.quoted\s*$/, "");
+  vm.runInContext(unwrapped, sandbox);
 
-  assert.equal(typeof sandbox.add_two, "function");
-  const r = sandbox.add_two({ obj: { num: 0 }, to: { num: 0, name: "bucket" } });
+  assert.equal(typeof sandbox.be_add_two, "function");
+  const r = sandbox.be_add_two({ obj: { num: 0 }, to: { num: 0, name: "bucket" } });
   assert.equal(r.obj?.num ?? r.to?.num, 2);
 });
 
@@ -331,8 +335,9 @@ test("compile emits JS ceremony mutating this.obj.num via genitive", async () =>
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /function\s+bump\(sentence\)[\s\S]*const target = .*remember/s);
-  assert.match(js, /return target;/);
+  assert.match(js, /function\s+be_bump\(sentence\)[\s\S]*sentence\.obj = sentence\.obj \?\? \{\}/);
+  assert.doesNotMatch(js, /const target = remember/, "this-genitive should not introduce remember");
+  assert.match(js, /return sentence;/);
 });
 
 test("compile emits JS if-statement for tiny then", async () => {

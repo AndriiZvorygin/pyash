@@ -86,13 +86,13 @@ export function parse(line) {
   const s = { mood };
   let current = null;
   let slot = null;
-  let exists = false;
 
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
 
     if (t === "exists") {
-      exists = true;
+      s.exists = true;
+      if (slot) slot.exists = true;
       continue;
     }
 
@@ -343,10 +343,6 @@ export function parse(line) {
       i++; // consume role token
       continue;
     }
-  }
-
-  if (exists) {
-    s.exists = true;
   }
 
   return s;
