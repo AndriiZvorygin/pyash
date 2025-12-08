@@ -299,7 +299,7 @@ function transpileProgram(sentences, { lang }) {
   }
 
   if (usesRememberShim && lang !== "c") {
-    const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string" && ref in globalThis) return globalThis[ref];\n  return { subj: { name: ref }, obj: {} };\n});`;
+    const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  return globalThis?.[ref];\n});`;
     lines.splice(1, 0, rememberShim);
   }
 
