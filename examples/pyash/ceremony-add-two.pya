@@ -14,6 +14,7 @@ obj this ti to be remember to name produce exists do
 obj num 2 to produce be add do
 subj name produce ret
 subj name add two be ceremony prah
+be add two to bucket do 
 .pyash.quoted be text ya
 obj name program from state pyash to state javascript to name output be compile do
 subj name output be javascript que

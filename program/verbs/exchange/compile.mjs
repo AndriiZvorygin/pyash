@@ -37,7 +37,7 @@ function targetPath(role, sentenceArg, field = "num", slot = {}) {
   return `${sentenceArg}.${role}.${field}`;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, declared } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -159,6 +159,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals } = {}) {
 
   const name = sentence?.subj?.name;
   const mood = sentence?.mood;
+  if (mood === "do" && !sentenceArg && lang !== "c") {
+    const fn = ceremonyFns?.get(baseBe);
+    if (fn) {
+      const arg = inlineSentenceLiteral(sentence, declared);
+      return `${fn}(${arg});`;
+    }
+  }
   if (!name || mood === "do") return null;
 
   const shouldDeclare = Boolean(sentence.exists);
@@ -246,6 +253,7 @@ function transpileProgram(sentences, { lang }) {
   const lines = [header];
   let usesRememberShim = false;
   const declared = new Set();
+  const ceremonyFns = new Map();
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i];
     const name = sentence?.subj?.name;
@@ -258,6 +266,15 @@ function transpileProgram(sentences, { lang }) {
         body.push(sentences[j]);
       }
       const fn = transpileCeremony(sentence, body, { lang });
+      const signatureWords = deriveSignatureFromDefinition(sentence);
+      const fnBaseName = signatureWords
+        ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
+        : (sentence?.subj?.name || "ceremony");
+      const fnName = sanitizeName(fnBaseName);
+      ceremonyFns.set(sentence.subj?.name, fnName);
+      if (signatureWords) {
+        ceremonyFns.set(joinSignatureWords(signatureWords), fnName);
+      }
       if (typeof fn === "string" && fn.includes("remember(")) {
         usesRememberShim = true;
       }
@@ -271,7 +288,7 @@ function transpileProgram(sentences, { lang }) {
       throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
     }
 
-    const line = transpileSentence(sentence, { lang });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
@@ -282,11 +299,30 @@ function transpileProgram(sentences, { lang }) {
   }
 
   if (usesRememberShim && lang !== "c") {
-    const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  return { subj: { name: ref }, obj: {} };\n});`;
+    const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string" && ref in globalThis) return globalThis[ref];\n  return { subj: { name: ref }, obj: {} };\n});`;
     lines.splice(1, 0, rememberShim);
   }
 
   return lines.join("\n") + "\n";
+}
+
+function inlineSentenceLiteral(value, declared = new Set()) {
+  if (value === null) return "null";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(v => inlineSentenceLiteral(v, declared)).join(", ")}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value).map(([key, val]) => {
+      if (key === "name" && typeof val === "string" && declared.has(val)) {
+        return `${key}: ${val}`;
+      }
+      return `${key}: ${inlineSentenceLiteral(val, declared)}`;
+    });
+    return `{ ${entries.join(", ")} }`;
+  }
+  return JSON.stringify(value);
 }
 
 async function compile_from_filename_to_filename(sentence) {
