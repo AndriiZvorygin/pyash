@@ -60,5 +60,27 @@ test("compile renders simple add into direct assignment when name provided", asy
   const js = result?.obj?.text ?? result?.value?.text ?? "";
   const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
 
-  assert.match(unwrapped, /produce\s*=\s*produce\s*\+\s*2;/, "should emit direct add assignment");
+  assert.match(unwrapped, /produce\.obj\.num\s*=\s*\(produce\.obj\.num \?\? 0\)\s*\+\s*2;/, "should emit direct add assignment");
+});
+
+test("compile keeps math inside ceremony after remember", async () => {
+  forget();
+
+  const program = [
+    "subj name add two be ceremony def",
+    "obj this ti to be remember to name produce exists do",
+    "obj num 2 to name produce be add do",
+    "subj name add two be ceremony prah"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
+
+  assert.match(unwrapped, /remember\(sentence\.to\)/, "remember line should be present");
+  assert.match(unwrapped, /produce\.obj\.num\s*=\s*\(produce\.obj\.num\s*\?\?\s*0\)\s*\+\s*2;/, "add line should remain in ceremony body");
 });

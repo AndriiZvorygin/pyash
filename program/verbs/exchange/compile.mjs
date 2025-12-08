@@ -37,7 +37,7 @@ function targetPath(role, sentenceArg, field = "num", slot = {}) {
   return `${sentenceArg}.${role}.${field}`;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -82,7 +82,7 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
         ? `${sentenceArg}.to ?? { subj: { name: ${targetNameLiteral} }, obj: {} }`
         : sentenceArg;
       const lines = [];
-      if (!isThisGenitive) {
+      if (!isThisGenitive && !locals?.has(targetVar)) {
         lines.push(`const ${targetVar} = remember(${targetExpr});`);
       }
       lines.push(`${targetVar}.obj = ${targetVar}.obj ?? {};`);
@@ -94,7 +94,13 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       lines.push(`return ${targetVar};`);
       return lines.join("\n");
     }
-    return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    if (lang === "c") {
+      return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    }
+    const lines = [];
+    lines.push(`${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};`);
+    lines.push(`${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+    return lines.join("\n");
   }
 
   if (baseBe === "remember" && sentenceArg) {
@@ -110,7 +116,7 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       lines.push(`let ${targetVar};`);
     }
     lines.push(`${targetVar} = remember(${source});`);
-    lines.push(`return ${targetVar};`);
+    locals?.add(targetVar);
     return lines.join("\n");
   }
 
@@ -120,7 +126,10 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
-    return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    if (lang === "c") {
+      return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    }
+    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
   if (baseBe === "multiply" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
@@ -129,7 +138,10 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
-    return `${sentence.to.name} = ${sentence.to.name} * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    if (lang === "c") {
+      return `${sentence.to.name} = ${sentence.to.name} * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    }
+    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
   if (baseBe === "divide" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
@@ -139,7 +151,10 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) / ${divisor};`;
     }
-    return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
+    if (lang === "c") {
+      return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
+    }
+    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) / ${divisor};`;
   }
 
   const name = sentence?.subj?.name;
@@ -155,14 +170,15 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       const target = valueForRole("subj", sentenceArg, "num", sentence.subj) ?? name;
       return `${target} = ${safeValue};`;
     }
+    const sentenceObject = `{ subj: { name: "${name}" }, obj: { num: ${safeValue} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
+    const decl = shouldDeclare ? (lang === "c" ? "/* TODO: sentence object in C */" : (isPermanent ? "const" : "let")) : "";
     if (lang === "c") {
+      // Fallback for C for now: keep scalar style
       if (!shouldDeclare) return `${name} = ${safeValue};`;
-      const decl = isPermanent ? "const double" : "double";
-      return `${decl} ${name} = ${safeValue};`;
+      const cdecl = isPermanent ? "const double" : "double";
+      return `${cdecl} ${name} = ${safeValue};`;
     }
-    if (!shouldDeclare) return `${name} = ${safeValue};`;
-    const decl = isPermanent ? "const" : "let";
-    return `${decl} ${name} = ${safeValue};`;
+    return shouldDeclare ? `${decl} ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
   }
 
   if (effectiveBe === "text" && typeof obj.text === "string") {
@@ -171,14 +187,14 @@ function transpileSentence(sentence, { lang, sentenceArg } = {}) {
       const target = valueForRole("subj", sentenceArg, "text") ?? name;
       return `${target} = ${value};`;
     }
+    const sentenceObject = `{ subj: { name: "${name}" }, obj: { text: ${value} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
     if (lang === "c") {
+      // Fallback for C: keep scalar style
       if (!shouldDeclare) return `${name} = ${value};`;
       const decl = isPermanent ? "const char *" : "char *";
       return `${decl} ${name} = ${value};`;
     }
-    if (!shouldDeclare) return `${name} = ${value};`;
-    const decl = isPermanent ? "const" : "let";
-    return `${decl} ${name} = ${value};`;
+    return shouldDeclare ? `let ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
   }
 
   return null;
@@ -193,8 +209,9 @@ function transpileCeremony(defSentence, bodySentences, { lang }) {
 
   const bodyLines = [];
   let hasReturn = false;
+  const locals = new Set();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: "sentence" });
+    const line = transpileSentence(s, { lang, sentenceArg: "sentence", locals });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
