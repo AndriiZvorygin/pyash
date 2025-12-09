@@ -145,7 +145,7 @@ test("file-based compile with math, ceremony, and say logs final value", async (
   forget();
 
   const inputFile = "examples/pyash/compile-math-say.txt";
-  const outputFile = "examples/pyash/compile-math-say-output.js";
+  const outputFile = "examples/out/compile-math-say-output.js";
 
   await fs.rm(outputFile, { force: true });
 
