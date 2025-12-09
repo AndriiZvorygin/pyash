@@ -113,6 +113,34 @@ test("compile converts Pyash file to JavaScript file", async () => {
   await fs.rm(outputFile, { force: true });
 });
 
+test("file-based compile outputs runnable JS with say", async () => {
+  forget();
+
+  const inputFile = "quiz/sandpit/compile-say.txt";
+  const outputFile = "quiz/sandpit/compile-say-output.js";
+
+  await fs.writeFile(inputFile, "obj text hello be say do\n", "utf8");
+  await fs.rm(outputFile, { force: true });
+
+  const sentence = parse(
+    `from filename "${inputFile}" from state pyash to filename "${outputFile}" to state javascript be compile do`
+  );
+
+  await interpret(sentence);
+
+  const fileText = await fs.readFile(outputFile, "utf8");
+
+  const logs = [];
+  const context = { console: { log: (...args) => logs.push(args.join(" ")) } };
+  context.globalThis = context;
+  vm.runInNewContext(fileText, context);
+
+  assert.ok(logs.includes("hello"), "compiled JS should log hello");
+
+  await fs.rm(inputFile, { force: true });
+  await fs.rm(outputFile, { force: true });
+});
+
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
   forget();
 
