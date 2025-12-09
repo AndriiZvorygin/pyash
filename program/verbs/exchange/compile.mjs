@@ -45,6 +45,22 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
   const effectiveBe = baseBe || sentence.mood;
 
+  // Say -> console.log
+  if (baseBe === "say") {
+    const genitiveExpr = sentenceArg && sentence.obj?.genitive
+      ? pathFromGenitive(sentence.obj.genitive, sentenceArg)
+      : null;
+    const expr =
+      typeof obj.text === "string"
+        ? JSON.stringify(obj.text)
+        : genitiveExpr
+          ? genitiveExpr
+          : (obj.name && declared?.has(obj.name))
+            ? obj.name
+            : (obj.name ? JSON.stringify(obj.name) : "undefined");
+    return `console.log(${expr});`;
+  }
+
   // Conditionals (tiny/giant/equally) with then consequence
   if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
     const lhs =
@@ -207,7 +223,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -218,7 +234,7 @@ function transpileCeremony(defSentence, bodySentences, { lang }) {
   let hasReturn = false;
   const locals = new Set();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: "sentence", locals });
+    const line = transpileSentence(s, { lang, sentenceArg: "sentence", locals, declared });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -265,7 +281,7 @@ function transpileProgram(sentences, { lang }) {
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang });
+      const fn = transpileCeremony(sentence, body, { lang, declared });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")

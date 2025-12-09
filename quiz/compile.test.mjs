@@ -224,6 +224,42 @@ test("compile reassigns without redeclaring when name already exists", async () 
   assert.doesNotMatch(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 2 \}/);
 });
 
+test("compile emits console.log for say text", async () => {
+  forget();
+
+  const program = [
+    "obj text hello be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text ?? "";
+
+  assert.match(js, /console\.log\("hello"\);/);
+});
+
+test("compile emits console.log for say name using variable reference", async () => {
+  forget();
+
+  const program = [
+    "exists subj name alpha obj text hi be text ya",
+    "obj name alpha be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text ?? "";
+
+  assert.match(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ text: "hi" \}/);
+  assert.match(js, /console\.log\(alpha\);/);
+});
+
 test("compile emits JS for simple multiply and divide", async () => {
   forget();
 
