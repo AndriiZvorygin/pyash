@@ -1,0 +1,3 @@
+subj name output be javascript ya
+
+from filename "examples/pyash/compile-math-say.txt" from state pyash to filename "examples/pyash/compile-math-say-output.js" to state javascript be compile do

@@ -104,9 +104,9 @@ test("compile emits ceremony invocation as sentence object", async () => {
   const js = result?.obj?.text ?? result?.value?.text ?? "";
   const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
 
-  assert.ok(
-    unwrapped.includes('be_add_two_to_name_num({ mood: "do", be: "add two", to: { name: bucket } })') ||
-      unwrapped.includes('be_add_two_to_name_num({mood:"do",be:"add two",to:{name: bucket}})'),
-    "should invoke ceremony with sentence object and inline bucket reference"
+  assert.match(
+    unwrapped,
+    /be_add_two_to_name_num\(\{\s*mood:\s*"do",\s*be:\s*"add two",\s*to:\s*(bucket|\{\s*name:\s*(bucket|"bucket")\s*\})\s*\}\);?/,
+    "should invoke ceremony with sentence object and bucket reference"
   );
 });

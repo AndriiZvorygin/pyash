@@ -330,6 +330,13 @@ function inlineSentenceLiteral(value, declared = new Set()) {
     return `[${value.map(v => inlineSentenceLiteral(v, declared)).join(", ")}]`;
   }
   if (typeof value === "object") {
+    const entriesArr = Object.entries(value);
+    if (entriesArr.length === 1 && entriesArr[0][0] === "name") {
+      const nameVal = entriesArr[0][1];
+      if (typeof nameVal === "string" && declared.has(nameVal)) {
+        return nameVal;
+      }
+    }
     const entries = Object.entries(value).map(([key, val]) => {
       if (key === "name" && typeof val === "string" && declared.has(val)) {
         return `${key}: ${val}`;

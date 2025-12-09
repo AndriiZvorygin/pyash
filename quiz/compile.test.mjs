@@ -141,6 +141,44 @@ test("file-based compile outputs runnable JS with say", async () => {
   await fs.rm(outputFile, { force: true });
 });
 
+test("file-based compile with math, ceremony, and say logs final value", async () => {
+  forget();
+
+  const inputFile = "examples/pyash/compile-math-say.txt";
+  const outputFile = "examples/pyash/compile-math-say-output.js";
+
+  await fs.rm(outputFile, { force: true });
+
+  const sentence = parse(
+    `from filename "${inputFile}" from state pyash to filename "${outputFile}" to state javascript be compile do`
+  );
+
+  await interpret(sentence);
+
+  const fileText = await fs.readFile(outputFile, "utf8");
+
+  const logs = [];
+  const context = {
+    console: {
+      log: (...args) => {
+        try {
+          logs.push(JSON.parse(JSON.stringify(args[0])));
+        } catch {
+          logs.push(args[0]);
+        }
+      }
+    }
+  };
+  context.globalThis = context;
+  vm.runInNewContext(fileText, context);
+
+  assert.equal(logs.length, 2, "should log twice");
+  assert.equal(logs[0]?.obj?.num, 2, "first log after add/subtract is 2");
+  assert.equal(logs[1]?.obj?.num, 5, "second log after ceremony is 5");
+
+  await fs.rm(outputFile, { force: true });
+});
+
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
   forget();
 
