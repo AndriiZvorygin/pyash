@@ -181,8 +181,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const evokerLiteral = inlineSentenceLiteral(sentence, declared);
       const lines = [];
       lines.push("{");
-      lines.push(`  let evoker = ${evokerLiteral};`);
-      lines.push("  while (true) {");
+      lines.push(`  for (let evoker = ${evokerLiteral};;) {`);
       lines.push(`    evoker = ${fn}(evoker);`);
       lines.push("    const currTloh = evoker?.tloh?.num ?? evoker?.tloh ?? 0;");
       lines.push("    const hasUntil = evoker?.until !== undefined;");

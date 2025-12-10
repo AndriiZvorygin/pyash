@@ -199,7 +199,7 @@ test("compile emits loop for tloh countdown", async () => {
   const js = result?.obj?.text ?? result?.value?.text ?? "";
   const unwrapped = js.replace(/^quoted\.javascript\.\n?/, "").replace(/\.javascript\.quoted\s*$/, "");
 
-  assert.match(unwrapped, /while\s*\(true\)/, "should emit loop");
+  assert.match(unwrapped, /for\s*\(let evoker =/, "should emit for-loop wrapper");
   assert.match(unwrapped, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/, "loop body increments counter");
 });
 
