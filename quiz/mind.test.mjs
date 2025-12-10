@@ -56,7 +56,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
   motor.generate = original;
 });
 
-test("mind invocation includes recent history in prompt", async () => {
+test("mind invocation includes recent history in prompt with per-mind window", async () => {
   forget();
 
   const original = motor.generate;
@@ -67,12 +67,13 @@ test("mind invocation includes recent history in prompt", async () => {
   };
 
   await interpret(
-    parse('su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+    parse('su generator obj window num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
   );
 
   await interpret(parse('be say obj text "Hi" to generator do'));
   await interpret(parse('su question obj discourse "Hello" to generator be mind do'));
 
+  // With window 1, we keep at most 1 user+assistant pair
   assert.match(capturedPrompt, /USER: Hi/);
   assert.match(capturedPrompt, /ASSISTANT:/);
   assert.match(capturedPrompt, /Hello/);

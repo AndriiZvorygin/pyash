@@ -37,6 +37,12 @@ function buildHistoryMessages(mindName, { window = 8 } = {}) {
 export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
+  const historyWindow =
+    config?.obj?.window?.num ??
+    config?.obj?.historyWindow?.num ??
+    config?.historyWindow ??
+    obj?.window?.num ??
+    8;
 
   // Model resolution: explicit on call or from config via state (keyword "as")
   const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;
@@ -56,7 +62,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const promptParts = [];
   if (configPrompt) promptParts.push(configPrompt);
   if (callPrompt) promptParts.push(callPrompt);
-  const historyMessages = buildHistoryMessages(targetName);
+  const historyMessages = buildHistoryMessages(targetName, { window: historyWindow });
   if (historyMessages.length) {
     const histText = historyMessages
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
@@ -97,13 +103,15 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
     from: baseConfig.from,
     as: baseConfig.as,
     accordingto: baseConfig.accordingto,
-    obj: { text: responseText, model }
+    obj: { text: responseText, model, historyWindow }
   });
 
   return { obj: { text: responseText, model } };
 }
 
 export default mind_to_name_text;
+
+export { buildHistoryMessages };
 
 export const signatures = [
   { signatureWords: ["be", "mind", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },

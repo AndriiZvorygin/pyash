@@ -68,7 +68,7 @@ be say obj text "Hello" to generator do
 1. Resolve mind config:
 
    * host, model, system prompt for `generator`.
-2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; still room to tune windowing.)
+2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; window is per mind via `obj window num N` on the config sentence, default ~8.)
 3. Build `messages[]` for Ollama:
 
    * optional `system` message from `via discourse`.
