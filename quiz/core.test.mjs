@@ -163,7 +163,7 @@ test("imperative creates default numeric target when missing", async () => {
 test("unknown imperative verb throws", async () => {
   forget();
 
-  await assert.rejects(() => run("obj num 1 be nowhere do"), /Unknown verb: nowhere/);
+  await assert.rejects(() => run("obj num 1 be nowhere do"), /Unknown verb\/signature: be nowhere obj num/);
 });
 
 test("add missing roles triggers signature error", async () => {

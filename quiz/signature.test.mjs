@@ -139,6 +139,25 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
   ]);
 });
 
+test("deriveSignatureFromCall infers mind and text for say with literal prompt", () => {
+  const sentence = {
+    mood: "do",
+    be: "say",
+    obj: { name: "do you like life?" },
+    to: { name: "generator" }
+  };
+
+  const remember = name => (name === "generator" ? { be: "mind" } : undefined);
+
+  const sig = deriveSignatureFromCall(sentence, { remember });
+
+  assert.deepEqual(sig, [
+    "be", "say",
+    "obj", "text",
+    "to", "name", "mind"
+  ]);
+});
+
 test("deriveSignatureFromCall throws when a case lacks type words", () => {
   const sentence = { mood: "do", be: "add", obj: {}, to: { name: "z" } };
 

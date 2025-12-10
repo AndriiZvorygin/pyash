@@ -161,7 +161,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
-    const typeWords = caseTypeWordsWithMemory(value, remember);
+    const typeWords = caseTypeWordsWithMemory(value, remember, verb);
     if (typeWords.length === 0) {
       throw new Error(`Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`);
     }
@@ -171,7 +171,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   return makeSignatureWords({ be: verb, cases });
 }
 
-function caseTypeWordsWithMemory(value, remember) {
+function caseTypeWordsWithMemory(value, remember, verb = "") {
   if (value == null) return [];
 
   if (Array.isArray(value)) {
@@ -193,10 +193,16 @@ function caseTypeWordsWithMemory(value, remember) {
     const factObj = inferred?.obj;
     const vecType = factObj?.ve?.type;
 
+    if (inferred?.be === "mind") return ["name", "mind"];
+
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.text !== undefined) return ["name", "text"];
     if (factObj?.filename !== undefined) return ["name", "filename"];
+    if (typeof value.name === "string") {
+      if (/\s/.test(value.name)) return ["text"];
+      if (verb === "mind" || verb === "say") return ["text"];
+    }
     return ["name", "num"];
   }
 
