@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "test": "node --test \"quiz/**/*.test.mjs\"",
-    "quiz": "node --test \"quiz/**/*.test.mjs\""
+    "quiz": "node --test \"quiz/**/*.test.mjs\"",
+    "repl": "node program/main.mjs",
+    "run": "node program/command/run_pya_program.mjs",
+    "trace": "node program/command/read_pya_trace.mjs",
+    "compile": "node program/command/run_pya_program.mjs --gross"
   }
 }
