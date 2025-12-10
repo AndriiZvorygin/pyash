@@ -177,6 +177,28 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const mood = sentence?.mood;
   if (mood === "do" && !sentenceArg && lang !== "c") {
     const fn = ceremonyFns?.get(baseBe);
+    if (fn && (sentence.tloh !== undefined || sentence.until !== undefined)) {
+      const evokerLiteral = inlineSentenceLiteral(sentence, declared);
+      const lines = [];
+      lines.push("{");
+      lines.push(`  let evoker = ${evokerLiteral};`);
+      lines.push("  while (true) {");
+      lines.push(`    evoker = ${fn}(evoker);`);
+      lines.push("    const currTloh = evoker?.tloh?.num ?? evoker?.tloh ?? 0;");
+      lines.push("    const hasUntil = evoker?.until !== undefined;");
+      lines.push("    const currUntil = evoker?.until?.num ?? evoker?.until;");
+      lines.push("    if (hasUntil ? currTloh === currUntil : currTloh === 0) break;");
+      lines.push("    let nextTloh;");
+      lines.push("    if (hasUntil) {");
+      lines.push("      nextTloh = currTloh + (currUntil > currTloh ? 1 : -1);");
+      lines.push("    } else {");
+      lines.push("      nextTloh = currTloh - 1;");
+      lines.push("    }");
+      lines.push("    evoker.tloh = typeof evoker.tloh === \"object\" ? { ...evoker.tloh, num: nextTloh } : nextTloh;");
+      lines.push("  }");
+      lines.push("}");
+      return lines.join("\n");
+    }
     if (fn) {
       const arg = inlineSentenceLiteral(sentence, declared);
       return `${fn}(${arg});`;
