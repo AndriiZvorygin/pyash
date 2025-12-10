@@ -47,5 +47,8 @@ Recent compile-focused examples:
 - `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`)
 - `examples/pyash/compile-loop.pya` → JS `tloh` loop using the runtime `runLoop` helper
 - `examples/pyash/compile-loop-c.pya` → C countdown loop (`examples/out/compile-loop-output.c`), build with `gcc -std=c11 -o /tmp/loop examples/out/compile-loop-output.c && /tmp/loop`
+- `examples/pyash/compile-vector-produce.pya` → JS dot product for vectors (inline/named) at `examples/out/compile-vector-produce.js`
+- `examples/pyash/compile-fizzbuzz.pya` → JS fizzbuzz via compiled conditionals/loops at `examples/out/compile-fizzbuzz-output.js`
+- `examples/pyash/compile-mind.pya` → JS mind invocation (sync curl to Ollama) at `examples/out/compile-mind.js`
 
 Generated outputs live under `examples/out/` (ignored by git).

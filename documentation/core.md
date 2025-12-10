@@ -66,6 +66,9 @@ This document summarizes the current core language model used by the interpreter
 - Assigning to undeclared names (missing `exists`) raises an error at compile time for `ya` sentences.
 - Conditionals or verbs without registered handlers error during interpretation.
 - Compilers include TODO comments for unsupported constructs (e.g., C string concat).
+- Vector compile: JS supports vector literals (`obj ve/vec num ... be vector`) and `produce` (dot product) for inline and named vectors; C vector codegen is still TODO.
+- Mind compile: JS emits a synchronous call to an Ollama-compatible endpoint using stored mind configs (`be mind ya` with `from`/`as`/`accordingto`) or call-local prompt/model; outputs go to stdout and `globalThis` by subject name.
+- Keep example outputs in git-ignored paths (e.g., `examples/out/`).
 
 ## Examples
 - Declare and add:
