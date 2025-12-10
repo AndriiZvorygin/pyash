@@ -41,3 +41,11 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 - `program/command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
 See `documentation/index.md` for deeper guidance and links to design, state, and glossary notes. Examples live in `examples/` (conditionals, subtract, chaining, registers).
+
+Recent compile-focused examples:
+- `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js`
+- `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`)
+- `examples/pyash/compile-loop.pya` → JS `tloh` loop using the runtime `runLoop` helper
+- `examples/pyash/compile-loop-c.pya` → C countdown loop (`examples/out/compile-loop-output.c`), build with `gcc -std=c11 -o /tmp/loop examples/out/compile-loop-output.c && /tmp/loop`
+
+Generated outputs live under `examples/out/` (ignored by git).
