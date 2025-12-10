@@ -514,6 +514,28 @@ test("compile vector produce from named vectors", async () => {
   assert.equal(logs[0], 9);
 });
 
+test("compile say to mind emits mind call", async () => {
+  forget();
+
+  const program = [
+    "exists subj name helper be mind from name http://localhost:11434 ya",
+    "obj text hello to name helper be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+    .replace(/^\s*quoted\.javascript\.\s*/, "")
+    .replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  assert.match(js, /mindConfigs.set/, "mind config should be emitted");
+  assert.match(js, /execSync\("curl -s -X POST/, "should call Ollama via curl");
+  assert.match(js, /promptParts\.push\("hello"\)/, "should push prompt from say text");
+});
+
 test("compile emits JS ceremony with no params", async () => {
   forget();
 

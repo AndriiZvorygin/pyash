@@ -107,6 +107,32 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
   // Say -> console.log / printf TODO
   if (baseBe === "say") {
+    // Special case: say to <mind> -> invoke mind (JS)
+    if (sentence.to?.name && lang !== "c") {
+      if (mindShim) mindShim.used = true;
+      const mindName = sentence.to.name;
+      const resultName = sentence.subj?.name ?? mindName;
+      const promptVal = typeof obj.text === "string" ? JSON.stringify(obj.text) : JSON.stringify(obj.name ?? "");
+      const explicitModel = obj.model ? JSON.stringify(obj.model) : null;
+      const lines = [];
+      lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
+      lines.push(`const host = cfg.space || process.env.OLLAMA_HOST || "http://localhost:11434";`);
+      lines.push(`const model = ${explicitModel ?? "cfg.model || \"llama3\""};`);
+      lines.push("const promptParts = [];");
+      lines.push("if (cfg.prompt) promptParts.push(cfg.prompt);");
+      lines.push(`promptParts.push(${promptVal});`);
+      lines.push("const prompt = promptParts.filter(Boolean).join(\"\\n\\n\");");
+      lines.push("const payload = JSON.stringify({ model, prompt, stream: false });");
+      lines.push("const resp = execSync(\"curl -s -X POST \" + JSON.stringify(host + \"/api/generate\") + \" -H 'Content-Type: application/json' -d \" + JSON.stringify(payload), { encoding: \"utf8\" });");
+      lines.push("let reply = \"\";");
+      lines.push("try { const data = JSON.parse(resp); reply = data?.response ?? data?.output ?? data?.data ?? \"\"; } catch { reply = String(resp ?? \"\"); }");
+      const resVar = sanitizeName(resultName);
+      lines.push(`const ${resVar} = { subj: { name: "${resultName}" }, obj: { text: reply }, be: "text", mood: "ya" };`);
+      lines.push(`globalThis["${resultName}"] = ${resVar};`);
+      lines.push(`console.log(${resVar}.obj?.text ?? ${resVar}.obj?.num);`);
+      return lines.join("\n");
+    }
+
     let expr = "undefined";
     if (typeof obj.text === "string") {
       expr = JSON.stringify(obj.text);
