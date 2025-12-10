@@ -49,5 +49,7 @@ export default mind_to_name_text;
 export const signatures = [
   { signatureWords: ["be", "mind", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "obj", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text }
+  { signatureWords: ["be", "mind", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "say", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "say", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text }
 ];
