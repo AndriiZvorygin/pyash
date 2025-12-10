@@ -9,8 +9,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   // Model resolution: explicit on call or from config via state (keyword "as")
   const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;
   const configModel = config?.as?.name ?? null;
-  const model = explicitModel ?? configModel;
-  if (!model) throw new Error("mind: obj.model is required");
+  const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
 
   // Prompt resolution: config accordingto (discourse) + call prompt/text
   const configPrompt = config?.accordingto?.name ?? null;
