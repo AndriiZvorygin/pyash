@@ -31,7 +31,7 @@ export async function handleImperative({
   }
 
   if (!fn && !defEntry && sigKey) {
-    throw new Error(`Unknown verb: ${be}`);
+    throw new Error(`Unknown verb/signature: ${sigKey}`);
   }
 
   if (!fn && defEntry) {
