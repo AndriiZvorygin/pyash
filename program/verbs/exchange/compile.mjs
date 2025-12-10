@@ -125,6 +125,22 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return lines.join("\n");
   }
 
+  // Text concatenation via add
+  if (baseBe === "add" && typeof obj.text === "string" && (sentence.to?.name || sentence.to?.genitive)) {
+    const literal = JSON.stringify(obj.text);
+    if (sentenceArg) {
+      const target = targetPath("to", sentenceArg, "text") ?? sentence.to?.name;
+      const init = `${target} = ${target} ?? "";`;
+      const concat = `${target} = ${target} + ${literal};`;
+      return `${init}\n${concat}`;
+    }
+    if (lang === "c") {
+      const target = sentence.to.name;
+      return `/* TODO: string concat add for ${target} */`;
+    }
+    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.text = (${sentence.to.name}.obj.text ?? "") + ${literal};`;
+  }
+
   if (baseBe === "remember" && sentenceArg) {
     const genitiveChain = sentence.obj?.genitive?.chain || [];
     const genitiveHint = genitiveChain.filter(part => part !== "this").at(-1);
@@ -177,6 +193,21 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       return `${sentence.to.name} = ${sentence.to.name} / ${divisor};`;
     }
     return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) / ${divisor};`;
+  }
+
+  if (baseBe === "remains" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
+    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    if (sentenceArg) {
+      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
+      if (lang === "c") {
+        return `${target} = fmod(${target}, ${safeValue});`;
+      }
+      return `${target} = (${target} ?? 0) % ${safeValue};`;
+    }
+    if (lang === "c") {
+      return `${sentence.to.name} = fmod(${sentence.to.name}, ${safeValue});`;
+    }
+    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) % ${safeValue};`;
   }
 
   const name = sentence?.subj?.name;
@@ -364,9 +395,10 @@ function transpileProgram(sentences, { lang }) {
   }
 
   if (lang === "c") {
-    if (cHelpers.usesPrintf) {
-      lines.unshift("#include <stdio.h>");
-    }
+    const headers = [];
+    if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
+    if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
+    if (headers.length) lines.unshift(...headers);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
     lines.push(body || "  return 0;");
@@ -516,6 +548,10 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "compile", "from", "text", "to", "filename"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "from", "filename", "fromstate", "name", "num", "tostate", "name", "to", "text"],
     handler: compile_from_filename_to_filename
   },
   {

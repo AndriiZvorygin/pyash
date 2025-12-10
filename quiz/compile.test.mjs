@@ -243,7 +243,8 @@ test("compiled C loop builds and runs", async (t) => {
     "subj name loop body to name counter be ceremony def",
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
-    "to name counter tloh num 3 be loop body do"
+    "to name counter tloh num 3 be loop body do",
+    "obj name counter be say do"
   ].join("\\n");
 
   const cFile = "quiz/sandpit/compile-loop-output.c";
@@ -437,6 +438,24 @@ test("compile emits JS for simple multiply and divide", async () => {
   assert.match(js, /let collector = \{ subj: \{ name: "collector" \}, obj: \{ num: 10 \}/);
   assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \* 3;/);
   assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \/ 2;/);
+});
+
+test("compile emits JS for text concatenation via add", async () => {
+  forget();
+
+  const program = [
+    "exists subj name message obj text hi be text ya",
+    "obj text there to name message be add do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text ?? "";
+
+  assert.match(js, /message\.obj\.text = \(message\.obj\.text \?\? \"\"\) \+ \"there\";/);
 });
 
 test("compile emits JS ceremony with no params", async () => {
