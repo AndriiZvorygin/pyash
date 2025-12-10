@@ -177,7 +177,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       lines.push(`promptParts.push(${p});`);
     }
     lines.push("const prompt = promptParts.filter(Boolean).join(\"\\n\\n\");");
-    lines.push("const payload = JSON.stringify({ model, prompt });");
+    lines.push("const payload = JSON.stringify({ model, prompt, stream: false });");
     lines.push("const resp = execSync(" +
       "\"curl -s -X POST \" + JSON.stringify(host + \"/api/generate\") + " +
       "\" -H 'Content-Type: application/json' -d \" + JSON.stringify(payload)," +
