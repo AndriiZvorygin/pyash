@@ -1,270 +1,331 @@
-````markdown
 # mind.md — Pyash Mind Integration
 
-This document defines how a **mind** (an LLM endpoint) is:
+This document defines how a **mind** (an LLM endpoint) is configured, how Pyash calls it, how replies are represented, and how conversational context flows to Ollama.
 
-1. configured once as a participant,  
-2. called from Pyash,  
-3. and how its reply is represented back in Pyash,  
-
-so Codex can implement the plumbing without guessing.
-
-It assumes:
-
-- the compositional case system is already implemented (`compositionalCases.md`),  
-- `pyashWords.json` and `compositionalCases.mjs` exist and are wired up.
-
-We’ll focus only on **how to use that system for the mind**.
-
----
-
-## 0. Concepts
+## Concepts
 
 - A **mind** is an LLM endpoint plus configuration.
-- Once configured, the mind is treated like a **person** in the conversation space.
-- The heavy case stuff (`from space`, `via state`, `via discourse`) is used **once** when setting the mind up.
-- Later turns only use **discourse / interior / time + mood**.
+- Configure once with `be mind ya` (host/model/system prompt).
+- Invoke with `be mind do` or `be say ... to <mind> do`.
+- The interpreter calls `motor/ollama.mjs`.
+- The compiler (JS) emits a call into a small JS HTTP helper instead of shelling out to `curl`.
 
-We use:
-
-- `space` context for engine location (URL).
-- `state` context for model name / mode.
-- `discourse` context for text (system prompt, questions, answers).
-- `interior` context for internal reasoning (`message.thinking`).
-- `time` context for timestamps.
-- Mood `ya` for “no further action required”.
+All calls use Ollama’s `/api/chat` endpoint with a `messages[]` array so the model receives previous turns as context.
 
 ---
 
-## 1. Phase 1 — Configure the mind (done once)
+## Configure once
 
-We bind:
-
-- engine URL (Ollama) → **from space**  
-- model name        → **via state**  
-- system prompt key → **via discourse**
-
-### 1.1 Pyash
-
-Example: register a mind bound to Ollama at localhost with `qwen3:8b` and a `pyash_orchestrator` system prompt.
+Example:
 
 ```pyash
-subj system
-  be mind
-    from space "http://localhost:11434"
-    via  state "qwen3:8b"
-    via  discourse "pyash_orchestrator"
-  ya
+su generator be mind
+  from space "http://localhost:11434"
+  via  state "qwen3-vl:8b-instruct"
+  via  discourse "pyash_orchestrator"
+ya
 ````
 
-Interpretation:
+Fields:
 
-* `from space "http://localhost:11434"`
-  → engine lives at that URL (SPACE context, source axis).
-* `via state "qwen3:8b"`
-  → this mind operates **via** that model state (STATE context, way axis).
-* `via discourse "pyash_orchestrator"`
-  → this mind acts according to that prompt (DISCOURSE context, way axis).
-* `subj system … ya`
-  → system performs this registration and no further action is needed from this clause.
+* `from space` → host (default: `http://localhost:11434` if `OLLAMA_HOST` is unset).
+* `via state` (`as`) → model
 
-After this is in history, the **mind is considered present** in the conversation and doesn’t need to be re-specified on each call unless you’re changing engine/model/prompt.
+  * interpreter default: `qwen3-vl:8b-instruct` if missing.
+* `via discourse` (`accordingto`) → system prompt string for the mind.
 
+Internally, the runtime stores at least:
 
----
-
-## 2. Phase 2 — Asking the mind a question
-
-Once the mind is configured, we **do not** repeat `from space` / `via state` / `via discourse` on every call.
-
-From here on, the mind is “already in the room” or in memory.
-
-We only need to send it **discourse** (the user’s question).
-
-### 2.1 Pyash
-
-From the questioner’s perspective:
-
-```pyash
-subj questioner
-  be say
-    obj discourse "What trees should I plant in zone 5b?"
-  do
-```
-
-This means:
-
-* `subj questioner` → the human questioner is the subject of this communicative event.
-* `be say` → perform a speech/ask act.
-* `obj discourse "…"` → the actual text to send as the user message content.
-
-The runtime, seeing this with a configured mind in scope, should:
-
-1. Take the current mind config (engine URL, model, system prompt).
-
-2. Call Ollama (or similar) with something equivalent to:
-
-   ```bash
-   curl http://localhost:11434/api/chat -d '{
-     "model": "qwen3:8b",
-     "stream": false,
-     "messages": [
-       { "role": "system", "content": "<resolved pyash_orchestrator prompt>" },
-       { "role": "user",   "content": "What trees should I plant in zone 5b?" }
-     ]
-   }'
-   ```
-
-3. Wait for the reply JSON (see next section).
-
-You *can* add routing like `to person mind` if your grammar supports it, but the key part for Codex is:
-
-* `obj discourse` → goes to the user message content in the API call.
-
----
-
-## 3. Phase 3 — Representing the mind’s reply
-
-When Ollama replies, you get a JSON object like:
-
-```json
+```jsonc
 {
-  "model": "qwen3:8b",
-  "created_at": "2025-11-21T16:15:08.043485835Z",
-  "message": {
-    "role": "assistant",
-    "content": "Planting trees in USDA Hardiness Zone 5b ...",
-    "thinking": "Okay, the user is asking about trees ..."
-  },
-  "done": true,
-  "done_reason": "stop",
-  "total_duration": 11259879809,
-  "load_duration": 77352796,
-  "prompt_eval_count": 36,
-  "prompt_eval_duration": 29518930,
-  "eval_count": 1227,
-  "eval_duration": 10801446253
+  "name": "generator",
+  "host": "http://localhost:11434",
+  "model": "qwen3-vl:8b-instruct",
+  "system": "pyash_orchestrator"
 }
 ```
 
-Only some fields get mapped into Pyash; the rest stay as runtime metadata.
+---
 
-### 3.1 Pyash reply clause
+## Calling a mind
 
-Your grammar for a completed “no further action” reply is:
+### Pyash source
+
+Direct call:
 
 ```pyash
-subj questioner
-  be say
-    obj discourse message.content
-    obj interior  message.thinking
-    via time      time
-  ya
+su question obj discourse "Hello" to generator be mind do
 ```
 
-Where:
+Via `say`:
 
-* `obj discourse message.content`
-  → main visible answer text (maps from `message.content` in JSON).
+```pyash
+be say obj text "Hello" to generator do
+```
 
-* `obj interior message.thinking`
-  → internal reasoning, chain-of-thought (maps from `message.thinking`).
-  → *interior* marks it as inside the mind, not external speech.
+### Runtime behaviour (high level)
 
-* `via time time`
-  → temporal tag from `created_at` (TIME context).
-  → `time` is your chosen representation of that timestamp.
+1. Resolve mind config:
 
-* `ya` (deontic mood)
-  → “no further action required”: this is a completed response, not a command.
+   * host, model, system prompt for `generator`.
+2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; still room to tune windowing.)
+3. Build `messages[]` for Ollama:
 
-* `subj questioner`
-  → still framed from the questioner’s side: this event is “the questioner receiving a say” with both visible discourse and interior content packaged.
+   * optional `system` message from `via discourse`.
+   * interleaved `user` / `assistant` messages from history.
+   * current `user` message from `obj` text.
+4. Send a `POST /api/chat` to Ollama with `stream: false`.
+5. Store the reply into `memory` as new facts.
+6. Return `{ obj: { text: <reply>, model: <model_name> } }` to the caller.
 
-### 3.2 What Codex should map
+---
 
-Given the JSON, Codex/runtime should:
+## Context (conversation history)
 
-* Bind:
+### Source of history
 
-  ```text
-  message.content  → some local label / string for reply text
-  message.thinking → some local label / string for interior text
-  created_at       → some local label / string for time
+The runtime derives context from `memory`. For each mind `<M>`:
+
+* **User messages** for `<M>`:
+
+  ```jsonc
+  {
+    "mood": "do",
+    "be": "say",
+    "obj": { "name": "<user text>" },
+    "to":  { "name": "<M>" }
+  }
   ```
 
-* Fill the Pyash clause:
+* **Assistant messages** from `<M>`:
 
-  ```pyash
-  subj questioner
-    be say
-      obj discourse "<message.content>"
-      obj interior  "<message.thinking>"
-      via time      "<created_at or normalised time>"
-    ya
+  Primary form:
+
+  ```jsonc
+  {
+    "mood": "ya",
+    "subj": { "name": "<M>" },
+    "be": "mind",
+    "obj": {
+      "text": "<llm reply>",
+      "model": "qwen3-vl:8b-instruct"
+    }
+  }
   ```
 
-* Keep everything else (`done`, durations, counts) as raw metadata attached to this event, not grammatically encoded.
+  A secondary form uses `subj: "result"` with `be: "say"` and the same `obj.text`. Both map to `role: "assistant"` for context building.
+
+### History stitching
+
+**Status:** implemented for interpreter (prompts include last N turns) and compiled JS (per-mind history map). Window remains configurable-to-be in code (defaults ~8 turns).
+
+Before each mind call, the runtime:
+
+1. Scans `memory` in order for facts belonging to that mind.
+
+2. Projects them into a chat-style sequence:
+
+   ```js
+   [
+     { role: "user",      content: "<previous prompt 1>" },
+     { role: "assistant", content: "<previous reply 1>" },
+     { role: "user",      content: "<previous prompt 2>" },
+     { role: "assistant", content: "<previous reply 2>" },
+     // ...
+   ]
+   ```
+
+3. Trims to a bounded window, for example the last `N` user+assistant pairs:
+
+   * default window: about 8 turns (16 messages).
+   * mind configs may override this with a `historyWindow` field.
+
+When implemented, this `historyMessages[]` array feeds directly into `messages[]` for Ollama.
+
+### Caller-provided context
+
+Callers may also embed their own context inside the current `obj` text or other fields. The automatic history stitching runs in addition to any explicit context the caller supplies.
 
 ---
 
-## 4. Summary for Codex
+## Ollama call shape
 
-**Phase 1 — Configure mind (one-time):**
+Both interpreter and compiled JS paths aim for the same JSON call to Ollama:
 
-```pyash
-subj system
-  be mind
-    from space "http://localhost:11434"
-    via  state "qwen3:8b"
-    via  discourse "pyash_orchestrator"
-  ya
+```jsonc
+POST /api/chat
+Content-Type: application/json
+
+{
+  "model": "<mind.model>",
+  "messages": [
+    {
+      "role": "system",
+      "content": "<mind.system prompt, if present>"
+    },
+    // historyMessages from memory:
+    { "role": "user",      "content": "earlier user message 1" },
+    { "role": "assistant", "content": "earlier assistant reply 1" },
+    // ...
+    // current call:
+    { "role": "user",      "content": "<current obj text>" }
+  ],
+  "options": {
+    "num_ctx": 8192
+  },
+  "stream": false
+}
 ```
 
-* Use compositional cases to map:
+The runtime then reads:
 
-  * `from space`   → engine URL.
-  * `via state`    → model name.
-  * `via discourse`→ system prompt key.
+```jsonc
+{
+  "message": {
+    "role": "assistant",
+    "content": "<generated text>"
+  },
+  // other metadata omitted
+}
+```
 
-Store this in JSON; do not re-emit it every call.
+and uses `message.content` as the reply text.
 
 ---
 
-**Phase 2 — Ask the mind:**
+## Reply facts
 
-```pyash
-subj questioner
-  be say
-    obj discourse "What trees should I plant in zone 5b?"
-  do
+The runtime records each call–reply pair in `memory` so that future calls see a continuous conversation.
+
+Example:
+
+```jsonc
+// User → mind
+{
+  "mood": "do",
+  "be": "say",
+  "to":  { "name": "generator" },
+  "obj": { "name": "<current obj text>" }
+}
+
+// Mind → user (main record)
+{
+  "mood": "ya",
+  "subj": { "name": "generator" },
+  "be": "mind",
+  "obj": {
+    "text":  "<llm reply text>",
+    "model": "qwen3-vl:8b-instruct"
+  }
+}
 ```
 
-* Map `obj discourse` → user message content sent to Ollama.
+A secondary “result” fact may mirror the reply for downstream use:
+
+```jsonc
+{
+  "mood": "ya",
+  "subj": { "name": "result" },
+  "be": "say",
+  "obj": {
+    "text":  "<llm reply text>",
+    "model": "qwen3-vl:8b-instruct"
+  }
+}
+```
+
+These facts serve both as a queryable log and as the source for automatic context.
 
 ---
 
-**Phase 3 — Represent the reply:**
+## Interpreter vs compiled behaviour
 
-```pyash
-subj questioner
-  be say
-    obj discourse message.content
-    obj interior  message.thinking
-    via time      time
-  ya
-```
+### Interpreter
 
-* `message.content`  ← JSON `message.content` (assistant’s answer).
-* `message.thinking` ← JSON `message.thinking` (internal reasoning).
-* `time`             ← JSON `created_at` (or normalised timestamp).
-* `ya`               ← complete reply, no further action.
+* Uses `motor/ollama.mjs`.
+* Builds `messages[]` as described above.
+* Uses `fetch` or an equivalent HTTP client to call `POST /api/chat`.
+* Stores reply facts and returns `{ obj: { text, model } }` to the REPL.
 
-With these three stages, Codex has everything needed to:
+### Compiled JS
 
-* set up a mind once,
-* route questions to it from Pyash,
-* and fold the Ollama reply back into Pyash in a way that respects your grammar.
+* Emits code that calls a small helper, for example `ollama_chat.mjs`, rather than calling `curl` directly.
+* The helper receives:
 
-```
-```
+  * `host`, `model`, `systemPrompt`,
+  * `historyMessages[]` (already built),
+  * `currentText`,
+  * `numCtx` (optional).
+* The helper assembles the JSON payload and calls `POST /api/chat` using `fetch` or a minimal HTTP client.
+
+This gives parity between interpreter and compiled paths and avoids shelling out.
+
+---
+
+## Notes / TODO
+
+* Streaming responses: future work.
+* C codegen for minds: future work.
+* Extra tooling for summarising very long histories: future work.
+
+````
+
+---
+
+## About replacing `curl`
+
+For the compiled JS path you have three realistic options that stay light:
+
+1. **Use Node’s built-in `fetch`** (Node 18+):
+
+   - No extra dependency.
+   - The helper module looks like:
+
+     ```js
+     // ollama_chat.mjs
+     export async function ollamaChat({ host, model, messages, numCtx = 8192 }) {
+       const res = await fetch(`${host}/api/chat`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           model,
+           messages,
+           options: { num_ctx: numCtx },
+           stream: false,
+         }),
+       });
+
+       if (!res.ok) {
+         throw new Error(`ollama chat failed: ${res.status} ${res.statusText}`);
+       }
+
+       const data = await res.json();
+       return data.message?.content ?? "";
+     }
+     ```
+
+   - The compiler then emits:
+
+     ```js
+     import { ollamaChat } from "./ollama_chat.mjs";
+
+     const reply = await ollamaChat({ host, model, messages, numCtx });
+     ```
+
+2. **Use `undici` in older Node**:
+
+   - Still very small.
+   - Same interface, just swap `fetch` with `undici.fetch`.
+
+3. **Ollama CLI** as a shell tool (fallback only):
+
+   - `ollama chat` can handle context on its own, although with less structured control.
+   - For a Pyash mind that already builds `messages[]`, the HTTP path is a better fit.
+
+If you want Codex to refactor away from `curl`, you can say:
+
+> “Replace the compiled JS `curl` call with a small `ollama_chat.mjs` helper that calls `POST /api/chat` via Node’s built-in `fetch`. The helper should accept `{ host, model, messages, numCtx }`, where `messages` already includes system, history, and current user message. Both interpreter and compiled code should call this helper so they share the same context behaviour.”
+
+Then open `mind.md` with `vim mind.md` and paste the updated version.
+::contentReference[oaicite:0]{index=0}
+````

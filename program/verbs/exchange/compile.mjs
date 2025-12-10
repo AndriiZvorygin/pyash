@@ -114,22 +114,22 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const resultName = sentence.subj?.name ?? mindName;
       const promptVal = typeof obj.text === "string" ? JSON.stringify(obj.text) : JSON.stringify(obj.name ?? "");
       const explicitModel = obj.model ? JSON.stringify(obj.model) : null;
-      const lines = [];
+      const lines = ["{"]; // block scope to avoid duplicate const per call
       lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
-      lines.push(`const host = cfg.space || process.env.OLLAMA_HOST || "http://localhost:11434";`);
-      lines.push(`const model = ${explicitModel ?? "cfg.model || \"llama3\""};`);
-      lines.push("const promptParts = [];");
-      lines.push("if (cfg.prompt) promptParts.push(cfg.prompt);");
-      lines.push(`promptParts.push(${promptVal});`);
-      lines.push("const prompt = promptParts.filter(Boolean).join(\"\\n\\n\");");
-      lines.push("const payload = JSON.stringify({ model, prompt, stream: false });");
-      lines.push("const resp = execSync(\"curl -s -X POST \" + JSON.stringify(host + \"/api/generate\") + \" -H 'Content-Type: application/json' -d \" + JSON.stringify(payload), { encoding: \"utf8\" });");
-      lines.push("let reply = \"\";");
-      lines.push("try { const data = JSON.parse(resp); reply = data?.response ?? data?.output ?? data?.data ?? \"\"; } catch { reply = String(resp ?? \"\"); }");
+      lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
+      lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
+      lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)});`);
+      lines.push("const messages = [];");
+      lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
+      lines.push("messages.push(...historyMessages);");
+      lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
+      lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
       const resVar = sanitizeName(resultName);
+      lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply });`);
       lines.push(`const ${resVar} = { subj: { name: "${resultName}" }, obj: { text: reply }, be: "text", mood: "ya" };`);
       lines.push(`globalThis["${resultName}"] = ${resVar};`);
       lines.push(`console.log(${resVar}.obj?.text ?? ${resVar}.obj?.num);`);
+      lines.push("}");
       return lines.join("\n");
     }
 
@@ -166,7 +166,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return `console.log(${expr});`;
   }
 
-  // Mind (sync, JS only)
+  // Mind (JS only)
   if (baseBe === "mind") {
     if (lang === "c") return "/* TODO: mind in C not supported */";
     if (mindShim) mindShim.used = true;
@@ -190,30 +190,27 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     // Invocation
     const resultName = sentence.subj?.name ?? "mind_result";
     const explicitModel = obj.model ? JSON.stringify(obj.model) : null;
-    const promptPieces = [];
-    if (obj.text) promptPieces.push(JSON.stringify(obj.text));
-    else if (obj.name) promptPieces.push(JSON.stringify(obj.name));
-    const lines = [];
+    const userText = obj.text
+      ? JSON.stringify(obj.text)
+      : obj.name
+        ? JSON.stringify(obj.name)
+        : "\"\"";
+    const lines = ["{"]; // block scope per invocation
     lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
-    lines.push(`const host = cfg.space || process.env.OLLAMA_HOST || "http://localhost:11434";`);
-    lines.push(`const model = ${explicitModel ?? "cfg.model || \"llama3\""};`);
-    lines.push("const promptParts = [];");
-    lines.push("if (cfg.prompt) promptParts.push(cfg.prompt);");
-    for (const p of promptPieces) {
-      lines.push(`promptParts.push(${p});`);
-    }
-    lines.push("const prompt = promptParts.filter(Boolean).join(\"\\n\\n\");");
-    lines.push("const payload = JSON.stringify({ model, prompt, stream: false });");
-    lines.push("const resp = execSync(" +
-      "\"curl -s -X POST \" + JSON.stringify(host + \"/api/generate\") + " +
-      "\" -H 'Content-Type: application/json' -d \" + JSON.stringify(payload)," +
-      " { encoding: \"utf8\" });");
-    lines.push("let reply = \"\";");
-    lines.push("try { const data = JSON.parse(resp); reply = data?.response ?? data?.output ?? data?.data ?? \"\"; } catch { reply = String(resp ?? \"\"); }");
+    lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
+    lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
+    lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)});`);
+    lines.push("const messages = [];");
+    lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
+    lines.push("messages.push(...historyMessages);");
+    lines.push(`messages.push({ role: "user", content: ${userText} });`);
+    lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
     const resVar = sanitizeName(resultName);
+    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${userText} }, { role: "assistant", content: reply });`);
     lines.push(`const ${resVar} = { subj: { name: "${resultName}" }, obj: { text: reply }, be: "text", mood: "ya" };`);
     lines.push(`globalThis["${resultName}"] = ${resVar};`);
     lines.push(`console.log(${resVar}.obj?.text ?? ${resVar}.obj?.num);`);
+    lines.push("}");
     return lines.join("\n");
   }
 
@@ -658,8 +655,13 @@ let lines = [header];
   if (lang !== "c") {
     const prelude = [lines[0]];
     if (mindShim.used) {
-      prelude.push(`import { execSync } from "node:child_process";`);
       prelude.push(`const mindConfigs = new Map();`);
+      const waitForHelper = `function waitFor(promise) {\n  if (!promise || typeof promise.then !== \"function\") return promise;\n  const sab = new SharedArrayBuffer(4);\n  const view = new Int32Array(sab);\n  let value;\n  let error;\n  promise.then(v => { value = v; Atomics.store(view, 0, 1); Atomics.notify(view, 0); }).catch(err => { error = err; Atomics.store(view, 0, 1); Atomics.notify(view, 0); });\n  Atomics.wait(view, 0, 0);\n  if (error) throw error;\n  return value;\n}`;
+      const mindHelper = `function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = transport({ host, model, messages, numCtx });\n    return waitFor(res);\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = waitFor(fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  }));\n  const data = waitFor(typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
+      const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(name, window = 8) {\n  const arr = mindHistory.get(name) || [];\n  const max = window * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(name, userMsg, assistantMsg) {\n  const arr = mindHistory.get(name) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  mindHistory.set(name, arr);\n}`;
+      prelude.push(waitForHelper);
+      prelude.push(mindHelper);
+      prelude.push(mindHistory);
     }
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string" && globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n  return ref;\n});`;

@@ -78,7 +78,8 @@ export async function handleImperative({
     memory.doRemember(target);
   }
 
-  const toValue = target?.obj ?? to;
+  const useRawTo = be === "mind" || be === "say";
+  const toValue = useRawTo ? (to ?? sentence.to) : (target?.obj ?? to);
 
   // pass the current value, not the name
   const callSentence = { ...sentence, obj: obj ?? sentence.obj, to: toValue ?? to ?? sentence.to, from: from ?? sentence.from };

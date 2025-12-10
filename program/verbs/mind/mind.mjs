@@ -1,6 +1,38 @@
 // pyash/verbs/mind.mjs
 import ollama from "../../motor/ollama.mjs";
-import { remember } from "../../remember/index.mjs";
+import { remember, dumpHistory, doRemember } from "../../remember/index.mjs";
+
+function buildHistoryMessages(mindName, { window = 8 } = {}) {
+  if (!mindName) return [];
+  const hist = dumpHistory();
+  const messages = [];
+
+  for (const fact of hist) {
+    // User -> mind (say do)
+    if (fact.mood === "do" && fact.be === "say" && fact.to?.name === mindName) {
+      const content = fact.obj?.text ?? fact.obj?.name;
+      if (content) messages.push({ role: "user", content: String(content) });
+      continue;
+    }
+
+    // Mind reply (primary)
+    if (fact.mood === "ya" && fact.be === "mind" && fact.subj?.name === mindName) {
+      const content = fact.obj?.text ?? fact.obj?.name;
+      if (content) messages.push({ role: "assistant", content: String(content) });
+      continue;
+    }
+
+    // Secondary result fact
+    if (fact.mood === "ya" && fact.be === "say" && fact.subj?.name === "result") {
+      const content = fact.obj?.text ?? fact.obj?.name;
+      if (content) messages.push({ role: "assistant", content: String(content) });
+    }
+  }
+
+  // Take the last N*2 entries (user/assistant pairs) to bound context
+  const max = window * 2;
+  return messages.slice(-max);
+}
 
 export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
@@ -24,6 +56,13 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const promptParts = [];
   if (configPrompt) promptParts.push(configPrompt);
   if (callPrompt) promptParts.push(callPrompt);
+  const historyMessages = buildHistoryMessages(targetName);
+  if (historyMessages.length) {
+    const histText = historyMessages
+      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+      .join("\n");
+    promptParts.push(histText);
+  }
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -40,6 +79,26 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
 
   const responseText = await ollama.generate(model, fullPrompt.trim());
+
+  // Record turn so future calls have context
+  if (callPrompt) {
+    doRemember({
+      mood: "do",
+      be: "say",
+      to: { name: targetName },
+      obj: { text: callPrompt }
+    });
+  }
+  const baseConfig = config || {};
+  doRemember({
+    mood: "ya",
+    subj: { name: targetName },
+    be: "mind",
+    from: baseConfig.from,
+    as: baseConfig.as,
+    accordingto: baseConfig.accordingto,
+    obj: { text: responseText, model }
+  });
 
   return { obj: { text: responseText, model } };
 }

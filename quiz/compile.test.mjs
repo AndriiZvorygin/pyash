@@ -532,8 +532,52 @@ test("compile say to mind emits mind call", async () => {
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
   assert.match(js, /mindConfigs.set/, "mind config should be emitted");
-  assert.match(js, /execSync\("curl -s -X POST/, "should call Ollama via curl");
-  assert.match(js, /promptParts\.push\("hello"\)/, "should push prompt from say text");
+  assert.match(js, /callMind\(/, "should route through mind helper");
+  assert.match(js, /messages\.push\(\{ role: "user", content: "hello" \}\)/, "should push user message");
+});
+
+test("compiled say to mind builds messages payload and uses helper transport", async () => {
+  forget();
+
+  const program = [
+    "exists subj name helper be mind from name http://localhost:11434 ya",
+    "obj text hello to name helper be say do",
+    "obj text again to name helper be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+    .replace(/^\s*quoted\.javascript\.\s*/, "")
+    .replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const calls = [];
+  const context = {
+    ollamaChat: payload => {
+      calls.push(payload);
+      return "ok";
+    },
+    console: { log: () => {} }
+  };
+  context.globalThis = context;
+  vm.runInNewContext(js, context);
+
+  assert.equal(calls.length, 2, "helper should be called for each say");
+  const [payload] = calls;
+  assert.equal(payload.host, "http://localhost:11434");
+  assert.equal(payload.model, "qwen3-vl:8b-instruct");
+  assert.equal(payload.messages.at(-1).content, "hello");
+  assert.equal(payload.messages.at(-1).role, "user");
+  assert.ok(payload.messages.every(m => m.role && m.content !== undefined));
+  // Second call should include first exchange in history
+  const second = calls[1];
+  const userMsgs = second.messages.filter(m => m.role === "user");
+  const assistantMsgs = second.messages.filter(m => m.role === "assistant");
+  assert.ok(userMsgs.length >= 2, "history should include prior user turn");
+  assert.ok(assistantMsgs.length >= 1, "history should include assistant turn");
 });
 
 test("compile emits JS ceremony with no params", async () => {

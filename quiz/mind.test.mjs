@@ -55,3 +55,27 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
 
   motor.generate = original;
 });
+
+test("mind invocation includes recent history in prompt", async () => {
+  forget();
+
+  const original = motor.generate;
+  let capturedPrompt = "";
+  motor.generate = async (model, prompt) => {
+    capturedPrompt = prompt;
+    return "ok";
+  };
+
+  await interpret(
+    parse('su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+  );
+
+  await interpret(parse('be say obj text "Hi" to generator do'));
+  await interpret(parse('su question obj discourse "Hello" to generator be mind do'));
+
+  assert.match(capturedPrompt, /USER: Hi/);
+  assert.match(capturedPrompt, /ASSISTANT:/);
+  assert.match(capturedPrompt, /Hello/);
+
+  motor.generate = original;
+});
