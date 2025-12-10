@@ -23,6 +23,7 @@ su generator be mind
   from space "http://localhost:11434"
   via  state "qwen3-vl:8b-instruct"
   via  discourse "pyash_orchestrator"
+  by   num 6
 ya
 ````
 
@@ -33,7 +34,7 @@ Fields:
 
   * interpreter default: `qwen3-vl:8b-instruct` if missing.
 * `via discourse` (`accordingto`) → system prompt string for the mind.
-* `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted.
+* `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted. Per-call override via `by num` is accepted too.
 
 Internally, the runtime stores at least:
 
