@@ -38,8 +38,11 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
   const historyWindow =
+    sentence?.by?.num ??
+    sentence?.by?.quantity?.num ??
     config?.obj?.window?.num ??
     config?.obj?.historyWindow?.num ??
+    config?.window ??
     config?.historyWindow ??
     obj?.window?.num ??
     8;

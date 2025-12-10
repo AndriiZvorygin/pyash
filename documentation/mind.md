@@ -33,6 +33,7 @@ Fields:
 
   * interpreter default: `qwen3-vl:8b-instruct` if missing.
 * `via discourse` (`accordingto`) → system prompt string for the mind.
+* `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted.
 
 Internally, the runtime stores at least:
 
@@ -63,12 +64,17 @@ Via `say`:
 be say obj text "Hello" to generator do
 ```
 
+Relevant compositional cases at call time:
+- `obj` holds the user text (`obj text` or `obj discourse`).
+- `to name <mind>` selects which mind to call.
+- Optional `by num N` could override window per call (not yet wired; config-level `by num` is used).
+
 ### Runtime behaviour (high level)
 
 1. Resolve mind config:
 
    * host, model, system prompt for `generator`.
-2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; window is per mind via `obj window num N` on the config sentence, default ~8.)
+2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; window is per mind via `by num N` on the config sentence, default ~8.)
 3. Build `messages[]` for Ollama:
 
    * optional `system` message from `via discourse`.

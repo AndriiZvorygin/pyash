@@ -67,7 +67,7 @@ test("mind invocation includes recent history in prompt with per-mind window", a
   };
 
   await interpret(
-    parse('su generator obj window num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+    parse('su generator by num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
   );
 
   await interpret(parse('be say obj text "Hi" to generator do'));

@@ -540,7 +540,7 @@ test("compiled say to mind builds messages payload and uses helper transport", a
   forget();
 
   const program = [
-    "exists subj name helper obj window num 1 be mind from name http://localhost:11434 ya",
+    "exists subj name helper by num 1 be mind from name http://localhost:11434 ya",
     "obj text hello to name helper be say do",
     "obj text again to name helper be say do"
   ].join("\\n");

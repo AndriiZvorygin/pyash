@@ -114,18 +114,19 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const resultName = sentence.subj?.name ?? mindName;
       const promptVal = typeof obj.text === "string" ? JSON.stringify(obj.text) : JSON.stringify(obj.name ?? "");
       const explicitModel = obj.model ? JSON.stringify(obj.model) : null;
+      const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? obj.window?.num ?? null;
       const lines = ["{"]; // block scope to avoid duplicate const per call
       lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
       lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
       lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
-      lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, cfg.window || 8);`);
+      lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
       lines.push("const messages = [];");
       lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
       lines.push("messages.push(...historyMessages);");
       lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
       lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
       const resVar = sanitizeName(resultName);
-      lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, cfg.window || 8);`);
+      lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
       lines.push(`const ${resVar} = { subj: { name: "${resultName}" }, obj: { text: reply }, be: "text", mood: "ya" };`);
       lines.push(`globalThis["${resultName}"] = ${resVar};`);
       lines.push(`console.log(${resVar}.obj?.text ?? ${resVar}.obj?.num);`);
@@ -178,7 +179,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const space = sentence.from?.name ?? obj.space ?? null;
       const model = sentence.as?.name ?? obj.model ?? null;
       const prompt = sentence.accordingto?.name ?? obj.text ?? null;
-      const window = sentence.obj?.window?.num ?? obj.window?.num ?? null;
+      const window = sentence.by?.num ?? sentence.by?.quantity?.num ?? sentence.obj?.window?.num ?? obj.window?.num ?? null;
       const lines = [];
       lines.push(`mindConfigs.set(${JSON.stringify(mindName)}, {`);
       if (space) lines.push(`  space: ${JSON.stringify(space)},`);
@@ -201,14 +202,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
     lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
     lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
-    lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, cfg.window || 8);`);
+    const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? obj.window?.num ?? null;
+    lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const messages = [];");
     lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
     lines.push("messages.push(...historyMessages);");
     lines.push(`messages.push({ role: "user", content: ${userText} });`);
     lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
     const resVar = sanitizeName(resultName);
-    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, cfg.window || 8);`);
+    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push(`const ${resVar} = { subj: { name: "${resultName}" }, obj: { text: reply }, be: "text", mood: "ya" };`);
     lines.push(`globalThis["${resultName}"] = ${resVar};`);
     lines.push(`console.log(${resVar}.obj?.text ?? ${resVar}.obj?.num);`);
