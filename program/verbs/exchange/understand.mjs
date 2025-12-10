@@ -20,6 +20,9 @@ export async function understand_from_name_text_to_name_text(sentence) {
     throw new Error(`understand: source text not found for \"${sourceName ?? sourceFilename ?? "unknown"}\"`);
   }
 
+  // Allow escaped newlines in inline text blocks
+  sourceText = sourceText.replaceAll("\\n", "\n");
+
   const program = buildProgram(sourceText);
   const json = JSON.stringify(program.sentences, null, 2);
 

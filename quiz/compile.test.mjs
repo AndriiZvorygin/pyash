@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import vm from "node:vm";
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
+
+const exec = promisify(execCb);
 
 test("understand verb reads Pyash text and stores JSON", async () => {
   forget();
@@ -173,8 +177,8 @@ test("file-based compile with math, ceremony, and say logs final value", async (
   vm.runInNewContext(fileText, context);
 
   assert.equal(logs.length, 2, "should log twice");
-  assert.equal(logs[0]?.obj?.num, 2, "first log after add/subtract is 2");
-  assert.equal(logs[1]?.obj?.num, 5, "second log after ceremony is 5");
+  assert.equal(logs[0], 2, "first log after add/subtract is 2");
+  assert.equal(logs[1], 5, "second log after ceremony is 5");
 
   await fs.rm(outputFile, { force: true });
 });
@@ -198,7 +202,7 @@ test("compile emits loop for tloh countdown", async () => {
   const result = await interpret(sentence);
   const js = result?.obj?.text ?? result?.value?.text ?? "";
   const unwrapped = js
-    .replace(/^quoted\.javascript\.\s*/, "")
+    .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
   assert.match(unwrapped, /runLoop\(/, "should emit loop helper call");
@@ -415,7 +419,7 @@ test("compile emits console.log for say name using variable reference", async ()
   const js = result?.obj?.text ?? result?.value?.text ?? "";
 
   assert.match(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ text: "hi" \}/);
-  assert.match(js, /console\.log\(alpha\);/);
+  assert.match(js, /console\.log\(alpha\.obj\?\.(text|num)[^)]+\);/);
 });
 
 test("compile emits JS for simple multiply and divide", async () => {
@@ -458,6 +462,58 @@ test("compile emits JS for text concatenation via add", async () => {
   assert.match(js, /message\.obj\.text = \(message\.obj\.text \?\? \"\"\) \+ \"there\";/);
 });
 
+test("compile vector literal and produce dot product inline", async () => {
+  forget();
+
+  const program = [
+    "obj vec num 1 2 3 by vec num 4 5 6 to name z be produce do",
+    "obj name z be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+    .replace(/^\s*quoted\.javascript\.\s*/, "")
+    .replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  const context = { console: { log: (...args) => logs.push(args[0]) } };
+  context.globalThis = context;
+  vm.runInNewContext(js, context);
+
+  assert.equal(logs[0], 32);
+});
+
+test("compile vector produce from named vectors", async () => {
+  forget();
+
+  const program = [
+    "exists subj name w obj ve num 1 1 1 be vector ya",
+    "exists subj name x obj ve num 2 3 4 be vector ya",
+    "from name w by name x to name z be produce do",
+    "obj name z be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+    .replace(/^\s*quoted\.javascript\.\s*/, "")
+    .replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  const context = { console: { log: (...args) => logs.push(args[0]) } };
+  context.globalThis = context;
+  vm.runInNewContext(js, context);
+
+  assert.equal(logs[0], 9);
+});
+
 test("compile emits JS ceremony with no params", async () => {
   forget();
 
@@ -496,9 +552,8 @@ test("compile emits JS ceremony with param and body", async () => {
 
   assert.ok(js);
   assert.match(js, /let bucket = \{ subj: \{ name: "bucket" \}, obj: \{ num: 0 \}/);
-  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*const bucket = remember\(sentence\.to/s);
-  assert.match(js, /const remember = /, "remember shim should be emitted");
-  assert.match(js, /return bucket;/);
+  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*bucket\.obj\.num\s*=\s*\(bucket\.obj\.num\s*\?\?\s*0\)\s*\+\s*2;/s);
+  assert.match(js, /return\s+sentence\s*;/);
 });
 
 test("compiled ceremony function can be invoked (JS)", async () => {
