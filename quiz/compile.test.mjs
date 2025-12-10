@@ -179,6 +179,30 @@ test("file-based compile with math, ceremony, and say logs final value", async (
   await fs.rm(outputFile, { force: true });
 });
 
+test("compile emits loop for tloh countdown", async () => {
+  forget();
+
+  const program = [
+    "exists subj name counter obj num 0 be number ya",
+    "subj name loop body to name counter be ceremony def",
+    "obj num 1 to name counter be add do",
+    "subj name loop body be ceremony prah",
+    "to name counter tloh num 3 be loop body do",
+    "obj name counter be say do"
+  ].join("\\n");
+
+  const sentence = parse(
+    `from text quoted.pyash.${program}.pyash.quoted to state javascript to text output be compile do`
+  );
+
+  const result = await interpret(sentence);
+  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const unwrapped = js.replace(/^quoted\.javascript\.\n?/, "").replace(/\.javascript\.quoted\s*$/, "");
+
+  assert.match(unwrapped, /while\s*\(true\)/, "should emit loop");
+  assert.match(unwrapped, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/, "loop body increments counter");
+});
+
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
   forget();
 
