@@ -197,10 +197,20 @@ test("compile emits loop for tloh countdown", async () => {
 
   const result = await interpret(sentence);
   const js = result?.obj?.text ?? result?.value?.text ?? "";
-  const unwrapped = js.replace(/^quoted\.javascript\.\n?/, "").replace(/\.javascript\.quoted\s*$/, "");
+  const unwrapped = js
+    .replace(/^quoted\.javascript\.\s*/, "")
+    .replace(/\s*\.javascript\.quoted\s*$/, "");
 
-  assert.match(unwrapped, /for\s*\(let evoker =/, "should emit for-loop wrapper");
+  assert.match(unwrapped, /runLoop\(/, "should emit loop helper call");
   assert.match(unwrapped, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/, "loop body increments counter");
+
+  const logs = [];
+  const context = { console: { log: (...args) => logs.push(args[0]) } };
+  context.globalThis = context;
+  vm.runInNewContext(unwrapped, context);
+  const firstLog = logs[0];
+  const loggedNum = firstLog?.obj?.num ?? firstLog;
+  assert.equal(loggedNum, 3, "loop should increment counter to 3");
 });
 
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
