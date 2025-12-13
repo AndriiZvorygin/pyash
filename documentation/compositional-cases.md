@@ -23,7 +23,8 @@ Every case is understood as:
   * **person** – individual people
   * **social** – groups, communities
   * **discourse** – text, speech, documents
-  * **quantity** – counts, rates, loop registers (`tloh`/`per`)
+* **quantity** – counts, rates, loop registers (`tloh`/`per`)
+* **sequence** – ordered positions / indices (`fromindex` / `atindex` / `toindex`)
 
 The **hex value** of the case (the `hnuc` field) is the canonical ID.  
 The `(axis, context)` reading is provided by lookup tables.
@@ -224,6 +225,7 @@ export const axisContextToKeyword = {
   person:    { source: "fromperson",way: "with",        destination: "for" },
   social:    { source: "fromgroup", way: "among",       destination: "intogroup" },
   discourse: { source: "fromtext",  way: "accordingto", destination: "totext" },
+  sequence:  { source: "fromindex", way: "atindex",     destination: "toindex" },
 };
 
 export const keywordToAxisContext = {
@@ -237,6 +239,7 @@ export const keywordToAxisContext = {
   fromperson:  { axis: "source", context: "person" },
   fromgroup:   { axis: "source", context: "social" },
   fromtext:    { axis: "source", context: "discourse" },
+  fromindex:   { axis: "source", context: "sequence" },
 
   // way
   at:          { axis: "way",    context: "space" },
@@ -248,6 +251,7 @@ export const keywordToAxisContext = {
   with:        { axis: "way",    context: "person" },
   among:       { axis: "way",    context: "social" },
   accordingto: { axis: "way",    context: "discourse" },
+  atindex:     { axis: "way",    context: "sequence" },
 
   // destination
   to:          { axis: "destination", context: "space" },
@@ -259,6 +263,7 @@ export const keywordToAxisContext = {
   for:         { axis: "destination", context: "person" },
   intogroup:   { axis: "destination", context: "social" },
   totext:      { axis: "destination", context: "discourse" },
+  toindex:     { axis: "destination", context: "sequence" },
 };
 ```
 
