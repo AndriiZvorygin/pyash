@@ -1,0 +1,5 @@
+exists subj name doors obj ve num 0 1 0 be vector ya
+
+obj name doors via space num 2 be read to name picked do
+
+subj name picked be pyash que
