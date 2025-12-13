@@ -10,16 +10,16 @@ async function run(line) {
   return interpret(s);
 }
 
-test("this tloh/this until bindings inside sandpit preserve registers on evoker", async () => {
+test("this fromindex/this toindex bindings inside sandpit preserve registers on evoker", async () => {
   forget();
 
   const lines = [
-    "subj name inspector to name num tloh num 0 until num 0 be ceremony def",
-    "subj name seen-tloh obj this tloh be number ya",
-    "subj name seen-until obj this until be number ya",
+    "subj name inspector to name num fromindex num 0 toindex num 0 be ceremony def",
+    "subj name seen-fromindex obj this fromindex be number ya",
+    "subj name seen-toindex obj this toindex be number ya",
     "this ret",
     "subj name inspector be ceremony prah",
-    "to name sink tloh num 2 until num 2 be inspector do",
+    "to name sink fromindex num 2 toindex num 2 be inspector do",
   ];
 
   for (const line of lines) {
@@ -29,18 +29,18 @@ test("this tloh/this until bindings inside sandpit preserve registers on evoker"
   const result = remember("result");
   const sandpit = dumpSandpits().at(-1);
   const evoker = sandpit?.[0];
-  const seenTloh = sandpit ? [...sandpit].reverse().find(s => s.subj?.name === "seen-tloh") : null;
-  const seenUntil = sandpit ? [...sandpit].reverse().find(s => s.subj?.name === "seen-until") : null;
+  const seenFrom = sandpit ? [...sandpit].reverse().find(s => s.subj?.name === "seen-fromindex") : null;
+  const seenTo = sandpit ? [...sandpit].reverse().find(s => s.subj?.name === "seen-toindex") : null;
 
   assert.ok(evoker, "evoker should be recorded first in sandpit");
-  assert.equal(evoker.tloh?.num ?? evoker.tloh, 2, "evoker tloh should remain at initial value when until matches");
-  assert.equal(evoker.until?.num ?? evoker.until, 2);
+  assert.equal(evoker.fromindex?.num ?? evoker.fromindex, 2, "evoker fromindex should remain at initial value when toindex matches");
+  assert.equal(evoker.toindex?.num ?? evoker.toindex, 2);
 
-  assert.equal(seenTloh?.obj?.num ?? seenTloh?.obj, 2, "this tloh should bind into seen tloh");
-  assert.equal(seenUntil?.obj?.num ?? seenUntil?.obj, 2, "this until should bind into seen until");
+  assert.equal(seenFrom?.obj?.num ?? seenFrom?.obj, 2, "this fromindex should bind into seen fact");
+  assert.equal(seenTo?.obj?.num ?? seenTo?.obj, 2, "this toindex should bind into seen fact");
 
   assert.ok(result, "result fact should be present");
 
-  assert.equal(remember("tloh"), undefined, "no standalone tloh fact");
-  assert.equal(remember("until"), undefined, "no standalone until fact");
+  assert.equal(remember("fromindex"), undefined, "no standalone fromindex fact");
+  assert.equal(remember("toindex"), undefined, "no standalone toindex fact");
 });

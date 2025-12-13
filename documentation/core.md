@@ -10,8 +10,8 @@ This document summarizes the current core language model used by the interpreter
     - `subj`: primary subject (`subj name alpha`).
     - `obj`: payload (`obj num 1`, `obj text hello`, or `obj genitive …`).
     - `to`: target (`to name bucket`, or `to genitive this ti obj`).
-    - `from`: secondary operand (`from num 3`, `from genitive this ti tloh`).
-    - `tloh` / `until`: loop counter and bound.
+    - `from`: secondary operand (`from num 3`, `from genitive this ti fromindex`).
+    - `fromindex` / `toindex`: loop counter and bound.
     - `consequence`: attached sentence for conditionals (`then` mood).
   - Optional `exists` flag declares a name. Without `exists`, assigning to a new name is an error.
   - `become`/`fromstate`/`tostate` are used by translation/compile verbs to select source/target languages.
@@ -52,10 +52,10 @@ This document summarizes the current core language model used by the interpreter
 - Genitive `this` accesses the incoming sentence registers; `remember` inside a ceremony can load targets from `sentence.to`.
 
 ## Loops
-- `tloh <start> [until <bound>] be <ceremony> do` runs a loop:
-  - JS uses `runLoop(sentence, fn)` helper (inclusive until). If `until` absent, counts down to 0.
+- `fromindex <start> [toindex <bound>] be <ceremony> do` runs a loop:
+  - JS uses `runLoop(sentence, fn)` helper (inclusive toindex). If `toindex` absent, counts down to 0.
   - C emits a `for` loop with the same semantics.
-- Within the ceremony, `this ti tloh ti num` reads the current counter.
+- Within the ceremony, `this ti fromindex ti num` reads the current counter.
 
 ## Translation / Compile Verbs
 - `understand`: parse Pyash text to JSON sentences, optionally writing to a name or filename.
@@ -76,7 +76,7 @@ This document summarizes the current core language model used by the interpreter
   - `exists subj name bucket obj num 0 be number ya`
   - `obj num 2 to name bucket be add do`
 - Loop:
-  - `to name counter tloh num 3 be loop body do`
+  - `to name counter fromindex num 3 be loop body do`
 - Ceremony:
   - ```
     subj name add two to name bucket be ceremony def

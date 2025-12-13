@@ -36,5 +36,13 @@ export const signatures = [
   { signatureWords: ["be", "remains", "from", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num }
+  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "obj", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "obj", "name", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "obj", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "obj", "name", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num }
 ];

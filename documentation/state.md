@@ -1,7 +1,7 @@
 # State of Project
 
 ## What the project is
-Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter, and a handful of verbs (add, subtract, giant/tiny/equally conditionals, understand, mind, read). It treats case roles compositionally (axis + context mapped to keywords like `fromtext`, `as`, `become`) and stores every sentence as history in memory. Ceremonies run in sandpits; the evoking sentence is the source of truth (including control cases like `tloh`/`until`), and returned state is carried by the updated evoker rather than separate register facts.
+Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter, and a handful of verbs (add, subtract, giant/tiny/equally conditionals, understand, mind, read). It treats case roles compositionally (axis + context mapped to keywords like `fromtext`, `as`, `become`) and stores every sentence as history in memory. Ceremonies run in sandpits; the evoking sentence is the source of truth (including control cases like `fromindex`/`toindex`), and returned state is carried by the updated evoker rather than separate register facts.
 
 ## Current goals
 - Keep a red→green flow: add quizzes before code.
@@ -30,7 +30,7 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 - Mind is stubbed against mocked generate in quizzes; real streaming/roles for replies aren’t modeled yet.
 - Parser still assumes keyword tables; no validation against hnuc codes yet.
 - Much of the 2019 spec (phonology, noun classes, tense/aspect, GPU/compiler ambitions) remains out-of-scope here.
-- Register facts (e.g., `tloh`/`until`) should ultimately be derived from the evoking sentence only; no separate register facts should be emitted long-term. Mutations to `to` targets inside sandpits are now written back when a loop invocation completes; general sandpit write-back beyond evoker/result is still limited.
+- Register facts (e.g., `fromindex`/`toindex`) should ultimately be derived from the evoking sentence only; no separate register facts should be emitted long-term. Mutations to `to` targets inside sandpits are now written back when a loop invocation completes; general sandpit write-back beyond evoker/result is still limited.
 
 ## Tried and rejected
 - Keeping `context` fields on parsed roles (removed in favor of keyword normalization).

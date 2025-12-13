@@ -44,7 +44,7 @@ test("compositional roles do not expose context field", () => {
 test("quantity context maps to times/by/per keywords", () => {
   const s = parse("subj name loop from quantity num 3 via quantity num 2 to quantity num 10 be topic ya");
 
-  assert.deepEqual(s.tloh ?? s.times, { num: 3 });
+  assert.deepEqual(s.times, { num: 3 });
   assert.deepEqual(s.by, { num: 2 });
   assert.deepEqual(s.per, { num: 10 });
   assert.ok(!s.from, "from should be normalized to times");

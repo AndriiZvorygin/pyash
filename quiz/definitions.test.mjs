@@ -118,14 +118,14 @@ test("invoking while definition is still open just records and does not run", as
 test("ceremony def captures signature words from typed header", async () => {
   forget();
 
-  await run("subj name loop body to name num tloh num 0 until num 0 be ceremony def");
+  await run("subj name loop body to name num fromindex num 0 toindex num 0 be ceremony def");
   await run("subj name loop body be ceremony prah");
 
   const def = getDefinition("loop body");
   assert.ok(def?.signatureWords, "definition should carry signatureWords");
   assert.deepEqual(
     def.signatureWords,
-    ["be", "loop body", "tloh", "num", "to", "name", "num", "until", "num"]
+    ["be", "loop body", "fromindex", "num", "to", "name", "num", "toindex", "num"]
   );
 });
 
@@ -150,4 +150,4 @@ test("ceremony def headers declare signature cases/types (new signature style)",
 
 test.todo("ceremony with ret returns updated evoke registers to caller names");
 
-test.todo("ceremony ret returns multiple registers (obj/tloh/until) to caller names");
+test.todo("ceremony ret returns multiple registers (obj/fromindex/toindex) to caller names");

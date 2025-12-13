@@ -28,8 +28,8 @@ export function handleReturn(sentence, state, remember) {
       obj: fact.obj ?? merged.obj,
       to: fact.to ?? merged.to,
       from: fact.from ?? merged.from,
-      tloh: fact.tloh ?? merged.tloh,
-      until: fact.until ?? merged.until,
+      fromindex: fact.fromindex ?? merged.fromindex,
+      toindex: fact.toindex ?? merged.toindex,
       as: fact.as ?? merged.as
     };
   } else if (sentence.obj !== undefined) {
@@ -38,8 +38,8 @@ export function handleReturn(sentence, state, remember) {
 
   if (sentence.to) merged.to = sentence.to;
   if (sentence.from) merged.from = sentence.from;
-  if (sentence.tloh !== undefined) merged.tloh = sentence.tloh;
-  if (sentence.until !== undefined) merged.until = sentence.until;
+  if (sentence.fromindex !== undefined) merged.fromindex = sentence.fromindex;
+  if (sentence.toindex !== undefined) merged.toindex = sentence.toindex;
   if (sentence.subj) merged.subj = sentence.subj;
   if (sentence.as) merged.as = sentence.as;
 

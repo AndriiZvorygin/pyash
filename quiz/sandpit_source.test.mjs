@@ -13,13 +13,13 @@ async function run(line) {
 test("sandpit first sentence is the source of truth for returned registers", async () => {
   forget();
 
-  // ceremony: start from invoke sentence with obj/tloh/until; mutate obj; return invoke
+  // ceremony: start from invoke sentence with obj/fromindex/toindex; mutate obj; return invoke
   await run("subj name worker to name num be ceremony def");
   await run("obj num 4 to name target be add do");
   await run("this obj name target ret");
   await run("subj name worker be ceremony prah");
 
-  await run("subj name target obj num 1 tloh num 3 until num 5 be number ya");
+  await run("subj name target obj num 1 fromindex num 3 toindex num 5 be number ya");
   await run("to name target be worker do");
 
   const mem = allRemember();
@@ -41,13 +41,13 @@ test("sandpit first sentence is the source of truth for returned registers", asy
 
   assert.equal(invoke.obj?.num, latestTarget.obj?.num, "invoke obj mirrors sandpit source of truth");
   assert.equal(result.obj?.num, invoke.obj?.num, "result mirrors invoke obj");
-  assert.equal(sandpitInvoke.tloh?.num ?? sandpitInvoke.tloh, latestTarget.tloh?.num ?? latestTarget.tloh, "tloh retained on evoke sentence");
-  assert.equal(sandpitInvoke.until?.num ?? sandpitInvoke.until, latestTarget.until?.num ?? latestTarget.until, "until retained on evoke sentence");
+  assert.equal(sandpitInvoke.fromindex?.num ?? sandpitInvoke.fromindex, latestTarget.fromindex?.num ?? latestTarget.fromindex, "fromindex retained on evoke sentence");
+  assert.equal(sandpitInvoke.toindex?.num ?? sandpitInvoke.toindex, latestTarget.toindex?.num ?? latestTarget.toindex, "toindex retained on evoke sentence");
 
   // No additional body leakage into main memory beyond definition-time add
   const adds = mem.filter(s => s.be === "add" && s.mood === "do");
   assert.ok(adds.length <= 1, "sandpit body should not leak additional add commands");
 
-  assert.equal(remember("tloh"), undefined, "tloh should remain attached to the invoke only");
-  assert.equal(remember("until"), undefined, "until should remain attached to the invoke only");
+  assert.equal(remember("fromindex"), undefined, "fromindex should remain attached to the invoke only");
+  assert.equal(remember("toindex"), undefined, "toindex should remain attached to the invoke only");
 });

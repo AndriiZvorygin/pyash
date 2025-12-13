@@ -16,7 +16,7 @@ This *is* the call frame. Internally you treat it as:
   be: "add two",       // ceremony being evoked (surface form, no underscore)
   obj: { num: 5 },
   to:  { name: "result" },
-  // optional registers also live here: tloh, until, etc.
+  // optional registers also live here: fromindex, toindex, etc.
 }
 ```
 
@@ -31,7 +31,7 @@ Inside the ceremony body for **add two**, `this` points at that evoke sentence:
 
 * `this obj` → the `obj` register of the current evoke.
 * `this to` → the `to` register.
-* `this tloh` → loop/multiplicative register if present.
+* `this fromindex` → loop/multiplicative register if present.
 * etc.
 
 You don’t use `what que` for computation; that’s just for REPL / inspection.
@@ -87,7 +87,7 @@ Meaning:
    evoke.obj = { num: 7 };
    ```
 
-3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `tloh`, `until`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `tloh`/`until` facts.
+3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `fromindex`, `toindex`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `fromindex`/`toindex` facts.
 
 So a complete ceremony flow for “add two” in Pyash surface form looks like:
 
@@ -115,37 +115,37 @@ obj num 7 to name result be add two do
 
 ---
 
-## 5. Loops with `tloh` (multiplicative register)
+## 5. Loops with `fromindex` (multiplicative register)
 
-Looping uses the same idea: `tloh` (and `until`, if present) live on the **evoke** as registers.
+Looping uses the same idea: `fromindex` (and `toindex`, if present) live on the **evoke** as registers.
 
 * Example evoke:
 
   ```pyash
-  obj num 0 to name acc tloh num 10 be count up do
+  obj num 0 to name acc fromindex num 10 be count up do
   ```
 
 * Default supervisor behaviour:
 
   * Run the ceremony body.
-  * If the ceremony didn’t explicitly change `this tloh`, move it **toward `until`**:
-    * if `until` is set and greater than `tloh`, increment by 1
-    * if `until` is set and less than `tloh`, decrement by 1
-    * if `until` is absent, decrement toward 0
-  * Stop when `tloh` equals `until` (or 0 when `until` is absent).
+  * If the ceremony didn’t explicitly change `this fromindex`, move it **toward `toindex`**:
+    * if `toindex` is set and greater than `fromindex`, increment by 1
+    * if `toindex` is set and less than `fromindex`, decrement by 1
+    * if `toindex` is absent, decrement toward 0
+  * Stop when `fromindex` equals `toindex` (or 0 when `toindex` is absent).
 
 Inside the ceremony, you can control it with `this`:
 
 ```pyash
 # explicit stop
-this tloh num 0 ret
+this fromindex num 0 ret
 ```
 
 or fancier patterns like:
 
 ```pyash
 # bump once so net effect is “no change” when supervisor subtracts 1
-this tloh num 1 ya
+this fromindex num 1 ya
 ```
 
 Again, verb phrases stay space-separated, and registers stay attached to the evoke:
@@ -165,4 +165,4 @@ If you’d like, next we can:
 
 ## 6. Examples
 
-See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`tloh-loop`, `until-loop`) show default supervisor behaviour with `tloh`/`until` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts. `this-registers` shows accessing `this tloh` / `this until` inside a ceremony body.
+See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`fromindex-loop`, `toindex-loop`) show default supervisor behaviour with `fromindex`/`toindex` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts. `this-registers` shows accessing `this fromindex` / `this toindex` inside a ceremony body.

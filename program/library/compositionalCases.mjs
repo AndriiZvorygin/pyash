@@ -141,7 +141,7 @@ export const compositionalGrid = {
       case: "terminative_case_",
       hnuc: "0x5957",
       pya: "tweh",
-      prep: "until", // DEST + time
+      prep: "toindex", // DEST + time
     },
   },
 
@@ -264,7 +264,7 @@ export const compositionalGrid = {
       axis: "source",
       case: "multiplicative_case_",
       hnuc: "0x6357",
-      pya: "tloh",
+      pya: "fromindex",
       prep: "times",       // SOURCE + quantity (loop/multiplicative register)
     },
 
@@ -319,7 +319,7 @@ export const contextKeywords = {
   time: {
     key: "time",
     contextWord: "time_context_",
-    hints: ["time", "before", "during", "after", "until", "when"],
+    hints: ["time", "before", "during", "after", "toindex", "when"],
   },
 
   state: {

@@ -58,7 +58,7 @@ test("ceremony ret returns full sentence with multiple registers", async () => {
   await run("subj name limiter obj num 2 be number ya");
 
   await run("subj name combo to name num be ceremony def");
-  await run("subj name payload obj num 3 to name target tloh num 4 until num 6 be number ya");
+  await run("subj name payload obj num 3 to name target fromindex num 4 toindex num 6 be number ya");
   await run("obj name payload ret");
   await run("subj name combo be ceremony prah");
 
@@ -72,8 +72,8 @@ test("ceremony ret returns full sentence with multiple registers", async () => {
 
   assert.ok(result?.obj);
   assert.equal(result.obj.num, 3, "result fact should mirror returned obj");
-  assert.equal(remember("tloh"), undefined, "tloh should remain on evoker, not as a register fact");
-  assert.equal(remember("until"), undefined, "until should remain on evoker, not as a register fact");
+  assert.equal(remember("fromindex"), undefined, "fromindex should remain on evoker, not as a register fact");
+  assert.equal(remember("toindex"), undefined, "toindex should remain on evoker, not as a register fact");
 });
 
 test("ret errors when binding is unknown", async () => {

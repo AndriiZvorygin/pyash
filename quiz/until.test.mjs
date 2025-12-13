@@ -10,25 +10,25 @@ async function run(line) {
   return interpret(s);
 }
 
-test("until register stops loop when tloh equals until", async () => {
+test("toindex stops loop when fromindex equals toindex", async () => {
   forget();
 
   await run("subj name counter obj num 0 be number ya");
 
   // define ceremony: add 1 to counter
-  await run("subj name loop body to name num tloh num 0 until num 0 be ceremony def");
+  await run("subj name loop body to name num fromindex num 0 toindex num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop body be ceremony prah");
 
   // call to trigger loop with registers on the evoker
-  await run("to name counter tloh num 5 until num 2 be loop body do");
+  await run("to name counter fromindex num 5 toindex num 2 be loop body do");
 
   const counter = remember("counter");
   const invoke = [...allRemember()].reverse().find(s => s.mood === "do" && s.be === "loop body");
 
-  assert.equal(invoke?.until?.num ?? invoke?.until, 2, "until should remain on the invoke");
-  assert.equal(counter.obj.num, 3, "counter should increment until reaching until gap");
-  assert.equal(invoke?.tloh?.num ?? invoke?.tloh, 2, "tloh should land on until value when loop stops");
-  assert.equal(remember("tloh"), undefined, "tloh register should not be stored as its own fact");
-  assert.equal(remember("until"), undefined, "until register should not be stored as its own fact");
+  assert.equal(invoke?.toindex?.num ?? invoke?.toindex, 2, "toindex should remain on the invoke");
+  assert.equal(counter.obj.num, 3, "counter should increment until reaching toindex gap");
+  assert.equal(invoke?.fromindex?.num ?? invoke?.fromindex, 2, "fromindex should land on toindex value when loop stops");
+  assert.equal(remember("fromindex"), undefined, "fromindex register should not be stored as its own fact");
+  assert.equal(remember("toindex"), undefined, "toindex register should not be stored as its own fact");
 });

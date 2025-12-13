@@ -27,7 +27,7 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 - Read file: `su file be read from filename "quiz/sandpit/compile.txt" do`
 - Parse text → JSON program: see `documentation/reference.md` end-to-end example
 - Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the evoke sentence.
-- Loops: seed `tloh` (and optional `until`) on the evoking sentence to repeat a ceremony; supervisor moves `tloh` toward `until` and stops on equality (no standalone register facts are written).
+- Loops: seed `fromindex` (and optional `toindex`) on the evoking sentence to repeat a ceremony; the supervisor moves `fromindex` toward `toindex` and stops on equality (no standalone register facts are written).
 
 ## Key Files
 - `program/main.mjs` — REPL wiring understand/bridge/memory
@@ -45,7 +45,7 @@ See `documentation/index.md` for deeper guidance and links to design, state, and
 Recent compile-focused examples:
 - `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js`
 - `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`)
-- `examples/pyash/compile-loop.pya` → JS `tloh` loop using the runtime `runLoop` helper
+- `examples/pyash/compile-loop.pya` → JS `fromindex`/`toindex` loop using the runtime `runLoop` helper
 - `examples/pyash/compile-loop-c.pya` → C countdown loop (`examples/out/compile-loop-output.c`), build with `gcc -std=c11 -o /tmp/loop examples/out/compile-loop-output.c && /tmp/loop`
 - `examples/pyash/compile-vector-produce.pya` → JS dot product for vectors (inline/named) at `examples/out/compile-vector-produce.js`
 - `examples/pyash/compile-fizzbuzz.pya` → JS fizzbuzz via compiled conditionals/loops at `examples/out/compile-fizzbuzz-output.js`

@@ -1,6 +1,6 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "tloh", "times", "until", "by", "per", "at", "fromindex", "atindex", "toindex"];
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "times", "by", "per", "at", "fromindex", "atindex", "toindex"];
 const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "ord"];
 const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity", "sequence"];
 const AXIS_CONTEXT_TO_KEYWORD = {

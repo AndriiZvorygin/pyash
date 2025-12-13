@@ -15,7 +15,7 @@ export async function handleImperative({
 
   let fn = null;
   let defEntry = getDefinitionEntry(be);
-  const hasLoopRegisters = sentence.tloh != null || sentence.until != null || sentence.fromindex != null || sentence.toindex != null;
+  const hasLoopRegisters = sentence.fromindex != null || sentence.toindex != null;
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
@@ -53,8 +53,8 @@ export async function handleImperative({
   }
 
   if (!fn && defEntry) {
-    if (subj?.name === "tloh" || sentence.be === "tloh") {
-      throw new Error("tloh reserved for loop control");
+    if (subj?.name === "tloh" || sentence.be === "tloh" || sentence.until !== undefined || sentence.tloh !== undefined) {
+      throw new Error("tloh/until no longer supported; use fromindex/toindex");
     }
 
     if (hasLoopRegisters) {

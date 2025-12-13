@@ -92,7 +92,7 @@ const v = resolveVector(base.obj);
 const out = v.map((elem, i) => {
   const s = structuredClone(base);
   s.obj = elem;
-  s.tloh = { num: i };
+  s.atindex = { num: i };
   execVerb(s.be, s);
   return s.obj;
 });
@@ -108,7 +108,7 @@ const out = v.map((elem, i) => {
   const out = v.map((elem, i) => {
     const s = structuredClone(base);
     s.obj = elem;
-    s.tloh = { num: i };
+    s.atindex = { num: i };
     execVerb(s.be, s);
     return s.obj;
   });
@@ -127,7 +127,7 @@ const out = v.map((elem, i) => {
   const out = v.map((elem, i) => {
     const s = structuredClone(base);
     s.obj = elem;
-    s.tloh = { num: i };
+    s.atindex = { num: i };
     execVerb(s.be, s);
     return s.obj;
   });
@@ -159,7 +159,7 @@ JS (explicit):
   const out = v.map((elem, i) => {
     const s = structuredClone(base);
     s.obj = elem;
-    s.tloh = { num: i };
+    s.atindex = { num: i };
     s.obj = invert(s.obj);        // or execVerb("invert", s)
     return s.obj;
   });
@@ -186,7 +186,7 @@ JS (explicit):
   const out = v.map((elem, i) => {
     const s = structuredClone(base);
     s.obj = elem;
-    s.tloh = { num: i };
+    s.atindex = { num: i };
     s.obj = add(s.obj, 1);        // or execVerb("add", s)
     return s.obj;
   });

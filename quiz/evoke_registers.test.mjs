@@ -18,7 +18,7 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
     "obj num 4 to name target be add do",
     "this obj name target ret",
     "subj name worker be ceremony prah",
-    "subj name target obj num 1 tloh num 3 until num 5 be number ya",
+    "subj name target obj num 1 fromindex num 3 toindex num 5 be number ya",
     "to name target be worker do",
   ];
 
@@ -39,9 +39,9 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
   assert.ok(evoker, "sandpit should include evoker at index 0");
   assert.equal(evoker.mood, "do", "evoker mood should be do");
   assert.equal(evoker.be, "worker", "evoker be should match ceremony");
-  assert.equal(evoker.tloh?.num ?? evoker.tloh, 3, "evoker carries tloh register");
-  assert.equal(evoker.until?.num ?? evoker.until, 5, "evoker carries until register");
+  assert.equal(evoker.fromindex?.num ?? evoker.fromindex, 3, "evoker carries fromindex register");
+  assert.equal(evoker.toindex?.num ?? evoker.toindex, 5, "evoker carries toindex register");
 
-  assert.equal(remember("tloh"), undefined, "registers should not be stored as separate facts");
-  assert.equal(remember("until"), undefined, "registers should not be stored as separate facts");
+  assert.equal(remember("fromindex"), undefined, "registers should not be stored as separate facts");
+  assert.equal(remember("toindex"), undefined, "registers should not be stored as separate facts");
 });

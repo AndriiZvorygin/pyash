@@ -19,6 +19,10 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
     if (path) return path;
   }
 
+  if (slot.thisRef && sentenceArg) {
+    return valueForRole(slot.thisRef, sentenceArg, field, slot);
+  }
+
   if (slot.at && slot.name) {
     const baseName = sanitizeName(slot.name);
     const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
@@ -94,7 +98,7 @@ function valueForRole(role, sentenceArg, field = "num", slot = {}) {
     const access = pathFromGenitive(slot.genitive, sentenceArg);
     return access;
   }
-  return `${sentenceArg}.${role}?.${field}`;
+  return `${sentenceArg}.${role}?.${field} ?? ${sentenceArg}.${role}`;
 }
 
 function targetPath(role, sentenceArg, field = "num", slot = {}) {
@@ -473,7 +477,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) / ${divisor};`;
   }
 
-  if (baseBe === "remains" && (obj.num !== undefined || sentence.from?.num !== undefined) && (sentence.to?.name || sentenceArg)) {
+  if (baseBe === "remains" && (obj.num !== undefined || sentence.from?.num !== undefined || obj.name || obj.genitive || obj.thisRef) && (sentence.to?.name || sentenceArg)) {
     const divisorRaw = sentence.from?.num ?? obj.num;
     const divisor = typeof divisorRaw === "number" ? divisorRaw : Number(divisorRaw);
     const safeValue = Number.isNaN(divisor) ? 0 : divisor;
@@ -483,7 +487,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const source =
         sentence.obj?.genitive && sentenceArg
           ? pathFromGenitive(sentence.obj.genitive, sentenceArg)
-          : targetGenitive ?? targetName;
+          : exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
 
       const lines = [];
       if (targetName && !locals?.has(targetName) && !declared?.has(targetName)) {
@@ -513,17 +517,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const mood = sentence?.mood;
   if (mood === "do" && !sentenceArg) {
     const fn = ceremonyFns?.get(baseBe);
-    if (fn && (sentence.tloh !== undefined || sentence.until !== undefined)) {
+    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
       if (lang === "c") {
-        const start = sentence.tloh?.num ?? sentence.tloh ?? 0;
-        const hasUntil = sentence.until !== undefined;
-        const untilVal = sentence.until?.num ?? sentence.until ?? 0;
+        const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
+        const hasUntil = sentence.toindex !== undefined;
+        const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
         if (hasUntil) {
           const step = untilVal > start ? 1 : -1;
           const cmp = step > 0 ? "<=" : ">=";
-          return `for (int tloh = ${start}; tloh ${cmp} ${untilVal}; tloh += ${step}) { ${fn}(); }`;
+          return `for (int fromindex = ${start}; fromindex ${cmp} ${untilVal}; fromindex += ${step}) { ${fn}(); }`;
         }
-        return `for (int tloh = ${start}; tloh > 0; tloh--) { ${fn}(); }`;
+        return `for (int fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
       }
       const evokerLiteral = inlineSentenceLiteral(sentence, declared);
       if (loopShim) loopShim.used = true;
@@ -555,22 +559,33 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return shouldDeclare ? `let ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
   }
 
-  if (effectiveBe === "number" && typeof obj.num !== "undefined") {
-    const value = typeof obj.num === "number" ? obj.num : Number(obj.num);
-    const safeValue = Number.isNaN(value) ? 0 : value;
-    if (sentenceArg) {
-      const target = valueForRole("subj", sentenceArg, "num", sentence.subj) ?? name;
-      return `${target} = ${safeValue};`;
+  if (effectiveBe === "number") {
+    const rhsExpr = exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
+    if (sentenceArg && rhsExpr !== null) {
+      const baseName = sentence.subj?.name ? sanitizeName(sentence.subj.name) : null;
+      if (baseName) {
+        const target = lvalueForName(baseName, { declared, locals, field: "num" });
+        const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
+        if (needsDecl) locals?.add(baseName);
+        return `${needsDecl ? "let " : ""}${target} = ${rhsExpr};`;
+      }
+      const target = valueForRole("subj", sentenceArg, "num", sentence.subj) ?? `${sentenceArg}.obj?.num`;
+      return `${target} = ${rhsExpr};`;
     }
-    const sentenceObject = `{ subj: { name: "${name}" }, obj: { num: ${safeValue} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
-    const decl = shouldDeclare ? (lang === "c" ? "/* TODO: sentence object in C */" : (isPermanent ? "const" : "let")) : "";
-    if (lang === "c") {
-      // Fallback for C for now: keep scalar style
-      if (!shouldDeclare) return `${name} = ${safeValue};`;
-      const cdecl = isPermanent ? "const double" : "double";
-      return `${cdecl} ${name} = ${safeValue};`;
+
+    if (typeof obj.num !== "undefined") {
+      const value = typeof obj.num === "number" ? obj.num : Number(obj.num);
+      const safeValue = Number.isNaN(value) ? 0 : value;
+      const sentenceObject = `{ subj: { name: "${name}" }, obj: { num: ${safeValue} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
+      const decl = shouldDeclare ? (lang === "c" ? "/* TODO: sentence object in C */" : (isPermanent ? "const" : "let")) : "";
+      if (lang === "c") {
+        // Fallback for C for now: keep scalar style
+        if (!shouldDeclare) return `${name} = ${safeValue};`;
+        const cdecl = isPermanent ? "const double" : "double";
+        return `${cdecl} ${name} = ${safeValue};`;
+      }
+      return shouldDeclare ? `${decl} ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
     }
-    return shouldDeclare ? `${decl} ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
   }
 
   if (effectiveBe === "text" && typeof obj.text === "string") {
@@ -715,7 +730,7 @@ let lines = [header];
       prelude.push(rememberShim);
     }
     if (loopShim.used) {
-      const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currTloh = sentence?.tloh?.num ?? sentence?.tloh ?? 0;\n    const hasUntil = sentence?.until !== undefined;\n    const currUntil = sentence?.until?.num ?? sentence?.until;\n    if (hasUntil ? currTloh === currUntil : currTloh === 0) break;\n    const prevTloh = sentence?.tloh;\n    const prevUntil = sentence?.until;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.tloh === undefined) sentence.tloh = prevTloh;\n    if (sentence.until === undefined) sentence.until = prevUntil;\n    let nextTloh;\n    if (hasUntil) {\n      nextTloh = currTloh + (currUntil > currTloh ? 1 : -1);\n    } else {\n      nextTloh = currTloh - 1;\n    }\n    sentence.tloh = typeof sentence.tloh === \"object\" ? { ...sentence.tloh, num: nextTloh } : nextTloh;\n  }\n  return sentence;\n}`;
+      const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = typeof sentence.fromindex === \"object\" ? { ...sentence.fromindex, num: nextIdx } : nextIdx;\n  }\n  return sentence;\n}`;
       prelude.push(loopHelper);
     }
     lines = prelude.concat(lines.slice(1));

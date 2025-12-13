@@ -17,4 +17,4 @@
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.
 - Revisit broader spec features (phonology, noun classes, control constructs from `pyac.txt`) when the interpreter foundations are stable.
 - Introduce result tracking with per-command IDs instead of generic `result`, to support richer history and debugging.
-- Remove reliance on separate register facts (e.g., `tloh`/`until`); keep the evoking sentence as ground truth and derive any register lookups from it (in progress).
+- Remove reliance on separate register facts (e.g., `fromindex`/`toindex`); keep the evoking sentence as ground truth and derive any register lookups from it (in progress).

@@ -93,7 +93,7 @@
       "$ref": "#/$defs/caseValue",
       "description": "WAY + time."
     },
-    "until": {
+    "toindex": {
       "$ref": "#/$defs/caseValue",
       "description": "DESTINATION + time, or loop stop condition (evoker register)."
     },
@@ -150,7 +150,7 @@
       "description": "DESTINATION + discourse (write to / as text)."
     },
 
-    "tloh": {
+    "fromindex": {
       "$ref": "#/$defs/caseValue",
       "description": "Multiplicative / loop register on evoking sentence."
     }

@@ -10,9 +10,9 @@ At the core of the design, **sentences are first-class datatypes**. Every piece 
 - There is no separate “AST” or meta-layer: the same sentence shape is used everywhere.
 - This is deliberate: Pyash sentences can be compiled into regular JavaScript functions that also consume/produce sentences, so Pyash itself can be used to extend the main implementation with the same data model.
 
-Pyash also introduces the idea of an **evoking sentence**: the original sentence that triggers a ceremony or other sandpit execution. When a sandpit starts, this evoking sentence is copied into the sandpit as sentence `0` (including any control cases such as `tloh` and `until`) and is available throughout execution via `this`. Any sentence in the definition/body (ya/def/do/ret) can read from `this`. A `ret` mood inside the sandpit does not call a verb; instead it describes how to update that evoking sentence, which is then returned to main memory as a `ya` fact.
+Pyash also introduces the idea of an **evoking sentence**: the original sentence that triggers a ceremony or other sandpit execution. When a sandpit starts, this evoking sentence is copied into the sandpit as sentence `0` (including any control cases such as `fromindex` and `toindex`) and is available throughout execution via `this`. Any sentence in the definition/body (ya/def/do/ret) can read from `this`. A `ret` mood inside the sandpit does not call a verb; instead it describes how to update that evoking sentence, which is then returned to main memory as a `ya` fact.
 
-There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `subj`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history until garbage collection chooses to purge them.
+There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `subj`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history toindex garbage collection chooses to purge them.
 
 ---
 
@@ -22,7 +22,7 @@ A **sentence** is a flat JS object with:
 
 - a `mood` field (the sentence mood),
 - a `be` field (the verb),
-- zero or more **case keywords** (roles), such as `subj`, `obj`, `fromtext`, `tloh`, `until`, etc.
+- zero or more **case keywords** (roles), such as `subj`, `obj`, `fromtext`, `fromindex`, `toindex`, etc.
 
 Example:
 
@@ -139,11 +139,11 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 * `program/understand/index.mjs`: Tokenizes input and produces sentence objects.
 
   * Supports quoted blocks, short role aliases (`su/ob`), and compositional keyword mapping.
-  * Context+axis pairs become keyword roles (`fromtext`, `during`, `become`, `totext`, `as`, `tloh`, `until`, etc.).
+  * Context+axis pairs become keyword roles (`fromtext`, `during`, `become`, `totext`, `as`, `fromindex`, `toindex`, etc.).
   * Emits plain JS objects which are the canonical **sentence datatype**, e.g.:
 
     ```js
-    { mood, be, subj, obj, fromtext, tloh, until, ... }
+    { mood, be, subj, obj, fromtext, fromindex, toindex, ... }
     ```
   * The parser’s output is the only “wire format” between text and the rest of the system.
 
@@ -164,7 +164,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
     * does **not** dispatch a verb module,
     * reads the current evoking sentence from the active sandpit frame (accessible as `this` to any sentence in the body),
-    * merges any cases present on the `ret` sentence into that evoker (e.g. new `subj`, `obj`, `as`, `tloh`, etc.),
+    * merges any cases present on the `ret` sentence into that evoker (e.g. new `subj`, `obj`, `as`, `fromindex`, etc.),
     * produces a final **result sentence** with `mood: "ya"` and the merged fields,
     * attaches this `ya` result to the sandpit frame and signals that sandpit execution is complete.
     * Errors are signalled by using `be: "error"` on the `ret` sentence (and thus on the merged result), with `obj` holding the error message and optional extra cases.
@@ -224,8 +224,8 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
     * state → `as` / `become`,
     * discourse → `fromtext` / `totext`,
-    * temporal → `during` / `until`,
-    * loop/control → `tloh`.
+    * temporal → `during` / `toindex`,
+    * loop/control → `fromindex`.
   * Full case/hnuc usage from the spec is not surfaced yet; only the keyword layer is wired into the parser.
   * Its output is used to decorate sentences with consistent role names.
 
@@ -275,13 +275,13 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
      * copies the evoking sentence into the sandpit as sentence `0`,
      * preserves all its cases, including control cases like:
 
-       * `tloh`: loop/control description,
-       * `until`: termination condition.
+       * `fromindex`: loop/control description,
+       * `toindex`: termination condition.
 
 2. **`this` binding**
 
    * Inside the sandpit, **every sentence in the definition/body** (regardless of mood) can access the evoking sentence via `this` (or an equivalent context handle).
-   * This lets `do` / `ya` / `def` / `ret` sentences read or respect `tloh`, `until`, and other evoker cases without re-passing them manually.
+   * This lets `do` / `ya` / `def` / `ret` sentences read or respect `fromindex`, `toindex`, and other evoker cases without re-passing them manually.
    * In nested ceremonies, `this` always refers to the evoker of the **innermost** active sandpit.
 
 3. **Body execution**
@@ -289,16 +289,16 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
    * The ceremony body is always a **paragraph of sentences**.
    * The sandpit engine iterates that paragraph and dispatches each sentence via `program/bridge/index.mjs`.
    * Internal `ya`/`def`/`do` sentences live only in the sandpit’s temporary memory but are recorded in its trace paragraph.
-   * There are **no explicit loop constructs inside** a ceremony body; looping is expressed by how the evoking sentence is interpreted (e.g. repeated invocation based on `tloh`/`until`).
+   * There are **no explicit loop constructs inside** a ceremony body; looping is expressed by how the evoking sentence is interpreted (e.g. repeated invocation based on `fromindex`/`toindex`).
 
-4. **Looping with `tloh` / `until` (control cases)**
+4. **Looping with `fromindex` / `toindex` (control cases)**
 
-   * If the evoking sentence carries a `tloh` case, a higher-level loop runner can treat it as “describe how to repeatedly call this ceremony/body”.
-   * An `until` case on the same evoker describes when to stop.
+   * If the evoking sentence carries a `fromindex` case, a higher-level loop runner can treat it as “describe how to repeatedly call this ceremony/body”.
+   * An `toindex` case on the same evoker describes when to stop.
    * Architecturally:
 
-     * `tloh` and `until` are **cases on the evoker sentence**, not separate verbs.
-     * A loop runner (interpreter or compiled) reads these fields from `this` and re-invokes the ceremony’s paragraph until the condition is met or a `ret` returns an error or final result.
+     * `fromindex` and `toindex` are **cases on the evoker sentence**, not separate verbs.
+     * A loop runner (interpreter or compiled) reads these fields from `this` and re-invokes the ceremony’s paragraph toindex the condition is met or a `ret` returns an error or final result.
 
 5. **Return with `ret` (mood)**
 
@@ -320,7 +320,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 
    * After the sandpit finishes:
 
-     * If a `retResult` exists, it is written to main memory via `doRemember` like any other `ya` fact (a single sentence) derived from the updated evoker; register lookups (e.g., `tloh`, `until`) should be derived from that evoker rather than separate facts.
+     * If a `retResult` exists, it is written to main memory via `doRemember` like any other `ya` fact (a single sentence) derived from the updated evoker; register lookups (e.g., `fromindex`, `toindex`) should be derived from that evoker rather than separate facts.
      * If no `ret` occurred, the sandpit may terminate with no result (implementation choice).
      * The sandpit frame is popped from the stack.
      * The sandpit trace (including the initial evoker, body sentences, and any `ret` mood) is kept in `program/remember/index.mjs` as a paragraph for debugging/inspection.
@@ -343,7 +343,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 
 * Always add quizzes first (red→green); every verb or control-flow change gets coverage.
 
-* Keywordized compositional roles: contexts are mapped to keywords (`as`, `fromtext`, `tloh`, `until`, etc.), not stored as nested `{context: ...}` objects.
+* Keywordized compositional roles: contexts are mapped to keywords (`as`, `fromtext`, `fromindex`, `toindex`, etc.), not stored as nested `{context: ...}` objects.
 
 * Imperatives are historical: commands and results are stored; moods `ya`, `def`, `do` all persist as facts. `ret` is a control mood used inside sandpits and appears in sandpit traces rather than main memory. Errors are expressed as `ret` sentences with `be: "error"`.
 
@@ -354,7 +354,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 * Evoking sentence pattern:
 
   * top-level command → evoker in a sandpit (`this`),
-  * `tloh` / `until` live as cases on this evoker,
+  * `fromindex` / `toindex` live as cases on this evoker,
   * any body sentence can read `this`,
   * `ret` merges its cases into the evoker and returns a `ya` fact (possibly `be: "error"`) to main memory.
 

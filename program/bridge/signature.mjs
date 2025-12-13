@@ -119,6 +119,14 @@ function caseTypeWords(value) {
     return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
   }
 
+  if (value.genitive) {
+    const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+    const head = chainArr.find(word => word !== "this") ?? chainArr[0];
+    const normalized = normalizeWords(head);
+    if (normalized === "atindex" || normalized === "fromindex" || normalized === "toindex") return ["num"];
+    return normalized ? [normalized] : ["num"];
+  }
+
   const words = [];
 
   if (value.name) {
