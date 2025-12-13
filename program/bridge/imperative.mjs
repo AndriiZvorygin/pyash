@@ -1,5 +1,6 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
+import { runAtAll } from "./map.mjs";
 
 export async function handleImperative({
   sentence,
@@ -15,6 +16,7 @@ export async function handleImperative({
   let fn = null;
   let defEntry = getDefinitionEntry(be);
   const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
+  const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
   let sigKey = null;
@@ -30,7 +32,7 @@ export async function handleImperative({
     }
   }
 
-  if (!fn && !defEntry && sigKey) {
+  if (!fn && !defEntry && sigKey && !hasAtAll) {
     throw new Error(`Unknown verb/signature: ${sigKey}`);
   }
 
@@ -67,11 +69,27 @@ export async function handleImperative({
     return defResult;
   }
 
-  if (!fn) throw new Error(`Unknown verb: ${be}`);
+  if (!fn && !hasAtAll) throw new Error(`Unknown verb: ${be}`);
+
+  if (hasAtAll) {
+    const atAllResult = await runAtAll({
+      sentence,
+      remember: memory.remember,
+      getDefinitionEntry,
+      state,
+      recordSandpitTrace,
+      interpret
+    });
+    if (atAllResult) {
+      memory.doRemember(atAllResult);
+      memory.doRemember({ subj: { name: "result" }, obj: atAllResult.obj, be: atAllResult.be, mood: "ya" });
+      return { acted: atAllResult.subj?.name, value: atAllResult.obj };
+    }
+  }
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
-  const shouldBootstrapNumber = addressedName && ["add", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent"].includes((be || "").replace(/\s+/g, "").toLowerCase());
+  const shouldBootstrapNumber = addressedName && ["add", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
   if (!target && shouldBootstrapNumber) {
     // create default numeric fact if it doesn't exist for math-like verbs
     target = { subj: { name: addressedName }, be: "number", obj: { num: 0 }, mood: "ya" };

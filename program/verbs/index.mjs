@@ -7,6 +7,7 @@ import { divide, signatures as divideSignatures } from "./mathematics/divide.mjs
 import { produce, signatures as produceSignatures } from "./mathematics/produce.mjs";
 import { neuron, signatures as neuronSignatures } from "./mathematics/neuron.mjs";
 import { twiceCrescent, signatures as twiceCrescentSignatures } from "./mathematics/twice_crescent.mjs";
+import { remains, signatures as remainsSignatures } from "./mathematics/remains.mjs";
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import compile, { signatures as compileSignatures } from "./exchange/compile.mjs";
 import translation, { signatures as translationSignatures } from "./exchange/translation.mjs";
@@ -28,6 +29,7 @@ export {
   produce,
   neuron,
   twiceCrescent,
+  remains,
   chip,
   compile,
   translation,
@@ -50,6 +52,7 @@ export const builtInSignatures = [
   ...produceSignatures,
   ...neuronSignatures,
   ...twiceCrescentSignatures,
+  ...remainsSignatures,
   ...chipSignatures,
   ...compileSignatures,
   ...translationSignatures,
