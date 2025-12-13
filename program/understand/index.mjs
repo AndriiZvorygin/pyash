@@ -1,8 +1,8 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "tloh", "until", "by", "per", "at"];
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "tloh", "times", "until", "by", "per", "at", "fromindex", "atindex", "toindex"];
 const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "ord"];
-const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity"];
+const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity", "sequence"];
 const AXIS_CONTEXT_TO_KEYWORD = {
   space: { source: "from", way: "at", destination: "to" },
   interior: { source: "outof", way: "inside", destination: "into" },
@@ -13,7 +13,8 @@ const AXIS_CONTEXT_TO_KEYWORD = {
   person: { source: "fromperson", way: "with", destination: "for" },
   social: { source: "fromgroup", way: "among", destination: "intogroup" },
   discourse: { source: "fromtext", way: "accordingto", destination: "totext" },
-  quantity: { source: "tloh", way: "by", destination: "per" }
+  quantity: { source: "times", way: "by", destination: "per" },
+  sequence: { source: "fromindex", way: "atindex", destination: "toindex" }
 };
 function tokenize(line) {
   const tokens = [];

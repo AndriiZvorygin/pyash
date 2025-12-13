@@ -41,15 +41,26 @@ test("compositional roles do not expose context field", () => {
   assert.ok(!("context" in (s.become || {})));
 });
 
-test("quantity context maps to tloh/by/per keywords", () => {
+test("quantity context maps to times/by/per keywords", () => {
   const s = parse("subj name loop from quantity num 3 via quantity num 2 to quantity num 10 be topic ya");
 
-  assert.deepEqual(s.tloh, { num: 3 });
+  assert.deepEqual(s.tloh ?? s.times, { num: 3 });
   assert.deepEqual(s.by, { num: 2 });
   assert.deepEqual(s.per, { num: 10 });
-  assert.ok(!s.from, "from should be normalized to tloh");
+  assert.ok(!s.from, "from should be normalized to times");
   assert.ok(!s.via, "via should be normalized to by");
   assert.ok(!s.to, "to should be normalized to per");
+});
+
+test("sequence context maps to fromindex/atindex/toindex", () => {
+  const s = parse("subj name item from sequence num 1 via sequence num 2 to sequence num 3 be topic ya");
+
+  assert.deepEqual(s.fromindex, { num: 1 });
+  assert.deepEqual(s.atindex, { num: 2 });
+  assert.deepEqual(s.toindex, { num: 3 });
+  assert.ok(!s.from, "from should be normalized to fromindex");
+  assert.ok(!s.via, "via should be normalized to atindex");
+  assert.ok(!s.to, "to should be normalized to toindex");
 });
 
 test("via space maps to at keyword", () => {

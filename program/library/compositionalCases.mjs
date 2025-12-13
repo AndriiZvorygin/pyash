@@ -265,7 +265,7 @@ export const compositionalGrid = {
       case: "multiplicative_case_",
       hnuc: "0x6357",
       pya: "tloh",
-      prep: "tloh",       // SOURCE + quantity (loop/multiplicative register)
+      prep: "times",       // SOURCE + quantity (loop/multiplicative register)
     },
 
     way: {
@@ -349,7 +349,7 @@ export const contextKeywords = {
   quantity: {
     key: "quantity",
     contextWord: "quantity_context_",
-    hints: ["quantity", "count", "per", "by", "rate", "tloh"],
+    hints: ["quantity", "count", "per", "by", "rate", "times"],
   },
 };
 
