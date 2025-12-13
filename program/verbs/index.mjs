@@ -16,6 +16,7 @@ import mind, { signatures as mindSignatures } from "./mind/mind.mjs";
 import { giant, signatures as giantSignatures } from "./regulation/giant.mjs";
 import { tiny, signatures as tinySignatures } from "./regulation/tiny.mjs";
 import { equally, signatures as equallySignatures } from "./regulation/equally.mjs";
+import vector, { signatures as vectorSignatures } from "./vector/index.mjs";
 
 export {
   add,
@@ -35,7 +36,8 @@ export {
   mind,
   giant,
   tiny,
-  equally
+  equally,
+  vector
 };
 
 export const builtInSignatures = [
@@ -57,4 +59,5 @@ export const builtInSignatures = [
   ...giantSignatures,
   ...tinySignatures,
   ...equallySignatures,
+  ...vectorSignatures,
 ];

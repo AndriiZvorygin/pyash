@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { deriveSignatureFromCall, joinSignatureWords, makeSignatureWords } from "../program/bridge/signature.mjs";
+import { parse } from "../program/understand/index.mjs";
 
 test("makeSignatureWords sorts cases and flattens type words", () => {
   const words = makeSignatureWords({
@@ -200,6 +201,29 @@ test("deriveSignatureFromCall handles exponential with inline number", () => {
   assert.deepEqual(sig, [
     "be", "exponential",
     "obj", "num",
+    "to", "name", "num"
+  ]);
+});
+
+test("deriveSignatureFromCall includes at-case for vector element read", () => {
+  const sentence = parse("obj name doors via space num 2 be read to name picked do");
+  const sig = deriveSignatureFromCall(sentence, { remember: () => null });
+  assert.deepEqual(sig, [
+    "be", "read",
+    "at", "num",
+    "obj", "name", "num",
+    "to", "name", "num"
+  ]);
+});
+
+test("deriveSignatureFromCall infers vec type for at-case when vector exists", () => {
+  const remember = name => (name === "doors" ? { be: "vector", obj: { ve: { type: "text", values: [0, 1, 0] } } } : null);
+  const sentence = parse("obj name doors via space num 2 be read to name picked do");
+  const sig = deriveSignatureFromCall(sentence, { remember });
+  assert.deepEqual(sig, [
+    "be", "read",
+    "at", "num",
+    "obj", "name", "vec", "text",
     "to", "name", "num"
   ]);
 });

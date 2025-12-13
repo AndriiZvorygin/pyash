@@ -19,6 +19,35 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
     if (path) return path;
   }
 
+  if (slot.at && slot.name && field === "num") {
+    const baseName = sanitizeName(slot.name);
+    const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
+    const idxVal = Number(slot.at.num ?? slot.at);
+    const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
+    const idxOffset = typeof idxExpr === "number" ? idxExpr - 1 : `(${idxExpr}) - 1`;
+    return `${vecRef}.obj?.ve?.values?.[${idxOffset}]`;
+  }
+
+  if (slot.at && slot.name && field === "num") {
+    const baseName = sanitizeName(slot.name);
+    const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
+    const idxVal = Number(slot.at.num ?? slot.at);
+    const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
+    const idxOffset = typeof idxExpr === "number" ? idxExpr - 1 : `(${idxExpr}) - 1`;
+    return `${vecRef}.obj?.ve?.values?.[${idxOffset}]`;
+  }
+
+  if (slot.at && slot.name) {
+    const baseName = sanitizeName(slot.name);
+    const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
+    const idxVal = Number(slot.at.num ?? slot.at);
+    const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
+    if (typeof idxExpr === "number") {
+      return `${vecRef}.obj?.ve?.values?.[${idxExpr - 1}]`;
+    }
+    return `${vecRef}.obj?.ve?.values?.[(${idxExpr}) - 1]`;
+  }
+
   if (slot[field] !== undefined) {
     const n = Number(slot[field]);
     return Number.isNaN(n) ? 0 : n;
@@ -165,6 +194,41 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       return `printf("${fmt}\\n", ${expr});`;
     }
     return `console.log(${expr});`;
+  }
+
+  // Vector element read: obj name doors at num 2 be read to name picked do
+  if (baseBe === "read" && obj?.name && obj.at?.num != null && (sentence.to?.name || sentenceArg)) {
+    const baseName = sanitizeName(obj.name);
+    const idxVal = Number(obj.at.num);
+    const idxExpr = Number.isNaN(idxVal) ? obj.at.num : idxVal;
+    const targetName = sentence.to?.name ?? sentence.subj?.name ?? "result";
+    const targetLval = lvalueForName(targetName, { declared, locals, field: "num" });
+    const lines = [];
+    if (!locals?.has(baseName) && !declared?.has(baseName)) {
+      lines.push(`const ${baseName} = remember(${JSON.stringify(obj.name)});`);
+      locals?.add(baseName);
+    }
+    lines.push(`${targetLval} = ${baseName}?.obj?.ve?.values?.[(${idxExpr}) - 1];`);
+    return lines.join("\n");
+  }
+
+  // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
+  if (baseBe === "invert" && obj?.name && obj.at?.num != null) {
+    const baseName = sanitizeName(obj.name);
+    const idxVal = Number(obj.at.num);
+    const idxExpr = Number.isNaN(idxVal) ? obj.at.num : idxVal;
+    const lines = [];
+    if (!locals?.has(baseName) && !declared?.has(baseName)) {
+      lines.push(`const ${baseName} = remember(${JSON.stringify(obj.name)});`);
+      locals?.add(baseName);
+    }
+    lines.push(`${baseName}.obj = ${baseName}.obj ?? {};`);
+    lines.push(`${baseName}.obj.ve = ${baseName}.obj.ve ?? {};`);
+    lines.push(`${baseName}.obj.ve.values = ${baseName}.obj.ve.values ?? [];`);
+    lines.push(`const _idx = (${idxExpr}) - 1;`);
+    lines.push(`const _curr = ${baseName}.obj.ve.values[_idx];`);
+    lines.push(`${baseName}.obj.ve.values[_idx] = (_curr === "truth" || _curr === true || _curr === 1) ? "lie" : "truth";`);
+    return lines.join("\n");
   }
 
   // Mind (JS only)

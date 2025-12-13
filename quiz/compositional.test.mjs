@@ -51,3 +51,50 @@ test("quantity context maps to tloh/by/per keywords", () => {
   assert.ok(!s.via, "via should be normalized to by");
   assert.ok(!s.to, "to should be normalized to per");
 });
+
+test("via space maps to at keyword", () => {
+  const s = parse("obj name doors via space slot2 be topic ya");
+
+  assert.deepEqual(s.at, { name: "slot2" });
+  assert.ok(!s.via, "via should be normalized to at");
+});
+
+test("interior context maps outof/inside/into keywords", () => {
+  const s = parse("subj name item from interior cellar via interior hallway to interior attic be topic ya");
+
+  assert.deepEqual(s.outof, { name: "cellar" });
+  assert.deepEqual(s.inside, { name: "hallway" });
+  assert.deepEqual(s.into, { name: "attic" });
+});
+
+test("surface context maps offof/along/onto keywords", () => {
+  const s = parse("subj name ball from surface table via surface rail to surface shelf be topic ya");
+
+  assert.deepEqual(s.offof, { name: "table" });
+  assert.deepEqual(s.along, { name: "rail" });
+  assert.deepEqual(s.onto, { name: "shelf" });
+});
+
+test("under context maps fromunder/under/beneath keywords", () => {
+  const s = parse("subj name crate from under bed via under frame to under floor be topic ya");
+
+  assert.deepEqual(s.fromunder, { name: "bed" });
+  assert.deepEqual(s.under, { name: "frame" });
+  assert.deepEqual(s.beneath, { name: "floor" });
+});
+
+test("person context maps fromperson/with/for keywords", () => {
+  const s = parse("subj name gift from person alice via person bob to person carol be topic ya");
+
+  assert.deepEqual(s.fromperson, { name: "alice" });
+  assert.deepEqual(s.with, { name: "bob" });
+  assert.deepEqual(s.for, { name: "carol" });
+});
+
+test("social context maps fromgroup/among/intogroup keywords", () => {
+  const s = parse("subj name dossier from social admins via social leads to social execs be topic ya");
+
+  assert.deepEqual(s.fromgroup, { name: "admins" });
+  assert.deepEqual(s.among, { name: "leads" });
+  assert.deepEqual(s.intogroup, { name: "execs" });
+});
