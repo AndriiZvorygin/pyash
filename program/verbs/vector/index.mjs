@@ -23,7 +23,9 @@ export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remem
   const vec = getVector(vecName, remember);
   const value = vec.obj.ve.values[idx];
   const isNum = typeof value === "number";
-  return isNum ? { obj: { num: value }, be: "number" } : { obj: { text: value }, be: "text" };
+  if (isNum) return { obj: { num: value }, be: "number" };
+  if (typeof value === "boolean") return { obj: { boolean: value }, be: "boolean" };
+  return { obj: { text: value }, be: "text" };
 }
 
 export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
@@ -34,7 +36,7 @@ export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
   const vec = getVector(vecName, remember);
   const curr = vec.obj.ve.values[idx];
   const truthy = curr === "truth" || curr === true || curr === 1;
-  vec.obj.ve.values[idx] = truthy ? "lie" : "truth";
+  vec.obj.ve.values[idx] = truthy ? (typeof curr === "boolean" ? false : "lie") : (typeof curr === "boolean" ? true : "truth");
   return { obj: vec.obj, be: "vector" };
 }
 
@@ -48,6 +50,8 @@ export const signatures = [
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "num", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "text", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "text", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "boolean"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "bool"], handler: invert_obj_name_num_at_num_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "text"], handler: invert_obj_name_num_at_num_num },
 ];

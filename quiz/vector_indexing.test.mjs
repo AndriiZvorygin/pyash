@@ -32,7 +32,7 @@ test("read element from numeric vector via at num <index>", async () => {
 
 test("invert boolean element via at num <index>", async () => {
   const program = [
-    "exists subj name doors obj ve text truth lie truth be vector ya",
+    "exists subj name doors obj ve bool truth lie truth be vector ya",
     "obj name doors via space num 1 be invert do"
   ].join("\n");
 
@@ -51,7 +51,7 @@ test("invert boolean element via at num <index>", async () => {
 
 test("read boolean element returns truth/lie text", async () => {
   const program = [
-    "exists subj name switches obj ve text lie be vector ya",
+    "exists subj name switches obj ve bool lie be vector ya",
     "obj name switches via space num 0 be read to name stateval do"
   ].join("\n");
 
