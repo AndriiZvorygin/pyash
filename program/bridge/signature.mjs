@@ -161,7 +161,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
-    if (key === "by" && value?.register) continue; // skip map/loop register helpers
+    if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
     const typeWords = caseTypeWordsWithMemory(value, remember, verb);
     if (typeWords.length === 0) {
       throw new Error(`Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`);

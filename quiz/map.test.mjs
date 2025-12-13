@@ -36,8 +36,8 @@ test("at all provides by register for index inside ceremony body", async () => {
   forget();
   const program = [
     "exists subj name vec obj ve num 4 5 6 be vector ya",
-    "subj name capture-index to name num by num 0 be ceremony def",
-    "subj name picked obj this by be number ya",
+    "subj name capture-index to name num atindex num 0 be ceremony def",
+    "subj name picked obj this atindex be number ya",
     "subj name picked ret",
     "subj name capture-index be ceremony prah",
     "be capture-index obj name vec to name out at name all do"
@@ -47,5 +47,5 @@ test("at all provides by register for index inside ceremony body", async () => {
 
   const sandpit = dumpSandpits().at(-1) || [];
   const evoker = sandpit[0];
-  assert.equal(evoker?.by?.num, 2, "last by register should be visible inside ceremony body");
+  assert.equal(evoker?.atindex?.num, 2, "last atindex register should be visible inside ceremony body");
 });

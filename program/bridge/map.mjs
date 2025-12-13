@@ -27,8 +27,8 @@ export async function runAtAll({
     else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
     else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
     else elemSentence.obj = elemValue ?? {};
-    elemSentence.by = { num: i, register: true };
-    elemSentence.this = { ...(elemSentence.this || {}), by: elemSentence.by };
+    elemSentence.atindex = { num: i, register: true };
+    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex };
     if (elemSentence.at) delete elemSentence.at; // per-element call should not carry at all
 
     let resultObj = elemSentence.obj;
