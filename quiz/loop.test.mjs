@@ -30,3 +30,21 @@ test("ceremony repeats using tloh countdown until zero", async () => {
   assert.equal(invoke?.tloh?.num ?? invoke?.tloh, 0, "tloh should countdown to zero on the invoke");
   assert.equal(remember("tloh"), undefined, "tloh should not be stored as a separate register fact");
 });
+
+test("ceremony repeats using fromindex/toindex aliases", async () => {
+  forget();
+
+  await run("subj name counter obj num 0 be number ya");
+
+  await run("subj name loop_body to name num tloh num 0 be ceremony def");
+  await run("obj num 1 to name counter be add do");
+  await run("subj name loop_body be ceremony prah");
+
+  await run("to name counter fromindex num 3 toindex num 0 be loop_body do");
+
+  const counter = remember("counter");
+  const invoke = [...allRemember()].reverse().find(s => s.mood === "do" && s.be === "loop_body");
+
+  assert.equal(counter.obj.num, 3, "counter should be incremented three times");
+  assert.equal(invoke?.tloh?.num ?? invoke?.fromindex?.num ?? invoke?.tloh, 0, "fromindex should count down to zero");
+});

@@ -15,7 +15,7 @@ export async function handleImperative({
 
   let fn = null;
   let defEntry = getDefinitionEntry(be);
-  const hasLoopRegisters = sentence.tloh != null || sentence.until != null;
+  const hasLoopRegisters = sentence.tloh != null || sentence.until != null || sentence.fromindex != null || sentence.toindex != null;
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });

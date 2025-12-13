@@ -7,13 +7,19 @@ function registerValue(reg) {
 }
 
 export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
-  const initialTloh = registerValue(sentence.tloh);
+  const initialTloh = registerValue(sentence.tloh ?? sentence.fromindex);
   if (initialTloh == null) throw new Error("tloh is required to loop");
-  const untilSeed = registerValue(sentence.until);
+  const untilSeed = registerValue(sentence.until ?? sentence.toindex);
 
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
-  state.currentEvoke = { ...sentence, tloh: sentence.tloh ?? initialTloh, until: sentence.until ?? untilSeed };
+  state.currentEvoke = {
+    ...sentence,
+    tloh: sentence.tloh ?? sentence.fromindex ?? initialTloh,
+    fromindex: sentence.fromindex ?? sentence.tloh ?? initialTloh,
+    until: sentence.until ?? sentence.toindex ?? untilSeed,
+    toindex: sentence.toindex ?? sentence.until ?? untilSeed
+  };
 
   memory.pushMemoryContext({ seedFromCurrent: true });
   state.currentEvokeRef = state.currentEvoke;
@@ -24,12 +30,14 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   let updatedTarget = null;
 
   try {
-    let currentTloh = registerValue(state.currentEvokeRef.tloh);
+    let currentTloh = registerValue(state.currentEvokeRef.tloh ?? state.currentEvokeRef.fromindex);
     let currentUntil = untilSeed;
 
     while (true) {
       state.currentEvokeRef.tloh = currentTloh;
+      state.currentEvokeRef.fromindex = currentTloh;
       state.currentEvokeRef.until = currentUntil ?? state.currentEvokeRef.until;
+      state.currentEvokeRef.toindex = state.currentEvokeRef.until;
 
       for (const step of body) {
         lastResult = await interpret(step);
@@ -39,8 +47,8 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
         }
       }
 
-      const updatedTloh = registerValue(state.currentEvokeRef.tloh);
-      const updatedUntil = registerValue(state.currentEvokeRef.until ?? currentUntil);
+      const updatedTloh = registerValue(state.currentEvokeRef.tloh ?? state.currentEvokeRef.fromindex);
+      const updatedUntil = registerValue(state.currentEvokeRef.until ?? state.currentEvokeRef.toindex ?? currentUntil);
 
       const effectiveTloh = updatedTloh ?? currentTloh;
       const effectiveUntil = updatedUntil ?? currentUntil;
@@ -50,7 +58,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
         currentTloh = effectiveTloh;
         currentUntil = effectiveUntil;
         state.currentEvokeRef.tloh = currentTloh;
+        state.currentEvokeRef.fromindex = currentTloh;
         state.currentEvokeRef.until = currentUntil;
+        state.currentEvokeRef.toindex = currentUntil;
         break;
       }
 
@@ -61,7 +71,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       currentUntil = effectiveUntil;
       if (reachedAfterStep) {
         state.currentEvokeRef.tloh = next;
+        state.currentEvokeRef.fromindex = next;
         state.currentEvokeRef.until = effectiveUntil;
+        state.currentEvokeRef.toindex = effectiveUntil;
         break;
       }
     }
