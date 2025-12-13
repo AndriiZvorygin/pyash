@@ -1,0 +1,1 @@
+from filename "examples/pyash/vector-read-element.pya" from state pyash to filename "examples/out/vector-read.english.txt" to state english be translation do

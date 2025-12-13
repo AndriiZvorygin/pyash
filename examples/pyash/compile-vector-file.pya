@@ -1,0 +1,1 @@
+from filename "examples/pyash/vector-read-element.pya" from state pyash to filename "examples/out/vector-read.js" to state javascript be compile do
