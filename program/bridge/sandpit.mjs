@@ -108,6 +108,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
   const evokeSeed = { ...sentence };
+  if (sentence.by?.register && !evokeSeed.by) evokeSeed.by = sentence.by;
   state.currentEvoke = evokeSeed;
   state.executingBody = true;
   memory.pushMemoryContext({ seedFromCurrent: true });

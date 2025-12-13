@@ -32,6 +32,22 @@ export async function handleImperative({
     }
   }
 
+  if (hasAtAll) {
+    const atAllResult = await runAtAll({
+      sentence,
+      remember: memory.remember,
+      getDefinitionEntry,
+      state,
+      recordSandpitTrace,
+      interpret
+    });
+    if (atAllResult) {
+      memory.doRemember(atAllResult);
+      memory.doRemember({ subj: { name: "result" }, obj: atAllResult.obj, be: atAllResult.be, mood: "ya" });
+      return { acted: atAllResult.subj?.name, value: atAllResult.obj };
+    }
+  }
+
   if (!fn && !defEntry && sigKey && !hasAtAll) {
     throw new Error(`Unknown verb/signature: ${sigKey}`);
   }
@@ -70,22 +86,6 @@ export async function handleImperative({
   }
 
   if (!fn && !hasAtAll) throw new Error(`Unknown verb: ${be}`);
-
-  if (hasAtAll) {
-    const atAllResult = await runAtAll({
-      sentence,
-      remember: memory.remember,
-      getDefinitionEntry,
-      state,
-      recordSandpitTrace,
-      interpret
-    });
-    if (atAllResult) {
-      memory.doRemember(atAllResult);
-      memory.doRemember({ subj: { name: "result" }, obj: atAllResult.obj, be: atAllResult.be, mood: "ya" });
-      return { acted: atAllResult.subj?.name, value: atAllResult.obj };
-    }
-  }
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);

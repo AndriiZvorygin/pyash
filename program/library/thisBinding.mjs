@@ -9,7 +9,7 @@ export function resolveThisValue(target, evoke) {
   const reg = target.thisRef;
   const isThis = target.name === "this" || reg;
   if (!isThis || !reg || !evoke) return null;
-  return evoke[reg] ?? null;
+  return evoke[reg] ?? evoke.this?.[reg] ?? null;
 }
 
 // No-op placeholder for future storage if needed.

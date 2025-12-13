@@ -1,3 +1,4 @@
+import { state } from "./state.mjs";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 
 // Generic vector map/foreach helper for "at all" sugar.
@@ -26,10 +27,18 @@ export async function runAtAll({
     else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
     else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
     else elemSentence.obj = elemValue ?? {};
+    elemSentence.by = { num: i, register: true };
+    elemSentence.this = { ...(elemSentence.this || {}), by: elemSentence.by };
     if (elemSentence.at) delete elemSentence.at; // per-element call should not carry at all
 
     let resultObj = elemSentence.obj;
+    const prevEvoke = state.currentEvoke;
+    const prevEvokeRef = state.currentEvokeRef;
+    state.currentEvoke = elemSentence;
+    state.currentEvokeRef = elemSentence;
     const res = await interpret(elemSentence);
+    state.currentEvoke = prevEvoke;
+    state.currentEvokeRef = prevEvokeRef;
     if (res?.value !== undefined) resultObj = res.value;
     if (res?.obj !== undefined) resultObj = res.obj;
 

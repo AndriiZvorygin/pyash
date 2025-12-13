@@ -4,7 +4,7 @@ This version defines `at all` as element-wise application where:
 
 * **with `to`**: produce a new vector (map)
 * **without `to`**: update the original vector in place (foreach-style transform)
-* Current interpreter implementation skips the per-element `tloh` register.
+* Each element run exposes a zero-based index via `by` (as a register), accessible inside the body as `this by` without affecting signature dispatch.
 
 ---
 
@@ -49,7 +49,7 @@ Given an invoking sentence `S` containing `at all`:
    * Overwrite only:
 
      * `E.obj = V[i]` (in your standard value form)
-   * Execute the normal handler for `be <verb>` on `E`.
+   * Execute the normal handler for `be <verb>` on `E`. `E.by` is set to `{ num: i, register: true }` and is available as a `this by` register inside ceremonies; it is ignored for signature derivation.
    * The per-element result value is `E.obj` after execution.
 
 No other role fields are special-cased; they come from cloning `S`.
