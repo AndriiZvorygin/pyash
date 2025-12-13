@@ -4,21 +4,35 @@
 # - If called with positional args (<input> <output> [target]),
 #   build a compile sentence: from filename "<input>" from state pyash
 #   to filename "<output>" to state <target> be compile do
+# - If called starting with Pyash prepositions/cases (e.g., `from filename ... to state ...`),
+#   join args, append `be compile do` if missing, and run directly.
 # - Otherwise, pass through to run_pya_program (preserve flags like --full)
 
 if [[ "$#" -ge 1 && "$1" != -* ]]; then
-  INPUT="$1"
-  OUTPUT="$2"
-  TARGET="$3"
-  if [[ -z "$OUTPUT" ]]; then
-    echo "usage: ./compile <input.pya> <output.{js|c|txt}> [target-state]" >&2
-    exit 1
+  FIRST="$1"
+  # If the caller gave us explicit Pyash cases/prepositions, join and append compile/do if missing.
+  if [[ "$FIRST" =~ ^(from|to|become|fromstate|fromtext|totext|obj|subj|su|ob)$ ]]; then
+    SENTENCE="$*"
+    if [[ ! "$SENTENCE" =~ [[:space:]]be[[:space:]] ]]; then
+      SENTENCE+=" be compile do"
+    elif [[ ! "$SENTENCE" =~ [[:space:]](do|ya|que|ret|def|prah)[[:space:]]?$ ]]; then
+      SENTENCE+=" do"
+    fi
+    node program/command/run_pya_program.mjs --gross "${SENTENCE}"
+  else
+    INPUT="$1"
+    OUTPUT="$2"
+    TARGET="$3"
+    if [[ -z "$OUTPUT" ]]; then
+      echo "usage: ./compile <input.pya> <output.{js|c|txt}> [target-state]" >&2
+      exit 1
+    fi
+    if [[ -z "$TARGET" ]]; then
+      TARGET="javascript"
+    fi
+    SENTENCE="from filename \"${INPUT}\" from state pyash to filename \"${OUTPUT}\" to state ${TARGET} be compile do"
+    node program/command/run_pya_program.mjs --gross "${SENTENCE}"
   fi
-  if [[ -z "$TARGET" ]]; then
-    TARGET="javascript"
-  fi
-  SENTENCE="from filename \"${INPUT}\" from state pyash to filename \"${OUTPUT}\" to state ${TARGET} be compile do"
-  node program/command/run_pya_program.mjs --gross "${SENTENCE}"
 else
   node program/command/run_pya_program.mjs --gross "$@"
 fi
