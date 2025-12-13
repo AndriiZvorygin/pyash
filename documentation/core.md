@@ -67,6 +67,7 @@ This document summarizes the current core language model used by the interpreter
 - Conditionals or verbs without registered handlers error during interpretation.
 - Compilers include TODO comments for unsupported constructs (e.g., C string concat).
 - Vector compile: JS supports vector literals (`obj ve/vec num ... be vector`) and `produce` (dot product) for inline and named vectors; C vector codegen is still TODO.
+- Vector addressing: use `via space` → `at` for zero-based indexing (`obj name doors via space num 0 be read …`). `ord N` sugar maps 1→0, 2→1, etc. `invert` flips truth/lie text values in-place.
 - Mind compile: JS emits a synchronous call to an Ollama-compatible endpoint using stored mind configs (`be mind ya` with `from`/`as`/`accordingto`) or call-local prompt/model; outputs go to stdout and `globalThis` by subject name.
 - Keep example outputs in git-ignored paths (e.g., `examples/out/`).
 

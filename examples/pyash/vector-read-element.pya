@@ -1,5 +1,11 @@
-exists subj name doors obj ve num 0 1 0 be vector ya
+exists subj name doors obj ve num 3 1 0 be vector ya
 
-obj name doors via space num 2 be read to name picked do
+obj name doors via space num 0 be read to name first do
+obj name doors via space num 1 be read to name second do
+obj name doors via space num 2 be read to name third do
+obj name doors at ord 2 be read to name secondord do
 
-subj name picked be pyash que
+subj name first be pyash que
+subj name second be pyash que
+subj name third be pyash que
+subj name secondord be pyash que

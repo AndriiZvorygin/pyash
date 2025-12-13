@@ -12,16 +12,16 @@ function indexFromAt(at) {
   const raw = at?.num ?? at;
   const n = Number(raw);
   if (Number.isNaN(n)) return null;
-  return Math.max(1, Math.trunc(n));
+  return Math.trunc(n);
 }
 
 export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remember }) {
   const obj = sentence.obj || {};
   const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
   const idx = indexFromAt(obj.at ?? sentence.at);
-  if (!vecName || idx == null) throw new Error("read: obj vec name and at num are required");
+  if (!vecName || idx == null || idx < 0) throw new Error("read: obj vec name and at num are required");
   const vec = getVector(vecName, remember);
-  const value = vec.obj.ve.values[idx - 1];
+  const value = vec.obj.ve.values[idx];
   const isNum = typeof value === "number";
   return isNum ? { obj: { num: value }, be: "number" } : { obj: { text: value }, be: "text" };
 }
@@ -30,11 +30,11 @@ export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
   const obj = sentence.obj || {};
   const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
   const idx = indexFromAt(obj.at ?? sentence.at);
-  if (!vecName || idx == null) throw new Error("invert: obj vec name and at num are required");
+  if (!vecName || idx == null || idx < 0) throw new Error("invert: obj vec name and at num are required");
   const vec = getVector(vecName, remember);
-  const curr = vec.obj.ve.values[idx - 1];
+  const curr = vec.obj.ve.values[idx];
   const truthy = curr === "truth" || curr === true || curr === 1;
-  vec.obj.ve.values[idx - 1] = truthy ? "lie" : "truth";
+  vec.obj.ve.values[idx] = truthy ? "lie" : "truth";
   return { obj: vec.obj, be: "vector" };
 }
 

@@ -1,7 +1,7 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "tloh", "until", "by", "per"];
-const TYPE_TOKENS = ["name", "num", "number", "text", "filename"];
+const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "tloh", "until", "by", "per", "at"];
+const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "ord"];
 const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity"];
 const AXIS_CONTEXT_TO_KEYWORD = {
   space: { source: "from", way: "at", destination: "to" },
@@ -273,6 +273,13 @@ export function parse(line) {
         const nameValue = parts.join(" ");
         if (nameValue) target.name = nameValue;
         i = j - 1;
+      } else if (t === "ord") {
+        const raw = words[i + 1];
+        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        const maybeNum = Number(value);
+        const ordIndex = Number.isNaN(maybeNum) ? null : Math.max(0, Math.trunc(maybeNum) - 1);
+        target.num = ordIndex ?? value;
+        i++; // skip consumed value
       } else {
         const raw = words[i + 1];
         const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;

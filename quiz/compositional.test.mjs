@@ -59,6 +59,13 @@ test("via space maps to at keyword", () => {
   assert.ok(!s.via, "via should be normalized to at");
 });
 
+test("flat at role parses directly", () => {
+  const s = parse("obj name doors at num 2 be topic ya");
+
+  assert.deepEqual(s.at, { num: 2 });
+  assert.equal(s.obj?.name, "doors");
+});
+
 test("interior context maps outof/inside/into keywords", () => {
   const s = parse("subj name item from interior cellar via interior hallway to interior attic be topic ya");
 

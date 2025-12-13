@@ -19,33 +19,12 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
     if (path) return path;
   }
 
-  if (slot.at && slot.name && field === "num") {
-    const baseName = sanitizeName(slot.name);
-    const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
-    const idxVal = Number(slot.at.num ?? slot.at);
-    const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
-    const idxOffset = typeof idxExpr === "number" ? idxExpr - 1 : `(${idxExpr}) - 1`;
-    return `${vecRef}.obj?.ve?.values?.[${idxOffset}]`;
-  }
-
-  if (slot.at && slot.name && field === "num") {
-    const baseName = sanitizeName(slot.name);
-    const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
-    const idxVal = Number(slot.at.num ?? slot.at);
-    const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
-    const idxOffset = typeof idxExpr === "number" ? idxExpr - 1 : `(${idxExpr}) - 1`;
-    return `${vecRef}.obj?.ve?.values?.[${idxOffset}]`;
-  }
-
   if (slot.at && slot.name) {
     const baseName = sanitizeName(slot.name);
     const vecRef = locals?.has(baseName) || declared?.has(baseName) ? baseName : JSON.stringify(slot.name);
     const idxVal = Number(slot.at.num ?? slot.at);
     const idxExpr = Number.isNaN(idxVal) ? (slot.at?.num ?? slot.at ?? 0) : idxVal;
-    if (typeof idxExpr === "number") {
-      return `${vecRef}.obj?.ve?.values?.[${idxExpr - 1}]`;
-    }
-    return `${vecRef}.obj?.ve?.values?.[(${idxExpr}) - 1]`;
+    return `${vecRef}.obj?.ve?.values?.[${idxExpr}]`;
   }
 
   if (slot[field] !== undefined) {
