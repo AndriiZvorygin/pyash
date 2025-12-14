@@ -211,6 +211,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
     * `giant.mjs`, `tiny.mjs`, `equally.mjs`: conditional control (used with `then` mood; compares numbers/subjects).
     * `understand.mjs`: builds programs via `program/program.mjs` and writes JSON/text results to memory, wrapping them in result sentences.
     * `mind.mjs`: resolves model/prompt from stored mind config (sentences with keywords `as`, `accordingto`) and calls Ollama HTTP via `program/motor/ollama.mjs`, then packages responses back into result sentences.
+    * Vector helpers: single-element mutations (`at num`) and “at all” mapping run through a shared helper (`runAtAll`) so primitive verbs (`add`, `subtract`, `invert`) can be mapped without ceremonies.
 
 * `program/program.mjs`: Program builder.
 
@@ -340,6 +341,8 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
   * All semantic communication between modules is via **sentence objects** or **paragraphs** (arrays of sentences).
   * Helper functions may use primitive JS types internally, but the public/architectural interfaces of modules are sentence/paragraph-based.
   * This keeps the runtime model aligned with the eventual compiler model, where Pyash sentences compile to JavaScript that still speaks in sentences.
+  * `exists … ya` compiles to **sentence objects** (`let name = { subj, obj, be, exists, mood }`), not raw scalars, so compiled code matches interpreter expectations and ceremony codegen.
+  * The JS remember shim now returns `undefined` for missing names (no implicit fallback objects), making absent facts explicit.
 
 * Always add quizzes first (red→green); every verb or control-flow change gets coverage.
 
