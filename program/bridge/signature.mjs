@@ -132,7 +132,7 @@ function caseTypeWords(value) {
   if (value.name) {
     words.push("name");
     const tail = normalizeWords(value.name);
-    if (tail && tail !== "num" && tail !== "text" && tail !== "vec") {
+    if (tail && tail !== "num" && tail !== "text" && tail !== "vec" && tail !== "ve") {
       words.push(...tail.split(" ").filter(Boolean));
     }
   }
@@ -172,6 +172,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
     const typeWords = caseTypeWordsWithMemory(value, remember, verb);
     if (typeWords.length === 0) {
+      console.error("derive-signature-fail", { key, value, verb });
       throw new Error(`Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`);
     }
     cases.push({ case: key, typeWords });
@@ -204,6 +205,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
 
     if (inferred?.be === "mind") return ["name", "mind"];
 
+    if (factObj?.ve?.values) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.text !== undefined) return ["name", "text"];
@@ -218,9 +220,14 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
   if (value.num !== undefined) return ["num"];
   if (value.text !== undefined) return ["text"];
   if (value.filename !== undefined) return ["filename"];
+  if (value.thisRef) return ["num"];
+  if (value.genitive) return ["num"];
 
   const fallback = caseTypeWords(value);
-  if (fallback.length === 0) throw new Error("Cannot derive type words for case");
+  if (fallback.length === 0) {
+    console.error("caseTypeWords fallback empty", value);
+    throw new Error("Cannot derive type words for case");
+  }
   return fallback;
 }
 

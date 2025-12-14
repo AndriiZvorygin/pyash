@@ -22,6 +22,23 @@ export async function subtract_by_num_from_name_num_to_name_num(sentence, { reme
   return { obj: result, be: sentence?.be ?? "number" };
 }
 
+// Vector element subtract: be subtract obj num X from name vec at num idx
+export async function subtract_obj_num_from_name_vec_at_num(sentence, { remember }) {
+  const vecName = sentence.from?.name ?? sentence.obj?.name;
+  const idx = sentence.at?.num;
+  const delta = Number(sentence.obj?.num ?? 0);
+  if (!vecName || idx == null) throw new Error("subtract: vector name, obj num, and at index are required");
+
+  const fact = remember ? remember(vecName) : null;
+  if (!fact?.obj?.ve?.values) throw new Error("subtract: target is not a vector");
+  const i = Number(idx) - 1;
+  if (!Number.isInteger(i) || i < 0 || i >= fact.obj.ve.values.length) throw new Error("subtract: index out of range");
+
+  const curr = Number(fact.obj.ve.values[i] ?? 0);
+  fact.obj.ve.values[i] = curr - delta;
+  return { obj: fact.obj };
+}
+
 export const subtract = subtract_by_num_from_name_num_to_name_num;
 
 export const signatures = [
@@ -56,5 +73,21 @@ export const signatures = [
   {
     signatureWords: ["be", "subtract", "obj", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "obj", "num", "from", "name", "vec", "at", "num"],
+    handler: subtract_obj_num_from_name_vec_at_num
+  },
+  {
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "obj", "num"],
+    handler: subtract_obj_num_from_name_vec_at_num
+  },
+  {
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "num", "obj", "num"],
+    handler: subtract_obj_num_from_name_vec_at_num
+  },
+  {
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "num", "obj", "num"],
+    handler: subtract_obj_num_from_name_vec_at_num
   }
 ];

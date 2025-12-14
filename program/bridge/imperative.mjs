@@ -1,6 +1,7 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 import { runAtAll } from "./map.mjs";
+import compileHandler from "../verbs/exchange/compile.mjs";
 
 export async function handleImperative({
   sentence,
@@ -30,6 +31,30 @@ export async function handleImperative({
       const defName = lookupSignature(sigKey);
       if (defName) defEntry = getDefinitionEntry(defName);
     }
+  }
+
+  // Fallback: allow compile to run even if signature words don't fully match a registered handler
+  if (!fn && be === "compile") {
+    fn = compileHandler;
+  }
+
+  // Inline conditional with consequence (e.g., "be equally ... then ...")
+  if (sentence.consequence && (be === "equally" || be === "tiny" || be === "giant")) {
+    if (!fn) throw new Error(`Unknown verb/signature: ${sigKey ?? be}`);
+    const lhs =
+      sentence.obj?.name && memory.remember(sentence.obj.name)
+        ? memory.remember(sentence.obj.name).obj
+        : sentence.obj;
+    const rhs =
+      sentence.from?.name && memory.remember(sentence.from.name)
+        ? memory.remember(sentence.from.name).obj
+        : sentence.from;
+    const truth = await fn({ subj: lhs, from: rhs });
+    state.lastCondition = truth;
+    if (truth && sentence.consequence) {
+      return interpret(sentence.consequence);
+    }
+    return { condition: truth };
   }
 
   if (hasAtAll) {

@@ -28,7 +28,13 @@ export async function runAtAll({
     else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
     else elemSentence.obj = elemValue ?? {};
     elemSentence.atindex = { num: i, register: true };
-    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex };
+    elemSentence.this = {
+      ...(elemSentence.this || {}),
+      atindex: elemSentence.atindex,
+      by: elemSentence.by,
+      fromindex: elemSentence.fromindex,
+      toindex: elemSentence.toindex,
+    };
     if (elemSentence.at) delete elemSentence.at; // per-element call should not carry at all
 
     let resultObj = elemSentence.obj;
@@ -41,6 +47,8 @@ export async function runAtAll({
     state.currentEvokeRef = prevEvokeRef;
     if (res?.value !== undefined) resultObj = res.value;
     if (res?.obj !== undefined) resultObj = res.obj;
+    if (res?.result !== undefined) resultObj = res.result;
+    if (state.currentEvokeRef?.obj !== undefined) resultObj = state.currentEvokeRef.obj;
 
     if (typeof resultObj === "object" && resultObj !== null) {
       if (resultObj.num !== undefined) out.push(resultObj.num);

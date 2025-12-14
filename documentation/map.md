@@ -195,6 +195,17 @@ JS (explicit):
 }
 ```
 
+### 5.3 Single element (imperative)
+
+You can mutate a single vector slot without `at all` by combining `at num` with a vector reference:
+
+```pyash
+obj name vector from num 5 at num 2 be add do        # vector[1] += 5
+obj num 3 from name vector at num 1 be subtract do   # vector[0] -= 3
+```
+
+Interpreter signatures recognize these shapes for `add` and `subtract` and update the vector in place. Indexes are 1-based (consistent with `at num` elsewhere in Pyash).
+
 ---
 
 ## 6. Errors and guards

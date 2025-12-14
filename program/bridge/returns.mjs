@@ -17,7 +17,7 @@ export function handleThisBinding(sentence, state) {
 export function handleReturn(sentence, state, remember) {
   if (sentence.mood !== "ret" || !state.currentEvokeRef) return null;
 
-  const sourceName = sentence?.ret?.name || sentence?.obj?.name;
+  const sourceName = sentence?.ret?.name || sentence?.obj?.name || sentence?.subj?.name;
   let merged = { ...state.currentEvokeRef };
 
   if (sourceName) {
@@ -40,7 +40,6 @@ export function handleReturn(sentence, state, remember) {
   if (sentence.from) merged.from = sentence.from;
   if (sentence.fromindex !== undefined) merged.fromindex = sentence.fromindex;
   if (sentence.toindex !== undefined) merged.toindex = sentence.toindex;
-  if (sentence.subj) merged.subj = sentence.subj;
   if (sentence.as) merged.as = sentence.as;
 
   merged.mood = state.currentEvokeRef.mood;

@@ -14,7 +14,8 @@ async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
-  const filePath = args.find(a => !a.startsWith("--"));
+  const positional = args.filter(a => !a.startsWith("--"));
+  const filePath = positional[0];
 
   if (!filePath) {
     console.error("Usage: node program/cli/run_pya_program.mjs [--gross] <path/to/file.pya>");
@@ -22,7 +23,14 @@ async function main() {
   }
 
   const resolved = path.resolve(filePath);
-  const text = await fs.readFile(resolved, "utf8");
+  let text;
+  try {
+    text = await fs.readFile(resolved, "utf8");
+  } catch (err) {
+    if (err.code !== "ENOENT") throw err;
+    // Treat the positional args as inline Pyash when the path does not exist.
+    text = positional.join(" ");
+  }
 
   forget();
   clearSignatureHandlers();
@@ -54,6 +62,12 @@ async function main() {
 
   if (gross) {
     console.log(JSON.stringify({ outputs, result }, null, 2));
+    return;
+  }
+
+  // If the result is a compiled artifact with a text payload, stream it directly.
+  if (result?.obj?.text) {
+    console.log(result.obj.text);
     return;
   }
 

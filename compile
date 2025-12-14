@@ -13,12 +13,14 @@ if [[ "$#" -ge 1 && "$1" != -* ]]; then
   # If the caller gave us explicit Pyash cases/prepositions, join and append compile/do if missing.
   if [[ "$FIRST" =~ ^(from|to|become|fromstate|fromtext|totext|obj|subj|su|ob)$ ]]; then
     SENTENCE="$*"
+    # Allow "become <state>" as sugar for "to state <state>"
+    SENTENCE="$(printf '%s' "$SENTENCE" | sed 's/[[:space:]]become[[:space:]]/ to state /')"
     if [[ ! "$SENTENCE" =~ [[:space:]]be[[:space:]] ]]; then
       SENTENCE+=" be compile do"
     elif [[ ! "$SENTENCE" =~ [[:space:]](do|ya|que|ret|def|prah)[[:space:]]?$ ]]; then
       SENTENCE+=" do"
     fi
-    node program/command/run_pya_program.mjs --gross "${SENTENCE}"
+    node program/command/run_pya_program.mjs "${SENTENCE}"
   else
     INPUT="$1"
     OUTPUT="$2"
@@ -31,7 +33,7 @@ if [[ "$#" -ge 1 && "$1" != -* ]]; then
       TARGET="javascript"
     fi
     SENTENCE="from filename \"${INPUT}\" from state pyash to filename \"${OUTPUT}\" to state ${TARGET} be compile do"
-    node program/command/run_pya_program.mjs --gross "${SENTENCE}"
+    node program/command/run_pya_program.mjs "${SENTENCE}"
   fi
 else
   node program/command/run_pya_program.mjs --gross "$@"

@@ -156,7 +156,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       if (locals?.has(name)) {
         expr = name;
       } else if (declared?.has(name)) {
-        expr = `${name}.obj?.text ?? ${name}.obj?.num`;
+        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
       } else {
         expr = JSON.stringify(obj.name);
       }
@@ -193,6 +193,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     }
     lines.push(`${targetLval} = ${baseName}?.obj?.ve?.values?.[(${idxExpr}) - 1];`);
     return lines.join("\n");
+  }
+
+  // Map/foreach over vector: at all
+  if (sentence.at?.name === "all" && ceremonyFns?.get(baseBe) && !sentenceArg && lang !== "c") {
+    const fn = ceremonyFns.get(baseBe);
+    const literal = inlineSentenceLiteral(sentence, declared);
+    return `runAtAll(${literal}, ${fn});`;
   }
 
   // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
@@ -331,6 +338,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   }
 
   // Imperative add
+  if (baseBe === "add" && obj.num !== undefined && sentenceArg && !sentence.to) {
+    const increment = typeof obj.num === "number" ? obj.num : Number(obj.num);
+    const safeInc = Number.isNaN(increment) ? 0 : increment;
+    return `${sentenceArg}.obj = ${sentenceArg}.obj ?? {};\n${sentenceArg}.obj.num = (${sentenceArg}.obj.num ?? 0) + ${safeInc};`;
+  }
+
   if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
@@ -653,6 +666,7 @@ function transpileProgram(sentences, { lang }) {
 let lines = [header];
   const mainLines = [];
   let usesRememberShim = false;
+  let usesMapShim = false;
   const cHelpers = { usesPrintf: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
@@ -700,6 +714,10 @@ let lines = [header];
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
+    if (typeof line === "string" && line.includes("runAtAll(")) {
+      usesMapShim = true;
+      usesRememberShim = true;
+    }
     const todoPrefix = lang === "c" ? "/* TODO" : "// TODO";
     const todoSuffix = lang === "c" ? " */" : "";
     const target = (() => {
@@ -728,6 +746,12 @@ let lines = [header];
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string" && globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n  return ref;\n});`;
       prelude.push(rememberShim);
+    }
+    if (usesMapShim) {
+      const cloneShim = `const structuredClone = globalThis.structuredClone || ((v) => JSON.parse(JSON.stringify(v)));`;
+      prelude.push(cloneShim);
+      const mapHelper = `function runAtAll(sentence, fn) {\n  const vecFact = remember(sentence.obj?.name ?? sentence.obj);\n  const values = vecFact?.obj?.ve?.values ?? [];\n  const out = values.map((elem, i) => {\n    const elemSentence = structuredClone(sentence);\n    if (typeof elem === \"number\") elemSentence.obj = { num: elem };\n    else if (typeof elem === \"string\") elemSentence.obj = { text: elem };\n    else if (typeof elem === \"boolean\") elemSentence.obj = { boolean: elem };\n    else elemSentence.obj = elem ?? {};\n    elemSentence.atindex = { num: i, register: true };\n    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex, by: elemSentence.by, fromindex: elemSentence.fromindex, toindex: elemSentence.toindex };\n    const res = fn(elemSentence) ?? elemSentence;\n    const obj = res?.obj ?? elemSentence.obj;\n    if (obj?.num !== undefined) return obj.num;\n    if (obj?.text !== undefined) return obj.text;\n    if (obj?.boolean !== undefined) return obj.boolean;\n    return obj;\n  });\n  const targetName = sentence.to?.name ?? sentence.obj?.name ?? vecFact?.subj?.name;\n  if (sentence.to?.name) {\n    const fact = { subj: { name: sentence.to.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.to.name] = fact;\n    return fact;\n  }\n  if (vecFact?.obj?.ve) {\n    vecFact.obj.ve.values = out;\n  }\n  if (targetName) {\n    const fact = vecFact && vecFact.obj ? { ...vecFact, obj: { ...(vecFact.obj || {}), ve: { ...(vecFact.obj?.ve || {}), values: out } } } : { subj: { name: targetName }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[targetName] = fact;\n    return fact;\n  }\n  if (sentence.obj?.name) {\n    const fact = { subj: { name: sentence.obj.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.obj.name] = fact;\n    return fact;\n  }\n  return { obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n}`;
+      prelude.push(mapHelper);
     }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = typeof sentence.fromindex === \"object\" ? { ...sentence.fromindex, num: nextIdx } : nextIdx;\n  }\n  return sentence;\n}`;
@@ -828,6 +852,10 @@ export default compile_from_filename_to_filename;
 export { transpileSentence };
 
 export const signatures = [
+  {
+    signatureWords: ["be", "compile", "become", "name", "num", "from", "filename"],
+    handler: compile_from_filename_to_filename
+  },
   {
     signatureWords: ["be", "compile", "become", "name", "num", "from", "filename", "fromstate", "name", "num", "to", "filename"],
     handler: compile_from_filename_to_filename

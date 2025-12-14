@@ -1,7 +1,15 @@
+import { state } from "../../bridge/state.mjs";
+
 function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
+  if (v.thisRef) {
+    const ev = state.currentEvoke;
+    const reg = ev?.[v.thisRef];
+    if (typeof reg === "number") return reg;
+    if (typeof reg?.num === "number") return reg.num;
+  }
   if (typeof v.name === "string") {
     const found = remember(v.name);
     if (typeof found?.obj?.num === "number") return found.obj.num;
