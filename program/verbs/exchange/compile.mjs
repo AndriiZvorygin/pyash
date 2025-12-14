@@ -109,7 +109,7 @@ function targetPath(role, sentenceArg, field = "num", slot = {}) {
   return `${sentenceArg}.${role}.${field}`;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, declared, loopShim, mindShim, cHelpers } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, declared, loopShim, mindShim, cHelpers, rememberFlag } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -195,11 +195,51 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return lines.join("\n");
   }
 
-  // Map/foreach over vector: at all
-  if (sentence.at?.name === "all" && ceremonyFns?.get(baseBe) && !sentenceArg && lang !== "c") {
-    const fn = ceremonyFns.get(baseBe);
-    const literal = inlineSentenceLiteral(sentence, declared);
-    return `runAtAll(${literal}, ${fn});`;
+  // Map/foreach over vector: at all (ceremony or primitive verbs)
+  if (sentence.at?.name === "all" && !sentenceArg && lang !== "c") {
+    if (ceremonyFns?.get(baseBe)) {
+      const fn = ceremonyFns.get(baseBe);
+      const literal = inlineSentenceLiteral(sentence, declared);
+      return `runAtAll(${literal}, ${fn});`;
+    }
+    if (baseBe === "add" || baseBe === "subtract" || baseBe === "invert") {
+      const vecName = sentence.obj?.name;
+      const toName = sentence.to?.name;
+      const delta = Number(sentence.from?.num ?? sentence.obj?.num ?? 0);
+      const op = baseBe === "invert" ? "invert" : baseBe;
+      const opBody =
+        baseBe === "invert"
+          ? `let val = elem;\n    if (typeof val === "number") return val * -1;\n    if (val === "truth" || val === true) return "lie";\n    if (val === "lie" || val === false) return "truth";\n    return val;`
+          : baseBe === "add"
+            ? `return (Number(elem) || 0) + ${Number.isNaN(delta) ? 0 : delta};`
+            : `return (Number(elem) || 0) - ${Number.isNaN(delta) ? 0 : delta};`;
+      const lines = [];
+      lines.push(`{`);
+      lines.push(`let vecFact = remember(${JSON.stringify(vecName ?? sentence.obj ?? "vec")}) || (typeof ${sanitizeName(vecName ?? "vec")} !== "undefined" ? ${sanitizeName(vecName ?? "vec")} : undefined);`);
+      lines.push(`const values = vecFact?.obj?.ve?.values ?? vecFact?.ve?.values ?? [];`);
+      lines.push(`const outVals = values.map((elem, i) => {`);
+      lines.push(opBody.split("\n").map(l => `  ${l}`).join("\n"));
+      lines.push(`});`);
+      if (toName) {
+        lines.push(`const fact = { subj: { name: ${JSON.stringify(toName)} }, obj: { ve: { values: outVals } }, be: "vector", mood: "ya" };`);
+        lines.push(`globalThis[${JSON.stringify(toName)}] = fact;`);
+        lines.push(`if (typeof ${sanitizeName(toName)} !== "undefined") { ${sanitizeName(toName)} = fact; }`);
+        lines.push(`/* end map */`);
+      } else if (vecName) {
+        lines.push(`if (vecFact?.obj?.ve) { vecFact.obj.ve.values = outVals; }`);
+        lines.push(`const fallback = { subj: { name: ${JSON.stringify(vecName)} }, obj: { ve: { values: outVals } }, be: "vector", mood: "ya" };`);
+        lines.push(`const finalFact = vecFact || fallback;`);
+        lines.push(`globalThis[${JSON.stringify(vecName)}] = finalFact;`);
+        lines.push(`if (typeof ${sanitizeName(vecName)} !== "undefined") { ${sanitizeName(vecName)} = finalFact; }`);
+        lines.push(`/* end map */`);
+      } else {
+        lines.push(`const fact = { obj: { ve: { values: outVals } }, be: "vector", mood: "ya" };`);
+        lines.push(`/* end map */`);
+      }
+      lines.push(`}`);
+      if (rememberFlag) rememberFlag.used = true;
+      return lines.join("\n");
+    }
   }
 
   // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
@@ -667,6 +707,7 @@ let lines = [header];
   const mainLines = [];
   let usesRememberShim = false;
   let usesMapShim = false;
+  const rememberFlag = { used: false };
   const cHelpers = { usesPrintf: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
@@ -710,9 +751,13 @@ let lines = [header];
       throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, loopShim, mindShim, cHelpers });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, loopShim, mindShim, cHelpers, rememberFlag });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
+    }
+    if (rememberFlag.used) {
+      usesRememberShim = true;
+      rememberFlag.used = false;
     }
     if (typeof line === "string" && line.includes("runAtAll(")) {
       usesMapShim = true;
@@ -744,7 +789,7 @@ let lines = [header];
       prelude.push(mindHistory);
     }
     if (usesRememberShim) {
-      const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string" && globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n  return ref;\n});`;
+      const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
     }
     if (usesMapShim) {
@@ -849,7 +894,7 @@ async function compile_from_filename_to_filename(sentence) {
 }
 
 export default compile_from_filename_to_filename;
-export { transpileSentence };
+export { transpileSentence, transpileProgram };
 
 export const signatures = [
   {

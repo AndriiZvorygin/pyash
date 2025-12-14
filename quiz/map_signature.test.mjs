@@ -12,5 +12,5 @@ test("deriveSignatureFromCall includes at all for add", () => {
     at: { name: "all" }
   };
   const sig = deriveSignatureFromCall(sentence, { remember: () => ({ obj: { ve: { values: [1] } } }) });
-  assert.deepEqual(sig, ["be", "add", "at", "name", "num", "from", "num", "obj", "name", "num", "to", "name", "num"]);
+  assert.deepEqual(sig, ["be", "add", "at", "name", "vec", "num", "from", "num", "obj", "name", "vec", "num", "to", "name", "vec", "num"]);
 });

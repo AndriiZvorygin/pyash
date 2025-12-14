@@ -20,13 +20,11 @@ export async function runAtAll({
 
   const out = [];
 
+  // Primitive verbs (no ceremony) can reuse the single-element handlers via at:num
+  const isPrimitive = !getDefinitionEntry(base.be);
+
   for (let i = 0; i < vecValues.length; i++) {
     const elemSentence = structuredClone(base);
-    const elemValue = vecValues[i];
-    if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
-    else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
-    else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
-    else elemSentence.obj = elemValue ?? {};
     elemSentence.atindex = { num: i, register: true };
     elemSentence.this = {
       ...(elemSentence.this || {}),
@@ -37,27 +35,47 @@ export async function runAtAll({
     };
     if (elemSentence.at) delete elemSentence.at; // per-element call should not carry at all
 
-    let resultObj = elemSentence.obj;
-    const prevEvoke = state.currentEvoke;
-    const prevEvokeRef = state.currentEvokeRef;
-    state.currentEvoke = elemSentence;
-    state.currentEvokeRef = elemSentence;
-    const res = await interpret(elemSentence);
-    state.currentEvoke = prevEvoke;
-    state.currentEvokeRef = prevEvokeRef;
-    if (res?.value !== undefined) resultObj = res.value;
-    if (res?.obj !== undefined) resultObj = res.obj;
-    if (res?.result !== undefined) resultObj = res.result;
-    if (state.currentEvokeRef?.obj !== undefined) resultObj = state.currentEvokeRef.obj;
+    let resultObj;
+    if (isPrimitive) {
+      // reuse single-element handler by setting at:num and providing the element value
+      const elemValue = vecValues[i];
+      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
+      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
+      else elemSentence.obj = elemValue ?? {};
+      elemSentence.at = { num: i + 1 };
+      const res = await interpret(elemSentence);
+      if (res?.obj !== undefined) resultObj = res.obj;
+      if (res?.value !== undefined) resultObj = res.value;
+      if (res?.result !== undefined) resultObj = res.result;
+      if (resultObj === undefined) resultObj = elemSentence.obj;
+    } else {
+      const elemValue = vecValues[i];
+      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
+      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
+      else elemSentence.obj = elemValue ?? {};
+      const prevEvoke = state.currentEvoke;
+      const prevEvokeRef = state.currentEvokeRef;
+      state.currentEvoke = elemSentence;
+      state.currentEvokeRef = elemSentence;
+      const res = await interpret(elemSentence);
+      state.currentEvoke = prevEvoke;
+      state.currentEvokeRef = prevEvokeRef;
+      if (res?.value !== undefined) resultObj = res.value;
+      if (res?.obj !== undefined) resultObj = res.obj;
+      if (res?.result !== undefined) resultObj = res.result;
+      if (state.currentEvokeRef?.obj !== undefined) resultObj = state.currentEvokeRef.obj;
+    }
 
     if (typeof resultObj === "object" && resultObj !== null) {
-      if (resultObj.num !== undefined) out.push(resultObj.num);
-      else if (resultObj.text !== undefined) out.push(resultObj.text);
-      else if (resultObj.boolean !== undefined) out.push(resultObj.boolean);
-      else if (resultObj.ve?.values) out.push(resultObj.ve.values);
-      else out.push(resultObj);
-    } else {
-      out.push(resultObj);
+      if (resultObj.num !== undefined) out[i] = resultObj.num;
+      else if (resultObj.text !== undefined) out[i] = resultObj.text;
+      else if (resultObj.boolean !== undefined) out[i] = resultObj.boolean;
+      else if (resultObj.ve?.values) out[i] = resultObj.ve.values;
+      else out[i] = resultObj;
+    } else if (resultObj !== undefined) {
+      out[i] = resultObj;
     }
   }
 

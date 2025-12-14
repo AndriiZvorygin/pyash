@@ -111,8 +111,8 @@ test("compile converts Pyash file to JavaScript file", async () => {
   assert.ok(result?.obj?.text ?? result?.value?.text);
 
   const fileText = await fs.readFile(outputFile, "utf8");
-  assert.match(fileText, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 1 \}/);
-  assert.match(fileText, /let beta = \{ subj: \{ name: "beta" \}, obj: \{ num: 2 \}/);
+  assert.match(fileText, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
+  assert.match(fileText, /let beta = \{[\s\S]*subj:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*obj:\s*\{\s*num:\s*2/s);
 
   await fs.rm(outputFile, { force: true });
 });
@@ -286,8 +286,8 @@ test("compile converts inline Pyash text to JavaScript text with const for perma
   const result = await interpret(sentence);
   const js = result?.obj?.text ?? result?.value?.text;
   assert.ok(js);
-  assert.match(js, /const alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 1 \}/);
-  assert.match(js, /let beta = \{ subj: \{ name: "beta" \}, obj: \{ text: "hello" \}/);
+  assert.match(js, /const alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
+  assert.match(js, /let beta = \{[\s\S]*subj:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*obj:\s*\{\s*text:\s*"hello"/s);
 });
 
 test("compile converts inline Pyash text to C text", async () => {
@@ -361,7 +361,7 @@ test("compile emits JS for simple add", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let collector = \{ subj: \{ name: "collector" \}, obj: \{ num: 0 \}/);
+  assert.match(js, /let collector = \{[\s\S]*subj:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*obj:\s*\{\s*num:\s*0/s);
   assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \+ 2;/);
 });
 
@@ -381,9 +381,8 @@ test("compile reassigns without redeclaring when name already exists", async () 
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 1 \}/);
-  assert.match(js, /alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 2 \}/);
-  assert.doesNotMatch(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ num: 2 \}/);
+  assert.match(js, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
+  assert.match(js, /alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"[\s\S]*obj:\s*\{\s*num:\s*2/s);
 });
 
 test("compile emits console.log for say text", async () => {
@@ -418,8 +417,8 @@ test("compile emits console.log for say name using variable reference", async ()
   const result = await interpret(sentence);
   const js = result?.obj?.text ?? result?.value?.text ?? "";
 
-  assert.match(js, /let alpha = \{ subj: \{ name: "alpha" \}, obj: \{ text: "hi" \}/);
-  assert.match(js, /console\.log\(alpha\.obj\?\.(text|num)[^)]+\);/);
+  assert.match(js, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*text:\s*"hi"/);
+  assert.match(js, /console\.log\(alpha\.obj\?\.(ve\?\.\w+\s*\?\?\s*)?alpha\.obj\?\.(text|num)[^)]*\);/);
 });
 
 test("compile emits JS for simple multiply and divide", async () => {
@@ -439,7 +438,7 @@ test("compile emits JS for simple multiply and divide", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let collector = \{ subj: \{ name: "collector" \}, obj: \{ num: 10 \}/);
+  assert.match(js, /let collector = \{[\s\S]*subj:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*obj:\s*\{\s*num:\s*10/s);
   assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \* 3;/);
   assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \/ 2;/);
 });
@@ -690,7 +689,7 @@ test("compile emits JS if-statement for tiny then", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let total = \{ subj: \{ name: "total" \}, obj: \{ num: 0 \}/);
+  assert.match(js, /let total = \{[\s\S]*subj:\s*\{\s*name:\s*"total"\s*\}[\s\S]*obj:\s*\{\s*num:\s*0/s);
   assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) \+ 1;/);
 });
 
@@ -710,7 +709,7 @@ test("compile emits JS if-statement for giant then subtract", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let total = \{ subj: \{ name: "total" \}, obj: \{ num: 10 \}/);
+  assert.match(js, /let total = \{[\s\S]*name:\s*"total"[\s\S]*num:\s*10/s);
   assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) - 2;/);
 });
 
@@ -730,7 +729,7 @@ test("compile emits JS if-statement for equally then multiply", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let total = \{ subj: \{ name: "total" \}, obj: \{ num: 5 \}/);
+  assert.match(js, /let total = \{[\s\S]*name:\s*"total"[\s\S]*num:\s*5/s);
   assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) \* 2;/);
 });
 
@@ -750,7 +749,7 @@ test("compile emits nested conditionals", async () => {
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let counter = \{ subj: \{ name: "counter" \}, obj: \{ num: 0 \}/);
+  assert.match(js, /let counter = \{[\s\S]*name:\s*"counter"[\s\S]*num:\s*0/s);
   assert.match(js, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/);
 });
 

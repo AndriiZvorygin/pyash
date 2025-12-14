@@ -23,5 +23,9 @@ export const signatures = [
   { signatureWords: ["be", "invert", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
   { signatureWords: ["be", "invert", "obj", "name", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
   { signatureWords: ["be", "invert", "obj", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "name", "num"], handler: invert_obj_num_to_name_num }
+  { signatureWords: ["be", "invert", "obj", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "at", "num", "obj", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "obj", "num", "at", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "at", "num", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "obj", "num", "at", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num }
 ];

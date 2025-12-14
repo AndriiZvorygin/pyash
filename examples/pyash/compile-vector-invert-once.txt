@@ -1,0 +1,7 @@
+exists subj name vec obj ve num 1 -2 3 be vector ya
+exists subj name out be vector ya
+
+obj name vec be say do
+
+exists be invert obj name vec to name out at name all do
+obj name out be say do
