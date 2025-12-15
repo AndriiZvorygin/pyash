@@ -1,43 +1,38 @@
 // pyash/verbs/mind.mjs
 import ollama from "../../motor/ollama.mjs";
-import { remember, dumpHistory, doRemember } from "../../remember/index.mjs";
+import { remember, doRemember } from "../../remember/index.mjs";
 
-function buildHistoryMessages(mindName, { window = 8 } = {}) {
-  if (!mindName) return [];
-  const hist = dumpHistory();
-  const messages = [];
+// Per-mind discourse logs keyed by bucket name
+const mindLogs = new Map();
 
-  for (const fact of hist) {
-    // User -> mind (say do)
-    if (fact.mood === "do" && fact.be === "say" && fact.to?.name === mindName) {
-      const content = fact.obj?.text ?? fact.obj?.name;
-      if (content) messages.push({ role: "user", content: String(content) });
-      continue;
-    }
+function historyBucketName({ callSentence, configSentence, targetName }) {
+  if (callSentence?.fromtext?.name) return String(callSentence.fromtext.name);
+  if (typeof callSentence?.fromtext?.text === "string") return callSentence.fromtext.text;
+  if (configSentence?.fromtext?.name) return String(configSentence.fromtext.name);
+  if (typeof configSentence?.fromtext?.text === "string") return configSentence.fromtext.text;
+  if (targetName) return `${targetName} story`;
+  return "mind story";
+}
 
-    // Mind reply (primary)
-    if (fact.mood === "ya" && fact.be === "mind" && fact.subj?.name === mindName) {
-      const content = fact.obj?.text ?? fact.obj?.name;
-      if (content) messages.push({ role: "assistant", content: String(content) });
-      continue;
-    }
+function appendLog(bucket, entry) {
+  if (!bucket) return;
+  const arr = mindLogs.get(bucket) || [];
+  arr.push(entry);
+  mindLogs.set(bucket, arr);
+}
 
-    // Secondary result fact
-    if (fact.mood === "ya" && fact.be === "say" && fact.subj?.name === "result") {
-      const content = fact.obj?.text ?? fact.obj?.name;
-      if (content) messages.push({ role: "assistant", content: String(content) });
-    }
-  }
-
-  // Take the last N*2 entries (user/assistant pairs) to bound context
+function buildHistoryMessages(bucket, { window = 8 } = {}) {
+  if (!bucket) return [];
+  const log = mindLogs.get(bucket) || [];
   const max = window * 2;
-  return messages.slice(-max);
+  return log.slice(-max);
 }
 
 export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
   const configSentence = config?.be === "mind" ? config : null;
+  const bucket = historyBucketName({ callSentence: sentence, configSentence, targetName });
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
@@ -66,7 +61,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const promptParts = [];
   if (configPrompt) promptParts.push(configPrompt);
   if (callPrompt) promptParts.push(callPrompt);
-  const historyMessages = buildHistoryMessages(targetName, { window: historyWindow });
+  const historyMessages = buildHistoryMessages(bucket, { window: historyWindow });
   if (historyMessages.length) {
     const histText = historyMessages
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
@@ -98,6 +93,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
       to: { name: targetName },
       obj: { text: callPrompt }
     });
+    appendLog(bucket, { role: "user", content: callPrompt });
   }
   const baseConfig = configSentence || {};
   doRemember({
@@ -110,6 +106,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
     exists: baseConfig.exists,
     obj: { text: responseText, model, historyWindow }
   });
+  appendLog(bucket, { role: "assistant", content: responseText });
 
   return { obj: { text: responseText, model } };
 }

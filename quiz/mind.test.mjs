@@ -80,3 +80,38 @@ test("mind invocation includes recent history in prompt with per-mind window", a
 
   motor.generate = original;
 });
+
+test("mind history is isolated by fromtext bucket", async () => {
+  forget();
+
+  const original = motor.generate;
+  let capturedPromptA = "";
+  let capturedPromptB = "";
+  motor.generate = async (model, prompt) => {
+    if (prompt.includes("Hello A")) capturedPromptA = prompt;
+    if (prompt.includes("Hello B")) capturedPromptB = prompt;
+    return "ok";
+  };
+
+  // Mind A with custom bucket
+  await interpret(
+    parse('su helperA from text bucketA be mind via state "qwen3:8b" ya')
+  );
+  // Mind B with different bucket
+  await interpret(
+    parse('su helperB from text bucketB be mind via state "qwen3:8b" ya')
+  );
+
+  await interpret(parse('be say obj text "Hi A" to helperA do'));
+  await interpret(parse('be say obj text "Hi B" to helperB do'));
+
+  await interpret(parse('su q obj discourse "Hello A" to helperA be mind do'));
+  await interpret(parse('su q obj discourse "Hello B" to helperB be mind do'));
+
+  motor.generate = original;
+
+  assert.match(capturedPromptA, /Hi A/);
+  assert.doesNotMatch(capturedPromptA, /Hi B/);
+  assert.match(capturedPromptB, /Hi B/);
+  assert.doesNotMatch(capturedPromptB, /Hi A/);
+});
