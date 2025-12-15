@@ -203,6 +203,7 @@ Rows:
 | social     | fromgroup    | among       | intogroup   |
 | discourse  | fromtext     | accordingto | totext      |
 | quantity   | times        | by          | per         |
+| sequence   | fromindex    | atindex     | toindex     |
 ```
 
 Usage patterns (current runtime):
