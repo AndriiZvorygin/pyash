@@ -37,23 +37,24 @@ function buildHistoryMessages(mindName, { window = 8 } = {}) {
 export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
+  const configSentence = config?.be === "mind" ? config : null;
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
-    config?.obj?.window?.num ??
-    config?.obj?.historyWindow?.num ??
-    config?.window ??
-    config?.historyWindow ??
+    configSentence?.obj?.window?.num ??
+    configSentence?.obj?.historyWindow?.num ??
+    configSentence?.window ??
+    configSentence?.historyWindow ??
     obj?.window?.num ??
     8;
 
   // Model resolution: explicit on call or from config via state (keyword "as")
   const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;
-  const configModel = config?.as?.name ?? null;
+  const configModel = configSentence?.as?.name ?? null;
   const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
 
   // Prompt resolution: config accordingto (discourse) + call prompt/text
-  const configPrompt = config?.accordingto?.name ?? null;
+  const configPrompt = configSentence?.accordingto?.name ?? null;
 
   const callPrompt =
     sentence?.with?.text ??
@@ -98,7 +99,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
       obj: { text: callPrompt }
     });
   }
-  const baseConfig = config || {};
+  const baseConfig = configSentence || {};
   doRemember({
     mood: "ya",
     subj: { name: targetName },
@@ -106,6 +107,7 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
     from: baseConfig.from,
     as: baseConfig.as,
     accordingto: baseConfig.accordingto,
+    exists: baseConfig.exists,
     obj: { text: responseText, model, historyWindow }
   });
 
