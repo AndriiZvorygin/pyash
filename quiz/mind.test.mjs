@@ -5,6 +5,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import motor from "../program/motor/ollama.mjs";
+import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 
 test("mind registration stores engine/model/prompt contexts", async () => {
   forget();
@@ -58,6 +59,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
 
 test("mind invocation includes recent history in prompt with per-mind window", async () => {
   forget();
+  resetMindLogs();
 
   const original = motor.generate;
   let capturedPrompt = "";
@@ -83,6 +85,7 @@ test("mind invocation includes recent history in prompt with per-mind window", a
 
 test("mind history is isolated by fromtext bucket", async () => {
   forget();
+  resetMindLogs();
 
   const original = motor.generate;
   let capturedPromptA = "";
@@ -115,3 +118,25 @@ test("mind history is isolated by fromtext bucket", async () => {
   assert.match(capturedPromptB, /Hi B/);
   assert.doesNotMatch(capturedPromptB, /Hi A/);
 });
+
+test("mind history defaults to `<name> story` bucket when fromtext absent", async () => {
+  forget();
+  resetMindLogs();
+
+  const original = motor.generate;
+  let capturedPrompt = "";
+  motor.generate = async (model, prompt) => {
+    capturedPrompt = prompt;
+    return "ok";
+  };
+
+  await interpret(parse('su helper be mind via state "qwen3:8b" ya'));
+  await interpret(parse('be say obj text "Ping" to helper do'));
+  await interpret(parse('su q obj discourse "Hello" to helper be mind do'));
+
+  motor.generate = original;
+
+  assert.match(capturedPrompt, /Ping/, "default bucket should contain earlier say");
+});
+
+test.todo("mind call can override bucket with fromtext on invocation (pending signature/case support)");
