@@ -22,6 +22,16 @@ export async function invert_obj_num_to_name_num(sentence, { remember }) {
   return { obj: -value, be: sentence?.be ?? "number" };
 }
 
+async function invert_obj_text(sentence) {
+  const val = sentence.obj?.text ?? sentence.obj;
+  let next = val;
+  if (val === "truth") next = "lie";
+  else if (val === "lie") next = "truth";
+  else if (typeof val === "boolean") next = !val;
+  else if (typeof val === "number") next = -val;
+  return { obj: { text: next }, be: sentence?.be ?? "text" };
+}
+
 async function invert_obj_name_vec_at_num(sentence, { remember }) {
   const vecName = sentence.obj?.name;
   const idxRaw = sentence.at?.num ?? sentence.at;
@@ -51,6 +61,10 @@ export const signatures = [
   { signatureWords: ["be", "invert", "obj", "num", "at", "num"], handler: invert_obj_num_to_name_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
   { signatureWords: ["be", "invert", "obj", "num", "at", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "obj", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "obj", "name", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "obj", "text", "at", "num"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "at", "num", "obj", "text"], handler: invert_obj_text },
   // vector element toggle: invert obj name vec at num <idx>
   { signatureWords: ["be", "invert", "obj", "name", "vec", "at", "num"], handler: invert_obj_name_vec_at_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec"], handler: invert_obj_name_vec_at_num },
