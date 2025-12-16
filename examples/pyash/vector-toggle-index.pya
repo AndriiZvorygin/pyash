@@ -1,0 +1,9 @@
+exists subj name doors obj ve bool truth lie truth be vector ya
+
+obj name doors at num 1 be invert do
+obj name doors via space num 0 be read to name first do
+obj name doors via space num 1 be read to name second do
+obj name doors via space num 2 be read to name third do
+obj name first be say do
+obj name second be say do
+obj name third be say do
