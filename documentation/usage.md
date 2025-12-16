@@ -26,3 +26,4 @@ Notes:
 - `./run` and `./compile` accept `--full` to echo the program before the result.
 - `./compile` prints the compiled artifact (e.g., JS/C text) to stdout when the result carries a `text` payload; the output file you provided is still written. Pass `--gross` if you want the JSON envelope instead.
 - Inline sentences are accepted when the provided path does not exist.
+- Genitive order is root-first: `this ti obj ti num` means `this.obj.num` (avoid reversed chains like `num ti this ti obj`).
