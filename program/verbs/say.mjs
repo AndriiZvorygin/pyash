@@ -28,5 +28,8 @@ export const signatures = [
   { signatureWords: ["be", "say", "obj", "num"], handler: say },
   { signatureWords: ["be", "say", "obj", "name", "text"], handler: say },
   { signatureWords: ["be", "say", "obj", "name", "num"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec"], handler: say }
+  { signatureWords: ["be", "say", "obj", "name", "vec"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "vec", "num"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "vec", "text"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "vec", "bool"], handler: say }
 ];
