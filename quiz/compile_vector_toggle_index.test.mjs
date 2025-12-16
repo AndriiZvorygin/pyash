@@ -20,5 +20,5 @@ test("compile toggles vector element and logs updated values", async () => {
   assert.ok(logs.length >= 1, "should log at least once");
   const out = logs.at(-1);
   const values = Array.isArray(out) ? JSON.parse(JSON.stringify(out)) : [];
-  assert.deepEqual(values, ["truth"]);
+  assert.deepEqual(values, ["truth", "truth", "truth"]);
 });
