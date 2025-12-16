@@ -4,6 +4,25 @@ function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
+  if (v.genitive) {
+    const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
+    if (chainArr.length > 0) {
+      const [root, ...rest] = chainArr;
+      let curr;
+      if (root === "this") {
+        curr = state.currentEvoke;
+      } else if (typeof root === "string") {
+        const fact = remember(root);
+        curr = fact;
+      }
+      for (const part of rest) {
+        if (curr == null) break;
+        curr = curr[part];
+      }
+      if (typeof curr === "number") return curr;
+      if (typeof curr?.num === "number") return curr.num;
+    }
+  }
   if (v.thisRef) {
     const ev = state.currentEvoke;
     const reg = ev?.[v.thisRef];
