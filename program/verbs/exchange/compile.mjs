@@ -243,10 +243,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   }
 
   // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
-  if (baseBe === "invert" && obj?.name && obj.at?.num != null) {
+  const atNum = sentence.at?.num ?? obj.at?.num;
+  if (baseBe === "invert" && obj?.name && atNum != null) {
     const baseName = sanitizeName(obj.name);
-    const idxVal = Number(obj.at.num);
-    const idxExpr = Number.isNaN(idxVal) ? obj.at.num : idxVal;
+    const idxVal = Number(atNum);
+    const idxExpr = Number.isNaN(idxVal) ? atNum : idxVal;
     const lines = [];
     if (!locals?.has(baseName) && !declared?.has(baseName)) {
       lines.push(`const ${baseName} = remember(${JSON.stringify(obj.name)});`);
