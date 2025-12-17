@@ -6,6 +6,9 @@ function resolveNumber(v, remember) {
   if (typeof v.num === "number") return v.num;
   if (v.genitive) {
     const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
+    if (chainArr[0] === "this" && !state.currentEvokeRef && !state.currentEvoke) {
+      return 0;
+    }
     if (chainArr.length > 0) {
       const [root, ...rest] = chainArr;
       let curr =

@@ -50,8 +50,9 @@ export async function runAtAll({
       if (res?.result !== undefined) resultObj = res.result;
       if (resultObj === undefined) resultObj = elemSentence.obj;
     } else {
+      state.lastCondition = true;
       const elemValue = vecValues[i];
-      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
+      if (typeof elemValue === "number") elemSentence.obj = { name: `elem_${i}`, num: elemValue };
       else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
       else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
       else elemSentence.obj = elemValue ?? {};

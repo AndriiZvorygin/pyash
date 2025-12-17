@@ -1,4 +1,25 @@
 import test from "node:test";
+import assert from "node:assert/strict";
 
-// TODO: map at all conditional toggle (needs genitive remains + atindex support)
-test.todo("map at all can conditionally invert based on at index and pass (needs genitive remains)");
+test("map at all can conditionally invert based on atindex parity", async () => {
+  const program = [
+    "exists subj name vec obj ve num 1 2 3 4 be vector ya",
+    "subj name toggle even obj name num be ceremony def",
+    "obj this ti atindex from num 2 to name mod be remains do",
+    "obj name mod be equally from num 0 then obj this obj be invert do",
+    "subj name toggle even be ceremony prah",
+    "obj name vec at name all be toggle even do"
+  ].join("\n");
+
+  const { interpret } = await import("../program/bridge/index.mjs");
+  const { parse } = await import("../program/understand/index.mjs");
+  const { remember, forget } = await import("../program/remember/index.mjs");
+
+  forget();
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
+
+  const vec = remember("vec");
+  assert.ok(Array.isArray(vec?.obj?.ve?.values));
+  assert.deepEqual(vec.obj.ve.values, [-1, 2, -3, 4]);
+});
