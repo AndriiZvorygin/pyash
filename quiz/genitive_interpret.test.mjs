@@ -10,7 +10,7 @@ test("genitive num of obj of this mutates target", async () => {
 
   const lines = [
     "exists subj name bucket obj num 1 be number ya",
-    "subj name bump be ceremony def",
+    "subj name bump obj name num be ceremony def",
     "obj num 2 to num of obj of this be add do",
     "subj name bump be ceremony prah",
     "subj name evoker obj name bucket be bump do"
@@ -30,7 +30,7 @@ test("genitive this ti obj ti num mutates target", async () => {
 
   const lines = [
     "exists subj name bucket obj num 1 be number ya",
-    "subj name bump be ceremony def",
+    "subj name bump obj name num be ceremony def",
     "obj num 2 to this ti obj ti num be add do",
     "subj name bump be ceremony prah",
     "subj name evoker obj name bucket be bump do"
@@ -45,22 +45,22 @@ test("genitive this ti obj ti num mutates target", async () => {
   assert.equal(bucket?.obj?.num, 3);
 });
 
-//test("genitive remains uses evoker fields", async () => {
-//  forget();
-//
-//  const lines = [
-//    "exists subj name counter obj num 5 be number ya",
-//    "subj name modceremony be ceremony def",
-//    "obj num ti obj ti this by num ti fromindex ti this be remains to name mod do",
-//    "subj name modceremony be ceremony prah",
-//    "subj name evoker obj name counter fromindex num 3 be modceremony do"
-//  ];
-//
-//  for (const line of lines) {
-//    const s = parse(line);
-//    if (s) await interpret(s);
-//  }
-//
-//  const mod = remember("mod");
-//  assert.equal(mod?.obj?.num, 2); // 5 % 3 = 2
-//});
+test("genitive remains uses evoker fields", async () => {
+  forget();
+
+  const lines = [
+    "exists subj name counter obj num 5 be number ya",
+    "subj name modceremony obj name num from num be ceremony def",
+    "obj name counter from num 3 be remains to name counter do",
+    "subj name modceremony  prah",
+    "subj name evoker obj name counter from num 3 be modceremony do"
+  ];
+
+  for (const line of lines) {
+    const s = parse(line);
+    if (s) await interpret(s);
+  }
+
+  const mod = remember("counter");
+  assert.equal(mod?.obj?.num, 2); // 5 % 3 = 2
+});

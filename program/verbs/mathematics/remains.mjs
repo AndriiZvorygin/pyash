@@ -12,6 +12,10 @@ function resolveNumber(v, remember) {
         root === "this"
           ? state.currentEvokeRef || state.currentEvoke
           : (typeof root === "string" && remember ? remember(root) : null);
+      // If we ended up pointing at the current remains sentence, fall back to the original evoker
+      if (curr && curr.be === "remains" && state.currentEvoke && state.currentEvoke !== curr) {
+        curr = state.currentEvoke;
+      }
 
       for (const part of rest) {
         if (typeof curr === "number") {
@@ -49,13 +53,20 @@ function resolveNumber(v, remember) {
 
 function getOperand(v, label, remember) {
   const n = resolveNumber(v, remember);
-  if (n === undefined) throw new Error(`remains: ${label} is required`);
+  if (n === undefined) {
+    if (label === "from") {
+      const alt = state.currentEvokeRef?.from?.num ?? state.currentEvoke?.from?.num;
+      if (alt !== undefined) return alt;
+    }
+    throw new Error(`remains: ${label} is required`);
+  }
   return n;
 }
 
 export async function remains_from_num_obj_num_to_name_num(sentence, { remember }) {
   const dividend = getOperand(sentence.obj, "obj", remember);
-  const divisor = getOperand(sentence.from ?? sentence.by, "from", remember);
+  const divisorSource = sentence.from ?? sentence.by ?? state.currentEvokeRef?.from ?? state.currentEvokeRef?.by ?? state.currentEvoke?.from ?? state.currentEvoke?.by;
+  const divisor = getOperand(divisorSource, "from", remember);
   if (divisor === 0) throw new Error("remains: from cannot be zero");
 
   return { obj: dividend % divisor, be: sentence?.be ?? "number" };
@@ -66,6 +77,7 @@ export const remains = remains_from_num_obj_num_to_name_num;
 export const signatures = [
   { signatureWords: ["be", "remains", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "by", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
