@@ -17,6 +17,7 @@ export async function handleImperative({
 
   let fn = null;
   let defEntry = getDefinitionEntry(be);
+  let defSignatureWords = defEntry ? memory.getDefinition(defEntry.name)?.signatureWords : null;
   const hasLoopRegisters = sentence.fromindex != null || sentence.toindex != null;
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
@@ -100,6 +101,18 @@ export async function handleImperative({
 
     if (typeof defEntry.end !== "number") {
       throw new Error(`Definition ${be} missing closing prah`);
+    }
+
+    // Enforce signature compatibility between evoker and definition
+    const defSignatureWords = memory.getDefinition(defEntry.name)?.signatureWords;
+    const callSignatureWords = sigWords;
+    if (Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
+      const defSigKey = joinSignatureWords(defSignatureWords);
+      const callSigKey = joinSignatureWords(callSignatureWords);
+      if (defSigKey !== callSigKey) {
+        const pyash = sentenceToPyash(sentence);
+        throw new Error(`Ceremony signature mismatch: expected ${defSigKey}, got ${callSigKey}; sentence: ${pyash}`);
+      }
     }
 
     const defResult = await runDefinitionBody({

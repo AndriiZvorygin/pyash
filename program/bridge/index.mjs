@@ -1,6 +1,6 @@
 // bridge (formerly dispatcher)
 import { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
-import { remember, doRemember, allRemember, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
+import { remember, doRemember, allRemember, getDefinition, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
@@ -76,7 +76,7 @@ export async function interpret(sentence) {
     const imperativeResult = await handleImperative({
       sentence,
       state,
-      memory: { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext },
+      memory: { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext, getDefinition },
       recordSandpitTrace,
       getDefinitionEntry,
       interpret

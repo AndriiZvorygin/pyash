@@ -121,10 +121,13 @@ function caseTypeWords(value) {
 
   if (value.genitive) {
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
-    const head = chainArr.find(word => word !== "this") ?? chainArr[0];
-    const normalized = normalizeWords(head);
-    if (normalized === "atindex" || normalized === "fromindex" || normalized === "toindex") return ["num"];
-    return normalized ? [normalized] : ["num"];
+    const tail = normalizeWords(chainArr.at(-1));
+    if (tail === "name") return ["name", "num"];
+    if (tail === "text") return ["text"];
+    if (tail === "filename") return ["filename"];
+    if (tail === "ve" || tail === "vec") return ["vec"];
+    if (tail === "atindex" || tail === "fromindex" || tail === "toindex") return ["num"];
+    return tail ? [tail] : ["num"];
   }
 
   const words = [];
@@ -221,7 +224,16 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
   if (value.text !== undefined) return ["text"];
   if (value.filename !== undefined) return ["filename"];
   if (value.thisRef) return ["num"];
-  if (value.genitive) return ["num"];
+  if (value.genitive) {
+    const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+    const tail = normalizeWords(chainArr.at(-1));
+    if (tail === "name") return ["name", "num"];
+    if (tail === "text") return ["text"];
+    if (tail === "filename") return ["filename"];
+    if (tail === "ve" || tail === "vec") return ["vec"];
+    if (tail === "atindex" || tail === "fromindex" || tail === "toindex") return ["num"];
+    return tail ? [tail] : ["num"];
+  }
 
   const fallback = caseTypeWords(value);
   if (fallback.length === 0) {
