@@ -2,8 +2,8 @@
 
 ## Now
 - Finish vector/map story:
-  - Interpreter parity for `at all` with primitive verbs (mirror compiled helper).
-  - 100 doors/map examples once `at all` is stable in both interpreter and compiler.
+  - Per-element writeback for `at all` when a ceremony mutates `this obj` (see TODO in `quiz/map.test.mjs`).
+  - 100 doors/map examples once writeback is fixed.
 - Mind: add streaming path and richer reply envelopes per `mind.md`; keep sync helper default but allow windowed history selection.
 - Tighten loop semantics on `fromindex`/`toindex` across compiler + interpreter; remove any lingering `tloh` usage in docs/examples.
 - Document and quiz chaining scenarios (`result` feeding subsequent calls; subject-to-subject conditionals).

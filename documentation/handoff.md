@@ -2,15 +2,15 @@
 
 ## Open tasks
 - Finish 100-doors: add a guardable map/loop combo so only every Nth door toggles per pass, and wire a ceremony with correct genitive order (`this ti at ti num`, `this ti pass ti num`). Add a passing quiz and example.
-- Add dedicated genitive quizzes (added): `quiz/genitive_interpret.test.mjs`, `quiz/genitive_compile.test.mjs`. Keep enforcing root-first genitives.
-- Ensure mind per-bucket history covers fromtext/from and defaults; streaming mind path still TODO.
+- Map writeback: per-element ceremonies in `at all` still need to persist mutations (see TODO in `quiz/map.test.mjs`).
+- Mind: keep per-bucket history (fromtext) working; streaming mind path still TODO.
 
 ## Status notes
-- Map “at all” works for primitive verbs in interpreter and compiler; compile prelude includes clone + remember. Vector at-index invert works and is tested (interpret + compile).
-- `say` verb added for simple console output.
-- Genitive guidance added to usage.md; handed-off tests cover genitive in interpreter and compile.
+- Map “at all” now exercised by multiple passing quizzes (invert, parity-based toggle, atindex exposure). Compiler prelude includes clone + remember; interpreter map helper reset conditions per element.
+- Genitive tests (interpret/compile) are in place; signature enforcement active for ceremony calls.
+- `say` verb provides console output; fizzbuzz compile fixed with genitive registers.
 
 ## Quick next steps
-1) Implement the guarded toggle for 100 doors (use `atindex`+`pass` in map/loop).
-2) Add an example for 100 doors once green.
-3) Keep mind streaming and window/bucket refinements on deck.
+1) Implement per-element writeback for ceremonies used via `at all` and re-enable the increment test.
+2) Build the 100-doors quiz/example on top of the stabilized map semantics.
+3) Revisit mind streaming/history after core map/loop work is green.
