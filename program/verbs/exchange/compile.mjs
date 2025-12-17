@@ -5,10 +5,15 @@ import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/
 import { sentenceToPyash } from "../../beautiful.mjs";
 
 function sanitizeName(name = "") {
-  return String(name)
+  const cleaned = String(name)
     .trim()
     .replace(/[^A-Za-z0-9_]+/g, "_")
     .replace(/^([0-9])/, "_$1");
+  // Avoid JS reserved words and special identifiers like "this"
+  if (/^(?:this|function|return|class|default|const|let|var|if|for|while|switch|case|break|continue|do|new|try|catch|finally)$/.test(cleaned)) {
+    return `_${cleaned}`;
+  }
+  return cleaned;
 }
 
 function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, field = "num" } = {}) {
