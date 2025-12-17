@@ -4,13 +4,53 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { remember, forget, dumpSandpits, doRemember } from "../program/remember/index.mjs";
 
-test.todo("at all map writes to new vector via to (pending stabilized map/at-all semantics)");
+test("at all map writes to new vector via to", async () => {
+  forget();
+  const program = [
+    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "be invert obj name vec to name out at name all do"
+  ].join("\n");
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
 
-test.todo("at all foreach updates source vector in place when no to (pending stabilized map/at-all semantics)");
+  const out = remember("out");
+  assert.ok(out?.obj?.ve?.values);
+  assert.deepEqual(out.obj.ve.values, [-1, -2, -3]);
+});
 
-test.todo("at all provides by register for index inside ceremony body (pending stabilized map/at-all semantics)");
+test("at all foreach updates source vector in place when no to", async () => {
+  forget();
+  const program = [
+    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "be invert obj name vec at name all do"
+  ].join("\n");
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
 
-test.todo("at all can increment each element via ceremony in place (pending stabilized map/at-all semantics)");
+  const vec = remember("vec");
+  assert.ok(vec?.obj?.ve?.values);
+  assert.deepEqual(vec.obj.ve.values, [-1, -2, -3]);
+});
+
+test("at all provides atindex register inside ceremony body", async () => {
+  forget();
+  const program = [
+    "exists subj name vec obj ve num 4 5 6 be vector ya",
+    "subj name capture-index obj name num be ceremony def",
+    "subj name picked obj this atindex be number ya",
+    "subj name picked ret",
+    "subj name capture-index be ceremony prah",
+    "be capture-index obj name vec at name all do"
+  ].join("\n");
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
+
+  const sandpit = dumpSandpits().at(-1) || [];
+  const evoker = sandpit[0];
+  assert.equal(evoker?.atindex?.num, 2, "last atindex register should be visible inside ceremony body");
+});
+
+test.todo("at all can increment each element via ceremony in place (pending per-element writeback)");
 
 test.todo("100 doors via at all toggles only square positions open (pending 100-doors map logic)");
 
