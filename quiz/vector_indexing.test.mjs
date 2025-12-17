@@ -1,8 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-// TODO: implement vector element addressing (read/write/invert) with "at" + quantity index.
-
 test("read element from numeric vector via at num <index>", async () => {
   const program = [
     "exists subj name doors obj ve num 3 1 0 be vector ya",
