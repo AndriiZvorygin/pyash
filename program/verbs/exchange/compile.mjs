@@ -413,7 +413,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         lines.push(`const ${targetVar} = remember(${targetExpr});`);
         locals?.add(targetVar);
       }
-      lines.push(`${targetVar}.obj = ${targetVar}.obj ?? {};`);
+      lines.push(`${targetVar}.obj = ${targetVar}.obj?.obj ?? ${targetVar}.obj ?? {};`);
       const fieldPath = sentence.to?.genitive
         ? pathFromGenitive(sentence.to.genitive, targetVar) || `${targetVar}.obj.num`
         : `${targetVar}.obj.num`;
@@ -848,7 +848,7 @@ function inlineSentenceLiteral(value, declared = new Set(), { inlineNames = true
       const nameVal = entriesArr[0][1];
       if (typeof nameVal === "string" && declared.has(nameVal)) {
         if (inlineNames) {
-          return `${sanitizeName(nameVal)}.obj ?? ${sanitizeName(nameVal)}`;
+          return sanitizeName(nameVal);
         }
         return `{ name: ${nameVal} }`;
       }

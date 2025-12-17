@@ -668,7 +668,7 @@ test("compile emits JS ceremony mutating this.obj.num via genitive", async () =>
   const js = result?.obj?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /function\s+be_bump\(sentence\)[\s\S]*sentence\.obj = sentence\.obj \?\? \{\}/);
+  assert.match(js, /function\s+be_bump\(sentence\)[\s\S]*sentence\.obj = sentence\.obj\?\.(obj\?\.)?obj \?\? sentence\.obj \?\? \{\}/);
   assert.doesNotMatch(js, /const target = remember/, "this-genitive should not introduce remember");
   assert.match(js, /return sentence;/);
 });
