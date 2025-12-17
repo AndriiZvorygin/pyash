@@ -1,6 +1,6 @@
 exists subj name vec obj ve num 1 2 3 be vector ya
 
-subj name inc be ceremony def
+subj name inc obj name vec at name all be ceremony def
 subj name val obj this obj be number ya
 obj num 1 be add do
 subj name val ret

@@ -1,6 +1,6 @@
 exists subj name handled obj num 0 be number ya
 
-subj name fizzbuzz be ceremony def
+subj name fizzbuzz fromindex num toindex num be ceremony def
 subj name idx obj this fromindex be number ya
 subj name handled obj num 0 be number ya
 
