@@ -411,7 +411,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const isThisGenitive = sentence.to?.genitive?.chain?.[0] === "this";
       const targetVar = isThisGenitive ? sentenceArg : targetVarName || "sentence";
       const targetExpr = sentence.to
-        ? `${sentenceArg}.to ?? { subj: { name: ${targetNameLiteral} }, obj: {} }`
+        ? isThisGenitive
+          ? sentenceArg
+          : `${sentenceArg}.to ?? { subj: { name: ${targetNameLiteral} }, obj: {} }`
         : sentenceArg;
       const lines = [];
       if (!isThisGenitive && !locals?.has(targetVar) && !declared?.has(targetVar)) {
