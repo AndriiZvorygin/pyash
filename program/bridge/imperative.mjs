@@ -2,6 +2,7 @@ import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
+import { sentenceToPyash } from "../beautiful.mjs";
 
 export async function handleImperative({
   sentence,
@@ -74,7 +75,9 @@ export async function handleImperative({
   }
 
   if (!fn && !defEntry && sigKey && !hasAtAll) {
-    throw new Error(`Unknown verb/signature: ${sigKey}`);
+    const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
+    const pyash = sentenceToPyash(sentence);
+    throw new Error(`Unknown verb/signature: ${sigKey}; derived: ${sigWordsStr}; sentence: ${pyash}`);
   }
 
   if (!fn && defEntry) {
@@ -110,7 +113,11 @@ export async function handleImperative({
     return defResult;
   }
 
-  if (!fn && !hasAtAll) throw new Error(`Unknown verb: ${be}`);
+  if (!fn && !hasAtAll) {
+    const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
+    const pyash = sentenceToPyash(sentence);
+    throw new Error(`Unknown verb: ${be}; derived: ${sigWordsStr}; sentence: ${pyash}`);
+  }
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
