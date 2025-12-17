@@ -225,8 +225,15 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
 
   const fallback = caseTypeWords(value);
   if (fallback.length === 0) {
-    console.error("caseTypeWords fallback empty", value);
-    throw new Error("Cannot derive type words for case");
+    console.error("caseTypeWords fallback empty", { verb, value });
+    const raw = (() => {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    })();
+    throw new Error(`Cannot derive type words for case; verb=${verb}; value=${raw}`);
   }
   return fallback;
 }

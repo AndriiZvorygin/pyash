@@ -77,7 +77,8 @@ export async function handleImperative({
   if (!fn && !defEntry && sigKey && !hasAtAll) {
     const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
     const pyash = sentenceToPyash(sentence);
-    throw new Error(`Unknown verb/signature: ${sigKey}; derived: ${sigWordsStr}; sentence: ${pyash}`);
+    const raw = JSON.stringify(sentence);
+    throw new Error(`Unknown verb/signature: ${sigKey}; derived: ${sigWordsStr}; sentence: ${pyash}; raw: ${raw}`);
   }
 
   if (!fn && defEntry) {
@@ -116,7 +117,8 @@ export async function handleImperative({
   if (!fn && !hasAtAll) {
     const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
     const pyash = sentenceToPyash(sentence);
-    throw new Error(`Unknown verb: ${be}; derived: ${sigWordsStr}; sentence: ${pyash}`);
+    const raw = JSON.stringify(sentence);
+    throw new Error(`Unknown verb: ${be}; derived: ${sigWordsStr}; sentence: ${pyash}; raw: ${raw}`);
   }
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
