@@ -8,14 +8,24 @@ function resolveNumber(v, remember) {
     const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
     if (chainArr.length > 0) {
       const [root, ...rest] = chainArr;
-      let curr;
-      if (root === "this") {
-        curr = state.currentEvoke;
-      } else if (typeof root === "string") {
-        const fact = remember(root);
-        curr = fact;
-      }
+      let curr =
+        root === "this"
+          ? state.currentEvokeRef || state.currentEvoke
+          : (typeof root === "string" && remember ? remember(root) : null);
+
       for (const part of rest) {
+        if (typeof curr === "number") {
+          if (part === "num") {
+            curr = curr;
+            continue;
+          }
+          curr = undefined;
+          break;
+        }
+        if (curr && typeof curr === "object" && curr.name && remember) {
+          const fact = remember(curr.name);
+          if (fact) curr = fact.obj ?? fact;
+        }
         if (curr == null) break;
         curr = curr[part];
       }
@@ -56,6 +66,7 @@ export const remains = remains_from_num_obj_num_to_name_num;
 export const signatures = [
   { signatureWords: ["be", "remains", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
   { signatureWords: ["be", "remains", "from", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },

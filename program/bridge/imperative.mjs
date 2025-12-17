@@ -125,7 +125,13 @@ export async function handleImperative({
   const toValue = useRawTo ? (to ?? sentence.to) : (target?.obj ?? to);
 
   // pass the current value, not the name
-  const callSentence = { ...sentence, obj: obj ?? sentence.obj, to: toValue ?? to ?? sentence.to, from: from ?? sentence.from };
+  const callSentence = {
+    ...sentence,
+    obj: obj ?? sentence.obj,
+    to: toValue ?? to ?? sentence.to,
+    from: from ?? sentence.from,
+    by: sentence.by
+  };
 
   const result = await fn(callSentence, { remember: memory.remember });
 

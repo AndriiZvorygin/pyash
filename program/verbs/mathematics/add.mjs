@@ -1,4 +1,6 @@
 // Simplified add: only supports numeric addition for now.
+import { state } from "../../bridge/state.mjs";
+
 function toNumber(v) {
   if (v == null) return 0;
   if (typeof v === "number") return v;
@@ -6,9 +8,48 @@ function toNumber(v) {
   return 0;
 }
 
+function resolveGenitiveTarget(genitive, remember) {
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return null;
+
+  let curr =
+    chainArr[0] === "this"
+      ? state.currentEvokeRef || state.currentEvoke
+      : typeof chainArr[0] === "string" && remember
+        ? remember(chainArr[0])
+        : null;
+
+  let parent = null;
+  let key = null;
+
+  for (const part of chainArr.slice(1)) {
+    if (curr && typeof curr === "object" && curr.name && remember) {
+      const fact = remember(curr.name);
+      if (fact) curr = fact.obj ?? fact;
+    }
+    parent = curr;
+    key = part;
+    curr = curr?.[part];
+  }
+
+  if (!parent || !key) return null;
+  return { parent, key, value: curr };
+}
+
 export async function add_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.obj == null) throw new Error("add: obj is required");
   if (sentence.to == null) throw new Error("add: to is required");
+
+  if (sentence.to.genitive) {
+    const target = resolveGenitiveTarget(sentence.to.genitive, remember);
+    if (target) {
+      const delta = toNumber(sentence.obj);
+      const current = toNumber(target.value ?? target.parent?.[target.key]);
+      target.parent[target.key] = current + delta;
+      return { obj: target.parent, be: "number" };
+    }
+  }
+
   const a = toNumber(sentence.obj);
   const b = toNumber(sentence.to);
   return { obj: a + b, be: "number" };
@@ -71,6 +112,7 @@ export const add = add_obj_num_to_name_num;
 export const signatures = [
   { signatureWords: ["be", "add", "obj", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "obj", "num", "to", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
   // Vector element: obj num ... to vec at idx

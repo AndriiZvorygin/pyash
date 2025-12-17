@@ -628,7 +628,7 @@ test("compiled ceremony function can be invoked (JS)", async () => {
   const program = [
     "exists subj name bucket obj num 0 be number ya",
     "subj name add two be ceremony def",
-    "obj num 2 to num ti obj ti this be add do",
+    "obj num 2 to num of obj of this be add do",
     "subj name add two be ceremony prah"
   ].join("\\n");
 

@@ -87,7 +87,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     const evokeWithResult = { ...(state.currentEvokeRef || finalEvoke), obj: normalizedObj };
     memory.doRemember(evokeWithResult);
 
-    const targetName = evokeWithResult.to?.name;
+    const targetName = evokeWithResult.to?.name ?? updatedTarget?.subj?.name;
     if (targetName) {
       const targetObj = updatedTarget?.obj ?? normalizedObj;
       const targetBe = updatedTarget?.be ?? mergedBe;

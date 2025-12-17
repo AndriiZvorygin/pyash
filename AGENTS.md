@@ -40,6 +40,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Mention added tests and any known gaps. Call out external needs (e.g., Ollama server availability) so reviewers can reproduce.
 - When adding runnable examples, keep outputs in git-ignored locations (e.g., `examples/out/`) and commit the sources plus tests/docs together.
 
+## Scope Discipline
+- Only do the work explicitly requested by the user; avoid expanding scope or tackling adjacent tasks unless asked.
+- If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
+- Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
+
 ## Security & Configuration Tips
 - `motor/ollama.mjs` calls an Ollama HTTP server (configured via `OLLAMA_HOST`, default `http://localhost:11434`); ensure the server is reachable.
 - Never commit secrets or personal data; prefer env vars or local, git-ignored config.

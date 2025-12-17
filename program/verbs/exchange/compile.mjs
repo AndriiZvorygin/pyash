@@ -89,6 +89,7 @@ function pathFromGenitive(genitive = [], sentenceArg) {
   if (!chainArr || chainArr.length === 0) return null;
   const chain = chainArr[0] === "this" ? chainArr.slice(1) : chainArr;
   if (chain.length === 0) return sentenceArg;
+  if (chain.length === 0) return sentenceArg;
   return [sentenceArg, ...chain.map(part => `.${part}`)].join("");
 }
 
@@ -382,7 +383,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   if (baseBe === "add" && obj.num !== undefined && sentenceArg && !sentence.to) {
     const increment = typeof obj.num === "number" ? obj.num : Number(obj.num);
     const safeInc = Number.isNaN(increment) ? 0 : increment;
-    return `${sentenceArg}.obj = ${sentenceArg}.obj ?? {};\n${sentenceArg}.obj.num = (${sentenceArg}.obj.num ?? 0) + ${safeInc};`;
+    const lines = [];
+    lines.push(`${sentenceArg}.obj = ${sentenceArg}.obj ?? {};`);
+    lines.push(`const _target = ${sentenceArg}.obj?.obj ?? ${sentenceArg}.obj;`);
+    lines.push(`_target.num = (_target.num ?? 0) + ${safeInc};`);
+    return lines.join("\n");
   }
 
   if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
@@ -610,7 +615,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     if (lang === "c") {
       return `/* TODO: vector support in C */`;
     }
-    return shouldDeclare ? `let ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
+    if (shouldDeclare) {
+      return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+    }
+    return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
   }
 
   if (effectiveBe === "number") {
@@ -638,7 +646,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         const cdecl = isPermanent ? "const double" : "double";
         return `${cdecl} ${name} = ${safeValue};`;
       }
-      return shouldDeclare ? `${decl} ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
+      if (shouldDeclare) {
+        return `${decl} ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+      }
+      return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
     }
   }
 
@@ -655,7 +666,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       const decl = isPermanent ? "const char *" : "char *";
       return `${decl} ${name} = ${value};`;
     }
-    return shouldDeclare ? `let ${name} = ${sentenceObject};` : `${name} = ${sentenceObject};`;
+    if (shouldDeclare) {
+      return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+    }
+    return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
   }
 
   return null;
@@ -790,7 +804,7 @@ let lines = [header];
       prelude.push(mindHistory);
     }
     if (usesRememberShim) {
-      const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") return ref;\n  if (typeof ref === "string") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
+      const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.subj?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
     }
     if (usesMapShim) {
@@ -821,7 +835,7 @@ let lines = [header];
   return lines.join("\n") + "\n";
 }
 
-function inlineSentenceLiteral(value, declared = new Set()) {
+function inlineSentenceLiteral(value, declared = new Set(), { inlineNames = true } = {}) {
   if (value === null) return "null";
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   if (typeof value === "string") return JSON.stringify(value);
@@ -833,14 +847,17 @@ function inlineSentenceLiteral(value, declared = new Set()) {
     if (entriesArr.length === 1 && entriesArr[0][0] === "name") {
       const nameVal = entriesArr[0][1];
       if (typeof nameVal === "string" && declared.has(nameVal)) {
-        return nameVal;
+        if (inlineNames) {
+          return `${sanitizeName(nameVal)}.obj ?? ${sanitizeName(nameVal)}`;
+        }
+        return `{ name: ${nameVal} }`;
       }
     }
     const entries = Object.entries(value).map(([key, val]) => {
-      if (key === "name" && typeof val === "string" && declared.has(val)) {
+      if (key === "name" && typeof val === "string" && declared.has(val) && inlineNames) {
         return `${key}: ${val}`;
       }
-      return `${key}: ${inlineSentenceLiteral(val, declared)}`;
+      return `${key}: ${inlineSentenceLiteral(val, declared, { inlineNames })}`;
     });
     return `{ ${entries.join(", ")} }`;
   }

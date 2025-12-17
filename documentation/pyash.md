@@ -71,6 +71,12 @@ so Pyash becomes a stable **pivot language** between people and machines.
 * The runtime is meant to be simple to read and hack.
 * There is a clear path from high-level sentences to low-level data structures that future backends, including assembly-like targets, can consume.
 
+9. **Interpret/compile parity**
+
+   * Any Pyash program should behave the same when interpreted or compiled.
+   * Genitives, cases, signatures, and memory effects must be preserved across both paths.
+   * Quizzes should cover both interpreter and compiler flows to guard against divergence.
+
 ---
 
 ### Pyash vocabulary in this repo
