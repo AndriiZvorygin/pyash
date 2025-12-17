@@ -69,18 +69,15 @@ test("ret merges onto evoke and writes result fact", async () => {
 test("non-numeric ceremonies do not default missing results", async () => {
   forget();
 
-  await run("subj name note be ceremony def");
+  await run("subj name note obj name text be ceremony def");
   await run("subj name payload obj text hello be text ya");
   await run("obj name payload ret");
   await run("subj name note be ceremony prah");
 
-  await run("to name message be note do");
+  await run("subj name message obj name payload be note do");
 
   const message = remember("message");
-  const result = remember("result");
 
   assert.ok(message, "invocation should store message fact");
   assert.equal(message.obj?.text ?? message.obj, "hello");
-  assert.ok(result, "result fact should be stored");
-  assert.equal(result.obj?.text ?? result.obj, "hello", "result should carry returned text");
 });

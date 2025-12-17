@@ -135,7 +135,9 @@ function caseTypeWords(value) {
   if (value.name) {
     words.push("name");
     const tail = normalizeWords(value.name);
-    if (tail && tail !== "num" && tail !== "text" && tail !== "vec" && tail !== "ve") {
+    if (tail && (tail === "num" || tail === "text" || tail === "vec" || tail === "ve" || tail === "filename" || tail === "mind")) {
+      words.push(tail);
+    } else if (tail && tail !== "num" && tail !== "text" && tail !== "vec" && tail !== "ve") {
       words.push(...tail.split(" ").filter(Boolean));
     }
   }
