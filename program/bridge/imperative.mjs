@@ -15,6 +15,8 @@ export async function handleImperative({
   const { mood, be, obj, to, from, subj } = sentence;
   if (mood !== "do") return null;
 
+  const hasSequenceRegisters =
+    sentence.fromindex != null || sentence.toindex != null || sentence.atindex != null;
   let fn = null;
   let defEntry = getDefinitionEntry(be);
   let defSignatureWords = defEntry ? memory.getDefinition(defEntry.name)?.signatureWords : null;
@@ -22,7 +24,15 @@ export async function handleImperative({
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
+  const baseSigWords =
+    hasSequenceRegisters && sigWords
+      ? (() => {
+          const { fromindex, toindex, atindex, ...rest } = sentence;
+          return deriveSignatureFromCall(rest, { remember: memory.remember });
+        })()
+      : null;
   let sigKey = null;
+  let baseSigKey = null;
   if (sigWords) {
     sigKey = joinSignatureWords(sigWords);
     if (!fn) {
@@ -31,6 +41,15 @@ export async function handleImperative({
     }
     if (!fn && !defEntry) {
       const defName = lookupSignature(sigKey);
+      if (defName) defEntry = getDefinitionEntry(defName);
+    }
+  }
+  if (!fn && !defEntry && baseSigWords) {
+    baseSigKey = joinSignatureWords(baseSigWords);
+    const handler = lookupSignatureHandler(baseSigKey);
+    if (handler) fn = handler;
+    if (!fn) {
+      const defName = lookupSignature(baseSigKey);
       if (defName) defEntry = getDefinitionEntry(defName);
     }
   }
@@ -109,7 +128,8 @@ export async function handleImperative({
     if (Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
       const defSigKey = joinSignatureWords(defSignatureWords);
       const callSigKey = joinSignatureWords(callSignatureWords);
-      if (defSigKey !== callSigKey) {
+      const relaxedCallSigKey = baseSigWords ? joinSignatureWords(baseSigWords) : null;
+      if (defSigKey !== callSigKey && defSigKey !== relaxedCallSigKey) {
         const pyash = sentenceToPyash(sentence);
         throw new Error(`Ceremony signature mismatch: expected ${defSigKey}, got ${callSigKey}; sentence: ${pyash}`);
       }
