@@ -1,11 +1,10 @@
 exists subj name handled obj num 0 be number ya
 
-subj name fizzbuzz fromindex num toindex num be ceremony def
-subj name idx obj this fromindex be number ya
+subj name fizzbuzz be ceremony def
 subj name handled obj num 0 be number ya
 
-obj name idx from num 3 to name rem3 be remains do
-obj name idx from num 5 to name rem5 be remains do
+obj this ti fromindex from num 3 to name rem3 be remains do
+obj this ti fromindex from num 5 to name rem5 be remains do
 
 obj name rem3 be equally from num 0 then obj num 1 to name handled be add do
 obj name rem5 be equally from num 0 then obj num 2 to name handled be add do
@@ -13,7 +12,7 @@ obj name rem5 be equally from num 0 then obj num 2 to name handled be add do
 obj name handled be equally from num 3 then obj text FizzBuzz be say do
 obj name handled be equally from num 1 then obj text Fizz be say do
 obj name handled be equally from num 2 then obj text Buzz be say do
-obj name handled be equally from num 0 then obj name idx be say do
+obj name handled be equally from num 0 then obj this ti fromindex be say do
 subj name fizzbuzz be ceremony prah
 
 fromindex num 1 toindex num 16 be fizzbuzz do

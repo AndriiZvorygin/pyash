@@ -47,6 +47,11 @@ function resolveNumber(v, remember) {
     const found = remember(v.name);
     if (typeof found?.obj?.num === "number") return found.obj.num;
     if (typeof found?.obj === "number") return found.obj;
+    if (found?.obj?.thisRef) {
+      const reg = state.currentEvokeRef?.[found.obj.thisRef] ?? state.currentEvoke?.[found.obj.thisRef];
+      if (typeof reg === "number") return reg;
+      if (typeof reg?.num === "number") return reg.num;
+    }
   }
   return undefined;
 }
