@@ -50,7 +50,21 @@ test("at all provides atindex register inside ceremony body", async () => {
   assert.equal(evoker?.atindex?.num, 2, "last atindex register should be visible inside ceremony body");
 });
 
-test.todo("at all can increment each element via ceremony in place (pending per-element writeback)");
+test("at all can increment each element via ceremony in place", async () => {
+  forget();
+  const program = [
+    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "subj name bump obj name num be ceremony def",
+    "obj num 1 to this ti obj ti num be add do",
+    "subj name bump be ceremony prah",
+    "obj name vec at name all be bump do"
+  ].join("\n");
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
+
+  const vec = remember("vec");
+  assert.deepEqual(vec?.obj?.ve?.values, [2, 3, 4]);
+});
 
 test.todo("100 doors via at all toggles only square positions open (pending 100-doors map logic)");
 
