@@ -158,6 +158,8 @@ Pyash:
 be invert obj name vector at all do
 ```
 
+Note: In compiled JS, inside ceremony bodies only, a bare `to name` that matches a local fact binding can be used as sugar for `to num of obj of <name>` (interpreter still treats bare `to <name>` as a memory name lookup).
+
 JS (explicit):
 
 ```js

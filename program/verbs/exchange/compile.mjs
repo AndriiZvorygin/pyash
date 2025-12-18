@@ -426,14 +426,25 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return lines.join("\n");
   }
 
-  if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
-    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
-    if (sentenceArg) {
-      const genitiveChain = sentence.to?.genitive?.chain || [];
-      const genitiveHint = genitiveChain.find(part => part !== "this");
-      const targetNameLiteral = sentence.to?.name
-        ? `"${sentence.to.name}"`
-        : genitiveHint
+	  if (baseBe === "add" && obj.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
+	    const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
+	    if (sentenceArg) {
+	      // Compiler-only sugar: inside ceremonies, `to <localName>` targets the local fact object.
+	      if (sentence.to?.name) {
+	        const localName = sanitizeName(sentence.to.name);
+	        if (locals?.has(localName)) {
+	          const inc = Number.isNaN(safeValue) ? 0 : safeValue;
+	          const lines = [];
+	          lines.push(`${localName}.obj = ${localName}.obj?.obj ?? ${localName}.obj ?? {};`);
+	          lines.push(`${localName}.obj.num = (${localName}.obj.num ?? 0) + ${inc};`);
+	          return lines.join("\n");
+	        }
+	      }
+	      const genitiveChain = sentence.to?.genitive?.chain || [];
+	      const genitiveHint = genitiveChain.find(part => part !== "this");
+	      const targetNameLiteral = sentence.to?.name
+	        ? `"${sentence.to.name}"`
+	        : genitiveHint
           ? `"${genitiveHint}"`
           : sentence.subj?.name
             ? `"${sentence.subj.name}"`
