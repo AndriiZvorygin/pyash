@@ -352,26 +352,36 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return lines.join("\n");
   }
 
-  // Conditionals (tiny/giant/equally) with then consequence
-  if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
-    const lhs = exprForSlot(obj, {
-      sentenceArg,
-      locals,
-      declared,
-      defaultExpr: sentenceArg ? `${sentenceArg}.obj?.num` : "lhs"
-    }) ?? "lhs";
-    const rhs = exprForSlot(sentence.from, {
-      sentenceArg,
-      locals,
-      declared,
-      defaultExpr: sentenceArg ? `${sentenceArg}.from?.num` : "rhs"
-    }) ?? "rhs";
-    const op = baseBe === "tiny" ? "<" : baseBe === "giant" ? ">" : "===";
-    const consequence = sentence.consequence;
-    const body = transpileSentence(consequence, { lang, sentenceArg, locals, declared }) ?? `// TODO: ${JSON.stringify(consequence)}`;
-    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
-    return `if (${lhs} ${op} ${rhs}) {\n${finalBody}\n}`;
-  }
+	  // Conditionals (tiny/giant/equally) with then consequence
+	  if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
+	    const lhs = exprForSlot(obj, {
+	      sentenceArg,
+	      locals,
+	      declared,
+	      defaultExpr: sentenceArg ? `${sentenceArg}.obj?.num` : "lhs"
+	    }) ?? "lhs";
+	    const rhs = exprForSlot(sentence.from, {
+	      sentenceArg,
+	      locals,
+	      declared,
+	      defaultExpr: sentenceArg ? `${sentenceArg}.from?.num` : "rhs"
+	    }) ?? "rhs";
+	    const op = baseBe === "tiny" ? "<" : baseBe === "giant" ? ">" : (lang === "c" ? "==" : "===");
+	    const consequence = sentence.consequence;
+	    const body = transpileSentence(consequence, { lang, sentenceArg, locals, declared }) ?? `// TODO: ${JSON.stringify(consequence)}`;
+	    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
+	    const cLhs = lang === "c"
+	      ? String(lhs)
+	          .replace(/\?\./g, ".")
+	          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
+	      : lhs;
+	    const cRhs = lang === "c"
+	      ? String(rhs)
+	          .replace(/\?\./g, ".")
+	          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
+	      : rhs;
+	    return `if (${lang === "c" ? cLhs : lhs} ${op} ${lang === "c" ? cRhs : rhs}) {\n${finalBody}\n}`;
+	  }
 
   // Dot product (produce) for vectors
   if (baseBe === "produce" && (obj?.ve || obj?.name || sentence.by || sentence.from)) {
