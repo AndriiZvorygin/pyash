@@ -1,0 +1,12 @@
+exists subj name counter obj num 0 be number ya
+exists subj name vec obj ve num 2 2 be vector ya
+
+subj name flip first to name ignored fromindex num 0 be ceremony def
+obj name vec at num 1 be invert do
+obj num 1 to name counter be add do
+subj name flip first be ceremony prah
+
+to name counter fromindex num 3 be flip first do
+
+obj name counter be say do
+obj name vec be say do
