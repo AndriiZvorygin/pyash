@@ -2,7 +2,7 @@ exists subj name doors obj ve num 0 0 0 0 0 0 0 0 0 0 be vector ya
 
 subj name toggle pass by num 0 obj name num be ceremony def
 subj name door obj this atindex be number ya
-obj num 1 to num of obj of door be add do
+obj num 1 to door be add do
 obj num of obj of door from num of by of this to name rem be remains do
 obj name rem be equally from num 0 then obj num 1 to this ti obj ti num be add do
 obj name rem be equally from num 0 then obj this ti obj ti num from num 2 to this ti obj ti num be remains do
