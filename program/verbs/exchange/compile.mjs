@@ -658,20 +658,19 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
   if (mood === "do" && !sentenceArg) {
     const fn = ceremonyFns?.get(baseBe);
-    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
-      if (lang === "c") {
-        const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
-        const hasUntil = sentence.toindex !== undefined;
-        const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
-        if (hasUntil) {
-          const step = untilVal > start ? 1 : -1;
-          const cmp = step > 0 ? "<=" : ">=";
-          return `for (int fromindex = ${start}; fromindex ${cmp} ${untilVal}; fromindex += ${step}) { ${fn}(); }`;
-        }
-        return `for (int fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
-      }
-      const evokerLiteral = inlineSentenceLiteral(sentence, declared);
-      if (loopShim) loopShim.used = true;
+	      if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
+	        if (lang === "c") {
+	          const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
+	          const hasUntil = sentence.toindex !== undefined;
+	          const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
+	          if (hasUntil) {
+	            const step = untilVal > start ? 1 : -1;
+	            return `for (int fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { ${fn}(); }`;
+	          }
+	          return `for (int fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
+	        }
+	        const evokerLiteral = inlineSentenceLiteral(sentence, declared);
+	        if (loopShim) loopShim.used = true;
       return `runLoop(${evokerLiteral}, ${fn});`;
     }
     if (fn) {
