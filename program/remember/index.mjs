@@ -60,12 +60,18 @@ export function doRemember(sentence) {
   const isDef = sentence.mood === "def";
   const isPrah = sentence.mood === "prah";
 
+  // Sandpits run in a temporary memory context (see `pushMemoryContext`). In that mode we must not
+  // splice the shared memory array because doing so would corrupt the global `definitionIndex`
+  // (which is not context-scoped today). Sandpit semantics can rely on `remember()` scanning from
+  // the end for last-write-wins, so appending is sufficient.
+  const isSandpit = contextStack.length > 0;
+
   // For non-def/prah sentences with a subject, replace the most recent
   // non-def/prah entry for that subject instead of appending, to keep
   // last-write wins without pruning def/prah blocks. Removed entries
   // shift definition indexes accordingly. New fact is appended to
   // preserve chronological order after the triggering command.
-  if (subjName && !isDef && !isPrah && sentence.mood !== "then") {
+  if (!isSandpit && subjName && !isDef && !isPrah && sentence.mood !== "then") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
       if (existing.subj?.name !== subjName) continue;

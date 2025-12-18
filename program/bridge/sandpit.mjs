@@ -14,6 +14,10 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   if (initialIndex == null) throw new Error("fromindex is required to loop");
   const untilSeed = registerValue(sentence.toindex);
 
+  const clone =
+    globalThis.structuredClone ||
+    ((v) => JSON.parse(JSON.stringify(v)));
+
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
   let lastResult;
   state.currentEvoke = {
@@ -37,9 +41,12 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     while (true) {
       state.currentEvokeRef.fromindex = currentIndex;
       state.currentEvokeRef.toindex = currentUntil ?? state.currentEvokeRef.toindex;
+      // Conditionals ("then") are a one-line control-flow mechanism; they should not leak across loop iterations.
+      state.lastCondition = true;
 
       for (const step of body) {
-        lastResult = await interpret(step);
+        // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
+        lastResult = await interpret(clone(step));
         if (step.mood === "then" && state.lastCondition === false) {
           state.lastCondition = true;
           break;
@@ -113,6 +120,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 
 export async function runDefinitionBody({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
   const { to } = sentence;
+  const clone =
+    globalThis.structuredClone ||
+    ((v) => JSON.parse(JSON.stringify(v)));
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
@@ -124,7 +134,8 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   state.currentEvokeRef = evokeSeed;
 
   for (const step of body) {
-    lastResult = await interpret(step);
+    // Avoid mutating definition body sentences across invocations.
+    lastResult = await interpret(clone(step));
     if (step.mood === "then" && state.lastCondition === false) {
       state.lastCondition = true;
       break;
