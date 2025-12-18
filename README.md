@@ -17,8 +17,8 @@ node --test quiz  # direct invoke
 ```bash
 node program/main.mjs
 ```
-Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit and return an updated evoke (optionally via `ret`). Conditionals use `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then`.
-Dispatch is signature-only: if a call’s cases/types do not match a registered signature, you’ll see `Unknown verb: <name>`.
+Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit. Conditionals use inline `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then obj num 1 to name counter be add do`.
+Dispatch is signature-first: if a call’s cases/types do not match a registered signature, you’ll see `Unknown verb/signature: ...`.
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`
@@ -26,7 +26,7 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 - Query: `su collector obj what que`
 - Read file: `su file be read from filename "quiz/sandpit/compile.txt" do`
 - Parse text → JSON program: see `documentation/reference.md` end-to-end example
-- Ceremony with return: see `examples/core/evoke-ret.md` for `this` binding + `ret` back to the evoke sentence.
+- Ceremony `ret`: see `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya`.
 - Loops: seed `fromindex` (and optional `toindex`) on the evoking sentence to repeat a ceremony; the supervisor moves `fromindex` toward `toindex` and stops on equality (no standalone register facts are written).
 
 ## Key Files
@@ -42,13 +42,17 @@ Dispatch is signature-only: if a call’s cases/types do not match a registered 
 
 See `documentation/index.md` for deeper guidance and links to design, state, and glossary notes. Examples live in `examples/` (conditionals, subtract, chaining, registers).
 
-Recent compile-focused examples:
+Recent compile-focused examples (JS is the reference backend; C is a work-in-progress):
 - `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js`
 - `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`)
 - `examples/pyash/compile-loop.pya` → JS `fromindex`/`toindex` loop using the runtime `runLoop` helper
-- `examples/pyash/compile-loop-c.pya` → C countdown loop (`examples/out/compile-loop-output.c`), build with `gcc -std=c11 -o /tmp/loop examples/out/compile-loop-output.c && /tmp/loop`
 - `examples/pyash/compile-vector-produce.pya` → JS dot product for vectors (inline/named) at `examples/out/compile-vector-produce.js`
 - `examples/pyash/compile-fizzbuzz.pya` → JS fizzbuzz via compiled conditionals/loops at `examples/out/compile-fizzbuzz-output.js`
 - `examples/pyash/compile-mind.pya` → JS mind invocation (sync curl to Ollama) at `examples/out/compile-mind.js`
+- Doors (map): `examples/pyash/doors-map-100.pya` (100 doors), `examples/pyash/doors-map-10.pya` (10 doors), `examples/pyash/doors-loop-10.pya` (nested loops only)
+
+Compile-to-C status (tested with `gcc` via quizzes):
+- Scalars: `be number ya` (`double`), `be say do` (`printf`), `be add do`, `be remains do` (`fmod`), `be equally ... then ...` (`if`)
+- Pending: ceremony ABI, loops, vectors, `at all`, and full program parity with JS
 
 Generated outputs live under `examples/out/` (ignored by git).

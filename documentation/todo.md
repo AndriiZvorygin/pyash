@@ -1,12 +1,12 @@
 # TODO
 
 ## Now
-- Finish vector/map story:
-  - Per-element writeback for `at all` when a ceremony mutates `this obj` (see TODO in `quiz/map.test.mjs`).
-  - 100 doors/map examples once writeback is fixed.
-- Mind: add streaming path and richer reply envelopes per `mind.md`; keep sync helper default but allow windowed history selection.
-- Remove any lingering `tloh` usage in docs/examples (loops are now `fromindex`/`toindex` and stop-when-equal).
-- Document and quiz chaining scenarios (`result` feeding subsequent calls; subject-to-subject conditionals).
+- C backend MVP parity (JS remains reference):
+  - Add loop lowering (`fromindex`/`toindex`) for C and cover with gcc+run quizzes.
+  - Add conditional lowering variants (`tiny`/`giant` as `<`/`>`) and cover with gcc+run quizzes.
+  - Start a C vector runtime (or choose a simpler C representation) to support 10/100 doors in C.
+- Mind: add streaming path and richer reply envelopes per `mind.md`.
+- Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
 ## Soon
 - Expand verb coverage with quizzes for additional nouns/classes hinted in `pyac.txt` (e.g., files/models/pipeline nodes) before adding code.
