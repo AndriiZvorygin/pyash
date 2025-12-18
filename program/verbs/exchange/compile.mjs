@@ -95,6 +95,9 @@ function pathFromGenitive(genitive = [], sentenceArg) {
   const chain = chainArr[0] === "this" ? chainArr.slice(1) : chainArr;
   if (chain.length === 0) return sentenceArg;
   if (chain.length === 0) return sentenceArg;
+  if (chain.length === 2 && chain[1] === "num" && ["fromindex", "toindex", "atindex", "by"].includes(chain[0])) {
+    return `${sentenceArg}.${chain[0]}?.num ?? ${sentenceArg}.${chain[0]}`;
+  }
   return [sentenceArg, ...chain.map(part => `.${part}`)].join("");
 }
 
@@ -249,11 +252,24 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   }
 
   // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
-  const atNum = sentence.at?.num ?? obj.at?.num;
-  if (baseBe === "invert" && obj?.name && atNum != null) {
+  const atSlot = sentence.at ?? obj.at;
+  const atNum = atSlot?.num;
+  const atGenitive = atSlot?.genitive;
+  if (baseBe === "invert" && obj?.name && (atNum != null || atGenitive) && lang !== "c") {
     const baseName = sanitizeName(obj.name);
-    const idxVal = Number(atNum);
-    const idxExpr = Number.isNaN(idxVal) ? atNum : idxVal;
+    const genChain = Array.isArray(atGenitive?.chain) ? atGenitive.chain : [];
+    const idxExpr =
+      atNum != null
+        ? (() => {
+            const idxVal = Number(atNum);
+            return Number.isNaN(idxVal) ? atNum : idxVal;
+          })()
+        : genChain.length === 3 && genChain[0] === "this" && genChain[2] === "num" && sentenceArg
+          ? `${sentenceArg}.${genChain[1]}?.num ?? ${sentenceArg}.${genChain[1]}`
+          : (sentenceArg && atGenitive)
+            ? pathFromGenitive(atGenitive, sentenceArg)
+            : null;
+    if (idxExpr == null) return `// TODO: ${JSON.stringify(sentence)}`;
     const lines = [];
     if (!locals?.has(baseName) && !declared?.has(baseName)) {
       lines.push(`const ${baseName} = remember(${JSON.stringify(obj.name)});`);
@@ -262,7 +278,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     lines.push(`${baseName}.obj = ${baseName}.obj ?? {};`);
     lines.push(`${baseName}.obj.ve = ${baseName}.obj.ve ?? {};`);
     lines.push(`${baseName}.obj.ve.values = ${baseName}.obj.ve.values ?? [];`);
-    lines.push(`const _idx = (${idxExpr}) - 1;`);
+    lines.push(`const _idx = (${idxExpr});`);
     lines.push(`const _curr = ${baseName}.obj.ve.values[_idx];`);
     lines.push(`if (${baseName}.obj.ve.type === "num" || typeof _curr === "number") {`);
     lines.push(`  ${baseName}.obj.ve.values[_idx] = (Number(_curr) || 0) * -1;`);

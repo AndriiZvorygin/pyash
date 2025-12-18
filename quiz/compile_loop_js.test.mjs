@@ -63,7 +63,7 @@ test("compile loop can mutate a vector (invert element) each iteration", async (
     "exists subj name counter obj num 0 be number ya",
     "exists subj name doors obj ve num 2 2 be vector ya",
     "subj name flip_first to name bucket fromindex num 0 be ceremony def",
-    "obj name doors at num 1 be invert do",
+    "obj name doors at num 0 be invert do",
     "subj name flip_first be ceremony prah",
     "to name counter fromindex num 3 be flip_first do"
   ].join("\n");
@@ -78,4 +78,28 @@ test("compile loop can mutate a vector (invert element) each iteration", async (
 
   const doors = sandbox.doors ?? sandbox.globalThis?.doors;
   assert.deepEqual(Array.from(doors?.obj?.ve?.values ?? []), [-2, 2]);
+});
+
+test("compile loop can invert boolean vector at num of fromindex of this", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name outside obj num 0 be number ya",
+    "exists subj name switches obj ve bool truth lie truth be vector ya",
+    "subj name flip_index to name bucket fromindex num 0 be ceremony def",
+    "obj name switches at num of fromindex of this be invert do",
+    "subj name flip_index be ceremony prah",
+    "to name outside fromindex num 2 toindex num -1 be flip_index do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const sandbox = { console: { log: () => {} } };
+  vm.runInNewContext(js, sandbox);
+
+  const switches = sandbox.switches ?? sandbox.globalThis?.switches;
+  assert.deepEqual(Array.from(switches?.obj?.ve?.values ?? []), ["lie", "truth", "lie"]);
 });

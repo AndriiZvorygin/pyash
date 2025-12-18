@@ -48,7 +48,7 @@ async function invert_obj_name_vec_at_num(sentence, { remember }) {
   const vecFact = remember(vecName);
   const values = vecFact?.obj?.ve?.values;
   if (!Array.isArray(values)) throw new Error("invert: target is not a vector");
-  const pos = idx - 1;
+  const pos = idx;
   const current = values[pos];
   let next = current;
   if (current === "truth" || current === true || current === 1) next = "lie";

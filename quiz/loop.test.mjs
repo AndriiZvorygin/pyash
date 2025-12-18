@@ -72,11 +72,28 @@ test("loop ceremony can mutate a vector (invert element) each iteration", async 
   await run("exists subj name doors obj ve num 2 2 be vector ya");
 
   await run("subj name flip_first to name bucket fromindex num 0 be ceremony def");
-  await run("obj name doors at num 1 be invert do");
+  await run("obj name doors at num 0 be invert do");
   await run("subj name flip_first be ceremony prah");
 
   await run("to name counter fromindex num 3 be flip_first do");
 
   const doors = remember("doors");
   assert.deepEqual(doors?.obj?.ve?.values, [-2, 2]);
+});
+
+test("loop can invert boolean vector at num of fromindex of this", async () => {
+  forget();
+
+  await run("exists subj name outside obj num 0 be number ya");
+  await run("exists subj name switches obj ve bool truth lie truth be vector ya");
+
+  // Definition binds to name bucket, but caller uses to name outside.
+  await run("subj name flip_index to name bucket fromindex num 0 be ceremony def");
+  await run("obj name switches at num of fromindex of this be invert do");
+  await run("subj name flip_index be ceremony prah");
+
+  await run("to name outside fromindex num 2 toindex num -1 be flip_index do");
+
+  const switches = remember("switches");
+  assert.deepEqual(switches?.obj?.ve?.values, ["lie", "truth", "lie"]);
 });

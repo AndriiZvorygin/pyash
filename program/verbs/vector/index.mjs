@@ -1,4 +1,5 @@
 import { remember as doRememberHelper } from "../../remember/index.mjs";
+import { state } from "../../bridge/state.mjs";
 
 function getVector(name, remember) {
   const fact = remember(name);
@@ -9,6 +10,14 @@ function getVector(name, remember) {
 }
 
 function indexFromAt(at) {
+  if (at?.genitive) {
+    const chainArr = Array.isArray(at.genitive.chain) ? at.genitive.chain : [];
+    if (chainArr.length === 3 && chainArr[0] === "this" && chainArr[2] === "num") {
+      const reg = state.currentEvokeRef?.[chainArr[1]] ?? state.currentEvoke?.[chainArr[1]];
+      const n = typeof reg === "number" ? reg : reg?.num;
+      if (typeof n === "number" && !Number.isNaN(n)) return Math.trunc(n);
+    }
+  }
   const raw = at?.num ?? at;
   const n = Number(raw);
   if (Number.isNaN(n)) return null;
