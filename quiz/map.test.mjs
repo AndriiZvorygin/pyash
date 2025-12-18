@@ -68,6 +68,31 @@ test("at all can increment each element via ceremony in place", async () => {
 
 test.todo("100 doors via at all toggles only square positions open (pending 100-doors map logic)");
 
+test("10 doors via at all toggles only square positions open (map, by pass)", async () => {
+  forget();
+  const program = [
+    "exists subj name doors obj ve num 0 0 0 0 0 0 0 0 0 0 be vector ya",
+    // Toggle a single door if (atindex+1) % pass === 0.
+    "subj name toggle pass by num 0 obj name num be ceremony def",
+    "subj name door obj this atindex be number ya",
+    "obj num 1 to num of obj of door be add do",
+    "obj num of obj of door from num of by of this to name rem be remains do",
+    "obj name rem be equally from num 0 then obj num 1 to this ti obj ti num be add do",
+    "obj name rem be equally from num 0 then obj this ti obj ti num from num 2 to this ti obj ti num be remains do",
+    "subj name toggle pass be ceremony prah",
+    // For passes 1..10 inclusive: stop when fromindex==11.
+    "subj name process pass fromindex num 0 be ceremony def",
+    "obj name doors by num of fromindex of this at name all be toggle pass do",
+    "subj name process pass be ceremony prah",
+    "fromindex num 1 toindex num 11 be process pass do",
+  ].join("\n");
+  const sentences = program.split("\n").map(parse).filter(Boolean);
+  for (const s of sentences) await interpret(s);
+
+  const values = remember("doors")?.obj?.ve?.values ?? [];
+  assert.deepEqual(values, [1, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
+});
+
 /*
 test("at all map writes to new vector via to", async () => {
   forget();

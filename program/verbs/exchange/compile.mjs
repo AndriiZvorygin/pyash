@@ -20,7 +20,7 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
   if (!slot) return defaultExpr ?? null;
 
   if (slot.genitive && sentenceArg) {
-    const path = pathFromGenitive(slot.genitive, sentenceArg);
+    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
     if (path) return path;
   }
 
@@ -75,7 +75,7 @@ function vectorValuesExpr(slot = {}, { sentenceArg, locals, declared } = {}) {
     return `[${vals.join(", ")}]`;
   }
   if (slot.genitive && sentenceArg) {
-    const path = pathFromGenitive(slot.genitive, sentenceArg);
+    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
     if (path) return `${path}?.ve?.values ?? []`;
   }
   if (slot.name) {
@@ -88,15 +88,20 @@ function vectorValuesExpr(slot = {}, { sentenceArg, locals, declared } = {}) {
   return "[]";
 }
 
-function pathFromGenitive(genitive = [], sentenceArg) {
+function pathFromGenitive(genitive = [], sentenceArg, { locals, declared } = {}) {
   if (!sentenceArg) return null;
   const chainArr = Array.isArray(genitive) ? genitive : genitive?.chain;
   if (!chainArr || chainArr.length === 0) return null;
+  const isLocalRoot = chainArr[0] !== "this" && typeof chainArr[0] === "string" && (locals?.has(sanitizeName(chainArr[0])) || declared?.has(sanitizeName(chainArr[0])));
   const chain = chainArr[0] === "this" ? chainArr.slice(1) : chainArr;
   if (chain.length === 0) return sentenceArg;
   if (chain.length === 0) return sentenceArg;
   if (chain.length === 2 && chain[1] === "num" && ["fromindex", "toindex", "atindex", "by"].includes(chain[0])) {
     return `${sentenceArg}.${chain[0]}?.num ?? ${sentenceArg}.${chain[0]}`;
+  }
+  if (isLocalRoot) {
+    const [root, ...rest] = chain;
+    return [sanitizeName(root), ...rest.map(part => `.${part}`)].join("");
   }
   return [sentenceArg, ...chain.map(part => `.${part}`)].join("");
 }
@@ -110,10 +115,10 @@ function valueForRole(role, sentenceArg, field = "num", slot = {}) {
   return `${sentenceArg}.${role}?.${field} ?? ${sentenceArg}.${role}`;
 }
 
-function targetPath(role, sentenceArg, field = "num", slot = {}) {
+function targetPath(role, sentenceArg, field = "num", slot = {}, { locals, declared } = {}) {
   if (!sentenceArg) return null;
   if (slot.genitive) {
-    return pathFromGenitive(slot.genitive, sentenceArg);
+    return pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
   }
   return `${sentenceArg}.${role}.${field}`;
 }
@@ -204,18 +209,24 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return lines.join("\n");
   }
 
-  // Map/foreach over vector: at all (ceremony or primitive verbs)
-  if (sentence.at?.name === "all" && !sentenceArg && lang !== "c") {
-    if (ceremonyFns?.get(baseBe)) {
-      const fn = ceremonyFns.get(baseBe);
-      const literal = inlineSentenceLiteral(sentence, declared);
-      return `runAtAll(${literal}, ${fn});`;
-    }
-    if (baseBe === "add" || baseBe === "subtract" || baseBe === "invert") {
-      const vecName = sentence.obj?.name;
-      const toName = sentence.to?.name;
-      const delta = Number(sentence.from?.num ?? sentence.obj?.num ?? 0);
-      const op = baseBe === "invert" ? "invert" : baseBe;
+	  // Map/foreach over vector: at all (ceremony or primitive verbs)
+	  if (sentence.at?.name === "all" && lang !== "c") {
+	    if (ceremonyFns?.get(baseBe)) {
+	      const fn = ceremonyFns.get(baseBe);
+	      const inlineSet = new Set([...(declared || []), ...(locals || [])]);
+	      const literal = inlineSentenceLiteral(sentence, inlineSet);
+	      if (sentenceArg && sentence.by?.genitive?.chain?.[0] === "this") {
+	        const byExpr = pathFromGenitive(sentence.by.genitive, sentenceArg, { locals, declared }) ?? "0";
+	        return `{\n  const _ev = ${literal};\n  _ev.by = { num: (${byExpr} ?? 0) };\n  runAtAll(_ev, ${fn});\n}`;
+	      }
+	      return `runAtAll(${literal}, ${fn});`;
+	    }
+	    if (baseBe === "add" || baseBe === "subtract" || baseBe === "invert") {
+	      if (sentenceArg) return `// TODO: ${JSON.stringify(sentence)}`;
+	      const vecName = sentence.obj?.name;
+	      const toName = sentence.to?.name;
+	      const delta = Number(sentence.from?.num ?? sentence.obj?.num ?? 0);
+	      const op = baseBe === "invert" ? "invert" : baseBe;
       const opBody =
         baseBe === "invert"
           ? `let val = elem;\n    if (typeof val === "number") return val * -1;\n    if (val === "truth" || val === true) return "lie";\n    if (val === "lie" || val === false) return "truth";\n    return val;`
@@ -440,10 +451,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         lines.push(`const ${targetVar} = remember(${targetExpr});`);
         locals?.add(targetVar);
       }
-      lines.push(`${targetVar}.obj = ${targetVar}.obj?.obj ?? ${targetVar}.obj ?? {};`);
-      const fieldPath = sentence.to?.genitive
-        ? pathFromGenitive(sentence.to.genitive, targetVar) || `${targetVar}.obj.num`
-        : `${targetVar}.obj.num`;
+	      lines.push(`${targetVar}.obj = ${targetVar}.obj?.obj ?? ${targetVar}.obj ?? {};`);
+	      const fieldPath = sentence.to?.genitive
+	        ? pathFromGenitive(sentence.to.genitive, targetVar, { locals, declared }) || `${targetVar}.obj.num`
+	        : `${targetVar}.obj.num`;
       const newVal = `${fieldPath} ?? 0`;
       lines.push(`${fieldPath} = (${newVal}) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
       return lines.join("\n");
@@ -461,7 +472,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   if (baseBe === "add" && typeof obj.text === "string" && (sentence.to?.name || sentence.to?.genitive)) {
     const literal = JSON.stringify(obj.text);
     if (sentenceArg) {
-      const target = targetPath("to", sentenceArg, "text") ?? sentence.to?.name;
+        const target = targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
       const init = `${target} = ${target} ?? "";`;
       const concat = `${target} = ${target} + ${literal};`;
       return `${init}\n${concat}`;
@@ -505,7 +516,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         lines.push(`${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`);
         return lines.join("\n");
       }
-      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
+      const target = targetPath("to", sentenceArg, "num", sentence.to, { locals, declared }) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     if (lang === "c") {
@@ -529,7 +540,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         lines.push(`${target} = (${target} ?? 0) * ${Number.isNaN(safeValue) ? 0 : safeValue};`);
         return lines.join("\n");
       }
-      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
+      const target = targetPath("to", sentenceArg, "num", sentence.to, { locals, declared }) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) * ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     if (lang === "c") {
@@ -554,7 +565,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         lines.push(`${target} = (${target} ?? 0) / ${divisor};`);
         return lines.join("\n");
       }
-      const target = targetPath("to", sentenceArg) ?? sentence.to?.name;
+      const target = targetPath("to", sentenceArg, "num", sentence.to, { locals, declared }) ?? sentence.to?.name;
       return `${target} = (${target} ?? 0) / ${divisor};`;
     }
     if (lang === "c") {
@@ -565,10 +576,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
 	  if (baseBe === "remains" && (obj.num !== undefined || sentence.from?.num !== undefined || obj.name || obj.genitive || obj.thisRef) && (sentence.to?.name || sentenceArg)) {
 	    if (sentenceArg) {
-	      const targetGenitive = sentence.to?.genitive ? pathFromGenitive(sentence.to.genitive, sentenceArg) : null;
+	      const targetGenitive = sentence.to?.genitive ? pathFromGenitive(sentence.to.genitive, sentenceArg, { locals, declared }) : null;
 	      const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
 	      const source = (() => {
-	        if (sentence.obj?.genitive && sentenceArg) return pathFromGenitive(sentence.obj.genitive, sentenceArg);
+	        if (sentence.obj?.genitive && sentenceArg) return pathFromGenitive(sentence.obj.genitive, sentenceArg, { locals, declared });
 	        if (obj?.name) {
 	          const baseName = sanitizeName(obj.name);
 	          if (locals?.has(baseName)) return `${baseName}.obj?.num`;
@@ -588,7 +599,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         ? targetGenitive
         : targetName
           ? lvalueForName(targetName, { declared, locals })
-          : targetPath("to", sentenceArg) ?? `${sentenceArg}.obj?.num`;
+	          : targetPath("to", sentenceArg, "num", sentence.to, { locals, declared }) ?? `${sentenceArg}.obj?.num`;
       const numerator = source ?? lhs;
       const div = divisorExpr ?? "0";
       lines.push(`if ((${div} ?? 0) === 0) throw new Error("remains: from cannot be zero");`);
@@ -808,9 +819,13 @@ let lines = [header];
       if (signatureWords) {
         ceremonyFns.set(joinSignatureWords(signatureWords), fnName);
       }
-      if (typeof fn === "string" && fn.includes("remember(")) {
-        usesRememberShim = true;
-      }
+	      if (typeof fn === "string" && fn.includes("remember(")) {
+	        usesRememberShim = true;
+	      }
+	      if (typeof fn === "string" && fn.includes("runAtAll(")) {
+	        usesMapShim = true;
+	        usesRememberShim = true;
+	      }
       if (lang === "c") {
         lines.push(fn);
       } else {
@@ -869,7 +884,7 @@ let lines = [header];
     if (usesMapShim) {
       const cloneShim = `const structuredClone = globalThis.structuredClone || ((v) => JSON.parse(JSON.stringify(v)));`;
       prelude.push(cloneShim);
-      const mapHelper = `function runAtAll(sentence, fn) {\n  const vecFact = remember(sentence.obj?.name ?? sentence.obj);\n  const values = vecFact?.obj?.ve?.values ?? [];\n  const out = values.map((elem, i) => {\n    const elemSentence = structuredClone(sentence);\n    if (typeof elem === \"number\") elemSentence.obj = { num: elem };\n    else if (typeof elem === \"string\") elemSentence.obj = { text: elem };\n    else if (typeof elem === \"boolean\") elemSentence.obj = { boolean: elem };\n    else elemSentence.obj = elem ?? {};\n    elemSentence.atindex = { num: i, register: true };\n    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex, by: elemSentence.by, fromindex: elemSentence.fromindex, toindex: elemSentence.toindex };\n    const res = fn(elemSentence) ?? elemSentence;\n    const obj = res?.obj ?? elemSentence.obj;\n    if (obj?.num !== undefined) return obj.num;\n    if (obj?.text !== undefined) return obj.text;\n    if (obj?.boolean !== undefined) return obj.boolean;\n    return obj;\n  });\n  const targetName = sentence.to?.name ?? sentence.obj?.name ?? vecFact?.subj?.name;\n  if (sentence.to?.name) {\n    const fact = { subj: { name: sentence.to.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.to.name] = fact;\n    return fact;\n  }\n  if (vecFact?.obj?.ve) {\n    vecFact.obj.ve.values = out;\n  }\n  if (targetName) {\n    const fact = vecFact && vecFact.obj ? { ...vecFact, obj: { ...(vecFact.obj || {}), ve: { ...(vecFact.obj?.ve || {}), values: out } } } : { subj: { name: targetName }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[targetName] = fact;\n    return fact;\n  }\n  if (sentence.obj?.name) {\n    const fact = { subj: { name: sentence.obj.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.obj.name] = fact;\n    return fact;\n  }\n  return { obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n}`;
+	      const mapHelper = `function runAtAll(sentence, fn) {\n  // Resolve genitive by (like \"by num of fromindex of this\") against the evoker sentence once.\n  if (sentence?.by?.genitive?.chain?.[0] === \"this\") {\n    let curr = sentence;\n    for (const part of sentence.by.genitive.chain.slice(1)) {\n      if (typeof curr === \"number\") {\n        if (part === \"num\") continue;\n        curr = undefined;\n        break;\n      }\n      curr = curr?.[part];\n    }\n    const resolved = (typeof curr === \"number\") ? curr : curr?.num;\n    if (typeof resolved === \"number\") sentence.by = { num: resolved };\n  }\n  const vecFact = remember(sentence.obj?.name ?? sentence.obj);\n  const values = vecFact?.obj?.ve?.values ?? [];\n  const out = values.map((elem, i) => {\n    const elemSentence = structuredClone(sentence);\n    if (typeof elem === \"number\") elemSentence.obj = { num: elem };\n    else if (typeof elem === \"string\") elemSentence.obj = { text: elem };\n    else if (typeof elem === \"boolean\") elemSentence.obj = { boolean: elem };\n    else elemSentence.obj = elem ?? {};\n    elemSentence.atindex = { num: i, register: true };\n    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex, by: elemSentence.by, fromindex: elemSentence.fromindex, toindex: elemSentence.toindex };\n    const res = fn(elemSentence) ?? elemSentence;\n    const obj = res?.obj ?? elemSentence.obj;\n    if (obj?.num !== undefined) return obj.num;\n    if (obj?.text !== undefined) return obj.text;\n    if (obj?.boolean !== undefined) return obj.boolean;\n    return obj;\n  });\n  if (sentence.to?.name) {\n    const fact = { subj: { name: sentence.to.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.to.name] = fact;\n    return fact;\n  }\n  // In-place: mutate the remembered fact and do not replace the binding object.\n  if (vecFact?.obj?.ve) {\n    vecFact.obj.ve.values = out;\n    return vecFact;\n  }\n  const targetName = sentence.obj?.name ?? vecFact?.subj?.name;\n  if (targetName) {\n    const fact = { subj: { name: targetName }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[targetName] = fact;\n    return fact;\n  }\n  return { obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n}`;
       prelude.push(mapHelper);
     }
     if (loopShim.used) {
