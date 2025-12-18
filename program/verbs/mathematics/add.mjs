@@ -40,6 +40,22 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.obj == null) throw new Error("add: obj is required");
   if (sentence.to == null) throw new Error("add: to is required");
 
+  // Text concatenation: obj text "..." to name <textVar> be add do
+  if (typeof sentence.obj?.text === "string") {
+    if (typeof sentence.to === "string") {
+      return { obj: { text: sentence.to + sentence.obj.text }, be: "text" };
+    }
+    if (typeof sentence.to?.text === "string") {
+      return { obj: { text: sentence.to.text + sentence.obj.text }, be: "text" };
+    }
+    const rawTo = sentence.to;
+    const targetName = typeof rawTo?.name === "string" ? rawTo.name : null;
+    if (!targetName || !remember) throw new Error("add: to name is required for text");
+    const fact = remember(targetName);
+    const current = typeof fact?.obj?.text === "string" ? fact.obj.text : "";
+    return { obj: { text: current + sentence.obj.text }, be: "text" };
+  }
+
   if (sentence.to.genitive) {
     const target = resolveGenitiveTarget(sentence.to.genitive, remember);
     if (target) {
@@ -112,6 +128,7 @@ export const add = add_obj_num_to_name_num;
 export const signatures = [
   { signatureWords: ["be", "add", "obj", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "obj", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num", "to", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
