@@ -673,14 +673,49 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const shouldDeclare = Boolean(sentence.exists);
 
   if (effectiveBe === "vector" && obj.ve?.values) {
-    const fillCount = typeof sentence.by?.num === "number" ? Math.trunc(sentence.by.num) : null;
-    const rawValues = (fillCount && fillCount > 0 && obj.ve.values.length === 1)
-      ? Array(fillCount).fill(obj.ve.values[0])
-      : obj.ve.values;
-    const values = rawValues
+    const fillCountExpr = (() => {
+      if (typeof sentence.by?.num === "number") return String(Math.trunc(sentence.by.num));
+      if (sentence.by?.name) {
+        const base = sanitizeName(sentence.by.name);
+        if (declared?.has(base) || locals?.has(base)) return `(${base}?.obj?.num ?? 0)`;
+      }
+      if (sentence.by?.genitive && !sentenceArg) {
+        const chain = sentence.by.genitive.chain || [];
+        const root = chain[0];
+        if (typeof root === "string") {
+          const base = sanitizeName(root);
+          if (declared?.has(base) || locals?.has(base)) {
+            const path = pathFromGenitive(sentence.by.genitive, "IGNORED", { locals, declared });
+            // pathFromGenitive can't run without a real sentence arg; handle the common "num of obj of X" case.
+            if (chain.length === 3 && chain[1] === "obj" && chain[2] === "num") return `(${base}?.obj?.num ?? 0)`;
+          }
+        }
+      }
+      return null;
+    })();
+
+    const vecType = obj.ve.type || "num";
+    if (fillCountExpr && obj.ve.values.length === 1) {
+      const elem = obj.ve.values[0];
+      const elemLiteral = typeof elem === "number" ? String(elem) : JSON.stringify(elem);
+      const vecLiteral = `{ type: "${vecType}", values: Array(${fillCountExpr}).fill(${elemLiteral}) }`;
+      if (sentenceArg) {
+        const target = valueForRole("subj", sentenceArg, "ve", sentence.subj) ?? name;
+        return `${target} = ${vecLiteral};`;
+      }
+      const sentenceObject = `{ subj: { name: "${name}" }, obj: { ve: ${vecLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
+      if (lang === "c") {
+        return `/* TODO: vector support in C */`;
+      }
+      return shouldDeclare
+        ? `${shouldDeclare ? "let" : ""} ${sanitizeName(name)} = ${sentenceObject};\nglobalThis[${JSON.stringify(name)}] = ${sanitizeName(name)};`
+        : sentenceObject;
+    }
+
+    const values = obj.ve.values
       .map(v => (typeof v === "number" ? v : JSON.stringify(v)))
       .join(", ");
-    const vecLiteral = `{ type: "${obj.ve.type || "num"}", values: [${values}] }`;
+    const vecLiteral = `{ type: "${vecType}", values: [${values}] }`;
     if (sentenceArg) {
       const target = valueForRole("subj", sentenceArg, "ve", sentence.subj) ?? name;
       return `${target} = ${vecLiteral};`;

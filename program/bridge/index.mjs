@@ -9,6 +9,23 @@ import { state } from "./state.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 
+function resolveFillCount(by, remember) {
+  if (!by) return null;
+  if (typeof by.num === "number") return by.num;
+  if (typeof by.name === "string") return remember(by.name)?.obj?.num ?? null;
+  if (by.genitive?.chain?.length) {
+    const [root, ...rest] = by.genitive.chain;
+    let curr = root === "this" ? null : remember(root);
+    for (const part of rest) {
+      if (curr == null) break;
+      curr = curr[part];
+    }
+    if (typeof curr === "number") return curr;
+    if (typeof curr?.num === "number") return curr.num;
+  }
+  return null;
+}
+
 for (const sig of builtInSignatures) {
   registerSignatureHandler(sig);
 }
@@ -68,8 +85,9 @@ export async function interpret(sentence) {
     }
 
     // Vector fill sugar: "obj ve <type> <value> by num N be vector ya"
-    if (mood === "ya" && be === "vector" && sentence?.obj?.ve?.values?.length === 1 && typeof sentence?.by?.num === "number") {
-      const n = Math.trunc(sentence.by.num);
+    if (mood === "ya" && be === "vector" && sentence?.obj?.ve?.values?.length === 1) {
+      const resolved = resolveFillCount(sentence.by, remember);
+      const n = resolved == null ? null : Math.trunc(resolved);
       if (n > 0) {
         const elem = sentence.obj.ve.values[0];
         const filled = { ...sentence, obj: { ...(sentence.obj || {}), ve: { ...(sentence.obj.ve || {}), values: Array(n).fill(elem) } } };

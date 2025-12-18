@@ -23,3 +23,21 @@ test("compile vector fill by num N to javascript", async () => {
   const doors = sandbox.doors ?? sandbox.globalThis?.doors;
   assert.deepEqual(Array.from(doors?.obj?.ve?.values ?? []), [0, 0, 0, 0, 0]);
 });
+
+test("compile vector fill by name N to javascript", async () => {
+  forget();
+  const pyash = [
+    "exists subj name n obj num 4 be number ya",
+    "exists subj name doors obj ve num 7 by name n be vector ya",
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const sandbox = { console: { log: () => {} } };
+  vm.runInNewContext(js, sandbox);
+  const doors = sandbox.doors ?? sandbox.globalThis?.doors;
+  assert.deepEqual(Array.from(doors?.obj?.ve?.values ?? []), [7, 7, 7, 7]);
+});

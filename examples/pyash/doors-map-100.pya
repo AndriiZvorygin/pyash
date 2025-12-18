@@ -1,0 +1,16 @@
+exists subj name doors obj ve num 0 by num 100 be vector ya
+
+subj name toggle pass by num 0 obj name num be ceremony def
+subj name door obj this atindex be number ya
+obj num 1 to door be add do
+obj num of obj of door from num of by of this to name rem be remains do
+obj name rem be equally from num 0 then obj num 1 to this ti obj ti num be add do
+obj name rem be equally from num 0 then obj this ti obj ti num from num 2 to this ti obj ti num be remains do
+subj name toggle pass be ceremony prah
+
+subj name process pass fromindex num 0 be ceremony def
+obj name doors by num of fromindex of this at name all be toggle pass do
+subj name process pass be ceremony prah
+
+fromindex num 1 toindex num 101 be process pass do
+obj name doors be say do
