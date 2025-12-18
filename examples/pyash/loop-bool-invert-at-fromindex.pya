@@ -5,7 +5,8 @@ subj name flip index to name bucket fromindex num 0 be ceremony def
 obj name switches at num of fromindex of this be invert do
 subj name flip index be ceremony prah
 
-to name outside fromindex num 3 be flip index do
+# Loop fromindex counts down each pass; start at 2 for a 3-element vector so we hit indices 2,1,0.
+to name outside fromindex num 2 toindex num -1 be flip index do
 
 obj name outside be say do
 obj name switches be say do
