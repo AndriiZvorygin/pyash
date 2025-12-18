@@ -20,7 +20,8 @@ function resolveNumber(v, remember) {
         curr = state.currentEvoke;
       }
 
-      for (const part of rest) {
+      for (let i = 0; i < rest.length; i++) {
+        const part = rest[i];
         if (typeof curr === "number") {
           if (part === "num") {
             curr = curr;
@@ -31,7 +32,9 @@ function resolveNumber(v, remember) {
         }
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
-          if (fact) curr = fact.obj ?? fact;
+          // If the chain explicitly asks for `.obj`, resolve names to the full fact so `.obj` works.
+          // Otherwise, resolve to the fact's payload (`.obj`) for convenience.
+          if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
         }
         if (curr == null) break;
         curr = curr[part];

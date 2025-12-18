@@ -50,6 +50,19 @@ function resolveNumber(v, remember) {
 export async function invert_obj_num_to_name_num(sentence, { remember }) {
   const value = resolveNumber(sentence.obj, remember);
   if (value === undefined) {
+    if (sentence.obj?.thisRef) {
+      const ev = state.currentEvokeRef || state.currentEvoke;
+      const reg = ev?.[sentence.obj.thisRef];
+      if (reg && typeof reg === "object" && (reg.text !== undefined || reg.boolean !== undefined)) {
+        return invert_obj_text({ ...sentence, obj: reg });
+      }
+      if (typeof reg === "string") {
+        return invert_obj_text({ ...sentence, obj: { text: reg } });
+      }
+      if (typeof reg === "boolean") {
+        return invert_obj_text({ ...sentence, obj: { boolean: reg } });
+      }
+    }
     if (sentence.obj?.name && remember(sentence.obj.name)?.obj?.ve?.values) {
       return invert_obj_name_vec_at_num(sentence, { remember });
     }
@@ -60,7 +73,7 @@ export async function invert_obj_num_to_name_num(sentence, { remember }) {
 }
 
 async function invert_obj_text(sentence) {
-  const val = sentence.obj?.text ?? sentence.obj;
+  const val = sentence.obj?.text ?? sentence.obj?.boolean ?? sentence.obj;
   let next = val;
   if (val === "truth") next = "lie";
   else if (val === "lie") next = "truth";

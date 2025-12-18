@@ -7,6 +7,9 @@ function registerValue(reg) {
 }
 
 export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const prevEvoke = state.currentEvoke;
+  const prevEvokeRef = state.currentEvokeRef;
+  const prevExecutingBody = state.executingBody;
   const initialIndex = registerValue(sentence.fromindex);
   if (initialIndex == null) throw new Error("fromindex is required to loop");
   const untilSeed = registerValue(sentence.toindex);
@@ -95,14 +98,16 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       memory.doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
-    state.currentEvoke = null;
-    state.currentEvokeRef = null;
+    state.currentEvoke = prevEvoke;
+    state.currentEvokeRef = prevEvokeRef;
+    state.executingBody = prevExecutingBody;
     return { invoked: finalEvoke.be, result: normalizedObj };
   }
 
   memory.doRemember(finalEvoke);
-  state.currentEvoke = null;
-  state.currentEvokeRef = null;
+  state.currentEvoke = prevEvoke;
+  state.currentEvokeRef = prevEvokeRef;
+  state.executingBody = prevExecutingBody;
   return lastResult;
 }
 

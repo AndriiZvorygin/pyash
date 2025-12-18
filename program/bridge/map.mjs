@@ -14,6 +14,25 @@ export async function runAtAll({
   interpret
 }) {
   const base = structuredClone(sentence);
+  // If the caller passed a genitive `by` like "by num of fromindex of this",
+  // resolve it against the *current evoker* once so per-element ceremonies see a plain number.
+  if (base.by?.genitive) {
+    const chainArr = Array.isArray(base.by.genitive.chain) ? base.by.genitive.chain : [];
+    const evoke = state.currentEvokeRef || state.currentEvoke;
+    if (evoke && chainArr[0] === "this") {
+      let curr = evoke;
+      for (const part of chainArr.slice(1)) {
+        if (typeof curr === "number") {
+          if (part === "num") continue;
+          curr = undefined;
+          break;
+        }
+        curr = curr?.[part];
+      }
+      const resolved = typeof curr === "number" ? curr : curr?.num;
+      if (typeof resolved === "number") base.by = { num: resolved };
+    }
+  }
   const vecFact = remember(base.obj?.name ?? base.obj?.vec?.name ?? base.obj?.name?.name ?? base.obj);
   const vecValues = vecFact?.obj?.ve?.values;
   if (!Array.isArray(vecValues)) throw new Error("at all: obj must resolve to a vector");
@@ -53,8 +72,8 @@ export async function runAtAll({
       state.lastCondition = true;
       const elemValue = vecValues[i];
       if (typeof elemValue === "number") elemSentence.obj = { name: `elem_${i}`, num: elemValue };
-      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
-      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
+      else if (typeof elemValue === "string") elemSentence.obj = { name: `elem_${i}`, text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.obj = { name: `elem_${i}`, boolean: elemValue };
       else elemSentence.obj = elemValue ?? {};
       const prevEvoke = state.currentEvoke;
       const prevEvokeRef = state.currentEvokeRef;
@@ -88,8 +107,15 @@ export async function runAtAll({
 
   // in-place back to obj target
   if (base.obj?.name) {
-    const dest = { subj: { name: base.obj.name }, be: "vector", obj: { ve: { values: out } }, mood: "ya" };
-    return dest;
+    // Prefer mutating the remembered fact in-place when available. This matters for loop sandpits:
+    // the sandpit memory context is a shallow copy, so in-place mutations persist back to main.
+    if (vecFact?.obj?.ve) {
+      vecFact.obj.ve.values = out;
+      vecFact.mood = vecFact.mood ?? "ya";
+      vecFact.be = vecFact.be ?? "vector";
+      return vecFact;
+    }
+    return { subj: { name: base.obj.name }, be: "vector", obj: { ve: { values: out } }, mood: "ya" };
   }
 
   throw new Error("at all: target not assignable (obj must be a name)");

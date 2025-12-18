@@ -563,17 +563,20 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) / ${divisor};`;
   }
 
-  if (baseBe === "remains" && (obj.num !== undefined || sentence.from?.num !== undefined || obj.name || obj.genitive || obj.thisRef) && (sentence.to?.name || sentenceArg)) {
-    const divisorRaw = sentence.from?.num ?? obj.num;
-    const divisor = typeof divisorRaw === "number" ? divisorRaw : Number(divisorRaw);
-    const safeValue = Number.isNaN(divisor) ? 0 : divisor;
-    if (sentenceArg) {
-      const targetGenitive = sentence.to?.genitive ? pathFromGenitive(sentence.to.genitive, sentenceArg) : null;
-      const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
-      const source =
-        sentence.obj?.genitive && sentenceArg
-          ? pathFromGenitive(sentence.obj.genitive, sentenceArg)
-          : exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
+	  if (baseBe === "remains" && (obj.num !== undefined || sentence.from?.num !== undefined || obj.name || obj.genitive || obj.thisRef) && (sentence.to?.name || sentenceArg)) {
+	    if (sentenceArg) {
+	      const targetGenitive = sentence.to?.genitive ? pathFromGenitive(sentence.to.genitive, sentenceArg) : null;
+	      const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
+	      const source = (() => {
+	        if (sentence.obj?.genitive && sentenceArg) return pathFromGenitive(sentence.obj.genitive, sentenceArg);
+	        if (obj?.name) {
+	          const baseName = sanitizeName(obj.name);
+	          if (locals?.has(baseName)) return `${baseName}.obj?.num`;
+	        }
+	        return exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
+	      })();
+	      const divisorExpr = exprForSlot(sentence.from ?? sentence.by, { sentenceArg, locals, declared, defaultExpr: null, field: "num" }) ??
+	        exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
 
       const lines = [];
       if (targetName && !locals?.has(targetName) && !declared?.has(targetName)) {
@@ -587,12 +590,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
           ? lvalueForName(targetName, { declared, locals })
           : targetPath("to", sentenceArg) ?? `${sentenceArg}.obj?.num`;
       const numerator = source ?? lhs;
-      const expr = lang === "c"
-        ? `fmod(${numerator}, ${safeValue})`
-        : `(${numerator} ?? 0) % ${safeValue}`;
+      const div = divisorExpr ?? "0";
+      lines.push(`if ((${div} ?? 0) === 0) throw new Error("remains: from cannot be zero");`);
+      const expr = `(${numerator} ?? 0) % (${div} ?? 0)`;
       lines.push(`${lhs} = ${expr};`);
       return lines.join("\n");
     }
+    const divisorRaw = sentence.from?.num ?? obj.num;
+    const divisor = typeof divisorRaw === "number" ? divisorRaw : Number(divisorRaw);
+    const safeValue = Number.isNaN(divisor) ? 0 : divisor;
     if (lang === "c") {
       return `${sentence.to.name} = fmod(${sentence.to.name}, ${safeValue});`;
     }
@@ -601,6 +607,21 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
   const name = sentence?.subj?.name;
   const mood = sentence?.mood;
+  if (mood === "do" && sentenceArg) {
+    const fn = ceremonyFns?.get(baseBe);
+    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
+      const inlineSet = new Set([...(declared || []), ...(locals || [])]);
+      const evokerLiteral = inlineSentenceLiteral(sentence, inlineSet);
+      if (loopShim) loopShim.used = true;
+      return `runLoop(${evokerLiteral}, ${fn});`;
+    }
+    if (fn) {
+      const inlineSet = new Set([...(declared || []), ...(locals || [])]);
+      const arg = inlineSentenceLiteral(sentence, inlineSet);
+      return `${fn}(${arg});`;
+    }
+  }
+
   if (mood === "do" && !sentenceArg) {
     const fn = ceremonyFns?.get(baseBe);
     if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
@@ -653,10 +674,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     if (sentenceArg && rhsExpr !== null) {
       const baseName = sentence.subj?.name ? sanitizeName(sentence.subj.name) : null;
       if (baseName) {
-        const target = lvalueForName(baseName, { declared, locals, field: "num" });
         const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
-        if (needsDecl) locals?.add(baseName);
-        return `${needsDecl ? "let " : ""}${target} = ${rhsExpr};`;
+        if (needsDecl) {
+          locals?.add(baseName);
+          return `let ${baseName} = { subj: { name: "${sentence.subj.name}" }, obj: {}, be: "number", mood: "ya" };\n${baseName}.obj.num = ${rhsExpr};`;
+        }
+        return `${baseName}.obj = ${baseName}.obj ?? {};\n${baseName}.obj.num = ${rhsExpr};`;
       }
       const target = valueForRole("subj", sentenceArg, "num", sentence.subj) ?? `${sentenceArg}.obj?.num`;
       return `${target} = ${rhsExpr};`;
@@ -683,6 +706,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   if (effectiveBe === "text" && typeof obj.text === "string") {
     const value = JSON.stringify(obj.text);
     if (sentenceArg) {
+      const baseName = sentence.subj?.name ? sanitizeName(sentence.subj.name) : null;
+      if (baseName) {
+        const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
+        if (needsDecl) {
+          locals?.add(baseName);
+          return `let ${baseName} = { subj: { name: "${sentence.subj.name}" }, obj: {}, be: "text", mood: "ya" };\n${baseName}.obj.text = ${value};`;
+        }
+        return `${baseName}.obj = ${baseName}.obj ?? {};\n${baseName}.obj.text = ${value};`;
+      }
       const target = valueForRole("subj", sentenceArg, "text") ?? name;
       return `${target} = ${value};`;
     }
@@ -702,7 +734,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang, declared }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremonyFns }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -713,7 +745,7 @@ function transpileCeremony(defSentence, bodySentences, { lang, declared }) {
   let hasReturn = false;
   const locals = new Set();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, declared });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, declared, ceremonyFns });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -766,7 +798,7 @@ let lines = [header];
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang, declared });
+      const fn = transpileCeremony(sentence, body, { lang, declared, ceremonyFns });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")

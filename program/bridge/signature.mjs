@@ -194,6 +194,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
   }
 
   if (typeof value !== "object") {
+    if (typeof value === "number") return ["num"];
     const normalized = normalizeWords(String(value));
     return normalized ? [normalized] : [];
   }

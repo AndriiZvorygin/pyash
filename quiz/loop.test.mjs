@@ -113,3 +113,54 @@ test("loop can invert boolean vector at num of fromindex of this", async () => {
   const switches = remember("switches");
   assert.deepEqual(switches?.obj?.ve?.values, ["lie", "truth", "lie"]);
 });
+
+test.todo("loop can perform 10-doors toggle (squares end open) using at all + by pass");
+
+/*
+test("loop can perform 10-doors toggle (squares end open) using at all + by pass", async () => {
+  forget();
+
+  await run("exists subj name doors obj ve bool lie lie lie lie lie lie lie lie lie lie be vector ya");
+
+  // Toggle current element when its (atindex+1) is divisible by the current pass (provided via `by`).
+  await run("subj name toggle pass by num 0 obj text placeholder be ceremony def");
+  await run("subj name door obj this atindex be number ya");
+  await run("obj num 1 to num of obj of door be add do");
+  await run("obj name door from num of by of this to name rem be remains do");
+  await run("obj name rem be equally from num 0 then obj this obj be invert do");
+  await run("subj name toggle pass be ceremony prah");
+
+  // For passes 1..10 inclusive: use stop-when-equal loop by setting toindex to 11.
+  await run("subj name process pass fromindex num 0 be ceremony def");
+  await run("obj name doors by num of fromindex of this at name all be toggle pass do");
+  await run("subj name process pass be ceremony prah");
+  await run("fromindex num 1 toindex num 11 be process pass do");
+
+  const doors = remember("doors");
+  assert.deepEqual(doors?.obj?.ve?.values, ["truth", "lie", "lie", "truth", "lie", "lie", "lie", "lie", "truth", "lie"]);
+});
+*/
+
+test("loop can perform 10-doors toggle (squares end open) using nested loops only", async () => {
+  forget();
+
+  await run("exists subj name doors obj ve bool lie lie lie lie lie lie lie lie lie lie be vector ya");
+
+  // Inner loop: iterate door indices 0..9, toggling if (doorIndex+1) % pass === 0.
+  await run("subj name toggle door by num 0 fromindex num 0 be ceremony def");
+  await run("subj name doorNum obj this fromindex be number ya");
+  await run("obj num 1 to name doorNum be add do");
+  await run("obj name doorNum from num of obj of by of this to name rem be remains do");
+  await run("obj name rem be equally from num 0 then obj name doors at num of fromindex of this be invert do");
+  await run("subj name toggle door be ceremony prah");
+
+  // Outer loop: passes 1..10 (stop when fromindex==11).
+  await run("subj name process pass fromindex num 0 be ceremony def");
+  await run("subj name pass obj this fromindex be number ya");
+  await run("by name pass fromindex num 0 toindex num 10 be toggle door do");
+  await run("subj name process pass be ceremony prah");
+  await run("fromindex num 1 toindex num 11 be process pass do");
+
+  const doors = remember("doors");
+  assert.deepEqual(doors?.obj?.ve?.values, ["truth", "lie", "lie", "truth", "lie", "lie", "lie", "lie", "truth", "lie"]);
+});

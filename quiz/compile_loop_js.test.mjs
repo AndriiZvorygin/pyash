@@ -127,3 +127,35 @@ test("compile loop can apply a conditional update per iteration", async () => {
   const vec = sandbox.vec ?? sandbox.globalThis?.vec;
   assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [-1, 2, -3, 4]);
 });
+
+test.todo("compile loop can perform 10-doors toggle (squares end open) using at all + by pass");
+
+test("compile loop can perform 10-doors toggle (squares end open) using nested loops only", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name doors obj ve bool lie lie lie lie lie lie lie lie lie lie be vector ya",
+    "subj name toggle door by num 0 fromindex num 0 be ceremony def",
+    "subj name doorNum obj this fromindex be number ya",
+    "obj num 1 to name doorNum be add do",
+    "obj name doorNum from num of obj of by of this to name rem be remains do",
+    "obj name rem be equally from num 0 then obj name doors at num of fromindex of this be invert do",
+    "subj name toggle door be ceremony prah",
+    "subj name process pass fromindex num 0 be ceremony def",
+    "subj name pass obj this fromindex be number ya",
+    "by name pass fromindex num 0 toindex num 10 be toggle door do",
+    "subj name process pass be ceremony prah",
+    "fromindex num 1 toindex num 11 be process pass do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const sandbox = { console: { log: () => {} } };
+  vm.runInNewContext(js, sandbox);
+
+  const doors = sandbox.doors ?? sandbox.globalThis?.doors;
+  assert.deepEqual(Array.from(doors?.obj?.ve?.values ?? []), ["truth", "lie", "lie", "truth", "lie", "lie", "lie", "lie", "truth", "lie"]);
+});
