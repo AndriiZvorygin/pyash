@@ -49,6 +49,22 @@ test("ceremony repeats using fromindex/toindex aliases", async () => {
   assert.equal(invoke?.fromindex?.num ?? invoke?.fromindex, 0, "fromindex should count down to zero");
 });
 
+test("loop ceremony can apply a conditional update per iteration", async () => {
+  forget();
+
+  await run("exists subj name vec obj ve num 1 2 3 4 be vector ya");
+
+  await run("subj name flip even to name bucket fromindex num 0 be ceremony def");
+  await run("obj this ti fromindex from num 2 to name mod be remains do");
+  await run("obj name mod be equally from num 0 then obj name vec at num of fromindex of this be invert do");
+  await run("subj name flip even be ceremony prah");
+
+  await run("to name outside fromindex num 0 toindex num 4 be flip even do");
+
+  const vec = remember("vec");
+  assert.deepEqual(vec?.obj?.ve?.values, [-1, 2, -3, 4]);
+});
+
 test("loop ceremony uses caller to-name regardless of internal binding name", async () => {
   forget();
 

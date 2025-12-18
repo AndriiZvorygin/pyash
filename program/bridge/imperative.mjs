@@ -71,7 +71,6 @@ export async function handleImperative({
         ? memory.remember(sentence.from.name).obj
         : sentence.from;
     const truth = await fn({ subj: lhs, from: rhs });
-    state.lastCondition = truth;
     if (truth && sentence.consequence) {
       return interpret(sentence.consequence);
     }

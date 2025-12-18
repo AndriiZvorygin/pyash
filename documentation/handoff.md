@@ -1,7 +1,7 @@
 # Handoff / Pending Work
 
 ## Open tasks
-- Finish 100-doors: add a guardable map/loop combo so only every Nth door toggles per pass, and wire a ceremony with correct genitive order (`this ti at ti num`, `this ti pass ti num`). Add a passing quiz and example.
+- Finish 100-doors: add a guardable map/loop combo so only every Nth door toggles per pass, and wire a ceremony that reads indices via the evoker registers (`this ti atindex ti num`) and pass counters via `by` (`this ti by ti num`). Add a passing quiz and example.
 - Map writeback: per-element ceremonies in `at all` still need to persist mutations (see TODO in `quiz/map.test.mjs`).
 - Mind: keep per-bucket history (fromtext) working; streaming mind path still TODO.
 

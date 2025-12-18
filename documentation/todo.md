@@ -5,7 +5,7 @@
   - Per-element writeback for `at all` when a ceremony mutates `this obj` (see TODO in `quiz/map.test.mjs`).
   - 100 doors/map examples once writeback is fixed.
 - Mind: add streaming path and richer reply envelopes per `mind.md`; keep sync helper default but allow windowed history selection.
-- Tighten loop semantics on `fromindex`/`toindex` across compiler + interpreter; remove any lingering `tloh` usage in docs/examples.
+- Remove any lingering `tloh` usage in docs/examples (loops are now `fromindex`/`toindex` and stop-when-equal).
 - Document and quiz chaining scenarios (`result` feeding subsequent calls; subject-to-subject conditionals).
 
 ## Soon

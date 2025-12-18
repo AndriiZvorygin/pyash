@@ -103,3 +103,27 @@ test("compile loop can invert boolean vector at num of fromindex of this", async
   const switches = sandbox.switches ?? sandbox.globalThis?.switches;
   assert.deepEqual(Array.from(switches?.obj?.ve?.values ?? []), ["lie", "truth", "lie"]);
 });
+
+test("compile loop can apply a conditional update per iteration", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name vec obj ve num 1 2 3 4 be vector ya",
+    "subj name flip even to name bucket fromindex num 0 be ceremony def",
+    "obj this ti fromindex from num 2 to name mod be remains do",
+    "obj name mod be equally from num 0 then obj name vec at num of fromindex of this be invert do",
+    "subj name flip even be ceremony prah",
+    "to name outside fromindex num 0 toindex num 4 be flip even do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const sandbox = { console: { log: () => {} } };
+  vm.runInNewContext(js, sandbox);
+
+  const vec = sandbox.vec ?? sandbox.globalThis?.vec;
+  assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [-1, 2, -3, 4]);
+});

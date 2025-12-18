@@ -35,7 +35,9 @@ This document summarizes the current core language model used by the interpreter
 - Text concatenation uses `be add` with `obj text ...`.
 
 ## Conditionals
-- `obj … be tiny/giant/equally from … then <sentence>` compares left vs right and executes the consequence.
+- Two conditional forms exist:
+  - **Gate-next-statement**: `obj … be tiny/giant/equally from … then` (a `then` mood sentence) computes a truth value and gates the *next* non-`then` sentence via the interpreter’s “skip-next-line” mechanism.
+  - **Inline consequence**: `obj … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence. This does **not** participate in the “skip-next-line” mechanism.
 - LHS/RHS can be numbers, names (resolved to sentence.obj fields), or genitives on `this`.
 
 ## Logging
@@ -53,7 +55,7 @@ This document summarizes the current core language model used by the interpreter
 
 ## Loops
 - `fromindex <start> [toindex <bound>] be <ceremony> do` runs a loop:
-  - JS uses `runLoop(sentence, fn)` helper (inclusive toindex). If `toindex` absent, counts down to 0.
+  - JS uses `runLoop(sentence, fn)` helper (stop-when-equal): after each body run, the supervisor stops when `fromindex === toindex` (or when `fromindex === 0` if `toindex` is absent). In the common forward form, `fromindex num 0 toindex num 3` runs indices `0, 1, 2` and stops before `3`.
   - C emits a `for` loop with the same semantics.
 - Within the ceremony, `this ti fromindex ti num` reads the current counter.
 
@@ -67,7 +69,7 @@ This document summarizes the current core language model used by the interpreter
 - Conditionals or verbs without registered handlers error during interpretation.
 - Compilers include TODO comments for unsupported constructs (e.g., C string concat).
 - Vector compile: JS supports vector literals (`obj ve/vec num ... be vector`) and `produce` (dot product) for inline and named vectors; C vector codegen is still TODO.
-- Vector addressing: use `via space` → `at` for zero-based indexing (`obj name doors via space num 0 be read …`). `ord N` sugar maps 1→0, 2→1, etc. `invert` flips truth/lie text values or boolean vectors in-place.
+- Vector addressing: use `via space` → `at` for 0-based indexing (`obj name doors via space num 0 be read …`). `ord N` sugar maps 1→0, 2→1, etc. `invert` flips truth/lie text values or boolean vectors in-place.
 - Mind compile: JS emits a synchronous call to an Ollama-compatible endpoint using stored mind configs (`be mind ya` with `from`/`as`/`accordingto`) or call-local prompt/model; outputs go to stdout and `globalThis` by subject name.
 - Keep example outputs in git-ignored paths (e.g., `examples/out/`).
 

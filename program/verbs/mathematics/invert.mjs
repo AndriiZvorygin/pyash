@@ -4,6 +4,35 @@ function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
+  if (v.genitive) {
+    const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
+    if (chainArr.length > 0) {
+      const [root, ...rest] = chainArr;
+      let curr =
+        root === "this"
+          ? state.currentEvokeRef || state.currentEvoke
+          : typeof root === "string" && remember
+            ? remember(root)
+            : null;
+
+      for (const part of rest) {
+        if (typeof curr === "number") {
+          if (part === "num") continue;
+          curr = undefined;
+          break;
+        }
+        if (curr && typeof curr === "object" && curr.name && remember) {
+          const fact = remember(curr.name);
+          if (fact) curr = fact.obj ?? fact;
+        }
+        if (curr == null) break;
+        curr = curr[part];
+      }
+
+      if (typeof curr === "number") return curr;
+      if (typeof curr?.num === "number") return curr.num;
+    }
+  }
   if (v.thisRef) {
     const ev = state.currentEvokeRef || state.currentEvoke;
     const reg = ev?.[v.thisRef];
@@ -42,18 +71,29 @@ async function invert_obj_text(sentence) {
 
 async function invert_obj_name_vec_at_num(sentence, { remember }) {
   const vecName = sentence.obj?.name;
-  const idxRaw = sentence.at?.num ?? sentence.at;
-  const idx = Number.isInteger(idxRaw) ? idxRaw : Number(idxRaw);
-  if (!vecName || Number.isNaN(idx)) throw new Error("invert: obj name vec at num <index> required");
+  const idx = resolveNumber(sentence.at, remember);
+  if (!vecName || idx === undefined) throw new Error("invert: obj name vec at num <index> required");
   const vecFact = remember(vecName);
   const values = vecFact?.obj?.ve?.values;
   if (!Array.isArray(values)) throw new Error("invert: target is not a vector");
   const pos = idx;
   const current = values[pos];
   let next = current;
-  if (current === "truth" || current === true || current === 1) next = "lie";
-  else if (current === "lie" || current === false || current === 0) next = "truth";
-  else if (typeof current === "number") next = current * -1;
+  const vecType = String(vecFact?.obj?.ve?.type ?? "").toLowerCase();
+  const isBoolVec = vecType === "bool" || vecType === "boolean";
+  if (isBoolVec) {
+    if (current === "truth" || current === true || current === 1) next = "lie";
+    else if (current === "lie" || current === false || current === 0) next = "truth";
+    else if (typeof current === "boolean") next = !current;
+  } else if (typeof current === "number") {
+    next = current * -1;
+  } else if (current === "truth") {
+    next = "lie";
+  } else if (current === "lie") {
+    next = "truth";
+  } else if (typeof current === "boolean") {
+    next = !current;
+  }
   values[pos] = next;
   return { subj: { name: vecName }, obj: { ve: { values } }, be: vecFact?.be ?? "vector", mood: "ya" };
 }
