@@ -662,7 +662,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const shouldDeclare = Boolean(sentence.exists);
 
   if (effectiveBe === "vector" && obj.ve?.values) {
-    const values = obj.ve.values
+    const fillCount = typeof sentence.by?.num === "number" ? Math.trunc(sentence.by.num) : null;
+    const rawValues = (fillCount && fillCount > 0 && obj.ve.values.length === 1)
+      ? Array(fillCount).fill(obj.ve.values[0])
+      : obj.ve.values;
+    const values = rawValues
       .map(v => (typeof v === "number" ? v : JSON.stringify(v)))
       .join(", ");
     const vecLiteral = `{ type: "${obj.ve.type || "num"}", values: [${values}] }`;

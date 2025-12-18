@@ -141,6 +141,15 @@ const out = v.map((elem, i) => {
 
 ## 5. Worked examples
 
+### 5.0 Vector fill (repeat literal)
+
+When declaring a vector with a single element, `by num N` repeats that element `N` times.
+
+```pyash
+exists subj name doors obj ve bool lie by num 100 be vector ya
+exists subj name zeros obj ve num 0 by num 10 be vector ya
+```
+
 ### 5.1 In-place: invert each element
 
 Pyash:

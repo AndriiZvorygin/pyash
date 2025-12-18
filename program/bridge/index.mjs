@@ -67,6 +67,19 @@ export async function interpret(sentence) {
       }
     }
 
+    // Vector fill sugar: "obj ve <type> <value> by num N be vector ya"
+    if (mood === "ya" && be === "vector" && sentence?.obj?.ve?.values?.length === 1 && typeof sentence?.by?.num === "number") {
+      const n = Math.trunc(sentence.by.num);
+      if (n > 0) {
+        const elem = sentence.obj.ve.values[0];
+        const filled = { ...sentence, obj: { ...(sentence.obj || {}), ve: { ...(sentence.obj.ve || {}), values: Array(n).fill(elem) } } };
+        // Avoid persisting the fill-count as part of the stored fact.
+        delete filled.by;
+        doRemember(filled);
+        return { stored: subj?.name };
+      }
+    }
+
     doRemember(sentence);
     return { stored: subj?.name };
   }
