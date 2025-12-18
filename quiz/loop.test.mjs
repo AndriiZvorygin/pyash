@@ -48,3 +48,19 @@ test("ceremony repeats using fromindex/toindex aliases", async () => {
   assert.equal(counter.obj.num, 3, "counter should be incremented three times");
   assert.equal(invoke?.fromindex?.num ?? invoke?.fromindex, 0, "fromindex should count down to zero");
 });
+
+test("loop ceremony uses caller to-name regardless of internal binding name", async () => {
+  forget();
+
+  await run("subj name alpha obj num 0 be number ya");
+
+  // Definition says to name bucket, but caller uses to name alpha.
+  await run("subj name inc_loop to name bucket fromindex num 0 be ceremony def");
+  await run("obj num 1 to name alpha be add do");
+  await run("subj name inc_loop be ceremony prah");
+
+  await run("to name alpha fromindex num 3 be inc_loop do");
+
+  const alpha = remember("alpha");
+  assert.equal(alpha.obj.num, 3);
+});

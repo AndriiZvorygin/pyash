@@ -32,3 +32,26 @@ test("compile ceremony loop to javascript and run", async () => {
 
   assert.deepEqual(logs.map(String), ["3"]);
 });
+
+test("compile loop: def to-name differs from call to-name", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name alpha obj num 0 be number ya",
+    // Definition binds to name bucket, but the caller invokes with to name alpha.
+    "subj name inc_loop to name bucket fromindex num 0 be ceremony def",
+    "obj num 1 to name alpha be add do",
+    "subj name inc_loop be ceremony prah",
+    "to name alpha fromindex num 3 be inc_loop do",
+    "obj name alpha be say do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  vm.runInNewContext(js, { console: { log: (...args) => logs.push(args.join(" ")) } });
+  assert.deepEqual(logs.map(String), ["3"]);
+});
