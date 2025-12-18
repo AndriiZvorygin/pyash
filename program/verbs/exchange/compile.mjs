@@ -262,9 +262,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     lines.push(`${baseName}.obj = ${baseName}.obj ?? {};`);
     lines.push(`${baseName}.obj.ve = ${baseName}.obj.ve ?? {};`);
     lines.push(`${baseName}.obj.ve.values = ${baseName}.obj.ve.values ?? [];`);
-    lines.push(`const _idx = (${idxExpr});`);
+    lines.push(`const _idx = (${idxExpr}) - 1;`);
     lines.push(`const _curr = ${baseName}.obj.ve.values[_idx];`);
-    lines.push(`${baseName}.obj.ve.values[_idx] = (_curr === "truth" || _curr === true || _curr === 1) ? "lie" : "truth";`);
+    lines.push(`if (${baseName}.obj.ve.type === "num" || typeof _curr === "number") {`);
+    lines.push(`  ${baseName}.obj.ve.values[_idx] = (Number(_curr) || 0) * -1;`);
+    lines.push(`} else {`);
+    lines.push(`  ${baseName}.obj.ve.values[_idx] = (_curr === "truth" || _curr === true || _curr === 1) ? "lie" : "truth";`);
+    lines.push(`}`);
     return lines.join("\n");
   }
 

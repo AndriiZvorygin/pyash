@@ -64,3 +64,19 @@ test("loop ceremony uses caller to-name regardless of internal binding name", as
   const alpha = remember("alpha");
   assert.equal(alpha.obj.num, 3);
 });
+
+test("loop ceremony can mutate a vector (invert element) each iteration", async () => {
+  forget();
+
+  await run("exists subj name counter obj num 0 be number ya");
+  await run("exists subj name doors obj ve num 2 2 be vector ya");
+
+  await run("subj name flip_first to name bucket fromindex num 0 be ceremony def");
+  await run("obj name doors at num 1 be invert do");
+  await run("subj name flip_first be ceremony prah");
+
+  await run("to name counter fromindex num 3 be flip_first do");
+
+  const doors = remember("doors");
+  assert.deepEqual(doors?.obj?.ve?.values, [-2, 2]);
+});
