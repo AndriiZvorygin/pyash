@@ -165,16 +165,18 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       expr = JSON.stringify(obj.text);
     } else if (obj.genitive && sentenceArg) {
       expr = pathFromGenitive(obj.genitive, sentenceArg) ?? expr;
-    } else if (obj.name) {
-      const name = sanitizeName(obj.name);
-      if (locals?.has(name)) {
-        expr = name;
-      } else if (declared?.has(name)) {
-        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
-      } else {
-        expr = JSON.stringify(obj.name);
-      }
-    } else {
+	    } else if (obj.name) {
+	      const name = sanitizeName(obj.name);
+	      if (lang === "c" && (locals?.has(name) || declared?.has(name))) {
+	        expr = name;
+	      } else if (locals?.has(name)) {
+	        expr = name;
+	      } else if (declared?.has(name)) {
+	        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+	      } else {
+	        expr = JSON.stringify(obj.name);
+	      }
+	    } else {
       const fallback = exprForSlot(obj, {
         sentenceArg,
         locals,
