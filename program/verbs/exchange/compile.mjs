@@ -51,7 +51,11 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
 
   if (slot.name) {
     const name = sanitizeName(slot.name);
-    if (locals?.has(name)) return name;
+    if (locals?.has(name)) {
+      if (field === "text") return `${name}.obj?.text`;
+      if (field === "name") return `${name}.obj?.name`;
+      return name;
+    }
     if (declared?.has(name)) {
       if (field === "text") return `${name}.obj?.text`;
       if (field === "name") return `${name}.obj?.name`;
@@ -480,9 +484,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, c
   // Text concatenation via add (numeric source)
   if (baseBe === "add" && (sentence.to?.name || sentence.to?.genitive)) {
     const objExpr = exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
+    const objTextExpr = exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "text" });
     const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
     const targetIsText = targetName && localsTypes?.get(targetName) === "text";
-    if (targetIsText && objExpr !== null) {
+    const valueExpr = objTextExpr ?? (objExpr !== null ? `String(${objExpr})` : null);
+    if (targetIsText && valueExpr !== null) {
       if (sentenceArg) {
         const target = (() => {
           if (sentence.to?.name) {
@@ -492,14 +498,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, c
           return targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
         })();
         const init = `${target} = ${target} ?? "";`;
-        const concat = `${target} = ${target} + String(${objExpr});`;
+        const concat = `${target} = ${target} + ${valueExpr};`;
         return `${init}\n${concat}`;
       }
       if (lang === "c") {
         const target = sentence.to.name;
         return `/* TODO: string concat add for ${target} */`;
       }
-      return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.text = (${sentence.to.name}.obj.text ?? \"\") + String(${objExpr});`;
+      return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.text = (${sentence.to.name}.obj.text ?? \"\") + ${valueExpr};`;
     }
   }
 

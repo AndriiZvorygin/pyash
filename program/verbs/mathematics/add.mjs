@@ -56,6 +56,23 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     return { obj: { text: current + sentence.obj.text }, be: "text" };
   }
 
+  if (sentence.obj?.name && remember) {
+    const source = remember(sentence.obj.name);
+    if (typeof source?.obj?.text === "string") {
+      if (typeof sentence.to === "string") {
+        return { obj: { text: sentence.to + source.obj.text }, be: "text" };
+      }
+      if (typeof sentence.to?.text === "string") {
+        return { obj: { text: sentence.to.text + source.obj.text }, be: "text" };
+      }
+      const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
+      if (!targetName) throw new Error("add: to name is required for text");
+      const fact = remember(targetName);
+      const current = typeof fact?.obj?.text === "string" ? fact.obj.text : "";
+      return { obj: { text: current + source.obj.text }, be: "text" };
+    }
+  }
+
   if (sentence.obj?.num !== undefined) {
     if (typeof sentence.to?.text === "string") {
       return { obj: { text: sentence.to.text + String(sentence.obj.num) }, be: "text" };
@@ -144,6 +161,7 @@ export const signatures = [
   { signatureWords: ["be", "add", "obj", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "obj", "name", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num", "to", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
