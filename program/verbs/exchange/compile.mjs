@@ -489,8 +489,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     const targetIsText =
       targetName &&
       (localsTypes?.get(targetName) === "text" || declaredTypes?.get(targetName) === "text");
+    const canUseTextExpr =
+      typeof obj.text === "string" ||
+      (obj?.name && (localsTypes?.get(sanitizeName(obj.name)) === "text" || declaredTypes?.get(sanitizeName(obj.name)) === "text"));
     const valueExpr =
-      objTextExpr !== null
+      (canUseTextExpr && objTextExpr !== null)
         ? (typeof obj.text === "string" ? JSON.stringify(obj.text) : `String(${objTextExpr})`)
         : (objExpr !== null ? `String(${objExpr})` : null);
     if (targetIsText && valueExpr !== null) {
