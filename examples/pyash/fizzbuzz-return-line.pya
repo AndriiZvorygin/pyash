@@ -1,16 +1,20 @@
-subj name fizzbuzz line obj num 0 to name line be ceremony def
-exists subj name line obj num 0 be number ya
+subj name fizzbuzz line by num 0 to name line text be ceremony def
+exists subj name line obj text quoted.text..text.quoted be text ya
 exists subj name rem3 obj num 0 be number ya
 exists subj name rem5 obj num 0 be number ya
-
-subj name line obj num of obj of this be number ya
-obj num of obj of this from num 3 to name rem3 be remains do
-obj num of obj of this from num 5 to name rem5 be remains do
+obj this by from num 3 to name rem3 be remains do
+obj this by from num 5 to name rem5 be remains do
 
 obj name rem3 be equally from num 0 then obj text Fizz to name line be add do
 obj name rem5 be equally from num 0 then obj text Buzz to name line be add do
-subj name line ret
+obj name line be equally from text quoted.text..text.quoted then obj this by to name line be add do
+obj name line ret
 subj name fizzbuzz line be ceremony prah
 
-obj num 15 to name line be fizzbuzz line do
+subj name fizzbuzz say fromindex num 0 toindex num 0 be ceremony def
+exists subj name line obj text quoted.text..text.quoted be text ya
+by num of fromindex of this to name line be fizzbuzz line do
 obj name line be say do
+subj name fizzbuzz say be ceremony prah
+
+to name outside fromindex num 1 toindex num 16 be fizzbuzz say do

@@ -3,6 +3,28 @@ import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSig
 import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { resolveThisValue } from "../library/thisBinding.mjs";
+
+function resolveInlineGenitive(genitive, state) {
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return undefined;
+  const [root, ...rest] = chainArr;
+  if (root !== "this") return undefined;
+  const ev = state.currentEvokeRef || state.currentEvoke;
+  if (!ev) return undefined;
+  let curr = ev;
+  for (const part of rest) {
+    if (curr == null) return undefined;
+    if (typeof curr === "number") {
+      if (part === "num") return curr;
+      return undefined;
+    }
+    curr = curr[part];
+  }
+  if (typeof curr === "number") return curr;
+  if (typeof curr?.num === "number") return curr.num;
+  return undefined;
+}
 
 export async function handleImperative({
   sentence,
@@ -14,6 +36,27 @@ export async function handleImperative({
 }) {
   const { mood, be, obj, to, from, subj } = sentence;
   if (mood !== "do") return null;
+
+  if (sentence.obj?.thisRef) {
+    const resolved = resolveThisValue(sentence.obj, state.currentEvokeRef || state.currentEvoke);
+    if (resolved !== null && resolved !== undefined) {
+      sentence.obj = typeof resolved === "number" ? { num: resolved } : resolved;
+    }
+    if (sentence.be === "add" && sentence.obj?.num === undefined && sentence.obj?.thisRef === "by") {
+      console.log("debug add obj thisRef by", resolved);
+    }
+  } else if (sentence.obj?.genitive) {
+    const resolved = resolveInlineGenitive(sentence.obj.genitive, state);
+    if (resolved !== undefined) {
+      sentence.obj = { num: resolved };
+    }
+  }
+  if (sentence.by?.genitive) {
+    const resolved = resolveInlineGenitive(sentence.by.genitive, state);
+    if (resolved !== undefined) {
+      sentence.by = { num: resolved };
+    }
+  }
 
   const hasSequenceRegisters =
     sentence.fromindex != null || sentence.toindex != null || sentence.atindex != null;
@@ -162,15 +205,18 @@ export async function handleImperative({
     memory.doRemember(target);
   }
 
-  const useRawTo = be === "mind" || be === "say";
+  const useRawTo =
+    be === "mind" ||
+    be === "say" ||
+    (be === "add" && (sentence.obj?.text || target?.obj?.text !== undefined));
   const toValue = useRawTo ? (to ?? sentence.to) : (target?.obj ?? to);
 
   // pass the current value, not the name
   const callSentence = {
     ...sentence,
-    obj: obj ?? sentence.obj,
+    obj: sentence.obj,
     to: toValue ?? to ?? sentence.to,
-    from: from ?? sentence.from,
+    from: sentence.from ?? from,
     by: sentence.by
   };
 

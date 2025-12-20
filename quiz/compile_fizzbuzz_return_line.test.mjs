@@ -29,5 +29,21 @@ test("compile fizzbuzz return-line to javascript and run", async () => {
     }
   });
 
-  assert.deepEqual(logs, ["FizzBuzz"]);
+  assert.deepEqual(logs, [
+    "1",
+    "2",
+    "Fizz",
+    "4",
+    "Buzz",
+    "Fizz",
+    "7",
+    "8",
+    "Fizz",
+    "Buzz",
+    "11",
+    "Fizz",
+    "13",
+    "14",
+    "FizzBuzz",
+  ]);
 });

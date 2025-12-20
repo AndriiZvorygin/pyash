@@ -119,6 +119,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 }
 
 export async function runDefinitionBody({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
+  const prevEvoke = state.currentEvoke;
+  const prevEvokeRef = state.currentEvokeRef;
+  const prevExecutingBody = state.executingBody;
   const { to } = sentence;
   const clone =
     globalThis.structuredClone ||
@@ -126,6 +129,8 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
+  let updatedTarget = null;
+  let evoke = sentence;
   const evokeSeed = { ...sentence };
   if (sentence.by?.register && !evokeSeed.by) evokeSeed.by = sentence.by;
   state.currentEvoke = evokeSeed;
@@ -133,23 +138,26 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   memory.pushMemoryContext({ seedFromCurrent: true });
   state.currentEvokeRef = evokeSeed;
 
-  for (const step of body) {
-    // Avoid mutating definition body sentences across invocations.
-    lastResult = await interpret(clone(step));
-    if (step.mood === "then" && state.lastCondition === false) {
-      state.lastCondition = true;
-      break;
+  try {
+    for (const step of body) {
+      // Avoid mutating definition body sentences across invocations.
+      lastResult = await interpret(clone(step));
+      if (step.mood === "then" && state.lastCondition === false) {
+        state.lastCondition = true;
+        break;
+      }
     }
+  } finally {
+    const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
+    updatedTarget = to?.name ? memory.remember(to.name) : null;
+    recordSandpitTrace(sandpit);
+    memory.popMemoryContext();
+    state.executingBody = false;
+    evoke = state.currentEvokeRef || state.currentEvoke || sentence;
+    state.currentEvoke = prevEvoke;
+    state.currentEvokeRef = prevEvokeRef;
+    state.executingBody = prevExecutingBody;
   }
-
-  const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
-  const updatedTarget = to?.name ? memory.remember(to.name) : null;
-  recordSandpitTrace(sandpit);
-  memory.popMemoryContext();
-  state.executingBody = false;
-  const evoke = state.currentEvokeRef || state.currentEvoke || sentence;
-  state.currentEvoke = null;
-  state.currentEvokeRef = null;
 
   // merge updates from sandpit
   const mainTarget = to?.name ? memory.remember(to.name) : null;

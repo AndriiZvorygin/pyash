@@ -56,6 +56,19 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     return { obj: { text: current + sentence.obj.text }, be: "text" };
   }
 
+  if (sentence.obj?.num !== undefined) {
+    if (typeof sentence.to?.text === "string") {
+      return { obj: { text: sentence.to.text + String(sentence.obj.num) }, be: "text" };
+    }
+    const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
+    if (targetName && remember) {
+      const fact = remember(targetName);
+      if (typeof fact?.obj?.text === "string") {
+        return { obj: { text: fact.obj.text + String(sentence.obj.num) }, be: "text" };
+      }
+    }
+  }
+
   if (sentence.to.genitive) {
     const target = resolveGenitiveTarget(sentence.to.genitive, remember);
     if (target) {
@@ -130,6 +143,7 @@ export const signatures = [
   { signatureWords: ["be", "add", "obj", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "obj", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num", "to", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "obj", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
