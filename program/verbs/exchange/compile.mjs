@@ -145,7 +145,7 @@ function targetPath(role, sentenceArg, field = "num", slot = {}, { locals, decla
   return `${sentenceArg}.${role}.${field}`;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, ceremonyFns, declared, loopShim, mindShim, cHelpers, rememberFlag } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -486,14 +486,20 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, c
     const objExpr = exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
     const objTextExpr = exprForSlot(obj, { sentenceArg, locals, declared, defaultExpr: null, field: "text" });
     const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
-    const targetIsText = targetName && localsTypes?.get(targetName) === "text";
-    const valueExpr = objTextExpr ?? (objExpr !== null ? `String(${objExpr})` : null);
+    const targetIsText =
+      targetName &&
+      (localsTypes?.get(targetName) === "text" || declaredTypes?.get(targetName) === "text");
+    const valueExpr =
+      objTextExpr !== null
+        ? (typeof obj.text === "string" ? JSON.stringify(obj.text) : `String(${objTextExpr})`)
+        : (objExpr !== null ? `String(${objExpr})` : null);
     if (targetIsText && valueExpr !== null) {
       if (sentenceArg) {
         const target = (() => {
           if (sentence.to?.name) {
             const baseName = sanitizeName(sentence.to.name);
             if (locals?.has(baseName)) return `${baseName}.obj.text`;
+            if (declaredTypes?.get(baseName) === "text") return `${baseName}.obj.text`;
           }
           return targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
         })();
@@ -963,7 +969,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, c
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremonyFns, cHelpers }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, ceremonyFns, cHelpers }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -975,7 +981,7 @@ function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremon
   const locals = new Set();
   const localsTypes = new Map();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, ceremonyFns, cHelpers });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, ceremonyFns, cHelpers });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -1016,6 +1022,7 @@ let lines = [header];
   const loopShim = { used: false };
   const mindShim = { used: false };
   const declared = new Set();
+  const declaredTypes = new Map();
   const ceremonyFns = new Map();
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i];
@@ -1028,7 +1035,7 @@ let lines = [header];
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang, declared, ceremonyFns, cHelpers });
+      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, ceremonyFns, cHelpers });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -1059,7 +1066,7 @@ let lines = [header];
       throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, loopShim, mindShim, cHelpers, rememberFlag });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, loopShim, mindShim, cHelpers, rememberFlag });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
@@ -1082,7 +1089,16 @@ let lines = [header];
       return lang === "c" ? mainLines : lines;
     })();
     target.push(line ?? `${todoPrefix}: ${JSON.stringify(sentence)}${todoSuffix}`);
-    if (name && sentence.mood === "ya") declared.add(name);
+    if (name && sentence.mood === "ya") {
+      declared.add(name);
+      if (sentence.be === "text" || sentence.obj?.text !== undefined) {
+        declaredTypes.set(name, "text");
+      } else if (sentence.be === "number" || sentence.obj?.num !== undefined) {
+        declaredTypes.set(name, "number");
+      } else if (sentence.be === "vector" || sentence.obj?.ve) {
+        declaredTypes.set(name, "vector");
+      }
+    }
   }
 
   if (lang !== "c") {

@@ -10,7 +10,7 @@ obj this by from num 5 to name rem5 be remains do
 
 obj name rem3 be equally from num 0 then obj text Fizz to name line be add do
 obj name rem5 be equally from num 0 then obj text Buzz to name line be add do
-obj name line be equally from text quoted.text..text.quoted then obj this by to name line be add do
+obj name line be equally from text quoted.text..text.quoted then obj num of by of this to name line be add do
 obj name line ret
 subj name fizzbuzz line be ceremony prah
 
@@ -18,8 +18,7 @@ subj name fizzbuzz build fromindex num 0 toindex num 0 be ceremony def
 exists subj name line obj text quoted.text..text.quoted be text ya
 by num of fromindex of this to name line be fizzbuzz line do
 obj name line to name output be add do
-obj text quoted.text.
-.text.quoted to name output be add do
+obj text quoted.text. .text.quoted to name output be add do
 subj name fizzbuzz build be ceremony prah
 
 fromindex num 1 toindex num 16 be fizzbuzz build do
