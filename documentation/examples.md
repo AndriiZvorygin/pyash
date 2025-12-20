@@ -24,5 +24,8 @@ This folder collects runnable/walkthrough examples to help future assistants and
 - `examples/pyash/compile-conditional-to-js-text.pya` / `compile-conditional-to-c-text.pya` — compile a tiny/then add into JS/C.
 - `examples/pyash/compile-mixed-to-js-text.pya` — shows `exists` declaration, reassignment, and conditional add compiled to JS.
 - `examples/pyash/translate-conditional-to-english.pya` / `translate-conditional-from-english.pya` — translate conditionals between Pyash and English.
+- `examples/pyash/fizzbuzz.pya` — interpreter fizzbuzz (1..15) using loop + inline `then`.
+- `examples/pyash/fizzbuzz-100.pya` — interpreter fizzbuzz (1..100) using the same loop ceremony.
+- `examples/pyash/compile-fizzbuzz-100.txt` — compile-ready fizzbuzz (1..100) text for JS/C targets.
 - `examples/bugs/` — reproductions of known or fixed issues; use to verify regressions and document tricky edge cases.
 - `examples/docs/` — documentation-oriented snippets or transcripts (e.g., REPL walkthroughs) that illustrate concepts for readers without running code.
