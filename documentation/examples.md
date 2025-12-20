@@ -30,6 +30,6 @@ This folder collects runnable/walkthrough examples to help future assistants and
 - `examples/pyash/fizzbuzz-one-say.pya` — build all fizzbuzz lines into one output string, then `say` once at the end.
 - `examples/pyash/compile-fizzbuzz-100.txt` — compile-ready fizzbuzz (1..100) text for JS/C targets.
 - `examples/pyash/compile-fizzbuzz-return-line.txt` — compile-ready return-line fizzbuzz for JS.
-- `examples/pyash/compile-fizzbuzz-one-say.txt` — compile-ready single-say fizzbuzz output for JS.
+- `examples/pyash/fizzbuzz-one-say.pya` — compile-ready single-say fizzbuzz output for JS.
 - `examples/bugs/` — reproductions of known or fixed issues; use to verify regressions and document tricky edge cases.
 - `examples/docs/` — documentation-oriented snippets or transcripts (e.g., REPL walkthroughs) that illustrate concepts for readers without running code.
