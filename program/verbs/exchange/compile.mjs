@@ -368,12 +368,20 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
 	  // Conditionals (tiny/giant/equally) with then consequence
 	  if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
-	    const lhs = exprForSlot(obj, {
-	      sentenceArg,
-	      locals,
-	      declared,
-	      defaultExpr: sentenceArg ? `${sentenceArg}.obj?.num` : "lhs"
-	    }) ?? "lhs";
+	    const lhs = (() => {
+	      if (obj?.name) {
+	        const baseName = sanitizeName(obj.name);
+	        if (locals?.has(baseName)) {
+	          return `${baseName}.obj?.num ?? ${baseName}`;
+	        }
+	      }
+	      return exprForSlot(obj, {
+	        sentenceArg,
+	        locals,
+	        declared,
+	        defaultExpr: sentenceArg ? `${sentenceArg}.obj?.num` : "lhs"
+	      }) ?? "lhs";
+	    })();
 	    const rhs = exprForSlot(sentence.from, {
 	      sentenceArg,
 	      locals,
@@ -394,7 +402,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 	          .replace(/\?\./g, ".")
 	          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
 	      : rhs;
-	    return `if (${lang === "c" ? cLhs : lhs} ${op} ${lang === "c" ? cRhs : rhs}) {\n${finalBody}\n}`;
+	    const jsLhs = `(${lhs})`;
+	    const jsRhs = `(${rhs})`;
+	    const cLhsWrapped = `(${cLhs})`;
+	    const cRhsWrapped = `(${cRhs})`;
+	    return `if (${lang === "c" ? cLhsWrapped : jsLhs} ${op} ${lang === "c" ? cRhsWrapped : jsRhs}) {\n${finalBody}\n}`;
 	  }
 
   // Dot product (produce) for vectors

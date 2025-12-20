@@ -1,8 +1,7 @@
+subj name fizzbuzz be ceremony def
 exists subj name handled obj num 0 be number ya
 exists subj name rem3 obj num 0 be number ya
 exists subj name rem5 obj num 0 be number ya
-
-subj name fizzbuzz be ceremony def
 subj name handled obj num 0 be number ya
 
 obj this ti fromindex from num 3 to name rem3 be remains do
