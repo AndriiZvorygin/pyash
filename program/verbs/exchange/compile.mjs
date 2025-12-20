@@ -145,6 +145,20 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
   const effectiveBe = baseBe || sentence.mood;
 
+  if (sentence.mood === "ret") {
+    const sourceName = sentence?.ret?.name || sentence?.obj?.name || sentence?.subj?.name;
+    if (sourceName) {
+      return `return ${sanitizeName(sourceName)};`;
+    }
+    if (sentence.obj?.genitive && sentenceArg) {
+      const expr = pathFromGenitive(sentence.obj.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
+      if (expr) return `return ${expr};`;
+    }
+    if (sentence.obj?.num !== undefined) return `return ${Number(sentence.obj.num) || 0};`;
+    if (typeof sentence.obj?.text === "string") return `return ${JSON.stringify(sentence.obj.text)};`;
+    return lang === "c" ? "return;" : "return sentence;";
+  }
+
   // Say -> console.log / printf TODO
   if (baseBe === "say") {
     // Special case: say to <mind> -> invoke mind (JS)
@@ -521,7 +535,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   if (baseBe === "add" && typeof obj.text === "string" && (sentence.to?.name || sentence.to?.genitive)) {
     const literal = JSON.stringify(obj.text);
     if (sentenceArg) {
-        const target = targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
+      const target = (() => {
+        if (sentence.to?.name) {
+          const baseName = sanitizeName(sentence.to.name);
+          if (locals?.has(baseName)) return `${baseName}.obj.text`;
+        }
+        return targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
+      })();
       const init = `${target} = ${target} ?? "";`;
       const concat = `${target} = ${target} + ${literal};`;
       return `${init}\n${concat}`;
@@ -690,6 +710,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     if (fn) {
       const inlineSet = new Set([...(declared || []), ...(locals || [])]);
       const arg = inlineSentenceLiteral(sentence, inlineSet);
+      if (sentence.to?.name) {
+        const targetVar = sanitizeName(sentence.to.name);
+        const lines = [];
+        if (!locals?.has(targetVar) && !declared?.has(targetVar)) {
+          lines.push(`let ${targetVar};`);
+          locals?.add(targetVar);
+        }
+        lines.push(`${targetVar} = ${fn}(${arg});`);
+        return lines.join("\n");
+      }
       return `${fn}(${arg});`;
     }
   }
@@ -714,6 +744,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     if (fn) {
       if (lang === "c") return `${fn}();`;
       const arg = inlineSentenceLiteral(sentence, declared);
+      if (sentence.to?.name) {
+        const targetVar = sanitizeName(sentence.to.name);
+        const lines = [];
+        if (!declared?.has(targetVar)) {
+          lines.push(`let ${targetVar};`);
+          declared?.add(targetVar);
+        }
+        lines.push(`${targetVar} = ${fn}(${arg});`);
+        lines.push(`globalThis["${sentence.to.name}"] = ${targetVar};`);
+        return lines.join("\n");
+      }
       return `${fn}(${arg});`;
     }
   }
@@ -787,7 +828,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
         const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
         if (needsDecl) {
           locals?.add(baseName);
+          if (obj?.thisRef === "obj") {
+            return `let ${baseName} = { subj: { name: "${sentence.subj.name}" }, obj: {}, be: "number", mood: "ya" };\n${baseName}.obj = ${sentenceArg}.obj;`;
+          }
           return `let ${baseName} = { subj: { name: "${sentence.subj.name}" }, obj: {}, be: "number", mood: "ya" };\n${baseName}.obj.num = ${rhsExpr};`;
+        }
+        if (obj?.thisRef === "obj") {
+          return `${baseName}.obj = ${sentenceArg}.obj;`;
         }
         return `${baseName}.obj = ${baseName}.obj ?? {};\n${baseName}.obj.num = ${rhsExpr};`;
       }

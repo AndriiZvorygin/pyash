@@ -342,7 +342,7 @@ test("compile emits C if-statement for tiny then", async () => {
 
   assert.ok(c);
   assert.match(c, /double total = 0;/);
-  assert.match(c, /if\s*\(3 < 5\)\s*\{\s*total = total \+ 1;/s);
+  assert.match(c, /if\s*\(\(3\)\s*<\s*\(5\)\)\s*\{\s*total = total \+ 1;/s);
 });
 
 test("compile emits JS for simple add", async () => {
