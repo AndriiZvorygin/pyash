@@ -37,3 +37,5 @@ FizzBuzz quick checks
 Compile-to-C status (quick reality check):
 - Verified by gcc+run quizzes: scalars (`number`), `say`, `add`, `remains` (`fmod`), and `equally ... then ...`.
 - Not yet parity: ceremonies, loops, vectors, `at all`.
+
+Stability notes and workflow guardrails live in `README.md` under "Stability Notes" and "Rules of the Road".

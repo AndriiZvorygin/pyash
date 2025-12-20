@@ -20,6 +20,24 @@ node program/main.mjs
 Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit. Conditionals use inline `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then obj num 1 to name counter be add do`.
 Dispatch is signature-first: if a call’s cases/types do not match a registered signature, you’ll see `Unknown verb/signature: ...`.
 
+## Stability Notes
+Stable enough for iteration:
+- Core parsing + compositional cases (`fromstate` -> `become`, `fromtext` -> `accordingto`, `totext`, etc.)
+- Signature derivation/dispatch for built-in numeric verbs
+- Sandpit execution and `ret` merge for simple ceremonies
+
+Still evolving / fragile:
+- Text-typed flows inside ceremonies (especially when mixed with numeric ops)
+- Genitive + `this` resolution in compiled code
+- Compiler conditionals with text comparisons
+- Map/loop interop in compiled backends
+
+## Rules of the Road
+- Ceremony bodies are stored once; avoid repeating the same `subj name` in a body, because later lines overwrite earlier ones.
+- Definition signatures must match invocation signatures (cases + types). Prefer explicit types in `def` headers.
+- For empty text literals, use `quoted.text..text.quoted` (plain `""` is ignored by the parser).
+- When you need loop/register values inside a ceremony, use `this` + genitives (`obj num of fromindex of this` or `obj this by`).
+
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`
 - Imperative (add): `obj num 3 to num 4 be add do` → stores command + result fact (`num 7`)
