@@ -236,7 +236,7 @@ test("compile emits C loop for fromindex countdown", async () => {
   const c = result?.obj?.text ?? result?.value?.text ?? "";
 
   assert.ok(c.includes("be_loop_body_to_name_num"), "should emit ceremony in C");
-  assert.ok(c.includes("for (int fromindex = 3; fromindex > 0; fromindex--) { be_loop_body_to_name_num(); }"), "should emit countdown loop");
+  assert.ok(c.includes("for (fromindex = 3; fromindex > 0; fromindex--) { be_loop_body_to_name_num(); }"), "should emit countdown loop");
 });
 
 test("compiled C loop builds and runs", async (t) => {

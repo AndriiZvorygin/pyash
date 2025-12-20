@@ -2,7 +2,7 @@ exists subj name handled obj num 0 be number ya
 exists subj name rem3 obj num 0 be number ya
 exists subj name rem5 obj num 0 be number ya
 
-subj name fizzbuzz be ceremony def
+subj name fizzbuzz step to name bucket fromindex num 0 toindex num 0 be ceremony def
 subj name handled obj num 0 be number ya
 
 obj this ti fromindex from num 3 to name rem3 be remains do
@@ -15,6 +15,6 @@ obj name handled be equally from num 3 then obj text FizzBuzz be say do
 obj name handled be equally from num 1 then obj text Fizz be say do
 obj name handled be equally from num 2 then obj text Buzz be say do
 obj name handled be equally from num 0 then obj this ti fromindex be say do
-subj name fizzbuzz be ceremony prah
+subj name fizzbuzz step be ceremony prah
 
-fromindex num 1 toindex num 16 be fizzbuzz do
+to name outside fromindex num 1 toindex num 16 be fizzbuzz step do

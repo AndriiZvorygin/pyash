@@ -19,8 +19,8 @@ function sanitizeName(name = "") {
 function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, field = "num" } = {}) {
   if (!slot) return defaultExpr ?? null;
 
-  if (slot.genitive && sentenceArg) {
-    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
+  if (slot.genitive) {
+    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared, allowCGlobals: true });
     if (path) return path;
   }
 
@@ -74,8 +74,8 @@ function vectorValuesExpr(slot = {}, { sentenceArg, locals, declared } = {}) {
     );
     return `[${vals.join(", ")}]`;
   }
-  if (slot.genitive && sentenceArg) {
-    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
+  if (slot.genitive) {
+    const path = pathFromGenitive(slot.genitive, sentenceArg, { locals, declared, allowCGlobals: true });
     if (path) return `${path}?.ve?.values ?? []`;
   }
   if (slot.name) {
@@ -88,10 +88,24 @@ function vectorValuesExpr(slot = {}, { sentenceArg, locals, declared } = {}) {
   return "[]";
 }
 
-function pathFromGenitive(genitive = [], sentenceArg, { locals, declared } = {}) {
-  if (!sentenceArg) return null;
+function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, allowCGlobals = false } = {}) {
   const chainArr = Array.isArray(genitive) ? genitive : genitive?.chain;
   if (!chainArr || chainArr.length === 0) return null;
+  if (!sentenceArg) {
+    if (!allowCGlobals) return null;
+    // C ceremonies/loops currently use global loop registers instead of passing a sentence object.
+    // Allow the common loop-register genitives (this/fromindex/etc) to resolve to those globals.
+    // Supported: `this ti fromindex`, `fromindex num of this`, etc.
+    const isThisPrefix = chainArr[0] === "this";
+    const isThisSuffix = chainArr[chainArr.length - 1] === "this";
+    const parts = isThisPrefix ? chainArr.slice(1) : (isThisSuffix ? chainArr.slice(0, -1) : null);
+    if (parts && parts.length) {
+      const head = parts[0];
+      if (parts.length === 1 && ["fromindex", "toindex", "atindex"].includes(head)) return head;
+      if (parts.length === 2 && parts[1] === "num" && ["fromindex", "toindex", "atindex"].includes(head)) return head;
+    }
+    return null;
+  }
   const isLocalRoot = chainArr[0] !== "this" && typeof chainArr[0] === "string" && (locals?.has(sanitizeName(chainArr[0])) || declared?.has(sanitizeName(chainArr[0])));
   const chain = chainArr[0] === "this" ? chainArr.slice(1) : chainArr;
   if (chain.length === 0) return sentenceArg;
@@ -109,7 +123,7 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared } = {})
 function valueForRole(role, sentenceArg, field = "num", slot = {}) {
   if (!sentenceArg) return null;
   if (slot.genitive) {
-    const access = pathFromGenitive(slot.genitive, sentenceArg);
+    const access = pathFromGenitive(slot.genitive, sentenceArg, { allowCGlobals: true });
     return access;
   }
   return `${sentenceArg}.${role}?.${field} ?? ${sentenceArg}.${role}`;
@@ -118,7 +132,7 @@ function valueForRole(role, sentenceArg, field = "num", slot = {}) {
 function targetPath(role, sentenceArg, field = "num", slot = {}, { locals, declared } = {}) {
   if (!sentenceArg) return null;
   if (slot.genitive) {
-    return pathFromGenitive(slot.genitive, sentenceArg, { locals, declared });
+    return pathFromGenitive(slot.genitive, sentenceArg, { locals, declared, allowCGlobals: true });
   }
   return `${sentenceArg}.${role}.${field}`;
 }
@@ -163,8 +177,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
     let expr = "undefined";
     if (typeof obj.text === "string") {
       expr = JSON.stringify(obj.text);
-    } else if (obj.genitive && sentenceArg) {
-      expr = pathFromGenitive(obj.genitive, sentenceArg) ?? expr;
+    } else if (obj.genitive) {
+      expr = pathFromGenitive(obj.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
 	    } else if (obj.name) {
 	      const name = sanitizeName(obj.name);
 	      if (lang === "c" && (locals?.has(name) || declared?.has(name))) {
@@ -630,12 +644,24 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
       lines.push(`${lhs} = ${expr};`);
       return lines.join("\n");
     }
+    if (lang === "c") {
+      const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
+      const hasExplicitDivisor = sentence.from != null || sentence.by != null;
+      const divisor = hasExplicitDivisor
+        ? (exprForSlot(sentence.from ?? sentence.by, { sentenceArg, locals, declared, defaultExpr: null, field: "num" }) ?? "0")
+        : (exprForSlot(sentence.obj, { sentenceArg, locals, declared, defaultExpr: null, field: "num" }) ?? "0");
+      // If the user wrote `obj num N to name X be remains do`, treat N as the divisor and X as the dividend.
+      // Otherwise, treat `obj ... from ...` as dividend/divisor.
+      const numerator = (!hasExplicitDivisor && sentence.obj?.num !== undefined)
+        ? (targetName ?? "0")
+        : (exprForSlot(sentence.obj, { sentenceArg, locals, declared, defaultExpr: targetName, field: "num" }) ?? targetName ?? "0");
+      const lhs = targetName ?? "result";
+      if (cHelpers) cHelpers.usesPrintf = cHelpers.usesPrintf; // no-op; keep helper object alive
+      return `if ((${divisor}) == 0) { /* remains: from cannot be zero */ } else { ${lhs} = fmod(${numerator}, ${divisor}); }`;
+    }
     const divisorRaw = sentence.from?.num ?? obj.num;
     const divisor = typeof divisorRaw === "number" ? divisorRaw : Number(divisorRaw);
     const safeValue = Number.isNaN(divisor) ? 0 : divisor;
-    if (lang === "c") {
-      return `${sentence.to.name} = fmod(${sentence.to.name}, ${safeValue});`;
-    }
     return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) % ${safeValue};`;
   }
 
@@ -658,16 +684,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
 
   if (mood === "do" && !sentenceArg) {
     const fn = ceremonyFns?.get(baseBe);
-	      if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
+	    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
 	        if (lang === "c") {
 	          const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
 	          const hasUntil = sentence.toindex !== undefined;
 	          const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
 	          if (hasUntil) {
 	            const step = untilVal > start ? 1 : -1;
-	            return `for (int fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { ${fn}(); }`;
+	            return `for (fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { toindex = ${untilVal}; ${fn}(); }`;
 	          }
-	          return `for (int fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
+	          return `for (fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
 	        }
 	        const evokerLiteral = inlineSentenceLiteral(sentence, declared);
 	        if (loopShim) loopShim.used = true;
@@ -806,7 +832,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, ceremonyFns, d
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremonyFns }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremonyFns, cHelpers }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -817,7 +843,7 @@ function transpileCeremony(defSentence, bodySentences, { lang, declared, ceremon
   let hasReturn = false;
   const locals = new Set();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, declared, ceremonyFns });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, declared, ceremonyFns, cHelpers });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -870,7 +896,7 @@ let lines = [header];
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang, declared, ceremonyFns });
+      const fn = transpileCeremony(sentence, body, { lang, declared, ceremonyFns, cHelpers });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -959,6 +985,13 @@ let lines = [header];
     const headers = [];
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
     if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
+    const needsLoopGlobals =
+      [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex)\b/.test(l));
+    if (needsLoopGlobals) {
+      headers.push("double fromindex = 0;");
+      headers.push("double toindex = 0;");
+      headers.push("double atindex = 0;");
+    }
     if (headers.length) lines.unshift(...headers);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
