@@ -1,0 +1,9 @@
+exists subj name outside obj num 0 be number ya
+exists subj name switches obj ve bool truth lie truth be vector ya
+
+subj name flip index to name bucket fromindex num 0 be ceremony def
+obj name switches at num of fromindex of this be invert do
+subj name flip index be ceremony prah
+
+to name outside fromindex num 2 toindex num -1 be flip index do
+obj ve of switches be say do
