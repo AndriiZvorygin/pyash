@@ -201,6 +201,23 @@ export function parse(line) {
     }
 
     if (t === "ve" || t === "vec") {
+      if (words[i + 1] === "of" || words[i + 1] === "ti") {
+        const chain = [t];
+        let j = i + 1;
+        while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
+          const next = words[j + 1];
+          if (!next) break;
+          chain.push(next);
+          j += 2;
+        }
+        if (chain.length > 1) {
+          const ordered = chain.slice().reverse(); // store root-first
+          slot.genitive = { chain: ordered };
+          i = j - 1;
+          continue;
+        }
+      }
+
       const elemType = words[i + 1];
       if (!elemType) continue;
       const vector = { type: elemType, values: [] };

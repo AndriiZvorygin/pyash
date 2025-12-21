@@ -12,6 +12,20 @@ export function npToPyash(np = {}) {
     return `text ${JSON.stringify(np.text)}`;
   }
   if (np.filename !== undefined) return `filename ${np.filename}`;
+  if (np.ve) {
+    const type = np.ve.type || "num";
+    const values = Array.isArray(np.ve.values) ? np.ve.values : [];
+    const rendered = values.map((value) => {
+      if (typeof value === "number") return String(value);
+      if (typeof value === "boolean") return value ? "truth" : "lie";
+      if (typeof value === "string") {
+        if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+        return JSON.stringify(value);
+      }
+      return String(value);
+    });
+    return ["ve", type, ...rendered].join(" ");
+  }
   return ""; // can refine later
 }
 
