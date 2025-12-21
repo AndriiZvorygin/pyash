@@ -55,3 +55,25 @@ test("compile JS say genitive vector outputs literal", async () => {
   const out = await runJs(js);
   assert.equal(out, "ve num 1 2 3");
 });
+
+test("compile JS say name text vector outputs full sentence", async () => {
+  forget();
+  const pyash = [
+    "exists subj name words obj ve text hello world be vector ya",
+    "obj name words be say do"
+  ].join("\n");
+  const js = await compileToJs(pyash);
+  const out = await runJs(js);
+  assert.equal(out, "subj name words obj ve text hello world be vector ya");
+});
+
+test("compile JS say genitive text vector outputs literal", async () => {
+  forget();
+  const pyash = [
+    "exists subj name words obj ve text hello world be vector ya",
+    "obj ve of words be say do"
+  ].join("\n");
+  const js = await compileToJs(pyash);
+  const out = await runJs(js);
+  assert.equal(out, "ve text hello world");
+});

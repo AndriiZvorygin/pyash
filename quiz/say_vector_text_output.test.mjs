@@ -1,0 +1,45 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget } from "../program/remember/index.mjs";
+
+test("say on text vector name prints full sentence", async () => {
+  forget();
+
+  await interpret(parse("subj name words obj ve text hello world be vector ya"));
+
+  const logs = [];
+  const originalLog = console.log;
+  // eslint-disable-next-line no-console
+  console.log = (...args) => logs.push(args.join(" "));
+  try {
+    await interpret(parse("obj name words be say do"));
+  } finally {
+    // eslint-disable-next-line no-console
+    console.log = originalLog;
+  }
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0], "subj name words obj ve text hello world be vector ya");
+});
+
+test("say on text vector literal prints vector only", async () => {
+  forget();
+
+  await interpret(parse("subj name words obj ve text hello world be vector ya"));
+
+  const logs = [];
+  const originalLog = console.log;
+  // eslint-disable-next-line no-console
+  console.log = (...args) => logs.push(args.join(" "));
+  try {
+    await interpret(parse("obj ve of words be say do"));
+  } finally {
+    // eslint-disable-next-line no-console
+    console.log = originalLog;
+  }
+
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0], "ve text hello world");
+});

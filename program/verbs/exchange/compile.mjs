@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
+import { vectorFormatHelper } from "./helpers_js.mjs";
+import { VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 
 function sanitizeName(name = "") {
@@ -222,6 +224,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesPrintf = true;
         cHelpers.usesVectorType = true;
         cHelpers.usesVectorPrinter = true;
+        cHelpers.usesString = true;
+        cHelpers.usesCtype = true;
       }
       const vecName = sentence.obj?.name;
       if (vecName && declaredTypes?.get(vecName) === "vector") {
@@ -919,7 +923,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       return null;
     })();
 
-    const vecType = obj.ve.type || "num";
+    const rawType = obj.ve.type || "num";
+    const vecType = rawType === "number" ? "num" : rawType;
     if (fillCountExpr && obj.ve.values.length === 1) {
       const elem = obj.ve.values[0];
       const elemLiteral = typeof elem === "number" ? String(elem) : JSON.stringify(elem);
@@ -947,18 +952,27 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     const sentenceObject = `{ subj: { name: "${name}" }, obj: { ve: ${vecLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
     if (lang === "c") {
-      if (vecType !== "num" && vecType !== "number") {
-        return `/* TODO: vector support in C for ${vecType} */`;
-      }
       if (!shouldDeclare) {
         return `/* TODO: vector reassignment in C */`;
       }
-      if (cHelpers) cHelpers.usesVectorType = true;
+      if (cHelpers) {
+        cHelpers.usesVectorType = true;
+        cHelpers.usesVectorPrinter = true;
+        cHelpers.usesString = true;
+        cHelpers.usesCtype = true;
+      }
+      const count = obj.ve.values.length;
+      if (vecType === "text") {
+        const values = obj.ve.values.map(v => JSON.stringify(String(v))).join(", ");
+        return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
+      }
+      if (vecType !== "num") {
+        return `/* TODO: vector support in C for ${vecType} */`;
+      }
       const values = obj.ve.values
         .map(v => (typeof v === "number" ? v : Number(v) || 0))
         .join(", ");
-      const count = obj.ve.values.length;
-      return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values };`;
+      return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values, NULL };`;
     }
     if (shouldDeclare) {
       return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
@@ -1090,7 +1104,7 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
   const jsHelpers = { usesVectorFormat: false };
@@ -1196,25 +1210,7 @@ let lines = [header];
       prelude.push(mapHelper);
     }
     if (jsHelpers.usesVectorFormat) {
-      const vectorHelper = [
-        "function formatVector(values = [], type = \"num\") {",
-        "  const tokens = [\"ve\", type];",
-        "  for (const value of values) {",
-        "    if (typeof value === \"number\") tokens.push(String(value));",
-        "    else if (typeof value === \"boolean\") tokens.push(value ? \"truth\" : \"lie\");",
-        "    else if (typeof value === \"string\") {",
-        "      if (/^[A-Za-z0-9_.-]+$/.test(value)) tokens.push(value);",
-        "      else tokens.push(JSON.stringify(value));",
-        "    } else tokens.push(String(value));",
-        "  }",
-        "  return tokens.join(\" \");",
-        "}",
-        "function formatVectorSentence(name, vec) {",
-        "  const v = vec || {};",
-        "  return `subj name ${name} obj ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
-        "}"
-      ].join("\n");
-      prelude.push(vectorHelper);
+      prelude.push(vectorFormatHelper());
     }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;
@@ -1226,9 +1222,8 @@ let lines = [header];
   if (lang === "c") {
     const headers = [];
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
-    if (cHelpers.usesVectorType) {
-      headers.push("typedef struct { const char *type; int length; double *values; } pya_vec;");
-    }
+    if (cHelpers.usesString) headers.push("#include <string.h>");
+    if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
     if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
     const needsLoopGlobals =
       [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex)\b/.test(l));
@@ -1238,26 +1233,10 @@ let lines = [header];
       headers.push("double atindex = 0;");
     }
     if (headers.length) lines.unshift(...headers);
-    if (cHelpers.usesVectorPrinter) {
-      lines.splice(
-        headers.length,
-        0,
-        "static void print_vec_inline(const pya_vec *vec) {",
-        "  if (!vec) { printf(\"ve num\"); return; }",
-        "  printf(\"ve %s\", vec->type ? vec->type : \"num\");",
-        "  for (int i = 0; i < vec->length; i++) { printf(\" %g\", vec->values[i]); }",
-        "}",
-        "static void print_vec(const pya_vec *vec) {",
-        "  print_vec_inline(vec);",
-        "  printf(\"\\n\");",
-        "}",
-        "static void print_vec_sentence(const char *name, const pya_vec *vec) {",
-        "  printf(\"subj name %s obj \", name ? name : \"\");",
-        "  print_vec_inline(vec);",
-        "  printf(\" be vector ya\\n\");",
-        "}"
-      );
-    }
+    const cPrelude = [];
+    if (cHelpers.usesVectorType) cPrelude.push(VECTOR_TYPE_DECL);
+    if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
+    if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
     lines.push(body || "  return 0;");
