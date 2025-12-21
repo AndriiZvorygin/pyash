@@ -33,6 +33,8 @@ Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` return
 - Text read: `su file be read from filename "quiz/sandpit/compile.txt" do` → stores text content
 - Parse text to JSON: see end-to-end example below
 - Conditionals: `obj num 3 be tiny from num 5 then ...`; `subj name lhs be giant from name rhs then ...`; `subj name x be equally from num 10 then ...`
+- Power: `obj num 2 from num 3 be exponential do` → stores `result` with `num 8`
+- Constant: `obj name eulers_number from num 2 be exponential do` → stores `result` with `num ~7.389`
 
 ## End-to-End Example (text understand)
 ```bash
