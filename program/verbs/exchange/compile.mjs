@@ -111,6 +111,11 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, allowC
     const parts = isThisPrefix ? chainArr.slice(1) : (isThisSuffix ? chainArr.slice(0, -1) : null);
     if (parts && parts.length) {
       const head = parts[0];
+      if (head === "by") {
+        if (parts.length === 1) return "by";
+        if (parts.length === 2 && parts[1] === "num") return "by";
+        if (parts.length === 3 && parts[1] === "obj" && parts[2] === "num") return "by";
+      }
       if (parts.length === 1 && ["fromindex", "toindex", "atindex"].includes(head)) return head;
       if (parts.length === 2 && parts[1] === "num" && ["fromindex", "toindex", "atindex"].includes(head)) return head;
     }
@@ -525,16 +530,18 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	    const consequence = sentence.consequence;
 	    const body = transpileSentence(consequence, { lang, sentenceArg, locals, localsTypes, declared }) ?? `// TODO: ${JSON.stringify(consequence)}`;
 	    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
-	    const cLhs = lang === "c"
-	      ? String(lhs)
-	          .replace(/\?\./g, ".")
-	          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
-	      : lhs;
-	    const cRhs = lang === "c"
-	      ? String(rhs)
-	          .replace(/\?\./g, ".")
-	          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
-	      : rhs;
+    const cLhs = lang === "c"
+      ? String(lhs)
+          .replace(/\?\./g, ".")
+          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
+          .replace(/\s*\?\?\s*[^)]+/g, "")
+      : lhs;
+    const cRhs = lang === "c"
+      ? String(rhs)
+          .replace(/\?\./g, ".")
+          .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
+          .replace(/\s*\?\?\s*[^)]+/g, "")
+      : rhs;
 	    const jsLhs = `(${lhs})`;
 	    const jsRhs = `(${rhs})`;
 	    const cLhsWrapped = `(${cLhs})`;
@@ -844,8 +851,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         ? (targetName ?? "0")
         : (exprForSlot(sentence.obj, { sentenceArg, locals, declared, defaultExpr: targetName, field: "num" }) ?? targetName ?? "0");
       const lhs = targetName ?? "result";
+      const lines = [];
+      if (targetName && !locals?.has(targetName) && !declared?.has(targetName)) {
+        locals?.add(targetName);
+        lines.push(`double ${targetName} = 0;`);
+      }
       if (cHelpers) cHelpers.usesPrintf = cHelpers.usesPrintf; // no-op; keep helper object alive
-      return `if ((${divisor}) == 0) { /* remains: from cannot be zero */ } else { ${lhs} = fmod(${numerator}, ${divisor}); }`;
+      lines.push(`if ((${divisor}) == 0) { /* remains: from cannot be zero */ } else { ${lhs} = fmod(${numerator}, ${divisor}); }`);
+      return lines.join("\n");
     }
     const divisorRaw = sentence.from?.num ?? obj.num;
     const divisor = typeof divisorRaw === "number" ? divisorRaw : Number(divisorRaw);
@@ -910,14 +923,23 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     const fn = ceremonyFns?.get(baseBe);
 	    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
 	        if (lang === "c") {
+	          const loopId = cState ? cState.vectorCounter++ : 0;
+	          const byExpr = (() => {
+	            if (sentence.by?.num !== undefined) return Number(sentence.by.num) || 0;
+	            if (sentence.by?.name) return sanitizeName(sentence.by.name);
+	            if (sentence.by?.genitive) return pathFromGenitive(sentence.by.genitive, undefined, { allowCGlobals: true }) ?? "0";
+	            return null;
+	          })();
 	          const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
 	          const hasUntil = sentence.toindex !== undefined;
 	          const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
 	          if (hasUntil) {
 	            const step = untilVal > start ? 1 : -1;
-	            return `for (fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { toindex = ${untilVal}; ${fn}(); }`;
+	            const byAssign = byExpr !== null ? `by = ${byExpr}; ` : "";
+	            return `{ double _saved_fromindex_${loopId} = fromindex; double _saved_toindex_${loopId} = toindex; for (fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { toindex = ${untilVal}; ${byAssign}${fn}(); } fromindex = _saved_fromindex_${loopId}; toindex = _saved_toindex_${loopId}; }`;
 	          }
-	          return `for (fromindex = ${start}; fromindex > 0; fromindex--) { ${fn}(); }`;
+	          const byAssign = byExpr !== null ? `by = ${byExpr}; ` : "";
+	          return `{ double _saved_fromindex_${loopId} = fromindex; for (fromindex = ${start}; fromindex > 0; fromindex--) { ${byAssign}${fn}(); } fromindex = _saved_fromindex_${loopId}; }`;
 	        }
 	        const evokerLiteral = inlineSentenceLiteral(sentence, declared);
 	        if (loopShim) loopShim.used = true;
@@ -1058,6 +1080,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
       const target = valueForRole("subj", sentenceArg, "num", sentence.subj) ?? `${sentenceArg}.obj?.num`;
       return `${target} = ${rhsExpr};`;
+    }
+
+    if (lang === "c" && !sentenceArg && sentence.subj?.name) {
+      const baseName = sanitizeName(sentence.subj.name);
+      const fromRef = obj?.thisRef ? obj.thisRef : null;
+      const rhs = rhsExpr ?? fromRef ?? (typeof obj.num !== "undefined" ? obj.num : null);
+      if (rhs !== null) {
+        const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
+        if (needsDecl) locals?.add(baseName);
+        return needsDecl ? `double ${baseName} = ${rhs};` : `${baseName} = ${rhs};`;
+      }
     }
 
     if (typeof obj.num !== "undefined") {
@@ -1283,11 +1316,12 @@ let lines = [header];
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
     if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
     const needsLoopGlobals =
-      [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex)\b/.test(l));
+      [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex|by)\b/.test(l));
     if (needsLoopGlobals) {
       headers.push("double fromindex = 0;");
       headers.push("double toindex = 0;");
       headers.push("double atindex = 0;");
+      headers.push("double by = 0;");
     }
     if (headers.length) lines.unshift(...headers);
     const cPrelude = [];
