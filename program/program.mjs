@@ -2,10 +2,47 @@
 import { parse } from "./understand/index.mjs";
 
 export function buildProgram(source) {
-  const lines = source
-    .split("\n")
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith("#"));
+  const rawLines = source.split("\n");
+  const lines = [];
+  let buffer = "";
+  let inQuote = false;
+  let quoteTag = null;
+
+  for (const rawLine of rawLines) {
+    const line = rawLine.trim();
+    if (!inQuote) {
+      if (!line || line.startsWith("#")) continue;
+      buffer = buffer ? `${buffer}\n${line}` : line;
+
+      const startMatch = buffer.match(/quoted\.([^.]+)\./);
+      if (startMatch) {
+        const tag = startMatch[1];
+        const endRegex = new RegExp(`\\.${tag}\\.quoted`);
+        if (!endRegex.test(buffer)) {
+          inQuote = true;
+          quoteTag = tag;
+          continue;
+        }
+      }
+
+      lines.push(buffer);
+      buffer = "";
+      continue;
+    }
+
+    buffer = `${buffer}\n${line}`;
+    if (quoteTag) {
+      const endRegex = new RegExp(`\\.${quoteTag}\\.quoted`);
+      if (endRegex.test(buffer)) {
+        lines.push(buffer);
+        buffer = "";
+        inQuote = false;
+        quoteTag = null;
+      }
+    }
+  }
+
+  if (buffer) lines.push(buffer);
 
   const sentences = lines.map(parse);
   const labels = new Map();
