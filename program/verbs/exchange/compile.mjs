@@ -398,6 +398,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       } else {
         lines.push(`    ${vecName}.num_values[_idx] -= ${delta};`);
       }
+      lines.push(`  } else if (strcmp(${vecName}.type, "bool") == 0) {`);
+      if (baseBe === "invert") {
+        lines.push(`    ${vecName}.num_values[_idx] = ${vecName}.num_values[_idx] != 0 ? 0 : 1;`);
+      }
       lines.push("  }");
       lines.push("}");
       return lines.join("\n");
@@ -1005,6 +1009,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
           return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
         }
         return `do { const char *${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "text", ${count}, NULL, ${name}_values_${suffix} }; } while(0);`;
+      }
+      if (vecType === "bool") {
+        const values = obj.ve.values
+          .map(v => (v === "truth" || v === true || v === 1 ? 1 : 0))
+          .join(", ");
+        if (shouldDeclare) {
+          return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "bool", ${count}, ${name}_values, NULL };`;
+        }
+        return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "bool", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
       }
       if (vecType !== "num") {
         return `/* TODO: vector support in C for ${vecType} */`;

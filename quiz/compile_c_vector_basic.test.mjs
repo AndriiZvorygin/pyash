@@ -90,6 +90,18 @@ test("compile C supports vector element add at index", async () => {
   assert.equal(out, "ve num 1 2 5");
 });
 
+test("compile C supports boolean vector invert at index", async () => {
+  forget();
+  const pyash = [
+    "exists subj name doors obj ve bool truth lie truth be vector ya",
+    "obj name doors at num 1 be invert do",
+    "obj ve of doors be say do"
+  ].join("\n");
+  const c = await compileToC(pyash);
+  const out = await runC(c);
+  assert.equal(out, "ve bool truth truth truth");
+});
+
 test("compile C supports vector reassignment", async () => {
   forget();
   const pyash = [
