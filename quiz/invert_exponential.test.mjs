@@ -31,27 +31,34 @@ test("invert named operand and update target", async () => {
   assert.equal(remember("result").obj.num, -5);
 });
 
-test("exponential computes e^x with literal and target", async () => {
+test("exponential computes power with literal base/exponent and target", async () => {
   forget();
 
-  await run("obj num 1 to name variable be exponential do");
+  await run("obj num 2 from num 3 to name variable be exponential do");
 
   const variable = remember("variable");
   const res = remember("result");
 
-  const expected = Math.exp(1);
-  const precision = 1e-9;
-  assert.ok(Math.abs(variable.obj.num - expected) < precision);
-  assert.ok(Math.abs(res.obj.num - expected) < precision);
+  assert.equal(variable.obj.num, 8);
+  assert.equal(res.obj.num, 8);
 });
 
-test("exponential accepts named operand", async () => {
+test("exponential accepts named base and exponent", async () => {
   forget();
 
   await run("subj name angle obj num 2 be number ya");
-  await run("obj name angle be exponential do");
+  await run("subj name power obj num 5 be number ya");
+  await run("obj name angle from name power be exponential do");
 
   const res = remember("result");
-  const expected = Math.exp(2);
-  assert.ok(Math.abs(res.obj.num - expected) < 1e-9);
+  assert.equal(res.obj.num, 32);
+});
+
+test("exponential supports eulers_number as base", async () => {
+  forget();
+
+  await run("obj name eulers_number from num 2 be exponential do");
+
+  const res = remember("result");
+  assert.ok(res.obj.num > 7.38 && res.obj.num < 7.40);
 });

@@ -193,13 +193,14 @@ test("deriveSignatureFromCall handles invert with named source resolved from mem
   ]);
 });
 
-test("deriveSignatureFromCall handles exponential with inline number", () => {
-  const sentence = { mood: "do", be: "exponential", obj: { num: 3 }, to: { name: "dst" } };
+test("deriveSignatureFromCall handles exponential with inline base/exponent", () => {
+  const sentence = { mood: "do", be: "exponential", obj: { num: 2 }, from: { num: 3 }, to: { name: "dst" } };
 
   const sig = deriveSignatureFromCall(sentence);
 
   assert.deepEqual(sig, [
     "be", "exponential",
+    "from", "num",
     "obj", "num",
     "to", "name", "num"
   ]);
