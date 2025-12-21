@@ -56,3 +56,20 @@ export const VECTOR_PRINT_HELPER = [
   "  printf(\" be vector ya\\n\");",
   "}"
 ].join("\n");
+
+export const TEXT_HELPER = [
+  "#ifndef PYA_TEXT_CAP",
+  "#define PYA_TEXT_CAP 4096",
+  "#endif",
+  "static void pya_concat_buf(char *dest, const char *src) {",
+  "  if (!dest || !src) return;",
+  "  size_t dlen = strlen(dest);",
+  "  if (dlen >= PYA_TEXT_CAP - 1) return;",
+  "  strncat(dest, src, PYA_TEXT_CAP - dlen - 1);",
+  "}",
+  "static void pya_concat_num_buf(char *dest, double value) {",
+  "  char buf[64];",
+  "  snprintf(buf, sizeof(buf), \"%g\", value);",
+  "  pya_concat_buf(dest, buf);",
+  "}"
+].join("\n");

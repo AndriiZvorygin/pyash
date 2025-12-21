@@ -208,6 +208,7 @@ export async function handleImperative({
   const useRawTo =
     be === "mind" ||
     be === "say" ||
+    be === "write" ||
     (be === "add" && (sentence.obj?.text || target?.obj?.text !== undefined));
   const toValue = useRawTo ? (to ?? sentence.to) : (target?.obj ?? to);
 

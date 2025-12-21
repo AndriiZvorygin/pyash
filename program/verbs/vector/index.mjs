@@ -9,13 +9,35 @@ function getVector(name, remember) {
   return fact;
 }
 
-function indexFromAt(at) {
+function indexFromAt(at, remember) {
   if (at?.genitive) {
     const chainArr = Array.isArray(at.genitive.chain) ? at.genitive.chain : [];
-    if (chainArr.length === 3 && chainArr[0] === "this" && chainArr[2] === "num") {
-      const reg = state.currentEvokeRef?.[chainArr[1]] ?? state.currentEvoke?.[chainArr[1]];
-      const n = typeof reg === "number" ? reg : reg?.num;
-      if (typeof n === "number" && !Number.isNaN(n)) return Math.trunc(n);
+    if (chainArr.length >= 2) {
+      const [root, ...rest] = chainArr;
+      if (root === "this") {
+        if (chainArr.length === 3 && chainArr[2] === "num") {
+          const reg = state.currentEvokeRef?.[chainArr[1]] ?? state.currentEvoke?.[chainArr[1]];
+          const n = typeof reg === "number" ? reg : reg?.num;
+          if (typeof n === "number" && !Number.isNaN(n)) return Math.trunc(n);
+        }
+      } else if (typeof root === "string" && remember) {
+        let curr = remember(root);
+        for (const part of rest) {
+          if (typeof curr === "number") {
+            if (part === "num") continue;
+            curr = undefined;
+            break;
+          }
+          if (curr && typeof curr === "object" && curr.name) {
+            const fact = remember(curr.name);
+            if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+          }
+          if (curr == null) break;
+          curr = curr[part];
+        }
+        const n = typeof curr === "number" ? curr : curr?.num;
+        if (typeof n === "number" && !Number.isNaN(n)) return Math.trunc(n);
+      }
     }
   }
   const raw = at?.num ?? at;
@@ -27,7 +49,7 @@ function indexFromAt(at) {
 export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remember }) {
   const obj = sentence.obj || {};
   const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
-  const idx = indexFromAt(obj.at ?? sentence.at);
+  const idx = indexFromAt(obj.at ?? sentence.at, remember);
   if (!vecName || idx == null || idx < 0) throw new Error("read: obj vec name and at num are required");
   const vec = getVector(vecName, remember);
   const value = vec.obj.ve.values[idx];
@@ -40,7 +62,7 @@ export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remem
 export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
   const obj = sentence.obj || {};
   const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
-  const idx = indexFromAt(obj.at ?? sentence.at);
+  const idx = indexFromAt(obj.at ?? sentence.at, remember);
   if (!vecName || idx == null || idx < 0) throw new Error("invert: obj vec name and at num are required");
   const vec = getVector(vecName, remember);
   const curr = vec.obj.ve.values[idx];
@@ -49,9 +71,33 @@ export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
   return { obj: vec.obj, be: "vector" };
 }
 
+export async function write_obj_to_name_vec_at_num(sentence, { remember }) {
+  const obj = sentence.obj || {};
+  const vecName = sentence.to?.name ?? obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
+  const atSlot = sentence.to?.at ?? obj.at ?? sentence.at;
+  const idx = indexFromAt(atSlot, remember);
+  if (!vecName || idx == null || idx < 0) throw new Error("write: obj value, vec name, and at num are required");
+
+  const vec = getVector(vecName, remember);
+  let value;
+  if (obj.num !== undefined) {
+    value = Number(obj.num);
+  } else if (obj.boolean !== undefined) {
+    value = obj.boolean ? "truth" : "lie";
+  } else if (obj.text !== undefined) {
+    value = obj.text;
+  } else {
+    throw new Error("write: obj num/text/boolean is required");
+  }
+
+  vec.obj.ve.values[idx] = value;
+  return { obj: vec.obj, be: "vector" };
+}
+
 export default {
   read_obj_name_num_at_num_num_to_name_num,
   invert_obj_name_num_at_num_num,
+  write_obj_to_name_vec_at_num,
 };
 
 export const signatures = [
@@ -61,6 +107,17 @@ export const signatures = [
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "text", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "boolean"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "bool"], handler: invert_obj_name_num_at_num_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "text"], handler: invert_obj_name_num_at_num_num },
+  { signatureWords: ["be", "write", "obj", "num", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "obj", "num", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "obj", "num", "to", "name", "vec", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "obj", "text", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "obj", "text", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "obj", "text", "to", "name", "vec", "text"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "obj", "text", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "obj", "boolean", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "obj", "boolean", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "obj", "boolean", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
 ];

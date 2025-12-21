@@ -32,3 +32,17 @@ subj name z obj num 32 be number ya
 ```
 
 Use `from name w by name x` to pull stored vectors; result is the dot product stored on the target and `result`.
+
+### Write element (`write`)
+
+```
+exists subj name vec obj ve num 10 20 30 be vector ya
+obj num 99 to name vec at num 1 be write do
+obj ve of vec be say do
+```
+
+Output:
+
+```
+ve num 10 99 30
+```

@@ -113,3 +113,15 @@ test("compile C supports vector reassignment", async () => {
   const out = await runC(c);
   assert.equal(out, "ve num 4 5 6");
 });
+
+test("compile C supports write to vector element", async () => {
+  forget();
+  const pyash = [
+    "exists subj name vec obj ve num 10 20 30 be vector ya",
+    "obj num 99 to name vec at num 1 be write do",
+    "obj ve of vec be say do"
+  ].join("\n");
+  const c = await compileToC(pyash);
+  const out = await runC(c);
+  assert.equal(out, "ve num 10 99 30");
+});

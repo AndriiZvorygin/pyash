@@ -1,0 +1,3 @@
+exists subj name vec obj ve num 10 20 30 be vector ya
+obj num 99 to name vec at num 1 be write do
+obj ve of vec be say do

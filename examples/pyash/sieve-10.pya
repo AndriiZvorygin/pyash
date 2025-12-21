@@ -1,0 +1,28 @@
+exists subj name composite obj ve bool lie by num 10 be vector ya
+
+subj name mark multiples by num 0 fromindex num 0 be ceremony def
+subj name i obj this fromindex be number ya
+from name i by num of obj of by of this to name product be multiply do
+subj name product be tiny from num 10 then obj text truth to name composite at num of obj of product be write do
+subj name mark multiples be ceremony prah
+
+subj name process passes fromindex num 0 be ceremony def
+subj name pass obj this fromindex be number ya
+by name pass fromindex num 2 toindex num 10 be mark multiples do
+subj name process passes be ceremony prah
+
+fromindex num 2 toindex num 10 be process passes do
+obj ve of composite be say do
+
+exists subj name primes_index obj num 1 be number ya
+exists subj name primes obj ve num 0 by num 4 be vector ya
+obj num 2 to name primes at num 0 be write do
+
+subj name collect primes fromindex num 0 be ceremony def
+obj name composite at num of fromindex of this be read to name status do
+obj name status be equally from text lie then obj num of fromindex of this to name primes at num of obj of primes_index be write do
+obj name status be equally from text lie then obj num 1 to name primes_index be add do
+subj name collect primes be ceremony prah
+
+fromindex num 3 toindex num 10 be collect primes do
+obj ve of primes be say do

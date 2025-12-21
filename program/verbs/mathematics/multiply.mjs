@@ -1,7 +1,34 @@
+import { state } from "../../bridge/state.mjs";
+
 function resolveNumber(v, remember) {
   if (v == null) return undefined;
   if (typeof v === "number") return v;
   if (typeof v.num === "number") return v.num;
+  if (v.genitive) {
+    const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
+    if (chainArr.length > 0) {
+      const [root, ...rest] = chainArr;
+      let curr =
+        root === "this"
+          ? state.currentEvokeRef || state.currentEvoke
+          : (typeof root === "string" && remember ? remember(root) : null);
+      for (const part of rest) {
+        if (typeof curr === "number") {
+          if (part === "num") continue;
+          curr = undefined;
+          break;
+        }
+        if (curr && typeof curr === "object" && curr.name && remember) {
+          const fact = remember(curr.name);
+          if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+        }
+        if (curr == null) break;
+        curr = curr[part];
+      }
+      if (typeof curr === "number") return curr;
+      if (typeof curr?.num === "number") return curr.num;
+    }
+  }
   if (typeof v.name === "string") {
     const found = remember(v.name);
     if (typeof found?.obj?.num === "number") return found.obj.num;
