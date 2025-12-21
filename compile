@@ -29,6 +29,11 @@ if [[ "$#" -ge 1 && "$1" != -* ]]; then
       echo "usage: ./compile <input.pya> <output.{js|c|txt}> [target-state]" >&2
       exit 1
     fi
+    if [[ "$OUTPUT" == -* ]]; then
+      # Treat flag-like args as pass-through to run_pya_program.
+      node program/command/run_pya_program.mjs --gross "$@"
+      exit 0
+    fi
     if [[ -z "$TARGET" ]]; then
       TARGET="javascript"
     fi
