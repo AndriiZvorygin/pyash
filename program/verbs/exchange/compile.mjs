@@ -56,7 +56,8 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
     if (locals?.has(name)) {
       if (field === "text") return `${name}.obj?.text`;
       if (field === "name") return `${name}.obj?.name`;
-      return name;
+      if (field === "num") return `${name}.obj?.num ?? ${name}`;
+      return `${name}.obj?.${field} ?? ${name}`;
     }
     if (declared?.has(name)) {
       if (field === "text") return `${name}.obj?.text`;
@@ -140,7 +141,10 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
     const [root, ...rest] = chain;
     if (localsTypes?.get(sanitizeName(root)) === "number") {
       if (rest.length === 1 && rest[0] === "num") return sanitizeName(root);
-      if (rest.length === 2 && rest[0] === "obj" && rest[1] === "num") return sanitizeName(root);
+      if (rest.length === 2 && rest[0] === "obj" && rest[1] === "num") {
+        const base = sanitizeName(root);
+        return `${base}.obj?.num ?? ${base}`;
+      }
     }
     return [sanitizeName(root), ...rest.map(part => `.${part}`)].join("");
   }
@@ -365,11 +369,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       locals?.add(targetVar);
     }
     if (localsTypes) localsTypes.set(targetVar, vecType === "num" ? "number" : "text");
-    lines.push(`const _val = ${baseName}?.obj?.ve?.values?.[(${idxExpr})];`);
+    const valVar = jsHelpers ? `_val_${jsHelpers.readCounter++}` : "_val";
+    lines.push(`const ${valVar} = ${baseName}?.obj?.ve?.values?.[(${idxExpr})];`);
     if (vecType === "num") {
-      lines.push(`${targetVar}.obj.num = _val;`);
+      lines.push(`${targetVar}.obj.num = ${valVar};`);
     } else {
-      lines.push(`const _text = (_val === true || _val === 1) ? "truth" : (_val === false || _val === 0) ? "lie" : String(_val ?? "");`);
+      lines.push(`const _text = (${valVar} === true || ${valVar} === 1) ? "truth" : (${valVar} === false || ${valVar} === 0) ? "lie" : String(${valVar} ?? "");`);
       lines.push(`${targetVar}.obj.text = _text;`);
     }
     return lines.join("\n");
@@ -899,29 +904,38 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     return lines.join("\n");
   }
 
-  if (baseBe === "subtract" && obj.num !== undefined && (sentence.to?.name || sentenceArg)) {
+  if (baseBe === "subtract" && obj.num !== undefined && ((sentence.to?.name || sentence.from?.name) || sentenceArg)) {
     const safeValue = typeof obj.num === "number" ? obj.num : Number(obj.num);
     if (sentenceArg) {
-      const hasGenitive = Boolean(sentence.to?.genitive);
-      if (!hasGenitive && sentence.to?.name) {
-        const baseName = sanitizeName(sentence.to.name);
-        const target = lvalueForName(sentence.to.name, { declared, locals });
+      const targetSlot = sentence.to ?? sentence.from;
+      const targetRole = sentence.to ? "to" : "from";
+      const hasGenitive = Boolean(targetSlot?.genitive);
+      if (!hasGenitive && targetSlot?.name) {
+        const baseName = sanitizeName(targetSlot.name);
         const lines = [];
         if (!locals?.has(baseName) && !declared?.has(baseName)) {
           lines.push(`let ${baseName};`);
           locals?.add(baseName);
           if (localsTypes) localsTypes.set(baseName, "number");
         }
-        lines.push(`${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+        if (lang === "c") {
+          lines.push(`${baseName} = (${baseName} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+        } else {
+          lines.push(`${baseName}.obj = ${baseName}.obj ?? {};`);
+          lines.push(`${baseName}.obj.num = (${baseName}.obj.num ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+        }
         return lines.join("\n");
       }
-      const target = targetPath("to", sentenceArg, "num", sentence.to, { locals, declared }) ?? sentence.to?.name;
+      const target = targetPath(targetRole, sentenceArg, "num", targetSlot, { locals, declared }) ?? targetSlot?.name;
       return `${target} = (${target} ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
+    const targetSlot = sentence.to ?? sentence.from;
+    const targetName = targetSlot?.name;
+    if (!targetName) return `// TODO: ${JSON.stringify(sentence)}`;
     if (lang === "c") {
-      return `${sentence.to.name} = ${sentence.to.name} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+      return `${targetName} = ${targetName} - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
-    return `${sentence.to.name}.obj = ${sentence.to.name}.obj ?? {};\n${sentence.to.name}.obj.num = (${sentence.to.name}.obj.num ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+    return `${targetName}.obj = ${targetName}.obj ?? {};\n${targetName}.obj.num = (${targetName}.obj.num ?? 0) - ${Number.isNaN(safeValue) ? 0 : safeValue};`;
   }
 
   if (
@@ -1103,6 +1117,21 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const inlineSet = new Set([...(declared || []), ...(locals || [])]);
       const evokerLiteral = inlineSentenceLiteral(sentence, inlineSet);
       if (loopShim) loopShim.used = true;
+      const genFromExpr = sentence.fromindex?.genitive
+        ? pathFromGenitive(sentence.fromindex.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
+        : null;
+      const genToExpr = sentence.toindex?.genitive
+        ? pathFromGenitive(sentence.toindex.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
+        : null;
+      if (genFromExpr || genToExpr) {
+        const lines = ["{"];
+        lines.push(`const _call = ${evokerLiteral};`);
+        if (genFromExpr) lines.push(`_call.fromindex = { num: ${genFromExpr} };`);
+        if (genToExpr) lines.push(`_call.toindex = { num: ${genToExpr} };`);
+        lines.push(`runLoop(_call, ${fn});`);
+        lines.push("}");
+        return lines.join("\n");
+      }
       return `runLoop(${evokerLiteral}, ${fn});`;
     }
     if (fn) {
@@ -1159,9 +1188,21 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	            if (sentence.by?.genitive) return pathFromGenitive(sentence.by.genitive, undefined, { allowCGlobals: true }) ?? "0";
 	            return null;
 	          })();
-	          const start = sentence.fromindex?.num ?? sentence.fromindex ?? 0;
+	          const fromGenChain = sentence.fromindex?.genitive?.chain;
+	          const fromGenFallback = (Array.isArray(fromGenChain) && typeof fromGenChain[0] === "string")
+	            ? sanitizeName(fromGenChain[0])
+	            : null;
+	          const start = sentence.fromindex?.genitive
+	            ? (pathFromGenitive(sentence.fromindex.genitive, undefined, { allowCGlobals: true }) ?? fromGenFallback ?? 0)
+	            : (sentence.fromindex?.num ?? sentence.fromindex ?? 0);
 	          const hasUntil = sentence.toindex !== undefined;
-	          const untilVal = sentence.toindex?.num ?? sentence.toindex ?? 0;
+	          const toGenChain = sentence.toindex?.genitive?.chain;
+	          const toGenFallback = (Array.isArray(toGenChain) && typeof toGenChain[0] === "string")
+	            ? sanitizeName(toGenChain[0])
+	            : null;
+	          const untilVal = sentence.toindex?.genitive
+	            ? (pathFromGenitive(sentence.toindex.genitive, undefined, { allowCGlobals: true }) ?? toGenFallback ?? 0)
+	            : (sentence.toindex?.num ?? sentence.toindex ?? 0);
 	          if (hasUntil) {
 	            const step = untilVal > start ? 1 : -1;
 	            const byAssign = byExpr !== null ? `by = ${byExpr}; ` : "";
@@ -1461,7 +1502,7 @@ let lines = [header];
   const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-  const jsHelpers = { usesVectorFormat: false };
+    const jsHelpers = { usesVectorFormat: false, readCounter: 0 };
   const cState = { vectorCounter: 0 };
   const declared = new Set();
   const declaredTypes = new Map();

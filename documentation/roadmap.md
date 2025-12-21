@@ -9,8 +9,8 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 **Ship**
 
 * 100 Doors parity (done, as you said)
-* Sieve parity
-* Insertion sort parity
+* Sieve parity (done)
+* Insertion sort parity (done)
 
 **Spec drops (freeze v0.1)**
 

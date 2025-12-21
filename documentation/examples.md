@@ -31,6 +31,7 @@ This folder collects runnable/walkthrough examples to help future assistants and
 - `examples/pyash/fizzbuzz-one-say.pya` — build all fizzbuzz lines into one output string, then `say` once at the end.
 - `examples/pyash/sieve-10.pya` — sieve-style composite marking with nested loops and vector writes (shared interpreter/JS/C).
 - `examples/pyash/sieve-100.pya` — sieve-style composite marking for 1..99 with primes list output (shared interpreter/JS/C).
+- `examples/pyash/insertion-sort.pya` — insertion sort with nested loops and vector swaps (shared interpreter/JS/C).
 - `examples/pyash/compile-fizzbuzz-100.txt` — compile-ready fizzbuzz (1..100) text for JS/C targets.
 - `examples/pyash/compile-fizzbuzz-return-line.txt` — compile-ready return-line fizzbuzz for JS.
 - `examples/pyash/fizzbuzz-one-say.pya` — compile-ready single-say fizzbuzz output for JS.

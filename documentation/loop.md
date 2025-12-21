@@ -49,5 +49,7 @@ When an evoker includes `fromindex`:
 
 * `examples/pyash/compile-loop.txt`: countdown loop with `fromindex`/`toindex`,
   no register facts.
+* `examples/pyash/insertion-sort.pya`: nested loops with vector reads/writes
+  (shared interpreter/JS/C).
 * `quiz/loop.test.mjs` and `quiz/until.test.mjs` cover sequence registers and
   their defaults.

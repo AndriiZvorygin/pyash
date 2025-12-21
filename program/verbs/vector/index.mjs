@@ -9,6 +9,34 @@ function getVector(name, remember) {
   return fact;
 }
 
+function resolveGenitiveValue(genitive, { remember } = {}) {
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return null;
+  const [root, ...rest] = chainArr;
+  let curr =
+    root === "this"
+      ? (state.currentEvokeRef || state.currentEvoke)
+      : (typeof root === "string" && remember ? remember(root) : null);
+  for (const part of rest) {
+    if (typeof curr === "number") {
+      if (part === "num") continue;
+      curr = undefined;
+      break;
+    }
+    if (curr && typeof curr === "object" && curr.name && remember) {
+      const fact = remember(curr.name);
+      if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+    }
+    if (curr == null) break;
+    curr = curr[part];
+  }
+  if (typeof curr === "number") return curr;
+  if (typeof curr?.num === "number") return curr.num;
+  if (typeof curr?.text === "string") return curr.text;
+  if (typeof curr?.boolean === "boolean") return curr.boolean ? "truth" : "lie";
+  return curr;
+}
+
 function indexFromAt(at, remember) {
   if (at?.genitive) {
     const chainArr = Array.isArray(at.genitive.chain) ? at.genitive.chain : [];
@@ -86,6 +114,15 @@ export async function write_obj_to_name_vec_at_num(sentence, { remember }) {
     value = obj.boolean ? "truth" : "lie";
   } else if (obj.text !== undefined) {
     value = obj.text;
+  } else if (obj.genitive) {
+    const resolved = resolveGenitiveValue(obj.genitive, { remember });
+    if (typeof resolved === "number") {
+      value = resolved;
+    } else if (typeof resolved === "string") {
+      value = resolved;
+    } else {
+      throw new Error("write: obj genitive did not resolve");
+    }
   } else {
     throw new Error("write: obj num/text/boolean is required");
   }

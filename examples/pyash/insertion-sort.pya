@@ -1,0 +1,19 @@
+exists subj name values obj ve num 5 2 4 6 1 3 be vector ya
+
+subj name insertion inner fromindex num 0 be ceremony def
+subj name j obj this fromindex be number ya
+subj name prevIndex obj this fromindex be number ya
+obj num 1 from name prevIndex be subtract do
+obj name values at num of obj of j be read to name curr do
+obj name values at num of obj of prevIndex be read to name prev do
+obj name prev be giant from name curr then obj num of obj of curr to name values at num of obj of prevIndex be write do
+obj name prev be giant from name curr then obj num of obj of prev to name values at num of obj of j be write do
+subj name insertion inner be ceremony prah
+
+subj name insertion outer fromindex num 0 be ceremony def
+subj name i obj this fromindex be number ya
+fromindex num of obj of i toindex num 0 be insertion inner do
+subj name insertion outer be ceremony prah
+
+fromindex num 1 toindex num 6 be insertion outer do
+obj ve of values be say do

@@ -1,8 +1,38 @@
 // Sandpit helpers for bridge
-function registerValue(reg) {
+function resolveGenitiveValue(genitive, { state, memory } = {}) {
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return null;
+  const [root, ...rest] = chainArr;
+  let curr =
+    root === "this"
+      ? (state?.currentEvokeRef || state?.currentEvoke)
+      : (typeof root === "string" && memory ? memory.remember(root) : null);
+  for (const part of rest) {
+    if (typeof curr === "number") {
+      if (part === "num") continue;
+      curr = undefined;
+      break;
+    }
+    if (curr && typeof curr === "object" && curr.name && memory) {
+      const fact = memory.remember(curr.name);
+      if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+    }
+    if (curr == null) break;
+    curr = curr[part];
+  }
+  if (typeof curr === "number") return curr;
+  if (typeof curr?.num === "number") return curr.num;
+  return null;
+}
+
+function registerValue(reg, { state, memory } = {}) {
   if (reg == null) return null;
   if (typeof reg === "number") return reg;
   if (typeof reg === "object" && typeof reg.num === "number") return reg.num;
+  if (reg?.genitive) {
+    const val = resolveGenitiveValue(reg.genitive, { state, memory });
+    if (typeof val === "number") return val;
+  }
   return null;
 }
 
@@ -10,9 +40,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
-  const initialIndex = registerValue(sentence.fromindex);
+  const initialIndex = registerValue(sentence.fromindex, { state, memory });
   if (initialIndex == null) throw new Error("fromindex is required to loop");
-  const untilSeed = registerValue(sentence.toindex);
+  const untilSeed = registerValue(sentence.toindex, { state, memory });
 
   const clone =
     globalThis.structuredClone ||
@@ -35,7 +65,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   let updatedTarget = null;
 
   try {
-    let currentIndex = registerValue(state.currentEvokeRef.fromindex);
+    let currentIndex = registerValue(state.currentEvokeRef.fromindex, { state, memory });
     let currentUntil = untilSeed;
 
     while (true) {
@@ -53,8 +83,8 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
         }
       }
 
-      const updatedTloh = registerValue(state.currentEvokeRef.fromindex);
-      const updatedUntil = registerValue(state.currentEvokeRef.toindex ?? currentUntil);
+      const updatedTloh = registerValue(state.currentEvokeRef.fromindex, { state, memory });
+      const updatedUntil = registerValue(state.currentEvokeRef.toindex ?? currentUntil, { state, memory });
 
       const effectiveTloh = updatedTloh ?? currentTloh;
       const effectiveUntil = updatedUntil ?? currentUntil;
