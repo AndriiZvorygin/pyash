@@ -145,7 +145,25 @@ function targetPath(role, sentenceArg, field = "num", slot = {}, { locals, decla
   return `${sentenceArg}.${role}.${field}`;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag } = {}) {
+function vectorExprFromGenitive(genitive, sentenceArg, { locals, declared } = {}) {
+  const chainArr = Array.isArray(genitive) ? genitive : genitive?.chain;
+  if (!chainArr || chainArr.length === 0) return null;
+  const [root, tail] = chainArr;
+  if (chainArr.length === 2 && tail === "ve") {
+    if (root === "this") {
+      return sentenceArg ? `${sentenceArg}.obj?.ve ?? ${sentenceArg}.ve` : null;
+    }
+    const name = sanitizeName(root);
+    if (locals?.has(name) || declared?.has(name)) {
+      return `${name}.obj?.ve ?? ${name}.ve`;
+    }
+    return `remember(${JSON.stringify(root)})?.obj?.ve`;
+  }
+  const path = pathFromGenitive(genitive, sentenceArg, { locals, declared, allowCGlobals: true });
+  return path;
+}
+
+function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -196,19 +214,59 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       return lines.join("\n");
     }
 
+    const genChain = sentence.obj?.genitive?.chain || [];
+    const wantsVector = genChain.at(-1) === "ve" || declaredTypes?.get(sentence.obj?.name) === "vector";
+
+    if (lang === "c" && wantsVector) {
+      if (cHelpers) {
+        cHelpers.usesPrintf = true;
+        cHelpers.usesVectorType = true;
+        cHelpers.usesVectorPrinter = true;
+      }
+      const vecName = sentence.obj?.name;
+      if (vecName && declaredTypes?.get(vecName) === "vector") {
+        return `print_vec_sentence(${JSON.stringify(vecName)}, &${sanitizeName(vecName)});`;
+      }
+      if (sentence.obj?.genitive) {
+        const chain = sentence.obj.genitive.chain || [];
+        if (chain.length === 2 && chain[1] === "ve" && chain[0] !== "this") {
+          const root = sanitizeName(chain[0]);
+          if (locals?.has(root) || declared?.has(root)) return `print_vec(&${root});`;
+        }
+        const vecExpr = vectorExprFromGenitive(sentence.obj.genitive, sentenceArg, { locals, declared });
+        if (vecExpr && !vecExpr.includes("remember(")) return `print_vec(${vecExpr});`;
+      }
+    }
+
     let expr = "undefined";
     if (typeof obj.text === "string") {
       expr = JSON.stringify(obj.text);
     } else if (obj.genitive) {
-      expr = pathFromGenitive(obj.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
+      if (wantsVector) {
+        if (jsHelpers) jsHelpers.usesVectorFormat = true;
+        const vecExpr = vectorExprFromGenitive(obj.genitive, sentenceArg, { locals, declared });
+        if (vecExpr) expr = `formatVector((${vecExpr})?.values ?? [], (${vecExpr})?.type ?? "num")`;
+      } else {
+        expr = pathFromGenitive(obj.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
+      }
 	    } else if (obj.name) {
 	      const name = sanitizeName(obj.name);
 	      if (lang === "c" && (locals?.has(name) || declared?.has(name))) {
 	        expr = name;
       } else if (locals?.has(name)) {
-        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+        if (declaredTypes?.get(obj.name) === "vector") {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          expr = `formatVectorSentence(${JSON.stringify(obj.name)}, ${name}.obj?.ve ?? ${name}.ve)`;
+        } else {
+          expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+        }
 	      } else if (declared?.has(name)) {
-	        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+	        if (declaredTypes?.get(obj.name) === "vector") {
+	          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+	          expr = `formatVectorSentence(${JSON.stringify(obj.name)}, ${name}.obj?.ve ?? ${name}.ve)`;
+	        } else {
+	          expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+	        }
 	      } else {
 	        expr = JSON.stringify(obj.name);
 	      }
@@ -889,7 +947,18 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     const sentenceObject = `{ subj: { name: "${name}" }, obj: { ve: ${vecLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
     if (lang === "c") {
-      return `/* TODO: vector support in C */`;
+      if (vecType !== "num" && vecType !== "number") {
+        return `/* TODO: vector support in C for ${vecType} */`;
+      }
+      if (!shouldDeclare) {
+        return `/* TODO: vector reassignment in C */`;
+      }
+      if (cHelpers) cHelpers.usesVectorType = true;
+      const values = obj.ve.values
+        .map(v => (typeof v === "number" ? v : Number(v) || 0))
+        .join(", ");
+      const count = obj.ve.values.length;
+      return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values };`;
     }
     if (shouldDeclare) {
       return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
@@ -972,7 +1041,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, ceremonyFns, cHelpers }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -984,7 +1053,7 @@ function transpileCeremony(defSentence, bodySentences, { lang, declared, declare
   const locals = new Set();
   const localsTypes = new Map();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, ceremonyFns, cHelpers });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -1021,9 +1090,10 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
+  const jsHelpers = { usesVectorFormat: false };
   const declared = new Set();
   const declaredTypes = new Map();
   const ceremonyFns = new Map();
@@ -1038,7 +1108,7 @@ let lines = [header];
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, ceremonyFns, cHelpers });
+      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -1069,7 +1139,7 @@ let lines = [header];
       throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, loopShim, mindShim, cHelpers, rememberFlag });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
@@ -1125,6 +1195,27 @@ let lines = [header];
 	      const mapHelper = `function runAtAll(sentence, fn) {\n  // Resolve genitive by (like \"by num of fromindex of this\") against the evoker sentence once.\n  if (sentence?.by?.genitive?.chain?.[0] === \"this\") {\n    let curr = sentence;\n    for (const part of sentence.by.genitive.chain.slice(1)) {\n      if (typeof curr === \"number\") {\n        if (part === \"num\") continue;\n        curr = undefined;\n        break;\n      }\n      curr = curr?.[part];\n    }\n    const resolved = (typeof curr === \"number\") ? curr : curr?.num;\n    if (typeof resolved === \"number\") sentence.by = { num: resolved };\n  }\n  const vecFact = remember(sentence.obj?.name ?? sentence.obj);\n  const values = vecFact?.obj?.ve?.values ?? [];\n  const out = values.map((elem, i) => {\n    const elemSentence = structuredClone(sentence);\n    if (typeof elem === \"number\") elemSentence.obj = { num: elem };\n    else if (typeof elem === \"string\") elemSentence.obj = { text: elem };\n    else if (typeof elem === \"boolean\") elemSentence.obj = { boolean: elem };\n    else elemSentence.obj = elem ?? {};\n    elemSentence.atindex = { num: i, register: true };\n    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex, by: elemSentence.by, fromindex: elemSentence.fromindex, toindex: elemSentence.toindex };\n    const res = fn(elemSentence) ?? elemSentence;\n    const obj = res?.obj ?? elemSentence.obj;\n    if (obj?.num !== undefined) return obj.num;\n    if (obj?.text !== undefined) return obj.text;\n    if (obj?.boolean !== undefined) return obj.boolean;\n    return obj;\n  });\n  if (sentence.to?.name) {\n    const fact = { subj: { name: sentence.to.name }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.to.name] = fact;\n    return fact;\n  }\n  // In-place: mutate the remembered fact and do not replace the binding object.\n  if (vecFact?.obj?.ve) {\n    vecFact.obj.ve.values = out;\n    return vecFact;\n  }\n  const targetName = sentence.obj?.name ?? vecFact?.subj?.name;\n  if (targetName) {\n    const fact = { subj: { name: targetName }, obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[targetName] = fact;\n    return fact;\n  }\n  return { obj: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n}`;
       prelude.push(mapHelper);
     }
+    if (jsHelpers.usesVectorFormat) {
+      const vectorHelper = [
+        "function formatVector(values = [], type = \"num\") {",
+        "  const tokens = [\"ve\", type];",
+        "  for (const value of values) {",
+        "    if (typeof value === \"number\") tokens.push(String(value));",
+        "    else if (typeof value === \"boolean\") tokens.push(value ? \"truth\" : \"lie\");",
+        "    else if (typeof value === \"string\") {",
+        "      if (/^[A-Za-z0-9_.-]+$/.test(value)) tokens.push(value);",
+        "      else tokens.push(JSON.stringify(value));",
+        "    } else tokens.push(String(value));",
+        "  }",
+        "  return tokens.join(\" \");",
+        "}",
+        "function formatVectorSentence(name, vec) {",
+        "  const v = vec || {};",
+        "  return `subj name ${name} obj ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
+        "}"
+      ].join("\n");
+      prelude.push(vectorHelper);
+    }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;
       prelude.push(loopHelper);
@@ -1135,6 +1226,9 @@ let lines = [header];
   if (lang === "c") {
     const headers = [];
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
+    if (cHelpers.usesVectorType) {
+      headers.push("typedef struct { const char *type; int length; double *values; } pya_vec;");
+    }
     if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
     const needsLoopGlobals =
       [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex)\b/.test(l));
@@ -1144,6 +1238,26 @@ let lines = [header];
       headers.push("double atindex = 0;");
     }
     if (headers.length) lines.unshift(...headers);
+    if (cHelpers.usesVectorPrinter) {
+      lines.splice(
+        headers.length,
+        0,
+        "static void print_vec_inline(const pya_vec *vec) {",
+        "  if (!vec) { printf(\"ve num\"); return; }",
+        "  printf(\"ve %s\", vec->type ? vec->type : \"num\");",
+        "  for (int i = 0; i < vec->length; i++) { printf(\" %g\", vec->values[i]); }",
+        "}",
+        "static void print_vec(const pya_vec *vec) {",
+        "  print_vec_inline(vec);",
+        "  printf(\"\\n\");",
+        "}",
+        "static void print_vec_sentence(const char *name, const pya_vec *vec) {",
+        "  printf(\"subj name %s obj \", name ? name : \"\");",
+        "  print_vec_inline(vec);",
+        "  printf(\" be vector ya\\n\");",
+        "}"
+      );
+    }
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
     lines.push(body || "  return 0;");
