@@ -128,6 +128,50 @@ test("compile loop can apply a conditional update per iteration", async () => {
   assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [-1, 2, -3, 4]);
 });
 
+test("compile loop stops at toindex when ascending", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name counter obj num 0 be number ya",
+    "subj name inc fromindex num 0 be ceremony def",
+    "obj num 1 to name counter be add do",
+    "subj name inc be ceremony prah",
+    "fromindex num 1 toindex num 4 be inc do",
+    "obj name counter be say do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  vm.runInNewContext(js, { console: { log: (...args) => logs.push(args.join(" ")) } });
+  assert.deepEqual(logs.map(String), ["3"]);
+});
+
+test("compile loop stops at toindex when descending", async () => {
+  forget();
+
+  const pyash = [
+    "exists subj name counter obj num 0 be number ya",
+    "subj name inc fromindex num 0 be ceremony def",
+    "obj num 1 to name counter be add do",
+    "subj name inc be ceremony prah",
+    "fromindex num 4 toindex num 1 be inc do",
+    "obj name counter be say do"
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
+  const result = await interpret(sentence);
+  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+
+  const logs = [];
+  vm.runInNewContext(js, { console: { log: (...args) => logs.push(args.join(" ")) } });
+  assert.deepEqual(logs.map(String), ["3"]);
+});
+
 test.todo("compile loop can perform 10-doors toggle (squares end open) using at all + by pass");
 
 test("compile loop can perform 10-doors toggle (squares end open) using nested loops only", async () => {
