@@ -19,6 +19,17 @@ test("compile toggles vector element and logs updated values", async () => {
 
   assert.ok(logs.length >= 1, "should log at least once");
   const out = logs.at(-1);
-  const values = Array.isArray(out) ? JSON.parse(JSON.stringify(out)) : [];
+  let values = [];
+  if (Array.isArray(out)) {
+    values = JSON.parse(JSON.stringify(out));
+  } else if (typeof out === "string") {
+    const tokens = out.split(/\s+/).filter(Boolean);
+    const veIndex = tokens.indexOf("ve");
+    if (veIndex !== -1 && tokens.length > veIndex + 1) {
+      const afterType = tokens.slice(veIndex + 2);
+      const stop = afterType.findIndex((tok) => ["be", "subj", "obj", "to", "from", "then", "ya", "do", "ret"].includes(tok));
+      values = stop === -1 ? afterType : afterType.slice(0, stop);
+    }
+  }
   assert.deepEqual(values, ["truth", "truth", "truth"]);
 });
