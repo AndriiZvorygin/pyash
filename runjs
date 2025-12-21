@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "usage: ./runjs <path/to/file.pya>" >&2
+  exit 2
+fi
+
+SRC="$1"
+if [[ ! -f "$SRC" ]]; then
+  echo "runjs: file not found: $SRC" >&2
+  exit 2
+fi
+
+BASE="$(basename "$SRC")"
+NAME="${BASE%.*}"
+TMP_JS="/tmp/${NAME}-pyash.js"
+
+./compile from filename "$SRC" become javascript to filename "$TMP_JS"
+node "$TMP_JS"
