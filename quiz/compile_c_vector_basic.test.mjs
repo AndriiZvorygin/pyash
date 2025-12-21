@@ -78,10 +78,26 @@ test("compile C supports text vector + say vector only", async () => {
   assert.equal(out, "ve text hello world");
 });
 
-test.todo("compile C supports vector element add at index", () => {
-  // Desired: compile
-  //   subj name vec obj ve num 1 2 3 be vector ya
-  //   obj num 2 to name vec at num 2 be add do
-  //   obj ve of vec be say do
-  // and output should be `ve num 1 4 3`.
+test("compile C supports vector element add at index", async () => {
+  forget();
+  const pyash = [
+    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "obj num 2 to name vec at num 2 be add do",
+    "obj ve of vec be say do"
+  ].join("\n");
+  const c = await compileToC(pyash);
+  const out = await runC(c);
+  assert.equal(out, "ve num 1 2 5");
+});
+
+test("compile C supports vector reassignment", async () => {
+  forget();
+  const pyash = [
+    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "subj name vec obj ve num 4 5 6 be vector ya",
+    "obj ve of vec be say do"
+  ].join("\n");
+  const c = await compileToC(pyash);
+  const out = await runC(c);
+  assert.equal(out, "ve num 4 5 6");
 });

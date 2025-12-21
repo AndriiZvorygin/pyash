@@ -165,7 +165,7 @@ function vectorExprFromGenitive(genitive, sentenceArg, { locals, declared } = {}
   return path;
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -362,10 +362,49 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
   }
 
-  // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
   const atSlot = sentence.at ?? obj.at;
   const atNum = atSlot?.num;
   const atGenitive = atSlot?.genitive;
+
+  // Vector element update in C: add/subtract/invert at index
+  if (lang === "c") {
+    const vecNameRaw = sentence.to?.name ?? obj?.name;
+    if ((baseBe === "add" || baseBe === "subtract" || baseBe === "invert") && vecNameRaw && (atNum != null || atGenitive)) {
+      if (cHelpers) {
+        cHelpers.usesVectorType = true;
+        cHelpers.usesString = true;
+      }
+      const vecName = sanitizeName(vecNameRaw);
+      const idxExpr =
+        atNum != null
+          ? (() => {
+              const idxVal = Number(atNum);
+              return Number.isNaN(idxVal) ? atNum : idxVal;
+            })()
+          : atGenitive
+            ? pathFromGenitive(atGenitive, sentenceArg, { locals, declared, allowCGlobals: true })
+            : null;
+      if (idxExpr == null) return `/* TODO: ${JSON.stringify(sentence)} */`;
+      const deltaVal = Number(obj?.num ?? sentence.from?.num ?? 0);
+      const delta = Number.isNaN(deltaVal) ? 0 : deltaVal;
+      const lines = [];
+      lines.push(`int _idx = (int)(${idxExpr});`);
+      lines.push(`if (_idx >= 0 && _idx < ${vecName}.length) {`);
+      lines.push(`  if (!${vecName}.type || strcmp(${vecName}.type, "num") == 0) {`);
+      if (baseBe === "invert") {
+        lines.push(`    ${vecName}.num_values[_idx] = -${vecName}.num_values[_idx];`);
+      } else if (baseBe === "add") {
+        lines.push(`    ${vecName}.num_values[_idx] += ${delta};`);
+      } else {
+        lines.push(`    ${vecName}.num_values[_idx] -= ${delta};`);
+      }
+      lines.push("  }");
+      lines.push("}");
+      return lines.join("\n");
+    }
+  }
+
+  // Vector element invert (toggle boolean or numeric 0/1): invert obj name doors at num 2 do
   if (baseBe === "invert" && obj?.name && (atNum != null || atGenitive) && lang !== "c") {
     const baseName = sanitizeName(obj.name);
     const genChain = Array.isArray(atGenitive?.chain) ? atGenitive.chain : [];
@@ -952,9 +991,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     const sentenceObject = `{ subj: { name: "${name}" }, obj: { ve: ${vecLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
     if (lang === "c") {
-      if (!shouldDeclare) {
-        return `/* TODO: vector reassignment in C */`;
-      }
+      const suffix = cState ? cState.vectorCounter++ : 0;
       if (cHelpers) {
         cHelpers.usesVectorType = true;
         cHelpers.usesVectorPrinter = true;
@@ -964,7 +1001,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const count = obj.ve.values.length;
       if (vecType === "text") {
         const values = obj.ve.values.map(v => JSON.stringify(String(v))).join(", ");
-        return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
+        if (shouldDeclare) {
+          return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
+        }
+        return `do { const char *${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "text", ${count}, NULL, ${name}_values_${suffix} }; } while(0);`;
       }
       if (vecType !== "num") {
         return `/* TODO: vector support in C for ${vecType} */`;
@@ -972,7 +1012,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const values = obj.ve.values
         .map(v => (typeof v === "number" ? v : Number(v) || 0))
         .join(", ");
-      return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values, NULL };`;
+      if (shouldDeclare) {
+        return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values, NULL };`;
+      }
+      return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "num", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
     }
     if (shouldDeclare) {
       return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
@@ -1055,7 +1098,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   return null;
 }
 
-function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers }) {
+function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers, cState }) {
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -1067,7 +1110,7 @@ function transpileCeremony(defSentence, bodySentences, { lang, declared, declare
   const locals = new Set();
   const localsTypes = new Map();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers, cState });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -1108,6 +1151,7 @@ let lines = [header];
   const loopShim = { used: false };
   const mindShim = { used: false };
   const jsHelpers = { usesVectorFormat: false };
+  const cState = { vectorCounter: 0 };
   const declared = new Set();
   const declaredTypes = new Map();
   const ceremonyFns = new Map();
@@ -1122,7 +1166,7 @@ let lines = [header];
         if (sentences[j].mood === "prah") break;
         body.push(sentences[j]);
       }
-      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers });
+      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, ceremonyFns, cHelpers, jsHelpers, cState });
       const signatureWords = deriveSignatureFromDefinition(sentence);
       const fnBaseName = signatureWords
         ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
@@ -1153,7 +1197,7 @@ let lines = [header];
       throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
