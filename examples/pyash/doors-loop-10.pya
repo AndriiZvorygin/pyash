@@ -1,4 +1,4 @@
-exists subj name doors obj ve bool lie lie lie lie lie lie lie lie lie lie be vector ya
+exists subj name doors obj ve bool lie by num 10 be vector ya
 
 subj name toggle door by num 0 fromindex num 0 be ceremony def
 subj name doorNum obj this fromindex be number ya

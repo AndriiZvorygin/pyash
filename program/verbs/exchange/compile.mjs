@@ -1000,7 +1000,39 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
       const sentenceObject = `{ subj: { name: "${name}" }, obj: { ve: ${vecLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
       if (lang === "c") {
-        return `/* TODO: vector support in C */`;
+        const isLiteralCount = /^\d+$/.test(String(fillCountExpr));
+        if (!isLiteralCount) return `/* TODO: vector fill with dynamic count in C */`;
+        const count = Number(fillCountExpr);
+        const suffix = cState ? cState.vectorCounter++ : 0;
+        if (cHelpers) {
+          cHelpers.usesVectorType = true;
+          cHelpers.usesVectorPrinter = true;
+          cHelpers.usesString = true;
+          cHelpers.usesCtype = true;
+        }
+        if (vecType === "bool") {
+          const val = elem === "truth" || elem === true || elem === 1 ? 1 : 0;
+          const values = Array(count).fill(val).join(", ");
+          if (shouldDeclare) {
+            return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "bool", ${count}, ${name}_values, NULL };`;
+          }
+          return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "bool", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
+        }
+        if (vecType === "text") {
+          const val = JSON.stringify(String(elem));
+          const values = Array(count).fill(val).join(", ");
+          if (shouldDeclare) {
+            return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
+          }
+          return `do { const char *${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "text", ${count}, NULL, ${name}_values_${suffix} }; } while(0);`;
+        }
+        if (vecType !== "num") return `/* TODO: vector support in C for ${vecType} */`;
+        const numVal = typeof elem === "number" ? elem : Number(elem) || 0;
+        const values = Array(count).fill(numVal).join(", ");
+        if (shouldDeclare) {
+          return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values, NULL };`;
+        }
+        return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "num", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
       }
       return shouldDeclare
         ? `${shouldDeclare ? "let" : ""} ${sanitizeName(name)} = ${sentenceObject};\nglobalThis[${JSON.stringify(name)}] = ${sanitizeName(name)};`
