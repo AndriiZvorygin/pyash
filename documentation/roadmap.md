@@ -4,7 +4,7 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 ---
 
-## Dec 13–Jan 10 (you are here): Algorithms slice + parity discipline
+## Dec 13–Dec 21, 2025 (completed): Algorithms slice + parity discipline
 
 **Ship**
 
@@ -14,7 +14,7 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 **Spec drops (freeze v0.1)**
 
-* **Core Semantics v0.1** (1–2 pages):
+* **Core Semantics v0.1** (1–2 pages) — done:
 
   * evaluation order
   * memory merge rules (`ret`)
@@ -28,7 +28,7 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 ---
 
-## Jan 11–Feb 14: Maps + frequency + CSV group-by (data slice begins)
+## Dec 22, 2025–Feb 14, 2026 (you are here): Maps + frequency + CSV group-by (data slice begins)
 
 **Ship**
 
