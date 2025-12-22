@@ -19,6 +19,55 @@ function sanitizeName(name = "") {
   return cleaned;
 }
 
+function mapValueToJson(value, mapDefs, seen) {
+  if (!value || typeof value !== "object") return undefined;
+  if (value.hollow) return null;
+  if (value.text !== undefined) return value.text;
+  if (value.num !== undefined) return value.num;
+  if (value.boolean !== undefined) return value.boolean;
+  if (value.ve) {
+    const type = value.ve.type || "num";
+    if (type === "hollow") return [];
+    if (type === "name") {
+      return (value.ve.values || []).map((name) => jsonFromMapName(name, mapDefs, seen));
+    }
+    if (type === "bool" || type === "boolean") {
+      return (value.ve.values || []).map((v) => v === "truth" || v === true || v === 1);
+    }
+    if (type === "num" || type === "number" || type === "text") {
+      return value.ve.values || [];
+    }
+    throw new Error(`json map contents defective: unsupported vector type ${type}`);
+  }
+  if (value.name) return jsonFromMapName(value.name, mapDefs, seen);
+  throw new Error("json map contents defective: unsupported contents");
+}
+
+function jsonFromMapName(name, mapDefs, seen) {
+  const mapSentence = mapDefs.get(name);
+  if (!mapSentence || mapSentence.be !== "json map") {
+    throw new Error(`json map referential defective: ${name}`);
+  }
+  return jsonFromMapSentence(mapSentence, mapDefs, seen);
+}
+
+function jsonFromMapSentence(mapSentence, mapDefs, seen) {
+  const mapName = mapSentence?.subj?.name ?? "<map>";
+  if (seen.has(mapName)) {
+    throw new Error("json map export self referential");
+  }
+  seen.add(mapName);
+  const entries = mapSentence?.obj?.map ?? {};
+  const out = {};
+  for (const [key, value] of Object.entries(entries)) {
+    const jsonValue = mapValueToJson(value, mapDefs, seen);
+    if (jsonValue === undefined) continue;
+    out[key] = jsonValue;
+  }
+  seen.delete(mapName);
+  return out;
+}
+
 function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, field = "num" } = {}) {
   if (!slot) return defaultExpr ?? null;
 
@@ -194,7 +243,7 @@ function cExpr(expr) {
     .replace(/\s*\?\?\s*[^)]+/g, "");
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -284,23 +333,32 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
 	    } else if (obj.name) {
 	      const name = sanitizeName(obj.name);
-	      if (lang === "c" && (locals?.has(name) || declared?.has(name))) {
+        const isJsonMap = declaredTypes?.get(obj.name) === "json map";
+        if (isJsonMap) {
+          if (lang === "c") {
+            expr = sanitizeName(`${obj.name}_json`);
+          } else {
+            if (jsHelpers) jsHelpers.usesJsonMap = true;
+            expr = `formatJsonMap(${JSON.stringify(obj.name)})`;
+          }
+        }
+	      if (!isJsonMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
 	        expr = name;
-      } else if (locals?.has(name)) {
+      } else if (!isJsonMap && locals?.has(name)) {
         if (declaredTypes?.get(obj.name) === "vector") {
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatVectorSentence(${JSON.stringify(obj.name)}, ${name}.obj?.ve ?? ${name}.ve)`;
         } else {
           expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
         }
-	      } else if (declared?.has(name)) {
+	      } else if (!isJsonMap && declared?.has(name)) {
 	        if (declaredTypes?.get(obj.name) === "vector") {
 	          if (jsHelpers) jsHelpers.usesVectorFormat = true;
 	          expr = `formatVectorSentence(${JSON.stringify(obj.name)}, ${name}.obj?.ve ?? ${name}.ve)`;
 	        } else {
 	          expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
 	        }
-	      } else {
+	      } else if (!isJsonMap) {
 	        expr = JSON.stringify(obj.name);
 	      }
 	    } else {
@@ -315,7 +373,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     if (lang === "c") {
       if (cHelpers) cHelpers.usesPrintf = true;
-      const isText = typeof obj.text === "string" || (obj.name && declaredTypes?.get(obj.name) === "text") || (obj.name && localsTypes?.get(sanitizeName(obj.name)) === "text");
+      const isText = typeof obj.text === "string"
+        || (obj.name && (declaredTypes?.get(obj.name) === "text" || declaredTypes?.get(obj.name) === "json map"))
+        || (obj.name && localsTypes?.get(sanitizeName(obj.name)) === "text");
       const fmt = isText ? "%s" : "%g";
       return `printf("${fmt}\\n", ${expr});`;
     }
@@ -1563,8 +1623,9 @@ let lines = [header];
   const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, readCounter: 0 };
-  const cState = { vectorCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, readCounter: 0 };
+  const cState = { vectorCounter: 0, jsonMapStrings: new Map() };
+  const mapDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
   const ceremonyFns = new Map();
@@ -1609,6 +1670,65 @@ let lines = [header];
       continue;
     }
 
+    if (sentence.mood === "def" && (sentence.be === "map" || sentence.be === "json map")) {
+      const body = [];
+      let j = i + 1;
+      for (; j < sentences.length; j++) {
+        if (sentences[j].mood === "prah") break;
+        body.push(sentences[j]);
+      }
+      const map = {};
+      for (const entry of body) {
+        const key = entry?.subj?.name;
+        if (!key) continue;
+        map[key] = entry.obj ?? {};
+      }
+      const mapSentence = {
+        mood: "ya",
+        subj: { name },
+        be: sentence.be,
+        obj: { map }
+      };
+      mapDefs.set(name, mapSentence);
+
+      if (sentence.be === "json map") {
+        try {
+          const jsonObj = jsonFromMapSentence(mapSentence, mapDefs, new Set());
+          cState.jsonMapStrings.set(name, JSON.stringify(jsonObj, null, 2));
+        } catch (err) {
+          throwErrorSentence({
+            name: "json map export failed",
+            message: err?.message ?? String(err),
+            from: { name: "compile" },
+            raw: { name, error: err?.message }
+          });
+        }
+      }
+
+      if (lang === "c") {
+        if (sentence.be === "json map") {
+          const jsonText = cState.jsonMapStrings.get(name);
+          if (jsonText) {
+            const varName = sanitizeName(`${name}_json`);
+            lines.push(`const char *${varName} = ${JSON.stringify(jsonText)};`);
+          }
+        }
+      } else {
+        const varName = sanitizeName(name);
+        const payload = JSON.stringify(mapSentence);
+        lines.push(`const ${varName} = ${payload};`);
+        lines.push(`globalThis[${JSON.stringify(name)}] = ${varName};`);
+      }
+
+      if (name) {
+        declared.add(name);
+        declaredTypes.set(name, sentence.be);
+      }
+
+      i = j;
+      continue;
+    }
+
     if (sentence.mood === "ya" && name && !sentence.exists && !declared.has(name)) {
       const pyash = sentenceToPyash(sentence);
       throwErrorSentence({
@@ -1620,7 +1740,7 @@ let lines = [header];
       });
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
@@ -1681,6 +1801,9 @@ let lines = [header];
     }
     if (jsHelpers.usesVectorFormat) {
       prelude.push(vectorFormatHelper());
+    }
+    if (jsHelpers.usesJsonMap) {
+      prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.subj?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.obj?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction formatJsonMap(name) {\n  return JSON.stringify(jsonFromMap(name), null, 2);\n}`);
     }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;

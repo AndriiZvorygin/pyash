@@ -1,0 +1,25 @@
+subj name address be json map def
+subj name street obj text "123 Main St" ya
+subj name city obj text "Springfield" ya
+subj name address be json map prah
+
+subj name project_one be json map def
+subj name title obj text "Pyash compiler" ya
+subj name done obj bool lie ya
+subj name project_one be json map prah
+
+subj name project_two be json map def
+subj name title obj text "Vector polish" ya
+subj name done obj bool truth ya
+subj name project_two be json map prah
+
+subj name profile be json map def
+subj name name obj text "Ada" ya
+subj name age obj num 36 ya
+subj name alive obj bool truth ya
+subj name note obj hollow ya
+subj name address obj name address ya
+subj name projects obj ve name project_one project_two be vector ya
+subj name profile be json map prah
+
+obj name profile be say do
