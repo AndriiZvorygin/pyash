@@ -187,6 +187,13 @@ function vectorExprFromGenitive(genitive, sentenceArg, { locals, declared } = {}
   return path;
 }
 
+function cExpr(expr) {
+  return String(expr ?? "0")
+    .replace(/\?\./g, ".")
+    .replace(/\.obj\.(num|text|name|boolean)\b/g, "")
+    .replace(/\s*\?\?\s*[^)]+/g, "");
+}
+
 function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState } = {}) {
   const obj = sentence.obj ?? {};
   const verb = sentence.be || sentence.mood || "";
@@ -1101,7 +1108,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`double ${targetName} = 0;`);
       }
       if (cHelpers) cHelpers.usesPrintf = cHelpers.usesPrintf; // no-op; keep helper object alive
-      lines.push(`if ((${divisor}) == 0) { /* remains: from cannot be zero */ } else { ${lhs} = fmod(${numerator}, ${divisor}); }`);
+      const cDivisor = cExpr(divisor);
+      const cNumerator = cExpr(numerator);
+      lines.push(`if ((${cDivisor}) == 0) { /* remains: from cannot be zero */ } else { ${lhs} = fmod(${cNumerator}, ${cDivisor}); }`);
       return lines.join("\n");
     }
     const divisorRaw = sentence.from?.num ?? obj.num;

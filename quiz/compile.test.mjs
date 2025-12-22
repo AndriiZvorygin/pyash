@@ -302,7 +302,7 @@ test("compile converts inline Pyash text to C text", async () => {
   const c = result?.obj?.text ?? result?.value?.text;
   assert.ok(c, `compile returned: ${JSON.stringify(result)}`);
   assert.match(c, /double alpha = 1;/);
-  assert.match(c, /const char \* beta = "hello";/);
+  assert.match(c, /char beta\[PYA_TEXT_CAP\] = "hello";/);
 });
 
 test("compile converts inline Pyash text to C with reassignment", async () => {
