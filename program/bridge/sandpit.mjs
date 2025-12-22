@@ -18,7 +18,17 @@ function resolveGenitiveValue(genitive, { state, memory } = {}) {
       if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
     }
     if (curr == null) break;
-    curr = curr[part];
+    if (curr && typeof curr === "object") {
+      if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
+        curr = curr.obj.map[part];
+      } else if (curr.obj && curr.obj[part] !== undefined) {
+        curr = curr.obj[part];
+      } else {
+        curr = curr[part];
+      }
+    } else {
+      curr = curr?.[part];
+    }
   }
   if (typeof curr === "number") return curr;
   if (typeof curr?.num === "number") return curr.num;

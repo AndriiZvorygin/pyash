@@ -384,6 +384,25 @@ export function parse(line) {
     }
 
     // --- bare value after a role defaults to name ---
+    if (current && (words[i + 1] === "of" || words[i + 1] === "ti")) {
+      const chain = [t];
+      let j = i + 1;
+      while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
+        const next = words[j + 1];
+        if (!next) break;
+        chain.push(next);
+        j += 2;
+      }
+      if (chain.length > 1) {
+        slot = slot || (current ? s[current] : null);
+        if (slot) {
+          slot.genitive = { chain: chain.slice().reverse() };
+          i = j - 1;
+          continue;
+        }
+      }
+    }
+
     if (current && slot && t === "hollow") {
       slot.hollow = true;
       continue;

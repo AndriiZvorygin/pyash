@@ -86,6 +86,38 @@ export async function interpret(sentence) {
   if (!sentence) return;
 
   const { mood, be, subj, obj, to, from } = sentence;
+  const isMapDef = mood === "def" && (be === "map" || be === "json map");
+  const isMapPrah = mood === "prah" && (be === "map" || be === "json map");
+  const insideMap = state.mapStack.length > 0;
+
+  if (isMapDef) {
+    state.mapStack.push({ name: subj?.name ?? null, kind: be, entries: [] });
+    return { mapStart: true };
+  }
+
+  if (insideMap && !isMapPrah) {
+    const frame = state.mapStack[state.mapStack.length - 1];
+    frame.entries.push(sentence);
+    return { recorded: true };
+  }
+
+  if (isMapPrah && insideMap) {
+    const frame = state.mapStack.pop();
+    const map = {};
+    for (const entry of frame.entries) {
+      const key = entry?.subj?.name;
+      if (!key) continue;
+      map[key] = entry.obj ?? {};
+    }
+    const mapSentence = {
+      mood: "ya",
+      subj: { name: frame.name },
+      be: frame.kind,
+      obj: { map }
+    };
+    doRemember(mapSentence);
+    return { stored: frame.name };
+  }
 
   // one-line skip after a false condition
   if (!state.lastCondition && mood !== "then") {

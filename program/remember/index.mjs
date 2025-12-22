@@ -156,6 +156,7 @@ export function forget() {
   clearSignatureDefinitions();
   state.lastCondition = true;
   state.definitionStack.length = 0;
+  state.mapStack.length = 0;
   state.currentEvoke = null;
   state.currentEvokeRef = null;
   state.executingBody = false;

@@ -27,6 +27,18 @@ function resolveGenitiveTarget(genitive, remember) {
       const fact = remember(curr.name);
       if (fact) curr = fact.obj ?? fact;
     }
+    if (curr && typeof curr === "object" && curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
+      parent = curr.obj.map;
+      key = part;
+      curr = curr.obj.map[part];
+      continue;
+    }
+    if (curr && typeof curr === "object" && curr.obj && curr.obj[part] !== undefined) {
+      parent = curr.obj;
+      key = part;
+      curr = curr.obj[part];
+      continue;
+    }
     parent = curr;
     key = part;
     curr = curr?.[part];
