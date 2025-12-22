@@ -315,21 +315,6 @@ export function parse(line) {
           parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
           j++;
         }
-        if (nameTypeWords.length === 0 && parts.length >= 2) {
-          const tail = parts[parts.length - 1];
-          const prev = parts[parts.length - 2];
-          const tailNorm = tail === "number" ? "num" : (tail === "boolean" ? "bool" : tail);
-          const prevNorm = prev === "number" ? "num" : (prev === "boolean" ? "bool" : prev);
-          if (tailNorm === "num" || tailNorm === "text" || tailNorm === "filename" || tailNorm === "bool") {
-            nameTypeWords.push(tailNorm);
-            parts.pop();
-          } else if ((tailNorm === "num" || tailNorm === "text" || tailNorm === "bool") && (prevNorm === "vec" || prevNorm === "ve")) {
-            nameTypeWords.push("vec", tailNorm);
-            parts.pop();
-            parts.pop();
-          }
-        }
-
         const nameValue = parts.join(" ");
         if (nameValue) target.name = nameValue;
         if (nameTypeWords.length > 0) target.nameTypeWords = nameTypeWords;
