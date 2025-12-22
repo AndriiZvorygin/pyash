@@ -77,6 +77,9 @@ export async function interpret(sentence) {
 
   if (mood === "ya" || mood === "def") {
     if (mood === "def" && be === "ceremony") {
+      if (subj?.name && getDefinition(subj.name)) {
+        console.warn(`ceremony redefined: ${subj.name}`);
+      }
       const sig = deriveSignatureFromDefinition(sentence);
       if (sig) {
         sentence.signatureWords = sig;
@@ -104,6 +107,9 @@ export async function interpret(sentence) {
 
   // --- Imperative ---
   if (mood === "do") {
+    if (sentence.exists) {
+      throw new Error("exists is only valid on ya sentences");
+    }
     const imperativeResult = await handleImperative({
       sentence,
       state,

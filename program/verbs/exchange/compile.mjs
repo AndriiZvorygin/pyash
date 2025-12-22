@@ -1513,6 +1513,9 @@ let lines = [header];
     const name = sentence?.subj?.name;
 
     if (sentence.mood === "def" && sentence.be === "ceremony") {
+      if (sentence.subj?.name && ceremonyFns.has(sentence.subj.name)) {
+        console.warn(`ceremony redefined: ${sentence.subj.name}`);
+      }
       const body = [];
       let j = i + 1;
       for (; j < sentences.length; j++) {
