@@ -103,7 +103,8 @@ export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remem
   const value = vec.obj.ve.values[idx];
   const isNum = typeof value === "number";
   if (isNum) return { obj: { num: value }, be: "number" };
-  if (typeof value === "boolean") return { obj: { boolean: value }, be: "boolean" };
+  if (typeof value === "boolean") return { obj: { text: value ? "truth" : "lie" }, be: "text" };
+  if (value === "truth" || value === "lie") return { obj: { text: value }, be: "text" };
   return { obj: { text: value }, be: "text" };
 }
 

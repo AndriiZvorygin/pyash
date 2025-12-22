@@ -241,8 +241,8 @@ export function parse(line) {
           const num = Number(token);
           vector.values.push(Number.isNaN(num) ? token : num);
         } else if (elemType === "bool" || elemType === "boolean") {
-          if (token === "truth" || token === "true" || token === "1") vector.values.push(true);
-          else if (token === "lie" || token === "false" || token === "0") vector.values.push(false);
+          if (token === "truth" || token === "true" || token === "1") vector.values.push("truth");
+          else if (token === "lie" || token === "false" || token === "0") vector.values.push("lie");
           else vector.values.push(token);
         } else {
           vector.values.push(token);

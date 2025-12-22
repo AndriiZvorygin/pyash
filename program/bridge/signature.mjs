@@ -132,6 +132,7 @@ function caseTypeWords(value) {
     if (tail === "filename") return ["filename"];
     if (tail === "bool") return ["bool"];
     if (tail === "hollow") return ["hollow"];
+    if (tail === "num" || tail === "number") return ["num"];
     if (tail === "ve" || tail === "vec") return ["vec"];
     if (tail === "atindex" || tail === "fromindex" || tail === "toindex") return ["num"];
     return tail ? ["name", "num"] : ["num"];
@@ -259,6 +260,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
     if (tail === "filename") return ["filename"];
+    if (tail === "num" || tail === "number") return ["num"];
     if (tail === "ve" || tail === "vec") return ["vec"];
     if (tail === "atindex" || tail === "fromindex" || tail === "toindex") return ["num"];
     return tail ? ["name", "num"] : ["num"];

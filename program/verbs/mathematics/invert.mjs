@@ -136,6 +136,10 @@ export const signatures = [
   { signatureWords: ["be", "invert", "obj", "name", "text"], handler: invert_obj_text },
   { signatureWords: ["be", "invert", "obj", "text", "at", "num"], handler: invert_obj_text },
   { signatureWords: ["be", "invert", "at", "num", "obj", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "obj", "bool"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "obj", "name", "bool"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "obj", "bool", "at", "num"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "at", "num", "obj", "bool"], handler: invert_obj_text },
   // vector element toggle: invert obj name vec at num <idx>
   { signatureWords: ["be", "invert", "obj", "name", "vec", "at", "num"], handler: invert_obj_name_vec_at_num },
   { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec"], handler: invert_obj_name_vec_at_num },
