@@ -12,7 +12,7 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - A sentence has `mood`, `be`, and any number of cases.
 - Cases are keyworded fields (`subj`, `obj`, `to`, `from`, `by`, `fromindex`, `toindex`, `atindex`).
 - `subj name <x>` identifies a subject name; `obj num <n>` / `obj text <t>` are typed payloads.
-- Typed name references use `name <type> <literal>` (e.g., `to name num counter`, `to name text line`).
+- Typed name references use `name <type> <literal>` (e.g., `to name num counter`, `to name text line`); the type must immediately follow `name` to allow multi-word literals.
 - Genitives resolve a field chain on a sentence:
   - Possessive: `this ti obj ti num` maps to `this.obj.num`.
   - Genitive: `num of obj of this` maps to the same chain.
