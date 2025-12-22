@@ -1,0 +1,5 @@
+obj text quoted.json.
+{"name":"Ada","pets":[{"kind":"cat"},{"kind":"dog"}],"tags":[true,false]}
+.json.quoted to name profile be import do
+
+obj name profile be say do

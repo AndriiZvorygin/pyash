@@ -198,7 +198,7 @@ This preserves the distinction:
 
 ## 6. Loading JSON as JSON maps (normative)
 
-When JSON is loaded into Pyash:
+When JSON is loaded into Pyash (typically via `be import` or `be compile ... fromstate json tostate pyash`):
 
 * JSON objects load as `be json map` values (with their object stored in `obj`).
 * JSON arrays load as vectors.
@@ -206,6 +206,27 @@ When JSON is loaded into Pyash:
   * For arrays of JSON objects, the loader may produce a **vector referential** (`vec name …`) by assigning each object element a generated name and storing each object element as its own `be json map`.
 
 Generated names must avoid collisions with existing memory; if a generated name conflicts, a suffix number is appended (example: `a1`, `a2`, `a3`).
+
+### 6.1 `import` verb
+
+`be import` loads JSON text or a JSON file into memory:
+
+* `obj text "<json>" to name <map> be import do`
+* `from filename <file.json> to name <map> be import do`
+
+Rules:
+
+* The root JSON object becomes a `be json map` sentence named `<map>`.
+* Arrays at the root become vectors named `<map>`.
+* Generated object names for array elements follow the pattern `<map> <switch> <number>`.
+
+### 6.2 `compile` JSON to Pyash
+
+`be compile` supports JSON → Pyash map definitions:
+
+* `subj name <map> obj text "<json>" from state json to state pyash to name <out> be compile do`
+
+The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` blocks.
 
 ---
 
@@ -239,7 +260,9 @@ Errors are raised only for structural violations, never for absent switches.
 
 ## 10. Tests that define truth
 
-(Quizzes listed once added.)
+* `quiz/json_map_export.test.mjs`
+* `quiz/import_json_map.test.mjs`
+* `quiz/compile_json_to_pyash.test.mjs`
 
 ---
 

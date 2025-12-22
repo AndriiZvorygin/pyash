@@ -71,25 +71,25 @@ function jsonValueFromObj(obj, { rememberFn, seen }) {
   if (obj.text !== undefined) return obj.text;
   if (obj.num !== undefined) return obj.num;
   if (obj.boolean !== undefined) return obj.boolean;
-  if (obj.ve) {
-    const type = obj.ve.type || "num";
-    if (type === "hollow") return [];
-    if (type === "name") {
-      return obj.ve.values.map((name) => jsonObjectFromMapName(name, { rememberFn, seen }));
-    }
-    if (!JSON_SCALAR_VECTORS.has(type)) {
-      throwErrorSentence({
-        name: "json map contents defective",
-        message: `json map contents defective: unsupported vector type ${type}`,
-        from: { name: "say" },
-        raw: { type }
+    if (obj.ve) {
+      const type = obj.ve.type || "num";
+      if (type === "hollow") return [];
+      if (type === "name") {
+        return obj.ve.values.map((name) => jsonObjectFromMapName(name, { rememberFn, seen }));
+      }
+      if (!JSON_SCALAR_VECTORS.has(type)) {
+        throwErrorSentence({
+          name: "json map contents defective",
+          message: `json map contents defective: unsupported vector type ${type}`,
+          from: { name: "say" },
+          raw: { type }
+        });
+      }
+      return obj.ve.values.map((value) => {
+        if (type === "bool" || type === "boolean") return value === "truth" || value === true || value === 1;
+        return value;
       });
     }
-    return obj.ve.values.map((value) => {
-      if (type === "bool" || type === "boolean") return Boolean(value);
-      return value;
-    });
-  }
   if (obj.name) return jsonObjectFromMapName(obj.name, { rememberFn, seen });
   throwErrorSentence({
     name: "json map contents defective",

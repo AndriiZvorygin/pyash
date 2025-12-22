@@ -6,6 +6,7 @@ import { vectorFormatHelper } from "./helpers_js.mjs";
 import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
+import { jsonToPyashText } from "./json_map.mjs";
 
 function sanitizeName(name = "") {
   const cleaned = String(name)
@@ -1899,9 +1900,52 @@ async function compile_from_filename_to_filename(sentence) {
   // Allow escaped newlines in inline text blocks
   sourceText = sourceText.replaceAll("\\n", "\n");
 
+  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  const targetState = (sentence?.tostate?.name || sentence?.become?.name || "javascript").toLowerCase();
+  if (sourceState === "json" && targetState === "pyash") {
+    let parsed;
+    try {
+      parsed = JSON.parse(sourceText);
+    } catch (err) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: invalid json",
+        from: { name: "compile" },
+        raw: { error: err?.message }
+      });
+    }
+    const rootName = sentence?.subj?.name ?? "data";
+    let text;
+    try {
+      text = jsonToPyashText(parsed, rootName).text;
+    } catch (err) {
+      throwErrorSentence({
+        name: "compile error",
+        message: err?.message ?? "compile: json export failed",
+        from: { name: "compile" },
+        raw: { error: err?.message }
+      });
+    }
+    const wrappedText = `quoted.pyash.\n${text}.pyash.quoted`;
+    const targetFilename = sentence?.to?.filename;
+    if (targetFilename) {
+      await fs.writeFile(targetFilename, text, "utf8");
+    }
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.subj?.name;
+    if (targetName) {
+      doRemember({
+        subj: { name: targetName },
+        be: "pyash",
+        obj: { text: wrappedText },
+        mood: "ya",
+      });
+    }
+    return { obj: { text: wrappedText }, be: "pyash" };
+  }
+
   const program = buildProgram(sourceText);
 
-  const targetLang = (sentence?.become?.name || "javascript").toLowerCase();
+  const targetLang = targetState || "javascript";
   const body = transpileProgram(program.sentences, { lang: targetLang });
   const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;
 
@@ -2009,6 +2053,22 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "compile", "obj", "name", "num", "fromstate", "name", "num", "tostate", "name", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "from", "text", "fromstate", "name", "num", "tostate", "name", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "fromtext", "text", "fromstate", "name", "num", "tostate", "name", "num", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "from", "text", "fromstate", "name", "num", "tostate", "name", "num", "to", "filename"],
+    handler: compile_from_filename_to_filename
+  },
+  {
+    signatureWords: ["be", "compile", "fromtext", "text", "fromstate", "name", "num", "tostate", "name", "num", "to", "filename"],
     handler: compile_from_filename_to_filename
   }
 ];

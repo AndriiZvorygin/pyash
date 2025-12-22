@@ -10,6 +10,7 @@ import { twiceCrescent, signatures as twiceCrescentSignatures } from "./mathemat
 import { remains, signatures as remainsSignatures } from "./mathematics/remains.mjs";
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import compile, { signatures as compileSignatures } from "./exchange/compile.mjs";
+import importJson, { signatures as importSignatures } from "./exchange/import.mjs";
 import translation, { signatures as translationSignatures } from "./exchange/translation.mjs";
 import understand, { signatures as understandSignatures } from "./exchange/understand.mjs";
 import read, { signatures as readSignatures } from "./exchange/read.mjs";
@@ -33,6 +34,7 @@ export {
   remains,
   chip,
   compile,
+  importJson,
   translation,
   understand,
   read,
@@ -57,6 +59,7 @@ export const builtInSignatures = [
   ...remainsSignatures,
   ...chipSignatures,
   ...compileSignatures,
+  ...importSignatures,
   ...translationSignatures,
   ...understandSignatures,
   ...readSignatures,
