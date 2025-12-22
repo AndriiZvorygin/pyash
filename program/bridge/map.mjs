@@ -62,7 +62,7 @@ export async function runAtAll({
       else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
       else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
       else elemSentence.obj = elemValue ?? {};
-      elemSentence.at = { num: i + 1 };
+      elemSentence.at = { num: i };
       const res = await interpret(elemSentence);
       if (res?.obj !== undefined) resultObj = res.obj;
       if (res?.value !== undefined) resultObj = res.value;
@@ -85,7 +85,9 @@ export async function runAtAll({
       if (res?.value !== undefined) resultObj = res.value;
       if (res?.obj !== undefined) resultObj = res.obj;
       if (res?.result !== undefined) resultObj = res.result;
-      if (state.currentEvokeRef?.obj !== undefined) resultObj = state.currentEvokeRef.obj;
+      if (resultObj === undefined && elemSentence.obj !== undefined) {
+        resultObj = elemSentence.obj;
+      }
     }
 
     if (typeof resultObj === "object" && resultObj !== null) {
