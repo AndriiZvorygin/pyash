@@ -40,6 +40,13 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 * Every normative rule links to existing quizzes and/or runnable examples
 
+**Additional work completed Dec 22, 2025**
+
+* JSON map import (`be import`) and JSON → Pyash compile path
+* `say` defaults to Pyash def-chain for JSON maps; `to state json` prints JSON
+* JS/C parity quizzes for JSON → Pyash compile
+* Example: `examples/pyash/compile-json-to-pyash.pya`
+
 ---
 
 ## Dec 22, 2025–Feb 14, 2026 (current): Maps + frequency + CSV group-by (data slice)
