@@ -87,7 +87,18 @@ This document summarizes the current core language model used by the interpreter
 ## Errors and Guards
 - Assigning to undeclared names (missing `exists`) raises an error at compile time for `ya` sentences.
 - Conditionals or verbs without registered handlers error during interpretation.
-- Error payload format is still under discussion; current errors include the derived signature and the source sentence where possible.
+
+## Error Sentence Contract (current)
+Errors are thrown as exceptions whose `.sentence` is a **`be error do`** sentence:
+
+- `subj name <error-name>` — short error identifier (e.g., `unknown verb`, `signature mismatch`).
+- `obj text <message>` — human-readable detail.
+- `from name <source>` — component that raised the error (e.g., `interpret`, `compile`, `signature`).
+- Optional context fields on `obj`:
+  - `obj.pyash` — pretty-printed Pyash sentence where applicable.
+  - `obj.raw` — raw sentence or debug payload.
+
+The thrown exception message mirrors `obj.text` when present.
 - Compilers include TODO comments for unsupported constructs (e.g., C string concat).
 - Vector compile: JS supports vector literals (`obj ve/vec num ... be vector`) and `produce` (dot product) for inline and named vectors; C vector codegen is still TODO.
 - Vector addressing: use `via space` → `at` for 0-based indexing (`obj name doors via space num 0 be read …`). `ord N` sugar maps 1→0, 2→1, etc. `invert` flips truth/lie text values or boolean vectors in-place.
