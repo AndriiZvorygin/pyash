@@ -37,19 +37,19 @@ async function runJs(source) {
 test("compile JS say name vector outputs full sentence", async () => {
   forget();
   const pyash = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "obj name vec be say do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "obj name values be say do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
-  assert.equal(out, "subj name vec obj ve num 1 2 3 be vector ya");
+  assert.equal(out, "subj name values obj ve num 1 2 3 be vector ya");
 });
 
 test("compile JS say genitive vector outputs literal", async () => {
   forget();
   const pyash = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "obj ve of vec be say do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "obj ve of values be say do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);

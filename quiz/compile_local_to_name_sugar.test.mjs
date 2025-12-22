@@ -10,7 +10,7 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
   forget();
 
   const pyash = [
-    "exists subj name vec obj ve num 0 0 0 be vector ya",
+    "exists subj name values obj ve num 0 0 0 be vector ya",
     // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.obj.num in JS.
     "subj name bumpIndex by num 0 obj name num value atindex num 0 be ceremony def",
     "subj name door obj this atindex be number ya",
@@ -19,7 +19,7 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
     "obj name rem be equally from num 0 then obj num 1 to this ti obj ti num be add do",
     "subj name bumpIndex be ceremony prah",
     // Apply once: pass=1 toggles every element by +1
-    "be bumpIndex obj name vec by num 1 at name all do"
+    "be bumpIndex obj name values by num 1 at name all do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -30,6 +30,6 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
   const sandbox = { console: { log: () => {} } };
   vm.runInNewContext(js, sandbox);
 
-  const vec = sandbox.vec ?? sandbox.globalThis?.vec;
+  const vec = sandbox.values ?? sandbox.globalThis?.values;
   assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [1, 1, 1]);
 });

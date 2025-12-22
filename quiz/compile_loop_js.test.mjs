@@ -108,10 +108,10 @@ test("compile loop can apply a conditional update per iteration", async () => {
   forget();
 
   const pyash = [
-    "exists subj name vec obj ve num 1 2 3 4 be vector ya",
+    "exists subj name values obj ve num 1 2 3 4 be vector ya",
     "subj name flip even to name num bucket fromindex num 0 be ceremony def",
     "obj this ti fromindex from num 2 to name mod be remains do",
-    "obj name mod be equally from num 0 then obj name vec at num of fromindex of this be invert do",
+    "obj name mod be equally from num 0 then obj name values at num of fromindex of this be invert do",
     "subj name flip even be ceremony prah",
     "to name outside fromindex num 0 toindex num 4 be flip even do"
   ].join("\n");
@@ -124,7 +124,7 @@ test("compile loop can apply a conditional update per iteration", async () => {
   const sandbox = { console: { log: () => {} } };
   vm.runInNewContext(js, sandbox);
 
-  const vec = sandbox.vec ?? sandbox.globalThis?.vec;
+  const vec = sandbox.values ?? sandbox.globalThis?.values;
   assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [-1, 2, -3, 4]);
 });
 

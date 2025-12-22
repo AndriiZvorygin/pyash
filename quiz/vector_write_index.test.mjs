@@ -6,10 +6,10 @@ import { remember, forget } from "../program/remember/index.mjs";
 
 test("write sets vector element by index", async () => {
   forget();
-  await interpret(parse("exists subj name vec obj ve num 10 20 30 be vector ya"));
-  await interpret(parse("obj num 99 to name vec at num 1 be write do"));
+  await interpret(parse("exists subj name values obj ve num 10 20 30 be vector ya"));
+  await interpret(parse("obj num 99 to name values at num 1 be write do"));
 
-  const vec = remember("vec");
+  const vec = remember("values");
   assert.deepEqual(vec?.obj?.ve?.values, [10, 99, 30]);
 });
 

@@ -7,13 +7,13 @@ import { interpret } from "../program/bridge/index.mjs";
 
 test("compile at all map writes back per-element ceremony mutations", async () => {
   const pyash = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "exists subj name values obj ve num 1 2 3 be vector ya",
     "subj name bump obj name num value be ceremony def",
     "subj name val obj this obj be number ya",
     "obj num 1 be add do",
     "subj name val ret",
     "subj name bump be ceremony prah",
-    "obj name vec at name all be bump do"
+    "obj name values at name all be bump do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -26,7 +26,7 @@ test("compile at all map writes back per-element ceremony mutations", async () =
   const sandbox = { console: { log: () => {} } };
   vm.runInNewContext(js, sandbox);
 
-  const vec = sandbox.vec ?? sandbox.globalThis?.vec;
+  const vec = sandbox.values ?? sandbox.globalThis?.values;
   const values = Array.from(vec?.obj?.ve?.values ?? []);
   assert.deepEqual(values, [2, 3, 4]);
 });

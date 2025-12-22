@@ -7,8 +7,8 @@ import { remember, forget, dumpSandpits, doRemember } from "../program/remember/
 test("at all map writes to new vector via to", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "be invert obj name vec to name out at name all do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "be invert obj name values to name out at name all do"
   ].join("\n");
   const sentences = program.split("\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
@@ -21,13 +21,13 @@ test("at all map writes to new vector via to", async () => {
 test("at all foreach updates source vector in place when no to", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "be invert obj name vec at name all do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "be invert obj name values at name all do"
   ].join("\n");
   const sentences = program.split("\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
 
-  const vec = remember("vec");
+  const vec = remember("values");
   assert.ok(vec?.obj?.ve?.values);
   assert.deepEqual(vec.obj.ve.values, [-1, -2, -3]);
 });
@@ -35,12 +35,12 @@ test("at all foreach updates source vector in place when no to", async () => {
 test("at all provides atindex register inside ceremony body", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 4 5 6 be vector ya",
+    "exists subj name values obj ve num 4 5 6 be vector ya",
     "subj name capture-index obj name num value atindex num 0 be ceremony def",
     "subj name picked obj this atindex be number ya",
     "subj name picked ret",
     "subj name capture-index be ceremony prah",
-    "be capture-index obj name vec at name all do"
+    "be capture-index obj name values at name all do"
   ].join("\n");
   const sentences = program.split("\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
@@ -53,16 +53,16 @@ test("at all provides atindex register inside ceremony body", async () => {
 test("at all can increment each element via ceremony in place", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
+    "exists subj name values obj ve num 1 2 3 be vector ya",
     "subj name bump obj name num value be ceremony def",
     "obj num 1 to this ti obj ti num be add do",
     "subj name bump be ceremony prah",
-    "obj name vec at name all be bump do"
+    "obj name values at name all be bump do"
   ].join("\n");
   const sentences = program.split("\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
 
-  const vec = remember("vec");
+  const vec = remember("values");
   assert.deepEqual(vec?.obj?.ve?.values, [2, 3, 4]);
 });
 
@@ -97,8 +97,8 @@ test("10 doors via at all toggles only square positions open (map, by pass)", as
 test("at all map writes to new vector via to", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "be invert obj name vec to name out at name all do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "be invert obj name values to name out at name all do"
   ].join("\\n");
   const sentences = program.split("\\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
@@ -111,13 +111,13 @@ test("at all map writes to new vector via to", async () => {
 test("at all foreach updates source vector in place when no to", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "be invert obj name vec at name all do"
+    "exists subj name values obj ve num 1 2 3 be vector ya",
+    "be invert obj name values at name all do"
   ].join("\\n");
   const sentences = program.split("\\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);
 
-  const vec = remember("vec");
+  const vec = remember("values");
   assert.ok(vec?.obj?.ve?.values);
   assert.deepEqual(vec.obj.ve.values, [-1, -2, -3]);
 });
@@ -125,12 +125,12 @@ test("at all foreach updates source vector in place when no to", async () => {
 test("at all provides by register for index inside ceremony body", async () => {
   forget();
   const program = [
-    "exists subj name vec obj ve num 4 5 6 be vector ya",
+    "exists subj name values obj ve num 4 5 6 be vector ya",
     "subj name capture-index to name num atindex num 0 be ceremony def",
     "subj name picked obj this atindex be number ya",
     "subj name picked ret",
     "subj name capture-index be ceremony prah",
-    "be capture-index obj name vec to name out at name all do"
+    "be capture-index obj name values to name out at name all do"
   ].join("\\n");
   const sentences = program.split("\\n").map(parse).filter(Boolean);
   for (const s of sentences) await interpret(s);

@@ -1,10 +1,10 @@
-exists subj name vec obj ve num 1 2 3 be vector ya
+exists subj name values obj ve num 1 2 3 be vector ya
 
-subj name inc obj name vec at name all be ceremony def
+subj name inc obj name values at name all be ceremony def
 subj name val obj this obj be number ya
 obj num 1 be add do
 subj name val ret
 subj name inc be ceremony prah
 
-obj name vec at name all be inc do
-obj name vec be say do
+obj name values at name all be inc do
+obj name values be say do

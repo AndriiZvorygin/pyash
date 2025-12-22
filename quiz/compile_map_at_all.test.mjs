@@ -9,7 +9,7 @@ test("compile at all map toggles vector elements", async () => {
   try {
     const pyash = [
       // Seed vector of zeros
-      "exists subj name vec obj ve num 0 0 0 be vector ya",
+      "exists subj name values obj ve num 0 0 0 be vector ya",
       // Ceremony: val = this obj + 1
       "subj name toggle be ceremony def",
       "subj name val obj this obj be number ya",
@@ -17,7 +17,7 @@ test("compile at all map toggles vector elements", async () => {
       "subj name val ret",
       "subj name toggle be ceremony prah",
       // Invoke at all (in-place)
-      "obj name vec at name all be toggle do"
+      "obj name values at name all be toggle do"
     ].join("\\n");
 
     const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -34,7 +34,7 @@ test("compile at all map toggles vector elements", async () => {
     const sandbox = { console: { log: () => {} } };
     vm.runInNewContext(js, sandbox);
 
-    const vec = sandbox.vec ?? sandbox.globalThis?.vec;
+    const vec = sandbox.values ?? sandbox.globalThis?.values;
     const values = Array.from(vec?.obj?.ve?.values ?? []);
     assert.ok(values.length, "vector should exist after runAtAll");
     assert.deepEqual(values, [1, 1, 1], "all elements should be incremented to 1");
