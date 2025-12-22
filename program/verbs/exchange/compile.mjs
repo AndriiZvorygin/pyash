@@ -5,6 +5,7 @@ import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/
 import { vectorFormatHelper } from "./helpers_js.mjs";
 import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { throwErrorSentence } from "../../error.mjs";
 
 function sanitizeName(name = "") {
   const cleaned = String(name)
@@ -1550,7 +1551,13 @@ let lines = [header];
 
     if (sentence.mood === "ya" && name && !sentence.exists && !declared.has(name)) {
       const pyash = sentenceToPyash(sentence);
-      throw new Error(`subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`);
+      throwErrorSentence({
+        name: "variable as not exists",
+        message: `subj quoted.pyash.${pyash}.pyash.quoted be error obj name variable as not exists ya`,
+        from: { name: "compile" },
+        pyash,
+        raw: sentence
+      });
     }
 
     const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState });
@@ -1699,7 +1706,11 @@ async function compile_from_filename_to_filename(sentence) {
     sourceText = await fs.readFile(sourceFilename, "utf8");
   }
   if (typeof sourceText !== "string") {
-    throw new Error("compile: source text is required (from text or from filename)");
+    throwErrorSentence({
+      name: "compile error",
+      message: "compile: source text is required (from text or from filename)",
+      from: { name: "compile" }
+    });
   }
 
   // Allow escaped newlines in inline text blocks

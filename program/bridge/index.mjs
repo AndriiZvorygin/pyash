@@ -8,6 +8,7 @@ import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
+import { throwErrorSentence } from "../error.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -108,7 +109,12 @@ export async function interpret(sentence) {
   // --- Imperative ---
   if (mood === "do") {
     if (sentence.exists) {
-      throw new Error("exists is only valid on ya sentences");
+      throwErrorSentence({
+        name: "exists invalid",
+        message: "exists is only valid on ya sentences",
+        from: { name: "interpret" },
+        raw: sentence
+      });
     }
     const imperativeResult = await handleImperative({
       sentence,

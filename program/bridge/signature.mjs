@@ -1,3 +1,5 @@
+import { throwErrorSentence } from "../error.mjs";
+
 // Build canonical signature words from a verb and its cases/types.
 export function makeSignatureWords({ be, cases }) {
   if (typeof be !== "string" || be.trim() === "") {
@@ -178,7 +180,12 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     const typeWords = caseTypeWordsWithMemory(value, remember, verb);
     if (typeWords.length === 0) {
       console.error("derive-signature-fail", { key, value, verb });
-      throw new Error(`Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`);
+      throwErrorSentence({
+        name: "signature derive",
+        message: `Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`,
+        from: { name: "signature" },
+        raw: { case: key, verb, value }
+      });
     }
     cases.push({ case: key, typeWords });
   }

@@ -4,6 +4,7 @@ import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
+import { throwErrorSentence } from "../error.mjs";
 
 function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -104,7 +105,16 @@ export async function handleImperative({
 
   // Inline conditional with consequence (e.g., "be equally ... then ...")
   if (sentence.consequence && (be === "equally" || be === "tiny" || be === "giant")) {
-    if (!fn) throw new Error(`Unknown verb/signature: ${sigKey ?? be}`);
+    if (!fn) {
+      const pyash = sentenceToPyash(sentence);
+      throwErrorSentence({
+        name: "unknown verb",
+        message: `Unknown verb/signature: ${sigKey ?? be}`,
+        from: { name: "interpret" },
+        pyash,
+        raw: sentence
+      });
+    }
     const lhs =
       sentence.obj?.name && memory.remember(sentence.obj.name)
         ? memory.remember(sentence.obj.name).obj
@@ -139,8 +149,13 @@ export async function handleImperative({
   if (!fn && !defEntry && sigKey && !hasAtAll) {
     const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
     const pyash = sentenceToPyash(sentence);
-    const raw = JSON.stringify(sentence);
-    throw new Error(`Unknown verb/signature: ${sigKey}; derived: ${sigWordsStr}; sentence: ${pyash}; raw: ${raw}`);
+    throwErrorSentence({
+      name: "unknown verb",
+      message: `Unknown verb/signature: ${sigKey}; derived: ${sigWordsStr}`,
+      from: { name: "interpret" },
+      pyash,
+      raw: sentence
+    });
   }
 
   if (!fn && defEntry) {
@@ -173,7 +188,13 @@ export async function handleImperative({
       const relaxedCallSigKey = baseSigWords ? joinSignatureWords(baseSigWords) : null;
       if (defSigKey !== callSigKey && defSigKey !== relaxedCallSigKey) {
         const pyash = sentenceToPyash(sentence);
-        throw new Error(`Ceremony signature mismatch: expected ${defSigKey}, got ${callSigKey}; sentence: ${pyash}`);
+        throwErrorSentence({
+          name: "signature mismatch",
+          message: `Ceremony signature mismatch: expected ${defSigKey}, got ${callSigKey}`,
+          from: { name: "interpret" },
+          pyash,
+          raw: sentence
+        });
       }
     }
 
@@ -192,8 +213,13 @@ export async function handleImperative({
   if (!fn && !hasAtAll) {
     const sigWordsStr = sigWords ? sigWords.join(" ") : "(none)";
     const pyash = sentenceToPyash(sentence);
-    const raw = JSON.stringify(sentence);
-    throw new Error(`Unknown verb: ${be}; derived: ${sigWordsStr}; sentence: ${pyash}; raw: ${raw}`);
+    throwErrorSentence({
+      name: "unknown verb",
+      message: `Unknown verb: ${be}; derived: ${sigWordsStr}`,
+      from: { name: "interpret" },
+      pyash,
+      raw: sentence
+    });
   }
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);

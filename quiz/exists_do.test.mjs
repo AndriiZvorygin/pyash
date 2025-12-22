@@ -16,5 +16,6 @@ test("exists is rejected on do sentences", async () => {
     err = e;
   }
   assert.ok(err, "expected error for exists on do");
-  assert.match(String(err), /exists/i);
+  assert.equal(err?.sentence?.be, "error");
+  assert.match(err?.sentence?.obj?.text ?? "", /exists/i);
 });

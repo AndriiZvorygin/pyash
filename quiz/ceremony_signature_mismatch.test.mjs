@@ -30,5 +30,6 @@ test("evoker with mismatched signature is rejected", async () => {
     err = e;
   }
   assert.ok(err, "expected error for signature mismatch");
-  assert.match(String(err), /signature mismatch/i);
+  assert.equal(err?.sentence?.be, "error");
+  assert.match(err?.sentence?.obj?.text ?? "", /signature mismatch/i);
 });
