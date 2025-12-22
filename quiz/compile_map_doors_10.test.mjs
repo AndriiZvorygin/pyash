@@ -12,7 +12,7 @@ test("compile map 10-doors (at all) to javascript and run", async () => {
   const pyash = [
     "exists subj name doors obj ve num 0 0 0 0 0 0 0 0 0 0 be vector ya",
     // Toggle a single door if (atindex+1) % pass === 0.
-    "subj name toggle pass by num 0 obj name num be ceremony def",
+    "subj name toggle pass by num 0 obj name num value atindex num 0 be ceremony def",
     "subj name door obj this atindex be number ya",
     "obj num 1 to num of obj of door be add do",
     "obj num of obj of door from num of by of this to name rem be remains do",
@@ -37,4 +37,3 @@ test("compile map 10-doors (at all) to javascript and run", async () => {
   const doors = sandbox.doors ?? sandbox.globalThis?.doors;
   assert.deepEqual(Array.from(doors?.obj?.ve?.values ?? []), [1, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
 });
-

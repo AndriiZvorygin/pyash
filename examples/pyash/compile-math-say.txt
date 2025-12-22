@@ -3,7 +3,7 @@ obj num 2 to name alpha be add do
 obj num 1 to name alpha be subtract do
 obj name alpha be say do
 
-subj name inc to name num be ceremony def
+subj name inc to name num target be ceremony def
 obj this ti to be remember to name target exists do
 obj num 3 to name target be add do
 subj name target ret

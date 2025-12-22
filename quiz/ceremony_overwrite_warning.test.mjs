@@ -22,10 +22,10 @@ test("later ceremony definition takes priority and warns", async () => {
   try {
     await run([
       "exists subj name counter obj num 0 be number ya",
-      "subj name bump to name counter be ceremony def",
+      "subj name bump to name num counter be ceremony def",
       "obj num 1 to name counter be add do",
       "subj name bump be ceremony prah",
-      "subj name bump to name counter be ceremony def",
+      "subj name bump to name num counter be ceremony def",
       "obj num 2 to name counter be add do",
       "subj name bump be ceremony prah",
       "to name counter be bump do"

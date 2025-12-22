@@ -8,7 +8,7 @@ import { interpret } from "../program/bridge/index.mjs";
 test("compile at all map writes back per-element ceremony mutations", async () => {
   const pyash = [
     "exists subj name vec obj ve num 1 2 3 be vector ya",
-    "subj name bump obj name num be ceremony def",
+    "subj name bump obj name num value be ceremony def",
     "subj name val obj this obj be number ya",
     "obj num 1 be add do",
     "subj name val ret",

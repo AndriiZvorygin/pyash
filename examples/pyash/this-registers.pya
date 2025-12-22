@@ -1,4 +1,4 @@
-subj name inspector to name seen-fromindex to name seen-toindex be ceremony def
+subj name inspector to name num seen-fromindex to name num seen-toindex be ceremony def
 exists subj name seen-fromindex obj be number ya
 exists subj name seen-toindex obj be number ya
 this ret

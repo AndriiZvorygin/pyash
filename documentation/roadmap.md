@@ -1,4 +1,4 @@
-### Updated roadmap (general-purpose, parity-driven, with “spec drops” and hardening points)
+### Updated roadmap (general-purpose, parity-driven, with **specification drops**, hardening points, **genetic programming**, and **early modules/namespacing**)
 
 Assumption: you keep **interpreter + JS + C parity as the default rule**, but you allow **explicit feature gates** when a backend lags (tests declare the gate).
 
@@ -8,127 +8,207 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 **Ship**
 
-* 100 Doors parity (done, as you said)
+* 100 Doors parity (done)
 * Sieve parity (done)
 * Insertion sort parity (done)
 
-**Spec drops (freeze v0.1)**
+**Specification drops (freeze v0.1)**
 
-* **Core Semantics v0.1** (1–2 pages) — done:
+* **Core Semantics v0.1** — done
 
   * evaluation order
   * memory merge rules (`ret`)
-  * ceremony overwrite rule (and whether it is kept or replaced)
-  * signature resolution order and error surface (“unknown signature” contract)
+  * ceremony overwrite rule
+  * signature resolution order and error surface (“unknown verb/signature”)
 
 **Hardening**
 
-* **Golden tests**: same input program, same output snapshot across all 3 backends.
-* **Error format**: standardize one machine-readable error shape (code + span + message).
+* Golden tests: same input program, same output snapshot across interpreter, JS, and C
+* Error sentence contract established (`be error do`)
 
 ---
 
-## Dec 22, 2025–Feb 14, 2026 (you are here): Maps + frequency + CSV group-by (data slice begins)
+## Dec 22, 2025 (completed): Specifications modularization v0.1
 
 **Ship**
 
-* Map literal, map get/set, map iteration order (pick one and lock it)
+* Modular **Specifications** set (`00-index.md`, `01–06` core specifications)
+* Guides: Getting Started, Debugging, Cookbook
+* Indexes: Examples list, Glossary, Specifications-to-quizzes
+
+**Hardening**
+
+* Every normative rule links to existing quizzes and/or runnable examples
+
+---
+
+## Dec 22, 2025–Feb 14, 2026 (current): Maps + frequency + CSV group-by (data slice)
+
+**Ship**
+
+* Map literal
+* Map get/set
+* Map iteration order (pick one and lock it)
 * Word frequency (map + loop + text split)
 * CSV parse + group-by + aggregate (count, sum)
 
-**Spec drops (freeze v0.2)**
+**Specification drops (freeze v0.2)**
 
-* **Map spec v0.1**
+* **Map specification v0.1**
 
-  * key types allowed (start with text + number)
-  * equality rules (numbers, text)
-  * iteration order rule
-  * missing key behaviour (null-ish value vs error)
+  * key types allowed (text, number)
+  * equality rules
+  * iteration order
+  * missing-key behaviour
 
-* **Text spec v0.1 (deliberately small)**
+* **Text specification v0.1**
 
-  * what a “character” means for now (ASCII-first acceptable)
-  * whitespace definition
+  * character definition (ASCII-first)
+  * whitespace rules
   * split/join behaviour
-  * case conversion stance (if any)
+  * case-conversion stance
 
 **Hardening**
 
-* Introduce **“strict mode”** for ceremonies:
+* Error sentence contract parity across interpreter, JS, and C
+* Expanded golden corpus:
 
-  * warn or fail on overwrite unless explicitly marked (example: `replace ya`)
-* Add **stdlib boundary**:
+  * fizzbuzz
+  * insertion sort
+  * sieve-10
+  * one vector example
+* Stdlib boundary enforced in layout:
 
-  * core verbs stay tiny
-  * maps/text/csv land in `program/verbs/library/*` with stable signatures
+  * core verbs stay minimal
+  * maps/text/csv live under library verbs with stable signatures
+* Ceremony overwrite warnings enforced (strict mode optional)
 
 ---
 
-## Feb 15–Mar 15: JSON parse + transform + path utilities (document slice)
+## Feb 2026 (small milestone): Minimal agent loop v0.1
 
 **Ship**
 
-* JSON parse to a typed tree
-* JSON stringify
-* JSON transform primitives (map, filter, reduce over arrays; set/get by path)
-
-**Spec drops (freeze v0.3)**
-
-* **JSON IR spec v0.1**
-
-  * exact node types (null, bool, number, text, array, object)
-  * number mapping (double? decimal? for now: double with constraints)
-  * object key rules (text only)
-
-* **Path spec v0.1**
-
-  * canonical way to address nested values (dot + bracket, or verb-based “by key / by index”)
-  * error rules for missing paths
+* Verifier loop: run quizzes, emit structured report artifacts
+* Reducer loop: store minimal repro `.pya` programs
+* Agents propose, tests decide (no autonomy promise)
 
 **Hardening**
 
-* **Determinism contract v0.1**
-
-  * label verbs as pure/impure
-  * define what “pure” guarantees (same inputs => same outputs)
-* **Span-tracked parser errors** (line/column) across all backends, same codes.
+* Deterministic, diff-friendly reports
 
 ---
 
-## Mar 16–Apr 30: Pipeline skeleton + retries + checkpoints (systems slice)
+## Feb 2026 (small milestone): Genetic programming harness v0.1
+
+**Ship**
+
+* Genome format: Pyash sentence lists (and/or JSON sentence IR once available)
+* Mutations: insert/delete/swap cases, tweak literals, tweak loop bounds
+* Crossover: splice sentence ranges
+* Fitness: pass/fail on selected quizzes, optional size/novelty penalties
+
+**Specification drops (freeze v0.2-gp)**
+
+* **Evolution artifacts specification v0.1**
+
+  * genome serialization
+  * mutation log format
+  * fitness report format
+  * reproducibility fields (seed, quiz set)
+
+**Hardening**
+
+* Fixed seeds and stable serialization
+* Time/step limits per candidate
+* Sandboxed IO: writes limited to an artifacts directory
+
+---
+
+## Feb 15–Mar 15, 2026: JSON parse + transform + path utilities (document slice)
+
+**Ship**
+
+* JSON parse to typed tree
+* JSON stringify
+* JSON transforms (map/filter/reduce; set/get by path)
+
+**Specification drops (freeze v0.3)**
+
+* **JSON IR specification v0.1**
+
+  * node types (null, bool, number, text, array, object)
+  * number mapping (double with constraints)
+  * object keys (text only)
+
+* **Path specification v0.1**
+
+  * canonical addressing model
+  * missing-path error rules
+
+**Hardening**
+
+* Determinism contract v0.1 (pure vs impure verbs)
+* Span-tracked parser errors across all backends
+
+---
+
+## Mar 16–Apr 30, 2026: Pipeline skeleton + retries + checkpoints (systems slice)
 
 **Ship**
 
 * Pipeline runner (stages)
 * Queue + worker pool
-* Rate limit, retries with backoff, checkpoints
-* Structured logs (machine readable)
+* Rate limiting, retries with backoff, checkpoints
+* Structured logs (machine-readable)
 
-**Spec drops (freeze v0.4)**
+**Specification drops (freeze v0.4)**
 
-* **Error model spec v0.1**
+* **Error model specification v0.1**
 
-  * error values vs thrown exceptions (pick one)
-  * standard fields (code, message, origin verb, optional span)
-  * how errors propagate through ceremonies and pipelines
+  * error propagation rules
+  * ceremony vs pipeline behaviour
 
-* **IO model spec v0.1**
+* **IO model specification v0.1**
 
   * file read/write contracts
-  * encoding rules for text
-  * sandbox boundaries: what IO allowed in sandpits
+  * text encodings
+  * sandpit IO boundaries
 
 **Hardening**
 
-* **Repro runs**:
-
-  * `pyash run --seed N` for anything nondeterministic (if any exists)
-  * stable log schema
-* **Backpressure rules** in pipeline (queue size, drop vs block)
+* Reproducible runs (`--seed` where applicable)
+* Stable log schema
+* Backpressure rules (queue size, drop vs block)
 
 ---
 
-## May–Jun: Scheduler and concurrency “truth serum”
+## May–Jun 2026: Minimal modules/imports/namespacing (keeps core tiny)
+
+**Ship**
+
+* Module file as unit of execution/compilation
+* `import` (single minimal form)
+* Qualified names (`module.symbol` or equivalent)
+* Stdlib split becomes real: core vs library paths enforce boundaries
+
+**Specification drops (freeze v0.45)**
+
+* **Modules & namespacing specification v0.1**
+
+  * module identity rules
+  * name resolution (local vs imported)
+  * cycle rule (forbid or define)
+  * visibility rule
+
+**Hardening**
+
+* Multi-file golden tests across interpreter, JS, and C
+* Compatibility rule: core names stable; library may evolve behind gates
+
+---
+
+## Jul–Aug 2026: Scheduler and concurrency “truth serum”
 
 **Ship**
 
@@ -138,14 +218,15 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 * Timeouts
 * Concurrency torture tests (readers–writers, dining philosophers)
 
-**Spec drops (freeze v0.5)**
+**Specification drops (freeze v0.5)**
 
-* **Concurrency spec v0.1**
+* **Concurrency specification v0.1**
 
-  * what can be shared, what is isolated
+  * isolation vs sharing
   * cancellation semantics
-  * ordering guarantees (if any)
-* **Runtime lifecycle spec v0.1**
+  * ordering guarantees
+
+* **Runtime lifecycle specification v0.1**
 
   * startup/shutdown hooks
   * resource cleanup contracts
@@ -153,67 +234,68 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 **Hardening**
 
 * Deterministic simulation mode for concurrency tests (where possible)
-* Stress harness runs nightly (or on demand) and reports regressions by backend.
+* Stress harness with regression reporting per backend
 
 ---
 
-## Jul onward: “General purpose” means modules + packaging + tooling
-
-This is the phase where a language becomes usable for other humans.
+## Sep 2026 onward: Packaging + tooling + “usable by other humans”
 
 **Ship**
 
-* Modules/imports
-* Namespacing
 * Package layout conventions
-* Versioned stdlib
-* Formatter + linter that people trust
+* Versioned standard library
+* Formatter + linter suitable for daily use
+* Dependency and compatibility checks
+* Genetic programming “production mode”:
 
-**Spec drops (freeze v1.0 candidates)**
+  * evolves candidate patches against target quizzes/specifications
+  * outputs PR-ready diffs plus proof artifacts
 
-* **Module system spec v0.1**
+**Specification drops (v1.0 candidates)**
 
-  * how names resolve
-  * cyclic import rules
-  * visibility rules
+* **Package system specification v0.1**
+
+  * package layout rules
+  * version resolution rules
+  * compatibility constraints
+
 * **Stdlib stability policy**
 
-  * which verbs are stable, experimental, deprecated
+  * stable vs experimental vs deprecated verbs
+
+* **Evolution policy specification v0.1**
+
+  * legal fitness targets
+  * acceptance thresholds
+  * provenance requirements (seeds, logs, reproductions)
 
 **Hardening**
 
-* Backward compatibility tests for “v1 stable” verbs/signatures
-* Deprecation warnings with codes, plus a migration guide.
+* Backward-compatibility tests for v1-stable signatures
+* Deprecation warnings with codes
+* Migration guides per breaking change
 
 ---
 
-## The parity rule, refined (keeps honesty without trapping you)
-
-Keep parity as your religion, but with one explicit mechanism:
+## Parity rule (refined)
 
 * Every quiz is tagged:
 
-  * `@core` must pass on all 3
-  * `@js` allowed to lead temporarily
-  * `@c` allowed to lag temporarily
-* Every new feature starts life either as `@core` (if small) or `@js/@c` (if big), then gets promoted to `@core` when its spec is frozen.
-
-This keeps you honest while still letting you move.
+  * `@core`: must pass on interpreter, JS, and C
+  * `@js`: JS may lead temporarily
+  * `@c`: C may lag temporarily
+* Features promote to `@core` only when their **specification** is frozen
 
 ---
 
-## Minimum “spec drop” templates (so you can ship them fast)
+## Specification template (standard)
 
-For each spec, keep the same headings:
+Each specification uses:
 
 * Purpose
 * Concepts and terms
 * Syntax surface (minimal)
-* Semantics (bullet rules)
-* Errors (codes)
-* Examples (3)
-* Tests that define it (file list)
-
-That turns specs into a map of your quizzes, instead of a novel.
-
-If you want to keep it ultra practical: the next spec to drop, given where you are, is **Core Semantics v0.1** plus a **standard error shape**. That will pay dividends immediately when you start tightening maps and text.
+* Semantics (normative rules)
+* Errors (names and conditions)
+* Examples (existing files only)
+* Tests that define truth

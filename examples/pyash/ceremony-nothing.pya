@@ -2,5 +2,5 @@ subj name nothing be ceremony def
 subj name nothing be ceremony prah
 
 subj name output be javascript ya
-from text "subj name nothing be ceremony def\nsubj name nothing be ceremony prah" to state javascript to name output be compile do
+from text "subj name nothing be ceremony def\nsubj name nothing be ceremony prah" to state javascript to name num output be compile do
 subj name output be javascript que

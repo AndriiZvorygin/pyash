@@ -273,23 +273,66 @@ export function parse(line) {
       if (!target) continue;
 
       if (t === "name") {
+        const nameTypeTokens = ["num", "number", "text", "filename", "vec", "ve", "bool", "boolean"];
         const parts = [];
         let j = i + 1;
+        const nameTypeWords = [];
+
+        const isBoundary = (token) =>
+          ROLE_KEYS.includes(token) ||
+          CONTEXT_KEYS.includes(token) ||
+          token === "be" ||
+          token === "then" ||
+          token === "ta" ||
+          token === "ret";
+
+        if (nameTypeTokens.includes(words[j])) {
+          let k = j;
+          const temp = [];
+          let token = words[k];
+          if (token === "number") token = "num";
+          if (token === "boolean") token = "bool";
+          if (token === "vec" || token === "ve") {
+            temp.push("vec");
+            k += 1;
+            const elem = words[k];
+            if (elem && (elem === "num" || elem === "number" || elem === "text" || elem === "bool" || elem === "boolean")) {
+              temp.push(elem === "number" ? "num" : (elem === "boolean" ? "bool" : elem));
+              k += 1;
+            }
+          } else {
+            temp.push(token);
+            k += 1;
+          }
+          if (k < words.length && !isBoundary(words[k])) {
+            nameTypeWords.push(...temp);
+            j = k;
+          }
+        }
         while (j < words.length) {
           const look = words[j];
-          const isBoundary =
-            ROLE_KEYS.includes(look) ||
-            CONTEXT_KEYS.includes(look) ||
-            look === "be" ||
-            look === "then" ||
-            look === "ta" ||
-            look === "ret";
-          if (isBoundary) break;
+          if (isBoundary(look)) break;
           parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
           j++;
         }
+        if (nameTypeWords.length === 0 && parts.length >= 2) {
+          const tail = parts[parts.length - 1];
+          const prev = parts[parts.length - 2];
+          const tailNorm = tail === "number" ? "num" : (tail === "boolean" ? "bool" : tail);
+          const prevNorm = prev === "number" ? "num" : (prev === "boolean" ? "bool" : prev);
+          if (tailNorm === "num" || tailNorm === "text" || tailNorm === "filename" || tailNorm === "bool") {
+            nameTypeWords.push(tailNorm);
+            parts.pop();
+          } else if ((tailNorm === "num" || tailNorm === "text" || tailNorm === "bool") && (prevNorm === "vec" || prevNorm === "ve")) {
+            nameTypeWords.push("vec", tailNorm);
+            parts.pop();
+            parts.pop();
+          }
+        }
+
         const nameValue = parts.join(" ");
         if (nameValue) target.name = nameValue;
+        if (nameTypeWords.length > 0) target.nameTypeWords = nameTypeWords;
         i = j - 1;
       } else if (t === "ord") {
         const raw = words[i + 1];

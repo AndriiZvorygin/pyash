@@ -1,6 +1,6 @@
 // bridge (formerly dispatcher)
 import { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
-import { remember, doRemember, allRemember, getDefinition, getDefinitionEntry, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
+import { remember, doRemember, allRemember, getDefinition, getDefinitionEntry, getDefinitionBody, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
@@ -31,6 +31,57 @@ for (const sig of builtInSignatures) {
   registerSignatureHandler(sig);
 }
 
+const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
+
+function collectSequenceDeps(sentence, deps = new Set()) {
+  if (!sentence || typeof sentence !== "object") return deps;
+  const scanValue = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (value.thisRef && SEQUENCE_REGISTERS.has(value.thisRef)) {
+      deps.add(value.thisRef);
+    }
+    if (value.genitive?.chain) {
+      const chain = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+      if (chain.includes("this")) {
+        for (const reg of SEQUENCE_REGISTERS) {
+          if (chain.includes(reg)) deps.add(reg);
+        }
+      }
+    }
+    if (Array.isArray(value)) {
+      value.forEach(scanValue);
+    }
+  };
+
+  for (const [key, value] of Object.entries(sentence)) {
+    if (key === "consequence") {
+      collectSequenceDeps(value, deps);
+      continue;
+    }
+    if (typeof value === "object") scanValue(value);
+  }
+  return deps;
+}
+
+function validateCeremonySequenceDeps(name) {
+  if (!name) return;
+  const defSentence = getDefinition(name);
+  if (!defSentence) return;
+  const body = getDefinitionBody(name);
+  const deps = new Set();
+  for (const s of body) collectSequenceDeps(s, deps);
+  for (const reg of deps) {
+    if (!defSentence[reg]) {
+      throwErrorSentence({
+        name: "sequence register missing",
+        message: `ceremony "${name}" reads this ${reg} but definition omits ${reg}`,
+        from: { name: "interpret" },
+        raw: { ceremony: name, missing: reg }
+      });
+    }
+  }
+}
+
 export async function interpret(sentence) {
   if (!sentence) return;
 
@@ -57,6 +108,7 @@ export async function interpret(sentence) {
   if (mood === "prah") {
     doRemember(sentence);
     if (state.definitionStack.length > 0) state.definitionStack.pop();
+    if (subj?.name) validateCeremonySequenceDeps(subj.name);
     return { paragraphEnd: true };
   }
 

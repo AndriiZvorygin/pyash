@@ -1,4 +1,4 @@
-subj name fizzbuzz line by num 0 to name line text be ceremony def
+subj name fizzbuzz line by num 0 to name text line be ceremony def
 exists subj name line obj text quoted.text..text.quoted be text ya
 exists subj name rem3 obj num 0 be number ya
 exists subj name rem5 obj num 0 be number ya

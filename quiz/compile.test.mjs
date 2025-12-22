@@ -188,7 +188,7 @@ test("compile emits loop for fromindex countdown", async () => {
 
   const program = [
     "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name counter be ceremony def",
+    "subj name loop body to name num counter be ceremony def",
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
@@ -222,7 +222,7 @@ test("compile emits C loop for fromindex countdown", async () => {
 
   const program = [
     "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name counter be ceremony def",
+    "subj name loop body to name num counter be ceremony def",
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do"
@@ -244,7 +244,7 @@ test("compiled C loop builds and runs", async (t) => {
 
   const program = [
     "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name counter be ceremony def",
+    "subj name loop body to name num counter be ceremony def",
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
@@ -604,7 +604,7 @@ test("compile emits JS ceremony with param and body", async () => {
 
   const program = [
     "exists subj name bucket obj num 0 be number ya",
-    "subj name add two to name bucket be ceremony def",
+    "subj name add two to name num bucket be ceremony def",
     "obj num 2 to name bucket be add do",
     "subj name add two be ceremony prah"
   ].join("\\n");

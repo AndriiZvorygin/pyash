@@ -16,7 +16,7 @@ test("evoker with mismatched signature is rejected", async () => {
   forget();
 
   const defLines = [
-    "subj name foo obj name num to name bar be ceremony def",
+    "subj name foo obj name num value to name num bar be ceremony def",
     "obj num 1 to name bar be add do",
     "subj name foo be ceremony prah"
   ];

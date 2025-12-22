@@ -16,7 +16,7 @@ test("ceremony repeats using fromindex countdown until zero", async () => {
   await run("subj name counter obj num 0 be number ya");
 
   // define ceremony: add 1 to counter
-  await run("subj name loop_body to name num fromindex num 0 be ceremony def");
+  await run("subj name loop_body to name num target fromindex num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop_body be ceremony prah");
 
@@ -36,7 +36,7 @@ test("ceremony repeats using fromindex/toindex aliases", async () => {
 
   await run("subj name counter obj num 0 be number ya");
 
-  await run("subj name loop_body to name num fromindex num 0 be ceremony def");
+  await run("subj name loop_body to name num target fromindex num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop_body be ceremony prah");
 
@@ -54,7 +54,7 @@ test("loop ceremony can apply a conditional update per iteration", async () => {
 
   await run("exists subj name vec obj ve num 1 2 3 4 be vector ya");
 
-  await run("subj name flip even to name bucket fromindex num 0 be ceremony def");
+  await run("subj name flip even to name num bucket fromindex num 0 be ceremony def");
   await run("obj this ti fromindex from num 2 to name mod be remains do");
   await run("obj name mod be equally from num 0 then obj name vec at num of fromindex of this be invert do");
   await run("subj name flip even be ceremony prah");
@@ -71,7 +71,7 @@ test("loop ceremony uses caller to-name regardless of internal binding name", as
   await run("subj name alpha obj num 0 be number ya");
 
   // Definition says to name bucket, but caller uses to name alpha.
-  await run("subj name inc_loop to name bucket fromindex num 0 be ceremony def");
+  await run("subj name inc_loop to name num bucket fromindex num 0 be ceremony def");
   await run("obj num 1 to name alpha be add do");
   await run("subj name inc_loop be ceremony prah");
 
@@ -87,7 +87,7 @@ test("loop ceremony can mutate a vector (invert element) each iteration", async 
   await run("exists subj name counter obj num 0 be number ya");
   await run("exists subj name doors obj ve num 2 2 be vector ya");
 
-  await run("subj name flip_first to name bucket fromindex num 0 be ceremony def");
+  await run("subj name flip_first to name num bucket fromindex num 0 be ceremony def");
   await run("obj name doors at num 0 be invert do");
   await run("subj name flip_first be ceremony prah");
 
@@ -104,7 +104,7 @@ test("loop can invert boolean vector at num of fromindex of this", async () => {
   await run("exists subj name switches obj ve bool truth lie truth be vector ya");
 
   // Definition binds to name bucket, but caller uses to name outside.
-  await run("subj name flip_index to name bucket fromindex num 0 be ceremony def");
+  await run("subj name flip_index to name num bucket fromindex num 0 be ceremony def");
   await run("obj name switches at num of fromindex of this be invert do");
   await run("subj name flip_index be ceremony prah");
 

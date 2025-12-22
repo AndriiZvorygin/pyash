@@ -1,6 +1,6 @@
 exists subj name doors obj ve num 0 0 0 0 0 0 0 0 0 0 be vector ya
 
-subj name toggle pass by num 0 obj name num be ceremony def
+subj name toggle pass by num 0 obj name num value be ceremony def
 subj name door obj this atindex be number ya
 obj num 1 to door be add do
 obj num of obj of door from num of by of this to name rem be remains do

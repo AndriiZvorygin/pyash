@@ -1,4 +1,4 @@
-subj name fizzbuzz step to name bucket fromindex num 0 toindex num 0 be ceremony def
+subj name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def
 exists subj name handled obj num 0 be number ya
 exists subj name rem3 obj num 0 be number ya
 exists subj name rem5 obj num 0 be number ya

@@ -11,7 +11,7 @@ test("compile ceremony loop to javascript and run", async () => {
 
   const pyash = [
     "exists subj name counter obj num 0 be number ya",
-    "subj name loop_body to name num fromindex num 0 be ceremony def",
+    "subj name loop_body to name num target fromindex num 0 be ceremony def",
     "obj num 1 to name counter be add do",
     "subj name loop_body be ceremony prah",
     "to name counter fromindex num 3 be loop_body do",
@@ -39,7 +39,7 @@ test("compile loop: def to-name differs from call to-name", async () => {
   const pyash = [
     "exists subj name alpha obj num 0 be number ya",
     // Definition binds to name bucket, but the caller invokes with to name alpha.
-    "subj name inc_loop to name bucket fromindex num 0 be ceremony def",
+    "subj name inc_loop to name num bucket fromindex num 0 be ceremony def",
     "obj num 1 to name alpha be add do",
     "subj name inc_loop be ceremony prah",
     "to name alpha fromindex num 3 be inc_loop do",
@@ -62,7 +62,7 @@ test("compile loop can mutate a vector (invert element) each iteration", async (
   const pyash = [
     "exists subj name counter obj num 0 be number ya",
     "exists subj name doors obj ve num 2 2 be vector ya",
-    "subj name flip_first to name bucket fromindex num 0 be ceremony def",
+    "subj name flip_first to name num bucket fromindex num 0 be ceremony def",
     "obj name doors at num 0 be invert do",
     "subj name flip_first be ceremony prah",
     "to name counter fromindex num 3 be flip_first do"
@@ -86,7 +86,7 @@ test("compile loop can invert boolean vector at num of fromindex of this", async
   const pyash = [
     "exists subj name outside obj num 0 be number ya",
     "exists subj name switches obj ve bool truth lie truth be vector ya",
-    "subj name flip_index to name bucket fromindex num 0 be ceremony def",
+    "subj name flip_index to name num bucket fromindex num 0 be ceremony def",
     "obj name switches at num of fromindex of this be invert do",
     "subj name flip_index be ceremony prah",
     "to name outside fromindex num 2 toindex num -1 be flip_index do"
@@ -109,7 +109,7 @@ test("compile loop can apply a conditional update per iteration", async () => {
 
   const pyash = [
     "exists subj name vec obj ve num 1 2 3 4 be vector ya",
-    "subj name flip even to name bucket fromindex num 0 be ceremony def",
+    "subj name flip even to name num bucket fromindex num 0 be ceremony def",
     "obj this ti fromindex from num 2 to name mod be remains do",
     "obj name mod be equally from num 0 then obj name vec at num of fromindex of this be invert do",
     "subj name flip even be ceremony prah",

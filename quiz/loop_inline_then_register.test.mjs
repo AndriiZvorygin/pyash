@@ -10,7 +10,7 @@ test("loop body can run inline conditional against this.fromindex (via remains p
 
   await interpret(parse("exists subj name hits obj num 0 be number ya"));
 
-  await interpret(parse("subj name count odd to name bucket fromindex num 0 be ceremony def"));
+  await interpret(parse("subj name count odd to name num bucket fromindex num 0 be ceremony def"));
   await interpret(parse("obj this ti fromindex from num 2 to name mod be remains do"));
   await interpret(parse("obj name mod be equally from num 1 then obj num 1 to name hits be add do"));
   await interpret(parse("subj name count odd be ceremony prah"));

@@ -2,7 +2,12 @@
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
-  if (np.name !== undefined) return `name ${np.name}`;
+  if (np.name !== undefined) {
+    if (Array.isArray(np.nameTypeWords) && np.nameTypeWords.length > 0) {
+      return `name ${np.nameTypeWords.join(" ")} ${np.name}`;
+    }
+    return `name ${np.name}`;
+  }
   if (np.num !== undefined) return `num ${np.num}`;
   if (np.text !== undefined) {
     const quotedBlockMatch = typeof np.text === "string" && np.text.match(/^quoted\.([^.]+)\.[\s\S]*\.\1\.quoted$/);

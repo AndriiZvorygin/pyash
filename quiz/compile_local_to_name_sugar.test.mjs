@@ -12,7 +12,7 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
   const pyash = [
     "exists subj name vec obj ve num 0 0 0 be vector ya",
     // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.obj.num in JS.
-    "subj name bumpIndex by num 0 obj name num be ceremony def",
+    "subj name bumpIndex by num 0 obj name num value atindex num 0 be ceremony def",
     "subj name door obj this atindex be number ya",
     "obj num 1 to door be add do",
     "obj num of obj of door from num of by of this to name rem be remains do",
@@ -33,4 +33,3 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
   const vec = sandbox.vec ?? sandbox.globalThis?.vec;
   assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [1, 1, 1]);
 });
-

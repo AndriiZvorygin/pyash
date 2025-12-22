@@ -8,7 +8,7 @@ import { forget } from "../program/remember/index.mjs";
 test("loop ceremony can return fizzbuzz line and say outside", async () => {
   forget();
 
-  await interpret(parse("subj name fizzbuzz line by num 0 to name line text be ceremony def"));
+  await interpret(parse("subj name fizzbuzz line by num 0 to name text line be ceremony def"));
   await interpret(parse("exists subj name line obj text quoted.text..text.quoted be text ya"));
   await interpret(parse("exists subj name rem3 obj num 0 be number ya"));
   await interpret(parse("exists subj name rem5 obj num 0 be number ya"));

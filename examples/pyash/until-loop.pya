@@ -1,5 +1,5 @@
 exists subj name counter obj num 0 be number ya
-subj name climb to name num fromindex num toindex num be ceremony def
+subj name climb to name num target fromindex num toindex num be ceremony def
 obj num 1 to name counter be add do
 subj name climb be ceremony prah
 to name counter fromindex num 1 toindex num 3 be climb do

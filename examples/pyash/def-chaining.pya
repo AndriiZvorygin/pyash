@@ -1,9 +1,9 @@
-subj name add one to name result be ceremony def
+subj name add one to name num result be ceremony def
 obj num 1 to name result be add do
 this ret
 subj name add one be ceremony prah
 
-subj name add two to name result be ceremony def
+subj name add two to name num result be ceremony def
 obj num 2 to name result be add do
 this ret
 subj name add two be ceremony prah

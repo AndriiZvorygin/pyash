@@ -12,6 +12,7 @@ Define how signature words are derived and used for dispatch.
 - Dispatch is signature-first: derive signature words, then resolve to a handler or ceremony.
 - Case order is normalized (sorted by case name).
 - Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored when matching ceremony signatures.
+- If a ceremony body reads sequence registers via `this`, include those cases in the definition to make the dependency explicit.
 - If no handler or ceremony matches, raise `be error do` with the derived signature.
 
 ## 4. Error contracts

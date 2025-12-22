@@ -54,7 +54,7 @@ test("definition index captures end via prah and supports invoking the paragraph
   forget();
 
   await run("subj name result obj num 5 be number ya");
-  await run("subj name add two to name num be ceremony def");
+  await run("subj name add two to name num target be ceremony def");
   await run("obj num 2 to name result be add do");
   await run("subj name add two be ceremony prah");
 
@@ -118,21 +118,21 @@ test("invoking while definition is still open just records and does not run", as
 test("ceremony def captures signature words from typed header", async () => {
   forget();
 
-  await run("subj name loop body to name num fromindex num 0 toindex num 0 be ceremony def");
+  await run("subj name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");
   await run("subj name loop body be ceremony prah");
 
   const def = getDefinition("loop body");
   assert.ok(def?.signatureWords, "definition should carry signatureWords");
   assert.deepEqual(
     def.signatureWords,
-    ["be", "loop body", "fromindex", "num", "to", "name", "num", "toindex", "num"]
+    ["be", "loop body", "to", "name", "num"]
   );
 });
 
 test("ceremony def headers declare signature cases/types (new signature style)", async () => {
   forget();
 
-  await run("subj name add two to name bucket be ceremony def");
+  await run("subj name add two to name num bucket be ceremony def");
   await run("obj num 2 to name bucket be add do");
   await run("subj name add two be ceremony prah");
 

@@ -8,7 +8,7 @@ test("compile names ceremony function with signature words", async () => {
   forget();
 
   const program = [
-    "subj name add two to name num be ceremony def",
+    "subj name add two to name num target be ceremony def",
     "subj name add two be ceremony prah"
   ].join("\\n");
 
@@ -90,7 +90,7 @@ test("compile emits ceremony invocation as sentence object", async () => {
 
   const program = [
     "exists subj name bucket obj num 0 be number ya",
-    "subj name add two to name num be ceremony def",
+    "subj name add two to name num target be ceremony def",
     "obj num 2 to name num be add do",
     "subj name add two be ceremony prah",
     "be add two to bucket do"

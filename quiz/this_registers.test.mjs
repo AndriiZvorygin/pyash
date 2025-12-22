@@ -14,7 +14,7 @@ test("this fromindex/this toindex bindings inside sandpit preserve registers on 
   forget();
 
   const lines = [
-    "subj name inspector to name num fromindex num 0 toindex num 0 be ceremony def",
+    "subj name inspector to name num target fromindex num 0 toindex num 0 be ceremony def",
     "subj name seen-fromindex obj this fromindex be number ya",
     "subj name seen-toindex obj this toindex be number ya",
     "this ret",

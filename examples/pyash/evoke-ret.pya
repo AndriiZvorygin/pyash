@@ -1,4 +1,4 @@
-subj name add two to name acc be ceremony def
+subj name add two to name num acc be ceremony def
 exists subj name acc obj be number ya
 obj num 2 to name acc be add do
 this obj name acc ret

@@ -132,6 +132,17 @@ export function getDefinitionEntry(name) {
   return entry;
 }
 
+export function getDefinitionBody(name) {
+  if (!name) return [];
+  const slot = findDefinitionSlot(name);
+  const entry = definitionIndex[slot];
+  if (!entry || entry.name !== name) return [];
+  const start = entry.index + 1;
+  const end = typeof entry.end === "number" ? entry.end : memory.length;
+  if (end <= start) return [];
+  return memory.slice(start, end);
+}
+
 export function dumpDefinitionIndex() {
   return definitionIndex;
 }

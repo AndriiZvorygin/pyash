@@ -16,7 +16,7 @@ test("toindex stops loop when fromindex equals toindex", async () => {
   await run("subj name counter obj num 0 be number ya");
 
   // define ceremony: add 1 to counter
-  await run("subj name loop body to name num fromindex num 0 toindex num 0 be ceremony def");
+  await run("subj name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");
   await run("obj num 1 to name counter be add do");
   await run("subj name loop body be ceremony prah");
 

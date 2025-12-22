@@ -1460,7 +1460,58 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   return null;
 }
 
+const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
+
+function collectSequenceDeps(sentences) {
+  const deps = new Set();
+  const scanValue = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (value.thisRef && SEQUENCE_REGISTERS.has(value.thisRef)) {
+      deps.add(value.thisRef);
+    }
+    if (value.genitive?.chain) {
+      const chain = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+      if (chain.includes("this")) {
+        for (const reg of SEQUENCE_REGISTERS) {
+          if (chain.includes(reg)) deps.add(reg);
+        }
+      }
+    }
+    if (Array.isArray(value)) value.forEach(scanValue);
+  };
+  const scanSentence = (sentence) => {
+    if (!sentence || typeof sentence !== "object") return;
+    for (const [key, value] of Object.entries(sentence)) {
+      if (key === "consequence") {
+        scanSentence(value);
+        continue;
+      }
+      scanValue(value);
+    }
+  };
+
+  if (Array.isArray(sentences)) {
+    sentences.forEach(scanSentence);
+  } else {
+    scanSentence(sentences);
+  }
+
+  return deps;
+}
+
 function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState }) {
+  const seqDeps = collectSequenceDeps(bodySentences);
+  for (const reg of seqDeps) {
+    if (!defSentence?.[reg]) {
+      throwErrorSentence({
+        name: "sequence register missing",
+        message: `ceremony "${defSentence?.subj?.name ?? "ceremony"}" reads this ${reg} but definition omits ${reg}`,
+        from: { name: "compile" },
+        raw: { ceremony: defSentence?.subj?.name, missing: reg }
+      });
+    }
+  }
+
   const signatureWords = deriveSignatureFromDefinition(defSentence);
   const fnBaseName = signatureWords
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")

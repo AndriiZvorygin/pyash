@@ -83,6 +83,7 @@ export function deriveSignatureFromDefinition(sentence) {
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
+    if (SEQUENCE_REGISTERS.has(key)) continue;
     const typeWords = normalizeDefinitionTypeWords(caseTypeWords(value));
     if (typeWords.length === 0) continue;
     cases.push({ case: key, typeWords });
@@ -102,6 +103,8 @@ const NON_CASE_FIELDS = new Set([
   "this",
   "consequence"
 ]);
+
+const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
 
 function caseTypeWords(value) {
   if (value == null) return [];
@@ -134,6 +137,10 @@ function caseTypeWords(value) {
 
   const words = [];
 
+  if (value.nameTypeWords?.length) {
+    return ["name", ...value.nameTypeWords];
+  }
+
   if (value.name) {
     words.push("name");
     const tail = normalizeWords(value.name);
@@ -156,7 +163,7 @@ function normalizeDefinitionTypeWords(typeWords) {
 
   if (typeWords[0] === "name") {
     // Drop concrete variable names in definitions; keep the type
-    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "vec" || t === "filename")];
+    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "vec" || t === "filename" || t === "bool")];
     if (withoutTail.length === 1) {
       // default to numeric if no explicit type after name
       return ["name", "num"];
@@ -209,6 +216,10 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
   if (value.ve) {
     const inner = normalizeWords(value.ve.type);
     return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
+  }
+
+  if (value.nameTypeWords?.length) {
+    return ["name", ...value.nameTypeWords];
   }
 
   if (value.name) {

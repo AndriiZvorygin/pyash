@@ -30,12 +30,12 @@ test("ceremony defs feed result into the next call", async () => {
 
   await run("subj name result obj num 0 be number ya");
 
-  await run("subj name add one to name num be ceremony def");
+  await run("subj name add one to name num target be ceremony def");
   await run("obj num 1 to name result be add do");
   await run("this ret");
   await run("subj name add one be ceremony prah");
 
-  await run("subj name add two to name num be ceremony def");
+  await run("subj name add two to name num target be ceremony def");
   await run("obj num 2 to name result be add do");
   await run("this ret");
   await run("subj name add two be ceremony prah");
@@ -51,7 +51,7 @@ test("ret merges onto evoke and writes result fact", async () => {
   forget();
 
   await run("subj name target obj num 0 be number ya");
-  await run("subj name mark to name num be ceremony def");
+  await run("subj name mark to name num target be ceremony def");
   await run("obj num 5 to name target ret");
   await run("subj name mark be ceremony prah");
 

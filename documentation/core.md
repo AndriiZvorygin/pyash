@@ -63,7 +63,8 @@ This document summarizes the current core language model used by the interpreter
 - Genitive `this` accesses the incoming sentence registers; `remember` inside a ceremony can load targets from `sentence.to`.
 - Signature compatibility is enforced at invocation time:
   - The evoker’s signature must match the ceremony’s signature.
-  - Sequence registers (`fromindex`, `toindex`, `atindex`) are allowed on the evoker even if the ceremony definition omits them.
+- Sequence registers (`fromindex`, `toindex`, `atindex`) are allowed on the evoker even if the ceremony definition omits them (so generic ceremonies can be looped).
+- If a ceremony body reads a sequence register via `this`, include that case in the ceremony definition to declare the dependency.
 - If a ceremony name is defined more than once, the later definition takes priority (a compile-time warning may be emitted).
 
 ## Loops

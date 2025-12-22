@@ -43,3 +43,10 @@ test("parses vector literals with element type", () => {
   const sLetters = parse("obj ve letter a b c d be topic ya");
   assert.deepEqual(sLetters.obj.ve, { type: "letter", values: ["a", "b", "c", "d"] });
 });
+
+test("parses typed name in name <type> <literal> order", () => {
+  const s = parse("subj name alpha to name text line be topic ya");
+
+  assert.equal(s.to.name, "line");
+  assert.deepEqual(s.to.nameTypeWords, ["text"]);
+});
