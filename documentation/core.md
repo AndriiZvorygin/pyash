@@ -15,13 +15,24 @@ This document summarizes the current core language model used by the interpreter
     - `consequence`: attached sentence for conditionals (`then` mood).
   - Optional `exists` flag declares a name. Without `exists`, assigning to a new name is an error.
   - `become`/`fromstate`/`tostate` are used by translation/compile verbs to select source/target languages.
-  - Genitives (`this ti obj ti num`) traverse fields on the current sentence; `this` refers to the incoming sentence/registers.
+  - Genitives traverse fields on a sentence:
+    - Possessive: `this ti obj ti num` resolves like `this.obj.num`.
+    - Genitive: `num of obj of this` resolves to the same chain as above.
+    - `this` refers to the evoking sentence/registers inside a ceremony.
 
 ## Moods
 - `ya`: declarative fact (stores to memory; compiler treats as declarations/assignments).
 - `do`: imperative (invokes verbs, ceremonies, arithmetic, logging, compile/understand).
 - `def` / `prah`: enclose a ceremony definition body.
 - `then`: conditional consequence stored on a `do` sentence with `tiny`/`giant`/`equally`.
+
+## Signature Resolution
+- Dispatch is signature-first:
+  - Build signature words from the call sentence (cases are sorted by case name).
+  - If a built-in verb handler matches, invoke it.
+  - Otherwise, if a ceremony signature matches, invoke the ceremony.
+- Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored for the purpose of matching ceremony signatures.
+- If no match exists, interpretation fails with an “unknown verb/signature” error that includes the derived signature.
 
 ## Declaration and Assignment
 - `exists subj name alpha obj num 1 be number ya` declares `alpha` as a number sentence.
@@ -52,12 +63,22 @@ This document summarizes the current core language model used by the interpreter
 - Bodies are `do` sentences; `ret`/`return` is implicit if a `return` statement is emitted, otherwise the incoming sentence is returned.
 - Invocation uses `be X … do` (signature words derive the function name in compiled code).
 - Genitive `this` accesses the incoming sentence registers; `remember` inside a ceremony can load targets from `sentence.to`.
+- Signature compatibility is enforced at invocation time:
+  - The evoker’s signature must match the ceremony’s signature.
+  - Sequence registers (`fromindex`, `toindex`, `atindex`) are allowed on the evoker even if the ceremony definition omits them.
 
 ## Loops
 - `fromindex <start> [toindex <bound>] be <ceremony> do` runs a loop:
   - JS uses `runLoop(sentence, fn)` helper (stop-when-equal): after each body run, the supervisor stops when `fromindex === toindex` (or when `fromindex === 0` if `toindex` is absent). In the common forward form, `fromindex num 0 toindex num 3` runs indices `0, 1, 2` and stops before `3`.
   - C emits a `for` loop with the same semantics.
 - Within the ceremony, `this ti fromindex ti num` reads the current counter.
+
+## `at all` (Map/Foreach over vectors)
+- `at name all` runs the target verb/ceremony once per element of the vector in `obj name ...`.
+- `atindex` is injected into the evoker as a register (0-based index).
+- With `to name <dest>`, the result is written to a new vector.
+- Without `to`, the source vector is updated in place.
+- For primitive verbs (e.g., `invert`, `add`, `subtract`) the element index is 0-based and passed as `at num <index>` per element.
 
 ## Translation / Compile Verbs
 - `understand`: parse Pyash text to JSON sentences, optionally writing to a name or filename.
