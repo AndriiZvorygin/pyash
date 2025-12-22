@@ -50,3 +50,16 @@ test("parses typed name in name <type> <literal> order", () => {
   assert.equal(s.to.name, "line");
   assert.deepEqual(s.to.nameTypeWords, ["text"]);
 });
+
+test("parses bool and hollow literals", () => {
+  const sBool = parse("obj bool truth be topic ya");
+  assert.equal(sBool.obj.boolean, true);
+
+  const sHollow = parse("obj hollow be topic ya");
+  assert.equal(sHollow.obj.hollow, true);
+});
+
+test("parses hollow vector literal", () => {
+  const s = parse("obj ve hollow be topic ya");
+  assert.deepEqual(s.obj.ve, { type: "hollow", values: [] });
+});

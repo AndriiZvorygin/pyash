@@ -59,6 +59,8 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
 function resolveValue(obj = {}, { rememberFn } = {}) {
   if (typeof obj.text === "string") return obj.text;
   if (typeof obj.num === "number") return obj.num;
+  if (typeof obj.boolean === "boolean") return obj.boolean ? "truth" : "lie";
+  if (obj.hollow) return "null";
   if (obj.genitive) {
     const v = resolveGenitive(obj.genitive, { rememberFn });
     if (v !== undefined) return v;

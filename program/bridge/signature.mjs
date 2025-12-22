@@ -130,6 +130,8 @@ function caseTypeWords(value) {
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
     if (tail === "filename") return ["filename"];
+    if (tail === "bool") return ["bool"];
+    if (tail === "hollow") return ["hollow"];
     if (tail === "ve" || tail === "vec") return ["vec"];
     if (tail === "atindex" || tail === "fromindex" || tail === "toindex") return ["num"];
     return tail ? [tail] : ["num"];
@@ -152,6 +154,8 @@ function caseTypeWords(value) {
   }
 
   if (value.num !== undefined) words.push("num");
+  if (value.boolean !== undefined) words.push("bool");
+  if (value.hollow) words.push("hollow");
   if (value.text !== undefined) words.push("text");
   if (value.filename !== undefined) words.push("filename");
 
@@ -222,6 +226,9 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
     return ["name", ...value.nameTypeWords];
   }
 
+  if (value.boolean !== undefined) return ["bool"];
+  if (value.hollow) return ["hollow"];
+
   if (value.name) {
     const inferred = remember ? remember(value.name) : null;
     const factObj = inferred?.obj;
@@ -232,6 +239,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
     if (factObj?.ve?.values) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (factObj?.num !== undefined) return ["name", "num"];
+    if (factObj?.boolean !== undefined) return ["name", "bool"];
     if (factObj?.text !== undefined) return ["name", "text"];
     if (factObj?.filename !== undefined) return ["name", "filename"];
     if (typeof value.name === "string") {

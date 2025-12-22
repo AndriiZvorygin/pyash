@@ -1,7 +1,7 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
 const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "times", "by", "per", "at", "fromindex", "atindex", "toindex"];
-const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "ord"];
+const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "bool", "boolean", "ord"];
 const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity", "sequence"];
 const AXIS_CONTEXT_TO_KEYWORD = {
   space: { source: "from", way: "at", destination: "to" },
@@ -221,6 +221,14 @@ export function parse(line) {
       const elemType = words[i + 1];
       if (!elemType) continue;
       const vector = { type: elemType, values: [] };
+      if (elemType === "hollow") {
+        const target = slot || (current ? s[current] : null);
+        if (target) {
+          target.ve = vector;
+        }
+        i = i + 1;
+        continue;
+      }
       let j = i + 2;
       while (
         j < words.length &&
@@ -232,6 +240,10 @@ export function parse(line) {
         if (elemType === "num" || elemType === "number") {
           const num = Number(token);
           vector.values.push(Number.isNaN(num) ? token : num);
+        } else if (elemType === "bool" || elemType === "boolean") {
+          if (token === "truth" || token === "true" || token === "1") vector.values.push(true);
+          else if (token === "lie" || token === "false" || token === "0") vector.values.push(false);
+          else vector.values.push(token);
         } else {
           vector.values.push(token);
         }
@@ -326,6 +338,13 @@ export function parse(line) {
         const ordIndex = Number.isNaN(maybeNum) ? null : Math.max(0, Math.trunc(maybeNum) - 1);
         target.num = ordIndex ?? value;
         i++; // skip consumed value
+      } else if (t === "bool" || t === "boolean") {
+        const raw = words[i + 1];
+        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        if (value === "truth" || value === "true" || value === "1") target.boolean = true;
+        else if (value === "lie" || value === "false" || value === "0") target.boolean = false;
+        else target.boolean = Boolean(value);
+        i++; // skip the value we just consumed
       } else {
         const raw = words[i + 1];
         const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
@@ -365,6 +384,11 @@ export function parse(line) {
     }
 
     // --- bare value after a role defaults to name ---
+    if (current && slot && t === "hollow") {
+      slot.hollow = true;
+      continue;
+    }
+
     if (current && slot && Object.keys(slot).length === 0) {
       slot.name = t;
       continue;
