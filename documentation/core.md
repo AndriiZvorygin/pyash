@@ -13,7 +13,7 @@ This document summarizes the current core language model used by the interpreter
     - `from`: secondary operand (`from num 3`, `from genitive this ti fromindex`).
     - `fromindex` / `toindex`: loop counter and bound.
     - `consequence`: attached sentence for conditionals (`then` mood).
-  - Optional `exists` flag declares a name. Without `exists`, assigning to a new name is an error.
+  - Optional `exists` flag declares a name on `ya` sentences only. Without `exists`, assigning to a new name is an error.
   - `become`/`fromstate`/`tostate` are used by translation/compile verbs to select source/target languages.
   - Genitives traverse fields on a sentence:
     - Possessive: `this ti obj ti num` resolves like `this.obj.num`.
@@ -46,9 +46,7 @@ This document summarizes the current core language model used by the interpreter
 - Text concatenation uses `be add` with `obj text ...`.
 
 ## Conditionals
-- Two conditional forms exist:
-  - **Gate-next-statement**: `obj … be tiny/giant/equally from … then` (a `then` mood sentence) computes a truth value and gates the *next* non-`then` sentence via the interpreter’s “skip-next-line” mechanism.
-  - **Inline consequence**: `obj … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence. This does **not** participate in the “skip-next-line” mechanism.
+- **Single canonical form**: `obj … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence.
 - LHS/RHS can be numbers, names (resolved to sentence.obj fields), or genitives on `this`.
 
 ## Logging
@@ -66,6 +64,7 @@ This document summarizes the current core language model used by the interpreter
 - Signature compatibility is enforced at invocation time:
   - The evoker’s signature must match the ceremony’s signature.
   - Sequence registers (`fromindex`, `toindex`, `atindex`) are allowed on the evoker even if the ceremony definition omits them.
+- If a ceremony name is defined more than once, the later definition takes priority (a compile-time warning may be emitted).
 
 ## Loops
 - `fromindex <start> [toindex <bound>] be <ceremony> do` runs a loop:
@@ -88,6 +87,7 @@ This document summarizes the current core language model used by the interpreter
 ## Errors and Guards
 - Assigning to undeclared names (missing `exists`) raises an error at compile time for `ya` sentences.
 - Conditionals or verbs without registered handlers error during interpretation.
+- Error payload format is still under discussion; current errors include the derived signature and the source sentence where possible.
 - Compilers include TODO comments for unsupported constructs (e.g., C string concat).
 - Vector compile: JS supports vector literals (`obj ve/vec num ... be vector`) and `produce` (dot product) for inline and named vectors; C vector codegen is still TODO.
 - Vector addressing: use `via space` → `at` for 0-based indexing (`obj name doors via space num 0 be read …`). `ord N` sugar maps 1→0, 2→1, etc. `invert` flips truth/lie text values or boolean vectors in-place.
