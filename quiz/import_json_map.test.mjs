@@ -58,7 +58,7 @@ test("imported json map can be exported via say", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await run("obj name profile be say do");
+    await run("obj name profile to state json be say do");
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

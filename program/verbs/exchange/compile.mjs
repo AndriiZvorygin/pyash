@@ -6,7 +6,7 @@ import { vectorFormatHelper } from "./helpers_js.mjs";
 import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
-import { jsonToPyashText } from "./json_map.mjs";
+import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
 
 function sanitizeName(name = "") {
   const cleaned = String(name)
@@ -67,6 +67,32 @@ function jsonFromMapSentence(mapSentence, mapDefs, seen) {
   }
   seen.delete(mapName);
   return out;
+}
+
+function mapDefChainFromName(name, mapDefs) {
+  const visited = new Set();
+  const defs = [];
+
+  const visit = (mapName) => {
+    if (!mapName || visited.has(mapName)) return;
+    visited.add(mapName);
+    const fact = mapDefs.get(mapName);
+    if (!fact || fact.be !== "json map") return;
+    const entries = fact?.obj?.map ?? {};
+    for (const value of Object.values(entries)) {
+      if (value?.name) visit(value.name);
+      if (value?.ve?.type === "name") {
+        for (const child of value.ve.values || []) {
+          if (typeof child === "string") visit(child);
+        }
+      }
+    }
+    defs.push(fact);
+  };
+
+  visit(name);
+  if (defs.length === 0) return "";
+  return defs.map(mapSentenceToPyash).join("\n\n");
 }
 
 function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, field = "num" } = {}) {
@@ -268,6 +294,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 
   // Say -> console.log / printf TODO
   if (baseBe === "say") {
+    const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
+    const wantJson = format === "json";
     // Special case: say to <mind> -> invoke mind (JS)
     if (sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
@@ -336,11 +364,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	      const name = sanitizeName(obj.name);
         const isJsonMap = declaredTypes?.get(obj.name) === "json map";
         if (isJsonMap) {
-          if (lang === "c") {
-            expr = sanitizeName(`${obj.name}_json`);
-          } else {
-            if (jsHelpers) jsHelpers.usesJsonMap = true;
-            expr = `formatJsonMap(${JSON.stringify(obj.name)})`;
+          if (wantJson) {
+            if (lang === "c") {
+              expr = sanitizeName(`${obj.name}_json`);
+            } else {
+              if (jsHelpers) jsHelpers.usesJsonMap = true;
+              expr = `formatJsonMap(${JSON.stringify(obj.name)})`;
+            }
+          } else if (mapDefs?.has(obj.name)) {
+            const chain = mapDefChainFromName(obj.name, mapDefs);
+            expr = JSON.stringify(chain);
           }
         }
 	      if (!isJsonMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {

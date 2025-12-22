@@ -2,6 +2,7 @@ import { remember } from "../remember/index.mjs";
 import { state } from "../bridge/state.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { mapSentenceToPyash } from "./exchange/json_map.mjs";
 
 function vectorLiteral(values = [], type = "num") {
   const parts = ["ve", type];
@@ -135,7 +136,33 @@ function jsonObjectFromMapSentence(mapSentence, { rememberFn, seen }) {
   return out;
 }
 
-function resolveValue(obj = {}, { rememberFn } = {}) {
+function mapDefChainFromName(name, { rememberFn } = {}) {
+  const visited = new Set();
+  const defs = [];
+
+  const visit = (mapName) => {
+    if (!mapName || visited.has(mapName)) return;
+    visited.add(mapName);
+    const fact = rememberFn ? rememberFn(mapName) : null;
+    if (!fact || fact.be !== "json map") return;
+    const entries = fact?.obj?.map ?? {};
+    for (const value of Object.values(entries)) {
+      if (value?.name) visit(value.name);
+      if (value?.ve?.type === "name") {
+        for (const child of value.ve.values || []) {
+          if (typeof child === "string") visit(child);
+        }
+      }
+    }
+    defs.push(fact);
+  };
+
+  visit(name);
+  if (defs.length === 0) return "";
+  return defs.map(mapSentenceToPyash).join("\n\n");
+}
+
+function resolveValue(obj = {}, { rememberFn, format = "pyash" } = {}) {
   if (typeof obj.text === "string") return obj.text;
   if (typeof obj.num === "number") return obj.num;
   if (typeof obj.boolean === "boolean") return obj.boolean ? "truth" : "lie";
@@ -147,8 +174,12 @@ function resolveValue(obj = {}, { rememberFn } = {}) {
   if (obj.name && rememberFn) {
     const fact = rememberFn(obj.name);
     if (fact?.be === "json map") {
-      const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
-      return JSON.stringify(json, null, 2);
+      if (format === "json") {
+        const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
+        return JSON.stringify(json, null, 2);
+      }
+      const chain = mapDefChainFromName(obj.name, { rememberFn });
+      return chain || sentenceToPyash(fact);
     }
     if (fact?.obj?.ve?.values) return sentenceToPyash(fact);
     if (fact?.obj?.text !== undefined) return fact.obj.text;
@@ -161,7 +192,8 @@ function resolveValue(obj = {}, { rememberFn } = {}) {
 }
 
 export async function say(sentence, { remember: rememberFn = remember } = {}) {
-  const text = resolveValue(sentence.obj ?? {}, { rememberFn });
+  const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
+  const text = resolveValue(sentence.obj ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
   // Log for REPL friendliness
   // eslint-disable-next-line no-console
   console.log(text);
@@ -183,5 +215,18 @@ export const signatures = [
   { signatureWords: ["be", "say", "obj", "name", "vec", "num"], handler: say },
   { signatureWords: ["be", "say", "obj", "name", "vec", "text"], handler: say },
   { signatureWords: ["be", "say", "obj", "name", "vec", "bool"], handler: say },
-  { signatureWords: ["be", "say", "obj", "vec"], handler: say }
+  { signatureWords: ["be", "say", "obj", "vec"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "vec"], handler: say }
 ];

@@ -250,15 +250,25 @@ Stable error names for this specification:
 
 Errors are raised only for structural violations, never for absent switches.
 
+## 9. `say` formatting for JSON maps
+
+`be say` defaults to Pyash output:
+
+* `obj name <json-map> be say do` prints the `be json map def ... prah` chain.
+
+To print JSON, specify a target state:
+
+* `obj name <json-map> to state json be say do`
+
 ---
 
-## 9. Examples (existing files only)
+## 10. Examples (existing files only)
 
 (Links added when map examples are introduced.)
 
 ---
 
-## 10. Tests that define truth
+## 11. Tests that define truth
 
 * `quiz/json_map_export.test.mjs`
 * `quiz/import_json_map.test.mjs`

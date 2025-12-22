@@ -121,7 +121,7 @@ export function jsonToMapSentences(value, rootName, { existingNames = [] } = {})
   return { rootName: root, sentences };
 }
 
-function mapSentenceToPyash(sentence) {
+export function mapSentenceToPyash(sentence) {
   const name = sentence?.subj?.name ?? "map";
   const lines = [`subj name ${name} be json map def`];
   const entries = sentence?.obj?.map ?? {};

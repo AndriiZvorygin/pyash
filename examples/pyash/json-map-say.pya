@@ -22,4 +22,4 @@ subj name address obj name address ya
 subj name projects obj ve name project_one project_two be vector ya
 subj name profile be json map prah
 
-obj name profile be say do
+obj name profile to state json be say do
