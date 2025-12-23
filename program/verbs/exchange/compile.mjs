@@ -456,15 +456,86 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       });
       if (fallback) expr = fallback;
     }
+    const writeFilename = sentence?.to?.filename;
+    if (writeFilename && lang !== "c") {
+      if (jsHelpers) jsHelpers.usesFs = true;
+      const writeLine = `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
+      return `${writeLine}\nconsole.log(${expr});`;
+    }
     if (lang === "c") {
       if (cHelpers) cHelpers.usesPrintf = true;
       const isText = typeof obj.text === "string"
         || (obj.name && (declaredTypes?.get(obj.name) === "text" || declaredTypes?.get(obj.name) === "json map"))
         || (obj.name && localsTypes?.get(sanitizeName(obj.name)) === "text");
       const fmt = isText ? "%s" : "%g";
+      if (writeFilename) {
+        if (cHelpers) cHelpers.usesStdlib = true;
+        const safePath = JSON.stringify(writeFilename);
+        return `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }\nprintf("${fmt}\\n", ${expr});`;
+      }
       return `printf("${fmt}\\n", ${expr});`;
     }
     return `console.log(${expr});`;
+  }
+
+  if (baseBe === "write" && sentence?.to?.filename) {
+    const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
+    const wantJson = format === "json";
+    let expr = "undefined";
+    if (typeof obj.text === "string") {
+      expr = JSON.stringify(obj.text);
+    } else if (obj.genitive) {
+      expr = pathFromGenitive(obj.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
+    } else if (obj.name) {
+      const name = sanitizeName(obj.name);
+      const isJsonMap = declaredTypes?.get(obj.name) === "json map";
+      if (isJsonMap) {
+        if (wantJson) {
+          if (lang === "c") {
+            expr = sanitizeName(`${obj.name}_json`);
+          } else {
+            if (jsHelpers) jsHelpers.usesJsonMap = true;
+            expr = `formatJsonMap(${JSON.stringify(obj.name)})`;
+          }
+        } else if (mapDefs?.has(obj.name)) {
+          const chain = mapDefChainFromName(obj.name, mapDefs);
+          expr = JSON.stringify(chain);
+        }
+      }
+      if (!isJsonMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
+        expr = name;
+      } else if (!isJsonMap && locals?.has(name)) {
+        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+      } else if (!isJsonMap && declared?.has(name)) {
+        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
+      } else if (!isJsonMap) {
+        expr = JSON.stringify(obj.name);
+      }
+    } else {
+      const fallback = exprForSlot(obj, {
+        sentenceArg,
+        locals,
+        declared,
+        defaultExpr: sentenceArg ? `${sentenceArg}.obj?.text ?? ${sentenceArg}.obj?.num` : undefined,
+        field: "text"
+      });
+      if (fallback) expr = fallback;
+    }
+    const writeFilename = sentence.to.filename;
+    if (lang !== "c") {
+      if (jsHelpers) jsHelpers.usesFs = true;
+      return `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
+    }
+    if (cHelpers) {
+      cHelpers.usesPrintf = true;
+      cHelpers.usesStdlib = true;
+    }
+    const isText = typeof obj.text === "string"
+      || (obj.name && (declaredTypes?.get(obj.name) === "text" || declaredTypes?.get(obj.name) === "json map"))
+      || (obj.name && localsTypes?.get(sanitizeName(obj.name)) === "text");
+    const fmt = isText ? "%s" : "%g";
+    const safePath = JSON.stringify(writeFilename);
+    return `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }`;
   }
 
   // Vector element read: obj name doors at num 2 be read to name picked do
@@ -1708,7 +1779,7 @@ let lines = [header];
   const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesFs: false, readCounter: 0 };
   const cState = { vectorCounter: 0, jsonMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
@@ -1889,6 +1960,9 @@ let lines = [header];
     }
     if (jsHelpers.usesJsonMap) {
       prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.subj?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.obj?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction formatJsonMap(name) {\n  return JSON.stringify(jsonFromMap(name), null, 2);\n}`);
+    }
+    if (jsHelpers.usesFs) {
+      prelude.splice(1, 0, `import fs from "node:fs";`);
     }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;

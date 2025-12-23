@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import { remember } from "../remember/index.mjs";
 import { state } from "../bridge/state.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
@@ -162,7 +163,7 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
   return defs.map(mapSentenceToPyash).join("\n\n");
 }
 
-function resolveValue(obj = {}, { rememberFn, format = "pyash" } = {}) {
+export function renderSayValue(obj = {}, { rememberFn, format = "pyash" } = {}) {
   if (typeof obj.text === "string") return obj.text;
   if (typeof obj.num === "number") return obj.num;
   if (typeof obj.boolean === "boolean") return obj.boolean ? "truth" : "lie";
@@ -193,7 +194,10 @@ function resolveValue(obj = {}, { rememberFn, format = "pyash" } = {}) {
 
 export async function say(sentence, { remember: rememberFn = remember } = {}) {
   const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
-  const text = resolveValue(sentence.obj ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
+  const text = renderSayValue(sentence.obj ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
+  if (sentence?.to?.filename) {
+    await fs.writeFile(sentence.to.filename, String(text ?? ""), "utf8");
+  }
   // Log for REPL friendliness
   // eslint-disable-next-line no-console
   console.log(text);
@@ -228,5 +232,24 @@ export const signatures = [
   { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "num"], handler: say },
   { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "text"], handler: say },
   { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "bool"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "vec"], handler: say }
+  { signatureWords: ["be", "say", "become", "text", "obj", "vec"], handler: say },
+  { signatureWords: ["be", "say", "obj", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "name", "vec", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "obj", "vec", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "to", "filename"], handler: say }
 ];

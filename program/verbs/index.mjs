@@ -14,6 +14,7 @@ import importJson, { signatures as importSignatures } from "./exchange/import.mj
 import translation, { signatures as translationSignatures } from "./exchange/translation.mjs";
 import understand, { signatures as understandSignatures } from "./exchange/understand.mjs";
 import read, { signatures as readSignatures } from "./exchange/read.mjs";
+import write, { signatures as writeSignatures } from "./exchange/write.mjs";
 import mind, { signatures as mindSignatures } from "./mind/mind.mjs";
 import { giant, signatures as giantSignatures } from "./regulation/giant.mjs";
 import { tiny, signatures as tinySignatures } from "./regulation/tiny.mjs";
@@ -38,6 +39,7 @@ export {
   translation,
   understand,
   read,
+  write,
   mind,
   giant,
   tiny,
@@ -63,6 +65,7 @@ export const builtInSignatures = [
   ...translationSignatures,
   ...understandSignatures,
   ...readSignatures,
+  ...writeSignatures,
   ...mindSignatures,
   ...giantSignatures,
   ...tinySignatures,

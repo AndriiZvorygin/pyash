@@ -245,7 +245,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
     if (factObj?.filename !== undefined) return ["name", "filename"];
     if (typeof value.name === "string") {
       if (/\s/.test(value.name)) return ["text"];
-      if (verb === "mind" || verb === "say") return ["text"];
+      if (verb === "mind" || verb === "say" || verb === "write") return ["text"];
     }
     return ["name", "num"];
   }

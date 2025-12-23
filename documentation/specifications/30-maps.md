@@ -260,6 +260,14 @@ To print JSON, specify a target state:
 
 * `obj name <json-map> to state json be say do`
 
+To write the output to a file:
+
+* `obj name <json-map> to state json to filename <file.json> be say do`
+
+`be write` performs the same formatting as `be say` but skips console output:
+
+* `obj name <json-map> to state json to filename <file.json> be write do`
+
 ---
 
 ## 10. Examples (existing files only)
