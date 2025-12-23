@@ -184,7 +184,7 @@ Columns:
 * `source` keyword (SOURCE axis)
 * `way` keyword (WAY axis)
 * `destination` keyword (DESTINATION axis)
-* `object` slot name (for `obj …` payloads)
+* `object` slot name (for `ob …` payloads)
 
 Rows:
 
@@ -213,7 +213,7 @@ Usage patterns (current runtime):
   * `from state draft`, `as state final`, `become state json`
   * `fromtext "prompt"`, `accordingto doc`, `totext output`
 
-The object-slot column is not used in the current parser; `obj` is taken as the payload.
+The object-slot column is not used in the current parser; `ob` is taken as the payload.
 
 ```js
 export const axisContextToKeyword = {
@@ -359,8 +359,8 @@ When generating or modifying Pyash-related code:
 3. **Use the object keywords for multi-object sentences.**
    Map:
 
-   * `obj discourse X` → `obtext: X`
-   * `obj interior Y` → `obin: Y`
+   * `ob discourse X` → `obtext: X`
+   * `ob interior Y` → `obin: Y`
    * etc.
 
 4. **Treat `space` as the default context**

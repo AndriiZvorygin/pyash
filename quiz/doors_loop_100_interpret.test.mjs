@@ -17,7 +17,7 @@ test("interpret 100 doors loop produces expected vector", async () => {
   }
 
   const doors = remember("doors");
-  const values = doors?.obj?.ve?.values ?? [];
+  const values = doors?.ob?.ve?.values ?? [];
   const literal = `ve bool ${values.join(" ")}`;
   assert.equal(literal, doorsExpectedLiteral(100));
 });

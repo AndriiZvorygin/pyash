@@ -38,13 +38,13 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
   for (const part of rest) {
     if (curr && typeof curr === "object" && curr.name && rememberFn) {
       const fact = rememberFn(curr.name);
-      if (fact) curr = fact.obj ?? fact;
+      if (fact) curr = fact.ob ?? fact;
     }
     if (curr && typeof curr === "object") {
-      if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-        curr = curr.obj.map[part];
-      } else if (curr.obj && curr.obj[part] !== undefined) {
-        curr = curr.obj[part];
+      if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+        curr = curr.ob.map[part];
+      } else if (curr.ob && curr.ob[part] !== undefined) {
+        curr = curr.ob[part];
       } else {
         curr = curr?.[part];
       }
@@ -67,17 +67,17 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
 
 const JSON_SCALAR_VECTORS = new Set(["num", "number", "text", "bool", "boolean", "hollow"]);
 
-function jsonValueFromObj(obj, { rememberFn, seen }) {
-  if (!obj || (typeof obj === "object" && Object.keys(obj).length === 0)) return undefined;
-  if (obj.hollow) return null;
-  if (obj.text !== undefined) return obj.text;
-  if (obj.num !== undefined) return obj.num;
-  if (obj.boolean !== undefined) return obj.boolean;
-    if (obj.ve) {
-      const type = obj.ve.type || "num";
+function jsonValueFromObj(ob, { rememberFn, seen }) {
+  if (!ob || (typeof ob === "object" && Object.keys(ob).length === 0)) return undefined;
+  if (ob.hollow) return null;
+  if (ob.text !== undefined) return ob.text;
+  if (ob.num !== undefined) return ob.num;
+  if (ob.boolean !== undefined) return ob.boolean;
+    if (ob.ve) {
+      const type = ob.ve.type || "num";
       if (type === "hollow") return [];
       if (type === "name") {
-        return obj.ve.values.map((name) => jsonObjectFromMapName(name, { rememberFn, seen }));
+        return ob.ve.values.map((name) => jsonObjectFromMapName(name, { rememberFn, seen }));
       }
       if (!JSON_SCALAR_VECTORS.has(type)) {
         throwErrorSentence({
@@ -87,17 +87,17 @@ function jsonValueFromObj(obj, { rememberFn, seen }) {
           raw: { type }
         });
       }
-      return obj.ve.values.map((value) => {
+      return ob.ve.values.map((value) => {
         if (type === "bool" || type === "boolean") return value === "truth" || value === true || value === 1;
         return value;
       });
     }
-  if (obj.name) return jsonObjectFromMapName(obj.name, { rememberFn, seen });
+  if (ob.name) return jsonObjectFromMapName(ob.name, { rememberFn, seen });
   throwErrorSentence({
     name: "json map contents defective",
     message: "json map contents defective: unsupported contents",
     from: { name: "say" },
-    raw: obj
+    raw: ob
   });
   return undefined;
 }
@@ -116,7 +116,7 @@ function jsonObjectFromMapName(name, { rememberFn, seen }) {
 }
 
 function jsonObjectFromMapSentence(mapSentence, { rememberFn, seen }) {
-  const mapName = mapSentence?.subj?.name ?? "<map>";
+  const mapName = mapSentence?.su?.name ?? "<map>";
   if (seen.has(mapName)) {
     throwErrorSentence({
       name: "json map export self referential",
@@ -126,7 +126,7 @@ function jsonObjectFromMapSentence(mapSentence, { rememberFn, seen }) {
     });
   }
   seen.add(mapName);
-  const entries = mapSentence?.obj?.map ?? {};
+  const entries = mapSentence?.ob?.map ?? {};
   const out = {};
   for (const [key, value] of Object.entries(entries)) {
     const jsonValue = jsonValueFromObj(value, { rememberFn, seen });
@@ -145,8 +145,8 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
     if (!mapName || visited.has(mapName)) return;
     visited.add(mapName);
     const fact = rememberFn ? rememberFn(mapName) : null;
-    if (!fact || fact.be !== "json map") return;
-    const entries = fact?.obj?.map ?? {};
+    if (!fact || (fact.be !== "json map" && fact.be !== "map")) return;
+    const entries = fact?.ob?.map ?? {};
     for (const value of Object.values(entries)) {
       if (value?.name) visit(value.name);
       if (value?.ve?.type === "name") {
@@ -163,93 +163,93 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
   return defs.map(mapSentenceToPyash).join("\n\n");
 }
 
-export function renderSayValue(obj = {}, { rememberFn, format = "pyash" } = {}) {
-  if (typeof obj.text === "string") return obj.text;
-  if (typeof obj.num === "number") return obj.num;
-  if (typeof obj.boolean === "boolean") return obj.boolean ? "truth" : "lie";
-  if (obj.hollow) return "null";
-  if (obj.genitive) {
-    const v = resolveGenitive(obj.genitive, { rememberFn });
+export function renderSayValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
+  if (typeof ob.text === "string") return ob.text;
+  if (typeof ob.num === "number") return ob.num;
+  if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
+  if (ob.hollow) return "null";
+  if (ob.genitive) {
+    const v = resolveGenitive(ob.genitive, { rememberFn });
     if (v !== undefined) return v;
   }
-  if (obj.name && rememberFn) {
-    const fact = rememberFn(obj.name);
-    if (fact?.be === "json map") {
-      if (format === "json") {
+  if (ob.name && rememberFn) {
+    const fact = rememberFn(ob.name);
+    if (fact?.be === "json map" || fact?.be === "map") {
+      if (fact.be === "json map" && format === "json") {
         const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
         return JSON.stringify(json, null, 2);
       }
-      const chain = mapDefChainFromName(obj.name, { rememberFn });
+      const chain = mapDefChainFromName(ob.name, { rememberFn });
       return chain || sentenceToPyash(fact);
     }
-    if (fact?.obj?.ve?.values) return sentenceToPyash(fact);
-    if (fact?.obj?.text !== undefined) return fact.obj.text;
-    if (fact?.obj?.num !== undefined) return fact.obj.num;
-    if (fact?.obj?.boolean !== undefined) return fact.obj.boolean ? "truth" : "lie";
-    if (fact?.obj?.hollow) return "null";
+    if (fact?.ob?.ve?.values) return sentenceToPyash(fact);
+    if (fact?.ob?.text !== undefined) return fact.ob.text;
+    if (fact?.ob?.num !== undefined) return fact.ob.num;
+    if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
+    if (fact?.ob?.hollow) return "null";
   }
-  if (obj.name) return obj.name;
+  if (ob.name) return ob.name;
   return "";
 }
 
 export async function say(sentence, { remember: rememberFn = remember } = {}) {
   const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
-  const text = renderSayValue(sentence.obj ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
+  const text = renderSayValue(sentence.ob ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
   if (sentence?.to?.filename) {
     await fs.writeFile(sentence.to.filename, String(text ?? ""), "utf8");
   }
   // Log for REPL friendliness
   // eslint-disable-next-line no-console
   console.log(text);
-  return { obj: { text }, be: "say" };
+  return { ob: { text }, be: "say" };
 }
 
 export default say;
 
 export const signatures = [
-  { signatureWords: ["be", "say", "obj", "text"], handler: say },
-  { signatureWords: ["be", "say", "obj", "num"], handler: say },
-  { signatureWords: ["be", "say", "obj", "bool"], handler: say },
-  { signatureWords: ["be", "say", "obj", "hollow"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "text"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "num"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "bool"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "hollow"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec", "num"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec", "text"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec", "bool"], handler: say },
-  { signatureWords: ["be", "say", "obj", "vec"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "text"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "num"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "bool"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "hollow"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "text"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "num"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "bool"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "hollow"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "num"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "text"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "bool"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "vec"], handler: say },
-  { signatureWords: ["be", "say", "obj", "text", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "num", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "bool", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "hollow", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "text", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "num", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "bool", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "hollow", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "name", "vec", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "obj", "vec", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "text", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "num", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "bool", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "hollow", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "text", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "num", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "bool", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "hollow", "to", "filename"], handler: say },
-  { signatureWords: ["be", "say", "become", "text", "obj", "name", "vec", "to", "filename"], handler: say }
+  { signatureWords: ["be", "say", "ob", "text"], handler: say },
+  { signatureWords: ["be", "say", "ob", "num"], handler: say },
+  { signatureWords: ["be", "say", "ob", "bool"], handler: say },
+  { signatureWords: ["be", "say", "ob", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "text"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "num"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "bool"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec", "num"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec", "text"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec", "bool"], handler: say },
+  { signatureWords: ["be", "say", "ob", "vec"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "hollow"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "vec"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "vec", "num"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "vec", "text"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "vec", "bool"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "vec"], handler: say },
+  { signatureWords: ["be", "say", "ob", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "ob", "vec", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "text", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "num", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "bool", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: say },
+  { signatureWords: ["be", "say", "become", "text", "ob", "name", "vec", "to", "filename"], handler: say }
 ];

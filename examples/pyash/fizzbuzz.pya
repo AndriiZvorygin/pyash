@@ -1,19 +1,19 @@
-subj name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def
-exists subj name handled obj num 0 be number ya
-exists subj name rem3 obj num 0 be number ya
-exists subj name rem5 obj num 0 be number ya
-subj name handled obj num 0 be number ya
+su name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def
+exists su name handled ob num 0 be number ya
+exists su name rem3 ob num 0 be number ya
+exists su name rem5 ob num 0 be number ya
+su name handled ob num 0 be number ya
 
-obj this ti fromindex from num 3 to name rem3 be remains do
-obj this ti fromindex from num 5 to name rem5 be remains do
+ob this ti fromindex from num 3 to name rem3 be remains do
+ob this ti fromindex from num 5 to name rem5 be remains do
 
-obj name rem3 be equally from num 0 then obj num 1 to name handled be add do
-obj name rem5 be equally from num 0 then obj num 2 to name handled be add do
+ob name rem3 be equally from num 0 then ob num 1 to name handled be add do
+ob name rem5 be equally from num 0 then ob num 2 to name handled be add do
 
-obj name handled be equally from num 3 then obj text FizzBuzz be write do
-obj name handled be equally from num 1 then obj text Fizz be write do
-obj name handled be equally from num 2 then obj text Buzz be write do
-obj name handled be equally from num 0 then obj this ti fromindex be write do
-subj name fizzbuzz step be ceremony prah
+ob name handled be equally from num 3 then ob text FizzBuzz be write do
+ob name handled be equally from num 1 then ob text Fizz be write do
+ob name handled be equally from num 2 then ob text Buzz be write do
+ob name handled be equally from num 0 then ob this ti fromindex be write do
+su name fizzbuzz step be ceremony prah
 
 to name outside fromindex num 1 toindex num 16 be fizzbuzz step do

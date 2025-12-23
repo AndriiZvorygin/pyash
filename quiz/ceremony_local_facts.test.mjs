@@ -13,13 +13,13 @@ async function run(line) {
 test("ya facts inside ceremony body do not leak to main memory", async () => {
   forget();
 
-  await run("subj name maker be ceremony def");
-  await run("subj name local obj num 7 be number ya");
-  await run("subj name maker be ceremony prah");
+  await run("su name maker be ceremony def");
+  await run("su name local ob num 7 be number ya");
+  await run("su name maker be ceremony prah");
 
-  const before = allRemember().filter(s => s.subj?.name === "local").length;
+  const before = allRemember().filter(s => s.su?.name === "local").length;
   await run("be maker do");
-  const after = allRemember().filter(s => s.subj?.name === "local").length;
+  const after = allRemember().filter(s => s.su?.name === "local").length;
 
   assert.equal(after, before, "no new local facts should be added to main memory");
 });

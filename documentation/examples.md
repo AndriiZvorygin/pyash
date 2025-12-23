@@ -24,6 +24,7 @@ This folder collects runnable/walkthrough examples to help future assistants and
 - `examples/pyash/compile-conditional-to-js-text.pya` / `compile-conditional-to-c-text.pya` — compile a tiny/then add into JS/C.
 - `examples/pyash/compile-mixed-to-js-text.pya` — shows `exists` declaration, reassignment, and conditional add compiled to JS.
 - `examples/pyash/vector-write-index.pya` — writes a vector element by index and prints the updated vector.
+- `examples/pyash/word-frequency.pya` — word-frequency via ceremony + map update (word-agnostic).
 - `examples/pyash/translate-conditional-to-english.pya` / `translate-conditional-from-english.pya` — translate conditionals between Pyash and English.
 - `examples/pyash/fizzbuzz.pya` — interpreter fizzbuzz (1..15) using loop + inline `then`.
 - `examples/pyash/fizzbuzz-100.pya` — interpreter fizzbuzz (1..100) using the same loop ceremony.

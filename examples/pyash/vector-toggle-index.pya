@@ -1,4 +1,4 @@
-exists subj name doors obj ve bool truth lie truth be vector ya
+exists su name doors ob ve bool truth lie truth be vector ya
 
-obj name doors at num 1 be invert do
-obj name doors be write do
+ob name doors at num 1 be invert do
+ob name doors be write do

@@ -27,15 +27,15 @@ test("compile write json map to filename (c) writes file", async () => {
   forget();
 
   const pyash = [
-    "subj name profile be json map def",
-    "subj name name obj text \"Ada\" ya",
-    "subj name profile be json map prah",
-    "obj name profile to state json to filename out.json be write do"
+    "su name profile be json map def",
+    "su name name ob text \"Ada\" ya",
+    "su name profile be json map prah",
+    "ob name profile to state json to filename out.json be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const wrapped = result?.obj?.text ?? result?.value?.text ?? "";
+  const wrapped = result?.ob?.text ?? result?.value?.text ?? "";
   const c = wrapped.replace(/^\s*quoted\.c\.\s*/, "").replace(/\s*\.c\.quoted\s*$/, "");
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-json-c-"));

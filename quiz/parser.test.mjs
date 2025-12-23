@@ -4,62 +4,62 @@ import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
 
 test("parses quoted text tokens", () => {
-  const s = parse('subj name prompt with text "hello world" be topic ya');
+  const s = parse('su name prompt with text "hello world" be topic ya');
 
   assert.equal(s.mood, "ya");
-  assert.equal(s.subj.name, "prompt");
+  assert.equal(s.su.name, "prompt");
   assert.equal(s.with.text, "hello world");
   assert.equal(s.be, "topic");
 });
 
 test("supports escaped quotes inside text", () => {
-  const s = parse('subj name note with text "say \\\"hi\\\"" be topic ya');
+  const s = parse('su name note with text "say \\\"hi\\\"" be topic ya');
 
   assert.equal(s.with.text, 'say "hi"');
 });
 
 test("parses minimal declarative sentence", () => {
-  const s = parse("subj hello be test ya");
+  const s = parse("su hello be test ya");
 
   assert.equal(s.mood, "ya");
-  assert.equal(s.subj.name, "hello");
+  assert.equal(s.su.name, "hello");
   assert.equal(s.be, "test");
 });
 
-test("supports short subj/obj aliases su/ob", () => {
+test("supports short su/ob aliases su/ob", () => {
   const s = parse("su hello ob world be test ya");
 
-  assert.equal(s.subj.name, "hello");
-  assert.equal(s.obj.name, "world");
+  assert.equal(s.su.name, "hello");
+  assert.equal(s.ob.name, "world");
 });
 
 test("parses vector literals with element type", () => {
-  const sNum = parse("obj ve num 1 2 3 be topic ya");
-  assert.deepEqual(sNum.obj.ve, { type: "num", values: [1, 2, 3] });
+  const sNum = parse("ob ve num 1 2 3 be topic ya");
+  assert.deepEqual(sNum.ob.ve, { type: "num", values: [1, 2, 3] });
 
-  const sText = parse('obj ve text "apple" "red maple" "pine" be topic ya');
-  assert.deepEqual(sText.obj.ve, { type: "text", values: ["apple", "red maple", "pine"] });
+  const sText = parse('ob ve text "apple" "red maple" "pine" be topic ya');
+  assert.deepEqual(sText.ob.ve, { type: "text", values: ["apple", "red maple", "pine"] });
 
-  const sLetters = parse("obj ve letter a b c d be topic ya");
-  assert.deepEqual(sLetters.obj.ve, { type: "letter", values: ["a", "b", "c", "d"] });
+  const sLetters = parse("ob ve letter a b c d be topic ya");
+  assert.deepEqual(sLetters.ob.ve, { type: "letter", values: ["a", "b", "c", "d"] });
 });
 
 test("parses typed name in name <type> <literal> order", () => {
-  const s = parse("subj name alpha to name text line be topic ya");
+  const s = parse("su name alpha to name text line be topic ya");
 
   assert.equal(s.to.name, "line");
   assert.deepEqual(s.to.nameTypeWords, ["text"]);
 });
 
 test("parses bool and hollow literals", () => {
-  const sBool = parse("obj bool truth be topic ya");
-  assert.equal(sBool.obj.boolean, true);
+  const sBool = parse("ob bool truth be topic ya");
+  assert.equal(sBool.ob.boolean, true);
 
-  const sHollow = parse("obj hollow be topic ya");
-  assert.equal(sHollow.obj.hollow, true);
+  const sHollow = parse("ob hollow be topic ya");
+  assert.equal(sHollow.ob.hollow, true);
 });
 
 test("parses hollow vector literal", () => {
-  const s = parse("obj ve hollow be topic ya");
-  assert.deepEqual(s.obj.ve, { type: "hollow", values: [] });
+  const s = parse("ob ve hollow be topic ya");
+  assert.deepEqual(s.ob.ve, { type: "hollow", values: [] });
 });

@@ -73,16 +73,17 @@ export function clearSignatureDefinitions() {
   nameToKeys.clear();
 }
 
-// Extract a signature from a ceremony definition sentence ("subj name X be ceremony def").
+// Extract a signature from a ceremony definition sentence ("su name X be ceremony def").
 export function deriveSignatureFromDefinition(sentence) {
   if (!sentence || sentence.mood !== "def" || sentence.be !== "ceremony") return null;
 
-  const verb = normalizeWords(sentence.subj?.name);
+  const verb = normalizeWords(sentence.su?.name);
   if (!verb) return null;
 
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
+    if (key === "su") continue; // ceremony name, not a case
     if (SEQUENCE_REGISTERS.has(key)) continue;
     const typeWords = normalizeDefinitionTypeWords(caseTypeWords(value));
     if (typeWords.length === 0) continue;
@@ -95,8 +96,7 @@ export function deriveSignatureFromDefinition(sentence) {
 const NON_CASE_FIELDS = new Set([
   "mood",
   "be",
-  "subj",
-  "su",
+  "exists",
   "signatureWords",
   "signature",
   "ret",
@@ -188,8 +188,9 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
     if (NON_CASE_FIELDS.has(key)) continue;
+    if (key === "su" && sentence.mood !== "then") continue;
     if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
-    const typeWords = caseTypeWordsWithMemory(value, remember, verb);
+    const typeWords = caseTypeWordsWithMemory(value, remember, verb, key);
     if (typeWords.length === 0) {
       console.error("derive-signature-fail", { key, value, verb });
       throwErrorSentence({
@@ -205,7 +206,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   return makeSignatureWords({ be: verb, cases });
 }
 
-function caseTypeWordsWithMemory(value, remember, verb = "") {
+function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value == null) return [];
 
   if (Array.isArray(value)) {
@@ -232,8 +233,18 @@ function caseTypeWordsWithMemory(value, remember, verb = "") {
 
   if (value.name) {
     const inferred = remember ? remember(value.name) : null;
-    const factObj = inferred?.obj;
+    const factObj = inferred?.ob;
     const vecType = factObj?.ve?.type;
+
+    if (caseKey === "su") {
+      if (factObj?.num !== undefined) return ["num"];
+      if (factObj?.boolean !== undefined) return ["bool"];
+      if (factObj?.text !== undefined) return ["text"];
+      if (factObj?.filename !== undefined) return ["filename"];
+      if (factObj?.ve?.values) return ["vec", normalizeWords(vecType) || "num"].filter(Boolean);
+      if (inferred?.be === "mind") return ["mind"];
+      return ["num"];
+    }
 
     if (inferred?.be === "mind") return ["name", "mind"];
 

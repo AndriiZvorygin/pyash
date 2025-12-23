@@ -1,23 +1,23 @@
 import { resolveThisValue } from "../library/thisBinding.mjs";
 
 export function handleThisBinding(sentence, state) {
-  const { subj, obj } = sentence;
+  const { su, ob } = sentence;
   if (sentence.mood !== "ya") return null;
-  if (!(subj?.name === "this" || obj?.thisRef)) return null;
+  if (!(su?.name === "this" || ob?.thisRef)) return null;
 
-  const resolved = resolveThisValue(obj, state.currentEvokeRef || state.currentEvoke);
+  const resolved = resolveThisValue(ob, state.currentEvokeRef || state.currentEvoke);
   if (resolved == null) return null;
 
-  const targetName = subj?.name === "this" ? obj?.name : subj?.name;
+  const targetName = su?.name === "this" ? ob?.name : su?.name;
   if (!targetName) throw new Error("this binding requires a target name");
 
-  return { ...sentence, subj: { name: targetName }, obj: resolved, mood: "ya" };
+  return { ...sentence, su: { name: targetName }, ob: resolved, mood: "ya" };
 }
 
 export function handleReturn(sentence, state, remember) {
   if (sentence.mood !== "ret" || !state.currentEvokeRef) return null;
 
-  const sourceName = sentence?.ret?.name || sentence?.obj?.name || sentence?.subj?.name;
+  const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
   let merged = { ...state.currentEvokeRef };
 
   if (sourceName) {
@@ -25,15 +25,15 @@ export function handleReturn(sentence, state, remember) {
     if (!fact) throw new Error(`ret: unknown binding ${sourceName}`);
     merged = {
       ...merged,
-      obj: fact.obj ?? merged.obj,
+      ob: fact.ob ?? merged.ob,
       to: fact.to ?? merged.to,
       from: fact.from ?? merged.from,
       fromindex: fact.fromindex ?? merged.fromindex,
       toindex: fact.toindex ?? merged.toindex,
       as: fact.as ?? merged.as
     };
-  } else if (sentence.obj !== undefined) {
-    merged = { ...merged, obj: sentence.obj };
+  } else if (sentence.ob !== undefined) {
+    merged = { ...merged, ob: sentence.ob };
   }
 
   if (sentence.to) merged.to = sentence.to;
@@ -46,5 +46,5 @@ export function handleReturn(sentence, state, remember) {
   merged.be = state.currentEvokeRef.be;
 
   Object.assign(state.currentEvokeRef, merged);
-  return { returned: "evoke", value: merged.obj ?? merged };
+  return { returned: "evoke", value: merged.ob ?? merged };
 }

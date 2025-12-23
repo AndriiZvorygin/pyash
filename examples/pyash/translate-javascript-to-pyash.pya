@@ -4,4 +4,4 @@ alpha += 2;
 const beta = "hi";
 alpha = alpha - 1;
 .javascript.quoted from state javascript to state pyash to name output be translation do
-subj name output be pyash que
+su name output be pyash que

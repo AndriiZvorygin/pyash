@@ -7,7 +7,7 @@ import { parse } from "../program/understand/index.mjs";
 
 test("captures quoted english block with whitespace", () => {
   const s = parse(
-    "subj name prompt with quoted.english.This is\n  a block with spaces..english.quoted be topic ya"
+    "su name prompt with quoted.english.This is\n  a block with spaces..english.quoted be topic ya"
   );
 
   assert.equal(s.with.text, "This is\n  a block with spaces.");
@@ -16,7 +16,7 @@ test("captures quoted english block with whitespace", () => {
 
 test("captures quoted bash block", () => {
   const s = parse(
-    "subj name script with quoted.bash.echo \"hi\" | wc -l .bash.quoted be run ya"
+    "su name script with quoted.bash.echo \"hi\" | wc -l .bash.quoted be run ya"
   );
 
   assert.equal(s.with.text, 'echo "hi" | wc -l ');

@@ -9,10 +9,10 @@ Define the error sentence contract and canonical error names.
 ## 3. Rules (normative)
 - Errors are thrown as exceptions with `err.sentence` set to a `be error do` sentence.
 - Required fields:
-  - `subj name <error-name>`
-  - `obj text <message>`
+  - `su name <error-name>`
+  - `ob text <message>`
   - `from name <source>`
-- Optional fields: `obj.pyash`, `obj.raw`.
+- Optional fields: `ob.pyash`, `ob.raw`.
 
 ## 4. Error contracts (stable names)
 - `unknown verb`

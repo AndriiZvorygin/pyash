@@ -51,7 +51,7 @@ export const VECTOR_PRINT_HELPER = [
   "  printf(\"\\n\");",
   "}",
   "static void print_vec_sentence(const char *name, const pya_vec *vec) {",
-  "  printf(\"subj name %s obj \", name ? name : \"\");",
+  "  printf(\"su name %s ob \", name ? name : \"\");",
   "  print_vec_inline(vec);",
   "  printf(\" be vector ya\\n\");",
   "}"

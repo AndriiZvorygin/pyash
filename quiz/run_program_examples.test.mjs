@@ -43,5 +43,5 @@ test("run_pya_program handles compile conditional example", async () => {
   }
 
   assert.match(lastOutput, /if \(\(3\) < \(5\)\)/);
-  assert.match(lastOutput, /total\.obj\.num = \(total\.obj\.num \?\? 0\) \+ 1;/);
+  assert.match(lastOutput, /total\.ob\.num = \(total\.ob\.num \?\? 0\) \+ 1;/);
 });

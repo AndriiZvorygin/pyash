@@ -1,13 +1,13 @@
 export function buildErrorSentence({ name, message, from, pyash, raw }) {
-  const obj = {};
-  if (message) obj.text = message;
-  if (pyash) obj.pyash = pyash;
-  if (raw) obj.raw = raw;
+  const ob = {};
+  if (message) ob.text = message;
+  if (pyash) ob.pyash = pyash;
+  if (raw) ob.raw = raw;
   return {
     mood: "do",
     be: "error",
-    subj: { name },
-    obj,
+    su: { name },
+    ob,
     from
   };
 }

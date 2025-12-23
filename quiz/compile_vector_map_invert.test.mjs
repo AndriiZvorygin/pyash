@@ -18,8 +18,8 @@ test("compile at all invert emits runnable JS that flips vector values", async (
   vm.runInNewContext(js, sandbox);
 
   const out = sandbox.out;
-  assert.ok(out?.obj?.ve?.values, "out vector should be produced");
-  const values = Array.isArray(out.obj.ve.values) ? out.obj.ve.values : Array.from(out.obj.ve.values || []);
+  assert.ok(out?.ob?.ve?.values, "out vector should be produced");
+  const values = Array.isArray(out.ob.ve.values) ? out.ob.ve.values : Array.from(out.ob.ve.values || []);
   assert.equal(values[0], -1);
   assert.equal(values[1], 2);
   assert.equal(values[2], -3);

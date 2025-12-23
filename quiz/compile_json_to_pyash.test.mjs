@@ -19,20 +19,20 @@ test("compile converts json text to pyash json map defs", async () => {
   });
 
   await run(
-    `subj name profile obj text ${JSON.stringify(json)} from state json to state pyash to name output be compile do`
+    `su name profile ob text ${JSON.stringify(json)} from state json to state pyash to name output be compile do`
   );
 
   const output = remember("output");
-  const text = output?.obj?.text ?? "";
+  const text = output?.ob?.text ?? "";
 
   assert.match(text, /quoted\.pyash\./);
-  assert.match(text, /subj name profile pets 1 be json map def/);
-  assert.match(text, /subj name profile be json map def/);
-  assert.match(text, /subj name pets obj ve name "profile pets 1" ya/);
-  assert.match(text, /subj name profile be json map prah/);
+  assert.match(text, /su name profile pets 1 be json map def/);
+  assert.match(text, /su name profile be json map def/);
+  assert.match(text, /su name pets ob ve name "profile pets 1" ya/);
+  assert.match(text, /\bprah\b/);
 
-  const childIdx = text.indexOf("subj name profile pets 1 be json map def");
-  const parentIdx = text.indexOf("subj name profile be json map def");
+  const childIdx = text.indexOf("su name profile pets 1 be json map def");
+  const parentIdx = text.indexOf("su name profile be json map def");
   assert.ok(childIdx >= 0 && parentIdx >= 0);
   assert.ok(childIdx < parentIdx);
 });

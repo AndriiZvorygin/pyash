@@ -9,20 +9,20 @@ test("compile at all map toggles vector elements", async () => {
   try {
     const pyash = [
       // Seed vector of zeros
-      "exists subj name values obj ve num 0 0 0 be vector ya",
-      // Ceremony: val = this obj + 1
-      "subj name toggle be ceremony def",
-      "subj name val obj this obj be number ya",
-      "obj num 1 be add do",
-      "subj name val ret",
-      "subj name toggle be ceremony prah",
+      "exists su name values ob ve num 0 0 0 be vector ya",
+      // Ceremony: val = this ob + 1
+      "su name toggle be ceremony def",
+      "su name val ob this ob be number ya",
+      "ob num 1 be add do",
+      "su name val ret",
+      "su name toggle be ceremony prah",
       // Invoke at all (in-place)
-      "obj name values at name all be toggle do"
+      "ob name values at name all be toggle do"
     ].join("\\n");
 
     const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
     const result = await interpret(sentence);
-    let js = result?.obj?.text ?? result?.value?.text ?? "";
+    let js = result?.ob?.text ?? result?.value?.text ?? "";
     if (js.startsWith("quoted.javascript.")) {
       js = js.slice("quoted.javascript.".length);
     }
@@ -35,7 +35,7 @@ test("compile at all map toggles vector elements", async () => {
     vm.runInNewContext(js, sandbox);
 
     const vec = sandbox.values ?? sandbox.globalThis?.values;
-    const values = Array.from(vec?.obj?.ve?.values ?? []);
+    const values = Array.from(vec?.ob?.ve?.values ?? []);
     assert.ok(values.length, "vector should exist after runAtAll");
     assert.deepEqual(values, [1, 1, 1], "all elements should be incremented to 1");
   } catch (err) {

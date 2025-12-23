@@ -9,9 +9,9 @@ test("compile errors when ceremony reads sequence register but omits it in def",
   forget();
 
   const source = [
-    "subj name peek be ceremony def",
-    "obj this fromindex be number ya",
-    "subj name peek be ceremony prah",
+    "su name peek be ceremony def",
+    "ob this fromindex be number ya",
+    "su name peek be ceremony prah",
     "to name num target fromindex num 1 be peek do"
   ].join("\n");
 
@@ -22,8 +22,8 @@ test("compile errors when ceremony reads sequence register but omits it in def",
       await interpret(sentence);
     },
     (err) => {
-      assert.equal(err?.sentence?.subj?.name, "sequence register missing");
-      assert.match(err?.sentence?.obj?.text ?? "", /fromindex/);
+      assert.equal(err?.sentence?.su?.name, "sequence register missing");
+      assert.match(err?.sentence?.ob?.text ?? "", /fromindex/);
       return true;
     }
   );

@@ -1,13 +1,13 @@
-exists subj name alpha obj num 1 be number ya
-obj num 2 to name alpha be add do
-obj num 1 to name alpha be subtract do
-obj name alpha be write do
+exists su name alpha ob num 1 be number ya
+ob num 2 to name alpha be add do
+ob num 1 to name alpha be subtract do
+ob name alpha be write do
 
-subj name inc to name num target be ceremony def
-obj this ti to be remember to name target exists do
-obj num 3 to name target be add do
-subj name target ret
-subj name inc be ceremony prah
+su name inc to name num target be ceremony def
+ob this ti to be remember to name target exists do
+ob num 3 to name target be add do
+su name target ret
+su name inc be ceremony prah
 
 be inc to alpha do
-obj name alpha be write do
+ob name alpha be write do

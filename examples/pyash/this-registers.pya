@@ -1,6 +1,6 @@
-subj name inspector to name num seen-fromindex to name num seen-toindex be ceremony def
-exists subj name seen-fromindex obj be number ya
-exists subj name seen-toindex obj be number ya
+su name inspector to name num seen-fromindex to name num seen-toindex be ceremony def
+exists su name seen-fromindex ob be number ya
+exists su name seen-toindex ob be number ya
 this ret
-subj name inspector be ceremony prah
+su name inspector be ceremony prah
 to name sink fromindex num 2 toindex num 2 be inspector do

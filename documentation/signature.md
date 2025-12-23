@@ -34,8 +34,8 @@ type Sentence = {
   be: string;   // the verb, e.g. "add", "neuron", "twice crescent"
 
   // cases as properties; may or may not be present on a given sentence
-  subj?: any;
-  obj?: any;
+  su?: any;
+  ob?: any;
   from?: any;
   by?: any;
   fromstate?: any;
@@ -46,7 +46,7 @@ type Sentence = {
 };
 ````
 
-The important idea: the **verb** is in `be`, and **cases** are fields like `obj`, `from`, `by`, `fromstate`, `to`, etc.
+The important idea: the **verb** is in `be`, and **cases** are fields like `ob`, `from`, `by`, `fromstate`, `to`, etc.
 Names are represented simply as `{ name: "variable name" }`.
 
 This document only specifies the **signature format**; it does not dictate how the rest of the runtime works.
@@ -151,7 +151,7 @@ Signature (cases sorted: `by`, `from`, `fromstate`, `to`):
 ### 4.2. Add
 
 ```text
-obj num 3
+ob num 3
 to  name num acc
 be add
 <mood>
@@ -161,7 +161,7 @@ Signature:
 
 ```txt
 ["be","add",
- "obj","num",
+ "ob","num",
  "to","name","num"]
 ```
 
@@ -187,7 +187,7 @@ Signature:
 ### 4.4. Activation (“twice crescent”)
 
 ```text
-obj num 0
+ob num 0
 be twice crescent
 <mood>
 ```
@@ -196,7 +196,7 @@ Signature:
 
 ```txt
 ["be","twice crescent",
- "obj","num"]
+ "ob","num"]
 ```
 
 ---
@@ -272,7 +272,7 @@ Examples:
 
   ```txt
   ["be","add",
-   "obj","num",
+   "ob","num",
    "to","name","num"]
   ```
 
@@ -316,7 +316,7 @@ Examples:
 A C or C++ implementation can export functions with **the same names** so linkage and dispatch stay consistent across JS and C:
 
 ```c
-void core_add_obj_num_to_name_num(double obj, double *to);
+void core_add_obj_num_to_name_num(double ob, double *to);
 void core_divide_by_num_from_name_num_to_name_num(double by, double *from, double *to);
 void core_neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num(
     double *by,

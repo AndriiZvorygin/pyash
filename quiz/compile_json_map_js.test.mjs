@@ -13,7 +13,7 @@ test("compile json map example to javascript and run", async () => {
   const pyash = await fs.readFile("examples/pyash/json-map-write.pya", "utf8");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  const wrapped = result?.obj?.text ?? result?.value?.text ?? "";
+  const wrapped = result?.ob?.text ?? result?.value?.text ?? "";
   const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
 
   const logs = [];

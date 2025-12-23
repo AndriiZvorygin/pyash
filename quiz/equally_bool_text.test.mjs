@@ -12,19 +12,19 @@ async function run(line) {
 test("equally compares truth/lie text (true case)", async () => {
   forget();
 
-  await run("exists subj name hits obj num 0 be number ya");
-  await run("obj text truth be equally from text truth then obj num 1 to name hits be add do");
+  await run("exists su name hits ob num 0 be number ya");
+  await run("ob text truth be equally from text truth then ob num 1 to name hits be add do");
 
   const hits = remember("hits");
-  assert.equal(hits.obj.num, 1);
+  assert.equal(hits.ob.num, 1);
 });
 
 test("equally compares truth/lie text (false case)", async () => {
   forget();
 
-  await run("exists subj name hits obj num 0 be number ya");
-  await run("obj text truth be equally from text lie then obj num 1 to name hits be add do");
+  await run("exists su name hits ob num 0 be number ya");
+  await run("ob text truth be equally from text lie then ob num 1 to name hits be add do");
 
   const hits = remember("hits");
-  assert.equal(hits.obj.num, 0);
+  assert.equal(hits.ob.num, 0);
 });

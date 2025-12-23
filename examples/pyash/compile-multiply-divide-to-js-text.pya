@@ -1,7 +1,7 @@
-exists subj name output be javascript ya
+exists su name output be javascript ya
 from text quoted.pyash.
-exists subj name collector obj num 10 be number ya
-obj num 3 to name collector be multiply do
-obj num 2 to name collector be divide do
+exists su name collector ob num 10 be number ya
+ob num 3 to name collector be multiply do
+ob num 2 to name collector be divide do
 .pyash.quoted to state javascript to name output be compile do
-subj name output be javascript que
+su name output be javascript que

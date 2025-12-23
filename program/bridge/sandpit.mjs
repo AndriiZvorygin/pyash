@@ -15,14 +15,14 @@ function resolveGenitiveValue(genitive, { state, memory } = {}) {
     }
     if (curr && typeof curr === "object" && curr.name && memory) {
       const fact = memory.remember(curr.name);
-      if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+      if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
     }
     if (curr == null) break;
     if (curr && typeof curr === "object") {
-      if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-        curr = curr.obj.map[part];
-      } else if (curr.obj && curr.obj[part] !== undefined) {
-        curr = curr.obj[part];
+      if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+        curr = curr.ob.map[part];
+      } else if (curr.ob && curr.ob[part] !== undefined) {
+        curr = curr.ob[part];
       } else {
         curr = curr[part];
       }
@@ -128,21 +128,21 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   }
 
   const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
-  const returnVal = lastResult?.value ?? lastResult?.obj;
-  const mergedObj = returnVal ?? finalEvoke.obj;
+  const returnVal = lastResult?.value ?? lastResult?.ob;
+  const mergedObj = returnVal ?? finalEvoke.ob;
   const mergedBe = finalEvoke.be || "result";
 
   if (mergedObj !== undefined) {
     const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
-    const evokeWithResult = { ...(state.currentEvokeRef || finalEvoke), obj: normalizedObj };
+    const evokeWithResult = { ...(state.currentEvokeRef || finalEvoke), ob: normalizedObj };
     memory.doRemember(evokeWithResult);
 
-    const targetName = evokeWithResult.to?.name ?? updatedTarget?.subj?.name;
+    const targetName = evokeWithResult.to?.name ?? updatedTarget?.su?.name;
     if (targetName) {
-      const targetObj = updatedTarget?.obj ?? normalizedObj;
+      const targetObj = updatedTarget?.ob ?? normalizedObj;
       const targetBe = updatedTarget?.be ?? mergedBe;
-      memory.doRemember({ subj: { name: targetName }, obj: targetObj, be: targetBe, mood: "ya" });
-      memory.doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+      memory.doRemember({ su: { name: targetName }, ob: targetObj, be: targetBe, mood: "ya" });
+      memory.doRemember({ su: { name: "result" }, ob: normalizedObj, be: mergedBe, mood: "ya" });
     }
 
     state.currentEvoke = prevEvoke;
@@ -201,15 +201,15 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
 
   // merge updates from sandpit
   const mainTarget = to?.name ? memory.remember(to.name) : null;
-  const lastVal = lastResult?.value ?? lastResult?.obj;
+  const lastVal = lastResult?.value ?? lastResult?.ob;
   const returnValue =
-    lastVal && typeof lastVal === "object" && lastVal.obj !== undefined ? lastVal.obj : lastVal;
+    lastVal && typeof lastVal === "object" && lastVal.ob !== undefined ? lastVal.ob : lastVal;
   const preferredVal =
     returnValue && typeof returnValue === "object" && returnValue.num === undefined && returnValue.mood
-      ? returnValue.obj ?? undefined // evoker-like; take its obj if present
+      ? returnValue.ob ?? undefined // evoker-like; take its ob if present
       : returnValue;
   const numericSignature = signatureImpliesNumeric(defSigWords);
-  const mergedObj = preferredVal ?? updatedTarget?.obj ?? mainTarget?.obj ?? evoke.obj;
+  const mergedObj = preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob;
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
   const mergedBe = evoke.be || updatedTarget?.be || "result";
 
@@ -219,12 +219,12 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
 
   if (mergedObj !== undefined || preferredVal !== undefined) {
     const normalizedObj = typeof effectiveObj === "object" ? effectiveObj : { num: effectiveObj };
-    const updatedEvoke = { ...evoke, obj: normalizedObj };
+    const updatedEvoke = { ...evoke, ob: normalizedObj };
     memory.doRemember(updatedEvoke);
 
     if (to?.name) {
-      memory.doRemember({ subj: { name: to.name }, obj: normalizedObj, be: mergedBe, mood: "ya" });
-      memory.doRemember({ subj: { name: "result" }, obj: normalizedObj, be: mergedBe, mood: "ya" });
+      memory.doRemember({ su: { name: to.name }, ob: normalizedObj, be: mergedBe, mood: "ya" });
+      memory.doRemember({ su: { name: "result" }, ob: normalizedObj, be: mergedBe, mood: "ya" });
     }
   } else {
     memory.doRemember(evoke);

@@ -4,8 +4,8 @@ function resolveNumber(v, remember) {
   if (typeof v.num === "number") return v.num;
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (typeof found?.obj?.num === "number") return found.obj.num;
-    if (typeof found?.obj === "number") return found.obj;
+    if (typeof found?.ob?.num === "number") return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
   }
   return undefined;
 }
@@ -17,11 +17,11 @@ function getOperand(v, label, remember) {
 }
 
 export async function divide_by_num_from_name_num_to_name_num(sentence, { remember }) {
-  const numerator = getOperand(sentence.obj ?? sentence.from, "obj", remember);
+  const numerator = getOperand(sentence.ob ?? sentence.from, "ob", remember);
   const denominator = getOperand(sentence.by, "by", remember);
   if (denominator === 0) throw new Error("divide: by cannot be zero");
 
-  return { obj: numerator / denominator, be: sentence?.be ?? "number" };
+  return { ob: numerator / denominator, be: sentence?.be ?? "number" };
 }
 
 // Backwards-compatible export until dispatch switches to signature names.
@@ -33,19 +33,19 @@ export const signatures = [
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "num", "obj", "num"],
+    signatureWords: ["be", "divide", "by", "num", "ob", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "num", "obj", "name", "num"],
+    signatureWords: ["be", "divide", "by", "num", "ob", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "name", "num", "obj", "num"],
+    signatureWords: ["be", "divide", "by", "name", "num", "ob", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "name", "num", "obj", "name", "num"],
+    signatureWords: ["be", "divide", "by", "name", "num", "ob", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
@@ -57,15 +57,15 @@ export const signatures = [
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "obj", "num"],
+    signatureWords: ["be", "divide", "ob", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "obj", "name", "num"],
+    signatureWords: ["be", "divide", "ob", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "num", "obj", "name", "num", "to", "name", "num"],
+    signatureWords: ["be", "divide", "by", "num", "ob", "name", "num", "to", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
@@ -73,7 +73,7 @@ export const signatures = [
     handler: divide_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "divide", "by", "name", "num", "obj", "num", "to", "name", "num"],
+    signatureWords: ["be", "divide", "by", "name", "num", "ob", "num", "to", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
   }
 ];

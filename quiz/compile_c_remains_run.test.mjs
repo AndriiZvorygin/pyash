@@ -22,14 +22,14 @@ test("compile to C: remains uses fmod and write prints it (gcc + run)", async ()
   forget();
 
   const pyash = [
-    "exists subj name x obj num 10 be number ya",
-    "obj num 3 to name x be remains do",
-    "obj name x be write do",
+    "exists su name x ob num 10 be number ya",
+    "ob num 3 to name x be remains do",
+    "ob name x be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");

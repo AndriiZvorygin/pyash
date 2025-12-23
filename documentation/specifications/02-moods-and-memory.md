@@ -4,7 +4,7 @@
 Define mood behavior (`ya`, `do`, `def`, `prah`, `then`) and memory rules.
 
 ## 2. Terms
-- memory: last-write-wins store of sentences keyed by `subj name`.
+- memory: last-write-wins store of sentences keyed by `su name`.
 - sandpit: temporary memory context used while running ceremonies/loops.
 - exists: declaration flag on `ya` sentences.
 

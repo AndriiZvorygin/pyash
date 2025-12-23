@@ -44,15 +44,15 @@ export function sentenceToPyash(s = {}) {
     parts.push("exists");
   }
 
-  if (s.subj) {
-    parts.push("subj");
-    const np = npToPyash(s.subj);
+  if (s.su) {
+    parts.push("su");
+    const np = npToPyash(s.su);
     if (np) parts.push(np.split(" "));
   }
 
-  if (s.obj) {
-    parts.push("obj");
-    const np = npToPyash(s.obj);
+  if (s.ob) {
+    parts.push("ob");
+    const np = npToPyash(s.ob);
     if (np) parts.push(np.split(" "));
   }
 

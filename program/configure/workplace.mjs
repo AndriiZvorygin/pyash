@@ -27,14 +27,14 @@ function extractInputs(sentence) {
   return [];
 }
 
-// Topological order by subj.name dependencies
+// Topological order by su.name dependencies
 function orderSentences(sentences) {
   const deps = new Map();
   const allNames = new Set();
 
   for (const s of sentences) {
-    const name = s.subj?.name;
-    if (!name) throw new Error("Every workflow sentence must have subj.name");
+    const name = s.su?.name;
+    if (!name) throw new Error("Every workflow sentence must have su.name");
 
     allNames.add(name);
     deps.set(name, extractInputs(s));
@@ -67,11 +67,11 @@ function orderSentences(sentences) {
   return order;
 }
 
-// Lookup convenience: return the stored value for a subj.name
+// Lookup convenience: return the stored value for a su.name
 function valueOf(name) {
   const fact = remember(name);
   if (!fact) return undefined;
-  return fact.value ?? fact.obj ?? fact.result ?? fact; // be generous for now
+  return fact.value ?? fact.ob ?? fact.result ?? fact; // be generous for now
 }
 
 // Main entry
@@ -84,11 +84,11 @@ export async function runWorkflow(workflow) {
   // Reset Pyash memory for a clean run
   forget();
 
-  // Index by subj.name
+  // Index by su.name
   const byName = new Map();
   for (const s of sentences) {
-    const name = s.subj?.name;
-    if (!name) throw new Error("Each sentence must have subj.name");
+    const name = s.su?.name;
+    if (!name) throw new Error("Each sentence must have su.name");
     byName.set(name, s);
   }
 

@@ -7,18 +7,18 @@ import { interpret } from "../program/bridge/index.mjs";
 
 test("compile at all map writes back per-element ceremony mutations", async () => {
   const pyash = [
-    "exists subj name values obj ve num 1 2 3 be vector ya",
-    "subj name bump obj name num value be ceremony def",
-    "subj name val obj this obj be number ya",
-    "obj num 1 be add do",
-    "subj name val ret",
-    "subj name bump be ceremony prah",
-    "obj name values at name all be bump do"
+    "exists su name values ob ve num 1 2 3 be vector ya",
+    "su name bump ob name num value be ceremony def",
+    "su name val ob this ob be number ya",
+    "ob num 1 be add do",
+    "su name val ret",
+    "su name bump be ceremony prah",
+    "ob name values at name all be bump do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  let js = result?.ob?.text ?? result?.value?.text ?? "";
   if (js.startsWith("quoted.javascript.")) js = js.slice("quoted.javascript.".length);
   if (js.endsWith(".javascript.quoted")) js = js.slice(0, -".javascript.quoted".length);
   js = js.trim();
@@ -27,6 +27,6 @@ test("compile at all map writes back per-element ceremony mutations", async () =
   vm.runInNewContext(js, sandbox);
 
   const vec = sandbox.values ?? sandbox.globalThis?.values;
-  const values = Array.from(vec?.obj?.ve?.values ?? []);
+  const values = Array.from(vec?.ob?.ve?.values ?? []);
   assert.deepEqual(values, [2, 3, 4]);
 });

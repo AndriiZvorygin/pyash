@@ -14,7 +14,7 @@ export function vectorFormatHelper() {
     "}",
     "function formatVectorSentence(name, vec) {",
     "  const v = vec || {};",
-    "  return `subj name ${name} obj ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
+    "  return `su name ${name} ob ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
     "}"
   ].join("\n");
 }

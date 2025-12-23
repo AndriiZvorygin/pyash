@@ -6,28 +6,28 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name file be read from filename "test/sandpit/compile.txt" do
+  su name file be read from filename "test/sandpit/compile.txt" do
   mem
   ```
 - **Expected output**:
   ```
-  → { "value": { "text": "subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya" } }
+  → { "value": { "text": "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" } }
   Memory: [
     {
-      "subj": { "name": "file" },
+      "su": { "name": "file" },
       "be": "read",
       "from": { "filename": "test/sandpit/compile.txt" },
       "mood": "do"
     },
     {
-      "subj": { "name": "file" },
+      "su": { "name": "file" },
       "be": "text",
-      "obj": { "text": "subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya" },
+      "ob": { "text": "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" },
       "mood": "ya"
     },
     {
-      "subj": { "name": "result" },
-      "obj": { "text": "subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya" },
+      "su": { "name": "result" },
+      "ob": { "text": "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" },
       "be": "text",
       "mood": "ya"
     }

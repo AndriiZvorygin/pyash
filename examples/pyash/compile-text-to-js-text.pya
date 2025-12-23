@@ -1,6 +1,6 @@
-exists subj name output be javascript ya
+exists su name output be javascript ya
 from text quoted.pyash.
-exists subj name alpha obj num 1 be permanent number ya
-exists subj name beta obj text hello be permanent text ya
+exists su name alpha ob num 1 be permanent number ya
+exists su name beta ob text hello be permanent text ya
 .pyash.quoted to state javascript to name output be compile do
-subj name output be javascript que
+su name output be javascript que

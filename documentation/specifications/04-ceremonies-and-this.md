@@ -9,7 +9,7 @@ Define ceremony definition/invocation, `this` access, and return behavior.
 - register: loop/map fields on the evoker (`fromindex`, `toindex`, `atindex`, `by`).
 
 ## 3. Rules (normative)
-- A ceremony is defined by `subj name X be ceremony def` and closed by `subj name X be ceremony prah`.
+- A ceremony is defined by `su name X be ceremony def` and closed by `su name X be ceremony prah`.
 - The evoker’s signature must match the ceremony’s signature (sequence registers are allowed on the evoker even if omitted in the definition).
 - `this` refers to the evoker sentence inside the ceremony body.
 - If a ceremony is defined more than once, the later definition takes priority (emit a compile-time warning).

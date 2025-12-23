@@ -21,7 +21,7 @@ function unwrapQuoted(text, lang) {
 async function compileToJs(pyash) {
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  return unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "javascript");
+  return unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "javascript");
 }
 
 async function runJs(source) {
@@ -37,9 +37,9 @@ async function runJs(source) {
 test("compile JS supports write to vector element", async () => {
   forget();
   const pyash = [
-    "exists subj name values obj ve num 10 20 30 be vector ya",
-    "obj num 99 to name values at num 1 be write do",
-    "obj ve of values be write do"
+    "exists su name values ob ve num 10 20 30 be vector ya",
+    "ob num 99 to name values at num 1 be write do",
+    "ob ve of values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);

@@ -2,7 +2,7 @@ import { remember } from "../remember/index.mjs";
 
 // Resolve "this" references inside a ceremony to fields on the current evoke sentence.
 // Supports patterns like:
-//   subj name acc obj this obj be number ya
+//   su name acc ob this ob be number ya
 // Returns an object suitable to use as the bound value (e.g., { num: 5 }).
 export function resolveThisValue(target, evoke) {
   if (!target) return null;

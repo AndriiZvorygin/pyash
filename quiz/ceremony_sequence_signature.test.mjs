@@ -18,10 +18,10 @@ test("evoker can supply sequence registers even if def omits them", async () => 
   forget();
 
   const defLines = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name climb to name num counter be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name climb be ceremony prah"
+    "exists su name counter ob num 0 be number ya",
+    "su name climb to name num counter be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name climb be ceremony prah"
   ];
   await run(defLines);
 
@@ -30,16 +30,16 @@ test("evoker can supply sequence registers even if def omits them", async () => 
 
   const counter = remember("counter");
   assert.ok(counter, "counter should be remembered");
-  assert.equal(counter.obj.num, 2);
+  assert.equal(counter.ob.num, 2);
 });
 
 test("ceremony must declare sequence registers it reads via this", async () => {
   forget();
 
   const defLines = [
-    "subj name peek be ceremony def",
-    "obj this fromindex be number ya",
-    "subj name peek be ceremony prah"
+    "su name peek be ceremony def",
+    "ob this fromindex be number ya",
+    "su name peek be ceremony prah"
   ];
 
   await assert.rejects(
@@ -47,8 +47,8 @@ test("ceremony must declare sequence registers it reads via this", async () => {
       await run(defLines);
     },
     (err) => {
-      assert.equal(err?.sentence?.subj?.name, "sequence register missing");
-      assert.match(err?.sentence?.obj?.text ?? "", /fromindex/);
+      assert.equal(err?.sentence?.su?.name, "sequence register missing");
+      assert.match(err?.sentence?.ob?.text ?? "", /fromindex/);
       return true;
     }
   );

@@ -15,5 +15,5 @@ test("insertion sort sorts numeric vector in interpreter", async () => {
   }
 
   const values = remember("values");
-  assert.deepEqual(values?.obj?.ve?.values, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(values?.ob?.ve?.values, [1, 2, 3, 4, 5, 6]);
 });

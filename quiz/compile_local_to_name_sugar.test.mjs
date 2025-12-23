@@ -10,26 +10,26 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
   forget();
 
   const pyash = [
-    "exists subj name values obj ve num 0 0 0 be vector ya",
-    // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.obj.num in JS.
-    "subj name bumpIndex by num 0 obj name num value atindex num 0 be ceremony def",
-    "subj name door obj this atindex be number ya",
-    "obj num 1 to door be add do",
-    "obj num of obj of door from num of by of this to name rem be remains do",
-    "obj name rem be equally from num 0 then obj num 1 to this ti obj ti num be add do",
-    "subj name bumpIndex be ceremony prah",
+    "exists su name values ob ve num 0 0 0 be vector ya",
+    // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.ob.num in JS.
+    "su name bumpIndex by num 0 ob name num value atindex num 0 be ceremony def",
+    "su name door ob this atindex be number ya",
+    "ob num 1 to door be add do",
+    "ob num of ob of door from num of by of this to name rem be remains do",
+    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be add do",
+    "su name bumpIndex be ceremony prah",
     // Apply once: pass=1 toggles every element by +1
-    "be bumpIndex obj name values by num 1 at name all do"
+    "be bumpIndex ob name values by num 1 at name all do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  let js = result?.obj?.text ?? result?.value?.text ?? "";
+  let js = result?.ob?.text ?? result?.value?.text ?? "";
   js = js.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
 
   const sandbox = { console: { log: () => {} } };
   vm.runInNewContext(js, sandbox);
 
   const vec = sandbox.values ?? sandbox.globalThis?.values;
-  assert.deepEqual(Array.from(vec?.obj?.ve?.values ?? []), [1, 1, 1]);
+  assert.deepEqual(Array.from(vec?.ob?.ve?.values ?? []), [1, 1, 1]);
 });

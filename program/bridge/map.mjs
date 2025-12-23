@@ -3,7 +3,7 @@ import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSig
 
 // Generic vector map/foreach helper for "at all" sugar.
 // - resolveObjVec: (sentence) => { values: [], name?: string }
-// - writeResult: (sentence, outVec) => void (writes to .to if present, else back to .obj target)
+// - writeResult: (sentence, outVec) => void (writes to .to if present, else back to .ob target)
 // - exec: (be, sentence) => result from handler/ceremony
 export async function runAtAll({
   sentence,
@@ -33,9 +33,9 @@ export async function runAtAll({
       if (typeof resolved === "number") base.by = { num: resolved };
     }
   }
-  const vecFact = remember(base.obj?.name ?? base.obj?.vec?.name ?? base.obj?.name?.name ?? base.obj);
-  const vecValues = vecFact?.obj?.ve?.values;
-  if (!Array.isArray(vecValues)) throw new Error("at all: obj must resolve to a vector");
+  const vecFact = remember(base.ob?.name ?? base.ob?.vec?.name ?? base.ob?.name?.name ?? base.ob);
+  const vecValues = vecFact?.ob?.ve?.values;
+  if (!Array.isArray(vecValues)) throw new Error("at all: ob must resolve to a vector");
 
   const out = [];
 
@@ -58,23 +58,23 @@ export async function runAtAll({
     if (isPrimitive) {
       // reuse single-element handler by setting at:num and providing the element value
       const elemValue = vecValues[i];
-      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
-      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
-      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
-      else elemSentence.obj = elemValue ?? {};
+      if (typeof elemValue === "number") elemSentence.ob = { num: elemValue };
+      else if (typeof elemValue === "string") elemSentence.ob = { text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.ob = { boolean: elemValue };
+      else elemSentence.ob = elemValue ?? {};
       elemSentence.at = { num: i };
       const res = await interpret(elemSentence);
-      if (res?.obj !== undefined) resultObj = res.obj;
+      if (res?.ob !== undefined) resultObj = res.ob;
       if (res?.value !== undefined) resultObj = res.value;
       if (res?.result !== undefined) resultObj = res.result;
-      if (resultObj === undefined) resultObj = elemSentence.obj;
+      if (resultObj === undefined) resultObj = elemSentence.ob;
     } else {
       state.lastCondition = true;
       const elemValue = vecValues[i];
-      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
-      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
-      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
-      else elemSentence.obj = elemValue ?? {};
+      if (typeof elemValue === "number") elemSentence.ob = { num: elemValue };
+      else if (typeof elemValue === "string") elemSentence.ob = { text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.ob = { boolean: elemValue };
+      else elemSentence.ob = elemValue ?? {};
       const prevEvoke = state.currentEvoke;
       const prevEvokeRef = state.currentEvokeRef;
       state.currentEvoke = elemSentence;
@@ -83,10 +83,10 @@ export async function runAtAll({
       state.currentEvoke = prevEvoke;
       state.currentEvokeRef = prevEvokeRef;
       if (res?.value !== undefined) resultObj = res.value;
-      if (res?.obj !== undefined) resultObj = res.obj;
+      if (res?.ob !== undefined) resultObj = res.ob;
       if (res?.result !== undefined) resultObj = res.result;
-      if (resultObj === undefined && elemSentence.obj !== undefined) {
-        resultObj = elemSentence.obj;
+      if (resultObj === undefined && elemSentence.ob !== undefined) {
+        resultObj = elemSentence.ob;
       }
     }
 
@@ -103,22 +103,22 @@ export async function runAtAll({
 
   // write result vector
   if (base.to?.name) {
-    const dest = { subj: { name: base.to.name }, be: "vector", obj: { ve: { values: out } }, mood: "ya" };
+    const dest = { su: { name: base.to.name }, be: "vector", ob: { ve: { values: out } }, mood: "ya" };
     return dest;
   }
 
-  // in-place back to obj target
-  if (base.obj?.name) {
+  // in-place back to ob target
+  if (base.ob?.name) {
     // Prefer mutating the remembered fact in-place when available. This matters for loop sandpits:
     // the sandpit memory context is a shallow copy, so in-place mutations persist back to main.
-    if (vecFact?.obj?.ve) {
-      vecFact.obj.ve.values = out;
+    if (vecFact?.ob?.ve) {
+      vecFact.ob.ve.values = out;
       vecFact.mood = vecFact.mood ?? "ya";
       vecFact.be = vecFact.be ?? "vector";
       return vecFact;
     }
-    return { subj: { name: base.obj.name }, be: "vector", obj: { ve: { values: out } }, mood: "ya" };
+    return { su: { name: base.ob.name }, be: "vector", ob: { ve: { values: out } }, mood: "ya" };
   }
 
-  throw new Error("at all: target not assignable (obj must be a name)");
+  throw new Error("at all: target not assignable (ob must be a name)");
 }

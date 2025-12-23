@@ -6,38 +6,38 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name collector obj num 7 be number ya
-  obj num 2 to name collector be add do
-  subj name collector obj what que
+  su name collector ob num 7 be number ya
+  ob num 2 to name collector be add do
+  su name collector ob what que
   mem
   ```
 - **Expected output**:
   ```
   → { "stored": "collector" }
   → { "acted": "collector", "value": 9 }
-  → "subj name collector obj num 9 be number ya"
+  → "su name collector ob num 9 be number ya"
   Memory: [
     {
-      "subj": { "name": "collector" },
-      "obj": { "num": 7 },
+      "su": { "name": "collector" },
+      "ob": { "num": 7 },
       "be": "number",
       "mood": "ya"
     },
     {
-      "obj": { "num": 2 },
+      "ob": { "num": 2 },
       "to": { "name": "collector" },
       "be": "add",
       "mood": "do"
     },
     {
-      "subj": { "name": "collector" },
+      "su": { "name": "collector" },
       "be": "number",
-      "obj": { "num": 9 },
+      "ob": { "num": 9 },
       "mood": "ya"
     },
     {
-      "subj": { "name": "result" },
-      "obj": { "num": 9 },
+      "su": { "name": "result" },
+      "ob": { "num": 9 },
       "be": "add",
       "mood": "ya"
     }

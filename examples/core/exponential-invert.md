@@ -6,15 +6,15 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  obj num 2 from num 3 to name variable be exponential do
-  subj name variable obj what que
+  ob num 2 from num 3 to name variable be exponential do
+  su name variable ob what que
   reset
-  obj num 3 be invert do
-  subj name result obj what que
+  ob num 3 be invert do
+  su name result ob what que
   ```
 - **Expected output**:
   ```
-  subj name variable obj num 8 be number ya
-  subj name result obj num -3 be number ya
+  su name variable ob num 8 be number ya
+  su name result ob num -3 be number ya
   ```
-- **Notes**: `exponential` computes `obj^from` (base in `obj`, exponent in `from`); `invert` negates the provided operand. Both store a `result` fact and update any addressed target.
+- **Notes**: `exponential` computes `ob^from` (base in `ob`, exponent in `from`); `invert` negates the provided operand. Both store a `result` fact and update any addressed target.

@@ -56,7 +56,7 @@ function adjustDefinitionIndices(removedIdx) {
 export function doRemember(sentence) {
   if (!sentence) return;
 
-  const subjName = sentence.subj?.name;
+  const subjName = sentence.su?.name;
   const isDef = sentence.mood === "def";
   const isPrah = sentence.mood === "prah";
 
@@ -74,7 +74,7 @@ export function doRemember(sentence) {
   if (!isSandpit && subjName && !isDef && !isPrah && sentence.mood !== "then") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
-      if (existing.subj?.name !== subjName) continue;
+      if (existing.su?.name !== subjName) continue;
       if (existing.mood === "def" || existing.mood === "prah") break;
       if (isInsideDefinition(i)) continue; // protect entries recorded inside def/prah blocks
       memory.splice(i, 1);
@@ -103,7 +103,7 @@ export function remember(name) {
   if (!name) return undefined;
   for (let i = memory.length - 1; i >= 0; i--) {
     const s = memory[i];
-    if (s.subj?.name === name) return s;
+    if (s.su?.name === name) return s;
   }
   return undefined;
 }

@@ -56,17 +56,17 @@ Internally, the runtime stores at least:
 Direct call:
 
 ```pyash
-su question obj discourse "Hello" to generator be mind do
+su question ob discourse "Hello" to generator be mind do
 ```
 
 Via `say`:
 
 ```pyash
-be say obj text "Hello" to generator do
+be say ob text "Hello" to generator do
 ```
 
 Relevant compositional cases at call time:
-- `obj` holds the user text (`obj text` or `obj discourse`).
+- `ob` holds the user text (`ob text` or `ob discourse`).
 - `to name <mind>` selects which mind to call.
 - Optional `by num N` could override window per call (not yet wired; config-level `by num` is used).
 
@@ -80,10 +80,10 @@ Relevant compositional cases at call time:
 
    * optional `system` message from `via discourse`.
    * interleaved `user` / `assistant` messages from history.
-   * current `user` message from `obj` text.
+   * current `user` message from `ob` text.
 4. Send a `POST /api/chat` to Ollama with `stream: false`.
 5. Store the reply into `memory` as new facts.
-6. Return `{ obj: { text: <reply>, model: <model_name> } }` to the caller.
+6. Return `{ ob: { text: <reply>, model: <model_name> } }` to the caller.
 
 ---
 
@@ -99,7 +99,7 @@ The runtime derives context from `memory`. For each mind `<M>`:
   {
     "mood": "do",
     "be": "say",
-    "obj": { "name": "<user text>" },
+    "ob": { "name": "<user text>" },
     "to":  { "name": "<M>" }
   }
   ```
@@ -111,16 +111,16 @@ The runtime derives context from `memory`. For each mind `<M>`:
   ```jsonc
   {
     "mood": "ya",
-    "subj": { "name": "<M>" },
+    "su": { "name": "<M>" },
     "be": "mind",
-    "obj": {
+    "ob": {
       "text": "<llm reply>",
       "model": "qwen3-vl:8b-instruct"
     }
   }
   ```
 
-  A secondary form uses `subj: "result"` with `be: "say"` and the same `obj.text`. Both map to `role: "assistant"` for context building.
+  A secondary form uses `su: "result"` with `be: "say"` and the same `ob.text`. Both map to `role: "assistant"` for context building.
 
 ### History stitching
 
@@ -151,7 +151,7 @@ When implemented, this `historyMessages[]` array feeds directly into `messages[]
 
 ### Caller-provided context
 
-Callers may also embed their own context inside the current `obj` text or other fields. The automatic history stitching runs in addition to any explicit context the caller supplies.
+Callers may also embed their own context inside the current `ob` text or other fields. The automatic history stitching runs in addition to any explicit context the caller supplies.
 
 ---
 
@@ -175,7 +175,7 @@ Content-Type: application/json
     { "role": "assistant", "content": "earlier assistant reply 1" },
     // ...
     // current call:
-    { "role": "user",      "content": "<current obj text>" }
+    { "role": "user",      "content": "<current ob text>" }
   ],
   "options": {
     "num_ctx": 8192
@@ -212,15 +212,15 @@ Example:
   "mood": "do",
   "be": "say",
   "to":  { "name": "generator" },
-  "obj": { "name": "<current obj text>" }
+  "ob": { "name": "<current ob text>" }
 }
 
 // Mind → user (main record)
 {
   "mood": "ya",
-  "subj": { "name": "generator" },
+  "su": { "name": "generator" },
   "be": "mind",
-  "obj": {
+  "ob": {
     "text":  "<llm reply text>",
     "model": "qwen3-vl:8b-instruct"
   }
@@ -232,9 +232,9 @@ A secondary “result” fact may mirror the reply for downstream use:
 ```jsonc
 {
   "mood": "ya",
-  "subj": { "name": "result" },
+  "su": { "name": "result" },
   "be": "say",
-  "obj": {
+  "ob": {
     "text":  "<llm reply text>",
     "model": "qwen3-vl:8b-instruct"
   }
@@ -252,7 +252,7 @@ These facts serve both as a queryable log and as the source for automatic contex
 * Uses `motor/ollama.mjs`.
 * Builds `messages[]` as described above.
 * Uses `fetch` or an equivalent HTTP client to call `POST /api/chat`.
-* Stores reply facts and returns `{ obj: { text, model } }` to the REPL.
+* Stores reply facts and returns `{ ob: { text, model } }` to the REPL.
 
 ### Compiled JS
 

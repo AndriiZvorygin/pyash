@@ -5,14 +5,14 @@ import vm from "node:vm";
 import { buildProgram } from "../program/program.mjs";
 import { transpileProgram } from "../program/verbs/exchange/compile.mjs";
 
-test("compile uses genitive num of obj of this without remember", async () => {
+test("compile uses genitive num of ob of this without remember", async () => {
   const program = [
-    "exists subj name bucket obj num 1 be number ya",
-    "subj name bump be ceremony def",
-    "obj num 2 to num of obj of this be add do",
-    "subj name bump be ceremony prah",
-    "subj name evoker obj name bucket be bump do",
-    "obj name bucket be write do"
+    "exists su name bucket ob num 1 be number ya",
+    "su name bump be ceremony def",
+    "ob num 2 to num of ob of this be add do",
+    "su name bump be ceremony prah",
+    "su name evoker ob name bucket be bump do",
+    "ob name bucket be write do"
   ].join("\n");
 
   const js = transpileProgram(buildProgram(program).sentences, { lang: "javascript" })
@@ -20,24 +20,24 @@ test("compile uses genitive num of obj of this without remember", async () => {
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
   assert.doesNotMatch(js, /remember\(sentence\.to/);
-  assert.match(js, /sentence\.obj\.num = \(sentence\.obj\.num \?\? 0\) \+ 2/);
+  assert.match(js, /sentence\.ob\.num = \(sentence\.ob\.num \?\? 0\) \+ 2/);
 
   const logs = [];
   const sandbox = { console: { log: v => logs.push(v) } };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(js, sandbox);
 
-  assert.equal(logs.at(-1)?.obj?.num ?? logs.at(-1), 3);
+  assert.equal(logs.at(-1)?.ob?.num ?? logs.at(-1), 3);
 });
 
-test("compile uses genitive this ti obj ti num without remember", async () => {
+test("compile uses genitive this ti ob ti num without remember", async () => {
   const program = [
-    "exists subj name bucket obj num 1 be number ya",
-    "subj name bump be ceremony def",
-    "obj num 2 to this ti obj ti num be add do",
-    "subj name bump be ceremony prah",
-    "subj name evoker obj name bucket be bump do",
-    "obj name bucket be write do"
+    "exists su name bucket ob num 1 be number ya",
+    "su name bump be ceremony def",
+    "ob num 2 to this ti ob ti num be add do",
+    "su name bump be ceremony prah",
+    "su name evoker ob name bucket be bump do",
+    "ob name bucket be write do"
   ].join("\n");
 
   const js = transpileProgram(buildProgram(program).sentences, { lang: "javascript" })
@@ -45,12 +45,12 @@ test("compile uses genitive this ti obj ti num without remember", async () => {
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
   assert.doesNotMatch(js, /remember\(sentence\.to/);
-  assert.match(js, /sentence\.obj\.num = \(sentence\.obj\.num \?\? 0\) \+ 2/);
+  assert.match(js, /sentence\.ob\.num = \(sentence\.ob\.num \?\? 0\) \+ 2/);
 
   const logs = [];
   const sandbox = { console: { log: v => logs.push(v) } };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(js, sandbox);
 
-  assert.equal(logs.at(-1)?.obj?.num ?? logs.at(-1), 3);
+  assert.equal(logs.at(-1)?.ob?.num ?? logs.at(-1), 3);
 });

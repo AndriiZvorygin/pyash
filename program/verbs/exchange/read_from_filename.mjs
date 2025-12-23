@@ -5,5 +5,5 @@ export default async function readFromFilename({ from }) {
   if (!filename) throw new Error("read_from_filename: filename is required");
 
   const text = await fs.readFile(filename, "utf8");
-  return { obj: { text } };
+  return { ob: { text } };
 }

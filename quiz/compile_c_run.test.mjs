@@ -22,13 +22,13 @@ test("compile to C: declare number and write it (gcc + run)", async () => {
   forget();
 
   const pyash = [
-    "exists subj name x obj num 3 be number ya",
-    "obj name x be write do",
+    "exists su name x ob num 3 be number ya",
+    "ob name x be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");

@@ -13,10 +13,10 @@ async function run(line) {
 test("ceremony runs in sandpit and merges results to main memory only", async () => {
   forget();
 
-  await run("subj name target obj num 1 be number ya");
-  await run("subj name incrementer to name num target be ceremony def");
-  await run("obj num 2 to name target be add do");
-  await run("subj name incrementer be ceremony prah");
+  await run("su name target ob num 1 be number ya");
+  await run("su name incrementer to name num target be ceremony def");
+  await run("ob num 2 to name target be add do");
+  await run("su name incrementer be ceremony prah");
 
   await run("to name target be incrementer do");
 
@@ -26,14 +26,14 @@ test("ceremony runs in sandpit and merges results to main memory only", async ()
   const result = remember("result");
 
   assert.ok(target);
-  assert.equal(target.obj.num, 3, "merged result should update target");
+  assert.equal(target.ob.num, 3, "merged result should update target");
   assert.ok(result);
-  assert.equal(result.obj.num, 3, "result fact should reflect merged update");
+  assert.equal(result.ob.num, 3, "result fact should reflect merged update");
 
   const sandpit = pits.at(-1);
   assert.ok(sandpit, "sandpit trace should be recorded");
   assert.ok(
-    !mem.some(s => s.mood === "def" && s.subj?.name === "incrementer" && s.be === "ceremony" && s.fromSandpit),
+    !mem.some(s => s.mood === "def" && s.su?.name === "incrementer" && s.be === "ceremony" && s.fromSandpit),
     "no sandpit body facts should leak into main memory"
   );
 });

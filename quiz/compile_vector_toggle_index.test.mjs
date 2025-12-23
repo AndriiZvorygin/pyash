@@ -27,7 +27,7 @@ test("compile toggles vector element and logs updated values", async () => {
     const veIndex = tokens.indexOf("ve");
     if (veIndex !== -1 && tokens.length > veIndex + 1) {
       const afterType = tokens.slice(veIndex + 2);
-      const stop = afterType.findIndex((tok) => ["be", "subj", "obj", "to", "from", "then", "ya", "do", "ret"].includes(tok));
+      const stop = afterType.findIndex((tok) => ["be", "su", "ob", "to", "from", "then", "ya", "do", "ret"].includes(tok));
       values = stop === -1 ? afterType : afterType.slice(0, stop);
     }
   }

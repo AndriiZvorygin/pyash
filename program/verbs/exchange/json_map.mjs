@@ -97,21 +97,21 @@ export function jsonToMapSentences(value, rootName, { existingNames = [] } = {})
   const used = new Set(existingNames);
   const sentences = [];
 
-  const emitMap = (obj, name) => {
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+  const emitMap = (ob, name) => {
+    if (!ob || typeof ob !== "object" || Array.isArray(ob)) {
       throw new Error("json map contents defective: object expected");
     }
     const map = {};
-    for (const [key, val] of Object.entries(obj)) {
+    for (const [key, val] of Object.entries(ob)) {
       const objValue = jsonValueToObj(val, { parentName: name, key, used, emitMap });
       if (objValue === undefined) continue;
       map[key] = objValue;
     }
     sentences.push({
       mood: "ya",
-      subj: { name },
+      su: { name },
       be: "json map",
-      obj: { map }
+      ob: { map }
     });
   };
 
@@ -122,14 +122,15 @@ export function jsonToMapSentences(value, rootName, { existingNames = [] } = {})
 }
 
 export function mapSentenceToPyash(sentence) {
-  const name = sentence?.subj?.name ?? "map";
-  const lines = [`subj name ${name} be json map def`];
-  const entries = sentence?.obj?.map ?? {};
-  for (const [key, obj] of Object.entries(entries)) {
-    const objText = npToPyash(obj);
-    lines.push(`subj name ${key} obj ${objText} ya`);
+  const name = sentence?.su?.name ?? "map";
+  const kind = sentence?.be === "map" ? "map" : "json map";
+  const lines = [`su name ${name} be ${kind} def`];
+  const entries = sentence?.ob?.map ?? {};
+  for (const [key, ob] of Object.entries(entries)) {
+    const objText = npToPyash(ob);
+    lines.push(`su name ${key} ob ${objText} ya`);
   }
-  lines.push(`subj name ${name} be json map prah`);
+  lines.push("prah");
   return lines.join("\n");
 }
 

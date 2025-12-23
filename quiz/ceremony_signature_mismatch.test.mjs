@@ -16,13 +16,13 @@ test("evoker with mismatched signature is rejected", async () => {
   forget();
 
   const defLines = [
-    "subj name foo obj name num value to name num bar be ceremony def",
-    "obj num 1 to name bar be add do",
-    "subj name foo be ceremony prah"
+    "su name foo ob name num value to name num bar be ceremony def",
+    "ob num 1 to name bar be add do",
+    "su name foo be ceremony prah"
   ];
   await run(defLines);
 
-  const evoker = parse("subj name caller obj name baz by num 1 be foo do");
+  const evoker = parse("su name caller ob name baz by num 1 be foo do");
   let err;
   try {
     await interpret(evoker);
@@ -31,5 +31,5 @@ test("evoker with mismatched signature is rejected", async () => {
   }
   assert.ok(err, "expected error for signature mismatch");
   assert.equal(err?.sentence?.be, "error");
-  assert.match(err?.sentence?.obj?.text ?? "", /signature mismatch/i);
+  assert.match(err?.sentence?.ob?.text ?? "", /signature mismatch/i);
 });

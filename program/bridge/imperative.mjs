@@ -35,21 +35,21 @@ export async function handleImperative({
   getDefinitionEntry,
   interpret
 }) {
-  const { mood, be, obj, to, from, subj } = sentence;
+  const { mood, be, ob, to, from, su } = sentence;
   if (mood !== "do") return null;
 
-  if (sentence.obj?.thisRef) {
-    const resolved = resolveThisValue(sentence.obj, state.currentEvokeRef || state.currentEvoke);
+  if (sentence.ob?.thisRef) {
+    const resolved = resolveThisValue(sentence.ob, state.currentEvokeRef || state.currentEvoke);
     if (resolved !== null && resolved !== undefined) {
-      sentence.obj = typeof resolved === "number" ? { num: resolved } : resolved;
+      sentence.ob = typeof resolved === "number" ? { num: resolved } : resolved;
     }
-    if (sentence.be === "add" && sentence.obj?.num === undefined && sentence.obj?.thisRef === "by") {
-      console.log("debug add obj thisRef by", resolved);
+    if (sentence.be === "add" && sentence.ob?.num === undefined && sentence.ob?.thisRef === "by") {
+      console.log("debug add ob thisRef by", resolved);
     }
-  } else if (sentence.obj?.genitive) {
-    const resolved = resolveInlineGenitive(sentence.obj.genitive, state);
+  } else if (sentence.ob?.genitive) {
+    const resolved = resolveInlineGenitive(sentence.ob.genitive, state);
     if (resolved !== undefined) {
-      sentence.obj = { num: resolved };
+      sentence.ob = { num: resolved };
     }
   }
   if (sentence.by?.genitive) {
@@ -116,14 +116,14 @@ export async function handleImperative({
       });
     }
     const lhs =
-      sentence.obj?.name && memory.remember(sentence.obj.name)
-        ? memory.remember(sentence.obj.name).obj
-        : sentence.obj;
+      sentence.ob?.name && memory.remember(sentence.ob.name)
+        ? memory.remember(sentence.ob.name).ob
+        : sentence.ob;
     const rhs =
       sentence.from?.name && memory.remember(sentence.from.name)
-        ? memory.remember(sentence.from.name).obj
+        ? memory.remember(sentence.from.name).ob
         : sentence.from;
-    const truth = await fn({ subj: lhs, from: rhs });
+    const truth = await fn({ su: lhs, from: rhs });
     if (truth && sentence.consequence) {
       return interpret(sentence.consequence);
     }
@@ -141,8 +141,8 @@ export async function handleImperative({
     });
     if (atAllResult) {
       memory.doRemember(atAllResult);
-      memory.doRemember({ subj: { name: "result" }, obj: atAllResult.obj, be: atAllResult.be, mood: "ya" });
-      return { acted: atAllResult.subj?.name, value: atAllResult.obj };
+      memory.doRemember({ su: { name: "result" }, ob: atAllResult.ob, be: atAllResult.be, mood: "ya" });
+      return { acted: atAllResult.su?.name, value: atAllResult.ob };
     }
   }
 
@@ -159,7 +159,7 @@ export async function handleImperative({
   }
 
   if (!fn && defEntry) {
-    if (subj?.name === "tloh" || sentence.be === "tloh" || sentence.until !== undefined || sentence.tloh !== undefined) {
+    if (su?.name === "tloh" || sentence.be === "tloh" || sentence.until !== undefined || sentence.tloh !== undefined) {
       throw new Error("tloh/until no longer supported; use fromindex/toindex");
     }
 
@@ -227,7 +227,7 @@ export async function handleImperative({
   const shouldBootstrapNumber = addressedName && ["add", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
   if (!target && shouldBootstrapNumber) {
     // create default numeric fact if it doesn't exist for math-like verbs
-    target = { subj: { name: addressedName }, be: "number", obj: { num: 0 }, mood: "ya" };
+    target = { su: { name: addressedName }, be: "number", ob: { num: 0 }, mood: "ya" };
     memory.doRemember(target);
   }
 
@@ -235,13 +235,13 @@ export async function handleImperative({
     be === "mind" ||
     be === "say" ||
     be === "write" ||
-    (be === "add" && (sentence.obj?.text || target?.obj?.text !== undefined));
-  const toValue = useRawTo ? (to ?? sentence.to) : (target?.obj ?? to);
+    (be === "add" && (sentence.ob?.text || target?.ob?.text !== undefined));
+  const toValue = useRawTo ? (to ?? sentence.to) : (target?.ob ?? to);
 
   // pass the current value, not the name
   const callSentence = {
     ...sentence,
-    obj: sentence.obj,
+    ob: sentence.ob,
     to: toValue ?? to ?? sentence.to,
     from: sentence.from ?? from,
     by: sentence.by
@@ -252,53 +252,53 @@ export async function handleImperative({
   // record the command itself in history
   memory.doRemember(sentence);
 
-  // expect verbs to return { obj: number | {num: number} }
-  if (result?.obj !== undefined) {
+  // expect verbs to return { ob: number | {num: number} }
+  if (result?.ob !== undefined) {
     // ensure a target fact exists if user addressed one
     const targetBe = sentence.to?.context || sentence.become?.name || sentence.be || "result";
     const dest =
       target ||
       (addressedName
         ? {
-            subj: { name: addressedName },
+            su: { name: addressedName },
             be: targetBe,
-            obj: {},
+            ob: {},
             mood: "ya",
           }
         : to?.name
         ? {
-            subj: { name: to.name },
+            su: { name: to.name },
             be: targetBe,
-            obj: {},
+            ob: {},
             mood: "ya",
           }
-        : sentence?.subj
+        : sentence?.su
         ? {
-            subj: sentence.subj,
+            su: sentence.su,
             be: sentence.be === "read" ? "text" : targetBe,
-            obj: {},
+            ob: {},
             mood: "ya",
           }
         : null);
 
     const normalizedObj =
-      typeof result.obj === "object" ? result.obj : { num: result.obj };
+      typeof result.ob === "object" ? result.ob : { num: result.ob };
     const resultBe = result.be ?? targetBe;
 
     if (dest) {
-      dest.obj = normalizedObj;
+      dest.ob = normalizedObj;
       if (!dest.be) dest.be = resultBe;
       memory.doRemember(dest);
     }
 
     // Always store a result fact for reference
     memory.doRemember({
-      subj: { name: "result" },
-      obj: normalizedObj,
+      su: { name: "result" },
+      ob: normalizedObj,
       be: resultBe,
       mood: "ya"
     });
   }
 
-  return { acted: to?.name, value: result?.obj };
+  return { acted: to?.name, value: result?.ob };
 }

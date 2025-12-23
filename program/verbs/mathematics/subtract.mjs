@@ -4,8 +4,8 @@ function detectValue(v, remember) {
   if (typeof v.num === "number") return v.num;
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (found?.obj?.num !== undefined) return found.obj.num;
-    if (typeof found?.obj === "number") return found.obj;
+    if (found?.ob?.num !== undefined) return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
   }
   return 0;
 }
@@ -15,28 +15,28 @@ export async function subtract_by_num_from_name_num_to_name_num(sentence, { reme
   if (!targetName) throw new Error("subtract: target name required (to name ... or from name ...)");
 
   const target = remember(targetName);
-  const targetVal = detectValue(target?.obj ?? sentence.to, remember);
-  const subtrahend = detectValue(sentence.obj, remember);
+  const targetVal = detectValue(target?.ob ?? sentence.to, remember);
+  const subtrahend = detectValue(sentence.ob, remember);
   const result = targetVal - subtrahend;
 
-  return { obj: result, be: sentence?.be ?? "number" };
+  return { ob: result, be: sentence?.be ?? "number" };
 }
 
-// Vector element subtract: be subtract obj num X from name vec at num idx
+// Vector element subtract: be subtract ob num X from name vec at num idx
 export async function subtract_obj_num_from_name_vec_at_num(sentence, { remember }) {
-  const vecName = sentence.from?.name ?? sentence.obj?.name;
+  const vecName = sentence.from?.name ?? sentence.ob?.name;
   const idx = sentence.at?.num;
-  const delta = Number(sentence.obj?.num ?? 0);
-  if (!vecName || idx == null) throw new Error("subtract: vector name, obj num, and at index are required");
+  const delta = Number(sentence.ob?.num ?? 0);
+  if (!vecName || idx == null) throw new Error("subtract: vector name, ob num, and at index are required");
 
   const fact = remember ? remember(vecName) : null;
-  if (!fact?.obj?.ve?.values) throw new Error("subtract: target is not a vector");
+  if (!fact?.ob?.ve?.values) throw new Error("subtract: target is not a vector");
   const i = Number(idx) - 1;
-  if (!Number.isInteger(i) || i < 0 || i >= fact.obj.ve.values.length) throw new Error("subtract: index out of range");
+  if (!Number.isInteger(i) || i < 0 || i >= fact.ob.ve.values.length) throw new Error("subtract: index out of range");
 
-  const curr = Number(fact.obj.ve.values[i] ?? 0);
-  fact.obj.ve.values[i] = curr - delta;
-  return { obj: fact.obj };
+  const curr = Number(fact.ob.ve.values[i] ?? 0);
+  fact.ob.ve.values[i] = curr - delta;
+  return { ob: fact.ob };
 }
 
 export const subtract = subtract_by_num_from_name_num_to_name_num;
@@ -47,19 +47,19 @@ export const signatures = [
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "num"],
+    signatureWords: ["be", "subtract", "from", "name", "num", "ob", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "name", "num"],
+    signatureWords: ["be", "subtract", "from", "name", "num", "ob", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "name", "num", "to", "name", "num"],
+    signatureWords: ["be", "subtract", "from", "name", "num", "ob", "name", "num", "to", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "from", "name", "num", "obj", "num", "to", "name", "num"],
+    signatureWords: ["be", "subtract", "from", "name", "num", "ob", "num", "to", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
@@ -67,27 +67,27 @@ export const signatures = [
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "obj", "num"],
+    signatureWords: ["be", "subtract", "ob", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "obj", "name", "num"],
+    signatureWords: ["be", "subtract", "ob", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "subtract", "obj", "num", "from", "name", "vec", "at", "num"],
+    signatureWords: ["be", "subtract", "ob", "num", "from", "name", "vec", "at", "num"],
     handler: subtract_obj_num_from_name_vec_at_num
   },
   {
-    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "obj", "num"],
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "ob", "num"],
     handler: subtract_obj_num_from_name_vec_at_num
   },
   {
-    signatureWords: ["be", "subtract", "at", "num", "from", "name", "num", "obj", "num"],
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "num", "ob", "num"],
     handler: subtract_obj_num_from_name_vec_at_num
   },
   {
-    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "num", "obj", "num"],
+    signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "num", "ob", "num"],
     handler: subtract_obj_num_from_name_vec_at_num
   }
 ];

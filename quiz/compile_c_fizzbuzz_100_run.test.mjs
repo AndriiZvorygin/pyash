@@ -36,7 +36,7 @@ test("compile fizzbuzz (1..100) to C and run (gcc + run)", async () => {
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
 
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");

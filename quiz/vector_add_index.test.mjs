@@ -6,27 +6,27 @@ import { remember, forget } from "../program/remember/index.mjs";
 
 test("add to vector element by index mutates in place", async () => {
   forget();
-  await interpret(parse("exists subj name values obj ve num 1 2 3 be vector ya"));
-  await interpret(parse("obj name values from num 5 at num 2 be add do"));
+  await interpret(parse("exists su name values ob ve num 1 2 3 be vector ya"));
+  await interpret(parse("ob name values from num 5 at num 2 be add do"));
 
   const vec = remember("values");
-  assert.deepEqual(vec?.obj?.ve?.values, [1, 7, 3]);
+  assert.deepEqual(vec?.ob?.ve?.values, [1, 7, 3]);
 });
 
-test("add using obj num and from vec at index mutates in place", async () => {
+test("add using ob num and from vec at index mutates in place", async () => {
   forget();
-  await interpret(parse("exists subj name values obj ve num 10 20 30 be vector ya"));
-  await interpret(parse("obj num 3 from name values at num 1 be add do"));
+  await interpret(parse("exists su name values ob ve num 10 20 30 be vector ya"));
+  await interpret(parse("ob num 3 from name values at num 1 be add do"));
 
   const vec = remember("values");
-  assert.deepEqual(vec?.obj?.ve?.values, [13, 20, 30]);
+  assert.deepEqual(vec?.ob?.ve?.values, [13, 20, 30]);
 });
 
-test("subtract obj num from vec at index mutates in place", async () => {
+test("subtract ob num from vec at index mutates in place", async () => {
   forget();
-  await interpret(parse("exists subj name values obj ve num 10 20 30 be vector ya"));
-  await interpret(parse("obj num 5 from name values at num 2 be subtract do"));
+  await interpret(parse("exists su name values ob ve num 10 20 30 be vector ya"));
+  await interpret(parse("ob num 5 from name values at num 2 be subtract do"));
 
   const vec = remember("values");
-  assert.deepEqual(vec?.obj?.ve?.values, [10, 15, 30]);
+  assert.deepEqual(vec?.ob?.ve?.values, [10, 15, 30]);
 });

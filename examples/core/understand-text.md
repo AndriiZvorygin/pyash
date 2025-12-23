@@ -6,22 +6,22 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name input obj text quoted.pyash.subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya.pyash.quoted be text ya
-  subj name output be text ya
-  obj name input from state pyash to state JSON to name output be understand do
+  su name input ob text quoted.pyash.su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya.pyash.quoted be text ya
+  su name output be text ya
+  ob name input from state pyash to state JSON to name output be understand do
   mem
   ```
 - **Expected output**:
   ```
   → { "stored": "input" }
   → { "stored": "output" }
-  → { "acted": "output", "value": { "sentences": [ { "subj": { "name": "alpha" }, "obj": { "num": 1 }, "be": "number", "mood": "ya" }, { "subj": { "name": "beta" }, "obj": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"subj\":{\"name\":\"alpha\"},\"obj\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"subj\":{\"name\":\"beta\"},\"obj\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" } }
+  → { "acted": "output", "value": { "sentences": [ { "su": { "name": "alpha" }, "ob": { "num": 1 }, "be": "number", "mood": "ya" }, { "su": { "name": "beta" }, "ob": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"su\":{\"name\":\"alpha\"},\"ob\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"su\":{\"name\":\"beta\"},\"ob\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" } }
   Memory: [
-    { "subj": { "name": "input" }, "obj": { "text": "subj name alpha obj num 1 be number ya\nsubj name beta obj num 2 be number ya" }, "be": "text", "mood": "ya" },
-    { "subj": { "name": "output" }, "be": "text", "mood": "ya" },
-    { "obj": { "name": "input" }, "from": { "state": "pyash" }, "to": { "state": "JSON", "name": "output" }, "be": "understand", "mood": "do" },
-    { "subj": { "name": "output" }, "be": "understand", "obj": { "sentences": [ { "subj": { "name": "alpha" }, "obj": { "num": 1 }, "be": "number", "mood": "ya" }, { "subj": { "name": "beta" }, "obj": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"subj\":{\"name\":\"alpha\"},\"obj\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"subj\":{\"name\":\"beta\"},\"obj\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" }, "mood": "ya" },
-    { "subj": { "name": "result" }, "obj": { "sentences": [ { "subj": { "name": "alpha" }, "obj": { "num": 1 }, "be": "number", "mood": "ya" }, { "subj": { "name": "beta" }, "obj": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"subj\":{\"name\":\"alpha\"},\"obj\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"subj\":{\"name\":\"beta\"},\"obj\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" }, "be": "understand", "mood": "ya" }
+    { "su": { "name": "input" }, "ob": { "text": "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" }, "be": "text", "mood": "ya" },
+    { "su": { "name": "output" }, "be": "text", "mood": "ya" },
+    { "ob": { "name": "input" }, "from": { "state": "pyash" }, "to": { "state": "JSON", "name": "output" }, "be": "understand", "mood": "do" },
+    { "su": { "name": "output" }, "be": "understand", "ob": { "sentences": [ { "su": { "name": "alpha" }, "ob": { "num": 1 }, "be": "number", "mood": "ya" }, { "su": { "name": "beta" }, "ob": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"su\":{\"name\":\"alpha\"},\"ob\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"su\":{\"name\":\"beta\"},\"ob\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" }, "mood": "ya" },
+    { "su": { "name": "result" }, "ob": { "sentences": [ { "su": { "name": "alpha" }, "ob": { "num": 1 }, "be": "number", "mood": "ya" }, { "su": { "name": "beta" }, "ob": { "num": 2 }, "be": "number", "mood": "ya" } ], "text": "[{\"su\":{\"name\":\"alpha\"},\"ob\":{\"num\":1},\"be\":\"number\",\"mood\":\"ya\"},{\"su\":{\"name\":\"beta\"},\"ob\":{\"num\":2},\"be\":\"number\",\"mood\":\"ya\"}]" }, "be": "understand", "mood": "ya" }
   ]
   ```
 - **Notes**: Matches `quiz/compile.test.mjs` (using `understand`); demonstrates storing input text, placeholder output target, running understand, and the resulting structured/text payload.

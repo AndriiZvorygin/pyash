@@ -1,16 +1,16 @@
-exists subj name doors obj ve bool lie by num 10 be vector ya
+exists su name doors ob ve bool lie by num 10 be vector ya
 
-subj name toggle door by num 0 fromindex num 0 be ceremony def
-subj name doorNum obj this fromindex be number ya
-obj num 1 to name doorNum be add do
-obj name doorNum from num of obj of by of this to name rem be remains do
-obj name rem be equally from num 0 then obj name doors at num of fromindex of this be invert do
-subj name toggle door be ceremony prah
+su name toggle door by num 0 fromindex num 0 be ceremony def
+su name doorNum ob this fromindex be number ya
+ob num 1 to name doorNum be add do
+ob name doorNum from num of ob of by of this to name rem be remains do
+ob name rem be equally from num 0 then ob name doors at num of fromindex of this be invert do
+su name toggle door be ceremony prah
 
-subj name process pass fromindex num 0 be ceremony def
-subj name pass obj this fromindex be number ya
+su name process pass fromindex num 0 be ceremony def
+su name pass ob this fromindex be number ya
 by name pass fromindex num 0 toindex num 10 be toggle door do
-subj name process pass be ceremony prah
+su name process pass be ceremony prah
 
 fromindex num 1 toindex num 11 be process pass do
-obj ve of doors be write do
+ob ve of doors be write do

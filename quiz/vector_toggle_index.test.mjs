@@ -9,13 +9,13 @@ test("invert toggles a boolean door at a given index", async () => {
   forget();
 
   const sentences = [
-    "exists subj name doors obj ve bool truth lie truth be vector ya",
-    "obj name doors at num 1 be invert do"
+    "exists su name doors ob ve bool truth lie truth be vector ya",
+    "ob name doors at num 1 be invert do"
   ].map(parse).filter(Boolean);
 
   for (const s of sentences) await interpret(s);
 
   const doors = remember("doors");
-  assert.ok(Array.isArray(doors?.obj?.ve?.values));
-  assert.deepEqual(doors.obj.ve.values, ["truth", "truth", "truth"]);
+  assert.ok(Array.isArray(doors?.ob?.ve?.values));
+  assert.deepEqual(doors.ob.ve.values, ["truth", "truth", "truth"]);
 });

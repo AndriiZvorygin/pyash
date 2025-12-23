@@ -6,22 +6,22 @@ import { jsonToMapSentences } from "./json_map.mjs";
 function collectExistingNames() {
   const used = new Set();
   for (const entry of allRemember()) {
-    if (entry?.subj?.name) used.add(entry.subj.name);
+    if (entry?.su?.name) used.add(entry.su.name);
   }
   return used;
 }
 
 function jsonScalarToSentence(value, name) {
-  if (value === null) return { subj: { name }, obj: { hollow: true }, be: "hollow", mood: "ya" };
-  if (typeof value === "string") return { subj: { name }, obj: { text: value }, be: "text", mood: "ya" };
-  if (typeof value === "number") return { subj: { name }, obj: { num: value }, be: "number", mood: "ya" };
-  if (typeof value === "boolean") return { subj: { name }, obj: { boolean: value }, be: "bool", mood: "ya" };
+  if (value === null) return { su: { name }, ob: { hollow: true }, be: "hollow", mood: "ya" };
+  if (typeof value === "string") return { su: { name }, ob: { text: value }, be: "text", mood: "ya" };
+  if (typeof value === "number") return { su: { name }, ob: { num: value }, be: "number", mood: "ya" };
+  if (typeof value === "boolean") return { su: { name }, ob: { boolean: value }, be: "bool", mood: "ya" };
   return null;
 }
 
 function jsonArrayToSentence(values, name) {
   if (values.length === 0) {
-    return { subj: { name }, obj: { ve: { type: "hollow", values: [] } }, be: "vector", mood: "ya" };
+    return { su: { name }, ob: { ve: { type: "hollow", values: [] } }, be: "vector", mood: "ya" };
   }
   const typeSet = new Set();
   for (const value of values) {
@@ -45,16 +45,16 @@ function jsonArrayToSentence(values, name) {
     throw new Error("json map contents defective: mixed array types are unsupported");
   }
   if (typeSet.has("bool")) {
-    return { subj: { name }, obj: { ve: { type: "bool", values: values.map(v => (v ? "truth" : "lie")) } }, be: "vector", mood: "ya" };
+    return { su: { name }, ob: { ve: { type: "bool", values: values.map(v => (v ? "truth" : "lie")) } }, be: "vector", mood: "ya" };
   }
   if (typeSet.has("num")) {
-    return { subj: { name }, obj: { ve: { type: "num", values } }, be: "vector", mood: "ya" };
+    return { su: { name }, ob: { ve: { type: "num", values } }, be: "vector", mood: "ya" };
   }
-  return { subj: { name }, obj: { ve: { type: "text", values } }, be: "vector", mood: "ya" };
+  return { su: { name }, ob: { ve: { type: "text", values } }, be: "vector", mood: "ya" };
 }
 
 async function importFromSentence(sentence) {
-  const targetName = sentence?.to?.name ?? sentence?.subj?.name;
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
   if (!targetName) {
     throwErrorSentence({
       name: "import error",
@@ -63,14 +63,14 @@ async function importFromSentence(sentence) {
     });
   }
 
-  let sourceText = sentence?.obj?.text ?? sentence?.from?.text;
+  let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
   if (!sourceText && sentence?.from?.filename) {
     sourceText = await fs.readFile(sentence.from.filename, "utf8");
   }
   if (typeof sourceText !== "string") {
     throwErrorSentence({
       name: "import error",
-      message: "import: source text is required (obj text or from filename)",
+      message: "import: source text is required (ob text or from filename)",
       from: { name: "import" }
     });
   }
@@ -137,7 +137,7 @@ async function importFromSentence(sentence) {
 export default importFromSentence;
 
 export const signatures = [
-  { signatureWords: ["be", "import", "obj", "text", "to", "name", "num"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "ob", "text", "to", "name", "num"], handler: importFromSentence },
   { signatureWords: ["be", "import", "from", "filename", "to", "name", "num"], handler: importFromSentence },
   { signatureWords: ["be", "import", "from", "text", "to", "name", "num"], handler: importFromSentence }
 ];

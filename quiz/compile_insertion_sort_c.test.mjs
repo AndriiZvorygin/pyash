@@ -21,7 +21,7 @@ function unwrapQuoted(text, lang) {
 async function compileToC(pyash) {
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  return unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  return unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 }
 
 async function runC(source) {

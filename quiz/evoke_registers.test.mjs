@@ -14,11 +14,11 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
   forget();
 
   const lines = [
-    "subj name worker to name num target be ceremony def",
-    "obj num 4 to name target be add do",
-    "this obj name target ret",
-    "subj name worker be ceremony prah",
-    "subj name target obj num 1 fromindex num 3 toindex num 5 be number ya",
+    "su name worker to name num target be ceremony def",
+    "ob num 4 to name target be add do",
+    "this ob name target ret",
+    "su name worker be ceremony prah",
+    "su name target ob num 1 fromindex num 3 toindex num 5 be number ya",
     "to name target be worker do",
   ];
 
@@ -32,9 +32,9 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
   const evoker = sandpit?.[0];
 
   assert.ok(target, "target fact should be stored");
-  assert.equal(target.obj.num, 5, "target obj should reflect ret merge");
+  assert.equal(target.ob.num, 5, "target ob should reflect ret merge");
   assert.ok(result, "result fact should be stored");
-  assert.equal(result.obj.num, 5, "result mirrors ret merge");
+  assert.equal(result.ob.num, 5, "result mirrors ret merge");
 
   assert.ok(evoker, "sandpit should include evoker at index 0");
   assert.equal(evoker.mood, "do", "evoker mood should be do");

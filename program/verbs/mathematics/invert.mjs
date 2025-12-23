@@ -23,14 +23,14 @@ function resolveNumber(v, remember) {
         }
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
-          if (fact) curr = fact.obj ?? fact;
+          if (fact) curr = fact.ob ?? fact;
         }
         if (curr == null) break;
         if (curr && typeof curr === "object") {
-          if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-            curr = curr.obj.map[part];
-          } else if (curr.obj && curr.obj[part] !== undefined) {
-            curr = curr.obj[part];
+          if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+            curr = curr.ob.map[part];
+          } else if (curr.ob && curr.ob[part] !== undefined) {
+            curr = curr.ob[part];
           } else {
             curr = curr[part];
           }
@@ -51,58 +51,58 @@ function resolveNumber(v, remember) {
   }
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (typeof found?.obj?.num === "number") return found.obj.num;
-    if (typeof found?.obj === "number") return found.obj;
+    if (typeof found?.ob?.num === "number") return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
   }
   return undefined;
 }
 
 export async function invert_obj_num_to_name_num(sentence, { remember }) {
-  const value = resolveNumber(sentence.obj, remember);
+  const value = resolveNumber(sentence.ob, remember);
   if (value === undefined) {
-    if (sentence.obj?.thisRef) {
+    if (sentence.ob?.thisRef) {
       const ev = state.currentEvokeRef || state.currentEvoke;
-      const reg = ev?.[sentence.obj.thisRef];
+      const reg = ev?.[sentence.ob.thisRef];
       if (reg && typeof reg === "object" && (reg.text !== undefined || reg.boolean !== undefined)) {
-        return invert_obj_text({ ...sentence, obj: reg });
+        return invert_obj_text({ ...sentence, ob: reg });
       }
       if (typeof reg === "string") {
-        return invert_obj_text({ ...sentence, obj: { text: reg } });
+        return invert_obj_text({ ...sentence, ob: { text: reg } });
       }
       if (typeof reg === "boolean") {
-        return invert_obj_text({ ...sentence, obj: { boolean: reg } });
+        return invert_obj_text({ ...sentence, ob: { boolean: reg } });
       }
     }
-    if (sentence.obj?.name && remember(sentence.obj.name)?.obj?.ve?.values) {
+    if (sentence.ob?.name && remember(sentence.ob.name)?.ob?.ve?.values) {
       return invert_obj_name_vec_at_num(sentence, { remember });
     }
-    throw new Error("invert: obj is required");
+    throw new Error("invert: ob is required");
   }
 
-  return { obj: -value, be: sentence?.be ?? "number" };
+  return { ob: -value, be: sentence?.be ?? "number" };
 }
 
 async function invert_obj_text(sentence) {
-  const val = sentence.obj?.text ?? sentence.obj?.boolean ?? sentence.obj;
+  const val = sentence.ob?.text ?? sentence.ob?.boolean ?? sentence.ob;
   let next = val;
   if (val === "truth") next = "lie";
   else if (val === "lie") next = "truth";
   else if (typeof val === "boolean") next = !val;
   else if (typeof val === "number") next = -val;
-  return { obj: { text: next }, be: sentence?.be ?? "text" };
+  return { ob: { text: next }, be: sentence?.be ?? "text" };
 }
 
 async function invert_obj_name_vec_at_num(sentence, { remember }) {
-  const vecName = sentence.obj?.name;
+  const vecName = sentence.ob?.name;
   const idx = resolveNumber(sentence.at, remember);
-  if (!vecName || idx === undefined) throw new Error("invert: obj name vec at num <index> required");
+  if (!vecName || idx === undefined) throw new Error("invert: ob name vec at num <index> required");
   const vecFact = remember(vecName);
-  const values = vecFact?.obj?.ve?.values;
+  const values = vecFact?.ob?.ve?.values;
   if (!Array.isArray(values)) throw new Error("invert: target is not a vector");
   const pos = idx;
   const current = values[pos];
   let next = current;
-  const vecType = String(vecFact?.obj?.ve?.type ?? "").toLowerCase();
+  const vecType = String(vecFact?.ob?.ve?.type ?? "").toLowerCase();
   const isBoolVec = vecType === "bool" || vecType === "boolean";
   if (isBoolVec) {
     if (current === "truth" || current === true || current === 1) next = "lie";
@@ -118,33 +118,33 @@ async function invert_obj_name_vec_at_num(sentence, { remember }) {
     next = !current;
   }
   values[pos] = next;
-  return { subj: { name: vecName }, obj: { ve: { values } }, be: vecFact?.be ?? "vector", mood: "ya" };
+  return { su: { name: vecName }, ob: { ve: { values } }, be: vecFact?.be ?? "vector", mood: "ya" };
 }
 
 export const invert = invert_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "invert", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "name", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "name", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "num", "at", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "num", "at", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
-  { signatureWords: ["be", "invert", "obj", "text"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "obj", "name", "text"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "obj", "text", "at", "num"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "text"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "obj", "bool"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "obj", "name", "bool"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "obj", "bool", "at", "num"], handler: invert_obj_text },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "bool"], handler: invert_obj_text },
-  // vector element toggle: invert obj name vec at num <idx>
-  { signatureWords: ["be", "invert", "obj", "name", "vec", "at", "num"], handler: invert_obj_name_vec_at_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec"], handler: invert_obj_name_vec_at_num },
-  { signatureWords: ["be", "invert", "obj", "name", "vec", "at", "num", "to", "name", "vec"], handler: invert_obj_name_vec_at_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "to", "name", "vec"], handler: invert_obj_name_vec_at_num },
-  { signatureWords: ["be", "invert", "obj", "name", "vec", "num", "at", "num"], handler: invert_obj_name_vec_at_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "num"], handler: invert_obj_name_vec_at_num }
+  { signatureWords: ["be", "invert", "ob", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "name", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "num", "at", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "num", "at", "num", "to", "name", "num"], handler: invert_obj_num_to_name_num },
+  { signatureWords: ["be", "invert", "ob", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "ob", "name", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "ob", "text", "at", "num"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "text"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "ob", "bool"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "ob", "name", "bool"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "ob", "bool", "at", "num"], handler: invert_obj_text },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "bool"], handler: invert_obj_text },
+  // vector element toggle: invert ob name vec at num <idx>
+  { signatureWords: ["be", "invert", "ob", "name", "vec", "at", "num"], handler: invert_obj_name_vec_at_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "name", "vec"], handler: invert_obj_name_vec_at_num },
+  { signatureWords: ["be", "invert", "ob", "name", "vec", "at", "num", "to", "name", "vec"], handler: invert_obj_name_vec_at_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "name", "vec", "to", "name", "vec"], handler: invert_obj_name_vec_at_num },
+  { signatureWords: ["be", "invert", "ob", "name", "vec", "num", "at", "num"], handler: invert_obj_name_vec_at_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "name", "vec", "num"], handler: invert_obj_name_vec_at_num }
 ];

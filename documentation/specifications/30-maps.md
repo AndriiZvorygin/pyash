@@ -19,8 +19,8 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
 * **pyash map**: declared with `be map def … prah`.
 * **json map**: declared with `be json map def … prah`.
 * **entry**: a `ya` sentence inside a map definition block.
-* **switch**: the entry subject (`subj name …`), used as a JSON object key.
-* **contents**: the entry payload (`obj …`), used as the JSON value.
+* **switch**: the entry subject (`su name …`), used as a JSON object key.
+* **contents**: the entry payload (`ob …`), used as the JSON value.
 * **json value**: one of:
 
   * object
@@ -31,11 +31,11 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
   * null
 * **unspecified**: absence or missing result (runtime), not a JSON value.
 * **hollow**: null (exports as JSON `null`).
-* **vector**: Pyash vector value (`obj ve … be vector`), used to represent JSON arrays.
+* **vector**: Pyash vector value (`ob ve … be vector`), used to represent JSON arrays.
 * **referential**:
 
-  * **map referential**: `obj name <pre-existing-json-map>` inside a JSON map entry, used for nesting objects
-  * **vector referential**: `obj ve name <a> <b> …` where each name resolves to a JSON map, used for arrays of objects
+  * **map referential**: `ob name <pre-existing-json-map>` inside a JSON map entry, used for nesting objects
+  * **vector referential**: `ob ve name <a> <b> …` where each name resolves to a JSON map, used for arrays of objects
 
 ---
 
@@ -44,7 +44,7 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
 ### 3.1 Pyash map definition
 
 ```
-subj name <M> be map def
+su name <M> be map def
   <entry>...
 prah
 ```
@@ -52,7 +52,7 @@ prah
 ### 3.2 JSON map definition
 
 ```
-subj name <M> be json map def
+su name <M> be json map def
   <entry>...
 prah
 ```
@@ -62,14 +62,14 @@ prah
 An entry is a `ya` sentence inside the definition block:
 
 ```
-subj name <switch> obj <contents> ya
+su name <switch> ob <contents> ya
 ```
 
 Notes:
 
 * Entries inside `def` blocks do **not** write to global memory.
-* Switches are derived from `subj`.
-* Contents are derived from `obj`.
+* Switches are derived from `su`.
+* Contents are derived from `ob`.
 
 ---
 
@@ -86,8 +86,8 @@ Inside a map definition block:
 
 * Each entry contributes one switch → contents association:
 
-  * `switch = entry.subj`
-  * `contents = entry.obj`
+  * `switch = entry.su`
+  * `contents = entry.ob`
 
 ### 4.3 Duplicate switches
 
@@ -116,24 +116,24 @@ If a switch is absent:
 
 ## 5. JSON map value model (normative)
 
-A JSON map represents a **JSON object** stored under the map sentence’s `obj`.
+A JSON map represents a **JSON object** stored under the map sentence’s `ob`.
 
 Switches become JSON keys; contents become JSON values.
 
 ### 5.1 Switch constraints
 
-* Switches originate from `subj name <switch>`.
+* Switches originate from `su name <switch>`.
 * Switches must be representable as JSON object keys.
 
 ### 5.2 Contents constraints
 
 Allowed contents for JSON maps are JSON values, expressed in Pyash forms:
 
-* **string**: `obj text "…"`
-* **number**: `obj num …`
-* **boolean**: `obj bool …` (requires bool as a type token)
-* **null**: `obj hollow` (requires `hollow` literal support)
-* **object nesting (map referential)**: `obj name <pre-existing-json-map>`
+* **string**: `ob text "…"`
+* **number**: `ob num …`
+* **boolean**: `ob bool …` (requires bool as a type token)
+* **null**: `ob hollow` (requires `hollow` literal support)
+* **object nesting (map referential)**: `ob name <pre-existing-json-map>`
 * **array**: a vector value used as a JSON array (see §5.3)
 
 `unspecified` is not a JSON value. It may appear during access (missing switch) and may appear in builders, but it does not export as a JSON value.
@@ -155,13 +155,13 @@ A vector whose element type is JSON-scalar-like exports as a JSON array of scala
 A vector of names exports as a JSON array of objects by resolving each name to a JSON map:
 
 ```
-obj ve name <a> <b> <c> be vector
+ob ve name <a> <b> <c> be vector
 ```
 
 Export semantics:
 
 * each element name must resolve to a `be json map` sentence
-* each element exports as that map’s `obj` object
+* each element exports as that map’s `ob` object
 
 If any element name does not resolve to a JSON map, it is an error (`json map referential defective`).
 
@@ -170,7 +170,7 @@ If any element name does not resolve to a JSON map, it is an error (`json map re
 An entry of the form:
 
 ```
-subj name <switch> obj name <pre-existing-json-map> ya
+su name <switch> ob name <pre-existing-json-map> ya
 ```
 
 is a **map referential**.
@@ -200,7 +200,7 @@ This preserves the distinction:
 
 When JSON is loaded into Pyash (typically via `be import` or `be compile ... fromstate json tostate pyash`):
 
-* JSON objects load as `be json map` values (with their object stored in `obj`).
+* JSON objects load as `be json map` values (with their object stored in `ob`).
 * JSON arrays load as vectors.
 
   * For arrays of JSON objects, the loader may produce a **vector referential** (`vec name …`) by assigning each object element a generated name and storing each object element as its own `be json map`.
@@ -211,7 +211,7 @@ Generated names must avoid collisions with existing memory; if a generated name 
 
 `be import` loads JSON text or a JSON file into memory:
 
-* `obj text "<json>" to name <map> be import do`
+* `ob text "<json>" to name <map> be import do`
 * `from filename <file.json> to name <map> be import do`
 
 Rules:
@@ -224,7 +224,7 @@ Rules:
 
 `be compile` supports JSON → Pyash map definitions:
 
-* `subj name <map> obj text "<json>" from state json to state pyash to name <out> be compile do`
+* `su name <map> ob text "<json>" from state json to state pyash to name <out> be compile do`
 
 The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` blocks.
 
@@ -236,17 +236,17 @@ The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` b
 
 ## 8. Dynamic map updates (normative)
 
-`be add` can update a map by using the **subj value** as the switch key.
+`be add` can update a map by using the **su value** as the switch key.
 
 Example (word frequency inside a ceremony):
 
 ```
-subj text of obj of this obj num 1 to name wordmap be add do
+su text of ob of this ob num 1 to name wordmap be add do
 ```
 
 Rules:
 * `to name <map>` must resolve to a `be map` value.
-* The `subj` value is converted to text and used as the switch key.
+* The `su` value is converted to text and used as the switch key.
 * Missing keys are treated as `0` before adding.
 * The target map entry is stored as `{ num: <count> }`.
 * Their exported form is the normal Pyash JSON AST produced by `understand`.
@@ -270,15 +270,15 @@ Errors are raised only for structural violations, never for absent switches.
 
 `be write` is the preferred screen/file output verb. `be say` remains reserved for mind/TTS flows.
 
-* `obj name <json-map> be write do` prints the `be json map def ... prah` chain.
+* `ob name <json-map> be write do` prints the `be json map def ... prah` chain.
 
 To print JSON, specify a target state:
 
-* `obj name <json-map> to state json be write do`
+* `ob name <json-map> to state json be write do`
 
 To write the output to a file:
 
-* `obj name <json-map> to state json to filename <file.json> be write do`
+* `ob name <json-map> to state json to filename <file.json> be write do`
 
 ---
 
@@ -300,7 +300,7 @@ To write the output to a file:
 
 This specification defines **maps v0.1**.
 
-* JSON maps represent real JSON objects under `obj`.
+* JSON maps represent real JSON objects under `ob`.
 * Arrays are represented via vectors.
 * Arrays of objects are representable via `vec name` referentials.
 * Missing switches resolve to `unspecified`.

@@ -15,7 +15,7 @@ test("sieve 10 marks composites in bool vector", async () => {
   }
 
   const composite = remember("composite");
-  assert.deepEqual(composite?.obj?.ve?.values, [
+  assert.deepEqual(composite?.ob?.ve?.values, [
     "lie",
     "lie",
     "lie",
@@ -29,5 +29,5 @@ test("sieve 10 marks composites in bool vector", async () => {
   ]);
 
   const primes = remember("primes");
-  assert.deepEqual(primes?.obj?.ve?.values, [2, 3, 5, 7]);
+  assert.deepEqual(primes?.ob?.ve?.values, [2, 3, 5, 7]);
 });

@@ -6,14 +6,14 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name weights obj vec num 1 2 3 be vector ya
-  subj name inputs obj vec num 4 5 6 be vector ya
-  subj name bias obj num 0 be number ya
+  su name weights ob vec num 1 2 3 be vector ya
+  su name inputs ob vec num 4 5 6 be vector ya
+  su name bias ob num 0 be number ya
   from name weights by name inputs fromstate name bias to name output be neuron do
-  subj name output obj what que
+  su name output ob what que
   ```
 - **Expected output**:
   ```
-  subj name output obj num 0.9999999999999873 be number ya
+  su name output ob num 0.9999999999999873 be number ya
   ```
 - **Notes**: `neuron` pulls vectors from `from`/`by`, scalar bias from `fromstate`, and writes the activated result (sigmoid of dot + bias) to the `to` target and `result`. Activation defaults to `twice crescent` (sigmoid).

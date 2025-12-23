@@ -14,7 +14,7 @@ test("mismatched signature for verb with handlers throws instead of falling back
   forget();
 
   await assert.rejects(
-    () => run('obj text "hello" by num 2 be multiply do'),
+    () => run('ob text "hello" by num 2 be multiply do'),
     /Unknown verb\/signature: be multiply/
   );
 });

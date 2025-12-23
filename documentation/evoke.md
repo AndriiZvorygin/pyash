@@ -5,7 +5,7 @@
 An **evoke sentence** is how you call a ceremony:
 
 ```pyash
-obj num 5 to name result be add two do
+ob num 5 to name result be add two do
 ```
 
 This *is* the call frame. Internally you treat it as:
@@ -14,7 +14,7 @@ This *is* the call frame. Internally you treat it as:
 {
   mood: "do",
   be: "add two",       // ceremony being evoked (surface form, no underscore)
-  obj: { num: 5 },
+  ob: { num: 5 },
   to:  { name: "result" },
   // optional registers also live here: fromindex, toindex, etc.
 }
@@ -29,7 +29,7 @@ This *is* the call frame. Internally you treat it as:
 
 Inside the ceremony body for **add two**, `this` points at that evoke sentence:
 
-* `this obj` → the `obj` register of the current evoke.
+* `this ob` → the `ob` register of the current evoke.
 * `this to` → the `to` register.
 * `this fromindex` → loop/multiplicative register if present.
 * etc.
@@ -42,25 +42,25 @@ You don’t use `what que` for computation; that’s just for REPL / inspection.
 
 To actually work with a value, you **bind** it into a named subject with `ya`.
 
-Example: copy the evoke’s `obj` into a local variable `acc`:
+Example: copy the evoke’s `ob` into a local variable `acc`:
 
 ```pyash
-subj name acc obj this obj be number ya
+su name acc ob this ob be number ya
 ```
 
 Semantics:
 
-* Read `this.obj` from the evoke sentence.
+* Read `this.ob` from the evoke sentence.
 * Store a normal declarative fact like:
 
   ```pyash
-  subj name acc obj num 5 be number ya
+  su name acc ob num 5 be number ya
   ```
 
 Now you can use existing verbs on `acc`:
 
 ```pyash
-obj num 2 to name acc be add do
+ob num 2 to name acc be add do
 ```
 
 (Your JS `add` dispatcher can still live in `program/verbs/add.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
@@ -74,17 +74,17 @@ When the ceremony is done, you **write back** into the evoke sentence using `ret
 Example:
 
 ```pyash
-this obj name acc ret
+this ob name acc ret
 ```
 
 Meaning:
 
 1. Resolve the latest fact about `name acc` from memory.
 
-2. Take its payload (e.g. `{ num: 7 }`) and assign it into the evoke’s `obj` register:
+2. Take its payload (e.g. `{ num: 7 }`) and assign it into the evoke’s `ob` register:
 
    ```js
-   evoke.obj = { num: 7 };
+   evoke.ob = { num: 7 };
    ```
 
 3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `fromindex`, `toindex`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `fromindex`/`toindex` facts.
@@ -93,24 +93,24 @@ So a complete ceremony flow for “add two” in Pyash surface form looks like:
 
 ```pyash
 # evoke
-obj num 5 to name result be add two do
+ob num 5 to name result be add two do
 
 # inside "add two" ceremony:
 
 # bind argument into acc
-subj name acc obj this obj be number ya
+su name acc ob this ob be number ya
 
 # acc := acc + 2
-obj num 2 to name acc be add do
+ob num 2 to name acc be add do
 
-# return acc as new obj of the evoke
-this obj name acc ret
+# return acc as new ob of the evoke
+this ob name acc ret
 ```
 
 From the outside, the modified evoke sentence now behaves like:
 
 ```pyash
-obj num 7 to name result be add two do
+ob num 7 to name result be add two do
 ```
 
 ---
@@ -122,7 +122,7 @@ Looping uses the same idea: `fromindex` (and `toindex`, if present) live on the 
 * Example evoke:
 
   ```pyash
-  obj num 0 to name acc fromindex num 10 be count up do
+  ob num 0 to name acc fromindex num 10 be count up do
   ```
 
 * Default supervisor behaviour:
@@ -165,4 +165,4 @@ If you’d like, next we can:
 
 ## 6. Examples
 
-See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this obj` into a local, mutates it, and returns via `ret`. Looping examples (`fromindex-loop`, `toindex-loop`) show default supervisor behaviour with `fromindex`/`toindex` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts. `this-registers` shows accessing `this fromindex` / `this toindex` inside a ceremony body.
+See `examples/core/evoke-ret.md` and `examples/pyash/evoke-ret.pya` for a full ceremony that binds `this ob` into a local, mutates it, and returns via `ret`. Looping examples (`fromindex-loop`, `toindex-loop`) show default supervisor behaviour with `fromindex`/`toindex` kept on the evoke; `evoke-registers` shows registers surviving a return without leaking register facts. `this-registers` shows accessing `this fromindex` / `this toindex` inside a ceremony body.

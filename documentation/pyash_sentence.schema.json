@@ -19,18 +19,22 @@
       "minLength": 1
     },
 
-    "subj": {
-      "$ref": "#/$defs/caseValue",
-      "description": "Canonical subject slot (preferred)."
-    },
     "su": {
       "$ref": "#/$defs/caseValue",
-      "description": "Short alias for subject."
+      "description": "Canonical subject slot."
+    },
+    "subj": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Legacy alias for su (accepted on input only)."
     },
 
+    "ob": {
+      "$ref": "#/$defs/caseValue",
+      "description": "Canonical object / payload slot."
+    },
     "obj": {
       "$ref": "#/$defs/caseValue",
-      "description": "Main object / payload."
+      "description": "Legacy alias for ob (accepted on input only)."
     },
 
     "from": {

@@ -1,6 +1,6 @@
 // parser.mjs
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
-const ROLE_KEYS = ["subj", "su", "obj", "ob", "to", "from", "fromstate", "with", "via", "times", "by", "per", "at", "fromindex", "atindex", "toindex"];
+const ROLE_KEYS = ["su", "subj", "ob", "obj", "to", "from", "fromstate", "with", "via", "times", "by", "per", "at", "fromindex", "atindex", "toindex"];
 const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "bool", "boolean", "ord"];
 const CONTEXT_KEYS = ["space", "interior", "surface", "under", "time", "state", "person", "social", "discourse", "quantity", "sequence"];
 const AXIS_CONTEXT_TO_KEYWORD = {
@@ -98,10 +98,10 @@ export function parse(line) {
     }
 
     // --- topic sugar: "ta loop_head be topic ya" ---
-    // sugar for: subj name loop_head be topic ya
+    // sugar for: su name loop_head be topic ya
     if (t === "ta") {
       const name = words[++i];
-      s.subj = { name };
+      s.su = { name };
       continue;
     }
 
@@ -118,8 +118,8 @@ export function parse(line) {
 
     if (ROLE_KEYS.includes(t)) {
       const normalized =
-        t === "su" ? "subj" :
-        t === "ob" ? "obj" :
+        t === "su" || t === "subj" ? "su" :
+        t === "ob" || t === "obj" ? "ob" :
         t;
       current = normalized;
       if (!s[current]) s[current] = {};
@@ -178,13 +178,13 @@ export function parse(line) {
     }
 
     // --- interrogative pronoun sugar ---
-    // "obj what que" ⇒ obj: { name: "what" }
-    if (t === "what" && current === "obj") {
-      s.obj = { name: "what" };
+    // "ob what que" ⇒ ob: { name: "what" }
+    if (t === "what" && current === "ob") {
+      s.ob = { name: "what" };
       continue;
     }
 
-    // ret target, e.g., "this obj name acc ret"
+    // ret target, e.g., "this ob name acc ret"
     if (mood === "ret" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
       current = "ret";
       s.ret = { role: words[i + 1] };
@@ -193,8 +193,8 @@ export function parse(line) {
       continue;
     }
 
-    // this reference inside a role, e.g., "obj this obj ..."
-    if (current === "obj" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+    // this reference inside a role, e.g., "ob this ob ..."
+    if (current === "ob" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
       slot.thisRef = words[i + 1];
       i++; // consume role token
       continue;
@@ -262,8 +262,8 @@ export function parse(line) {
     // --- type tokens: name / num / number / text / filename ---
     if (TYPE_TOKENS.includes(t)) {
       // Genitive chains:
-      //   backward: "num of obj of this"   => chain ["this","obj","num"]
-      //   forward:  "num ti obj ti this"   => chain ["this","obj","num"]
+      //   backward: "num of ob of this"   => chain ["this","ob","num"]
+      //   forward:  "num ti ob ti this"   => chain ["this","ob","num"]
       if (words[i + 1] === "of" || words[i + 1] === "ti") {
         const chain = [t];
         let j = i + 1;
@@ -363,7 +363,7 @@ export function parse(line) {
       continue;
     }
 
-    // Forward root-first genitive starting with "this" (e.g., "this ti obj ti num")
+    // Forward root-first genitive starting with "this" (e.g., "this ti ob ti num")
     if (t === "this" && words[i + 1] === "ti") {
       const chain = [t];
       let j = i + 1;
@@ -433,8 +433,8 @@ export function parse(line) {
       continue;
     }
 
-    // Track this-reference inside obj context, e.g., "obj this obj ..."
-    if (current === "obj" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
+    // Track this-reference inside ob context, e.g., "ob this ob ..."
+    if (current === "ob" && t === "this" && words[i + 1] && ROLE_KEYS.includes(words[i + 1])) {
       slot.thisRef = words[i + 1];
       i++; // consume role token
       continue;

@@ -19,21 +19,21 @@ test("translation from JavaScript text back to Pyash sentences (assignments + ma
   );
 
   const result = await interpret(sentence);
-  const out = result?.obj ?? result?.value;
+  const out = result?.ob ?? result?.value;
 
   assert.ok(out?.sentences, "should return sentences array");
   const [decl, add, constDecl, assign] = out.sentences;
-  assert.equal(decl.subj.name, "alpha");
+  assert.equal(decl.su.name, "alpha");
   assert.equal(decl.exists, true);
-  assert.equal(decl.obj.num, 1);
+  assert.equal(decl.ob.num, 1);
   assert.equal(add.be, "add");
-  assert.equal(add.obj.num, 2);
+  assert.equal(add.ob.num, 2);
   assert.equal(add.to.name, "alpha");
   assert.equal(constDecl.be, "permanent text");
   assert.equal(constDecl.exists, true);
-  assert.equal(assign.obj.num, 5);
-  assert.match(out.text, /exists subj name alpha obj num 1 be number ya/);
-  assert.match(out.text, /obj num 2 to name alpha be add do/);
+  assert.equal(assign.ob.num, 5);
+  assert.match(out.text, /exists su name alpha ob num 1 be number ya/);
+  assert.match(out.text, /ob num 2 to name alpha be add do/);
 });
 
 test("translation from JavaScript math assignments covers compound ops", async () => {
@@ -51,17 +51,17 @@ test("translation from JavaScript math assignments covers compound ops", async (
   );
 
   const result = await interpret(sentence);
-  const out = result?.obj ?? result?.value;
+  const out = result?.ob ?? result?.value;
 
   assert.ok(out?.sentences);
   const [, sub, mul, div] = out.sentences;
   assert.equal(sub.be, "subtract");
-  assert.equal(sub.obj.num, 3);
+  assert.equal(sub.ob.num, 3);
   assert.equal(mul.be, "multiply");
-  assert.equal(mul.obj.num, 2);
+  assert.equal(mul.ob.num, 2);
   assert.equal(div.be, "divide");
-  assert.equal(div.obj.num, 5);
-  assert.match(out.text, /obj num 3 to name total be subtract do/);
-  assert.match(out.text, /obj num 2 to name total be multiply do/);
-  assert.match(out.text, /obj num 5 to name total be divide do/);
+  assert.equal(div.ob.num, 5);
+  assert.match(out.text, /ob num 3 to name total be subtract do/);
+  assert.match(out.text, /ob num 2 to name total be multiply do/);
+  assert.match(out.text, /ob num 5 to name total be divide do/);
 });

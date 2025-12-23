@@ -20,14 +20,14 @@ function resolveNumber(v, remember) {
         }
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
-          if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+          if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
         }
         if (curr == null) break;
         if (curr && typeof curr === "object") {
-          if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-            curr = curr.obj.map[part];
-          } else if (curr.obj && curr.obj[part] !== undefined) {
-            curr = curr.obj[part];
+          if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+            curr = curr.ob.map[part];
+          } else if (curr.ob && curr.ob[part] !== undefined) {
+            curr = curr.ob[part];
           } else {
             curr = curr[part];
           }
@@ -41,8 +41,8 @@ function resolveNumber(v, remember) {
   }
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (typeof found?.obj?.num === "number") return found.obj.num;
-    if (typeof found?.obj === "number") return found.obj;
+    if (typeof found?.ob?.num === "number") return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
   }
   return undefined;
 }
@@ -54,13 +54,13 @@ function getOperand(v, label, remember) {
 }
 
 export async function multiply_by_num_from_name_num_to_name_num(sentence, { remember }) {
-  if (!sentence.obj && !sentence.from) throw new Error("multiply: obj or from is required");
+  if (!sentence.ob && !sentence.from) throw new Error("multiply: ob or from is required");
   if (!sentence.by) throw new Error("multiply: by is required");
-  const lhs = getOperand(sentence.obj ?? sentence.from, "obj", remember);
+  const lhs = getOperand(sentence.ob ?? sentence.from, "ob", remember);
   const rhs = getOperand(sentence.by, "by", remember);
   const product = lhs * rhs;
 
-  return { obj: product, be: sentence?.be ?? "number" };
+  return { ob: product, be: sentence?.be ?? "number" };
 }
 
 export const multiply = multiply_by_num_from_name_num_to_name_num;
@@ -71,19 +71,19 @@ export const signatures = [
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "by", "num", "obj", "num"],
+    signatureWords: ["be", "multiply", "by", "num", "ob", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "by", "num", "obj", "name", "num"],
+    signatureWords: ["be", "multiply", "by", "num", "ob", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "by", "name", "num", "obj", "num"],
+    signatureWords: ["be", "multiply", "by", "name", "num", "ob", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "by", "name", "num", "obj", "name", "num"],
+    signatureWords: ["be", "multiply", "by", "name", "num", "ob", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
@@ -95,15 +95,15 @@ export const signatures = [
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "obj", "num"],
+    signatureWords: ["be", "multiply", "ob", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "obj", "name", "num"],
+    signatureWords: ["be", "multiply", "ob", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {
-    signatureWords: ["be", "multiply", "by", "num", "obj", "name", "num", "to", "name", "num"],
+    signatureWords: ["be", "multiply", "by", "num", "ob", "name", "num", "to", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
   },
   {

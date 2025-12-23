@@ -2,7 +2,7 @@
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignatureHandler } from "./signature.mjs";
 
 export async function handleCondition(sentence, { state, remember }) {
-  const { be, subj, obj, from } = sentence;
+  const { be, su, ob, from } = sentence;
 
   let fn = null;
   const sigWords = deriveSignatureFromCall(sentence, { remember });
@@ -16,19 +16,19 @@ export async function handleCondition(sentence, { state, remember }) {
   }
   if (!fn) throw new Error(`Unknown verb: ${be}`);
 
-  let subjValue = subj;
-  if (subj?.name) {
-    const target = remember(subj.name);
-    if (!target) throw new Error(`Unknown subj: ${subj.name}`);
-    subjValue = target.obj;
+  let subjValue = su;
+  if (su?.name) {
+    const target = remember(su.name);
+    if (!target) throw new Error(`Unknown su: ${su.name}`);
+    subjValue = target.ob;
   }
 
   const fromValue =
-    from?.name && remember(from.name)?.obj !== undefined
-      ? remember(from.name).obj
+    from?.name && remember(from.name)?.ob !== undefined
+      ? remember(from.name).ob
       : from;
 
-  const truth = await fn({ subj: subjValue ?? obj, from: fromValue });
+  const truth = await fn({ su: subjValue ?? ob, from: fromValue });
   state.lastCondition = truth;
   return { condition: truth };
 }

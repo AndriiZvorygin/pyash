@@ -22,14 +22,14 @@ test("compile to C: equally then controls execution (gcc + run)", async () => {
   forget();
 
   const pyash = [
-    "exists subj name counter obj num 0 be number ya",
-    "obj name counter be equally from num 0 then obj num 1 to name counter be add do",
-    "obj name counter be write do",
+    "exists su name counter ob num 0 be number ya",
+    "ob name counter be equally from num 0 then ob num 1 to name counter be add do",
+    "ob name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");
@@ -45,14 +45,14 @@ test("compile to C: equally compares text", async () => {
   forget();
 
   const pyash = [
-    "exists subj name counter obj num 0 be number ya",
-    "obj text truth be equally from text truth then obj num 1 to name counter be add do",
-    "obj name counter be write do",
+    "exists su name counter ob num 0 be number ya",
+    "ob text truth be equally from text truth then ob num 1 to name counter be add do",
+    "ob name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");

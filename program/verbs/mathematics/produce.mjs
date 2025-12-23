@@ -4,8 +4,8 @@ function resolveVector(v, remember) {
   if (v.values && v.type) return v;
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (found?.obj?.ve?.values) return found.obj.ve;
-    if (found?.obj?.values && found.obj?.type) return found.obj;
+    if (found?.ob?.ve?.values) return found.ob.ve;
+    if (found?.ob?.values && found.ob?.type) return found.ob;
   }
   return undefined;
 }
@@ -17,23 +17,23 @@ function toNumeric(values) {
 }
 
 export async function produce_by_name_vec_num_from_name_vec_num_to_name_num(sentence, { remember }) {
-  const leftVec = resolveVector(sentence.obj ?? sentence.from, remember);
+  const leftVec = resolveVector(sentence.ob ?? sentence.from, remember);
   const rightVec = resolveVector(sentence.by, remember);
 
-  if (!leftVec || !rightVec) throw new Error("produce: both obj/from and by vectors are required");
+  if (!leftVec || !rightVec) throw new Error("produce: both ob/from and by vectors are required");
   const left = toNumeric(leftVec.values);
   const right = toNumeric(rightVec.values);
   if (left.length !== right.length) throw new Error("produce: vectors must be the same length");
 
   const sum = left.reduce((acc, v, idx) => acc + v * right[idx], 0);
-  return { obj: sum, be: sentence?.be ?? "number" };
+  return { ob: sum, be: sentence?.be ?? "number" };
 }
 
 export const produce = produce_by_name_vec_num_from_name_vec_num_to_name_num;
 
 export const signatures = [
   {
-    signatureWords: ["be", "produce", "by", "vec", "num", "obj", "vec", "num", "to", "name", "num"],
+    signatureWords: ["be", "produce", "by", "vec", "num", "ob", "vec", "num", "to", "name", "num"],
     handler: produce_by_name_vec_num_from_name_vec_num_to_name_num
   },
   {
@@ -45,7 +45,7 @@ export const signatures = [
     handler: produce_by_name_vec_num_from_name_vec_num_to_name_num
   },
   {
-    signatureWords: ["be", "produce", "by", "vec", "num", "obj", "vec", "letter", "to", "name", "num"],
+    signatureWords: ["be", "produce", "by", "vec", "num", "ob", "vec", "letter", "to", "name", "num"],
     handler: produce_by_name_vec_num_from_name_vec_num_to_name_num
   }
 ];

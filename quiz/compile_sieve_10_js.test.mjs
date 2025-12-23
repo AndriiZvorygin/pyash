@@ -21,7 +21,7 @@ function unwrapQuoted(text, lang) {
 async function compileToJs(pyash) {
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  return unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "javascript");
+  return unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "javascript");
 }
 
 async function runJs(source) {

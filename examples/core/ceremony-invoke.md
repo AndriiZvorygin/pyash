@@ -6,10 +6,10 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  subj name result obj num 5 be number ya
-subj name add two to name result be ceremony def
-obj num 2 to name result be add do
-subj name add two be ceremony prah
+  su name result ob num 5 be number ya
+su name add two to name result be ceremony def
+ob num 2 to name result be add do
+su name add two be ceremony prah
   to name result be add two do
   mem
   ```
@@ -21,13 +21,13 @@ subj name add two be ceremony prah
   → { "paragraphEnd": true }
   → { "invoked": "add two", "result": { "acted": "result", "value": 7 } }
   Memory: [
-    { "subj": { "name": "result" }, "obj": { "num": 5 }, "be": "number", "mood": "ya" },
-    { "subj": { "name": "add two" }, "be": "ceremony", "mood": "def" },
-    { "obj": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
-    { "subj": { "name": "add two" }, "be": "ceremony", "mood": "prah" },
-    { "obj": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
-    { "subj": { "name": "result" }, "be": "number", "obj": { "num": 7 }, "mood": "ya" },
-    { "subj": { "name": "result" }, "obj": { "num": 7 }, "be": "add", "mood": "ya" },
+    { "su": { "name": "result" }, "ob": { "num": 5 }, "be": "number", "mood": "ya" },
+    { "su": { "name": "add two" }, "be": "ceremony", "mood": "def" },
+    { "ob": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
+    { "su": { "name": "add two" }, "be": "ceremony", "mood": "prah" },
+    { "ob": { "num": 2 }, "to": { "name": "result" }, "be": "add", "mood": "do" },
+    { "su": { "name": "result" }, "be": "number", "ob": { "num": 7 }, "mood": "ya" },
+    { "su": { "name": "result" }, "ob": { "num": 7 }, "be": "add", "mood": "ya" },
     { "to": { "name": "result" }, "be": "add two", "mood": "do" }
   ]
   ```

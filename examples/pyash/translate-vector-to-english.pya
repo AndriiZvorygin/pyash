@@ -1,9 +1,9 @@
-subj name output be english ya
+su name output be english ya
 
-subj name program obj text quoted.pyash.
-exists subj name doors obj ve num 3 1 0 be vector ya
-obj name doors at ord 2 be read to name picked do
+su name program ob text quoted.pyash.
+exists su name doors ob ve num 3 1 0 be vector ya
+ob name doors at ord 2 be read to name picked do
 .pyash.quoted be text ya
 
-obj name program from state pyash to state english to name output be translation do
-subj name output be english que
+ob name program from state pyash to state english to name output be translation do
+su name output be english que

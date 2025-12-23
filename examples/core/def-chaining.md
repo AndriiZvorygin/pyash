@@ -6,22 +6,22 @@
 - **type**: REPL
 - **REPL input**:
   ```
-subj name add one to name result be ceremony def
-obj num 1 to name result be add do
+su name add one to name result be ceremony def
+ob num 1 to name result be add do
 this ret
-subj name add one be ceremony prah
+su name add one be ceremony prah
 
-subj name add two to name result be ceremony def
-obj num 2 to name result be add do
+su name add two to name result be ceremony def
+ob num 2 to name result be add do
 this ret
-subj name add two be ceremony prah
+su name add two be ceremony prah
 
   to name result be add one do
   to name result be add two do
-  subj name result obj what que
+  su name result ob what que
   ```
 - **Expected output**:
   ```
-  subj name result obj num 3 be add two ya
+  su name result ob num 3 be add two ya
   ```
 - **Notes**: The first ceremony initializes/updates `result` (defaulting to 0), the second builds on it. Shows chaining of definitions via the `result` fact.

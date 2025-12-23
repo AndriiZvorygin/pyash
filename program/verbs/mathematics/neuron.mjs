@@ -1,6 +1,6 @@
 function resolveVector(name, remember) {
   const fact = name?.ve ? name : remember(name?.name || name);
-  const vector = fact?.obj?.ve ?? fact?.ve ?? fact?.obj;
+  const vector = fact?.ob?.ve ?? fact?.ve ?? fact?.ob;
   if (!vector?.values || !Array.isArray(vector.values)) {
     throw new Error("neuron: weights/inputs must be vectors");
   }
@@ -15,8 +15,8 @@ function resolveScalar(ref, remember, label) {
   if (typeof ref.num === "number") return ref.num;
   if (typeof ref.name === "string") {
     const fact = remember(ref.name);
-    if (typeof fact?.obj?.num === "number") return fact.obj.num;
-    if (typeof fact?.obj === "number") return fact.obj;
+    if (typeof fact?.ob?.num === "number") return fact.ob.num;
+    if (typeof fact?.ob === "number") return fact.ob;
   }
   throw new Error(`neuron: ${label} is required`);
 }
@@ -35,7 +35,7 @@ export async function neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_
   const dot = weights.reduce((acc, w, idx) => acc + w * inputs[idx], 0);
   const activated = sigmoid(dot + bias);
 
-  return { obj: activated, be: sentence?.be ?? "number" };
+  return { ob: activated, be: sentence?.be ?? "number" };
 }
 
 export const neuron = neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num;

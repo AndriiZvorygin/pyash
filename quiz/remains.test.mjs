@@ -13,25 +13,25 @@ async function run(line) {
 test("remains stores remainder in target name", async () => {
   forget();
 
-  await run("exists subj name dividend obj num 10 be number ya");
-  await run("obj name dividend from num 3 to name rem be remains do");
+  await run("exists su name dividend ob num 10 be number ya");
+  await run("ob name dividend from num 3 to name rem be remains do");
 
   const rem = remember("rem");
-  assert.equal(rem?.obj?.num, 1);
-  assert.equal(remember("result")?.obj?.num, 1);
+  assert.equal(rem?.ob?.num, 1);
+  assert.equal(remember("result")?.ob?.num, 1);
 });
 
 test("remains resolves numeric names", async () => {
   forget();
 
-  await run("exists subj name lhs obj num 14 be number ya");
-  await run("exists subj name rhs obj num 5 be number ya");
-  await run("obj name lhs from name rhs to name rem be remains do");
+  await run("exists su name lhs ob num 14 be number ya");
+  await run("exists su name rhs ob num 5 be number ya");
+  await run("ob name lhs from name rhs to name rem be remains do");
 
-  assert.equal(remember("rem")?.obj?.num, 4);
+  assert.equal(remember("rem")?.ob?.num, 4);
 });
 
 test("remains throws when divisor missing", async () => {
   forget();
-  await assert.rejects(() => run("obj num 5 be remains do"), /remains: from is required/);
+  await assert.rejects(() => run("ob num 5 be remains do"), /remains: from is required/);
 });

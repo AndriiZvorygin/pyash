@@ -21,13 +21,13 @@ test("later ceremony definition takes priority and warns", async () => {
 
   try {
     await run([
-      "exists subj name counter obj num 0 be number ya",
-      "subj name bump to name num counter be ceremony def",
-      "obj num 1 to name counter be add do",
-      "subj name bump be ceremony prah",
-      "subj name bump to name num counter be ceremony def",
-      "obj num 2 to name counter be add do",
-      "subj name bump be ceremony prah",
+      "exists su name counter ob num 0 be number ya",
+      "su name bump to name num counter be ceremony def",
+      "ob num 1 to name counter be add do",
+      "su name bump be ceremony prah",
+      "su name bump to name num counter be ceremony def",
+      "ob num 2 to name counter be add do",
+      "su name bump be ceremony prah",
       "to name counter be bump do"
     ]);
   } finally {
@@ -35,6 +35,6 @@ test("later ceremony definition takes priority and warns", async () => {
   }
 
   const counter = remember("counter");
-  assert.equal(counter?.obj?.num, 2);
+  assert.equal(counter?.ob?.num, 2);
   assert.ok(warnings.some(msg => msg.includes("ceremony redefined: bump")));
 });

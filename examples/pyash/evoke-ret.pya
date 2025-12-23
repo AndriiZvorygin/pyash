@@ -1,6 +1,6 @@
-subj name add two to name num acc be ceremony def
-exists subj name acc obj be number ya
-obj num 2 to name acc be add do
-this obj name acc ret
-subj name add two be ceremony prah
-obj num 5 to name result be add two do
+su name add two to name num acc be ceremony def
+exists su name acc ob be number ya
+ob num 2 to name acc be add do
+this ob name acc ret
+su name add two be ceremony prah
+ob num 5 to name result be add two do

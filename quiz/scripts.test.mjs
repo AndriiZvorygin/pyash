@@ -51,8 +51,8 @@ test("run_pya_program.mjs outputs result in gross mode", async () => {
   const payload = JSON.parse(logs.join(""));
   assert.ok(Array.isArray(payload.outputs));
   const result = payload.result;
-  assert.equal(result.subj?.name, "result");
-  assert.equal(result.obj?.num, 5);
+  assert.equal(result.su?.name, "result");
+  assert.equal(result.ob?.num, 5);
   assert.equal(result.be, "worker");
   assert.equal(result.mood, "ya");
 });
@@ -63,7 +63,7 @@ test("run_pya_program.mjs prints program with --full", async () => {
   const output = logs.join("\n");
   assert.match(output, /Program:\n/);
   assert.match(output, /Result:\n/);
-  assert.match(output, /subj name result obj num 5 be worker ya/);
+  assert.match(output, /su name result ob num 5 be worker ya/);
 });
 
 test("read_pya_trace.mjs emits beautiful trace by default and has evoker first", async () => {
@@ -72,7 +72,7 @@ test("read_pya_trace.mjs emits beautiful trace by default and has evoker first",
   const output = logs.join("\n");
   assert.match(output, /Beautiful Trace/);
   assert.match(output, /Sandpit 0:/);
-  assert.ok(output.includes("[0] obj num 5 to name target be worker do"), "evoker should be first sandpit sentence");
+  assert.ok(output.includes("[0] ob num 5 to name target be worker do"), "evoker should be first sandpit sentence");
 });
 
 test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
@@ -85,5 +85,5 @@ test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
 
   assert.ok(evoker, "sandpit should have an evoker at index 0");
   assert.equal(evoker.be, "worker");
-  assert.equal(evoker.obj?.num, 5);
+  assert.equal(evoker.ob?.num, 5);
 });

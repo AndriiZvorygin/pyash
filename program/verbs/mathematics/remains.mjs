@@ -32,16 +32,16 @@ function resolveNumber(v, remember) {
         }
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
-          // If the chain explicitly asks for `.obj`, resolve names to the full fact so `.obj` works.
-          // Otherwise, resolve to the fact's payload (`.obj`) for convenience.
-          if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+          // If the chain explicitly asks for `.ob`, resolve names to the full fact so `.ob` works.
+          // Otherwise, resolve to the fact's payload (`.ob`) for convenience.
+          if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
         }
         if (curr == null) break;
         if (curr && typeof curr === "object") {
-          if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-            curr = curr.obj.map[part];
-          } else if (curr.obj && curr.obj[part] !== undefined) {
-            curr = curr.obj[part];
+          if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+            curr = curr.ob.map[part];
+          } else if (curr.ob && curr.ob[part] !== undefined) {
+            curr = curr.ob[part];
           } else {
             curr = curr[part];
           }
@@ -61,10 +61,10 @@ function resolveNumber(v, remember) {
   }
   if (typeof v.name === "string") {
     const found = remember(v.name);
-    if (typeof found?.obj?.num === "number") return found.obj.num;
-    if (typeof found?.obj === "number") return found.obj;
-    if (found?.obj?.thisRef) {
-      const reg = state.currentEvokeRef?.[found.obj.thisRef] ?? state.currentEvoke?.[found.obj.thisRef];
+    if (typeof found?.ob?.num === "number") return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
+    if (found?.ob?.thisRef) {
+      const reg = state.currentEvokeRef?.[found.ob.thisRef] ?? state.currentEvoke?.[found.ob.thisRef];
       if (typeof reg === "number") return reg;
       if (typeof reg?.num === "number") return reg.num;
     }
@@ -85,43 +85,43 @@ function getOperand(v, label, remember) {
 }
 
 export async function remains_from_num_obj_num_to_name_num(sentence, { remember }) {
-  const dividend = getOperand(sentence.obj, "obj", remember);
+  const dividend = getOperand(sentence.ob, "ob", remember);
   const divisorSource = sentence.from ?? sentence.by ?? state.currentEvokeRef?.from ?? state.currentEvokeRef?.by ?? state.currentEvoke?.from ?? state.currentEvoke?.by;
   const divisor = getOperand(divisorSource, "from", remember);
   if (divisor === 0) throw new Error("remains: from cannot be zero");
 
-  return { obj: dividend % divisor, be: sentence?.be ?? "number" };
+  return { ob: dividend % divisor, be: sentence?.be ?? "number" };
 }
 
 export const remains = remains_from_num_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "remains", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "by", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "by", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "by", "num", "obj", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "by", "num", "obj", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "obj", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "obj", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "obj", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "name", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
-  { signatureWords: ["be", "remains", "obj", "name", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num }
+  { signatureWords: ["be", "remains", "ob", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "ob", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "ob", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "ob", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "by", "num", "ob", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "name", "num", "to", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "ob", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "ob", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "ob", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "ob", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "num", "to", "name", "num", "ob", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "from", "name", "num", "to", "name", "num", "ob", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "name", "num", "from", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num },
+  { signatureWords: ["be", "remains", "ob", "name", "num", "from", "name", "num", "to", "name", "num"], handler: remains_from_num_obj_num_to_name_num }
 ];

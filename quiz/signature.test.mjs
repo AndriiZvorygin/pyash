@@ -28,30 +28,30 @@ test("multi-word verbs and case arrays normalize whitespace", () => {
   const words = makeSignatureWords({
     be: "  twice   crescent ",
     cases: [
-      { case: "obj", typeWords: [" num "] }
+      { case: "ob", typeWords: [" num "] }
     ]
   });
 
-  assert.deepEqual(words, ["be", "twice crescent", "obj", "num"]);
+  assert.deepEqual(words, ["be", "twice crescent", "ob", "num"]);
 });
 
 test("joinSignatureWords renders a space-joined key", () => {
-  const words = ["be", "add", "obj", "num", "to", "name", "num"];
-  assert.equal(joinSignatureWords(words), "be add obj num to name num");
+  const words = ["be", "add", "ob", "num", "to", "name", "num"];
+  assert.equal(joinSignatureWords(words), "be add ob num to name num");
 });
 
 test("missing type words throws", () => {
   assert.throws(
-    () => makeSignatureWords({ be: "add", cases: [{ case: "obj", typeWords: [] }] }),
+    () => makeSignatureWords({ be: "add", cases: [{ case: "ob", typeWords: [] }] }),
     /needs at least one type word/
   );
 });
 
-test("deriveSignatureFromCall builds inline produce signature (vec obj + by)", () => {
+test("deriveSignatureFromCall builds inline produce signature (vec ob + by)", () => {
   const sentence = {
     mood: "do",
     be: "produce",
-    obj: { ve: { type: "num", values: [1, 2, 3] } },
+    ob: { ve: { type: "num", values: [1, 2, 3] } },
     by: { ve: { type: "num", values: [4, 5, 6] } },
     to: { name: "z" }
   };
@@ -61,7 +61,7 @@ test("deriveSignatureFromCall builds inline produce signature (vec obj + by)", (
   assert.deepEqual(sig, [
     "be", "produce",
     "by", "vec", "num",
-    "obj", "vec", "num",
+    "ob", "vec", "num",
     "to", "name", "num"
   ]);
 });
@@ -77,10 +77,10 @@ test("deriveSignatureFromCall uses memory for named vectors in produce", () => {
 
   const remember = name => {
     if (name === "lhs" || name === "rhs") {
-      return { obj: { ve: { type: "num", values: [1, 2, 3] } } };
+      return { ob: { ve: { type: "num", values: [1, 2, 3] } } };
     }
     if (name === "z") {
-      return { obj: { num: 0 } };
+      return { ob: { num: 0 } };
     }
     return undefined;
   };
@@ -99,7 +99,7 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
   const sentence = {
     mood: "do",
     be: "understand",
-    obj: { name: "input" },
+    ob: { name: "input" },
     fromstate: { name: "pyash" },
     become: { name: "JSON" },
     to: { name: "output" }
@@ -107,7 +107,7 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
 
   const remember = name => {
     if (name === "input" || name === "pyash" || name === "JSON" || name === "output") {
-      return { obj: { text: `${name}-text` } };
+      return { ob: { text: `${name}-text` } };
     }
     return undefined;
   };
@@ -118,7 +118,7 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
     "be", "understand",
     "become", "name", "text",
     "fromstate", "name", "text",
-    "obj", "name", "text",
+    "ob", "name", "text",
     "to", "name", "text"
   ]);
 });
@@ -127,7 +127,7 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
   const sentence = {
     mood: "do",
     be: "add",
-    obj: { name: "lhs" },
+    ob: { name: "lhs" },
     to: { name: "dest" }
   };
 
@@ -135,7 +135,7 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
 
   assert.deepEqual(sig, [
     "be", "add",
-    "obj", "name", "num",
+    "ob", "name", "num",
     "to", "name", "num"
   ]);
 });
@@ -144,7 +144,7 @@ test("deriveSignatureFromCall infers mind and text for say with literal prompt",
   const sentence = {
     mood: "do",
     be: "say",
-    obj: { name: "do you like life?" },
+    ob: { name: "do you like life?" },
     to: { name: "generator" }
   };
 
@@ -154,13 +154,13 @@ test("deriveSignatureFromCall infers mind and text for say with literal prompt",
 
   assert.deepEqual(sig, [
     "be", "say",
-    "obj", "text",
+    "ob", "text",
     "to", "name", "mind"
   ]);
 });
 
 test("deriveSignatureFromCall throws when a case lacks type words", () => {
-  const sentence = { mood: "do", be: "add", obj: {}, to: { name: "z" } };
+  const sentence = { mood: "do", be: "add", ob: {}, to: { name: "z" } };
 
   assert.throws(
     () => deriveSignatureFromCall(sentence),
@@ -169,62 +169,62 @@ test("deriveSignatureFromCall throws when a case lacks type words", () => {
 });
 
 test("deriveSignatureFromCall handles add with inline number + target name", () => {
-  const sentence = { mood: "do", be: "add", obj: { num: 2 }, to: { name: "acc" } };
+  const sentence = { mood: "do", be: "add", ob: { num: 2 }, to: { name: "acc" } };
 
   const sig = deriveSignatureFromCall(sentence);
 
   assert.deepEqual(sig, [
     "be", "add",
-    "obj", "num",
+    "ob", "num",
     "to", "name", "num"
   ]);
 });
 
 test("deriveSignatureFromCall handles invert with named source resolved from memory", () => {
-  const sentence = { mood: "do", be: "invert", obj: { name: "x" }, to: { name: "dst" } };
-  const remember = name => (name === "x" ? { obj: { num: 7 } } : undefined);
+  const sentence = { mood: "do", be: "invert", ob: { name: "x" }, to: { name: "dst" } };
+  const remember = name => (name === "x" ? { ob: { num: 7 } } : undefined);
 
   const sig = deriveSignatureFromCall(sentence, { remember });
 
   assert.deepEqual(sig, [
     "be", "invert",
-    "obj", "name", "num",
+    "ob", "name", "num",
     "to", "name", "num"
   ]);
 });
 
 test("deriveSignatureFromCall handles exponential with inline base/exponent", () => {
-  const sentence = { mood: "do", be: "exponential", obj: { num: 2 }, from: { num: 3 }, to: { name: "dst" } };
+  const sentence = { mood: "do", be: "exponential", ob: { num: 2 }, from: { num: 3 }, to: { name: "dst" } };
 
   const sig = deriveSignatureFromCall(sentence);
 
   assert.deepEqual(sig, [
     "be", "exponential",
     "from", "num",
-    "obj", "num",
+    "ob", "num",
     "to", "name", "num"
   ]);
 });
 
 test("deriveSignatureFromCall includes at-case for vector element read", () => {
-  const sentence = parse("obj name doors via space num 2 be read to name picked do");
+  const sentence = parse("ob name doors via space num 2 be read to name picked do");
   const sig = deriveSignatureFromCall(sentence, { remember: () => null });
   assert.deepEqual(sig, [
     "be", "read",
     "at", "num",
-    "obj", "name", "num",
+    "ob", "name", "num",
     "to", "name", "num"
   ]);
 });
 
 test("deriveSignatureFromCall infers vec type for at-case when vector exists", () => {
-  const remember = name => (name === "doors" ? { be: "vector", obj: { ve: { type: "text", values: [0, 1, 0] } } } : null);
-  const sentence = parse("obj name doors via space num 2 be read to name picked do");
+  const remember = name => (name === "doors" ? { be: "vector", ob: { ve: { type: "text", values: [0, 1, 0] } } } : null);
+  const sentence = parse("ob name doors via space num 2 be read to name picked do");
   const sig = deriveSignatureFromCall(sentence, { remember });
   assert.deepEqual(sig, [
     "be", "read",
     "at", "num",
-    "obj", "name", "vec", "text",
+    "ob", "name", "vec", "text",
     "to", "name", "num"
   ]);
 });
@@ -232,8 +232,8 @@ test("deriveSignatureFromCall infers vec type for at-case when vector exists", (
 test("deriveSignatureFromCall handles multiply with named operands from memory", () => {
   const sentence = { mood: "do", be: "multiply", from: { name: "lhs" }, by: { name: "rhs" }, to: { name: "dst" } };
   const remember = name => {
-    if (name === "lhs" || name === "rhs") return { obj: { num: 2 } };
-    if (name === "dst") return { obj: { num: 0 } };
+    if (name === "lhs" || name === "rhs") return { ob: { num: 2 } };
+    if (name === "dst") return { ob: { num: 0 } };
     return undefined;
   };
 
@@ -247,29 +247,29 @@ test("deriveSignatureFromCall handles multiply with named operands from memory",
   ]);
 });
 
-test("deriveSignatureFromCall handles divide with inline obj and by name", () => {
-  const sentence = { mood: "do", be: "divide", obj: { num: 10 }, by: { name: "rhs" }, to: { name: "dst" } };
-  const remember = name => (name === "rhs" ? { obj: { num: 2 } } : undefined);
+test("deriveSignatureFromCall handles divide with inline ob and by name", () => {
+  const sentence = { mood: "do", be: "divide", ob: { num: 10 }, by: { name: "rhs" }, to: { name: "dst" } };
+  const remember = name => (name === "rhs" ? { ob: { num: 2 } } : undefined);
 
   const sig = deriveSignatureFromCall(sentence, { remember });
 
   assert.deepEqual(sig, [
     "be", "divide",
     "by", "name", "num",
-    "obj", "num",
+    "ob", "num",
     "to", "name", "num"
   ]);
 });
 
-test("deriveSignatureFromCall handles subtract with obj num and from name", () => {
-  const sentence = { mood: "do", be: "subtract", obj: { num: 3 }, from: { name: "collector" } };
-  const remember = name => (name === "collector" ? { obj: { num: 10 } } : undefined);
+test("deriveSignatureFromCall handles subtract with ob num and from name", () => {
+  const sentence = { mood: "do", be: "subtract", ob: { num: 3 }, from: { name: "collector" } };
+  const remember = name => (name === "collector" ? { ob: { num: 10 } } : undefined);
 
   const sig = deriveSignatureFromCall(sentence, { remember });
 
   assert.deepEqual(sig, [
     "be", "subtract",
     "from", "name", "num",
-    "obj", "num"
+    "ob", "num"
   ]);
 });

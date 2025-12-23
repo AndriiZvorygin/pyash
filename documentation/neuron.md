@@ -67,7 +67,7 @@ Cases:
 Requirements:
 
 * `weights` and `inputs` must both be numeric vectors of the same length.
-* `bias` must be a numeric scalar (`obj num`).
+* `bias` must be a numeric scalar (`ob num`).
 * `output` is any word-like subject; it will be bound to the result.
 
 The neuron verb must:
@@ -92,7 +92,7 @@ Given an evoking sentence:
   by:        { name: "inputs" },
   fromstate: { name: "bias" },
   to:        { name: "output" },
-  // plus standard fields like subj if present
+  // plus standard fields like su if present
 }
 ```
 
@@ -111,7 +111,7 @@ The neuron behaviour is:
    Codex must ensure:
 
    * `weights` and `inputs` are vectors of equal length.
-   * `aggregation` is a scalar number (`obj num`) equal to the dot product of those vectors.
+   * `aggregation` is a scalar number (`ob num`) equal to the dot product of those vectors.
 
    In JS pseudocode:
 
@@ -126,7 +126,7 @@ The neuron behaviour is:
 2. **Add bias with scalar `add`**
 
    ```pyash
-   obj  num  from name aggregation
+   ob  num  from name aggregation
    from name bias
    to   name aggregation
    be   add
@@ -142,7 +142,7 @@ The neuron behaviour is:
 3. **Apply activation (default: `twice crescent`)**
 
    ```pyash
-   obj  num  from name aggregation
+   ob  num  from name aggregation
    to   name activated
    be   twice crescent
    do
@@ -161,14 +161,14 @@ The neuron behaviour is:
    To hand the result back through the evoking sentence, use `this` and a proper `ret` sentence:
 
    ```pyash
-   this obj num from name activated
+   this ob num from name activated
    ret
    ```
 
    Codex must:
 
-   * Look up the latest `activated` fact, read its `obj num`.
-   * Merge that into the evoking sentence’s `obj` field.
+   * Look up the latest `activated` fact, read its `ob num`.
+   * Merge that into the evoking sentence’s `ob` field.
    * Return a `ya` sentence for the `output` subject, according to your existing `ret` + bridge rules.
 
 In summary, the neuron ceremony body is this paragraph:
@@ -180,18 +180,18 @@ to   name aggregation
 be   produce
 do
 
-obj  num  from name aggregation
+ob  num  from name aggregation
 from name bias
 to   name aggregation
 be   add
 do
 
-obj  num  from name aggregation
+ob  num  from name aggregation
 to   name activated
 be   twice crescent
 do
 
-this obj num from name activated
+this ob num from name activated
 ret
 ```
 

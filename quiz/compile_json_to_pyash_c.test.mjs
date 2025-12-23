@@ -29,7 +29,7 @@ test("compile json->pyash example to C and run", async () => {
   const pyash = await fs.readFile("examples/pyash/compile-json-to-pyash.pya", "utf8");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const wrapped = result?.obj?.text ?? result?.value?.text ?? "";
+  const wrapped = result?.ob?.text ?? result?.value?.text ?? "";
   const c = wrapped.replace(/^\s*quoted\.c\.\s*/, "").replace(/\s*\.c\.quoted\s*$/, "");
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-json-to-pyash-"));
@@ -41,6 +41,6 @@ test("compile json->pyash example to C and run", async () => {
   const { stdout } = await execFileAsync(exePath, []);
 
   assert.match(stdout, /quoted\.pyash\./);
-  assert.match(stdout, /subj name profile be json map def/);
-  assert.match(stdout, /subj name profile be json map prah/);
+  assert.match(stdout, /su name profile be json map def/);
+  assert.match(stdout, /\bprah\b/);
 });

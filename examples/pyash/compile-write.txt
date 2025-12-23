@@ -1,1 +1,1 @@
-obj text hello be write do
+ob text hello be write do

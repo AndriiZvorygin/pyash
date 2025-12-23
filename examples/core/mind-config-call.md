@@ -7,7 +7,7 @@
 - **REPL input**:
   ```
   su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya
-  su question obj discourse "Hello" to generator be mind do
+  su question ob discourse "Hello" to generator be mind do
   mem
   ```
 - **Expected output**:
@@ -16,7 +16,7 @@
   → { "acted": "generator", "value": { "text": "MODEL=qwen3:8b\nPROMPT=orchestrator\n\nHello", "model": "qwen3:8b" } }
   Memory: [
     {
-      "subj": { "name": "generator" },
+      "su": { "name": "generator" },
       "be": "mind",
       "from": { "name": "http://localhost:11434" },
       "as": { "name": "qwen3:8b" },
@@ -24,21 +24,21 @@
       "mood": "ya"
     },
     {
-      "subj": { "name": "question" },
-      "obj": { "discourse": "Hello" },
+      "su": { "name": "question" },
+      "ob": { "discourse": "Hello" },
       "to": { "name": "generator" },
       "be": "mind",
       "mood": "do"
     },
     {
-      "subj": { "name": "generator" },
+      "su": { "name": "generator" },
       "be": "mind",
-      "obj": { "text": "MODEL=qwen3:8b\nPROMPT=orchestrator\n\nHello", "model": "qwen3:8b" },
+      "ob": { "text": "MODEL=qwen3:8b\nPROMPT=orchestrator\n\nHello", "model": "qwen3:8b" },
       "mood": "ya"
     },
     {
-      "subj": { "name": "result" },
-      "obj": { "text": "MODEL=qwen3:8b\nPROMPT=orchestrator\n\nHello", "model": "qwen3:8b" },
+      "su": { "name": "result" },
+      "ob": { "text": "MODEL=qwen3:8b\nPROMPT=orchestrator\n\nHello", "model": "qwen3:8b" },
       "be": "mind",
       "mood": "ya"
     }

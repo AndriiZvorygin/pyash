@@ -16,11 +16,11 @@ test("inline then consequence executes without gating the next line", async () =
   forget();
 
   await run([
-    "exists subj name counter obj num 0 be number ya",
-    "obj num 1 be tiny from num 2 then obj num 1 to name counter be add do",
-    "obj num 2 to name counter be add do"
+    "exists su name counter ob num 0 be number ya",
+    "ob num 1 be tiny from num 2 then ob num 1 to name counter be add do",
+    "ob num 2 to name counter be add do"
   ]);
 
   const counter = remember("counter");
-  assert.equal(counter?.obj?.num, 3);
+  assert.equal(counter?.ob?.num, 3);
 });

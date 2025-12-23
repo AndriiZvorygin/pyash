@@ -8,17 +8,17 @@ test("quoted.pyash multiline blocks parse as single text without literal \\n tok
   forget();
 
   const program = [
-    "subj name alpha obj num 1 be number ya",
-    "subj name beta obj num 2 be number ya"
+    "su name alpha ob num 1 be number ya",
+    "su name beta ob num 2 be number ya"
   ].join("\n");
 
   const sentence = parse(
-    `subj name input obj text quoted.pyash.${program}.pyash.quoted be text ya`
+    `su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`
   );
 
-  assert.ok(sentence?.obj?.text);
-  assert.equal(sentence.obj.text.includes("\\n"), false, "should retain real newlines, not literal \\n");
-  assert.equal(sentence.obj.text.split("\n").length, 2, "should preserve line breaks inside quoted block");
+  assert.ok(sentence?.ob?.text);
+  assert.equal(sentence.ob.text.includes("\\n"), false, "should retain real newlines, not literal \\n");
+  assert.equal(sentence.ob.text.split("\n").length, 2, "should preserve line breaks inside quoted block");
 
   await interpret(sentence);
 });

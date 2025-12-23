@@ -1,8 +1,8 @@
-exists subj name nums obj ve num 1 2 3 be vector ya
-exists subj name words obj ve text hello world be vector ya
+exists su name nums ob ve num 1 2 3 be vector ya
+exists su name words ob ve text hello world be vector ya
 
-obj name nums be write do
-obj ve of nums be write do
+ob name nums be write do
+ob ve of nums be write do
 
-obj name words be write do
-obj ve of words be write do
+ob name words be write do
+ob ve of words be write do

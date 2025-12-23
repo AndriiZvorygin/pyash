@@ -8,21 +8,21 @@ import { forget } from "../program/remember/index.mjs";
 test("loop ceremony can print fizzbuzz outputs using remains + inline then", async () => {
   forget();
 
-  await interpret(parse("exists subj name handled obj num 0 be number ya"));
-  await interpret(parse("exists subj name rem3 obj num 0 be number ya"));
-  await interpret(parse("exists subj name rem5 obj num 0 be number ya"));
+  await interpret(parse("exists su name handled ob num 0 be number ya"));
+  await interpret(parse("exists su name rem3 ob num 0 be number ya"));
+  await interpret(parse("exists su name rem5 ob num 0 be number ya"));
 
-  await interpret(parse("subj name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def"));
-  await interpret(parse("subj name handled obj num 0 be number ya"));
-  await interpret(parse("obj this ti fromindex from num 3 to name rem3 be remains do"));
-  await interpret(parse("obj this ti fromindex from num 5 to name rem5 be remains do"));
-  await interpret(parse("obj name rem3 be equally from num 0 then obj num 1 to name handled be add do"));
-  await interpret(parse("obj name rem5 be equally from num 0 then obj num 2 to name handled be add do"));
-  await interpret(parse("obj name handled be equally from num 3 then obj text FizzBuzz be write do"));
-  await interpret(parse("obj name handled be equally from num 1 then obj text Fizz be write do"));
-  await interpret(parse("obj name handled be equally from num 2 then obj text Buzz be write do"));
-  await interpret(parse("obj name handled be equally from num 0 then obj this ti fromindex be write do"));
-  await interpret(parse("subj name fizzbuzz step be ceremony prah"));
+  await interpret(parse("su name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def"));
+  await interpret(parse("su name handled ob num 0 be number ya"));
+  await interpret(parse("ob this ti fromindex from num 3 to name rem3 be remains do"));
+  await interpret(parse("ob this ti fromindex from num 5 to name rem5 be remains do"));
+  await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name handled be add do"));
+  await interpret(parse("ob name rem5 be equally from num 0 then ob num 2 to name handled be add do"));
+  await interpret(parse("ob name handled be equally from num 3 then ob text FizzBuzz be write do"));
+  await interpret(parse("ob name handled be equally from num 1 then ob text Fizz be write do"));
+  await interpret(parse("ob name handled be equally from num 2 then ob text Buzz be write do"));
+  await interpret(parse("ob name handled be equally from num 0 then ob this ti fromindex be write do"));
+  await interpret(parse("su name fizzbuzz step be ceremony prah"));
 
   const logs = [];
   const originalLog = console.log;

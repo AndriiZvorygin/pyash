@@ -12,18 +12,18 @@ async function run(line) {
 test("word frequency ceremony counts tokens into map", async () => {
   forget();
 
-  await run("exists subj name words obj ve text one two two be vector ya");
-  await run("subj name wordmap be map def");
+  await run("exists su name words ob ve text one two two be vector ya");
+  await run("su name wordmap be map def");
   await run("prah");
 
-  await run("subj name word frequency obj text token be ceremony def");
-  await run("subj text of obj of this obj num 1 to name wordmap be add do");
+  await run("su name word frequency ob text token be ceremony def");
+  await run("su text of ob of this ob num 1 to name wordmap be add do");
   await run("prah");
 
-  await run("obj name words at all be word frequency do");
+  await run("ob name words at all be word frequency do");
 
   const map = remember("wordmap");
   assert.equal(map?.be, "map");
-  assert.equal(map?.obj?.map?.one?.num, 1);
-  assert.equal(map?.obj?.map?.two?.num, 2);
+  assert.equal(map?.ob?.map?.one?.num, 1);
+  assert.equal(map?.ob?.map?.two?.num, 2);
 });

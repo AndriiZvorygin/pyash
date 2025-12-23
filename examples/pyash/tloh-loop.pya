@@ -1,5 +1,5 @@
-exists subj name counter obj num 0 be number ya
-subj name loop body to name num target fromindex num be ceremony def
-obj num 1 to name counter be add do
-subj name loop body be ceremony prah
+exists su name counter ob num 0 be number ya
+su name loop body to name num target fromindex num be ceremony def
+ob num 1 to name counter be add do
+su name loop body be ceremony prah
 to name counter fromindex num 3 be loop body do

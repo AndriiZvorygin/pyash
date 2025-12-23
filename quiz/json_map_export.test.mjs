@@ -13,19 +13,19 @@ async function run(line) {
 test("json map exports pretty JSON via write", async () => {
   forget();
 
-  await run("subj name profile be json map def");
-  await run('subj name name obj text "Ada" ya');
-  await run("subj name age obj num 36 ya");
-  await run("subj name alive obj bool truth ya");
-  await run("subj name note obj hollow ya");
-  await run("subj name profile be json map prah");
+  await run("su name profile be json map def");
+  await run('su name name ob text "Ada" ya');
+  await run("su name age ob num 36 ya");
+  await run("su name alive ob bool truth ya");
+  await run("su name note ob hollow ya");
+  await run("su name profile be json map prah");
 
   const logs = [];
   const originalLog = console.log;
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await run("obj name profile to state json be write do");
+    await run("ob name profile to state json be write do");
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;
@@ -41,16 +41,16 @@ test("json map exports pretty JSON via write", async () => {
 test("json map allows genitive access by switch", async () => {
   forget();
 
-  await run("subj name profile be json map def");
-  await run("subj name age obj num 36 ya");
-  await run("subj name profile be json map prah");
+  await run("su name profile be json map def");
+  await run("su name age ob num 36 ya");
+  await run("su name profile be json map prah");
 
   const logs = [];
   const originalLog = console.log;
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await run("obj age of profile be write do");
+    await run("ob age of profile be write do");
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

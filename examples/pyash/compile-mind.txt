@@ -1,4 +1,4 @@
-exists subj name helper be mind from space "http://localhost:11434" via state "qwen3-vl:8b-instruct" via discourse "You are a concise assistant." ya
+exists su name helper be mind from space "http://localhost:11434" via state "qwen3-vl:8b-instruct" via discourse "You are a concise assistant." ya
 
-subj name question obj text "Hello from Pyash" to name helper be mind do
-obj name question be write do
+su name question ob text "Hello from Pyash" to name helper be mind do
+ob name question be write do

@@ -22,18 +22,18 @@ test("compile to C: fromindex/toindex loop invokes ceremony body (gcc + run)", a
   forget();
 
   const pyash = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name loop body fromindex num 0 be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name loop body be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name loop body fromindex num 0 be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name loop body be ceremony prah",
     // stop-when-equal loop: 3,2,1 then stop at 0
     "fromindex num 3 toindex num 0 be loop body do",
-    "obj name counter be write do",
+    "ob name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");
@@ -49,17 +49,17 @@ test("compile to C: loop stops at toindex when ascending", async () => {
   forget();
 
   const pyash = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name inc fromindex num 0 be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name inc be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name inc fromindex num 0 be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name inc be ceremony prah",
     "fromindex num 1 toindex num 4 be inc do",
-    "obj name counter be write do",
+    "ob name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");
@@ -75,17 +75,17 @@ test("compile to C: loop stops at toindex when descending", async () => {
   forget();
 
   const pyash = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name inc fromindex num 0 be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name inc be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name inc fromindex num 0 be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name inc be ceremony prah",
     "fromindex num 4 toindex num 1 be inc do",
-    "obj name counter be write do",
+    "ob name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "c");
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(tmpDir, "out.c");

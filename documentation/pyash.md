@@ -99,7 +99,7 @@ The goal is to make the codebase read like controlled natural language, reducing
 
 Pyash keeps declarations explicit when compiling to code targets:
 
-- Use `exists` on the first `ya` sentence for a name, e.g., `exists subj name alpha obj num 1 be number ya`. This is treated as the declaration (`let/const` in JS, `double/const` in C).
+- Use `exists` on the first `ya` sentence for a name, e.g., `exists su name alpha ob num 1 be number ya`. This is treated as the declaration (`let/const` in JS, `double/const` in C).
 - Later `ya` sentences on the same name omit `exists` and become plain assignments (`alpha = 2;`).
 - The compiler will emit a Pyash error if a `ya` sentence assigns to a name that has not been declared with `exists`. This catches undeclared variables before the generated JS/C runs.
 

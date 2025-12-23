@@ -8,21 +8,21 @@ import { forget, remember } from "../program/remember/index.mjs";
 test("bool literal stores boolean payload", async () => {
   forget();
 
-  await interpret(parse("subj name flag obj bool truth be boolean ya"));
+  await interpret(parse("su name flag ob bool truth be boolean ya"));
   const flag = remember("flag");
-  assert.equal(flag?.obj?.boolean, true);
+  assert.equal(flag?.ob?.boolean, true);
 
-  await interpret(parse("subj name off obj bool lie be boolean ya"));
+  await interpret(parse("su name off ob bool lie be boolean ya"));
   const off = remember("off");
-  assert.equal(off?.obj?.boolean, false);
+  assert.equal(off?.ob?.boolean, false);
 });
 
 test("hollow literal stores null marker", async () => {
   forget();
 
-  await interpret(parse("subj name empty obj hollow be null ya"));
+  await interpret(parse("su name empty ob hollow be null ya"));
   const empty = remember("empty");
-  assert.equal(empty?.obj?.hollow, true);
+  assert.equal(empty?.ob?.hollow, true);
 });
 
 test("write prints bool and hollow literals", async () => {
@@ -33,8 +33,8 @@ test("write prints bool and hollow literals", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse("obj bool truth be write do"));
-    await interpret(parse("obj hollow be write do"));
+    await interpret(parse("ob bool truth be write do"));
+    await interpret(parse("ob hollow be write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

@@ -49,11 +49,11 @@ export function buildProgram(source) {
 
   for (let i = 0; i < sentences.length; i++) {
     const s = sentences[i];
-    if (s.be === "topic" && s.mood === "ya" && s.subj?.name) {
-      if (labels.has(s.subj.name)) {
-        throw new Error(`Duplicate label: ${s.subj.name}`);
+    if (s.be === "topic" && s.mood === "ya" && s.su?.name) {
+      if (labels.has(s.su.name)) {
+        throw new Error(`Duplicate label: ${s.su.name}`);
       }
-      labels.set(s.subj.name, i + 1); // pc = next sentence
+      labels.set(s.su.name, i + 1); // pc = next sentence
     }
   }
 

@@ -30,7 +30,7 @@ function buildHistoryMessages(bucket, { window = 8 } = {}) {
   return log.slice(-max);
 }
 
-export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] }) {
+export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) {
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
   const configSentence = config?.be === "mind" ? config : null;
@@ -40,15 +40,15 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
-    configSentence?.obj?.window?.num ??
-    configSentence?.obj?.historyWindow?.num ??
+    configSentence?.ob?.window?.num ??
+    configSentence?.ob?.historyWindow?.num ??
     configSentence?.window ??
     configSentence?.historyWindow ??
-    obj?.window?.num ??
+    ob?.window?.num ??
     8;
 
   // Model resolution: explicit on call or from config via state (keyword "as")
-  const explicitModel = sentence?.obj?.model ?? obj?.model ?? null;
+  const explicitModel = sentence?.ob?.model ?? ob?.model ?? null;
   const configModel = configSentence?.as?.name ?? null;
   const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
 
@@ -57,10 +57,10 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
 
   const callPrompt =
     sentence?.with?.text ??
-    sentence?.obj?.text ??
-    (sentence?.obj?.name && !sentence?.obj?.model ? sentence?.obj?.name : null) ??
-    obj?.text ??
-    (obj?.name && !obj?.model ? obj?.name : null);
+    sentence?.ob?.text ??
+    (sentence?.ob?.name && !sentence?.ob?.model ? sentence?.ob?.name : null) ??
+    ob?.text ??
+    (ob?.name && !ob?.model ? ob?.name : null);
 
   const promptParts = [];
   if (configPrompt) promptParts.push(configPrompt);
@@ -95,24 +95,24 @@ export async function mind_to_name_text({ sentence, obj = {}, to, inputs = [] })
       mood: "do",
       be: "say",
       to: { name: targetName },
-      obj: { text: callPrompt }
+      ob: { text: callPrompt }
     });
     appendLog(bucket, { role: "user", content: callPrompt });
   }
   const baseConfig = configSentence || {};
   doRemember({
     mood: "ya",
-    subj: { name: targetName },
+    su: { name: targetName },
     be: "mind",
     from: baseConfig.from,
     as: baseConfig.as,
     accordingto: baseConfig.accordingto,
     exists: baseConfig.exists,
-    obj: { text: responseText, model, historyWindow }
+    ob: { text: responseText, model, historyWindow }
   });
   appendLog(bucket, { role: "assistant", content: responseText });
 
-  return { obj: { text: responseText, model } };
+  return { ob: { text: responseText, model } };
 }
 
 export default mind_to_name_text;
@@ -123,22 +123,22 @@ export function resetMindLogs() {
 }
 
 export const signatures = [
-  { signatureWords: ["be", "mind", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "obj", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "obj", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "obj", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "obj", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "obj", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "obj", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "obj", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "obj", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "obj", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "say", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "say", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   // Type-style target: say ... to name mind
-  { signatureWords: ["be", "say", "obj", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "obj", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
+  { signatureWords: ["be", "say", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "say", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
 ];

@@ -25,18 +25,18 @@ function resolveGenitiveTarget(genitive, remember) {
   for (const part of chainArr.slice(1)) {
     if (curr && typeof curr === "object" && curr.name && remember) {
       const fact = remember(curr.name);
-      if (fact) curr = fact.obj ?? fact;
+      if (fact) curr = fact.ob ?? fact;
     }
-    if (curr && typeof curr === "object" && curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-      parent = curr.obj.map;
+    if (curr && typeof curr === "object" && curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+      parent = curr.ob.map;
       key = part;
-      curr = curr.obj.map[part];
+      curr = curr.ob.map[part];
       continue;
     }
-    if (curr && typeof curr === "object" && curr.obj && curr.obj[part] !== undefined) {
-      parent = curr.obj;
+    if (curr && typeof curr === "object" && curr.ob && curr.ob[part] !== undefined) {
+      parent = curr.ob;
       key = part;
-      curr = curr.obj[part];
+      curr = curr.ob[part];
       continue;
     }
     parent = curr;
@@ -68,14 +68,14 @@ function resolveScalarValue(v, remember) {
       for (const part of rest) {
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
-          if (fact) curr = fact.obj ?? fact;
+          if (fact) curr = fact.ob ?? fact;
         }
-        if (curr && typeof curr === "object" && curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-          curr = curr.obj.map[part];
+        if (curr && typeof curr === "object" && curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+          curr = curr.ob.map[part];
           continue;
         }
-        if (curr && typeof curr === "object" && curr.obj && curr.obj[part] !== undefined) {
-          curr = curr.obj[part];
+        if (curr && typeof curr === "object" && curr.ob && curr.ob[part] !== undefined) {
+          curr = curr.ob[part];
           continue;
         }
         curr = curr?.[part];
@@ -100,16 +100,16 @@ function resolveScalarValue(v, remember) {
 }
 
 export async function add_obj_num_to_name_num(sentence, { remember }) {
-  if (sentence.obj == null) throw new Error("add: obj is required");
+  if (sentence.ob == null) throw new Error("add: ob is required");
   if (sentence.to == null) throw new Error("add: to is required");
 
   const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
   const targetFact = targetName && remember ? remember(targetName) : null;
-  const mapEntries = targetFact?.obj?.map ?? sentence.to?.map;
+  const mapEntries = targetFact?.ob?.map ?? sentence.to?.map;
   if (mapEntries && typeof mapEntries === "object") {
-    let keyVal = resolveScalarValue(sentence.subj, remember);
+    let keyVal = resolveScalarValue(sentence.su, remember);
     if (keyVal === undefined) {
-      const evokeObj = state.currentEvokeRef?.obj;
+      const evokeObj = state.currentEvokeRef?.ob;
       if (typeof evokeObj?.text === "string") keyVal = evokeObj.text;
       else if (typeof evokeObj?.num === "number") keyVal = evokeObj.num;
       else if (typeof evokeObj?.boolean === "boolean") keyVal = evokeObj.boolean;
@@ -118,54 +118,54 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
       const key = String(keyVal);
       const current = mapEntries[key];
       const currentNum = typeof current?.num === "number" ? current.num : 0;
-      const delta = toNumber(sentence.obj);
+      const delta = toNumber(sentence.ob);
       mapEntries[key] = { num: currentNum + delta };
-      return { obj: { map: mapEntries }, be: targetFact?.be ?? "map" };
+      return { ob: { map: mapEntries }, be: targetFact?.be ?? "map" };
     }
   }
 
-  // Text concatenation: obj text "..." to name <textVar> be add do
-  if (typeof sentence.obj?.text === "string") {
+  // Text concatenation: ob text "..." to name <textVar> be add do
+  if (typeof sentence.ob?.text === "string") {
     if (typeof sentence.to === "string") {
-      return { obj: { text: sentence.to + sentence.obj.text }, be: "text" };
+      return { ob: { text: sentence.to + sentence.ob.text }, be: "text" };
     }
     if (typeof sentence.to?.text === "string") {
-      return { obj: { text: sentence.to.text + sentence.obj.text }, be: "text" };
+      return { ob: { text: sentence.to.text + sentence.ob.text }, be: "text" };
     }
     const rawTo = sentence.to;
     const targetName = typeof rawTo?.name === "string" ? rawTo.name : null;
     if (!targetName || !remember) throw new Error("add: to name is required for text");
     const fact = remember(targetName);
-    const current = typeof fact?.obj?.text === "string" ? fact.obj.text : "";
-    return { obj: { text: current + sentence.obj.text }, be: "text" };
+    const current = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
+    return { ob: { text: current + sentence.ob.text }, be: "text" };
   }
 
-  if (sentence.obj?.name && remember) {
-    const source = remember(sentence.obj.name);
-    if (typeof source?.obj?.text === "string") {
+  if (sentence.ob?.name && remember) {
+    const source = remember(sentence.ob.name);
+    if (typeof source?.ob?.text === "string") {
       if (typeof sentence.to === "string") {
-        return { obj: { text: sentence.to + source.obj.text }, be: "text" };
+        return { ob: { text: sentence.to + source.ob.text }, be: "text" };
       }
       if (typeof sentence.to?.text === "string") {
-        return { obj: { text: sentence.to.text + source.obj.text }, be: "text" };
+        return { ob: { text: sentence.to.text + source.ob.text }, be: "text" };
       }
       const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
       if (!targetName) throw new Error("add: to name is required for text");
       const fact = remember(targetName);
-      const current = typeof fact?.obj?.text === "string" ? fact.obj.text : "";
-      return { obj: { text: current + source.obj.text }, be: "text" };
+      const current = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
+      return { ob: { text: current + source.ob.text }, be: "text" };
     }
   }
 
-  if (sentence.obj?.num !== undefined) {
+  if (sentence.ob?.num !== undefined) {
     if (typeof sentence.to?.text === "string") {
-      return { obj: { text: sentence.to.text + String(sentence.obj.num) }, be: "text" };
+      return { ob: { text: sentence.to.text + String(sentence.ob.num) }, be: "text" };
     }
     const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
     if (targetName && remember) {
       const fact = remember(targetName);
-      if (typeof fact?.obj?.text === "string") {
-        return { obj: { text: fact.obj.text + String(sentence.obj.num) }, be: "text" };
+      if (typeof fact?.ob?.text === "string") {
+        return { ob: { text: fact.ob.text + String(sentence.ob.num) }, be: "text" };
       }
     }
   }
@@ -173,93 +173,93 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.to.genitive) {
     const target = resolveGenitiveTarget(sentence.to.genitive, remember);
     if (target) {
-      const delta = toNumber(sentence.obj);
+      const delta = toNumber(sentence.ob);
       const current = toNumber(target.value ?? target.parent?.[target.key]);
       target.parent[target.key] = current + delta;
-      return { obj: target.parent, be: "number" };
+      return { ob: target.parent, be: "number" };
     }
   }
 
-  const a = toNumber(sentence.obj);
+  const a = toNumber(sentence.ob);
   const b = toNumber(sentence.to);
-  return { obj: a + b, be: "number" };
+  return { ob: a + b, be: "number" };
 }
 
-// Vector element add: obj num X to name vec at num idx
+// Vector element add: ob num X to name vec at num idx
 export async function add_obj_num_to_name_vec_at_num(sentence, { remember }) {
-  const vecName = sentence.to?.name ?? sentence.obj?.name;
+  const vecName = sentence.to?.name ?? sentence.ob?.name;
   const idx = sentence.to?.at?.num ?? sentence.at?.num;
   if (!vecName || idx == null) throw new Error("add: vector name and index required");
 
   const fact = remember ? remember(vecName) : null;
-  if (!fact?.obj?.ve?.values) throw new Error("add: target is not a vector");
+  if (!fact?.ob?.ve?.values) throw new Error("add: target is not a vector");
   const i = Number(idx) - 1;
-  if (!Number.isInteger(i) || i < 0 || i >= fact.obj.ve.values.length) throw new Error("add: index out of range");
+  if (!Number.isInteger(i) || i < 0 || i >= fact.ob.ve.values.length) throw new Error("add: index out of range");
 
-  const delta = Number(sentence.obj?.num ?? 0);
-  const curr = Number(fact.obj.ve.values[i] ?? 0);
-  fact.obj.ve.values[i] = curr + delta;
-  return { obj: fact.obj };
+  const delta = Number(sentence.ob?.num ?? 0);
+  const curr = Number(fact.ob.ve.values[i] ?? 0);
+  fact.ob.ve.values[i] = curr + delta;
+  return { ob: fact.ob };
 }
 
-// Vector element add: be add obj name vec from num X at num idx
+// Vector element add: be add ob name vec from num X at num idx
 export async function add_obj_name_vec_from_num_at_num(sentence, { remember }) {
-  const vecName = sentence.obj?.name;
+  const vecName = sentence.ob?.name;
   const idx = sentence.at?.num;
   const delta = Number(sentence.from?.num ?? 0);
   if (!vecName || idx == null) throw new Error("add: vector name, from num, and at index are required");
 
   const fact = remember ? remember(vecName) : null;
-  if (!fact?.obj?.ve?.values) throw new Error("add: target is not a vector");
+  if (!fact?.ob?.ve?.values) throw new Error("add: target is not a vector");
   const i = Number(idx) - 1;
-  if (!Number.isInteger(i) || i < 0 || i >= fact.obj.ve.values.length) throw new Error("add: index out of range");
+  if (!Number.isInteger(i) || i < 0 || i >= fact.ob.ve.values.length) throw new Error("add: index out of range");
 
-  const curr = Number(fact.obj.ve.values[i] ?? 0);
-  fact.obj.ve.values[i] = curr + delta;
-  return { obj: fact.obj };
+  const curr = Number(fact.ob.ve.values[i] ?? 0);
+  fact.ob.ve.values[i] = curr + delta;
+  return { ob: fact.ob };
 }
 
-// Vector element add: be add obj num X from name vec at num idx
+// Vector element add: be add ob num X from name vec at num idx
 export async function add_obj_num_from_name_vec_at_num(sentence, { remember }) {
   const vecName = sentence.from?.name;
   const idx = sentence.at?.num;
-  const delta = Number(sentence.obj?.num ?? 0);
-  if (!vecName || idx == null) throw new Error("add: vector name, obj num, and at index are required");
+  const delta = Number(sentence.ob?.num ?? 0);
+  if (!vecName || idx == null) throw new Error("add: vector name, ob num, and at index are required");
 
   const fact = remember ? remember(vecName) : null;
-  if (!fact?.obj?.ve?.values) throw new Error("add: target is not a vector");
+  if (!fact?.ob?.ve?.values) throw new Error("add: target is not a vector");
   const i = Number(idx) - 1;
-  if (!Number.isInteger(i) || i < 0 || i >= fact.obj.ve.values.length) throw new Error("add: index out of range");
+  if (!Number.isInteger(i) || i < 0 || i >= fact.ob.ve.values.length) throw new Error("add: index out of range");
 
-  const curr = Number(fact.obj.ve.values[i] ?? 0);
-  fact.obj.ve.values[i] = curr + delta;
-  return { obj: fact.obj };
+  const curr = Number(fact.ob.ve.values[i] ?? 0);
+  fact.ob.ve.values[i] = curr + delta;
+  return { ob: fact.ob };
 }
 
 // Backwards-compatible export until dispatch switches to signature names.
 export const add = add_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "add", "obj", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "name", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "num", "to", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "obj", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "name", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "num", "to", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  // Vector element: obj num ... to vec at idx
-  { signatureWords: ["be", "add", "obj", "num", "to", "name", "vec", "at", "num"], handler: add_obj_num_to_name_vec_at_num },
-  { signatureWords: ["be", "add", "obj", "num", "at", "num", "to", "name", "vec"], handler: add_obj_num_to_name_vec_at_num },
-  // Vector element: obj vec ... from num ... at idx
-  { signatureWords: ["be", "add", "obj", "name", "vec", "from", "num", "at", "num"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "obj", "name", "vec"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "obj", "name", "num"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "obj", "name", "vec", "num"], handler: add_obj_name_vec_from_num_at_num },
-  // Vector element: obj num ... from vec ... at idx
-  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "obj", "num"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "num", "obj", "num"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "obj", "num", "at", "num", "from", "name", "vec"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "obj", "num", "from", "name", "vec", "at", "num"], handler: add_obj_num_from_name_vec_at_num }
+  // Vector element: ob num ... to vec at idx
+  { signatureWords: ["be", "add", "ob", "num", "to", "name", "vec", "at", "num"], handler: add_obj_num_to_name_vec_at_num },
+  { signatureWords: ["be", "add", "ob", "num", "at", "num", "to", "name", "vec"], handler: add_obj_num_to_name_vec_at_num },
+  // Vector element: ob vec ... from num ... at idx
+  { signatureWords: ["be", "add", "ob", "name", "vec", "from", "num", "at", "num"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "vec"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "num"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "vec", "num"], handler: add_obj_name_vec_from_num_at_num },
+  // Vector element: ob num ... from vec ... at idx
+  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "num", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "add", "ob", "num", "at", "num", "from", "name", "vec"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "add", "ob", "num", "from", "name", "vec", "at", "num"], handler: add_obj_num_from_name_vec_at_num }
 ];

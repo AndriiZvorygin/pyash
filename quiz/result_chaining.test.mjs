@@ -13,47 +13,47 @@ async function run(line) {
 test("result facts chain across evocations", async () => {
   forget();
 
-  await run("subj name a obj num 1 be number ya");
-  await run("obj num 2 to name a be add do");
+  await run("su name a ob num 1 be number ya");
+  await run("ob num 2 to name a be add do");
 
   const first = remember("result");
-  assert.equal(first?.obj?.num, 3);
+  assert.equal(first?.ob?.num, 3);
 
-  await run("obj num 4 to name result be add do");
+  await run("ob num 4 to name result be add do");
 
   const second = remember("result");
-  assert.equal(second?.obj?.num, 7);
+  assert.equal(second?.ob?.num, 7);
 });
 
 test("ceremony defs feed result into the next call", async () => {
   forget();
 
-  await run("subj name result obj num 0 be number ya");
+  await run("su name result ob num 0 be number ya");
 
-  await run("subj name add one to name num target be ceremony def");
-  await run("obj num 1 to name result be add do");
+  await run("su name add one to name num target be ceremony def");
+  await run("ob num 1 to name result be add do");
   await run("this ret");
-  await run("subj name add one be ceremony prah");
+  await run("su name add one be ceremony prah");
 
-  await run("subj name add two to name num target be ceremony def");
-  await run("obj num 2 to name result be add do");
+  await run("su name add two to name num target be ceremony def");
+  await run("ob num 2 to name result be add do");
   await run("this ret");
-  await run("subj name add two be ceremony prah");
+  await run("su name add two be ceremony prah");
 
   await run("to name result be add one do");
   await run("to name result be add two do");
 
   const chained = remember("result");
-  assert.equal(chained?.obj?.num, 3);
+  assert.equal(chained?.ob?.num, 3);
 });
 
 test("ret merges onto evoke and writes result fact", async () => {
   forget();
 
-  await run("subj name target obj num 0 be number ya");
-  await run("subj name mark to name num target be ceremony def");
-  await run("obj num 5 to name target ret");
-  await run("subj name mark be ceremony prah");
+  await run("su name target ob num 0 be number ya");
+  await run("su name mark to name num target be ceremony def");
+  await run("ob num 5 to name target ret");
+  await run("su name mark be ceremony prah");
 
   await run("to name target be mark do");
 
@@ -62,22 +62,22 @@ test("ret merges onto evoke and writes result fact", async () => {
   const target = remember("target");
 
   assert.ok(evoker, "evoker should be stored");
-  assert.equal(target?.obj?.num, 5, "target should be updated via ret");
-  assert.equal(result?.obj?.num, 5, "result fact should reflect ret obj");
+  assert.equal(target?.ob?.num, 5, "target should be updated via ret");
+  assert.equal(result?.ob?.num, 5, "result fact should reflect ret ob");
 });
 
 test("non-numeric ceremonies do not default missing results", async () => {
   forget();
 
-  await run("subj name note obj name text payload be ceremony def");
-  await run("subj name payload obj text hello be text ya");
-  await run("obj name payload ret");
-  await run("subj name note be ceremony prah");
+  await run("su name note ob name text payload be ceremony def");
+  await run("su name payload ob text hello be text ya");
+  await run("ob name payload ret");
+  await run("su name note be ceremony prah");
 
-  await run("subj name message obj name payload be note do");
+  await run("su name message ob name payload be note do");
 
   const message = remember("message");
 
   assert.ok(message, "invocation should store message fact");
-  assert.equal(message.obj?.text ?? message.obj, "hello");
+  assert.equal(message.ob?.text ?? message.ob, "hello");
 });

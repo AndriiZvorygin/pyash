@@ -4,7 +4,7 @@ import { buildProgram } from "../program/program.mjs";
 
 test("buildProgram preserves multiline quoted text blocks", () => {
   const source = [
-    'obj text quoted.text.',
+    'ob text quoted.text.',
     'line one',
     'line two',
     '.text.quoted to name output be add do',
@@ -12,5 +12,5 @@ test("buildProgram preserves multiline quoted text blocks", () => {
 
   const program = buildProgram(source);
   assert.equal(program.sentences.length, 1);
-  assert.equal(program.sentences[0].obj?.text, "\nline one\nline two\n");
+  assert.equal(program.sentences[0].ob?.text, "\nline one\nline two\n");
 });

@@ -3,7 +3,7 @@ import { state } from "../../bridge/state.mjs";
 
 function getVector(name, remember) {
   const fact = remember(name);
-  if (!fact?.obj?.ve?.values) {
+  if (!fact?.ob?.ve?.values) {
     throw new Error(`vector: ${name} not found or has no values`);
   }
   return fact;
@@ -25,14 +25,14 @@ function resolveGenitiveValue(genitive, { remember } = {}) {
     }
     if (curr && typeof curr === "object" && curr.name && remember) {
       const fact = remember(curr.name);
-      if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+      if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
     }
     if (curr == null) break;
     if (curr && typeof curr === "object") {
-      if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-        curr = curr.obj.map[part];
-      } else if (curr.obj && curr.obj[part] !== undefined) {
-        curr = curr.obj[part];
+      if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+        curr = curr.ob.map[part];
+      } else if (curr.ob && curr.ob[part] !== undefined) {
+        curr = curr.ob[part];
       } else {
         curr = curr[part];
       }
@@ -68,14 +68,14 @@ function indexFromAt(at, remember) {
           }
           if (curr && typeof curr === "object" && curr.name) {
             const fact = remember(curr.name);
-            if (fact) curr = part === "obj" ? fact : (fact.obj ?? fact);
+            if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
           }
           if (curr == null) break;
           if (curr && typeof curr === "object") {
-            if (curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
-              curr = curr.obj.map[part];
-            } else if (curr.obj && curr.obj[part] !== undefined) {
-              curr = curr.obj[part];
+            if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+              curr = curr.ob.map[part];
+            } else if (curr.ob && curr.ob[part] !== undefined) {
+              curr = curr.ob[part];
             } else {
               curr = curr[part];
             }
@@ -95,61 +95,61 @@ function indexFromAt(at, remember) {
 }
 
 export async function read_obj_name_num_at_num_num_to_name_num(sentence, { remember }) {
-  const obj = sentence.obj || {};
-  const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
-  const idx = indexFromAt(obj.at ?? sentence.at, remember);
-  if (!vecName || idx == null || idx < 0) throw new Error("read: obj vec name and at num are required");
+  const ob = sentence.ob || {};
+  const vecName = ob.name ?? ob.vec?.name ?? ob.vec ?? ob.name?.name;
+  const idx = indexFromAt(ob.at ?? sentence.at, remember);
+  if (!vecName || idx == null || idx < 0) throw new Error("read: ob vec name and at num are required");
   const vec = getVector(vecName, remember);
-  const value = vec.obj.ve.values[idx];
+  const value = vec.ob.ve.values[idx];
   const isNum = typeof value === "number";
-  if (isNum) return { obj: { num: value }, be: "number" };
-  if (typeof value === "boolean") return { obj: { text: value ? "truth" : "lie" }, be: "text" };
-  if (value === "truth" || value === "lie") return { obj: { text: value }, be: "text" };
-  return { obj: { text: value }, be: "text" };
+  if (isNum) return { ob: { num: value }, be: "number" };
+  if (typeof value === "boolean") return { ob: { text: value ? "truth" : "lie" }, be: "text" };
+  if (value === "truth" || value === "lie") return { ob: { text: value }, be: "text" };
+  return { ob: { text: value }, be: "text" };
 }
 
 export async function invert_obj_name_num_at_num_num(sentence, { remember }) {
-  const obj = sentence.obj || {};
-  const vecName = obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
-  const idx = indexFromAt(obj.at ?? sentence.at, remember);
-  if (!vecName || idx == null || idx < 0) throw new Error("invert: obj vec name and at num are required");
+  const ob = sentence.ob || {};
+  const vecName = ob.name ?? ob.vec?.name ?? ob.vec ?? ob.name?.name;
+  const idx = indexFromAt(ob.at ?? sentence.at, remember);
+  if (!vecName || idx == null || idx < 0) throw new Error("invert: ob vec name and at num are required");
   const vec = getVector(vecName, remember);
-  const curr = vec.obj.ve.values[idx];
+  const curr = vec.ob.ve.values[idx];
   const truthy = curr === "truth" || curr === true || curr === 1;
-  vec.obj.ve.values[idx] = truthy ? (typeof curr === "boolean" ? false : "lie") : (typeof curr === "boolean" ? true : "truth");
-  return { obj: vec.obj, be: "vector" };
+  vec.ob.ve.values[idx] = truthy ? (typeof curr === "boolean" ? false : "lie") : (typeof curr === "boolean" ? true : "truth");
+  return { ob: vec.ob, be: "vector" };
 }
 
 export async function write_obj_to_name_vec_at_num(sentence, { remember }) {
-  const obj = sentence.obj || {};
-  const vecName = sentence.to?.name ?? obj.name ?? obj.vec?.name ?? obj.vec ?? obj.name?.name;
-  const atSlot = sentence.to?.at ?? obj.at ?? sentence.at;
+  const ob = sentence.ob || {};
+  const vecName = sentence.to?.name ?? ob.name ?? ob.vec?.name ?? ob.vec ?? ob.name?.name;
+  const atSlot = sentence.to?.at ?? ob.at ?? sentence.at;
   const idx = indexFromAt(atSlot, remember);
-  if (!vecName || idx == null || idx < 0) throw new Error("write: obj value, vec name, and at num are required");
+  if (!vecName || idx == null || idx < 0) throw new Error("write: ob value, vec name, and at num are required");
 
   const vec = getVector(vecName, remember);
   let value;
-  if (obj.num !== undefined) {
-    value = Number(obj.num);
-  } else if (obj.boolean !== undefined) {
-    value = obj.boolean ? "truth" : "lie";
-  } else if (obj.text !== undefined) {
-    value = obj.text;
-  } else if (obj.genitive) {
-    const resolved = resolveGenitiveValue(obj.genitive, { remember });
+  if (ob.num !== undefined) {
+    value = Number(ob.num);
+  } else if (ob.boolean !== undefined) {
+    value = ob.boolean ? "truth" : "lie";
+  } else if (ob.text !== undefined) {
+    value = ob.text;
+  } else if (ob.genitive) {
+    const resolved = resolveGenitiveValue(ob.genitive, { remember });
     if (typeof resolved === "number") {
       value = resolved;
     } else if (typeof resolved === "string") {
       value = resolved;
     } else {
-      throw new Error("write: obj genitive did not resolve");
+      throw new Error("write: ob genitive did not resolve");
     }
   } else {
-    throw new Error("write: obj num/text/boolean is required");
+    throw new Error("write: ob num/text/boolean is required");
   }
 
-  vec.obj.ve.values[idx] = value;
-  return { obj: vec.obj, be: "vector" };
+  vec.ob.ve.values[idx] = value;
+  return { ob: vec.ob, be: "vector" };
 }
 
 export default {
@@ -159,23 +159,23 @@ export default {
 };
 
 export const signatures = [
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "num", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "num", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "text", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "text", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "boolean"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "read", "at", "num", "obj", "name", "vec", "bool", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "bool"], handler: invert_obj_name_num_at_num_num },
-  { signatureWords: ["be", "invert", "at", "num", "obj", "name", "vec", "text"], handler: invert_obj_name_num_at_num_num },
-  { signatureWords: ["be", "write", "obj", "num", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "obj", "num", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "at", "num", "obj", "num", "to", "name", "vec", "num"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "obj", "text", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "obj", "text", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "at", "num", "obj", "text", "to", "name", "vec", "text"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "at", "num", "obj", "text", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "obj", "boolean", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "obj", "boolean", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
-  { signatureWords: ["be", "write", "at", "num", "obj", "boolean", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "num", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "num", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "text", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "text", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "bool", "to", "name", "num"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "bool", "to", "name", "boolean"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "read", "at", "num", "ob", "name", "vec", "bool", "to", "name", "text"], handler: read_obj_name_num_at_num_num_to_name_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "name", "vec", "bool"], handler: invert_obj_name_num_at_num_num },
+  { signatureWords: ["be", "invert", "at", "num", "ob", "name", "vec", "text"], handler: invert_obj_name_num_at_num_num },
+  { signatureWords: ["be", "write", "ob", "num", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "ob", "num", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "ob", "num", "to", "name", "vec", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "ob", "text", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "ob", "text", "to", "name", "vec", "text"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "ob", "text", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "ob", "boolean", "to", "name", "vec", "at", "num"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "ob", "boolean", "at", "num", "to", "name", "vec"], handler: write_obj_to_name_vec_at_num },
+  { signatureWords: ["be", "write", "at", "num", "ob", "boolean", "to", "name", "vec", "bool"], handler: write_obj_to_name_vec_at_num },
 ];

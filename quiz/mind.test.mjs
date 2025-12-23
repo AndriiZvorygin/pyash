@@ -17,7 +17,7 @@ test("mind registration stores engine/model/prompt contexts", async () => {
   await interpret(sentence);
 
   const mem = allRemember();
-  const fact = mem.find(s => s.subj?.name === "generator");
+  const fact = mem.find(s => s.su?.name === "generator");
 
   assert.ok(fact);
   assert.equal(fact.be, "mind");
@@ -41,18 +41,18 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
   );
 
   // Ask the mind (no model/prompt on the call; should resolve from memory)
-  const sentence = parse('su question obj discourse "Hello" to generator be mind do');
+  const sentence = parse('su question ob discourse "Hello" to generator be mind do');
 
   await interpret(sentence);
 
   const mem = allRemember();
-  const fact = mem.find(s => s.subj?.name === "generator");
+  const fact = mem.find(s => s.su?.name === "generator");
 
   assert.ok(fact);
   assert.equal(fact.be, "mind");
-  assert.ok(fact.obj?.text?.includes("MODEL=qwen3:8b"));
-  assert.ok(fact.obj?.text?.includes("Hello"));
-  assert.ok(fact.obj?.text?.includes("orchestrator"));
+  assert.ok(fact.ob?.text?.includes("MODEL=qwen3:8b"));
+  assert.ok(fact.ob?.text?.includes("Hello"));
+  assert.ok(fact.ob?.text?.includes("orchestrator"));
 
   motor.generate = original;
 });
@@ -72,8 +72,8 @@ test("mind invocation includes recent history in prompt with per-mind window", a
     parse('su generator by num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
   );
 
-  await interpret(parse('be say obj text "Hi" to generator do'));
-  await interpret(parse('su question obj discourse "Hello" to generator be mind do'));
+  await interpret(parse('be say ob text "Hi" to generator do'));
+  await interpret(parse('su question ob discourse "Hello" to generator be mind do'));
 
   // With window 1, we keep at most 1 user+assistant pair
   assert.match(capturedPrompt, /USER: Hi/);
@@ -105,11 +105,11 @@ test("mind history is isolated by fromtext bucket", async () => {
     parse('su helperB from text bucketB be mind via state "qwen3:8b" ya')
   );
 
-  await interpret(parse('be say obj text "Hi A" to helperA do'));
-  await interpret(parse('be say obj text "Hi B" to helperB do'));
+  await interpret(parse('be say ob text "Hi A" to helperA do'));
+  await interpret(parse('be say ob text "Hi B" to helperB do'));
 
-  await interpret(parse('su q obj discourse "Hello A" to helperA be mind do'));
-  await interpret(parse('su q obj discourse "Hello B" to helperB be mind do'));
+  await interpret(parse('su q ob discourse "Hello A" to helperA be mind do'));
+  await interpret(parse('su q ob discourse "Hello B" to helperB be mind do'));
 
   motor.generate = original;
 
@@ -131,8 +131,8 @@ test("mind history defaults to `<name> story` bucket when fromtext absent", asyn
   };
 
   await interpret(parse('su helper be mind via state "qwen3:8b" ya'));
-  await interpret(parse('be say obj text "Ping" to helper do'));
-  await interpret(parse('su q obj discourse "Hello" to helper be mind do'));
+  await interpret(parse('be say ob text "Ping" to helper do'));
+  await interpret(parse('su q ob discourse "Hello" to helper be mind do'));
 
   motor.generate = original;
 

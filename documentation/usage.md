@@ -32,7 +32,7 @@ FizzBuzz quick checks
 - Compile to C: `./compile examples/pyash/compile-fizzbuzz.txt examples/out/compile-fizzbuzz-output.c c`
 - Full-length compile (1..100): `./compile examples/pyash/compile-fizzbuzz-100.txt examples/out/compile-fizzbuzz-100-output.js javascript`
 - Inline sentences are accepted when the provided path does not exist.
-- Genitive order is root-first: `this ti obj ti num` means `this.obj.num` (avoid reversed chains like `num ti this ti obj`).
+- Genitive order is root-first: `this ti ob ti num` means `this.ob.num` (avoid reversed chains like `num ti this ti ob`).
 
 Compile-to-C status (quick reality check):
 - Verified by gcc+run quizzes: scalars (`number`/`text`), `write`, `add`/`subtract`/`remains` (`fmod`), `equally`/`tiny`/`giant` with `then`, loops (`fromindex`/`toindex`), and vectors (read/write + print).

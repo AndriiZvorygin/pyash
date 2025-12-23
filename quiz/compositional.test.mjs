@@ -42,7 +42,7 @@ test("compositional roles do not expose context field", () => {
 });
 
 test("quantity context maps to times/by/per keywords", () => {
-  const s = parse("subj name loop from quantity num 3 via quantity num 2 to quantity num 10 be topic ya");
+  const s = parse("su name loop from quantity num 3 via quantity num 2 to quantity num 10 be topic ya");
 
   assert.deepEqual(s.times, { num: 3 });
   assert.deepEqual(s.by, { num: 2 });
@@ -53,7 +53,7 @@ test("quantity context maps to times/by/per keywords", () => {
 });
 
 test("sequence context maps to fromindex/atindex/toindex", () => {
-  const s = parse("subj name item from sequence num 1 via sequence num 2 to sequence num 3 be topic ya");
+  const s = parse("su name item from sequence num 1 via sequence num 2 to sequence num 3 be topic ya");
 
   assert.deepEqual(s.fromindex, { num: 1 });
   assert.deepEqual(s.atindex, { num: 2 });
@@ -64,21 +64,21 @@ test("sequence context maps to fromindex/atindex/toindex", () => {
 });
 
 test("via space maps to at keyword", () => {
-  const s = parse("obj name doors via space slot2 be topic ya");
+  const s = parse("ob name doors via space slot2 be topic ya");
 
   assert.deepEqual(s.at, { name: "slot2" });
   assert.ok(!s.via, "via should be normalized to at");
 });
 
 test("flat at role parses directly", () => {
-  const s = parse("obj name doors at num 2 be topic ya");
+  const s = parse("ob name doors at num 2 be topic ya");
 
   assert.deepEqual(s.at, { num: 2 });
-  assert.equal(s.obj?.name, "doors");
+  assert.equal(s.ob?.name, "doors");
 });
 
 test("interior context maps outof/inside/into keywords", () => {
-  const s = parse("subj name item from interior cellar via interior hallway to interior attic be topic ya");
+  const s = parse("su name item from interior cellar via interior hallway to interior attic be topic ya");
 
   assert.deepEqual(s.outof, { name: "cellar" });
   assert.deepEqual(s.inside, { name: "hallway" });
@@ -86,7 +86,7 @@ test("interior context maps outof/inside/into keywords", () => {
 });
 
 test("surface context maps offof/along/onto keywords", () => {
-  const s = parse("subj name ball from surface table via surface rail to surface shelf be topic ya");
+  const s = parse("su name ball from surface table via surface rail to surface shelf be topic ya");
 
   assert.deepEqual(s.offof, { name: "table" });
   assert.deepEqual(s.along, { name: "rail" });
@@ -94,7 +94,7 @@ test("surface context maps offof/along/onto keywords", () => {
 });
 
 test("under context maps fromunder/under/beneath keywords", () => {
-  const s = parse("subj name crate from under bed via under frame to under floor be topic ya");
+  const s = parse("su name crate from under bed via under frame to under floor be topic ya");
 
   assert.deepEqual(s.fromunder, { name: "bed" });
   assert.deepEqual(s.under, { name: "frame" });
@@ -102,7 +102,7 @@ test("under context maps fromunder/under/beneath keywords", () => {
 });
 
 test("person context maps fromperson/with/for keywords", () => {
-  const s = parse("subj name gift from person alice via person bob to person carol be topic ya");
+  const s = parse("su name gift from person alice via person bob to person carol be topic ya");
 
   assert.deepEqual(s.fromperson, { name: "alice" });
   assert.deepEqual(s.with, { name: "bob" });
@@ -110,7 +110,7 @@ test("person context maps fromperson/with/for keywords", () => {
 });
 
 test("social context maps fromgroup/among/intogroup keywords", () => {
-  const s = parse("subj name dossier from social admins via social leads to social execs be topic ya");
+  const s = parse("su name dossier from social admins via social leads to social execs be topic ya");
 
   assert.deepEqual(s.fromgroup, { name: "admins" });
   assert.deepEqual(s.among, { name: "leads" });

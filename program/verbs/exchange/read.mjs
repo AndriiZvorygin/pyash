@@ -18,7 +18,7 @@ export async function read_from_filename({ from }) {
   }
   const mod = await import(modulePath);
   const result = await mod.default({ from });
-  return { obj: result.obj, be: "text" };
+  return { ob: result.ob, be: "text" };
 }
 
 export default async function read({ from }) {

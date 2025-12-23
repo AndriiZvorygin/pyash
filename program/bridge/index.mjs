@@ -13,7 +13,7 @@ import { throwErrorSentence } from "../error.mjs";
 function resolveFillCount(by, remember) {
   if (!by) return null;
   if (typeof by.num === "number") return by.num;
-  if (typeof by.name === "string") return remember(by.name)?.obj?.num ?? null;
+  if (typeof by.name === "string") return remember(by.name)?.ob?.num ?? null;
   if (by.genitive?.chain?.length) {
     const [root, ...rest] = by.genitive.chain;
     let curr = root === "this" ? null : remember(root);
@@ -84,14 +84,18 @@ function validateCeremonySequenceDeps(name) {
 
 export async function interpret(sentence) {
   if (!sentence) return;
+  if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
+  if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;
+  if (sentence.subj) delete sentence.subj;
+  if (sentence.obj) delete sentence.obj;
 
-  const { mood, be, subj, obj, to, from } = sentence;
+  const { mood, be, su, ob, to, from } = sentence;
   const isMapDef = mood === "def" && (be === "map" || be === "json map");
   const isMapPrah = mood === "prah" && (be === "map" || be === "json map");
   const insideMap = state.mapStack.length > 0;
 
   if (isMapDef) {
-    state.mapStack.push({ name: subj?.name ?? null, kind: be, entries: [] });
+    state.mapStack.push({ name: su?.name ?? null, kind: be, entries: [] });
     return { mapStart: true };
   }
 
@@ -105,15 +109,15 @@ export async function interpret(sentence) {
     const frame = state.mapStack.pop();
     const map = {};
     for (const entry of frame.entries) {
-      const key = entry?.subj?.name;
+      const key = entry?.su?.name;
       if (!key) continue;
-      map[key] = entry.obj ?? {};
+      map[key] = entry.ob ?? {};
     }
     const mapSentence = {
       mood: "ya",
-      subj: { name: frame.name },
+      su: { name: frame.name },
       be: frame.kind,
-      obj: { map }
+      ob: { map }
     };
     doRemember(mapSentence);
     return { stored: frame.name };
@@ -129,7 +133,7 @@ export async function interpret(sentence) {
   const insideParagraph = state.definitionStack.length > 0;
 
   if (isParagraphDef) {
-    state.definitionStack.push(subj?.name ?? null);
+    state.definitionStack.push(su?.name ?? null);
   }
 
   if (insideParagraph && !state.executingBody && mood !== "prah" && !isParagraphDef) {
@@ -139,12 +143,12 @@ export async function interpret(sentence) {
 
   if (mood === "prah") {
     let prahSentence = sentence;
-    if (!prahSentence.subj?.name && state.definitionStack.length > 0) {
-      prahSentence = { ...prahSentence, subj: { name: state.definitionStack[state.definitionStack.length - 1] } };
+    if (!prahSentence.su?.name && state.definitionStack.length > 0) {
+      prahSentence = { ...prahSentence, su: { name: state.definitionStack[state.definitionStack.length - 1] } };
     }
     doRemember(prahSentence);
     if (state.definitionStack.length > 0) state.definitionStack.pop();
-    if (prahSentence.subj?.name) validateCeremonySequenceDeps(prahSentence.subj.name);
+    if (prahSentence.su?.name) validateCeremonySequenceDeps(prahSentence.su.name);
     return { paragraphEnd: true };
   }
 
@@ -166,32 +170,32 @@ export async function interpret(sentence) {
 
   if (mood === "ya" || mood === "def") {
     if (mood === "def" && be === "ceremony") {
-      if (subj?.name && getDefinition(subj.name)) {
-        console.warn(`ceremony redefined: ${subj.name}`);
+      if (su?.name && getDefinition(su.name)) {
+        console.warn(`ceremony redefined: ${su.name}`);
       }
       const sig = deriveSignatureFromDefinition(sentence);
       if (sig) {
         sentence.signatureWords = sig;
-        registerSignature({ name: subj?.name, signatureWords: sig });
+        registerSignature({ name: su?.name, signatureWords: sig });
       }
     }
 
-    // Vector fill sugar: "obj ve <type> <value> by num N be vector ya"
-    if (mood === "ya" && be === "vector" && sentence?.obj?.ve?.values?.length === 1) {
+    // Vector fill sugar: "ob ve <type> <value> by num N be vector ya"
+    if (mood === "ya" && be === "vector" && sentence?.ob?.ve?.values?.length === 1) {
       const resolved = resolveFillCount(sentence.by, remember);
       const n = resolved == null ? null : Math.trunc(resolved);
       if (n > 0) {
-        const elem = sentence.obj.ve.values[0];
-        const filled = { ...sentence, obj: { ...(sentence.obj || {}), ve: { ...(sentence.obj.ve || {}), values: Array(n).fill(elem) } } };
+        const elem = sentence.ob.ve.values[0];
+        const filled = { ...sentence, ob: { ...(sentence.ob || {}), ve: { ...(sentence.ob.ve || {}), values: Array(n).fill(elem) } } };
         // Avoid persisting the fill-count as part of the stored fact.
         delete filled.by;
         doRemember(filled);
-        return { stored: subj?.name };
+        return { stored: su?.name };
       }
     }
 
     doRemember(sentence);
-    return { stored: subj?.name };
+    return { stored: su?.name };
   }
 
   // --- Imperative ---
@@ -217,7 +221,7 @@ export async function interpret(sentence) {
 
   // --- Interrogative ---
   if (mood === "que") {
-    const fact = remember(subj?.name);
+    const fact = remember(su?.name);
     if (!fact) return null;
 
     // For now your tests want the whole matching sentence as Pyash

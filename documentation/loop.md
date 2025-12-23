@@ -13,7 +13,7 @@ stay on the evoking sentence; no standalone loop facts are written.
 * The parser treats them like other roles:
   * `fromindex num 1 toindex num 10 be worker do`
   * `fromindex num 5 be countdown do` (implicit decrement toward zero)
-* No `subj fromindex ... ya` or `subj toindex ... ya` facts are written.
+* No `su fromindex ... ya` or `su toindex ... ya` facts are written.
 
 ## 2) Supervisor defaults
 

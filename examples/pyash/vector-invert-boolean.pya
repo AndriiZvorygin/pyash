@@ -1,6 +1,6 @@
-exists subj name switches obj ve bool truth lie truth be vector ya
+exists su name switches ob ve bool truth lie truth be vector ya
 
-obj name switches via space num 1 be invert do
-obj name switches via space num 1 be read to name status do
+ob name switches via space num 1 be invert do
+ob name switches via space num 1 be read to name status do
 
-subj name status be pyash que
+su name status be pyash que

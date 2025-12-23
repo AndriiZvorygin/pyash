@@ -6,27 +6,27 @@ import { remember, forget } from "../program/remember/index.mjs";
 
 test("write sets vector element by index", async () => {
   forget();
-  await interpret(parse("exists subj name values obj ve num 10 20 30 be vector ya"));
-  await interpret(parse("obj num 99 to name values at num 1 be write do"));
+  await interpret(parse("exists su name values ob ve num 10 20 30 be vector ya"));
+  await interpret(parse("ob num 99 to name values at num 1 be write do"));
 
   const vec = remember("values");
-  assert.deepEqual(vec?.obj?.ve?.values, [10, 99, 30]);
+  assert.deepEqual(vec?.ob?.ve?.values, [10, 99, 30]);
 });
 
 test("write sets text vector element by index", async () => {
   forget();
-  await interpret(parse("exists subj name words obj ve text hello world be vector ya"));
-  await interpret(parse("obj text alpha to name words at num 1 be write do"));
+  await interpret(parse("exists su name words ob ve text hello world be vector ya"));
+  await interpret(parse("ob text alpha to name words at num 1 be write do"));
 
   const words = remember("words");
-  assert.deepEqual(words?.obj?.ve?.values, ["hello", "alpha"]);
+  assert.deepEqual(words?.ob?.ve?.values, ["hello", "alpha"]);
 });
 
 test("write sets boolean vector element by index", async () => {
   forget();
-  await interpret(parse("exists subj name switches obj ve bool truth lie truth be vector ya"));
-  await interpret(parse("obj text truth to name switches at num 1 be write do"));
+  await interpret(parse("exists su name switches ob ve bool truth lie truth be vector ya"));
+  await interpret(parse("ob text truth to name switches at num 1 be write do"));
 
   const switches = remember("switches");
-  assert.deepEqual(switches?.obj?.ve?.values, ["truth", "truth", "truth"]);
+  assert.deepEqual(switches?.ob?.ve?.values, ["truth", "truth", "truth"]);
 });

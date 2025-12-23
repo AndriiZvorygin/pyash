@@ -21,7 +21,7 @@ function unwrapQuoted(text, lang) {
 async function compileToJs(pyash) {
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  return unwrapQuoted(result?.obj?.text ?? result?.value?.text ?? "", "javascript");
+  return unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "javascript");
 }
 
 async function runJs(source) {
@@ -37,19 +37,19 @@ async function runJs(source) {
 test("compile JS write name vector outputs full sentence", async () => {
   forget();
   const pyash = [
-    "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj name values be write do"
+    "exists su name values ob ve num 1 2 3 be vector ya",
+    "ob name values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
-  assert.equal(out, "subj name values obj ve num 1 2 3 be vector ya");
+  assert.equal(out, "su name values ob ve num 1 2 3 be vector ya");
 });
 
 test("compile JS write genitive vector outputs literal", async () => {
   forget();
   const pyash = [
-    "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj ve of values be write do"
+    "exists su name values ob ve num 1 2 3 be vector ya",
+    "ob ve of values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
@@ -59,19 +59,19 @@ test("compile JS write genitive vector outputs literal", async () => {
 test("compile JS write name text vector outputs full sentence", async () => {
   forget();
   const pyash = [
-    "exists subj name words obj ve text hello world be vector ya",
-    "obj name words be write do"
+    "exists su name words ob ve text hello world be vector ya",
+    "ob name words be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
-  assert.equal(out, "subj name words obj ve text hello world be vector ya");
+  assert.equal(out, "su name words ob ve text hello world be vector ya");
 });
 
 test("compile JS write genitive text vector outputs literal", async () => {
   forget();
   const pyash = [
-    "exists subj name words obj ve text hello world be vector ya",
-    "obj ve of words be write do"
+    "exists su name words ob ve text hello world be vector ya",
+    "ob ve of words be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);

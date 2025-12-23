@@ -3,8 +3,8 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 
 function sentenceToEnglish(sentence) {
-  const subj = sentence.subj?.name;
-  const obj = sentence.obj ?? {};
+  const su = sentence.su?.name;
+  const ob = sentence.ob ?? {};
   const mood = sentence.mood;
   const beWords = (sentence.be || "").split(" ").filter(Boolean);
   const beLabel = beWords.length ? beWords.join(" ") : "something";
@@ -12,17 +12,17 @@ function sentenceToEnglish(sentence) {
   // Conditional
   const isComparator = ["tiny", "giant", "equally"].includes(beLabel);
   if (sentence.consequence && isComparator) {
-    const lhs = obj.num !== undefined ? obj.num : obj.name ?? "lhs";
+    const lhs = ob.num !== undefined ? ob.num : ob.name ?? "lhs";
     const rhs = sentence.from?.num !== undefined ? sentence.from.num : sentence.from?.name ?? "rhs";
     const consequence = sentenceToEnglish(sentence.consequence);
     return `if ${lhs} is ${beLabel} from ${rhs} then ${consequence}`.replace(/\.$/, "") + ".";
   }
 
-  if (!subj && mood !== "do") return JSON.stringify(sentence);
+  if (!su && mood !== "do") return JSON.stringify(sentence);
 
   if (mood === "do") {
-    const numVal = obj.num !== undefined ? obj.num : undefined;
-    const textVal = obj.text !== undefined ? obj.text : undefined;
+    const numVal = ob.num !== undefined ? ob.num : undefined;
+    const textVal = ob.text !== undefined ? ob.text : undefined;
     const verb = beLabel;
     const targetTo = sentence.to?.name;
     const targetFrom = sentence.from?.name;
@@ -40,15 +40,15 @@ function sentenceToEnglish(sentence) {
 
   if (mood !== "ya") return JSON.stringify(sentence);
 
-  if (obj.num !== undefined) {
-    return `${subj} is ${beLabel} ${obj.num}.`;
+  if (ob.num !== undefined) {
+    return `${su} is ${beLabel} ${ob.num}.`;
   }
 
-  if (obj.text !== undefined) {
-    return `${subj} is ${beLabel} "${obj.text}".`;
+  if (ob.text !== undefined) {
+    return `${su} is ${beLabel} "${ob.text}".`;
   }
 
-  return `${subj} is ${beLabel}`;
+  return `${su} is ${beLabel}`;
 }
 
 function englishLineToSentence(line) {
@@ -60,15 +60,15 @@ function englishLineToSentence(line) {
     const [, lhsRaw, cmp, rhsRaw, consequenceRaw] = condMatch;
     const lhsNum = Number(lhsRaw);
     const rhsNum = Number(rhsRaw);
-    const obj = {};
-    if (!Number.isNaN(lhsNum)) obj.num = lhsNum; else obj.name = lhsRaw.trim();
+    const ob = {};
+    if (!Number.isNaN(lhsNum)) ob.num = lhsNum; else ob.name = lhsRaw.trim();
     const from = {};
     if (!Number.isNaN(rhsNum)) from.num = rhsNum; else from.name = rhsRaw.trim();
     const consequence = englishLineToSentence(consequenceRaw) ?? null;
     return {
       mood: "do",
       be: cmp.toLowerCase(),
-      obj,
+      ob,
       from,
       consequence
     };
@@ -80,11 +80,11 @@ function englishLineToSentence(line) {
     const [, verb, numRaw, dir, target] = doMatch;
     const cleanNum = numRaw.replace(/\.$/, "");
     const n = Number(cleanNum);
-    const obj = { num: Number.isNaN(n) ? cleanNum : n };
+    const ob = { num: Number.isNaN(n) ? cleanNum : n };
     const sentence = {
       mood: "do",
       be: verb.toLowerCase(),
-      obj,
+      ob,
     };
     if (dir.toLowerCase() === "to") {
       sentence.to = { name: target };
@@ -100,14 +100,14 @@ function englishLineToSentence(line) {
 
   const [, name, bePart, textVal, numVal] = match;
   const be = bePart.trim();
-  const sentence = { mood: "ya", subj: { name }, be };
+  const sentence = { mood: "ya", su: { name }, be };
 
   if (textVal !== undefined) {
-    sentence.obj = { text: textVal };
+    sentence.ob = { text: textVal };
   } else if (numVal !== undefined) {
     const clean = numVal.replace(/\.$/, "");
     const n = Number(clean);
-    sentence.obj = { num: Number.isNaN(n) ? numVal : n };
+    sentence.ob = { num: Number.isNaN(n) ? numVal : n };
   }
 
   return sentence;
@@ -133,8 +133,8 @@ function javascriptLineToSentence(line) {
       "number";
     return {
       mood: "ya",
-      subj: { name },
-      obj: { num },
+      su: { name },
+      ob: { num },
       be,
       exists: true
     };
@@ -149,8 +149,8 @@ function javascriptLineToSentence(line) {
       "text";
     return {
       mood: "ya",
-      subj: { name },
-      obj: { text },
+      su: { name },
+      ob: { text },
       be,
       exists: true
     };
@@ -162,8 +162,8 @@ function javascriptLineToSentence(line) {
     const [, name, numRaw] = match;
     return {
       mood: "ya",
-      subj: { name },
-      obj: { num: parseNumberToken(numRaw) },
+      su: { name },
+      ob: { num: parseNumberToken(numRaw) },
       be: "number"
     };
   }
@@ -174,8 +174,8 @@ function javascriptLineToSentence(line) {
     const [, name, text] = match;
     return {
       mood: "ya",
-      subj: { name },
-      obj: { text },
+      su: { name },
+      ob: { text },
       be: "text"
     };
   }
@@ -192,7 +192,7 @@ function javascriptLineToSentence(line) {
     return {
       mood: "do",
       be: verb,
-      obj: { num: parseNumberToken(numRaw) },
+      ob: { num: parseNumberToken(numRaw) },
       to: { name }
     };
   }
@@ -209,7 +209,7 @@ function javascriptLineToSentence(line) {
     return {
       mood: "do",
       be: verb,
-      obj: { num: parseNumberToken(numRaw) },
+      ob: { num: parseNumberToken(numRaw) },
       to: { name }
     };
   }
@@ -218,11 +218,11 @@ function javascriptLineToSentence(line) {
 }
 
 export async function translation_from_text_to_name_text(sentence) {
-  const sourceName = sentence?.obj?.name ?? sentence?.from?.name;
+  const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
   const sourceText =
     sentence?.from?.text ??
-    sentence?.obj?.text ??
-    (sourceName ? remember(sourceName)?.obj?.text : null);
+    sentence?.ob?.text ??
+    (sourceName ? remember(sourceName)?.ob?.text : null);
 
   if (typeof sourceText !== "string") {
     throw new Error("translation: source text is required");
@@ -253,17 +253,17 @@ export async function translation_from_text_to_name_text(sentence) {
     translation = lines.join("\n");
   }
 
-  const targetName = sentence?.to?.name ?? sentence?.subj?.name;
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
   if (targetName) {
     doRemember({
-      subj: { name: targetName },
+      su: { name: targetName },
       be: sentence?.become?.name ?? (isEnglishSource || isJavaScriptSource ? "pyash" : "english"),
-      obj: { text: translation, sentences },
+      ob: { text: translation, sentences },
       mood: "ya"
     });
   }
 
-  return { obj: { text: translation, sentences }, be: sentence?.become?.name ?? (isEnglishSource || isJavaScriptSource ? "pyash" : "english") };
+  return { ob: { text: translation, sentences }, be: sentence?.become?.name ?? (isEnglishSource || isJavaScriptSource ? "pyash" : "english") };
 }
 
 export default translation_from_text_to_name_text;
@@ -282,7 +282,7 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
-    signatureWords: ["be", "translation", "become", "name", "num", "fromstate", "name", "num", "obj", "name", "text", "to", "name", "num"],
+    signatureWords: ["be", "translation", "become", "name", "num", "fromstate", "name", "num", "ob", "name", "text", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },
   {

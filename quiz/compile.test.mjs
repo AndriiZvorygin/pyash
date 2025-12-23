@@ -14,51 +14,51 @@ test("understand verb reads Pyash text and stores JSON", async () => {
   forget();
 
   const program = [
-    "subj name alpha obj num 1 be number ya",
-    "subj name beta obj num 2 be number ya"
+    "su name alpha ob num 1 be number ya",
+    "su name beta ob num 2 be number ya"
   ].join("\n");
 
   // store input text and placeholder output
   await interpret(
-    parse(`exists subj name input obj text "${program}" be text ya`)
+    parse(`exists su name input ob text "${program}" be text ya`)
   );
-  await interpret(parse("subj name output be text ya"));
+  await interpret(parse("su name output be text ya"));
 
   const sentence = parse(
-    "obj name input from state pyash to state JSON to name output be understand do"
+    "ob name input from state pyash to state JSON to name output be understand do"
   );
   const result = await interpret(sentence);
 
   const mem = allRemember();
-  const out = mem.find(s => s.subj?.name === "output");
+  const out = mem.find(s => s.su?.name === "output");
 
   assert.ok(result, "understand should return result");
   assert.ok(out, "understand should store to output");
-  assert.ok(Array.isArray(out.obj?.sentences));
-  assert.equal(out.obj.sentences.length, 2);
-  assert.match(out.obj.text, /alpha/);
+  assert.ok(Array.isArray(out.ob?.sentences));
+  assert.equal(out.ob.sentences.length, 2);
+  assert.match(out.ob.text, /alpha/);
 
-  const parsed = JSON.parse(out.obj.text);
-  assert.equal(parsed[0].subj.name, "alpha");
+  const parsed = JSON.parse(out.ob.text);
+  assert.equal(parsed[0].su.name, "alpha");
 });
 
 test("understand can write parsed JSON to filename", async () => {
   forget();
 
   const program = [
-    "subj name alpha obj num 1 be number ya",
-    "subj name beta obj num 2 be number ya"
+    "su name alpha ob num 1 be number ya",
+    "su name beta ob num 2 be number ya"
   ].join("\n");
 
   const outputFile = "quiz/sandpit/understand-output.json";
   await fs.rm(outputFile, { force: true });
 
   await interpret(
-    parse(`subj name input obj text quoted.pyash.${program}.pyash.quoted be text ya`)
+    parse(`su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`)
   );
 
   const sentence = parse(
-    `obj name input from state pyash to filename "${outputFile}" be understand do`
+    `ob name input from state pyash to filename "${outputFile}" be understand do`
   );
 
   const result = await interpret(sentence);
@@ -68,7 +68,7 @@ test("understand can write parsed JSON to filename", async () => {
   const parsed = JSON.parse(fileText);
 
   assert.equal(parsed.length, 2);
-  assert.equal(parsed[1].subj.name, "beta");
+  assert.equal(parsed[1].su.name, "beta");
 
   await fs.rm(outputFile, { force: true });
 });
@@ -91,7 +91,7 @@ test("understand can read from filename and write JSON to filename", async () =>
   const parsed = JSON.parse(fileText);
 
   assert.equal(parsed.length, 2);
-  assert.equal(parsed[0].subj.name, "alpha");
+  assert.equal(parsed[0].su.name, "alpha");
 
   await fs.rm(outputFile, { force: true });
 });
@@ -108,11 +108,11 @@ test("compile converts Pyash file to JavaScript file", async () => {
   );
 
   const result = await interpret(sentence);
-  assert.ok(result?.obj?.text ?? result?.value?.text);
+  assert.ok(result?.ob?.text ?? result?.value?.text);
 
   const fileText = await fs.readFile(outputFile, "utf8");
-  assert.match(fileText, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
-  assert.match(fileText, /let beta = \{[\s\S]*subj:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*obj:\s*\{\s*num:\s*2/s);
+  assert.match(fileText, /let alpha = \{[\s\S]*su:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*ob:\s*\{\s*num:\s*1/s);
+  assert.match(fileText, /let beta = \{[\s\S]*su:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*ob:\s*\{\s*num:\s*2/s);
 
   await fs.rm(outputFile, { force: true });
 });
@@ -123,7 +123,7 @@ test("file-based compile outputs runnable JS with write", async () => {
   const inputFile = "quiz/sandpit/compile-write.txt";
   const outputFile = "quiz/sandpit/compile-write-output.js";
 
-  await fs.writeFile(inputFile, "obj text hello be write do\n", "utf8");
+  await fs.writeFile(inputFile, "ob text hello be write do\n", "utf8");
   await fs.rm(outputFile, { force: true });
 
   const sentence = parse(
@@ -187,12 +187,12 @@ test("compile emits loop for fromindex countdown", async () => {
   forget();
 
   const program = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name num counter be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name loop body be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name loop body to name num counter be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
-    "obj name counter be write do"
+    "ob name counter be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -200,20 +200,20 @@ test("compile emits loop for fromindex countdown", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const js = result?.ob?.text ?? result?.value?.text ?? "";
   const unwrapped = js
     .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
   assert.match(unwrapped, /runLoop\(/, "should emit loop helper call");
-  assert.match(unwrapped, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/, "loop body increments counter");
+  assert.match(unwrapped, /counter\.ob\.num = \(counter\.ob\.num \?\? 0\) \+ 1;/, "loop body increments counter");
 
   const logs = [];
   const context = { console: { log: (...args) => logs.push(args[0]) } };
   context.globalThis = context;
   vm.runInNewContext(unwrapped, context);
   const firstLog = logs[0];
-  const loggedNum = firstLog?.obj?.num ?? firstLog;
+  const loggedNum = firstLog?.ob?.num ?? firstLog;
   assert.equal(loggedNum, 3, "loop should increment counter to 3");
 });
 
@@ -221,10 +221,10 @@ test("compile emits C loop for fromindex countdown", async () => {
   forget();
 
   const program = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name num counter be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name loop body be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name loop body to name num counter be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do"
   ].join("\\n");
 
@@ -233,7 +233,7 @@ test("compile emits C loop for fromindex countdown", async () => {
   );
 
   const result = await interpret(sentence);
-  const c = result?.obj?.text ?? result?.value?.text ?? "";
+  const c = result?.ob?.text ?? result?.value?.text ?? "";
 
   assert.ok(c.includes("be_loop_body_to_name_num"), "should emit ceremony in C");
   assert.ok(c.includes("for (fromindex = 3; fromindex > 0; fromindex--) { be_loop_body_to_name_num(); }"), "should emit countdown loop");
@@ -243,12 +243,12 @@ test("compiled C loop builds and runs", async (t) => {
   forget();
 
   const program = [
-    "exists subj name counter obj num 0 be number ya",
-    "subj name loop body to name num counter be ceremony def",
-    "obj num 1 to name counter be add do",
-    "subj name loop body be ceremony prah",
+    "exists su name counter ob num 0 be number ya",
+    "su name loop body to name num counter be ceremony def",
+    "ob num 1 to name counter be add do",
+    "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
-    "obj name counter be write do"
+    "ob name counter be write do"
   ].join("\\n");
 
   const cFile = "quiz/sandpit/compile-loop-output.c";
@@ -278,28 +278,28 @@ test("compiled C loop builds and runs", async (t) => {
 test("compile converts inline Pyash text to JavaScript text with const for permanent", async () => {
   forget();
 
-  const program = "exists subj name alpha obj num 1 be permanent number ya\nexists subj name beta obj text hello be permanent text ya";
+  const program = "exists su name alpha ob num 1 be permanent number ya\nexists su name beta ob text hello be permanent text ya";
   const sentence = parse(
     `from text quoted.pyash.${program}.pyash.quoted become javascript to text output be compile do`
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
   assert.ok(js);
-  assert.match(js, /const alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
-  assert.match(js, /let beta = \{[\s\S]*subj:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*obj:\s*\{\s*text:\s*"hello"/s);
+  assert.match(js, /const alpha = \{[\s\S]*su:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*ob:\s*\{\s*num:\s*1/s);
+  assert.match(js, /let beta = \{[\s\S]*su:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*ob:\s*\{\s*text:\s*"hello"/s);
 });
 
 test("compile converts inline Pyash text to C text", async () => {
   forget();
 
-  const program = "exists subj name alpha obj num 1 be number ya\nexists subj name beta obj text hello be permanent text ya";
+  const program = "exists su name alpha ob num 1 be number ya\nexists su name beta ob text hello be permanent text ya";
   const sentence = parse(
     `from text quoted.pyash.${program}.pyash.quoted to state c to text output be compile do`
   );
 
   const result = await interpret(sentence);
-  const c = result?.obj?.text ?? result?.value?.text;
+  const c = result?.ob?.text ?? result?.value?.text;
   assert.ok(c, `compile returned: ${JSON.stringify(result)}`);
   assert.match(c, /double alpha = 1;/);
   assert.match(c, /char beta\[PYA_TEXT_CAP\] = "hello";/);
@@ -309,8 +309,8 @@ test("compile converts inline Pyash text to C with reassignment", async () => {
   forget();
 
   const program = [
-    "exists subj name alpha obj num 1 be number ya",
-    "subj name alpha obj num 3 be number ya"
+    "exists su name alpha ob num 1 be number ya",
+    "su name alpha ob num 3 be number ya"
   ].join("\\n");
 
   const sentence = parse(
@@ -318,7 +318,7 @@ test("compile converts inline Pyash text to C with reassignment", async () => {
   );
 
   const result = await interpret(sentence);
-  const c = result?.obj?.text ?? result?.value?.text;
+  const c = result?.ob?.text ?? result?.value?.text;
   assert.ok(c, `compile returned: ${JSON.stringify(result)}`);
   assert.match(c, /double alpha = 1;/);
   assert.match(c, /alpha = 3;/);
@@ -329,8 +329,8 @@ test("compile emits C if-statement for tiny then", async () => {
   forget();
 
   const program = [
-    "exists subj name total obj num 0 be number ya",
-    "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
+    "exists su name total ob num 0 be number ya",
+    "ob num 3 be tiny from num 5 then ob num 1 to name total be add do"
   ].join("\\n");
 
   const sentence = parse(
@@ -338,7 +338,7 @@ test("compile emits C if-statement for tiny then", async () => {
   );
 
   const result = await interpret(sentence);
-  const c = result?.obj?.text ?? result?.value?.text;
+  const c = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(c);
   assert.match(c, /double total = 0;/);
@@ -349,8 +349,8 @@ test("compile emits JS for simple add", async () => {
   forget();
 
   const program = [
-    "exists subj name collector obj num 0 be number ya",
-    "obj num 2 to name collector be add do"
+    "exists su name collector ob num 0 be number ya",
+    "ob num 2 to name collector be add do"
   ].join("\\n");
 
   const sentence = parse(
@@ -358,19 +358,19 @@ test("compile emits JS for simple add", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let collector = \{[\s\S]*subj:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*obj:\s*\{\s*num:\s*0/s);
-  assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \+ 2;/);
+  assert.match(js, /let collector = \{[\s\S]*su:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*ob:\s*\{\s*num:\s*0/s);
+  assert.match(js, /collector\.ob\.num = \(collector\.ob\.num \?\? 0\) \+ 2;/);
 });
 
 test("compile reassigns without redeclaring when name already exists", async () => {
   forget();
 
   const program = [
-    "exists subj name alpha obj num 1 be number ya",
-    "subj name alpha obj num 2 be number ya"
+    "exists su name alpha ob num 1 be number ya",
+    "su name alpha ob num 2 be number ya"
   ].join("\\n");
 
   const sentence = parse(
@@ -378,18 +378,18 @@ test("compile reassigns without redeclaring when name already exists", async () 
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*num:\s*1/s);
-  assert.match(js, /alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"[\s\S]*obj:\s*\{\s*num:\s*2/s);
+  assert.match(js, /let alpha = \{[\s\S]*su:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*ob:\s*\{\s*num:\s*1/s);
+  assert.match(js, /alpha = \{[\s\S]*su:\s*\{\s*name:\s*"alpha"[\s\S]*ob:\s*\{\s*num:\s*2/s);
 });
 
 test("compile emits console.log for write text", async () => {
   forget();
 
   const program = [
-    "obj text hello be write do"
+    "ob text hello be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -397,7 +397,7 @@ test("compile emits console.log for write text", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const js = result?.ob?.text ?? result?.value?.text ?? "";
 
   assert.match(js, /console\.log\("hello"\);/);
 });
@@ -406,8 +406,8 @@ test("compile emits console.log for write name using variable reference", async 
   forget();
 
   const program = [
-    "exists subj name alpha obj text hi be text ya",
-    "obj name alpha be write do"
+    "exists su name alpha ob text hi be text ya",
+    "ob name alpha be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -415,19 +415,19 @@ test("compile emits console.log for write name using variable reference", async 
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const js = result?.ob?.text ?? result?.value?.text ?? "";
 
-  assert.match(js, /let alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*obj:\s*\{\s*text:\s*"hi"/);
-  assert.match(js, /console\.log\(alpha\.obj\?\.(ve\?\.\w+\s*\?\?\s*)?alpha\.obj\?\.(text|num)[^)]*\);/);
+  assert.match(js, /let alpha = \{[\s\S]*su:\s*\{\s*name:\s*"alpha"\s*\}[\s\S]*ob:\s*\{\s*text:\s*"hi"/);
+  assert.match(js, /console\.log\(alpha\.ob\?\.(ve\?\.\w+\s*\?\?\s*)?alpha\.ob\?\.(text|num)[^)]*\);/);
 });
 
 test("compile emits JS for simple multiply and divide", async () => {
   forget();
 
   const program = [
-    "exists subj name collector obj num 10 be number ya",
-    "obj num 3 to name collector be multiply do",
-    "obj num 2 to name collector be divide do"
+    "exists su name collector ob num 10 be number ya",
+    "ob num 3 to name collector be multiply do",
+    "ob num 2 to name collector be divide do"
   ].join("\\n");
 
   const sentence = parse(
@@ -435,20 +435,20 @@ test("compile emits JS for simple multiply and divide", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let collector = \{[\s\S]*subj:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*obj:\s*\{\s*num:\s*10/s);
-  assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \* 3;/);
-  assert.match(js, /collector\.obj\.num = \(collector\.obj\.num \?\? 0\) \/ 2;/);
+  assert.match(js, /let collector = \{[\s\S]*su:\s*\{\s*name:\s*"collector"\s*\}[\s\S]*ob:\s*\{\s*num:\s*10/s);
+  assert.match(js, /collector\.ob\.num = \(collector\.ob\.num \?\? 0\) \* 3;/);
+  assert.match(js, /collector\.ob\.num = \(collector\.ob\.num \?\? 0\) \/ 2;/);
 });
 
 test("compile emits JS for text concatenation via add", async () => {
   forget();
 
   const program = [
-    "exists subj name message obj text hi be text ya",
-    "obj text there to name message be add do"
+    "exists su name message ob text hi be text ya",
+    "ob text there to name message be add do"
   ].join("\\n");
 
   const sentence = parse(
@@ -456,17 +456,17 @@ test("compile emits JS for text concatenation via add", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text ?? "";
+  const js = result?.ob?.text ?? result?.value?.text ?? "";
 
-  assert.match(js, /message\.obj\.text = \(message\.obj\.text \?\? \"\"\) \+ \"there\";/);
+  assert.match(js, /message\.ob\.text = \(message\.ob\.text \?\? \"\"\) \+ \"there\";/);
 });
 
 test("compile vector literal and produce dot product inline", async () => {
   forget();
 
   const program = [
-    "obj vec num 1 2 3 by vec num 4 5 6 to name z be produce do",
-    "obj name z be write do"
+    "ob vec num 1 2 3 by vec num 4 5 6 to name z be produce do",
+    "ob name z be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -474,7 +474,7 @@ test("compile vector literal and produce dot product inline", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+  const js = (result?.ob?.text ?? result?.value?.text ?? "")
     .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
@@ -490,10 +490,10 @@ test("compile vector produce from named vectors", async () => {
   forget();
 
   const program = [
-    "exists subj name w obj ve num 1 1 1 be vector ya",
-    "exists subj name x obj ve num 2 3 4 be vector ya",
+    "exists su name w ob ve num 1 1 1 be vector ya",
+    "exists su name x ob ve num 2 3 4 be vector ya",
     "from name w by name x to name z be produce do",
-    "obj name z be write do"
+    "ob name z be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -501,7 +501,7 @@ test("compile vector produce from named vectors", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+  const js = (result?.ob?.text ?? result?.value?.text ?? "")
     .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
@@ -517,8 +517,8 @@ test("compile say to mind emits mind call", async () => {
   forget();
 
   const program = [
-    "exists subj name helper be mind from name http://localhost:11434 ya",
-    "obj text hello to name helper be say do"
+    "exists su name helper be mind from name http://localhost:11434 ya",
+    "ob text hello to name helper be say do"
   ].join("\\n");
 
   const sentence = parse(
@@ -526,7 +526,7 @@ test("compile say to mind emits mind call", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+  const js = (result?.ob?.text ?? result?.value?.text ?? "")
     .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
@@ -539,9 +539,9 @@ test("compiled say to mind builds messages payload and uses helper transport", a
   forget();
 
   const program = [
-    "exists subj name helper by num 1 be mind from name http://localhost:11434 ya",
-    "obj text hello to name helper be say do",
-    "obj text again to name helper be say do"
+    "exists su name helper by num 1 be mind from name http://localhost:11434 ya",
+    "ob text hello to name helper be say do",
+    "ob text again to name helper be say do"
   ].join("\\n");
 
   const sentence = parse(
@@ -549,7 +549,7 @@ test("compiled say to mind builds messages payload and uses helper transport", a
   );
 
   const result = await interpret(sentence);
-  const js = (result?.obj?.text ?? result?.value?.text ?? "")
+  const js = (result?.ob?.text ?? result?.value?.text ?? "")
     .replace(/^\s*quoted\.javascript\.\s*/, "")
     .replace(/\s*\.javascript\.quoted\s*$/, "");
 
@@ -584,8 +584,8 @@ test("compile emits JS ceremony with no params", async () => {
   forget();
 
   const program = [
-    "subj name noop be ceremony def",
-    "subj name noop be ceremony prah"
+    "su name noop be ceremony def",
+    "su name noop be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -593,7 +593,7 @@ test("compile emits JS ceremony with no params", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
   assert.match(js, /function\s+be_noop\(sentence\)[\s\S]*return\s*sentence;/);
@@ -603,10 +603,10 @@ test("compile emits JS ceremony with param and body", async () => {
   forget();
 
   const program = [
-    "exists subj name bucket obj num 0 be number ya",
-    "subj name add two to name num bucket be ceremony def",
-    "obj num 2 to name bucket be add do",
-    "subj name add two be ceremony prah"
+    "exists su name bucket ob num 0 be number ya",
+    "su name add two to name num bucket be ceremony def",
+    "ob num 2 to name bucket be add do",
+    "su name add two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -614,11 +614,11 @@ test("compile emits JS ceremony with param and body", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let bucket = \{ subj: \{ name: "bucket" \}, obj: \{ num: 0 \}/);
-  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*bucket\.obj\.num\s*=\s*\(bucket\.obj\.num\s*\?\?\s*0\)\s*\+\s*2;/s);
+  assert.match(js, /let bucket = \{ su: \{ name: "bucket" \}, ob: \{ num: 0 \}/);
+  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*bucket\.ob\.num\s*=\s*\(bucket\.ob\.num\s*\?\?\s*0\)\s*\+\s*2;/s);
   assert.match(js, /return\s+sentence\s*;/);
 });
 
@@ -626,10 +626,10 @@ test("compiled ceremony function can be invoked (JS)", async () => {
   forget();
 
   const program = [
-    "exists subj name bucket obj num 0 be number ya",
-    "subj name add two be ceremony def",
-    "obj num 2 to num of obj of this be add do",
-    "subj name add two be ceremony prah"
+    "exists su name bucket ob num 0 be number ya",
+    "su name add two be ceremony def",
+    "ob num 2 to num of ob of this be add do",
+    "su name add two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -637,9 +637,9 @@ test("compiled ceremony function can be invoked (JS)", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
-  const sandbox = { remember: name => ({ subj: { name }, obj: { num: 0 } }) };
+  const sandbox = { remember: name => ({ su: { name }, ob: { num: 0 } }) };
   vm.createContext(sandbox);
   const unwrapped = js
     .replace(/^quoted\.javascript\.\n?/, "")
@@ -647,17 +647,17 @@ test("compiled ceremony function can be invoked (JS)", async () => {
   vm.runInContext(unwrapped, sandbox);
 
   assert.equal(typeof sandbox.be_add_two, "function");
-  const r = sandbox.be_add_two({ obj: { num: 0 }, to: { num: 0, name: "bucket" } });
-  assert.equal(r.obj?.num ?? r.to?.num, 2);
+  const r = sandbox.be_add_two({ ob: { num: 0 }, to: { num: 0, name: "bucket" } });
+  assert.equal(r.ob?.num ?? r.to?.num, 2);
 });
 
-test("compile emits JS ceremony mutating this.obj.num via genitive", async () => {
+test("compile emits JS ceremony mutating this.ob.num via genitive", async () => {
   forget();
 
   const program = [
-    "subj name bump be ceremony def",
-    "obj num 2 to num of obj of this be add do",
-    "subj name bump be ceremony prah"
+    "su name bump be ceremony def",
+    "ob num 2 to num of ob of this be add do",
+    "su name bump be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -665,10 +665,10 @@ test("compile emits JS ceremony mutating this.obj.num via genitive", async () =>
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /function\s+be_bump\(sentence\)[\s\S]*sentence\.obj = sentence\.obj\?\.(obj\?\.)?obj \?\? sentence\.obj \?\? \{\}/);
+  assert.match(js, /function\s+be_bump\(sentence\)[\s\S]*sentence\.ob = sentence\.ob\?\.(ob\?\.)?ob \?\? sentence\.ob \?\? \{\}/);
   assert.doesNotMatch(js, /const target = remember/, "this-genitive should not introduce remember");
   assert.match(js, /return sentence;/);
 });
@@ -677,8 +677,8 @@ test("compile emits JS if-statement for tiny then", async () => {
   forget();
 
   const program = [
-    "exists subj name total obj num 0 be number ya",
-    "obj num 3 be tiny from num 5 then obj num 1 to name total be add do"
+    "exists su name total ob num 0 be number ya",
+    "ob num 3 be tiny from num 5 then ob num 1 to name total be add do"
   ].join("\\n");
 
   const sentence = parse(
@@ -686,19 +686,19 @@ test("compile emits JS if-statement for tiny then", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
-  assert.match(js, /let total = \{[\s\S]*subj:\s*\{\s*name:\s*"total"\s*\}[\s\S]*obj:\s*\{\s*num:\s*0/s);
-  assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) \+ 1;/);
+  assert.match(js, /let total = \{[\s\S]*su:\s*\{\s*name:\s*"total"\s*\}[\s\S]*ob:\s*\{\s*num:\s*0/s);
+  assert.match(js, /total\.ob\.num = \(total\.ob\.num \?\? 0\) \+ 1;/);
 });
 
 test("compile emits JS if-statement for giant then subtract", async () => {
   forget();
 
   const program = [
-    "exists subj name total obj num 10 be number ya",
-    "obj num 7 be giant from num 5 then obj num 2 to name total be subtract do"
+    "exists su name total ob num 10 be number ya",
+    "ob num 7 be giant from num 5 then ob num 2 to name total be subtract do"
   ].join("\\n");
 
   const sentence = parse(
@@ -706,19 +706,19 @@ test("compile emits JS if-statement for giant then subtract", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
   assert.match(js, /let total = \{[\s\S]*name:\s*"total"[\s\S]*num:\s*10/s);
-  assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) - 2;/);
+  assert.match(js, /total\.ob\.num = \(total\.ob\.num \?\? 0\) - 2;/);
 });
 
 test("compile emits JS if-statement for equally then multiply", async () => {
   forget();
 
   const program = [
-    "exists subj name total obj num 5 be number ya",
-    "obj num 5 be equally from num 5 then obj num 2 to name total be multiply do"
+    "exists su name total ob num 5 be number ya",
+    "ob num 5 be equally from num 5 then ob num 2 to name total be multiply do"
   ].join("\\n");
 
   const sentence = parse(
@@ -726,19 +726,19 @@ test("compile emits JS if-statement for equally then multiply", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
   assert.match(js, /let total = \{[\s\S]*name:\s*"total"[\s\S]*num:\s*5/s);
-  assert.match(js, /total\.obj\.num = \(total\.obj\.num \?\? 0\) \* 2;/);
+  assert.match(js, /total\.ob\.num = \(total\.ob\.num \?\? 0\) \* 2;/);
 });
 
 test("compile emits nested conditionals", async () => {
   forget();
 
   const program = [
-    "exists subj name counter obj num 0 be number ya",
-    "obj num 2 be tiny from num 3 then obj num 4 be giant from num 1 then obj num 1 to name counter be add do"
+    "exists su name counter ob num 0 be number ya",
+    "ob num 2 be tiny from num 3 then ob num 4 be giant from num 1 then ob num 1 to name counter be add do"
   ].join("\\n");
 
   const sentence = parse(
@@ -746,18 +746,18 @@ test("compile emits nested conditionals", async () => {
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
   assert.match(js, /let counter = \{[\s\S]*name:\s*"counter"[\s\S]*num:\s*0/s);
-  assert.match(js, /counter\.obj\.num = \(counter\.obj\.num \?\? 0\) \+ 1;/);
+  assert.match(js, /counter\.ob\.num = \(counter\.ob\.num \?\? 0\) \+ 1;/);
 });
 
 test("compile leaves TODO for malformed conditional without consequence", async () => {
   forget();
 
   const program = [
-    "obj num 1 be tiny from num 2 ya"
+    "ob num 1 be tiny from num 2 ya"
   ].join("\\n");
 
   const sentence = parse(
@@ -765,7 +765,7 @@ test("compile leaves TODO for malformed conditional without consequence", async 
   );
 
   const result = await interpret(sentence);
-  const js = result?.obj?.text ?? result?.value?.text;
+  const js = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(js);
   assert.match(js, /TODO: .*\"be\":\"tiny\"/);

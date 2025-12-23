@@ -1,7 +1,7 @@
 # Glossary
 
 - sentence: a structured Pyash statement (mood + verb + cases).
-- case: a keyworded role like `subj`, `obj`, `to`, `from`.
+- case: a keyworded role like `su`, `ob`, `to`, `from`.
 - mood: how a sentence is treated (`ya`, `do`, `def`, `prah`, `then`).
 - signature: canonical word list used for dispatch.
 - ceremony: a user-defined verb (`def` / `prah`).

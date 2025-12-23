@@ -66,8 +66,8 @@ async function main() {
   }
 
   // If the result is a compiled artifact with a text payload, stream it directly.
-  if (result?.obj?.text) {
-    console.log(result.obj.text);
+  if (result?.ob?.text) {
+    console.log(result.ob.text);
     return;
   }
 

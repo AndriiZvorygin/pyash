@@ -13,20 +13,20 @@ async function run(line) {
 test("sandpit first sentence is the source of truth for returned registers", async () => {
   forget();
 
-  // ceremony: start from invoke sentence with obj/fromindex/toindex; mutate obj; return invoke
-  await run("subj name worker to name num target be ceremony def");
-  await run("obj num 4 to name target be add do");
-  await run("this obj name target ret");
-  await run("subj name worker be ceremony prah");
+  // ceremony: start from invoke sentence with ob/fromindex/toindex; mutate ob; return invoke
+  await run("su name worker to name num target be ceremony def");
+  await run("ob num 4 to name target be add do");
+  await run("this ob name target ret");
+  await run("su name worker be ceremony prah");
 
-  await run("subj name target obj num 1 fromindex num 3 toindex num 5 be number ya");
+  await run("su name target ob num 1 fromindex num 3 toindex num 5 be number ya");
   await run("to name target be worker do");
 
   const mem = allRemember();
   const sandpit = dumpSandpits().at(-1);
 
   const invoke = [...mem].reverse().find(s => s.be === "worker" && s.mood === "do");
-  const result = mem.find(s => s.subj?.name === "result");
+  const result = mem.find(s => s.su?.name === "result");
   const sandpitInvoke = sandpit?.[0];
 
   assert.ok(invoke, "invoke sentence should be stored");
@@ -36,11 +36,11 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   assert.equal(sandpitInvoke.be, "worker");
 
   assert.ok(sandpit, "sandpit trace should exist");
-  const latestTarget = [...sandpit].reverse().find(s => s.subj?.name === "target");
+  const latestTarget = [...sandpit].reverse().find(s => s.su?.name === "target");
   assert.ok(latestTarget, "sandpit should contain updated target");
 
-  assert.equal(invoke.obj?.num, latestTarget.obj?.num, "invoke obj mirrors sandpit source of truth");
-  assert.equal(result.obj?.num, invoke.obj?.num, "result mirrors invoke obj");
+  assert.equal(invoke.ob?.num, latestTarget.ob?.num, "invoke ob mirrors sandpit source of truth");
+  assert.equal(result.ob?.num, invoke.ob?.num, "result mirrors invoke ob");
   assert.equal(sandpitInvoke.fromindex?.num ?? sandpitInvoke.fromindex, latestTarget.fromindex?.num ?? latestTarget.fromindex, "fromindex retained on evoke sentence");
   assert.equal(sandpitInvoke.toindex?.num ?? sandpitInvoke.toindex, latestTarget.toindex?.num ?? latestTarget.toindex, "toindex retained on evoke sentence");
 

@@ -10,7 +10,7 @@ async function run(line) {
   return interpret(s);
 }
 
-test("def sentences are indexed by subj name with position in memory", async () => {
+test("def sentences are indexed by su name with position in memory", async () => {
   forget();
 
   await run("su alpha be paragraph def");
@@ -27,7 +27,7 @@ test("def sentences are indexed by subj name with position in memory", async () 
 
   const alphaDef = getDefinition("alpha");
   assert.ok(alphaDef, "alpha definition should be retrievable");
-  assert.equal(alphaDef.subj.name, "alpha");
+  assert.equal(alphaDef.su.name, "alpha");
   assert.equal(alphaDef.be, "paragraph");
 });
 
@@ -53,10 +53,10 @@ test("redef updates index to latest memory position and reset clears", async () 
 test("definition index captures end via prah and supports invoking the paragraph", async () => {
   forget();
 
-  await run("subj name result obj num 5 be number ya");
-  await run("subj name add two to name num target be ceremony def");
-  await run("obj num 2 to name result be add do");
-  await run("subj name add two be ceremony prah");
+  await run("su name result ob num 5 be number ya");
+  await run("su name add two to name num target be ceremony def");
+  await run("ob num 2 to name result be add do");
+  await run("su name add two be ceremony prah");
 
   const entry = dumpDefinitionIndex().find(e => e.name === "add two");
   assert.ok(entry, "definition index should include add two");
@@ -67,37 +67,37 @@ test("definition index captures end via prah and supports invoking the paragraph
 
   const latestResult = remember("result");
   assert.ok(latestResult, "result should be retrievable after function call");
-  assert.equal(latestResult.obj.num, 7, "function body should have added two");
+  assert.equal(latestResult.ob.num, 7, "function body should have added two");
 });
 
 test("last-write wins keeps updated fact after command and preserves def/prah block entries", async () => {
   forget();
 
-  await run("subj name result obj num 5 be number ya");
-  await run("obj num 2 to name result be add do");
+  await run("su name result ob num 5 be number ya");
+  await run("ob num 2 to name result be add do");
 
   const mem = allRemember();
-  const resultFacts = mem.filter(s => s.subj?.name === "result" && s.mood === "ya");
+  const resultFacts = mem.filter(s => s.su?.name === "result" && s.mood === "ya");
 
   assert.equal(resultFacts.length, 1, "only one result fact should remain");
-  assert.equal(resultFacts[0].obj.num, 7, "result fact should be updated after add");
+  assert.equal(resultFacts[0].ob.num, 7, "result fact should be updated after add");
   assert.equal(mem[0].mood, "do", "command should remain before updated fact");
 
   // Protect facts inside def/prah blocks
-  await run("subj name block be ceremony def");
-  await run("subj name collector obj num 1 be number ya"); // inside block
-  await run("subj name block be ceremony prah");
+  await run("su name block be ceremony def");
+  await run("su name collector ob num 1 be number ya"); // inside block
+  await run("su name block be ceremony prah");
 
-  await run("subj name collector obj num 10 be number ya"); // outside block update
-  const collectors = allRemember().filter(s => s.subj?.name === "collector");
+  await run("su name collector ob num 10 be number ya"); // outside block update
+  const collectors = allRemember().filter(s => s.su?.name === "collector");
 
   assert.equal(
     collectors.length >= 2,
     true,
     "collector fact inside def/prah block should not be removed"
   );
-  const protectedCollector = collectors.find(s => s.obj?.num === 1);
-  const updatedCollector = collectors.find(s => s.obj?.num === 10);
+  const protectedCollector = collectors.find(s => s.ob?.num === 1);
+  const updatedCollector = collectors.find(s => s.ob?.num === 10);
   assert.ok(protectedCollector, "collector inside def block should persist");
   assert.ok(updatedCollector, "collector outside block should be stored");
 });
@@ -105,8 +105,8 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
 test("invoking while definition is still open just records and does not run", async () => {
   forget();
 
-  await run("subj name incomplete be ceremony def");
-  await run("obj num 1 to name result be add do"); // recorded inside open block
+  await run("su name incomplete be ceremony def");
+  await run("ob num 1 to name result be add do"); // recorded inside open block
 
   const before = allRemember().length;
   const res = await run("be incomplete do");
@@ -118,8 +118,8 @@ test("invoking while definition is still open just records and does not run", as
 test("ceremony def captures signature words from typed header", async () => {
   forget();
 
-  await run("subj name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");
-  await run("subj name loop body be ceremony prah");
+  await run("su name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");
+  await run("su name loop body be ceremony prah");
 
   const def = getDefinition("loop body");
   assert.ok(def?.signatureWords, "definition should carry signatureWords");
@@ -132,9 +132,9 @@ test("ceremony def captures signature words from typed header", async () => {
 test("ceremony def headers declare signature cases/types (new signature style)", async () => {
   forget();
 
-  await run("subj name add two to name num bucket be ceremony def");
-  await run("obj num 2 to name bucket be add do");
-  await run("subj name add two be ceremony prah");
+  await run("su name add two to name num bucket be ceremony def");
+  await run("ob num 2 to name bucket be add do");
+  await run("su name add two be ceremony prah");
 
   const def = getDefinition("add two");
   assert.deepEqual(
@@ -145,9 +145,9 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   // Invocation should resolve by signature (not bare name) and update target
   await run("to name bucket be add two do");
   const bucket = remember("bucket");
-  assert.equal(bucket.obj.num, 2);
+  assert.equal(bucket.ob.num, 2);
 });
 
 test.todo("ceremony with ret returns updated evoke registers to caller names");
 
-test.todo("ceremony ret returns multiple registers (obj/fromindex/toindex) to caller names");
+test.todo("ceremony ret returns multiple registers (ob/fromindex/toindex) to caller names");

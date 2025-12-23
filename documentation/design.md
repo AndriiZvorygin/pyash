@@ -12,7 +12,7 @@ At the core of the design, **sentences are first-class datatypes**. Every piece 
 
 Pyash also introduces the idea of an **evoking sentence**: the original sentence that triggers a ceremony or other sandpit execution. When a sandpit starts, this evoking sentence is copied into the sandpit as sentence `0` (including any control cases such as `fromindex` and `toindex`) and is available throughout execution via `this`. Any sentence in the definition/body (ya/def/do/ret) can read from `this`. A `ret` mood inside the sandpit does not call a verb; instead it describes how to update that evoking sentence, which is then returned to main memory as a `ya` fact.
 
-There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `subj`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history toindex garbage collection chooses to purge them.
+There are no artificial IDs or metadata fields at sentence level. The **subject (`su` / `su`) functions as the “name” or reference key**: the latest sentence for a given subject has semantic priority. Earlier sentences for that subject remain as history toindex garbage collection chooses to purge them.
 
 ---
 
@@ -22,7 +22,7 @@ A **sentence** is a flat JS object with:
 
 - a `mood` field (the sentence mood),
 - a `be` field (the verb),
-- zero or more **case keywords** (roles), such as `subj`, `obj`, `fromtext`, `fromindex`, `toindex`, etc.
+- zero or more **case keywords** (roles), such as `su`, `ob`, `fromtext`, `fromindex`, `toindex`, etc.
 
 Example:
 
@@ -30,8 +30,8 @@ Example:
 {
   mood: "do",
   be: "mind",
-  subj: "assistant",
-  obj: "answer the question",
+  su: "assistant",
+  ob: "answer the question",
   fromtext: "raw user input",
   as: "helpful",
 }
@@ -41,7 +41,7 @@ Key points:
 
 * Only **mood**, **be**, and **case keywords** are allowed as top-level keys.
 * There is **no** `id`, `meta`, or nested structure at this time.
-* `subj` (or `su`) is the closest equivalent to an identifier; it is how other sentences refer to this one in human language terms.
+* `su` (or `su`) is the closest equivalent to an identifier; it is how other sentences refer to this one in human language terms.
 
 A **paragraph** is just an ordered array of such sentences:
 
@@ -143,7 +143,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * Emits plain JS objects which are the canonical **sentence datatype**, e.g.:
 
     ```js
-    { mood, be, subj, obj, fromtext, fromindex, toindex, ... }
+    { mood, be, su, ob, fromtext, fromindex, toindex, ... }
     ```
   * The parser’s output is the only “wire format” between text and the rest of the system.
 
@@ -164,10 +164,10 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
     * does **not** dispatch a verb module,
     * reads the current evoking sentence from the active sandpit frame (accessible as `this` to any sentence in the body),
-    * merges any cases present on the `ret` sentence into that evoker (e.g. new `subj`, `obj`, `as`, `fromindex`, etc.),
+    * merges any cases present on the `ret` sentence into that evoker (e.g. new `su`, `ob`, `as`, `fromindex`, etc.),
     * produces a final **result sentence** with `mood: "ya"` and the merged fields,
     * attaches this `ya` result to the sandpit frame and signals that sandpit execution is complete.
-    * Errors are signalled by using `be: "error"` on the `ret` sentence (and thus on the merged result), with `obj` holding the error message and optional extra cases.
+    * Errors are signalled by using `be: "error"` on the `ret` sentence (and thus on the merged result), with `ob` holding the error message and optional extra cases.
   * `que`:
 
     * looks up a stored fact (sentence) by subject or other cases,
@@ -193,7 +193,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
     * Sentences are never edited in place.
     * A “mutation” is expressed by **appending a new sentence** for the same subject.
-    * The most recent sentence for a given `subj` has semantic priority.
+    * The most recent sentence for a given `su` has semantic priority.
     * Older sentences may be retained as history/log or purged by garbage collection.
 
 * `program/beautiful.mjs`: Rendering layer.
@@ -258,7 +258,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
      * the original command sentence to memory,
      * any updated target sentences (by appending them),
      * a `result` fact, also a sentence.
-   * When multiple sentences share the same `subj`, the newest one is the current truth; earlier ones serve as history/log, subject to garbage collection.
+   * When multiple sentences share the same `su`, the newest one is the current truth; earlier ones serve as history/log, subject to garbage collection.
 
 4. **Query**
 
@@ -311,11 +311,11 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
      * Instead it:
 
        * takes the current evoking sentence from the frame (the same `this` that any body sentence can read),
-       * overlays / merges the cases present on the `ret` sentence onto that evoker (e.g. new `subj`, `obj`, `as`, other roles),
+       * overlays / merges the cases present on the `ret` sentence onto that evoker (e.g. new `su`, `ob`, `as`, other roles),
        * forces `mood: "ya"` on the merged sentence,
        * stores this merged sentence as `retResult` on the sandpit frame,
        * signals completion of the sandpit.
-     * If the `ret` sentence has `be: "error"`, the merged result also has `be: "error"` and is treated as an error result, with `obj` carrying the error message (and additional cases as needed).
+     * If the `ret` sentence has `be: "error"`, the merged result also has `be: "error"` and is treated as an error result, with `ob` carrying the error message (and additional cases as needed).
 
    * The `ret` sentence itself is kept in the sandpit trace paragraph but is not normally stored as a top-level fact in main memory.
 
@@ -343,7 +343,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
   * All semantic communication between modules is via **sentence objects** or **paragraphs** (arrays of sentences).
   * Helper functions may use primitive JS types internally, but the public/architectural interfaces of modules are sentence/paragraph-based.
   * This keeps the runtime model aligned with the eventual compiler model, where Pyash sentences compile to JavaScript that still speaks in sentences.
-  * `exists … ya` compiles to **sentence objects** (`let name = { subj, obj, be, exists, mood }`), not raw scalars, so compiled code matches interpreter expectations and ceremony codegen.
+  * `exists … ya` compiles to **sentence objects** (`let name = { su, ob, be, exists, mood }`), not raw scalars, so compiled code matches interpreter expectations and ceremony codegen.
   * The JS remember shim now returns `undefined` for missing names (no implicit fallback objects), making absent facts explicit.
 
 * Always add quizzes first (red→green); every verb or control-flow change gets coverage.

@@ -20,13 +20,13 @@ Pyash is a small experimental language with a Node/ESM REPL, parser, interpreter
 
 ## What works now
 - All quizzes green (`node --test quiz`): parser quoting/text, compositional keyword normalization, mind config/use, read filename handler, understand paths, vector indexing and math, at-all mapping for vectors, add/subtract/multiply/divide, remains, conditionals, translation/compile paths, moods `ya/def/do/ret` stored, sandpit execution for ceremonies.
-- Imperatives store both the command and a result fact; bare add (`obj num 3 to num 4 be add do`) or subtract produces `result` with updated value in memory. `result` can be chained into subsequent calls.
+- Imperatives store both the command and a result fact; bare add (`ob num 3 to num 4 be add do`) or subtract produces `result` with updated value in memory. `result` can be chained into subsequent calls.
 - Ceremonies run in a sandpit context; `this` bindings and `ret` update the evoke/target/result in main memory; multi-word ceremony names work end-to-end. Registers should be read from the evoking sentence; separate register facts are being phased out.
 - Mind resolves model/prompt from stored config (`as` state, `accordingto` discourse) and returns text; compositional parsing emits keyword roles without lingering `context` fields.
 - Compile emits JS/C code that keeps the sentence ABI: `exists` produces sentence objects (not scalars), vector `at all` lowers to a map helper, and the JS remember shim returns `undefined` when a name is missing.
 
 ## What is half-finished / open edges
-- Result facts use a generic `subj result`; could evolve to track per-command identifiers.
+- Result facts use a generic `su result`; could evolve to track per-command identifiers.
 - Read writes both the command and a result fact; additional result-shaping (e.g., filenames) not captured.
 - Mind is stubbed against mocked generate in quizzes; real streaming/roles for replies aren’t modeled yet.
 - Parser still assumes keyword tables; no validation against hnuc codes yet.
