@@ -32,6 +32,7 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
 * **unspecified**: absence or missing result (runtime), not a JSON value.
 * **hollow**: null (exports as JSON `null`).
 * **vector**: Pyash vector value (`ob ve … be vector`), used to represent JSON arrays.
+* **json parse/stringify**: provided via existing verbs (`import`, `compile`, `write`), not dedicated `parse`/`stringify` verbs.
 * **referential**:
 
   * **map referential**: `ob name <pre-existing-json-map>` inside a JSON map entry, used for nesting objects
@@ -119,6 +120,15 @@ If a switch is absent:
 A JSON map represents a **JSON object** stored under the map sentence’s `ob`.
 
 Switches become JSON keys; contents become JSON values.
+
+Supported JSON value types are already implemented:
+
+* **null** via `ob hollow`
+* **boolean** via `ob bool truth|lie`
+* **number** via `ob num …`
+* **text** via `ob text "…"`
+* **array** via `ob ve …`
+* **object** via `ob name <json-map-name>`
 
 ### 5.1 Switch constraints
 
@@ -230,11 +240,22 @@ The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` b
 
 ---
 
-## 7. Pyash map behaviour (normative)
+## 7. Exporting JSON (stringify)
+
+JSON export uses existing verbs:
+
+* **to JSON text**: `ob name <map> to state json to name <out> be write do`
+* **to JSON file**: `ob name <map> to state json to filename <path> be write do`
+
+`be compile … fromstate json tostate pyash` is the canonical JSON → Pyash transform (parse and re-emit).
+
+---
+
+## 8. Pyash map behaviour (normative)
 
 * Pyash maps impose **no JSON-compatibility constraints**.
 
-## 8. Dynamic map updates (normative)
+## 9. Dynamic map updates (normative)
 
 `be add` can update a map by using the **su value** as the switch key.
 
@@ -254,7 +275,7 @@ Rules:
 
 ---
 
-## 8. Errors (normative)
+## 10. Errors (normative)
 
 Errors are thrown as exceptions whose `err.sentence` is a `be error do` sentence.
 
