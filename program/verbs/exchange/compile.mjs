@@ -3,7 +3,7 @@ import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -197,6 +197,11 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
     const parts = isThisPrefix ? chainArr.slice(1) : (isThisSuffix ? chainArr.slice(0, -1) : null);
     if (parts && parts.length) {
       const head = parts[0];
+      if (parts.length === 2 && parts[0] === "ob") {
+        if (parts[1] === "text") return "pya_ob_text";
+        if (parts[1] === "num") return "pya_ob_num";
+        if (parts[1] === "boolean") return "pya_ob_bool";
+      }
       if (head === "by") {
         if (parts.length === 1) return "by";
         if (parts.length === 2 && parts[1] === "num") return "by";
@@ -381,6 +386,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       return lines.join("\n");
     }
 
+    if (lang === "c" && ob.name && declaredTypes?.get(ob.name) === "map") {
+      cHelpers.usesMap = true;
+      cHelpers.usesMapPrinter = true;
+      cHelpers.usesMapGlobals = true;
+      cHelpers.usesPrintf = true;
+      cHelpers.usesString = true;
+      cHelpers.usesStdlib = true;
+      cHelpers.usesCtype = true;
+      return `print_map_sentence(${JSON.stringify(ob.name)}, &${sanitizeName(ob.name)});`;
+    }
+
     const genChain = sentence.ob?.genitive?.chain || [];
     const wantsVector = genChain.at(-1) === "ve" || declaredTypes?.get(sentence.ob?.name) === "vector";
 
@@ -423,9 +439,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         const isMap = declaredTypes?.get(ob.name) === "map";
         const isJsonMap = declaredTypes?.get(ob.name) === "json map";
         if (isMap) {
-          if (jsHelpers) jsHelpers.usesVectorFormat = true;
-          const mapExpr = (locals?.has(name) || declared?.has(name)) ? name : `remember(${JSON.stringify(ob.name)})`;
-          expr = `formatMapSentence(${JSON.stringify(ob.name)}, ${mapExpr})`;
+          const chain = mapDefs?.has(ob.name) ? mapDefChainFromName(ob.name, mapDefs) : "";
+          if (lang === "c") {
+            expr = JSON.stringify(chain);
+          } else {
+            if (jsHelpers) jsHelpers.usesVectorFormat = true;
+            const mapExpr = (locals?.has(name) || declared?.has(name)) ? name : `remember(${JSON.stringify(ob.name)})`;
+            expr = `formatMapSentence(${JSON.stringify(ob.name)}, ${mapExpr})`;
+          }
         }
         if (isJsonMap) {
           if (wantJson) {
@@ -478,7 +499,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     if (lang === "c") {
       if (cHelpers) cHelpers.usesPrintf = true;
       const isText = typeof ob.text === "string"
-        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map"))
+        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
       const fmt = isText ? "%s" : "%g";
       if (writeFilename) {
@@ -559,6 +580,29 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
 	  // Map/foreach over vector: at all (ceremony or primitive verbs)
+	  if (sentence.at?.name === "all" && lang === "c") {
+      const fn = ceremonyFns?.get(baseBe);
+      const vecName = sentence.ob?.name;
+      if (!fn || !vecName) {
+        return `/* TODO: ${JSON.stringify(sentence)} */`;
+      }
+      cHelpers.usesMapGlobals = true;
+      const vecVar = sanitizeName(vecName);
+      const vecType = declaredVectorTypes?.get(vecName) ?? "num";
+      const lines = [];
+      lines.push(`for (int i = 0; i < ${vecVar}.length; i++) {`);
+      lines.push(`  atindex = i;`);
+      if (vecType === "text") {
+        lines.push(`  pya_ob_text = ${vecVar}.text_values[i];`);
+      } else if (vecType === "bool" || vecType === "boolean") {
+        lines.push(`  pya_ob_bool = ${vecVar}.num_values[i] != 0;`);
+      } else {
+        lines.push(`  pya_ob_num = ${vecVar}.num_values[i];`);
+      }
+      lines.push(`  ${fn}();`);
+      lines.push(`}`);
+      return lines.join("\n");
+    }
 	  if (sentence.at?.name === "all" && lang !== "c") {
 	    if (ceremonyFns?.get(baseBe)) {
 	      const fn = ceremonyFns.get(baseBe);
@@ -993,8 +1037,42 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	  if (baseBe === "add" && ob.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
       const mapName = sentence.to?.name;
       const targetType = mapName ? declaredTypes?.get(mapName) : null;
-      if (mapName && lang !== "c" && (targetType === "map" || targetType === "json map" || mapDefs?.has(mapName))) {
+      if (mapName && (targetType === "map" || targetType === "json map" || mapDefs?.has(mapName))) {
         const safeValue = typeof ob.num === "number" ? ob.num : Number(ob.num);
+        if (lang === "c") {
+          cHelpers.usesMap = true;
+          cHelpers.usesMapGlobals = true;
+          cHelpers.usesString = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesPrintf = true;
+          cHelpers.usesCtype = true;
+          const mapVar = sanitizeName(mapName);
+          const keyChain = sentence.su?.genitive?.chain;
+          const keyTail = Array.isArray(keyChain) ? keyChain.at(-1) : null;
+          const rawKey = (() => {
+            if (sentence.su?.genitive) {
+              return pathFromGenitive(sentence.su.genitive, sentenceArg, { locals, declared, localsTypes, declaredTypes, allowCGlobals: true }) ?? "0";
+            }
+            if (sentence.su?.text !== undefined) return JSON.stringify(sentence.su.text);
+            if (sentence.su?.num !== undefined) return String(Number.isNaN(Number(sentence.su.num)) ? 0 : Number(sentence.su.num));
+            if (sentence.su?.boolean !== undefined) return sentence.su.boolean ? "1" : "0";
+            if (sentence.su?.name) return JSON.stringify(sentence.su.name);
+            return "0";
+          })();
+          const lines = [];
+          let keyExpr = rawKey;
+          if (keyTail === "num" || typeof sentence.su?.num !== "undefined") {
+            lines.push(`char _key_buf[64];`);
+            lines.push(`snprintf(_key_buf, sizeof(_key_buf), "%g", ${rawKey});`);
+            keyExpr = "_key_buf";
+          } else if (keyTail === "boolean" || typeof sentence.su?.boolean !== "undefined") {
+            lines.push(`char _key_buf[8];`);
+            lines.push(`snprintf(_key_buf, sizeof(_key_buf), "%s", (${rawKey}) ? "truth" : "lie");`);
+            keyExpr = "_key_buf";
+          }
+          lines.push(`pya_map_add_num(&${mapVar}, ${keyExpr}, ${Number.isNaN(safeValue) ? 0 : safeValue});`);
+          return lines.join("\n");
+        }
         const mapVar = sanitizeName(mapName);
         const keyExpr = (() => {
           if (sentence.su?.genitive && sentenceArg) {
@@ -1757,7 +1835,7 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesFs: false, readCounter: 0 };
@@ -1843,6 +1921,27 @@ let lines = [header];
       }
 
       if (lang === "c") {
+        cHelpers.usesMap = true;
+        cHelpers.usesMapGlobals = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+        cHelpers.usesCtype = true;
+        const mapVar = sanitizeName(name);
+        lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
+        mainLines.push(`pya_map_init(&${mapVar});`);
+        for (const [key, value] of Object.entries(map)) {
+          if (value?.num !== undefined) {
+            const numVal = Number(value.num);
+            mainLines.push(`pya_map_set_num(&${mapVar}, ${JSON.stringify(key)}, ${Number.isNaN(numVal) ? 0 : numVal});`);
+          } else if (value?.text !== undefined) {
+            mainLines.push(`pya_map_set_text(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(String(value.text))});`);
+          } else if (value?.boolean !== undefined) {
+            mainLines.push(`pya_map_set_bool(&${mapVar}, ${JSON.stringify(key)}, ${value.boolean ? 1 : 0});`);
+          } else if (value?.hollow) {
+            mainLines.push(`pya_map_set_hollow(&${mapVar}, ${JSON.stringify(key)});`);
+          }
+        }
         if (sentence.be === "json map") {
           const jsonText = cState.jsonMapStrings.get(name);
           if (jsonText) {
@@ -1967,11 +2066,18 @@ let lines = [header];
       headers.push("double atindex = 0;");
       headers.push("double by = 0;");
     }
+    if (cHelpers.usesMapGlobals) {
+      headers.push("double pya_ob_num = 0;");
+      headers.push("const char *pya_ob_text = 0;");
+      headers.push("int pya_ob_bool = 0;");
+    }
     if (headers.length) lines.unshift(...headers);
     const cPrelude = [];
     if (cHelpers.usesTextHelper) cPrelude.push(TEXT_HELPER);
     if (cHelpers.usesVectorType) cPrelude.push(VECTOR_TYPE_DECL);
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
+    if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
+    if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
