@@ -344,11 +344,18 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
   // Say -> console.log / printf TODO
-  if (baseBe === "say") {
+  const hasWriteIndex =
+    baseBe === "write" &&
+    (sentence.at?.num != null || sentence.at?.genitive ||
+      sentence.obj?.at?.num != null || sentence.obj?.at?.genitive ||
+      sentence.to?.at?.num != null || sentence.to?.at?.genitive);
+
+  if ((baseBe === "say") || (baseBe === "write" && !hasWriteIndex)) {
+    const isWrite = baseBe === "write";
     const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
     const wantJson = format === "json";
     // Special case: say to <mind> -> invoke mind (JS)
-    if (sentence.to?.name && lang !== "c") {
+    if (baseBe === "say" && sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
       const mindName = sentence.to.name;
       const resultName = sentence.subj?.name ?? mindName;
@@ -460,7 +467,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     if (writeFilename && lang !== "c") {
       if (jsHelpers) jsHelpers.usesFs = true;
       const writeLine = `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
-      return `${writeLine}\nconsole.log(${expr});`;
+      return isWrite ? writeLine : `${writeLine}\nconsole.log(${expr});`;
     }
     if (lang === "c") {
       if (cHelpers) cHelpers.usesPrintf = true;
@@ -471,71 +478,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (writeFilename) {
         if (cHelpers) cHelpers.usesStdlib = true;
         const safePath = JSON.stringify(writeFilename);
-        return `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }\nprintf("${fmt}\\n", ${expr});`;
+        const writeLine = `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }`;
+        return isWrite ? writeLine : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
       return `printf("${fmt}\\n", ${expr});`;
     }
     return `console.log(${expr});`;
-  }
-
-  if (baseBe === "write" && sentence?.to?.filename) {
-    const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
-    const wantJson = format === "json";
-    let expr = "undefined";
-    if (typeof obj.text === "string") {
-      expr = JSON.stringify(obj.text);
-    } else if (obj.genitive) {
-      expr = pathFromGenitive(obj.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
-    } else if (obj.name) {
-      const name = sanitizeName(obj.name);
-      const isJsonMap = declaredTypes?.get(obj.name) === "json map";
-      if (isJsonMap) {
-        if (wantJson) {
-          if (lang === "c") {
-            expr = sanitizeName(`${obj.name}_json`);
-          } else {
-            if (jsHelpers) jsHelpers.usesJsonMap = true;
-            expr = `formatJsonMap(${JSON.stringify(obj.name)})`;
-          }
-        } else if (mapDefs?.has(obj.name)) {
-          const chain = mapDefChainFromName(obj.name, mapDefs);
-          expr = JSON.stringify(chain);
-        }
-      }
-      if (!isJsonMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
-        expr = name;
-      } else if (!isJsonMap && locals?.has(name)) {
-        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
-      } else if (!isJsonMap && declared?.has(name)) {
-        expr = `${name}.obj?.ve?.values ?? ${name}.obj?.text ?? ${name}.obj?.num`;
-      } else if (!isJsonMap) {
-        expr = JSON.stringify(obj.name);
-      }
-    } else {
-      const fallback = exprForSlot(obj, {
-        sentenceArg,
-        locals,
-        declared,
-        defaultExpr: sentenceArg ? `${sentenceArg}.obj?.text ?? ${sentenceArg}.obj?.num` : undefined,
-        field: "text"
-      });
-      if (fallback) expr = fallback;
-    }
-    const writeFilename = sentence.to.filename;
-    if (lang !== "c") {
-      if (jsHelpers) jsHelpers.usesFs = true;
-      return `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
-    }
-    if (cHelpers) {
-      cHelpers.usesPrintf = true;
-      cHelpers.usesStdlib = true;
-    }
-    const isText = typeof obj.text === "string"
-      || (obj.name && (declaredTypes?.get(obj.name) === "text" || declaredTypes?.get(obj.name) === "json map"))
-      || (obj.name && localsTypes?.get(sanitizeName(obj.name)) === "text");
-    const fmt = isText ? "%s" : "%g";
-    const safePath = JSON.stringify(writeFilename);
-    return `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }`;
   }
 
   // Vector element read: obj name doors at num 2 be read to name picked do

@@ -252,19 +252,15 @@ Errors are raised only for structural violations, never for absent switches.
 
 ## 9. `say` formatting for JSON maps
 
-`be say` defaults to Pyash output:
+`be say` still prints to console, but `be write` is now the preferred screen/file output verb.
 
-* `obj name <json-map> be say do` prints the `be json map def ... prah` chain.
+* `obj name <json-map> be write do` prints the `be json map def ... prah` chain.
 
 To print JSON, specify a target state:
 
-* `obj name <json-map> to state json be say do`
+* `obj name <json-map> to state json be write do`
 
 To write the output to a file:
-
-* `obj name <json-map> to state json to filename <file.json> be say do`
-
-`be write` performs the same formatting as `be say` but skips console output:
 
 * `obj name <json-map> to state json to filename <file.json> be write do`
 

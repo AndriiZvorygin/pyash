@@ -5,20 +5,37 @@ import { renderSayValue } from "../say.mjs";
 
 export default async function write(sentence, { remember: rememberFn = remember } = {}) {
   const target = sentence?.to?.filename;
-  if (!target) {
-    throwErrorSentence({
-      name: "write error",
-      message: "write: to filename is required",
-      from: { name: "write" }
-    });
-  }
   const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
   const text = renderSayValue(sentence.obj ?? {}, { rememberFn, format: format === "json" ? "json" : "pyash" });
-  await fs.writeFile(target, String(text ?? ""), "utf8");
+  if (target) {
+    await fs.writeFile(target, String(text ?? ""), "utf8");
+  } else {
+    // eslint-disable-next-line no-console
+    console.log(text);
+  }
   return { obj: { text }, be: "write" };
 }
 
 export const signatures = [
+  { signatureWords: ["be", "write", "obj", "text"], handler: write },
+  { signatureWords: ["be", "write", "obj", "num"], handler: write },
+  { signatureWords: ["be", "write", "obj", "bool"], handler: write },
+  { signatureWords: ["be", "write", "obj", "hollow"], handler: write },
+  { signatureWords: ["be", "write", "obj", "name", "text"], handler: write },
+  { signatureWords: ["be", "write", "obj", "name", "num"], handler: write },
+  { signatureWords: ["be", "write", "obj", "name", "bool"], handler: write },
+  { signatureWords: ["be", "write", "obj", "name", "hollow"], handler: write },
+  { signatureWords: ["be", "write", "obj", "name", "vec"], handler: write },
+  { signatureWords: ["be", "write", "obj", "vec"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "num"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "bool"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "hollow"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "name", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "name", "num"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "name", "bool"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "name", "hollow"], handler: write },
+  { signatureWords: ["be", "write", "become", "text", "obj", "name", "vec"], handler: write },
   { signatureWords: ["be", "write", "obj", "text", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "obj", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "obj", "bool", "to", "filename"], handler: write },
