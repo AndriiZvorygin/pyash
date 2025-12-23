@@ -38,7 +38,7 @@ test("compile JS say name vector outputs full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj name values be say do"
+    "obj name values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
@@ -49,7 +49,7 @@ test("compile JS say genitive vector outputs literal", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
@@ -60,7 +60,7 @@ test("compile JS say name text vector outputs full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
-    "obj name words be say do"
+    "obj name words be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);
@@ -71,7 +71,7 @@ test("compile JS say genitive text vector outputs literal", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
-    "obj ve of words be say do"
+    "obj ve of words be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);

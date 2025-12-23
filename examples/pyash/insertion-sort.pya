@@ -16,4 +16,4 @@ fromindex num of obj of i toindex num 0 be insertion inner do
 subj name insertion outer be ceremony prah
 
 fromindex num 1 toindex num 6 be insertion outer do
-obj ve of values be say do
+obj ve of values be write do

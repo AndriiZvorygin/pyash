@@ -123,7 +123,7 @@ test("file-based compile outputs runnable JS with say", async () => {
   const inputFile = "quiz/sandpit/compile-say.txt";
   const outputFile = "quiz/sandpit/compile-say-output.js";
 
-  await fs.writeFile(inputFile, "obj text hello be say do\n", "utf8");
+  await fs.writeFile(inputFile, "obj text hello be write do\n", "utf8");
   await fs.rm(outputFile, { force: true });
 
   const sentence = parse(
@@ -192,7 +192,7 @@ test("compile emits loop for fromindex countdown", async () => {
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
-    "obj name counter be say do"
+    "obj name counter be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -248,7 +248,7 @@ test("compiled C loop builds and runs", async (t) => {
     "obj num 1 to name counter be add do",
     "subj name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
-    "obj name counter be say do"
+    "obj name counter be write do"
   ].join("\\n");
 
   const cFile = "quiz/sandpit/compile-loop-output.c";
@@ -389,7 +389,7 @@ test("compile emits console.log for say text", async () => {
   forget();
 
   const program = [
-    "obj text hello be say do"
+    "obj text hello be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -407,7 +407,7 @@ test("compile emits console.log for say name using variable reference", async ()
 
   const program = [
     "exists subj name alpha obj text hi be text ya",
-    "obj name alpha be say do"
+    "obj name alpha be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -466,7 +466,7 @@ test("compile vector literal and produce dot product inline", async () => {
 
   const program = [
     "obj vec num 1 2 3 by vec num 4 5 6 to name z be produce do",
-    "obj name z be say do"
+    "obj name z be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -493,7 +493,7 @@ test("compile vector produce from named vectors", async () => {
     "exists subj name w obj ve num 1 1 1 be vector ya",
     "exists subj name x obj ve num 2 3 4 be vector ya",
     "from name w by name x to name z be produce do",
-    "obj name z be say do"
+    "obj name z be write do"
   ].join("\\n");
 
   const sentence = parse(

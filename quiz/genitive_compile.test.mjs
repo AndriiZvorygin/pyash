@@ -12,7 +12,7 @@ test("compile uses genitive num of obj of this without remember", async () => {
     "obj num 2 to num of obj of this be add do",
     "subj name bump be ceremony prah",
     "subj name evoker obj name bucket be bump do",
-    "obj name bucket be say do"
+    "obj name bucket be write do"
   ].join("\n");
 
   const js = transpileProgram(buildProgram(program).sentences, { lang: "javascript" })
@@ -37,7 +37,7 @@ test("compile uses genitive this ti obj ti num without remember", async () => {
     "obj num 2 to this ti obj ti num be add do",
     "subj name bump be ceremony prah",
     "subj name evoker obj name bucket be bump do",
-    "obj name bucket be say do"
+    "obj name bucket be write do"
   ].join("\n");
 
   const js = transpileProgram(buildProgram(program).sentences, { lang: "javascript" })

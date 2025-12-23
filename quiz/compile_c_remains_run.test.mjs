@@ -24,7 +24,7 @@ test("compile to C: remains uses fmod and say prints it (gcc + run)", async () =
   const pyash = [
     "exists subj name x obj num 10 be number ya",
     "obj num 3 to name x be remains do",
-    "obj name x be say do",
+    "obj name x be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

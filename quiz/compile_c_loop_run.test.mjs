@@ -28,7 +28,7 @@ test("compile to C: fromindex/toindex loop invokes ceremony body (gcc + run)", a
     "subj name loop body be ceremony prah",
     // stop-when-equal loop: 3,2,1 then stop at 0
     "fromindex num 3 toindex num 0 be loop body do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
@@ -54,7 +54,7 @@ test("compile to C: loop stops at toindex when ascending", async () => {
     "obj num 1 to name counter be add do",
     "subj name inc be ceremony prah",
     "fromindex num 1 toindex num 4 be inc do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
@@ -80,7 +80,7 @@ test("compile to C: loop stops at toindex when descending", async () => {
     "obj num 1 to name counter be add do",
     "subj name inc be ceremony prah",
     "fromindex num 4 toindex num 1 be inc do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

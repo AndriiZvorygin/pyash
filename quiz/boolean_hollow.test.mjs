@@ -33,8 +33,8 @@ test("say prints bool and hollow literals", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse("obj bool truth be say do"));
-    await interpret(parse("obj hollow be say do"));
+    await interpret(parse("obj bool truth be write do"));
+    await interpret(parse("obj hollow be write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

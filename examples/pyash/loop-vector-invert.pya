@@ -8,5 +8,5 @@ subj name flip first be ceremony prah
 
 to name counter fromindex num 3 be flip first do
 
-obj name counter be say do
-obj name values be say do
+obj name counter be write do
+obj name values be write do

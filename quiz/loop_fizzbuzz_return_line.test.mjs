@@ -23,7 +23,7 @@ test("loop ceremony can return fizzbuzz line and say outside", async () => {
   await interpret(parse("subj name fizzbuzz say fromindex num 0 toindex num 0 be ceremony def"));
   await interpret(parse("exists subj name line obj text quoted.text..text.quoted be text ya"));
   await interpret(parse("by num of fromindex of this to name line be fizzbuzz line do"));
-  await interpret(parse("obj name line be say do"));
+  await interpret(parse("obj name line be write do"));
   await interpret(parse("subj name fizzbuzz say be ceremony prah"));
 
   const logs = [];

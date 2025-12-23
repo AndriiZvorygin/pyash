@@ -15,7 +15,7 @@ test("compile ceremony loop to javascript and run", async () => {
     "obj num 1 to name counter be add do",
     "subj name loop_body be ceremony prah",
     "to name counter fromindex num 3 be loop_body do",
-    "obj name counter be say do"
+    "obj name counter be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -43,7 +43,7 @@ test("compile loop: def to-name differs from call to-name", async () => {
     "obj num 1 to name alpha be add do",
     "subj name inc_loop be ceremony prah",
     "to name alpha fromindex num 3 be inc_loop do",
-    "obj name alpha be say do"
+    "obj name alpha be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -137,7 +137,7 @@ test("compile loop stops at toindex when ascending", async () => {
     "obj num 1 to name counter be add do",
     "subj name inc be ceremony prah",
     "fromindex num 1 toindex num 4 be inc do",
-    "obj name counter be say do"
+    "obj name counter be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
@@ -159,7 +159,7 @@ test("compile loop stops at toindex when descending", async () => {
     "obj num 1 to name counter be add do",
     "subj name inc be ceremony prah",
     "fromindex num 4 toindex num 1 be inc do",
-    "obj name counter be say do"
+    "obj name counter be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);

@@ -38,7 +38,7 @@ test("compile C supports vector literal + say full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj name values be say do"
+    "obj name values be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -49,7 +49,7 @@ test("compile C supports vector literal + say vector only", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -60,7 +60,7 @@ test("compile C supports text vector + say full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
-    "obj name words be say do"
+    "obj name words be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -71,7 +71,7 @@ test("compile C supports text vector + say vector only", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
-    "obj ve of words be say do"
+    "obj ve of words be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -83,7 +83,7 @@ test("compile C supports vector element add at index", async () => {
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
     "obj num 2 to name values at num 2 be add do",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -95,7 +95,7 @@ test("compile C supports boolean vector invert at index", async () => {
   const pyash = [
     "exists subj name doors obj ve bool truth lie truth be vector ya",
     "obj name doors at num 1 be invert do",
-    "obj ve of doors be say do"
+    "obj ve of doors be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -107,7 +107,7 @@ test("compile C supports vector reassignment", async () => {
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
     "subj name values obj ve num 4 5 6 be vector ya",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);
@@ -119,7 +119,7 @@ test("compile C supports write to vector element", async () => {
   const pyash = [
     "exists subj name values obj ve num 10 20 30 be vector ya",
     "obj num 99 to name values at num 1 be write do",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const out = await runC(c);

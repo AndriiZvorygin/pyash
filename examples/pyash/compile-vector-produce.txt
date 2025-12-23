@@ -2,4 +2,4 @@ exists subj name w obj ve num 1 2 3 be vector ya
 exists subj name x obj ve num 4 5 6 be vector ya
 
 from name w by name x to name z be produce do
-obj name z be say do
+obj name z be write do

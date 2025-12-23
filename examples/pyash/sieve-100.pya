@@ -12,7 +12,7 @@ by name pass fromindex num 2 toindex num 100 be mark multiples do
 subj name process passes be ceremony prah
 
 fromindex num 2 toindex num 100 be process passes do
-obj ve of composite be say do
+obj ve of composite be write do
 
 exists subj name primes_index obj num 1 be number ya
 exists subj name primes obj ve num 0 by num 25 be vector ya
@@ -25,4 +25,4 @@ obj name status be equally from text lie then obj num 1 to name primes_index be 
 subj name collect primes be ceremony prah
 
 fromindex num 3 toindex num 100 be collect primes do
-obj ve of primes be say do
+obj ve of primes be write do

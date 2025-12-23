@@ -10,7 +10,7 @@ test("compile vector fill by num N to javascript", async () => {
   forget();
   const pyash = [
     "exists subj name doors obj ve num 0 by num 5 be vector ya",
-    "obj name doors be say do"
+    "obj name doors be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);

@@ -24,7 +24,7 @@ test("compile to C: tiny then controls execution (gcc + run)", async () => {
   const pyash = [
     "exists subj name counter obj num 0 be number ya",
     "obj name counter be tiny from num 1 then obj num 1 to name counter be add do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

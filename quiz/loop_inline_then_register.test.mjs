@@ -18,7 +18,7 @@ test("loop body can run inline conditional against this.fromindex (via remains p
   // stop-when-equal loop: executes for 0..4, stops at 5
   await interpret(parse("to name outside fromindex num 0 toindex num 5 be count odd do"));
 
-  const out = await interpret(parse("obj name hits be say do"));
+  const out = await interpret(parse("obj name hits be write do"));
   // odds in 0..4 are 1 and 3
   assert.equal(String(out?.value?.text), "2");
 });

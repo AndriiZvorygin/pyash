@@ -24,7 +24,7 @@ test("compile to C: equally then controls execution (gcc + run)", async () => {
   const pyash = [
     "exists subj name counter obj num 0 be number ya",
     "obj name counter be equally from num 0 then obj num 1 to name counter be add do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
@@ -47,7 +47,7 @@ test("compile to C: equally compares text", async () => {
   const pyash = [
     "exists subj name counter obj num 0 be number ya",
     "obj text truth be equally from text truth then obj num 1 to name counter be add do",
-    "obj name counter be say do",
+    "obj name counter be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

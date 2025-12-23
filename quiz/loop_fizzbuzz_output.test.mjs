@@ -18,10 +18,10 @@ test("loop ceremony can print fizzbuzz outputs using remains + inline then", asy
   await interpret(parse("obj this ti fromindex from num 5 to name rem5 be remains do"));
   await interpret(parse("obj name rem3 be equally from num 0 then obj num 1 to name handled be add do"));
   await interpret(parse("obj name rem5 be equally from num 0 then obj num 2 to name handled be add do"));
-  await interpret(parse("obj name handled be equally from num 3 then obj text FizzBuzz be say do"));
-  await interpret(parse("obj name handled be equally from num 1 then obj text Fizz be say do"));
-  await interpret(parse("obj name handled be equally from num 2 then obj text Buzz be say do"));
-  await interpret(parse("obj name handled be equally from num 0 then obj this ti fromindex be say do"));
+  await interpret(parse("obj name handled be equally from num 3 then obj text FizzBuzz be write do"));
+  await interpret(parse("obj name handled be equally from num 1 then obj text Fizz be write do"));
+  await interpret(parse("obj name handled be equally from num 2 then obj text Buzz be write do"));
+  await interpret(parse("obj name handled be equally from num 0 then obj this ti fromindex be write do"));
   await interpret(parse("subj name fizzbuzz step be ceremony prah"));
 
   const logs = [];

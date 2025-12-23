@@ -23,7 +23,7 @@ test("compile to C: declare number and say it (gcc + run)", async () => {
 
   const pyash = [
     "exists subj name x obj num 3 be number ya",
-    "obj name x be say do",
+    "obj name x be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

@@ -14,7 +14,7 @@ subj name fizzbuzz line be ceremony prah
 subj name fizzbuzz say fromindex num 0 toindex num 0 be ceremony def
 exists subj name line obj text quoted.text..text.quoted be text ya
 by num of fromindex of this to name line be fizzbuzz line do
-obj name line be say do
+obj name line be write do
 subj name fizzbuzz say be ceremony prah
 
 to name outside fromindex num 1 toindex num 16 be fizzbuzz say do

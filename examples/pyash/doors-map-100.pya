@@ -13,4 +13,4 @@ obj name doors by num of fromindex of this at name all be toggle pass do
 subj name process pass be ceremony prah
 
 fromindex num 1 toindex num 101 be process pass do
-obj name doors be say do
+obj name doors be write do

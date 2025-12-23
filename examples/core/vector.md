@@ -38,7 +38,7 @@ Use `from name w by name x` to pull stored vectors; result is the dot product st
 ```
 exists subj name vec obj ve num 10 20 30 be vector ya
 obj num 99 to name vec at num 1 be write do
-obj ve of vec be say do
+obj ve of vec be write do
 ```
 
 Output:

@@ -26,8 +26,8 @@ test("loop body can implement fizzbuzz logic using remains + inline then", async
 
   await interpret(parse("to name outside fromindex num 1 toindex num 16 be fizzbuzz step do"));
 
-  const fizz = await interpret(parse("obj name fizzHits be say do"));
-  const buzz = await interpret(parse("obj name buzzHits be say do"));
+  const fizz = await interpret(parse("obj name fizzHits be write do"));
+  const buzz = await interpret(parse("obj name buzzHits be write do"));
   assert.equal(String(fizz?.value?.text), "5");
   assert.equal(String(buzz?.value?.text), "3");
 });

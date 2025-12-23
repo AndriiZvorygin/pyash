@@ -24,7 +24,7 @@ test("compile to C: add updates a scalar and say prints it (gcc + run)", async (
   const pyash = [
     "exists subj name x obj num 1 be number ya",
     "obj num 2 to name x be add do",
-    "obj name x be say do",
+    "obj name x be write do",
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

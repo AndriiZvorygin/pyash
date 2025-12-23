@@ -16,7 +16,7 @@ test("definition body can run an inline conditional (… then …) imperatively"
 
   await interpret(parse("be check do"));
 
-  const out = await interpret(parse("obj name flag be say do"));
+  const out = await interpret(parse("obj name flag be write do"));
   assert.equal(String(out?.value?.text), "1");
 });
 
@@ -31,6 +31,6 @@ test("definition body skips inline conditional consequence when condition is fal
 
   await interpret(parse("be check do"));
 
-  const out = await interpret(parse("obj name flag be say do"));
+  const out = await interpret(parse("obj name flag be write do"));
   assert.equal(String(out?.value?.text), "1");
 });

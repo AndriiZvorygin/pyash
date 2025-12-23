@@ -8,5 +8,5 @@ subj name flip index be ceremony prah
 # Loop fromindex counts up and stops when it reaches toindex; this hits indices 0,1,2.
 to name outside fromindex num 0 toindex num 3 be flip index do
 
-obj name outside be say do
-obj name switches be say do
+obj name outside be write do
+obj name switches be write do

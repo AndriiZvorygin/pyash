@@ -1,7 +1,7 @@
 exists subj name alpha obj num 1 be number ya
 obj num 2 to name alpha be add do
 obj num 1 to name alpha be subtract do
-obj name alpha be say do
+obj name alpha be write do
 
 subj name inc to name num target be ceremony def
 obj this ti to be remember to name target exists do
@@ -10,4 +10,4 @@ subj name target ret
 subj name inc be ceremony prah
 
 be inc to alpha do
-obj name alpha be say do
+obj name alpha be write do

@@ -6,4 +6,4 @@ obj name switches at num of fromindex of this be invert do
 subj name flip index be ceremony prah
 
 to name outside fromindex num 2 toindex num -1 be flip index do
-obj ve of switches be say do
+obj ve of switches be write do

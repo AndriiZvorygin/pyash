@@ -23,4 +23,4 @@ obj text quoted.text.
 subj name fizzbuzz build be ceremony prah
 
 fromindex num 1 toindex num 16 be fizzbuzz build do
-obj name output be say do
+obj name output be write do

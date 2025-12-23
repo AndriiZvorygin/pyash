@@ -39,7 +39,7 @@ test("compile JS supports write to vector element", async () => {
   const pyash = [
     "exists subj name values obj ve num 10 20 30 be vector ya",
     "obj num 99 to name values at num 1 be write do",
-    "obj ve of values be say do"
+    "obj ve of values be write do"
   ].join("\n");
   const js = await compileToJs(pyash);
   const out = await runJs(js);

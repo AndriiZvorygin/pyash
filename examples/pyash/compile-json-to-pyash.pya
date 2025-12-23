@@ -2,4 +2,4 @@ subj name profile obj text quoted.json.
 {"name":"Ada","pets":[{"kind":"cat"},{"kind":"dog"}],"tags":[true,false]}
 .json.quoted from state json to state pyash to name output be compile do
 
-obj name output be say do
+obj name output be write do

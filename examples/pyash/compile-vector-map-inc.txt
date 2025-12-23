@@ -7,4 +7,4 @@ subj name val ret
 subj name inc be ceremony prah
 
 obj name values at name all be inc do
-obj name values be say do
+obj name values be write do
