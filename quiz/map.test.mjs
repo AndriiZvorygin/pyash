@@ -36,7 +36,7 @@ test("at all provides atindex register inside ceremony body", async () => {
   forget();
   const program = [
     "exists subj name values obj ve num 4 5 6 be vector ya",
-    "subj name capture-index obj name num value atindex num 0 be ceremony def",
+    "subj name capture-index obj num value atindex num 0 be ceremony def",
     "subj name picked obj this atindex be number ya",
     "subj name picked ret",
     "subj name capture-index be ceremony prah",
@@ -54,7 +54,7 @@ test("at all can increment each element via ceremony in place", async () => {
   forget();
   const program = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
-    "subj name bump obj name num value be ceremony def",
+    "subj name bump obj num value be ceremony def",
     "obj num 1 to this ti obj ti num be add do",
     "subj name bump be ceremony prah",
     "obj name values at name all be bump do"
@@ -73,7 +73,7 @@ test("10 doors via at all toggles only square positions open (map, by pass)", as
   const program = [
     "exists subj name doors obj ve num 0 0 0 0 0 0 0 0 0 0 be vector ya",
     // Toggle a single door if (atindex+1) % pass === 0.
-    "subj name toggle pass by num 0 obj name num value atindex num 0 be ceremony def",
+    "subj name toggle pass by num 0 obj num value atindex num 0 be ceremony def",
     "subj name door obj this atindex be number ya",
     "obj num 1 to num of obj of door be add do",
     "obj num of obj of door from num of by of this to name rem be remains do",

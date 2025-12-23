@@ -95,13 +95,13 @@ export async function interpret(sentence) {
     return { mapStart: true };
   }
 
-  if (insideMap && !isMapPrah) {
+  if (insideMap && mood !== "prah") {
     const frame = state.mapStack[state.mapStack.length - 1];
     frame.entries.push(sentence);
     return { recorded: true };
   }
 
-  if (isMapPrah && insideMap) {
+  if (insideMap && mood === "prah") {
     const frame = state.mapStack.pop();
     const map = {};
     for (const entry of frame.entries) {
@@ -138,9 +138,13 @@ export async function interpret(sentence) {
   }
 
   if (mood === "prah") {
-    doRemember(sentence);
+    let prahSentence = sentence;
+    if (!prahSentence.subj?.name && state.definitionStack.length > 0) {
+      prahSentence = { ...prahSentence, subj: { name: state.definitionStack[state.definitionStack.length - 1] } };
+    }
+    doRemember(prahSentence);
     if (state.definitionStack.length > 0) state.definitionStack.pop();
-    if (subj?.name) validateCeremonySequenceDeps(subj.name);
+    if (prahSentence.subj?.name) validateCeremonySequenceDeps(prahSentence.subj.name);
     return { paragraphEnd: true };
   }
 

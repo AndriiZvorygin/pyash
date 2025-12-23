@@ -71,9 +71,9 @@ export async function runAtAll({
     } else {
       state.lastCondition = true;
       const elemValue = vecValues[i];
-      if (typeof elemValue === "number") elemSentence.obj = { name: `elem_${i}`, num: elemValue };
-      else if (typeof elemValue === "string") elemSentence.obj = { name: `elem_${i}`, text: elemValue };
-      else if (typeof elemValue === "boolean") elemSentence.obj = { name: `elem_${i}`, boolean: elemValue };
+      if (typeof elemValue === "number") elemSentence.obj = { num: elemValue };
+      else if (typeof elemValue === "string") elemSentence.obj = { text: elemValue };
+      else if (typeof elemValue === "boolean") elemSentence.obj = { boolean: elemValue };
       else elemSentence.obj = elemValue ?? {};
       const prevEvoke = state.currentEvoke;
       const prevEvokeRef = state.currentEvokeRef;

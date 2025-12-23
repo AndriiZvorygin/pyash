@@ -8,7 +8,7 @@
 ## Status notes
 - Map “at all” now exercised by multiple passing quizzes (invert, parity-based toggle, atindex exposure). Compiler prelude includes clone + remember; interpreter map helper reset conditions per element.
 - Genitive tests (interpret/compile) are in place; signature enforcement active for ceremony calls.
-- `say` verb provides console output; fizzbuzz compile fixed with genitive registers.
+- `write` verb provides console output; fizzbuzz compile fixed with genitive registers.
 
 ## Quick next steps
 1) Implement per-element writeback for ceremonies used via `at all` and re-enable the increment test.

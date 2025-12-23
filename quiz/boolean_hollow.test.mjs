@@ -25,7 +25,7 @@ test("hollow literal stores null marker", async () => {
   assert.equal(empty?.obj?.hollow, true);
 });
 
-test("say prints bool and hollow literals", async () => {
+test("write prints bool and hollow literals", async () => {
   forget();
 
   const logs = [];

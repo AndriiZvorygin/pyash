@@ -4,7 +4,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 
-test("say on text vector name prints full sentence", async () => {
+test("write on text vector name prints full sentence", async () => {
   forget();
 
   await interpret(parse("subj name words obj ve text hello world be vector ya"));
@@ -14,7 +14,7 @@ test("say on text vector name prints full sentence", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse("obj name words be say do"));
+    await interpret(parse("obj name words be write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;
@@ -24,7 +24,7 @@ test("say on text vector name prints full sentence", async () => {
   assert.equal(logs[0], "subj name words obj ve text hello world be vector ya");
 });
 
-test("say on text vector literal prints vector only", async () => {
+test("write on text vector literal prints vector only", async () => {
   forget();
 
   await interpret(parse("subj name words obj ve text hello world be vector ya"));
@@ -34,7 +34,7 @@ test("say on text vector literal prints vector only", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse("obj ve of words be say do"));
+    await interpret(parse("obj ve of words be write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

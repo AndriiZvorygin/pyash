@@ -10,7 +10,7 @@ async function run(line) {
   return interpret(s);
 }
 
-test("json map exports pretty JSON via say", async () => {
+test("json map exports pretty JSON via write", async () => {
   forget();
 
   await run("subj name profile be json map def");

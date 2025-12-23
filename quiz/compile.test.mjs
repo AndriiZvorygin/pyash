@@ -117,11 +117,11 @@ test("compile converts Pyash file to JavaScript file", async () => {
   await fs.rm(outputFile, { force: true });
 });
 
-test("file-based compile outputs runnable JS with say", async () => {
+test("file-based compile outputs runnable JS with write", async () => {
   forget();
 
-  const inputFile = "quiz/sandpit/compile-say.txt";
-  const outputFile = "quiz/sandpit/compile-say-output.js";
+  const inputFile = "quiz/sandpit/compile-write.txt";
+  const outputFile = "quiz/sandpit/compile-write-output.js";
 
   await fs.writeFile(inputFile, "obj text hello be write do\n", "utf8");
   await fs.rm(outputFile, { force: true });
@@ -145,11 +145,11 @@ test("file-based compile outputs runnable JS with say", async () => {
   await fs.rm(outputFile, { force: true });
 });
 
-test("file-based compile with math, ceremony, and say logs final value", async () => {
+test("file-based compile with math, ceremony, and write logs final value", async () => {
   forget();
 
-  const inputFile = "examples/pyash/compile-math-say.txt";
-  const outputFile = "examples/out/compile-math-say-output.js";
+  const inputFile = "examples/pyash/compile-math-write.txt";
+  const outputFile = "examples/out/compile-math-write-output.js";
 
   await fs.rm(outputFile, { force: true });
 
@@ -385,7 +385,7 @@ test("compile reassigns without redeclaring when name already exists", async () 
   assert.match(js, /alpha = \{[\s\S]*subj:\s*\{\s*name:\s*"alpha"[\s\S]*obj:\s*\{\s*num:\s*2/s);
 });
 
-test("compile emits console.log for say text", async () => {
+test("compile emits console.log for write text", async () => {
   forget();
 
   const program = [
@@ -402,7 +402,7 @@ test("compile emits console.log for say text", async () => {
   assert.match(js, /console\.log\("hello"\);/);
 });
 
-test("compile emits console.log for say name using variable reference", async () => {
+test("compile emits console.log for write name using variable reference", async () => {
   forget();
 
   const program = [

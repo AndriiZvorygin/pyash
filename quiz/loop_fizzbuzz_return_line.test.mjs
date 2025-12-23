@@ -5,7 +5,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 
-test("loop ceremony can return fizzbuzz line and say outside", async () => {
+test("loop ceremony can return fizzbuzz line and write outside", async () => {
   forget();
 
   await interpret(parse("subj name fizzbuzz line by num 0 to name text line be ceremony def"));
@@ -20,18 +20,18 @@ test("loop ceremony can return fizzbuzz line and say outside", async () => {
   await interpret(parse("obj name line ret"));
   await interpret(parse("subj name fizzbuzz line be ceremony prah"));
 
-  await interpret(parse("subj name fizzbuzz say fromindex num 0 toindex num 0 be ceremony def"));
+  await interpret(parse("subj name fizzbuzz write fromindex num 0 toindex num 0 be ceremony def"));
   await interpret(parse("exists subj name line obj text quoted.text..text.quoted be text ya"));
   await interpret(parse("by num of fromindex of this to name line be fizzbuzz line do"));
   await interpret(parse("obj name line be write do"));
-  await interpret(parse("subj name fizzbuzz say be ceremony prah"));
+  await interpret(parse("subj name fizzbuzz write be ceremony prah"));
 
   const logs = [];
   const originalLog = console.log;
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse("to name outside fromindex num 1 toindex num 16 be fizzbuzz say do"));
+    await interpret(parse("to name outside fromindex num 1 toindex num 16 be fizzbuzz write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

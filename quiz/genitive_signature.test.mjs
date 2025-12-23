@@ -23,8 +23,8 @@ test("genitive tail name derives name num for target", () => {
 });
 
 test("genitive tail text derives text", () => {
-  assert.equal(words("obj text of obj of this be say do"),
-    "be say obj text");
+  assert.equal(words("obj text of obj of this be write do"),
+    "be write obj text");
 });
 
 test("genitive tail vec derives vec", () => {

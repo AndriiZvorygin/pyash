@@ -34,7 +34,7 @@ async function runJs(source) {
   return stdout.trim();
 }
 
-test("compile JS say name vector outputs full sentence", async () => {
+test("compile JS write name vector outputs full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
@@ -45,7 +45,7 @@ test("compile JS say name vector outputs full sentence", async () => {
   assert.equal(out, "subj name values obj ve num 1 2 3 be vector ya");
 });
 
-test("compile JS say genitive vector outputs literal", async () => {
+test("compile JS write genitive vector outputs literal", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
@@ -56,7 +56,7 @@ test("compile JS say genitive vector outputs literal", async () => {
   assert.equal(out, "ve num 1 2 3");
 });
 
-test("compile JS say name text vector outputs full sentence", async () => {
+test("compile JS write name text vector outputs full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
@@ -67,7 +67,7 @@ test("compile JS say name text vector outputs full sentence", async () => {
   assert.equal(out, "subj name words obj ve text hello world be vector ya");
 });
 
-test("compile JS say genitive text vector outputs literal", async () => {
+test("compile JS write genitive text vector outputs literal", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",

@@ -12,10 +12,10 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile fizzbuzz one-say to javascript and run", async () => {
+test("compile fizzbuzz one-write to javascript and run", async () => {
   forget();
 
-  const pyash = await fs.readFile("examples/pyash/fizzbuzz-one-say.pya", "utf8");
+  const pyash = await fs.readFile("examples/pyash/fizzbuzz-one-write.pya", "utf8");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
   const wrapped = result?.obj?.text ?? result?.value?.text ?? "";

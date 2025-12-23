@@ -43,7 +43,7 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 **Additional work completed Dec 22, 2025**
 
 * JSON map import (`be import`) and JSON → Pyash compile path
-* `say` defaults to Pyash def-chain for JSON maps; `to state json` prints JSON
+* `write` defaults to Pyash def-chain for JSON maps; `to state json` prints JSON
 * JS/C parity quizzes for JSON → Pyash compile
 * Example: `examples/pyash/compile-json-to-pyash.pya`
 

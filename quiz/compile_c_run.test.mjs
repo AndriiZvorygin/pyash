@@ -18,7 +18,7 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile to C: declare number and say it (gcc + run)", async () => {
+test("compile to C: declare number and write it (gcc + run)", async () => {
   forget();
 
   const pyash = [
@@ -39,4 +39,3 @@ test("compile to C: declare number and say it (gcc + run)", async () => {
   const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
   assert.equal(stdout.trim(), "3");
 });
-

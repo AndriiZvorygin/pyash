@@ -5,7 +5,7 @@ This document summarizes the current core language model used by the interpreter
 ## Sentence Model
 - A program is a sequence of sentences. Each sentence has:
   - `mood`: how to treat the sentence (`ya`, `do`, `def`, `prah`, `then`/conditionals).
-  - `be`: the verb (e.g., `number`, `text`, `add`, `subtract`, `multiply`, `divide`, `remains`, `say`, `ceremony`, `compile`, `understand`).
+  - `be`: the verb (e.g., `number`, `text`, `add`, `subtract`, `multiply`, `divide`, `remains`, `write`, `say`, `ceremony`, `compile`, `understand`).
   - Roles (keyworded fields):
     - `subj`: primary subject (`subj name alpha`).
     - `obj`: payload (`obj num 1`, `obj text hello`, or `obj genitive …`).
@@ -50,7 +50,8 @@ This document summarizes the current core language model used by the interpreter
 - LHS/RHS can be numbers, names (resolved to sentence.obj fields), or genitives on `this`.
 
 ## Logging
-- `be say` logs `obj text`, or resolves `obj name`/genitive to a value. JS backend uses `console.log`; C uses `printf`.
+- `be write` logs `obj text`, or resolves `obj name`/genitive to a value. JS backend uses `console.log`; C uses `printf`.
+- `be say` is reserved for mind/TTS flows; use `be write` for screen/file output.
 
 ## Memory Access
 - Interpreter uses `remember(name)` to fetch stored sentences.

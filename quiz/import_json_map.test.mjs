@@ -42,7 +42,7 @@ test("import loads json object into json map with nested arrays", async () => {
   assert.equal(dog?.obj?.map?.kind?.text, "dog");
 });
 
-test("imported json map can be exported via say", async () => {
+test("imported json map can be exported via write", async () => {
   forget();
 
   const json = JSON.stringify({

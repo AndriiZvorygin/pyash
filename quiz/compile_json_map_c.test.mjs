@@ -26,7 +26,7 @@ function execFileAsync(file, args, opts = {}) {
 test("compile json map example to C and run", async () => {
   forget();
 
-  const pyash = await fs.readFile("examples/pyash/json-map-say.pya", "utf8");
+  const pyash = await fs.readFile("examples/pyash/json-map-write.pya", "utf8");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
   const wrapped = result?.obj?.text ?? result?.value?.text ?? "";

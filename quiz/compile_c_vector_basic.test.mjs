@@ -34,7 +34,7 @@ async function runC(source) {
   return stdout.trim();
 }
 
-test("compile C supports vector literal + say full sentence", async () => {
+test("compile C supports vector literal + write full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
@@ -45,7 +45,7 @@ test("compile C supports vector literal + say full sentence", async () => {
   assert.equal(out, "subj name values obj ve num 1 2 3 be vector ya");
 });
 
-test("compile C supports vector literal + say vector only", async () => {
+test("compile C supports vector literal + write vector only", async () => {
   forget();
   const pyash = [
     "exists subj name values obj ve num 1 2 3 be vector ya",
@@ -56,7 +56,7 @@ test("compile C supports vector literal + say vector only", async () => {
   assert.equal(out, "ve num 1 2 3");
 });
 
-test("compile C supports text vector + say full sentence", async () => {
+test("compile C supports text vector + write full sentence", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",
@@ -67,7 +67,7 @@ test("compile C supports text vector + say full sentence", async () => {
   assert.equal(out, "subj name words obj ve text hello world be vector ya");
 });
 
-test("compile C supports text vector + say vector only", async () => {
+test("compile C supports text vector + write vector only", async () => {
   forget();
   const pyash = [
     "exists subj name words obj ve text hello world be vector ya",

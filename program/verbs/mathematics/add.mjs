@@ -48,9 +48,81 @@ function resolveGenitiveTarget(genitive, remember) {
   return { parent, key, value: curr };
 }
 
+function resolveScalarValue(v, remember) {
+  if (v == null) return undefined;
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+  if (typeof v.text === "string") return v.text;
+  if (typeof v.num === "number") return v.num;
+  if (typeof v.boolean === "boolean") return v.boolean;
+  if (v.genitive) {
+    const chainArr = Array.isArray(v.genitive.chain) ? v.genitive.chain : [];
+    if (chainArr.length > 0) {
+      const [root, ...rest] = chainArr;
+      let curr =
+        root === "this"
+          ? state.currentEvokeRef || state.currentEvoke
+          : typeof root === "string" && remember
+            ? remember(root)
+            : null;
+
+      for (const part of rest) {
+        if (curr && typeof curr === "object" && curr.name && remember) {
+          const fact = remember(curr.name);
+          if (fact) curr = fact.obj ?? fact;
+        }
+        if (curr && typeof curr === "object" && curr.obj?.map && Object.prototype.hasOwnProperty.call(curr.obj.map, part)) {
+          curr = curr.obj.map[part];
+          continue;
+        }
+        if (curr && typeof curr === "object" && curr.obj && curr.obj[part] !== undefined) {
+          curr = curr.obj[part];
+          continue;
+        }
+        curr = curr?.[part];
+      }
+
+      if (typeof curr === "string" || typeof curr === "number" || typeof curr === "boolean") return curr;
+      if (typeof curr?.text === "string") return curr.text;
+      if (typeof curr?.num === "number") return curr.num;
+      if (typeof curr?.boolean === "boolean") return curr.boolean;
+    }
+  }
+  if (v.thisRef) {
+    const ev = state.currentEvokeRef || state.currentEvoke;
+    const reg = ev?.[v.thisRef];
+    if (typeof reg === "string" || typeof reg === "number" || typeof reg === "boolean") return reg;
+    if (typeof reg?.text === "string") return reg.text;
+    if (typeof reg?.num === "number") return reg.num;
+    if (typeof reg?.boolean === "boolean") return reg.boolean;
+  }
+  if (typeof v.name === "string") return v.name;
+  return undefined;
+}
+
 export async function add_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.obj == null) throw new Error("add: obj is required");
   if (sentence.to == null) throw new Error("add: to is required");
+
+  const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
+  const targetFact = targetName && remember ? remember(targetName) : null;
+  const mapEntries = targetFact?.obj?.map ?? sentence.to?.map;
+  if (mapEntries && typeof mapEntries === "object") {
+    let keyVal = resolveScalarValue(sentence.subj, remember);
+    if (keyVal === undefined) {
+      const evokeObj = state.currentEvokeRef?.obj;
+      if (typeof evokeObj?.text === "string") keyVal = evokeObj.text;
+      else if (typeof evokeObj?.num === "number") keyVal = evokeObj.num;
+      else if (typeof evokeObj?.boolean === "boolean") keyVal = evokeObj.boolean;
+    }
+    if (keyVal !== undefined) {
+      const key = String(keyVal);
+      const current = mapEntries[key];
+      const currentNum = typeof current?.num === "number" ? current.num : 0;
+      const delta = toNumber(sentence.obj);
+      mapEntries[key] = { num: currentNum + delta };
+      return { obj: { map: mapEntries }, be: targetFact?.be ?? "map" };
+    }
+  }
 
   // Text concatenation: obj text "..." to name <textVar> be add do
   if (typeof sentence.obj?.text === "string") {

@@ -46,7 +46,7 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
 ```
 subj name <M> be map def
   <entry>...
-subj name <M> be map prah
+prah
 ```
 
 ### 3.2 JSON map definition
@@ -54,7 +54,7 @@ subj name <M> be map prah
 ```
 subj name <M> be json map def
   <entry>...
-subj name <M> be json map prah
+prah
 ```
 
 ### 3.3 Entry form (shared)
@@ -233,6 +233,22 @@ The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` b
 ## 7. Pyash map behaviour (normative)
 
 * Pyash maps impose **no JSON-compatibility constraints**.
+
+## 8. Dynamic map updates (normative)
+
+`be add` can update a map by using the **subj value** as the switch key.
+
+Example (word frequency inside a ceremony):
+
+```
+subj text of obj of this obj num 1 to name wordmap be add do
+```
+
+Rules:
+* `to name <map>` must resolve to a `be map` value.
+* The `subj` value is converted to text and used as the switch key.
+* Missing keys are treated as `0` before adding.
+* The target map entry is stored as `{ num: <count> }`.
 * Their exported form is the normal Pyash JSON AST produced by `understand`.
 * No automatic transformation to data-JSON is implied.
 
@@ -250,9 +266,9 @@ Stable error names for this specification:
 
 Errors are raised only for structural violations, never for absent switches.
 
-## 9. `say` formatting for JSON maps
+## 9. `write` formatting for JSON maps
 
-`be say` still prints to console, but `be write` is now the preferred screen/file output verb.
+`be write` is the preferred screen/file output verb. `be say` remains reserved for mind/TTS flows.
 
 * `obj name <json-map> be write do` prints the `be json map def ... prah` chain.
 
