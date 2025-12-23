@@ -49,6 +49,21 @@ Assumption: you keep **interpreter + JS + C parity as the default rule**, but yo
 
 ---
 
+## Dec 23, 2025 (completed): su/ob canonicalization + word frequency parity
+
+**Ship**
+
+* `su`/`ob` canonicalized in parser + runtime, legacy `subj`/`obj` accepted on input
+* Word frequency example (`examples/pyash/word-frequency.pya`) and parity across interpreter/JS/C
+* C map support for map adds + map sentence printing
+
+**Hardening**
+
+* JS/C compile parity quizzes for word frequency
+* Signature derivation updated for `su` in conditionals and definitions
+
+---
+
 ## Dec 22, 2025–Feb 14, 2026 (current): Maps + frequency + CSV group-by (data slice)
 
 **Ship**
