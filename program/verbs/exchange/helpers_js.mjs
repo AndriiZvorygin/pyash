@@ -16,5 +16,26 @@ export function vectorFormatHelper() {
     "  const v = vec || {};",
     "  return `su name ${name} ob ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
     "}"
+    ,
+    "function formatNp(np = {}) {",
+    "  if (np.name !== undefined) return `name ${np.name}`;",
+    "  if (np.hollow) return \"hollow\";",
+    "  if (np.boolean !== undefined) return `bool ${np.boolean ? \"truth\" : \"lie\"}`;",
+    "  if (np.num !== undefined) return `num ${np.num}`;",
+    "  if (np.text !== undefined) return `text ${JSON.stringify(np.text)}`;",
+    "  if (np.filename !== undefined) return `filename ${np.filename}`;",
+    "  if (np.ve) return formatVector(np.ve.values || [], np.ve.type || \"num\");",
+    "  return \"\";",
+    "}",
+    "function formatMapSentence(name, mapFact) {",
+    "  const kind = mapFact?.be === \"json map\" ? \"json map\" : \"map\";",
+    "  const entries = mapFact?.ob?.map ?? {};",
+    "  const lines = [`su name ${name} be ${kind} def`];",
+    "  for (const key of Object.keys(entries)) {",
+    "    lines.push(`su name ${key} ob ${formatNp(entries[key] || {})} ya`);",
+    "  }",
+    "  lines.push(\"prah\");",
+    "  return lines.join(\"\\n\");",
+    "}"
   ].join("\n");
 }

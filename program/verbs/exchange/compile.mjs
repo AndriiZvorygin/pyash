@@ -77,7 +77,7 @@ function mapDefChainFromName(name, mapDefs) {
     if (!mapName || visited.has(mapName)) return;
     visited.add(mapName);
     const fact = mapDefs.get(mapName);
-    if (!fact || fact.be !== "json map") return;
+    if (!fact || (fact.be !== "json map" && fact.be !== "map")) return;
     const entries = fact?.ob?.map ?? {};
     for (const value of Object.values(entries)) {
       if (value?.name) visit(value.name);
@@ -420,7 +420,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
 	    } else if (ob.name) {
 	      const name = sanitizeName(ob.name);
+        const isMap = declaredTypes?.get(ob.name) === "map";
         const isJsonMap = declaredTypes?.get(ob.name) === "json map";
+        if (isMap) {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          const mapExpr = (locals?.has(name) || declared?.has(name)) ? name : `remember(${JSON.stringify(ob.name)})`;
+          expr = `formatMapSentence(${JSON.stringify(ob.name)}, ${mapExpr})`;
+        }
         if (isJsonMap) {
           if (wantJson) {
             if (lang === "c") {
@@ -434,23 +440,23 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
             expr = JSON.stringify(chain);
           }
         }
-	      if (!isJsonMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
+	      if (!isJsonMap && !isMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
 	        expr = name;
-      } else if (!isJsonMap && locals?.has(name)) {
+      } else if (!isJsonMap && !isMap && locals?.has(name)) {
         if (declaredTypes?.get(ob.name) === "vector") {
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
         } else {
           expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
         }
-	      } else if (!isJsonMap && declared?.has(name)) {
+	      } else if (!isJsonMap && !isMap && declared?.has(name)) {
 	        if (declaredTypes?.get(ob.name) === "vector") {
 	          if (jsHelpers) jsHelpers.usesVectorFormat = true;
 	          expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
 	        } else {
 	          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
 	        }
-	      } else if (!isJsonMap) {
+	      } else if (!isJsonMap && !isMap) {
 	        expr = JSON.stringify(ob.name);
 	      }
 	    } else {
@@ -985,6 +991,33 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
 	  if (baseBe === "add" && ob.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
+      const mapName = sentence.to?.name;
+      const targetType = mapName ? declaredTypes?.get(mapName) : null;
+      if (mapName && lang !== "c" && (targetType === "map" || targetType === "json map" || mapDefs?.has(mapName))) {
+        const safeValue = typeof ob.num === "number" ? ob.num : Number(ob.num);
+        const mapVar = sanitizeName(mapName);
+        const keyExpr = (() => {
+          if (sentence.su?.genitive && sentenceArg) {
+            return pathFromGenitive(sentence.su.genitive, sentenceArg, { locals, declared, localsTypes, declaredTypes }) ?? "undefined";
+          }
+          if (sentence.su?.text !== undefined) return JSON.stringify(sentence.su.text);
+          if (sentence.su?.num !== undefined) return String(Number.isNaN(Number(sentence.su.num)) ? 0 : Number(sentence.su.num));
+          if (sentence.su?.boolean !== undefined) return sentence.su.boolean ? "\"truth\"" : "\"lie\"";
+          if (sentence.su?.name) return JSON.stringify(sentence.su.name);
+          return "undefined";
+        })();
+        const lines = [];
+        if (!locals?.has(mapVar) && !declared?.has(mapVar)) {
+          lines.push(`const ${mapVar} = remember(${JSON.stringify(mapName)});`);
+          locals?.add(mapVar);
+        }
+        lines.push(`${mapVar}.ob = ${mapVar}.ob ?? {};`);
+        lines.push(`${mapVar}.ob.map = ${mapVar}.ob.map ?? {};`);
+        lines.push(`const _key = String(${keyExpr});`);
+        lines.push(`const _curr = ${mapVar}.ob.map[_key];`);
+        lines.push(`${mapVar}.ob.map[_key] = { num: (typeof _curr?.num === "number" ? _curr.num : 0) + ${Number.isNaN(safeValue) ? 0 : safeValue} };`);
+        return lines.join("\n");
+      }
 	    const safeValue = typeof ob.num === "number" ? ob.num : Number(ob.num);
 	    if (sentenceArg) {
 	      // Compiler-only sugar: inside ceremonies, `to <localName>` targets the local fact object.
