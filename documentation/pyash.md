@@ -77,6 +77,11 @@ so Pyash becomes a stable **pivot language** between people and machines.
    * Genitives, cases, signatures, and memory effects must be preserved across both paths.
    * Quizzes should cover both interpreter and compiler flows to guard against divergence.
 
+10. **Deterministic JSON artefacts**
+
+   * JSON output defaults to RFC 8785 canonical form via `to state json`.
+   * Use `to state beautiful json` for human-readable pretty output.
+
 ---
 
 ### Pyash vocabulary in this repo

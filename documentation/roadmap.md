@@ -104,28 +104,21 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Word frequency built as a map-driven exemplar with compile parity tests.
 * Final doc updates to map/JSON spec and roadmap.
 
-
 ---
 
 ## Now → Jan 5, 2026: v0.2 freeze sprint (maps + JSON determinism lock)
 
-### Ship
+### Dec 25, 2025: v0.2 freeze sprint complete (maps + JSON determinism lock)
 
-* Done: explicit note — no inline map literal; def/prah is canonical
-* Done: determinism locked (RFC 8785 canonical JSON by default):
+* Explicit note: no inline map literal; def/prah is canonical
+* Determinism locked (RFC 8785 canonical JSON by default):
 
   * JSON export key ordering rule (stated + golden)
   * `unspecified` omission rule during JSON export (golden)
   * Self-referential export errors (golden)
-
-### Spec drops
-
-* Done: `30-maps.md` status bumped to v0.2
-
-### Hardening
-
-* Done: JSON → Pyash → JSON round-trip snapshots (byte-stable)
-* Done: cross-backend error parity audit for JSON map structural errors
+* Spec drop: `30-maps.md` status bumped to v0.2
+* Hardening: JSON → Pyash → JSON round-trip snapshots (byte-stable)
+* Hardening: cross-backend error parity audit for JSON map structural errors
 
 ---
 
