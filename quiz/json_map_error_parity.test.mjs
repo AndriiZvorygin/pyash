@@ -21,7 +21,7 @@ test("json map structural errors match across interpret/compile", async () => {
   const pyash = [
     "su name sample be json map def",
     "su name bad ob ve foo bar ya",
-    "su name sample be json map prah",
+    "prah",
     "ob name sample to state json be write do"
   ].join("\n");
 

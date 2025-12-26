@@ -18,7 +18,7 @@ test("json map exports pretty JSON via write", async () => {
   await run("su name age ob num 36 ya");
   await run("su name alive ob bool truth ya");
   await run("su name note ob hollow ya");
-  await run("su name profile be json map prah");
+  await run("prah");
 
   const logs = [];
   const originalLog = console.log;
@@ -43,7 +43,7 @@ test("json map allows genitive access by switch", async () => {
 
   await run("su name profile be json map def");
   await run("su name age ob num 36 ya");
-  await run("su name profile be json map prah");
+  await run("prah");
 
   const logs = [];
   const originalLog = console.log;

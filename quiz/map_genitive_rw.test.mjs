@@ -15,7 +15,7 @@ test("genitive read + add updates map entry", async () => {
 
   await run("su name profile be json map def");
   await run("su name count ob num 2 ya");
-  await run("su name profile be json map prah");
+  await run("prah");
 
   const logs = [];
   const originalLog = console.log;

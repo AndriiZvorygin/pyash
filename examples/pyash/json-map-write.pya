@@ -1,17 +1,17 @@
 su name address be json map def
 su name street ob text "123 Main St" ya
 su name city ob text "Springfield" ya
-su name address be json map prah
+prah
 
 su name project_one be json map def
 su name title ob text "Pyash compiler" ya
 su name done ob bool lie ya
-su name project_one be json map prah
+prah
 
 su name project_two be json map def
 su name title ob text "Vector polish" ya
 su name done ob bool truth ya
-su name project_two be json map prah
+prah
 
 su name profile be json map def
 su name name ob text "Ada" ya
@@ -20,6 +20,6 @@ su name alive ob bool truth ya
 su name note ob hollow ya
 su name address ob name address ya
 su name projects ob ve name project_one project_two be vector ya
-su name profile be json map prah
+prah
 
 ob name profile to state beautiful json be write do
