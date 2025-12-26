@@ -46,7 +46,7 @@ async function main() {
   }
 }
 
-main();
+await main();
 
 function printBeautiful(memory, sandpits) {
   const safeSentence = s => {
