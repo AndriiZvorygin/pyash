@@ -38,6 +38,7 @@ Still evolving / fragile:
 - Definition signatures must match invocation signatures (cases + types). Prefer explicit types in `def` headers.
 - For empty text literals, use `quoted.text..text.quoted` (plain `""` is ignored by the parser).
 - When you need loop/register values inside a ceremony, use `this` + genitives (`obj num of fromindex of this` or `obj this by`).
+- JSON output defaults to RFC 8785 canonical form via `to state json`; use `to state beautiful json` for pretty output.
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`

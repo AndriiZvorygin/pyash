@@ -111,21 +111,21 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship
 
-* Explicit note: no inline map literal; def/prah is canonical
-* Lock determinism where it matters:
+* Done: explicit note — no inline map literal; def/prah is canonical
+* Done: determinism locked (RFC 8785 canonical JSON by default):
 
-  * JSON export key ordering rule (state it and test it)
-  * `unspecified` omission rule during JSON export (already defined; add golden)
-  * Self-referential export errors (already named; add golden)
+  * JSON export key ordering rule (stated + golden)
+  * `unspecified` omission rule during JSON export (golden)
+  * Self-referential export errors (golden)
 
 ### Spec drops
 
-* Bump `30-maps.md` status to v0.2 once determinism rules are locked
+* Done: `30-maps.md` status bumped to v0.2
 
 ### Hardening
 
-* Golden: JSON → Pyash → JSON round-trip snapshots (byte-stable)
-* Cross-backend error parity audit for JSON map structural errors
+* Done: JSON → Pyash → JSON round-trip snapshots (byte-stable)
+* Done: cross-backend error parity audit for JSON map structural errors
 
 ---
 
