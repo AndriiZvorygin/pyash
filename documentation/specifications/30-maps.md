@@ -1,5 +1,7 @@
 # `30-maps.md`
 
+Status: v0.2
+
 ## 1. Purpose
 
 Define **map values** in Pyash.
