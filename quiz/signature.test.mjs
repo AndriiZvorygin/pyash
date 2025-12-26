@@ -140,10 +140,10 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
   ]);
 });
 
-test("deriveSignatureFromCall infers mind and text for say with literal prompt", () => {
+test("deriveSignatureFromCall infers mind and text for write with literal prompt", () => {
   const sentence = {
     mood: "do",
-    be: "say",
+    be: "write",
     ob: { name: "do you like life?" },
     to: { name: "generator" }
   };
@@ -153,7 +153,7 @@ test("deriveSignatureFromCall infers mind and text for say with literal prompt",
   const sig = deriveSignatureFromCall(sentence, { remember });
 
   assert.deepEqual(sig, [
-    "be", "say",
+    "be", "write",
     "ob", "text",
     "to", "name", "mind"
   ]);

@@ -409,8 +409,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       ? (formatRaw.includes("beautiful") ? "pretty" : "canonical")
       : null;
     const wantJson = jsonMode !== null;
-    // Special case: say to <mind> -> invoke mind (JS)
-    if (baseBe === "say" && sentence.to?.name && lang !== "c") {
+    // Special case: write to <mind> -> invoke mind (JS)
+    if (baseBe === "write" && sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
       const mindName = sentence.to.name;
       const resultName = sentence.su?.name ?? mindName;

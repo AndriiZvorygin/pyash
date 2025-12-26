@@ -6,7 +6,7 @@ This document defines how a **mind** (an LLM endpoint) is configured, how Pyash 
 
 - A **mind** is an LLM endpoint plus configuration.
 - Configure once with `be mind ya` (host/model/system prompt).
-- Invoke with `be mind do` or `be say ... to <mind> do`.
+- Invoke with `be mind do` or `be write ... to <mind> do`.
 - The interpreter calls `motor/ollama.mjs`.
 - The compiler (JS) emits a call into a small JS HTTP helper instead of shelling out to `curl`.
 
@@ -59,10 +59,10 @@ Direct call:
 su question ob discourse "Hello" to generator be mind do
 ```
 
-Via `say`:
+Via `write`:
 
 ```pyash
-be say ob text "Hello" to generator do
+be write ob text "Hello" to generator do
 ```
 
 Relevant compositional cases at call time:
@@ -98,7 +98,7 @@ The runtime derives context from `memory`. For each mind `<M>`:
   ```jsonc
   {
     "mood": "do",
-    "be": "say",
+    "be": "write",
     "ob": { "name": "<user text>" },
     "to":  { "name": "<M>" }
   }
@@ -120,7 +120,7 @@ The runtime derives context from `memory`. For each mind `<M>`:
   }
   ```
 
-  A secondary form uses `su: "result"` with `be: "say"` and the same `ob.text`. Both map to `role: "assistant"` for context building.
+  A secondary form uses `su: "result"` with `be: "write"` and the same `ob.text`. Both map to `role: "assistant"` for context building.
 
 ### History stitching
 
@@ -210,7 +210,7 @@ Example:
 // User → mind
 {
   "mood": "do",
-  "be": "say",
+  "be": "write",
   "to":  { "name": "generator" },
   "ob": { "name": "<current ob text>" }
 }
@@ -233,7 +233,7 @@ A secondary “result” fact may mirror the reply for downstream use:
 {
   "mood": "ya",
   "su": { "name": "result" },
-  "be": "say",
+  "be": "write",
   "ob": {
     "text":  "<llm reply text>",
     "model": "qwen3-vl:8b-instruct"
@@ -329,7 +329,7 @@ For the compiled JS path you have three realistic options that stay light:
    - `ollama chat` can handle context on its own, although with less structured control.
    - For a Pyash mind that already builds `messages[]`, the HTTP path is a better fit.
 
-If you want Codex to refactor away from `curl`, you can say:
+If you want Codex to refactor away from `curl`, you can write:
 
 > “Replace the compiled JS `curl` call with a small `ollama_chat.mjs` helper that calls `POST /api/chat` via Node’s built-in `fetch`. The helper should accept `{ host, model, messages, numCtx }`, where `messages` already includes system, history, and current user message. Both interpreter and compiled code should call this helper so they share the same context behaviour.”
 

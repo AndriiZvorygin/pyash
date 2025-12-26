@@ -298,7 +298,7 @@ Errors are raised only for structural violations, never for absent switches.
 
 ## 9. `write` formatting for JSON maps
 
-`be write` is the preferred screen/file output verb. `be say` remains reserved for mind/TTS flows.
+`be write` is the preferred screen/file output verb (including mind calls). `be say` remains reserved for TTS flows.
 
 * `ob name <json-map> be write do` prints the `be json map def ... prah` chain.
 

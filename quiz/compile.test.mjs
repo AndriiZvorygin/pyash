@@ -513,12 +513,12 @@ test("compile vector produce from named vectors", async () => {
   assert.equal(logs[0], 9);
 });
 
-test("compile say to mind emits mind call", async () => {
+test("compile write to mind emits mind call", async () => {
   forget();
 
   const program = [
     "exists su name helper be mind from name http://localhost:11434 ya",
-    "ob text hello to name helper be say do"
+    "ob text hello to name helper be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -535,13 +535,13 @@ test("compile say to mind emits mind call", async () => {
   assert.match(js, /messages\.push\(\{ role: "user", content: "hello" \}\)/, "should push user message");
 });
 
-test("compiled say to mind builds messages payload and uses helper transport", async () => {
+test("compiled write to mind builds messages payload and uses helper transport", async () => {
   forget();
 
   const program = [
     "exists su name helper by num 1 be mind from name http://localhost:11434 ya",
-    "ob text hello to name helper be say do",
-    "ob text again to name helper be say do"
+    "ob text hello to name helper be write do",
+    "ob text again to name helper be write do"
   ].join("\\n");
 
   const sentence = parse(

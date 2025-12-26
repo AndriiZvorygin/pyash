@@ -25,7 +25,7 @@ Stable enough for iteration:
 - Core parsing + compositional cases (`fromstate` -> `become`, `fromtext` -> `accordingto`, `totext`, etc.)
 - Signature derivation/dispatch for built-in numeric verbs
 - Sandpit execution and `ret` merge for simple ceremonies
-- Vector basics (literals, `say`, element updates), loops, and 10/100 doors in interpreter + JS/C
+- Vector basics (literals, `write`, element updates), loops, and 10/100 doors in interpreter + JS/C
 
 Still evolving / fragile:
 - Text-typed flows inside ceremonies (especially when mixed with numeric ops)
@@ -39,6 +39,7 @@ Still evolving / fragile:
 - For empty text literals, use `quoted.text..text.quoted` (plain `""` is ignored by the parser).
 - When you need loop/register values inside a ceremony, use `this` + genitives (`obj num of fromindex of this` or `obj this by`).
 - JSON output defaults to RFC 8785 canonical form via `to state json`; use `to state beautiful json` for pretty output.
+- `be write` is used for screen/file output and mind calls; `be say` is reserved for TTS flows.
 
 ## Example Sentences
 - Declarative: `su collector obj num 7 be number ya`
@@ -63,8 +64,8 @@ Still evolving / fragile:
 See `documentation/index.md` for deeper guidance and links to design, state, and glossary notes. Examples live in `examples/` (conditionals, subtract, chaining, registers).
 
 Recent compile-focused examples (JS is the reference backend; C is catching up):
-- `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js`
-- `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`)
+- `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js` (legacy name; uses `write`)
+- `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`) (legacy name; uses `write`)
 - `examples/pyash/compile-loop.pya` → JS `fromindex`/`toindex` loop using the runtime `runLoop` helper
 - `examples/pyash/compile-vector-produce.pya` → JS dot product for vectors (inline/named) at `examples/out/compile-vector-produce.js`
 - `examples/pyash/compile-fizzbuzz.pya` → JS fizzbuzz via compiled conditionals/loops at `examples/out/compile-fizzbuzz-output.js`
@@ -72,8 +73,8 @@ Recent compile-focused examples (JS is the reference backend; C is catching up):
 - Doors (map): `examples/pyash/doors-map-100.pya` (100 doors), `examples/pyash/doors-map-10.pya` (10 doors), `examples/pyash/doors-loop-10.pya` (nested loops only), `examples/pyash/doors-loop-100.pya` (nested loops only)
 
 Compile-to-C status (tested with `gcc` via quizzes):
-- Scalars: `be number ya` (`double`), `be say do` (`printf`), `be add do`, `be remains do` (`fmod`), `be equally ... then ...` (`if`)
-- Vectors: literals (num/text/bool), `say`, element updates, and fill-by-count (literal `by num N`)
+- Scalars: `be number ya` (`double`), `be write do` (`printf`), `be add do`, `be remains do` (`fmod`), `be equally ... then ...` (`if`)
+- Vectors: literals (num/text/bool), `write`, element updates, and fill-by-count (literal `by num N`)
 - Loops: fromindex/toindex loops in ceremonies (nested loops supported with saved registers)
 - Pending: ceremony ABI parity, `at all` map, and full program parity with JS
 

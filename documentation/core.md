@@ -52,7 +52,7 @@ This document summarizes the current core language model used by the interpreter
 ## Logging
 - `be write` logs `ob text`, or resolves `ob name`/genitive to a value. JS backend uses `console.log`; C uses `printf`.
 - JSON output defaults to RFC 8785 canonical form with `to state json`; use `to state beautiful json` for human-readable pretty JSON.
-- `be say` is reserved for mind/TTS flows; use `be write` for screen/file output.
+- `be write` is used for screen/file output and mind calls; `be say` is reserved for TTS flows.
 
 ## Memory Access
 - Interpreter uses `remember(name)` to fetch stored sentences.

@@ -14,7 +14,7 @@ Assumption: “modules” here means “multi-file execution unit + qualified na
 * Feature gates allowed when a backend lags; quizzes declare the gate
 * Specs freeze truth: promote to `@core` only when spec is frozen
 * Golden corpus grows continuously; snapshots must match across backends
-* `write` is canonical for screen/file output; `say` reserved for mind/TTS flows
+* `write` is canonical for screen/file output and mind calls; `say` reserved for TTS flows
 
 
 ## Timeline summary (from the commits you pasted)

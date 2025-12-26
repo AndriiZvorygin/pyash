@@ -93,7 +93,7 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
   if (callPrompt) {
     doRemember({
       mood: "do",
-      be: "say",
+      be: "write",
       to: { name: targetName },
       ob: { text: callPrompt }
     });
@@ -136,9 +136,7 @@ export const signatures = [
   { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  // Type-style target: say ... to name mind
-  { signatureWords: ["be", "say", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "say", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
+  // Type-style target: write ... to name mind
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
 ];
