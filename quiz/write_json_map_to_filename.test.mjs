@@ -23,7 +23,7 @@ test("write json map to filename writes json", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-json-"));
   const outPath = path.join(tmp, "profile.json");
 
-  await run(`ob name profile to state json to filename ${outPath} be write do`);
+  await run(`ob name profile to state beautiful json to filename ${outPath} be write do`);
 
   const saved = await fs.readFile(outPath, "utf8");
   assert.equal(saved.trim(), '{\n  "name": "Ada"\n}');

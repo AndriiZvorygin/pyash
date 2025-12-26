@@ -20,6 +20,36 @@ function sanitizeName(name = "") {
   return cleaned;
 }
 
+function compareUtf8(a, b) {
+  if (a === b) return 0;
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  const len = Math.min(bufA.length, bufB.length);
+  for (let i = 0; i < len; i += 1) {
+    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
+  }
+  return bufA.length < bufB.length ? -1 : 1;
+}
+
+function canonicalizeJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalizeJsonValue(item));
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    const keys = Object.keys(value).sort(compareUtf8);
+    for (const key of keys) {
+      out[key] = canonicalizeJsonValue(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function canonicalJsonStringify(value) {
+  return JSON.stringify(canonicalizeJsonValue(value));
+}
+
 function mapValueToJson(value, mapDefs, seen) {
   if (!value || typeof value !== "object") return undefined;
   if (value.hollow) return null;
@@ -357,8 +387,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 
   if ((baseBe === "say") || (baseBe === "write" && !hasWriteIndex)) {
     const isWrite = baseBe === "write";
-    const format = (sentence?.become?.name || sentence?.become?.text || "").toLowerCase();
-    const wantJson = format === "json";
+    const formatParts = [];
+    if (sentence?.become?.name) formatParts.push(sentence.become.name);
+    if (sentence?.become?.text) formatParts.push(sentence.become.text);
+    const formatRaw = formatParts.join(" ").trim().toLowerCase();
+    const jsonMode = formatRaw.includes("json")
+      ? (formatRaw.includes("beautiful") ? "pretty" : "canonical")
+      : null;
+    const wantJson = jsonMode !== null;
     // Special case: say to <mind> -> invoke mind (JS)
     if (baseBe === "say" && sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
@@ -451,10 +487,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (isJsonMap) {
           if (wantJson) {
             if (lang === "c") {
-              expr = sanitizeName(`${ob.name}_json`);
+              const suffix = jsonMode === "pretty" ? "json_pretty" : "json";
+              expr = sanitizeName(`${ob.name}_${suffix}`);
             } else {
               if (jsHelpers) jsHelpers.usesJsonMap = true;
-              expr = `formatJsonMap(${JSON.stringify(ob.name)})`;
+              expr = `formatJsonMap(${JSON.stringify(ob.name)}, ${JSON.stringify(jsonMode)})`;
             }
           } else if (mapDefs?.has(ob.name)) {
             const chain = mapDefChainFromName(ob.name, mapDefs);
@@ -1839,7 +1876,7 @@ let lines = [header];
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesFs: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, jsonMapStrings: new Map() };
+  const cState = { vectorCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
@@ -1909,7 +1946,8 @@ let lines = [header];
       if (sentence.be === "json map") {
         try {
           const jsonObj = jsonFromMapSentence(mapSentence, mapDefs, new Set());
-          cState.jsonMapStrings.set(name, JSON.stringify(jsonObj, null, 2));
+          cState.jsonMapStrings.set(name, canonicalJsonStringify(jsonObj));
+          cState.jsonMapPrettyStrings.set(name, JSON.stringify(jsonObj, null, 2));
         } catch (err) {
           throwErrorSentence({
             name: "json map export failed",
@@ -1947,6 +1985,11 @@ let lines = [header];
           if (jsonText) {
             const varName = sanitizeName(`${name}_json`);
             lines.push(`const char *${varName} = ${JSON.stringify(jsonText)};`);
+          }
+          const prettyText = cState.jsonMapPrettyStrings.get(name);
+          if (prettyText) {
+            const varName = sanitizeName(`${name}_json_pretty`);
+            lines.push(`const char *${varName} = ${JSON.stringify(prettyText)};`);
           }
         }
       } else {
@@ -2039,7 +2082,7 @@ let lines = [header];
       prelude.push(vectorFormatHelper());
     }
     if (jsHelpers.usesJsonMap) {
-      prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.su?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.ob?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction formatJsonMap(name) {\n  return JSON.stringify(jsonFromMap(name), null, 2);\n}`);
+      prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.su?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.ob?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction canonicalizeJson(value) {\n  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));\n  if (value && typeof value === \"object\") {\n    const out = {};\n    const keys = Object.keys(value).sort((a, b) => {\n      if (a === b) return 0;\n      const bufA = Buffer.from(a, \"utf8\");\n      const bufB = Buffer.from(b, \"utf8\");\n      const len = Math.min(bufA.length, bufB.length);\n      for (let i = 0; i < len; i += 1) {\n        if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;\n      }\n      return bufA.length < bufB.length ? -1 : 1;\n    });\n    for (const key of keys) out[key] = canonicalizeJson(value[key]);\n    return out;\n  }\n  return value;\n}\nfunction formatJsonMap(name, mode = \"canonical\") {\n  const json = jsonFromMap(name);\n  if (mode === \"pretty\") return JSON.stringify(json, null, 2);\n  return JSON.stringify(canonicalizeJson(json));\n}`);
     }
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);

@@ -22,4 +22,4 @@ su name address ob name address ya
 su name projects ob ve name project_one project_two be vector ya
 su name profile be json map prah
 
-ob name profile to state json be write do
+ob name profile to state beautiful json be write do

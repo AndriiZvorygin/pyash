@@ -163,6 +163,19 @@ export function parse(line) {
       ) {
         slot.name = next;
         i++; // consume the name token
+        if (t === "state" && slot.name === "beautiful") {
+          const nextState = words[i + 1];
+          if (
+            nextState &&
+            !ROLE_KEYS.includes(nextState) &&
+            !["be", "then", "ta"].includes(nextState) &&
+            !TYPE_TOKENS.includes(nextState)
+          ) {
+            slot.text = slot.name;
+            slot.name = nextState;
+            i++; // consume the secondary state token
+          }
+        }
       }
 
       continue;

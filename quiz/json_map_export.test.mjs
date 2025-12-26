@@ -25,7 +25,7 @@ test("json map exports pretty JSON via write", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await run("ob name profile to state json be write do");
+    await run("ob name profile to state beautiful json be write do");
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;

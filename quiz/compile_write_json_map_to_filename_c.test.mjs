@@ -30,7 +30,7 @@ test("compile write json map to filename (c) writes file", async () => {
     "su name profile be json map def",
     "su name name ob text \"Ada\" ya",
     "su name profile be json map prah",
-    "ob name profile to state json to filename out.json be write do"
+    "ob name profile to state beautiful json to filename out.json be write do"
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);

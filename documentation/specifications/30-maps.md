@@ -42,6 +42,8 @@ This specification defines syntax, semantics, access rules, arrays, nesting, and
 
 ## 3. Syntax
 
+Inline map literals are not supported. `def … prah` is the canonical map form.
+
 ### 3.1 Pyash map definition
 
 ```
@@ -242,10 +244,15 @@ The compiled output is a `.pya`-compatible chain of `be json map def` / `prah` b
 
 ## 7. Exporting JSON (stringify)
 
-JSON export uses existing verbs:
+JSON export uses existing verbs and is **canonical by default** (RFC 8785):
 
-* **to JSON text**: `ob name <map> to state json to name <out> be write do`
-* **to JSON file**: `ob name <map> to state json to filename <path> be write do`
+* **to canonical JSON text**: `ob name <map> to state json to name <out> be write do`
+* **to canonical JSON file**: `ob name <map> to state json to filename <path> be write do`
+
+Human-readable JSON requires an explicit state:
+
+* **to pretty JSON text**: `ob name <map> to state beautiful json to name <out> be write do`
+* **to pretty JSON file**: `ob name <map> to state beautiful json to filename <path> be write do`
 
 `be compile … fromstate json tostate pyash` is the canonical JSON → Pyash transform (parse and re-emit).
 
@@ -293,13 +300,18 @@ Errors are raised only for structural violations, never for absent switches.
 
 * `ob name <json-map> be write do` prints the `be json map def ... prah` chain.
 
-To print JSON, specify a target state:
+To print canonical JSON, specify a target state:
 
 * `ob name <json-map> to state json be write do`
+
+To print human-readable JSON, specify the explicit state:
+
+* `ob name <json-map> to state beautiful json be write do`
 
 To write the output to a file:
 
 * `ob name <json-map> to state json to filename <file.json> be write do`
+* `ob name <json-map> to state beautiful json to filename <file.json> be write do`
 
 ---
 

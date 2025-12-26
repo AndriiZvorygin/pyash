@@ -1,323 +1,316 @@
-### Updated roadmap (general-purpose, parity-driven, with **specification drops**, hardening points, **genetic programming**, and **early modules/namespacing**)
+You are right. Modules and namespacing are a foundation feature. Config formats become cleaner once you have a stable place to put “library verbs” (`say`, `hear`, `import`, etc.) and any tooling helpers.
 
-Assumption: you keep **interpreter + JS + C parity as the default rule**, but you allow **explicit feature gates** when a backend lags (tests declare the gate).
+Below is the full updated roadmap with **modules/imports moved earlier**, and config/YAML positioned *after* that. I also keep `say/hear` explicitly as library-surface, backed by external tools via config.
 
----
-
-## Dec 13–Dec 21, 2025 (completed): Algorithms slice + parity discipline
-
-**Ship**
-
-* 100 Doors parity (done)
-* Sieve parity (done)
-* Insertion sort parity (done)
-
-**Specification drops (freeze v0.1)**
-
-* **Core Semantics v0.1** — done
-
-  * evaluation order
-  * memory merge rules (`ret`)
-  * ceremony overwrite rule
-  * signature resolution order and error surface (“unknown verb/signature”)
-
-**Hardening**
-
-* Golden tests: same input program, same output snapshot across interpreter, JS, and C
-* Error sentence contract established (`be error do`)
+Assumption: “modules” here means “multi-file execution unit + qualified names + minimal import”, without a full package manager yet.
 
 ---
 
-## Dec 22, 2025 (completed): Specifications modularization v0.1
+# Roadmap (parity-driven, spec drops, hardening gates, modules early, media IO)
 
-**Ship**
+## Invariants
 
-* Modular **Specifications** set (`00-index.md`, `01–06` core specifications)
-* Guides: Getting Started, Debugging, Cookbook
-* Indexes: Examples list, Glossary, Specifications-to-quizzes
+* Parity-first: interpreter + JS + C ship together by default
+* Feature gates allowed when a backend lags; quizzes declare the gate
+* Specs freeze truth: promote to `@core` only when spec is frozen
+* Golden corpus grows continuously; snapshots must match across backends
+* `write` is canonical for screen/file output; `say` reserved for mind/TTS flows
 
-**Hardening**
 
-* Every normative rule links to existing quizzes and/or runnable examples
+## Timeline summary (from the commits you pasted)
 
-**Additional work completed Dec 22, 2025**
+## One-paragraph “progress so far” (copy-paste friendly)
 
-* JSON map import (`be import`) and JSON → Pyash compile path
-* `write` defaults to Pyash def-chain for JSON maps; `to state json` prints JSON
-* JS/C parity quizzes for JSON → Pyash compile
-* Example: `examples/pyash/compile-json-to-pyash.pya`
+Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an async verb dispatcher. By mid-November the interpreter existed and tests plus packaging were in place. Late November rapidly expanded the language surface: compositional cases, `def`, file IO, conditionals, sandpit execution, and early compile support, followed by vectors and core math verbs. On Dec 1 the signature system and strict mode became the backbone, enabling reliable dispatch and compilation. Early Dec added translation flows (English↔Pyash), genitives, and stronger compilation to JS/C, then mid-Dec hardened loops, registers, `remains`, and introduced `say`. From Dec 20 onward, algorithm examples (FizzBuzz, 100 doors, sieve, insertion sort) drove parity and regression coverage. By Dec 22–23, maps and JSON maps became full infrastructure with import, JSON→Pyash compile, deterministic `write` output (including file output), and JS/C parity, capped with a word-frequency example and updated specifications.
 
----
 
-## Dec 23, 2025 (completed): su/ob canonicalization + word frequency parity
+### Nov 12, 2025: Project bootstrapped
 
-**Ship**
+* **Initial sentence model + core runtime skeleton** (initial commit).
+* **Unified memory layer + async verb dispatcher** landed right away, so the execution model was “verbs over sentences” from day one.
 
-* `su`/`ob` canonicalized in parser + runtime, legacy `subj`/`obj` accepted on input
-* Word frequency example (`examples/pyash/word-frequency.pya`) and parity across interpreter/JS/C
-* C map support for map adds + map sentence printing
+### Nov 13, 2025: Interpreter exists
 
-**Hardening**
+* Interpreter layer added, missing files filled in.
+* This is the point where it becomes a real language runtime, not just data structures.
 
-* JS/C compile parity quizzes for word frequency
-* Signature derivation updated for `su` in conditionals and definitions
+### Nov 14, 2025: Testing and packaging foundation
 
----
+* NPM/package metadata, a testing framework, and early pretty-print tests.
+* History logging for sentences appears early, signalling traceability as a core constraint.
 
-## Dec 22, 2025–Feb 14, 2026 (current): Maps + frequency + CSV group-by (data slice)
+### Nov 21–23, 2025: Language surface area and core ergonomics expand fast
 
-**Ship**
+* **Parser upgrades**, new quoting style, compositional cases supported and made to work.
+* **`def` and function definitions** introduced.
+* `compile` appears, plus file read support and helper scripts for testing.
+* Conditionals evolve rapidly (`tiny`, `giant`, `equally`), examples grow, docs iterate.
+* Major architectural tightening: **evoke sentences as ground truth**, plus **sandpit execution** and `until` support.
 
-* Map literal
-* Map get/set
-* Map iteration order (pick one and lock it)
-* Word frequency (map + loop + text split)
-* CSV parse + group-by + aggregate (count, sum)
+### Nov 24–29, 2025: Reorg + math + vectors
 
-**Specification drops (freeze v0.2)**
+* Big reorganization and terminology changes (memory → remember, etc.).
+* Quantity/context axis work (`tloh/by/per`), then math verbs (multiply/divide/exponent/negate), dot product, and vector support.
+* This is where “can do nontrivial computation” becomes a stated property.
 
-* **Map specification v0.1**
+### Dec 1, 2025: Signature system consolidation
 
-  * key types allowed (text, number)
-  * equality rules
-  * iteration order
-  * missing-key behaviour
+* **Legacy map removed**, verbs migrated to signature dispatch.
+* Strict mode enabled.
+* Ceremony style updated; signatures stored as metadata.
+* Net effect: the runtime gets stricter, more deterministic, and easier to compile.
 
-* **Text specification v0.1**
+### Dec 4–6, 2025: Compile and translation pipeline matures
 
-  * character definition (ASCII-first)
-  * whitespace rules
-  * split/join behaviour
-  * case-conversion stance
+* `understand` file-to-file; `compile` text-to-text.
+* **Translation to/from English** and Pyash introduced, plus conditional compilation to JS and C.
+* `exists` added and documented.
+* Genitives added (key for later map + JSON work).
 
-**Hardening**
+### Dec 7–10, 2025: Compiler hardening + mind integration
 
-* Error sentence contract parity across interpreter, JS, and C
-* Expanded golden corpus:
+* Compile moves to sentence objects; conditional tests fixed; ceremony codegen improved.
+* Helpers and npm scripts for repl/run/trace/compile.
+* **`mind` plumbing added** (model default, compile payload details, history windows, per-mind buckets).
+* Error messages improved (unknown verb, derived signature diagnostics).
 
-  * fizzbuzz
-  * insertion sort
-  * sieve-10
-  * one vector example
-* Stdlib boundary enforced in layout:
+### Dec 13, 2025: Loops + vectors + at-all / remains
 
-  * core verbs stay minimal
-  * maps/text/csv live under library verbs with stable signatures
-* Ceremony overwrite warnings enforced (strict mode optional)
+* Big vector and indexing work (ord sugar, at-case examples, translation/roundtrip tests).
+* Compile wrapper shortcuts; signature coverage broadened.
+* **`remains` verb** and simplification of **`at all`**.
+* Sequence register work begins (`tloh` renamed to `times`, sequence context added).
+* Map/at-all doc + decisions refreshed.
 
----
+### Dec 16–18, 2025: Genitives stabilised, say introduced, C compiler brought up
 
-## Feb 2026 (small milestone): Minimal agent loop v0.1
+* Genitive tests restored, parity stabilised, signature checks hardened.
+* `say` verb added and broadened; vector toggle/invert examples land.
+* C compiler smoke tests expand: add/remains/equally/loops/conditionals; text concatenation lands.
+* FizzBuzz parity + regressions land; doors begins to harden.
 
-**Ship**
+### Dec 20–21, 2025: Algorithms as parity drivers
 
-* Verifier loop: run quizzes, emit structured report artifacts
-* Reducer loop: store minimal repro `.pya` programs
-* Agents propose, tests decide (no autonomy promise)
+* FizzBuzz parity across interpreter/JS/C with compile quizzes.
+* 100 doors examples + quizzes; nested C loops; vector fill by count; run helpers.
+* Sieve updated to output a primes vector.
+* Insertion sort example + JS/C parity tests.
 
-**Hardening**
+### Dec 22–23, 2025: Maps and JSON maps become real infrastructure
 
-* Deterministic, diff-friendly reports
+* Core semantics v0.1 drafted and clarified; error sentence contract formalized.
+* `write` introduced and migrated as canonical output (console output migration, write-to-file).
+* **JSON maps added end-to-end**: literals (`bool`, `hollow`), JSON import, JSON→Pyash compile, JS/C parity tests, default write for JSON maps, and docs updates.
+* Word frequency built as a map-driven exemplar with compile parity tests.
+* Final doc updates to map/JSON spec and roadmap.
 
----
-
-## Feb 2026 (small milestone): Genetic programming harness v0.1
-
-**Ship**
-
-* Genome format: Pyash sentence lists (and/or JSON sentence IR once available)
-* Mutations: insert/delete/swap cases, tweak literals, tweak loop bounds
-* Crossover: splice sentence ranges
-* Fitness: pass/fail on selected quizzes, optional size/novelty penalties
-
-**Specification drops (freeze v0.2-gp)**
-
-* **Evolution artifacts specification v0.1**
-
-  * genome serialization
-  * mutation log format
-  * fitness report format
-  * reproducibility fields (seed, quiz set)
-
-**Hardening**
-
-* Fixed seeds and stable serialization
-* Time/step limits per candidate
-* Sandboxed IO: writes limited to an artifacts directory
 
 ---
 
-## Feb 15–Mar 15, 2026: JSON parse + transform + path utilities (document slice)
+## Now → Jan 5, 2026: v0.2 freeze sprint (maps + JSON determinism lock)
 
-**Ship**
+### Ship
 
-* JSON parse to typed tree
-* JSON stringify
-* JSON transforms (map/filter/reduce; set/get by path)
+* Explicit note: no inline map literal; def/prah is canonical
+* Lock determinism where it matters:
 
-**Specification drops (freeze v0.3)**
+  * JSON export key ordering rule (state it and test it)
+  * `unspecified` omission rule during JSON export (already defined; add golden)
+  * Self-referential export errors (already named; add golden)
 
-* **JSON IR specification v0.1**
+### Spec drops
 
-  * node types (null, bool, number, text, array, object)
-  * number mapping (double with constraints)
-  * object keys (text only)
+* Bump `30-maps.md` status to v0.2 once determinism rules are locked
 
-* **Path specification v0.1**
+### Hardening
 
-  * canonical addressing model
-  * missing-path error rules
-
-**Hardening**
-
-* Determinism contract v0.1 (pure vs impure verbs)
-* Span-tracked parser errors across all backends
+* Golden: JSON → Pyash → JSON round-trip snapshots (byte-stable)
+* Cross-backend error parity audit for JSON map structural errors
 
 ---
 
-## Mar 16–Apr 30, 2026: Pipeline skeleton + retries + checkpoints (systems slice)
+## Jan 6 → Feb 2, 2026: Modules/imports/namespacing v0.1
 
-**Ship**
+This is the “make the library real” milestone.
 
-* Pipeline runner (stages)
-* Queue + worker pool
-* Rate limiting, retries with backoff, checkpoints
-* Structured logs (machine-readable)
+### Ship
 
-**Specification drops (freeze v0.4)**
+* Module file as a unit of execution/compilation
+* Minimal `import`:
 
-* **Error model specification v0.1**
+  * import module by path or logical name
+  * load-time behaviour defined (once per run, memoized)
+* Qualified names: `module.symbol` (or your chosen equivalent)
+* Resolution order: local > module > imported
+* Cycle rule: forbid at first (simplest), with a clear error
 
-  * error propagation rules
-  * ceremony vs pipeline behaviour
+### Spec drops (freeze v0.3)
 
-* **IO model specification v0.1**
+* Modules & namespacing spec v0.1:
 
-  * file read/write contracts
-  * text encodings
-  * sandpit IO boundaries
+  * module identity, resolution, cycles, visibility
+  * what counts as a module boundary for compiler targets
 
-**Hardening**
+### Hardening
 
-* Reproducible runs (`--seed` where applicable)
-* Stable log schema
-* Backpressure rules (queue size, drop vs block)
-
----
-
-## May–Jun 2026: Minimal modules/imports/namespacing (keeps core tiny)
-
-**Ship**
-
-* Module file as unit of execution/compilation
-* `import` (single minimal form)
-* Qualified names (`module.symbol` or equivalent)
-* Stdlib split becomes real: core vs library paths enforce boundaries
-
-**Specification drops (freeze v0.45)**
-
-* **Modules & namespacing specification v0.1**
-
-  * module identity rules
-  * name resolution (local vs imported)
-  * cycle rule (forbid or define)
-  * visibility rule
-
-**Hardening**
-
-* Multi-file golden tests across interpreter, JS, and C
-* Compatibility rule: core names stable; library may evolve behind gates
+* Multi-file golden tests across interpreter/JS/C
+* Gate: backend that cannot do multi-file remains behind `@js` or `@c` until parity
 
 ---
 
-## Jul–Aug 2026: Scheduler and concurrency “truth serum”
+## Feb 3 → Mar 1, 2026: Real-world inputs tranche (CSV + YAML + config), now module-aware
 
-**Ship**
+Now that modules exist, config and formats can live in a proper stdlib namespace.
 
-* DAG scheduler
-* Priorities
-* Cancellation
-* Timeouts
-* Concurrency torture tests (readers–writers, dining philosophers)
+### Ship
 
-**Specification drops (freeze v0.5)**
+* CSV parse into vectors/maps
+* Group-by + aggregates: count, sum
+* YAML ↔ Pyash translation:
 
-* **Concurrency specification v0.1**
+  * YAML → `be json map def … prah` chain (canonical)
+  * JSON maps → YAML emission (supported subset)
+* Configuration loading:
 
-  * isolation vs sharing
-  * cancellation semantics
-  * ordering guarantees
+  * support JSON and YAML config files
+  * merge/override precedence (CLI > env > config > defaults)
+  * stable error sentences for missing/invalid config
 
-* **Runtime lifecycle specification v0.1**
+### Spec drops (freeze v0.35)
 
-  * startup/shutdown hooks
-  * resource cleanup contracts
+* CSV spec v0.1
+* YAML spec v0.1 (subset explicitly stated)
+* Config spec v0.1 (formats, precedence, error rules)
 
-**Hardening**
+### Hardening
 
-* Deterministic simulation mode for concurrency tests (where possible)
-* Stress harness with regression reporting per backend
+* Deterministic parsing/emission tests (CSV + YAML)
+* Golden demos:
 
----
-
-## Sep 2026 onward: Packaging + tooling + “usable by other humans”
-
-**Ship**
-
-* Package layout conventions
-* Versioned standard library
-* Formatter + linter suitable for daily use
-* Dependency and compatibility checks
-* Genetic programming “production mode”:
-
-  * evolves candidate patches against target quizzes/specifications
-  * outputs PR-ready diffs plus proof artifacts
-
-**Specification drops (v1.0 candidates)**
-
-* **Package system specification v0.1**
-
-  * package layout rules
-  * version resolution rules
-  * compatibility constraints
-
-* **Stdlib stability policy**
-
-  * stable vs experimental vs deprecated verbs
-
-* **Evolution policy specification v0.1**
-
-  * legal fitness targets
-  * acceptance thresholds
-  * provenance requirements (seeds, logs, reproductions)
-
-**Hardening**
-
-* Backward-compatibility tests for v1-stable signatures
-* Deprecation warnings with codes
-* Migration guides per breaking change
+  * `csv_group_by.pya`
+  * `yaml_roundtrip.pya`
+  * `config_precedence.pya`
 
 ---
 
-## Parity rule (refined)
+## Mar 2 → Apr 5, 2026: Media IO v0.1 (TTS via `say`, STT via `hear`)
 
-* Every quiz is tagged:
+Implemented as library verbs, configured via the config system, backed by external tools.
 
-  * `@core`: must pass on interpreter, JS, and C
-  * `@js`: JS may lead temporarily
-  * `@c`: C may lag temporarily
-* Features promote to `@core` only when their **specification** is frozen
+### Ship
+
+* `say` (TTS interface):
+
+  * `ob text "..." be say do`
+  * default backend “none” with clear error sentence
+* `hear` (STT interface):
+
+  * `from filename <audio> to name <out> be hear do`
+  * minimal output: text; optional future: segments + timestamps
+* External tool backends via config:
+
+  * TTS: eSpeak NG, Piper, system TTS
+  * STT: Whisper, whisper.cpp, or external service (explicitly gated)
+
+### Spec drops (freeze v0.4)
+
+* Speech spec v0.1:
+
+  * signatures
+  * required config keys
+  * error rules
+  * deterministic test mode requirements
+
+### Hardening
+
+* Deterministic test mode:
+
+  * `say` writes an artefact log or wav to artefacts dir in tests
+  * `hear` uses pinned fixture audio and pinned model/version recorded in artefacts
+* Artefact schema: backend, model, version, input hash
 
 ---
 
-## Specification template (standard)
+## Apr 6 → May 10, 2026: Minimal agent loop v0.1 (tests decide)
 
-Each specification uses:
+### Ship
 
-* Purpose
-* Concepts and terms
-* Syntax surface (minimal)
-* Semantics (normative rules)
-* Errors (names and conditions)
-* Examples (existing files only)
-* Tests that define truth
+* Verifier loop: run quizzes, emit structured reports + artefacts dir
+* Reducer loop: store minimal repro `.pya`
+* Propose, run, report
+
+### Spec drops (freeze v0.45)
+
+* Reports spec v0.1 (stable fields, ordering, paths)
+
+### Hardening
+
+* Diff-friendly deterministic reports
+
+---
+
+## May 11 → Jun 30, 2026: Genetic programming harness v0.1
+
+### Ship
+
+* Genome: Pyash sentence lists
+* Mutations + crossover
+* Fitness: quiz pass/fail + optional penalties
+
+### Spec drops (freeze v0.5)
+
+* Evolution artefacts spec v0.1 (genomes, logs, fitness, reproducibility)
+
+### Hardening
+
+* Fixed seeds, time/step limits, sandboxed IO (artefacts only)
+
+---
+
+## Jul → Aug 2026: Pipeline skeleton (systems slice)
+
+### Ship
+
+* Pipeline runner (stages), queue + worker pool
+* Retries/backoff, checkpoints
+* Structured logs
+
+### Spec drops (freeze v0.6)
+
+* Error model spec v0.1
+* IO model spec v0.1
+* Log schema spec v0.1
+
+### Hardening
+
+* Reproducible runs, backpressure rules
+
+---
+
+## Sep 2026 onward: Concurrency + packaging + “usable by other humans”
+
+### Concurrency
+
+* DAG scheduler, cancellation, timeouts, torture tests
+* Deterministic simulation mode where possible
+* Concurrency spec v0.1 + runtime lifecycle spec v0.1
+
+### Packaging/tooling
+
+* Package layout conventions, versioned stdlib
+* Formatter + linter, dependency/compat checks
+* GP production mode: PR-ready diffs + proof artefacts
+* Package system spec v0.1, stdlib stability policy, evolution policy spec v0.1
+
+---
+
+## Parity tags
+
+* `@core`: interpreter + JS + C
+* `@js`: JS may lead temporarily
+* `@c`: C may lag temporarily
+* Promote to `@core` only with frozen spec + golden coverage + error parity
+
+---
+
+If you later decide “config before modules” for pragmatic reasons, you can still do it, but early modules will pay off immediately: it forces a clean boundary where `say/hear/csv/yaml/config` live, and prevents core from turning into a junk drawer.
