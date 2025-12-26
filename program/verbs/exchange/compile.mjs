@@ -50,6 +50,20 @@ function canonicalJsonStringify(value) {
   return JSON.stringify(canonicalizeJsonValue(value));
 }
 
+function normalizeJsonMapError(err) {
+  const message = err?.message ?? String(err ?? "");
+  if (message.startsWith("json map contents defective")) {
+    return { name: "json map contents defective", message };
+  }
+  if (message.startsWith("json map referential defective")) {
+    return { name: "json map referential defective", message };
+  }
+  if (message.startsWith("json map export self referential")) {
+    return { name: "json map export self referential", message };
+  }
+  return { name: "json map export failed", message };
+}
+
 function mapValueToJson(value, mapDefs, seen) {
   if (!value || typeof value !== "object") return undefined;
   if (value.hollow) return null;
@@ -1949,9 +1963,10 @@ let lines = [header];
           cState.jsonMapStrings.set(name, canonicalJsonStringify(jsonObj));
           cState.jsonMapPrettyStrings.set(name, JSON.stringify(jsonObj, null, 2));
         } catch (err) {
+          const normalized = normalizeJsonMapError(err);
           throwErrorSentence({
-            name: "json map export failed",
-            message: err?.message ?? String(err),
+            name: normalized.name,
+            message: normalized.message,
             from: { name: "compile" },
             raw: { name, error: err?.message }
           });
