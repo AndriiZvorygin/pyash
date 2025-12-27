@@ -127,6 +127,7 @@ function caseTypeWords(value) {
   if (value.genitive) {
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = normalizeWords(chainArr.at(-1));
+    if (tail === "all") return ["all"];
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
     if (tail === "filename") return ["filename"];
@@ -268,6 +269,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.genitive) {
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = normalizeWords(chainArr.at(-1));
+    if (tail === "all") return ["all"];
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
     if (tail === "filename") return ["filename"];

@@ -88,6 +88,35 @@ export function parse(line) {
   let current = null;
   let slot = null;
 
+  function parseAllEnumeration(startIdx) {
+    if (words[startIdx] !== "all") return null;
+    let idx = startIdx + 1;
+    let role = null;
+    if (words[idx] === "su" || words[idx] === "ob") {
+      role = words[idx];
+      idx += 1;
+    }
+    if (words[idx] === "of" || words[idx] === "ti") {
+      idx += 1;
+    } else if (!role) {
+      return null;
+    }
+    const nameTokens = [];
+    while (
+      idx < words.length &&
+      !ROLE_KEYS.includes(words[idx]) &&
+      !CONTEXT_KEYS.includes(words[idx]) &&
+      !["be", "then", "ta", "ret"].includes(words[idx])
+    ) {
+      nameTokens.push(words[idx]);
+      idx += 1;
+    }
+    if (nameTokens.length === 0) return null;
+    const mapName = nameTokens.join(" ");
+    const chain = role ? [mapName, role, "all"] : [mapName, "all"];
+    return { chain, endIndex: idx };
+  }
+
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
 
@@ -114,6 +143,15 @@ export function parse(line) {
       const subline = subTokens.join(" ");
       s.consequence = parse(subline);
       break;
+    }
+
+    if (t === "all") {
+      const parsed = parseAllEnumeration(i);
+      if (parsed) {
+        s.ob = { genitive: { chain: parsed.chain } };
+        i = parsed.endIndex - 1;
+        continue;
+      }
     }
 
     if (ROLE_KEYS.includes(t)) {

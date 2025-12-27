@@ -1,0 +1,11 @@
+su name sample be json map def
+su name b ob text "bee" ya
+su name a ob text "ace" ya
+su name aa ob text "double" ya
+prah
+
+all su of sample be read do
+ob name result be write do
+
+all ob of sample be read do
+ob name result be write do

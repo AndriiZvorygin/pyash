@@ -1,10 +1,3 @@
-You are right. Modules and namespacing are a foundation feature. Config formats become cleaner once you have a stable place to put “library verbs” (`say`, `hear`, `import`, etc.) and any tooling helpers.
-
-Below is the full updated roadmap with **modules/imports moved earlier**, and config/YAML positioned *after* that. I also keep `say/hear` explicitly as library-surface, backed by external tools via config.
-
-Assumption: “modules” here means “multi-file execution unit + qualified names + minimal import”, without a full package manager yet.
-
----
 
 # Roadmap (parity-driven, spec drops, hardening gates, modules early, media IO)
 
@@ -104,9 +97,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Word frequency built as a map-driven exemplar with compile parity tests.
 * Final doc updates to map/JSON spec and roadmap.
 
----
-
-## Now → Jan 5, 2026: v0.2 freeze sprint (maps + JSON determinism lock)
 
 ### Dec 25, 2025: v0.2 freeze sprint complete (maps + JSON determinism lock)
 
@@ -121,6 +111,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Hardening: cross-backend error parity audit for JSON map structural errors
 
 ---
+## Now → Jan 5, 2026: v0.2 freeze sprint (maps + JSON determinism lock)
 
 ## Jan 6 → Feb 2, 2026: Modules/imports/namespacing v0.1
 
