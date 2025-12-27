@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "count tools": "./number_tools.pya",
+    "bad module": "./bad_module.pya"
+  }
+}

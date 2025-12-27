@@ -6,8 +6,10 @@ import { parse } from "./understand/index.mjs";
 import { interpret } from "./bridge/index.mjs";
 import { allRemember, forget } from "./remember/index.mjs";
 import { splitSentences } from "./library/sentenceSplitter.mjs";
+import { setEntryModulePath } from "./bridge/modules.mjs";
 
 async function repl() {
+  setEntryModulePath(process.cwd());
   const rl = readline.createInterface({ input, output });
 
   console.log("Pyash REPL");

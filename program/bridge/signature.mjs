@@ -50,6 +50,15 @@ export function registerSignature({ name, signatureWords }) {
   nameToKeys.set(name, new Set([key]));
 }
 
+export function registerSignatureAlias({ name, signatureWords }) {
+  if (!name || !signatureWords?.length) return;
+  const key = joinSignatureWords(signatureWords);
+  signatureRegistry.set(key, name);
+  const keys = nameToKeys.get(name) ?? new Set();
+  keys.add(key);
+  nameToKeys.set(name, keys);
+}
+
 export function registerSignatureHandler({ signatureWords, handler }) {
   if (!signatureWords?.length || typeof handler !== "function") return;
   const key = joinSignatureWords(signatureWords);

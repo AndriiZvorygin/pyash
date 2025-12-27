@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
+import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
 import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
@@ -2282,6 +2283,123 @@ function inlineSentenceLiteral(value, declared = new Set(), { inlineNames = true
   return JSON.stringify(value);
 }
 
+function findDefinitionBlock(sentences, name) {
+  for (let i = 0; i < sentences.length; i++) {
+    const s = sentences[i];
+    if (s?.mood === "def" && s?.be === "ceremony" && s?.su?.name === name) {
+      const body = [];
+      let j = i + 1;
+      for (; j < sentences.length; j++) {
+        if (sentences[j].mood === "prah") break;
+        body.push(sentences[j]);
+      }
+      return { def: s, body, prah: sentences[j], end: j };
+    }
+  }
+  return null;
+}
+
+function collectExportFacts(record, sentences) {
+  const exported = new Map();
+  for (const name of record.exportNames) {
+    if (record.localCeremonies.has(name)) continue;
+    const mapped = record.nameMap.get(name);
+    if (!mapped) continue;
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      const s = sentences[i];
+      if (s?.mood === "ya" && s?.su?.name === mapped) {
+        exported.set(name, s.ob ?? {});
+        break;
+      }
+    }
+  }
+  return exported;
+}
+
+function mapNamespaceSentences({ alias, exportFacts }) {
+  const def = { mood: "def", be: "map", su: { name: alias } };
+  const entries = [];
+  for (const [key, value] of exportFacts.entries()) {
+    entries.push({ mood: "ya", su: { name: key }, ob: value ?? {} });
+  }
+  const prah = { mood: "prah", be: "map", su: { name: alias } };
+  return [def, ...entries, prah];
+}
+
+async function expandModulesForCompile(entryPath, sentences) {
+  clearModuleCache();
+  if (entryPath) setEntryModulePath(entryPath);
+
+  const modules = [];
+  const seen = new Set();
+
+  const includeModule = async (specifier, alias) => {
+    const record = await loadModule({ specifier, alias, source: "compile import" });
+    if (seen.has(record.id)) return record;
+    seen.add(record.id);
+
+    const local = [];
+    for (const s of record.sentences) {
+      if (s?.mood === "do" && s?.be === "import" && s?.from?.name) {
+        await includeModule(s.from.name, s.to?.name);
+        continue;
+      }
+      local.push(s);
+    }
+
+    const exportFacts = collectExportFacts(record, local);
+    modules.push({ record, sentences: local, exportFacts });
+    return record;
+  };
+
+  const entry = [];
+  const aliasBlocks = [];
+
+  for (const s of sentences) {
+    if (s?.mood === "do" && s?.be === "import" && s?.from?.name) {
+      const record = await includeModule(s.from.name, s.to?.name);
+      const symbol = s.ob?.name;
+      if (symbol) {
+        if (record.localCeremonies.has(symbol)) {
+          const mapped = record.nameMap.get(symbol);
+          const block = findDefinitionBlock(record.sentences, mapped);
+          if (block?.def) {
+            const localName = s.to?.name ?? symbol;
+            aliasBlocks.push({ def: { ...block.def, su: { name: localName } }, body: block.body, prah: block.prah });
+          }
+        } else {
+          const exported = collectExportFacts(record, record.sentences);
+          if (exported.has(symbol)) {
+            const localName = s.to?.name ?? symbol;
+            aliasBlocks.push({ fact: { mood: "ya", su: { name: localName }, ob: exported.get(symbol) } });
+          }
+        }
+      }
+      continue;
+    }
+    entry.push(s);
+  }
+
+  const combined = [];
+  for (const mod of modules) {
+    combined.push(...mod.sentences);
+    if (mod.exportFacts.size && mod.record.alias) {
+      combined.push(...mapNamespaceSentences({ alias: mod.record.alias, exportFacts: mod.exportFacts }));
+    }
+  }
+
+  for (const block of aliasBlocks) {
+    if (block.fact) {
+      combined.push(block.fact);
+      continue;
+    }
+    combined.push(block.def, ...block.body, block.prah);
+  }
+
+  combined.push(...entry);
+  return combined;
+}
+
 async function compile_from_filename_to_filename(sentence) {
   const sourceFilename =
     sentence?.from?.filename ??
@@ -2353,9 +2471,10 @@ async function compile_from_filename_to_filename(sentence) {
   }
 
   const program = buildProgram(sourceText);
+  const expanded = await expandModulesForCompile(sentence?.from?.filename, program.sentences);
 
   const targetLang = targetState || "javascript";
-  const body = transpileProgram(program.sentences, { lang: targetLang });
+  const body = transpileProgram(expanded, { lang: targetLang });
   const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;
 
   const targetFilename = sentence?.to?.filename;

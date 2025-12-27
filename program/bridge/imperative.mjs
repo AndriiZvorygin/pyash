@@ -5,6 +5,8 @@ import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir } from "./modules.mjs";
+import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 
 function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -37,6 +39,82 @@ export async function handleImperative({
 }) {
   const { mood, be, ob, to, from, su } = sentence;
   if (mood !== "do") return null;
+
+  if (be === "import" && sentence.from?.name) {
+    const specifier = sentence.from.name;
+    const alias = sentence.to?.name;
+    const symbol = sentence.ob?.name;
+    const source = "interpret import";
+    const record = await loadModule({ specifier, alias, source });
+    pushModuleDir(record.dir);
+    try {
+      for (const s of record.sentences) {
+        await interpret(s);
+      }
+    } finally {
+      popModuleDir();
+    }
+
+    const exportFacts = new Map();
+    for (const name of record.exportNames) {
+      if (record.localCeremonies.has(name)) continue;
+      const mapped = record.nameMap.get(name);
+      const fact = mapped ? memory.remember(mapped) : null;
+      if (fact?.ob !== undefined) exportFacts.set(name, fact.ob);
+    }
+
+    if (symbol) {
+      if (!record.exportNames.has(symbol)) {
+        throwErrorSentence({
+          name: "module export incomplete",
+          message: `module export missing: ${symbol}`,
+          from: { name: source },
+          raw: sentence
+        });
+      }
+
+      if (record.localCeremonies.has(symbol)) {
+        const mapped = record.nameMap.get(symbol);
+        const def = mapped ? memory.getDefinition(mapped) : null;
+        const sig = def?.signatureWords ?? (def ? deriveSignatureFromDefinition(def) : null);
+        if (!sig) {
+          throwErrorSentence({
+            name: "module export incomplete",
+            message: `module ceremony signature missing: ${symbol}`,
+            from: { name: source },
+            raw: sentence
+          });
+        }
+        const localName = sentence.to?.name ?? symbol;
+        const aliasSig = [...sig];
+        aliasSig[1] = localName;
+        registerSignatureAlias({ name: mapped, signatureWords: aliasSig });
+        return { imported: localName };
+      }
+
+      const mapped = record.nameMap.get(symbol);
+      const fact = mapped ? memory.remember(mapped) : null;
+      if (!fact) {
+        throwErrorSentence({
+          name: "module export incomplete",
+          message: `module export missing: ${symbol}`,
+          from: { name: source },
+          raw: sentence
+        });
+      }
+      const localName = sentence.to?.name ?? symbol;
+      memory.doRemember({ ...fact, su: { name: localName }, mood: "ya" });
+      return { imported: localName };
+    }
+
+    const namespaceAlias = alias ?? record.alias;
+    if (namespaceAlias) {
+      const namespaceFact = moduleNamespaceFact({ alias: namespaceAlias, exportFacts });
+      memory.doRemember(namespaceFact);
+    }
+
+    return { imported: namespaceAlias };
+  }
 
   if (sentence.ob?.thisRef) {
     const resolved = resolveThisValue(sentence.ob, state.currentEvokeRef || state.currentEvoke);

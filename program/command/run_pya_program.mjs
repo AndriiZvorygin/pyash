@@ -9,6 +9,7 @@ import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { setEntryModulePath } from "../bridge/modules.mjs";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -23,6 +24,7 @@ async function main() {
   }
 
   const resolved = path.resolve(filePath);
+  setEntryModulePath(resolved);
   let text;
   try {
     text = await fs.readFile(resolved, "utf8");
