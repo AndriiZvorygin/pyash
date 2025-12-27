@@ -5,6 +5,8 @@ import { buildProgram } from "../program.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
 const moduleCache = new Map();
+const moduleAliases = new Map();
+const moduleExecution = new Set();
 let entryModuleDir = process.cwd();
 let importMapCache = null;
 const moduleDirStack = [];
@@ -17,8 +19,24 @@ export function setEntryModulePath(filePath) {
 
 export function clearModuleCache() {
   moduleCache.clear();
+  moduleAliases.clear();
   importMapCache = null;
   moduleDirStack.length = 0;
+  moduleExecution.clear();
+}
+
+export function registerModuleAlias({ alias, moduleId, source }) {
+  if (!alias) return;
+  const existing = moduleAliases.get(alias);
+  if (existing && existing !== moduleId) {
+    throwErrorSentence({
+      name: "module alias conflict",
+      message: `module alias already used: ${alias}`,
+      from: { name: source },
+      raw: { alias, moduleId, existing }
+    });
+  }
+  moduleAliases.set(alias, moduleId);
 }
 
 export function pushModuleDir(dir) {
@@ -31,6 +49,26 @@ export function popModuleDir() {
 
 export function currentModuleDir() {
   return moduleDirStack.length ? moduleDirStack[moduleDirStack.length - 1] : entryModuleDir;
+}
+
+export function isModuleExecuting(moduleId) {
+  return moduleExecution.has(moduleId);
+}
+
+export function pushModuleExecution(moduleId, { source }) {
+  if (moduleExecution.has(moduleId)) {
+    throwErrorSentence({
+      name: "module import cycle",
+      message: `module import cycle detected: ${moduleId}`,
+      from: { name: source },
+      raw: { moduleId }
+    });
+  }
+  moduleExecution.add(moduleId);
+}
+
+export function popModuleExecution(moduleId) {
+  moduleExecution.delete(moduleId);
 }
 
 async function loadImportMap({ source }) {
@@ -146,7 +184,7 @@ function qualifyValue(value, opts, { skipNames = false } = {}) {
   return next;
 }
 
-function qualifySentence(sentence, opts) {
+function qualifySentence(sentence, opts, { skipSuName = false } = {}) {
   const next = { ...sentence };
   const skipNameKeys = new Set(["fromstate", "tostate", "become", "as"]);
   const isImport = sentence.be === "import" && sentence.mood === "do";
@@ -156,6 +194,7 @@ function qualifySentence(sentence, opts) {
   for (const [key, val] of Object.entries(next)) {
     if (!val || typeof val !== "object") continue;
     if (skipNameKeys.has(key)) continue;
+    if (skipSuName && key === "su") continue;
     if (isImport && (key === "from" || key === "ob")) {
       next[key] = qualifyValue(val, opts, { skipNames: true });
       continue;
@@ -232,69 +271,92 @@ export async function loadModule({ specifier, alias, source }) {
   const moduleId = path.resolve(resolved.modulePath);
   const moduleAlias = alias || resolved.alias;
 
-  if (moduleCache.has(moduleId)) {
-    const cached = moduleCache.get(moduleId);
-    if (cached.alias !== moduleAlias) {
-      throwErrorSentence({
-        name: "module import incomplete",
-        message: `module already loaded as "${cached.alias}"`,
-        from: { name: source },
-        raw: { specifier, alias: moduleAlias }
-      });
-    }
-    return cached;
+  let base = moduleCache.get(moduleId);
+  if (base?.loading) {
+    throwErrorSentence({
+      name: "module import cycle",
+      message: `module import cycle detected: ${moduleId}`,
+      from: { name: source },
+      raw: { specifier, alias: moduleAlias }
+    });
   }
+  if (!base) {
+    base = {
+      id: moduleId,
+      dir: path.dirname(moduleId),
+      sentences: [],
+      exportNames: new Set(),
+      localCeremonies: new Set(),
+      localNames: new Set(),
+      importAliases: new Set(),
+      loadedAliases: new Set(),
+      loading: true
+    };
+    moduleCache.set(moduleId, base);
 
-  const record = {
-    id: moduleId,
-    alias: moduleAlias,
-    dir: path.dirname(moduleId),
-    sentences: [],
-    exportNames: new Set(),
-    localCeremonies: new Set(),
-    localNames: new Set()
-  };
-  moduleCache.set(moduleId, record);
+    const sentences = await parseModuleFile(moduleId);
+    ensureNoTopLevelDo(sentences, { source });
 
-  const sentences = await parseModuleFile(moduleId);
-  ensureNoTopLevelDo(sentences, { source });
-
-  for (const sentence of sentences) {
-    if (sentence?.mood === "do" && sentence?.be === "import" && sentence?.from?.name && !sentence?.to?.name) {
-      const spec = sentence.from.name;
-      if (isPathSpecifier(spec)) {
-        const resolvedPath = path.resolve(record.dir, spec);
-        sentence.to = { name: deriveAliasFromPath(resolvedPath) };
-      } else {
-        sentence.to = { name: spec };
+    for (const sentence of sentences) {
+      if (sentence?.mood === "do" && sentence?.be === "import" && sentence?.from?.name && !sentence?.to?.name) {
+        const spec = sentence.from.name;
+        if (isPathSpecifier(spec)) {
+          const resolvedPath = path.resolve(base.dir, spec);
+          sentence.to = { name: deriveAliasFromPath(resolvedPath) };
+        } else {
+          sentence.to = { name: spec };
+        }
       }
     }
+
+    const info = collectModuleInfo(sentences);
+    base.sentences = sentences;
+    base.exportNames = info.exportNames;
+    base.localCeremonies = info.localCeremonies;
+    base.localNames = info.localNames;
+    base.importAliases = info.importAliases;
+    base.loading = false;
   }
 
-  const info = collectModuleInfo(sentences);
-  record.exportNames = info.exportNames;
-  record.localCeremonies = info.localCeremonies;
-  record.localNames = info.localNames;
+  const alreadyLoaded = base.loadedAliases.has(moduleAlias);
+  base.loadedAliases.add(moduleAlias);
 
   const nameMap = buildNameMap({
     modulePrefix: moduleAlias,
-    localNames: info.localNames,
-    exportNames: info.exportNames,
-    importAliases: info.importAliases
+    localNames: base.localNames,
+    exportNames: base.exportNames,
+    importAliases: base.importAliases
   });
 
-  record.sentences = sentences
-    .filter(s => !(s?.mood === "ya" && s?.be === "export"))
-    .map(s => qualifySentence(s, { nameMap, localCeremonies: info.localCeremonies, importAliases: info.importAliases }));
+  const qualified = [];
+  let mapDepth = 0;
+  for (const s of base.sentences) {
+    const isMapDef = s?.mood === "def" && (s?.be === "map" || s?.be === "json map");
+    const isMapPrah = s?.mood === "prah" && (s?.be === "map" || s?.be === "json map");
+    const inMap = mapDepth > 0;
+    const skipSuName = inMap && s?.mood === "ya";
+    const nextSentence = qualifySentence(s, { nameMap, localCeremonies: base.localCeremonies, importAliases: base.importAliases }, { skipSuName });
+    qualified.push(nextSentence);
+    if (isMapDef) mapDepth += 1;
+    if (isMapPrah && mapDepth > 0) mapDepth -= 1;
+  }
 
-  record.nameMap = nameMap;
-
-  return record;
+  return {
+    id: base.id,
+    alias: moduleAlias,
+    dir: base.dir,
+    alreadyLoaded,
+    exportNames: base.exportNames,
+    localCeremonies: base.localCeremonies,
+    localNames: base.localNames,
+    sentences: qualified.filter(s => !(s?.mood === "ya" && s?.be === "export")),
+    nameMap
+  };
 }
 
-export function moduleNamespaceFact({ alias, exportFacts }) {
+export function moduleNamespaceFact({ alias, exportRefs }) {
   const map = {};
-  for (const [symbol, value] of exportFacts.entries()) {
+  for (const [symbol, value] of exportRefs.entries()) {
     map[symbol] = value ?? {};
   }
   return {

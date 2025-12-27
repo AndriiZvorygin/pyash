@@ -1,0 +1,12 @@
+su name settings be map def
+  su name mode ob text "ready" ya
+  su name limit ob num 3 ya
+prah
+su name settings be export ya
+
+su name blend by num 0 ob num 0 from num 0 to name bucket be ceremony def
+  ob num of ob of this be write do
+  ob num of from of this be write do
+  ob num of by of this be write do
+prah
+su name blend be export ya

@@ -21,6 +21,13 @@ function sanitizeName(name = "") {
   return cleaned;
 }
 
+function markDeclared(declared, name) {
+  if (!declared || !name) return;
+  const clean = sanitizeName(name);
+  declared.add(name);
+  declared.add(clean);
+}
+
 function compareUtf8(a, b) {
   if (a === b) return 0;
   const bufA = Buffer.from(a, "utf8");
@@ -253,6 +260,11 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
         if (parts.length === 2 && parts[1] === "num") return "by";
         if (parts.length === 3 && parts[1] === "ob" && parts[2] === "num") return "by";
       }
+      if (head === "from") {
+        if (parts.length === 1) return "pya_from_num";
+        if (parts.length === 2 && parts[1] === "num") return "pya_from_num";
+        if (parts.length === 3 && parts[1] === "ob" && parts[2] === "num") return "pya_from_num";
+      }
       if (parts.length === 1 && ["fromindex", "toindex", "atindex"].includes(head)) return head;
       if (parts.length === 2 && parts[1] === "num" && ["fromindex", "toindex", "atindex"].includes(head)) return head;
     }
@@ -380,7 +392,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const wrappedText = `quoted.pyash.\n${text}.pyash.quoted`;
       const targetName = sentence?.to?.name ?? "output";
       const safeName = sanitizeName(targetName);
-      if (declared) declared.add(targetName);
+      markDeclared(declared, targetName);
       if (declaredTypes) declaredTypes.set(targetName, "text");
       if (lang === "c") {
         if (cHelpers) {
@@ -1660,14 +1672,28 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       return `runLoop(${evokerLiteral}, ${fn});`;
     }
     if (fn) {
-      if (lang === "c") return `${fn}();`;
+      if (lang === "c") {
+        const obVal = sentence.ob?.num;
+        const fromVal = sentence.from?.num;
+        const byVal = sentence.by?.num;
+        if (obVal !== undefined || fromVal !== undefined || byVal !== undefined) {
+          if (cHelpers) cHelpers.usesMapGlobals = true;
+          const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;"];
+          if (obVal !== undefined) lines.push(`pya_ob_num = ${Number(obVal) || 0};`);
+          if (fromVal !== undefined) lines.push(`pya_from_num = ${Number(fromVal) || 0};`);
+          if (byVal !== undefined) lines.push(`by = ${Number(byVal) || 0};`);
+          lines.push(`${fn}();`, "pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "}");
+          return lines.join("\n");
+        }
+        return `${fn}();`;
+      }
       const arg = inlineSentenceLiteral(sentence, declared);
       if (sentence.to?.name) {
         const targetVar = sanitizeName(sentence.to.name);
         const lines = [];
         if (!declared?.has(targetVar)) {
           lines.push(`let ${targetVar};`);
-          declared?.add(targetVar);
+          markDeclared(declared, sentence.to.name);
         }
         lines.push(`${targetVar} = ${fn}(${arg});`);
         lines.push(`globalThis["${sentence.to.name}"] = ${targetVar};`);
@@ -2129,7 +2155,7 @@ let lines = [header];
       }
 
       if (name) {
-        declared.add(name);
+        markDeclared(declared, name);
         declaredTypes.set(name, sentence.be);
       }
 
@@ -2172,7 +2198,7 @@ let lines = [header];
     })();
     target.push(line ?? `${todoPrefix}: ${JSON.stringify(sentence)}${todoSuffix}`);
     if (name && sentence.mood === "ya") {
-      declared.add(name);
+      markDeclared(declared, name);
       if (sentence.be === "text" || sentence.ob?.text !== undefined) {
         declaredTypes.set(name, "text");
       } else if (sentence.be === "number" || sentence.ob?.num !== undefined) {
@@ -2240,6 +2266,7 @@ let lines = [header];
     }
     if (cHelpers.usesMapGlobals) {
       headers.push("double pya_ob_num = 0;");
+      headers.push("double pya_from_num = 0;");
       headers.push("const char *pya_ob_text = 0;");
       headers.push("int pya_ob_bool = 0;");
     }
@@ -2312,10 +2339,31 @@ function collectExportFacts(record, sentences) {
     if (record.localCeremonies.has(name)) continue;
     const mapped = record.nameMap.get(name);
     if (!mapped) continue;
-    for (let i = sentences.length - 1; i >= 0; i--) {
+    for (let i = 0; i < sentences.length; i++) {
       const s = sentences[i];
+      if (s?.mood === "def" && (s.be === "map" || s.be === "json map") && s?.su?.name === mapped) {
+        const entries = [];
+        let j = i + 1;
+        for (; j < sentences.length; j++) {
+          if (sentences[j].mood === "prah") break;
+          entries.push(sentences[j]);
+        }
+        const map = {};
+        const internalPrefix = `${record.alias} internal `;
+        for (const entry of entries) {
+          let key = entry?.su?.name;
+          if (!key) continue;
+          if (key.startsWith(internalPrefix)) {
+            key = key.slice(internalPrefix.length);
+          }
+          map[key] = entry.ob ?? {};
+        }
+        exported.set(name, { be: s.be, ob: { map } });
+        i = j;
+        break;
+      }
       if (s?.mood === "ya" && s?.su?.name === mapped) {
-        exported.set(name, s.ob ?? {});
+        exported.set(name, { be: s.be, ob: s.ob ?? {} });
         break;
       }
     }
@@ -2323,11 +2371,12 @@ function collectExportFacts(record, sentences) {
   return exported;
 }
 
-function mapNamespaceSentences({ alias, exportFacts }) {
+function mapNamespaceSentences({ alias, exportFacts, nameMap }) {
   const def = { mood: "def", be: "map", su: { name: alias } };
   const entries = [];
   for (const [key, value] of exportFacts.entries()) {
-    entries.push({ mood: "ya", su: { name: key }, ob: value ?? {} });
+    const mapped = nameMap?.get(key);
+    entries.push({ mood: "ya", su: { name: key }, ob: mapped ? { name: mapped } : (value?.ob ?? value ?? {}) });
   }
   const prah = { mood: "prah", be: "map", su: { name: alias } };
   return [def, ...entries, prah];
@@ -2339,11 +2388,13 @@ async function expandModulesForCompile(entryPath, sentences) {
 
   const modules = [];
   const seen = new Set();
+  const aliasToId = new Map();
 
   const includeModule = async (specifier, alias) => {
     const record = await loadModule({ specifier, alias, source: "compile import" });
-    if (seen.has(record.id)) return record;
-    seen.add(record.id);
+    const cacheKey = `${record.id}::${record.alias}`;
+    if (seen.has(cacheKey)) return record;
+    seen.add(cacheKey);
 
     const local = [];
     for (const s of record.sentences) {
@@ -2364,8 +2415,21 @@ async function expandModulesForCompile(entryPath, sentences) {
 
   for (const s of sentences) {
     if (s?.mood === "do" && s?.be === "import" && s?.from?.name) {
-      const record = await includeModule(s.from.name, s.to?.name);
       const symbol = s.ob?.name;
+      const record = await includeModule(s.from.name, symbol ? null : s.to?.name);
+      const aliasName = symbol ? null : (record.alias ?? s.to?.name);
+      if (aliasName) {
+        const existing = aliasToId.get(aliasName);
+        if (existing && existing !== record.id) {
+          throwErrorSentence({
+            name: "module alias conflict",
+            message: `module alias already used: ${aliasName}`,
+            from: { name: "compile" },
+            raw: { alias: aliasName, existing, current: record.id }
+          });
+        }
+        aliasToId.set(aliasName, record.id);
+      }
       if (symbol) {
         if (record.localCeremonies.has(symbol)) {
           const mapped = record.nameMap.get(symbol);
@@ -2378,7 +2442,20 @@ async function expandModulesForCompile(entryPath, sentences) {
           const exported = collectExportFacts(record, record.sentences);
           if (exported.has(symbol)) {
             const localName = s.to?.name ?? symbol;
-            aliasBlocks.push({ fact: { mood: "ya", su: { name: localName }, ob: exported.get(symbol) } });
+            const fact = exported.get(symbol);
+            if (fact?.be === "map" || fact?.be === "json map") {
+              const entries = fact.ob?.map ?? {};
+              const def = { mood: "def", be: fact.be, su: { name: localName } };
+              const body = Object.entries(entries).map(([key, ob]) => ({
+                mood: "ya",
+                su: { name: key },
+                ob: ob ?? {}
+              }));
+              const prah = { mood: "prah", be: fact.be, su: { name: localName } };
+              aliasBlocks.push({ def, body, prah });
+            } else {
+              aliasBlocks.push({ fact: { mood: "ya", su: { name: localName }, be: fact?.be, ob: fact?.ob ?? {} } });
+            }
           }
         }
       }
@@ -2391,7 +2468,7 @@ async function expandModulesForCompile(entryPath, sentences) {
   for (const mod of modules) {
     combined.push(...mod.sentences);
     if (mod.exportFacts.size && mod.record.alias) {
-      combined.push(...mapNamespaceSentences({ alias: mod.record.alias, exportFacts: mod.exportFacts }));
+      combined.push(...mapNamespaceSentences({ alias: mod.record.alias, exportFacts: mod.exportFacts, nameMap: mod.record.nameMap }));
     }
   }
 

@@ -5,7 +5,7 @@ import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
 import { throwErrorSentence } from "../error.mjs";
-import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir } from "./modules.mjs";
+import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 
 function resolveInlineGenitive(genitive, state) {
@@ -42,25 +42,40 @@ export async function handleImperative({
 
   if (be === "import" && sentence.from?.name) {
     const specifier = sentence.from.name;
-    const alias = sentence.to?.name;
     const symbol = sentence.ob?.name;
+    const alias = symbol ? null : sentence.to?.name;
     const source = "interpret import";
     const record = await loadModule({ specifier, alias, source });
-    pushModuleDir(record.dir);
-    try {
-      for (const s of record.sentences) {
-        await interpret(s);
+    if (isModuleExecuting(record.id)) {
+      throwErrorSentence({
+        name: "module import cycle",
+        message: `module import cycle detected: ${record.id}`,
+        from: { name: source },
+        raw: sentence
+      });
+    }
+
+    if (!record.alreadyLoaded) {
+      pushModuleExecution(record.id, { source });
+      pushModuleDir(record.dir);
+      try {
+        for (const s of record.sentences) {
+          await interpret(s);
+        }
+      } finally {
+        popModuleDir();
+        popModuleExecution(record.id);
       }
-    } finally {
-      popModuleDir();
     }
 
     const exportFacts = new Map();
+    const exportRefs = new Map();
     for (const name of record.exportNames) {
       if (record.localCeremonies.has(name)) continue;
       const mapped = record.nameMap.get(name);
       const fact = mapped ? memory.remember(mapped) : null;
       if (fact?.ob !== undefined) exportFacts.set(name, fact.ob);
+      if (mapped) exportRefs.set(name, { name: mapped });
     }
 
     if (symbol) {
@@ -109,7 +124,8 @@ export async function handleImperative({
 
     const namespaceAlias = alias ?? record.alias;
     if (namespaceAlias) {
-      const namespaceFact = moduleNamespaceFact({ alias: namespaceAlias, exportFacts });
+      registerModuleAlias({ alias: namespaceAlias, moduleId: record.id, source });
+      const namespaceFact = moduleNamespaceFact({ alias: namespaceAlias, exportRefs });
       memory.doRemember(namespaceFact);
     }
 
@@ -141,6 +157,7 @@ export async function handleImperative({
     sentence.fromindex != null || sentence.toindex != null || sentence.atindex != null;
   let fn = null;
   let defEntry = getDefinitionEntry(be);
+  let defResolvedBySignature = false;
   let defSignatureWords = defEntry ? memory.getDefinition(defEntry.name)?.signatureWords : null;
   const hasLoopRegisters = sentence.fromindex != null || sentence.toindex != null;
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
@@ -163,7 +180,10 @@ export async function handleImperative({
     }
     if (!fn && !defEntry) {
       const defName = lookupSignature(sigKey);
-      if (defName) defEntry = getDefinitionEntry(defName);
+      if (defName) {
+        defEntry = getDefinitionEntry(defName);
+        defResolvedBySignature = true;
+      }
     }
   }
   if (!fn && !defEntry && baseSigWords) {
@@ -172,7 +192,10 @@ export async function handleImperative({
     if (handler) fn = handler;
     if (!fn) {
       const defName = lookupSignature(baseSigKey);
-      if (defName) defEntry = getDefinitionEntry(defName);
+      if (defName) {
+        defEntry = getDefinitionEntry(defName);
+        defResolvedBySignature = true;
+      }
     }
   }
 
@@ -260,7 +283,7 @@ export async function handleImperative({
     // Enforce signature compatibility between evoker and definition
     const defSignatureWords = memory.getDefinition(defEntry.name)?.signatureWords;
     const callSignatureWords = sigWords;
-    if (Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
+    if (!defResolvedBySignature && Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
       const defSigKey = joinSignatureWords(defSignatureWords);
       const callSigKey = joinSignatureWords(callSignatureWords);
       const relaxedCallSigKey = baseSigWords ? joinSignatureWords(baseSigWords) : null;

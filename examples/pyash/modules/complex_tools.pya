@@ -1,0 +1,9 @@
+su name settings be map def
+  su name mode ob text "ready" ya
+  su name limit ob num 3 ya
+prah
+su name settings be export ya
+
+su name trace by num 0 ob num 0 from num 0 at num 0 be ceremony def
+prah
+su name trace be export ya

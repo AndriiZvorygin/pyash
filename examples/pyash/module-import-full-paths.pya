@@ -1,0 +1,11 @@
+from name full tools to name logical be import do
+from name ./modules/full_tools.pya to name relative be import do
+from name /home/htaf/pyac/pyash/examples/pyash/modules/full_tools.pya to name absolute be import do
+
+exists su name total one ob num 0 be number ya
+exists su name total two ob num 0 be number ya
+exists su name total three ob num 0 be number ya
+
+ob num 2 from num 5 by num 7 to name total one be logical blend do
+ob num 3 from num 4 by num 8 to name total two be relative blend do
+ob num 1 from num 6 by num 9 to name total three be absolute blend do

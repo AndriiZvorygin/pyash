@@ -23,7 +23,9 @@ test("module import binds namespace and ceremonies", async () => {
 
   const math = remember("math");
   assert.equal(math?.be, "map");
-  assert.equal(math?.ob?.map?.pi?.num, 3.14);
+  const piName = math?.ob?.map?.pi?.name;
+  const pi = piName ? remember(piName) : null;
+  assert.equal(pi?.ob?.num, 3.14);
 
   await run("to name out be math add two do");
   const out = remember("out");

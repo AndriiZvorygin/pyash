@@ -111,34 +111,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Hardening: cross-backend error parity audit for JSON map structural errors
 
 ---
-## Now → Jan 5, 2026: v0.2 freeze sprint (maps + JSON determinism lock)
-
-## Jan 6 → Feb 2, 2026: Modules/imports/namespacing v0.1
-
-This is the “make the library real” milestone.
-
-### Ship
+### Dec 26, 2025: Modules/imports/namespacing v0.1 complete (pulled forward)
 
 * Module file as a unit of execution/compilation
-* Minimal `import`:
-
-  * import module by path or logical name
-  * load-time behaviour defined (once per run, memoized)
-* Qualified names: `module.symbol` (or your chosen equivalent)
-* Resolution order: local > module > imported
-* Cycle rule: forbid at first (simplest), with a clear error
-
-### Spec drops (freeze v0.3)
-
-* Modules & namespacing spec v0.1:
-
-  * module identity, resolution, cycles, visibility
-  * what counts as a module boundary for compiler targets
-
-### Hardening
-
-* Multi-file golden tests across interpreter/JS/C
-* Gate: backend that cannot do multi-file remains behind `@js` or `@c` until parity
+* `import` supports logical names and filesystem paths (relative + absolute)
+* Memoized parsing; multi-alias initialization supported
+* Qualified names via alias prefix (ceremonies + facts) with namespace map binding
+* Cycle detection and alias-shadowing errors
+* Spec drop: `50-modules.md` v0.1 (identity, resolution, cycles, visibility)
+* Hardening: multi-file golden tests across interpreter/JS/C
+* Backend parity gate enforced by compile tests
 
 ---
 

@@ -278,10 +278,11 @@ Canonical module id is the memoization key.
 
 ### 10.1 Memoization
 
-Each module id loads once per run:
+Each module id parses once per run, but may be initialized under multiple aliases:
 
-* first import loads and registers exports
-* later imports reuse cached module record
+* first import for an alias initializes that alias namespace and qualified names
+* later imports with the same alias reuse the existing alias bindings
+* later imports with a different alias reuse the cached parse, then apply a new alias qualification
 
 ### 10.2 Storage model for module exports
 
@@ -297,6 +298,7 @@ Representation is implementation-defined, as long as behaviour matches:
 * dedicated module registry keyed by alias name
 * special internal value type for module namespaces
 * map-like value with reserved internal tags
+* module namespace entries store **name references** (live bindings), not snapshots of values
 
 ### 10.3 Loader internal state machine (parallel-ready core)
 
