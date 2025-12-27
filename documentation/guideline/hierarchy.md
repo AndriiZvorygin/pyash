@@ -22,7 +22,7 @@ Canonical top-level names
 - `building/`        Intermediate build outputs
 - `distribute/`      Release artifacts (final outputs)
 - `know/`            Datasets used by quiz, example, criterion
-- `vendor/`          Third-party snapshots and pinned dependencies
+- `caterer/`          Third-party snapshots and pinned dependencies
 
 Optional names
 - `library/`         Shared code intended for reuse across programs
@@ -46,7 +46,7 @@ Shorthand -> Pyash name
 - `build` -> `building`
 - `dist` -> `distribute`
 - `data` -> `know`
-- `vendor` -> `vendor`
+- `vendor` -> `caterer`
 - `lib` -> `library`
 - `bin` -> `binary`
 - `tmp` -> `sandpit`
@@ -69,7 +69,7 @@ pyash/
   building/
   distribute/
   know/
-  vendor/
+  caterer/
 
 
 ## 2) Linux filesystem gloss (speakable FHS sugar)
