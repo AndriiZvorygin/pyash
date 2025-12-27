@@ -1,6 +1,7 @@
 {
   "imports": {
-    "count tools": "./number_tools.pya",
+    "count tools": "./count_facts.pya",
+    "math tools": "./number_tools.pya",
     "bad module": "./bad_module.pya"
   }
 }

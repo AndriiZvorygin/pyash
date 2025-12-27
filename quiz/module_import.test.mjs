@@ -19,7 +19,7 @@ test("module import binds namespace and ceremonies", async () => {
   forget();
   setEntryModulePath(entryPath);
 
-  await run("from name count tools to name math be import do");
+  await run("from name math tools to name math be import do");
 
   const math = remember("math");
   assert.equal(math?.be, "map");
