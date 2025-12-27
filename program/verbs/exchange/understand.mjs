@@ -54,6 +54,14 @@ export const signatures = [
     handler: understand_from_name_text_to_name_text
   },
   {
+    signatureWords: ["be", "understand", "become", "name", "JSON", "fromstate", "name", "pyash", "ob", "name", "text", "to", "name", "num"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "become", "name", "JSON", "fromstate", "name", "pyash", "ob", "name", "text", "to", "name", "text"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
     signatureWords: ["be", "understand", "become", "name", "num", "fromstate", "name", "num", "ob", "name", "text", "to", "name", "num"],
     handler: understand_from_name_text_to_name_text
   },
@@ -71,6 +79,10 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "understand", "fromstate", "name", "num", "ob", "name", "num", "to", "filename"],
+    handler: understand_from_name_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "understand", "fromstate", "name", "pyash", "ob", "name", "text", "to", "filename"],
     handler: understand_from_name_text_to_name_text
   },
   {

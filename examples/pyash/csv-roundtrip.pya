@@ -1,0 +1,2 @@
+ob text "Name,Age\nAda,36\nTuring\n" from state csv to name people be read do
+ob name people to state csv be write do

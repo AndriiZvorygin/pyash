@@ -2608,6 +2608,10 @@ export const signatures = [
     handler: compile_from_filename_to_filename
   },
   {
+    signatureWords: ["be", "compile", "become", "name", "javascript", "from", "text", "to", "name", "num"],
+    handler: compile_from_filename_to_filename
+  },
+  {
     signatureWords: ["be", "compile", "from", "text", "to", "name", "num"],
     handler: compile_from_filename_to_filename
   },

@@ -58,7 +58,9 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     globalThis.structuredClone ||
     ((v) => JSON.parse(JSON.stringify(v)));
 
-  const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // exclude def; include body and prah
+  const baseBody = memory.allRemember()
+    .slice(defEntry.index + 1, defEntry.end)
+    .map((step) => clone(step));
   let lastResult;
   state.currentEvoke = {
     ...sentence,
@@ -84,7 +86,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       // Conditionals ("then") are a one-line control-flow mechanism; they should not leak across loop iterations.
       state.lastCondition = true;
 
-      for (const step of body) {
+      for (const step of baseBody) {
         // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
         lastResult = await interpret(clone(step));
         if (step.mood === "then" && state.lastCondition === false) {

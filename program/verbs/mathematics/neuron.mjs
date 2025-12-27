@@ -46,7 +46,17 @@ export const signatures = [
       "be", "neuron",
       "by", "name", "vec", "num",
       "from", "name", "vec", "num",
-      "fromstate", "name", "num",
+      "fromstate", "name", "bias",
+      "to", "name", "num"
+    ],
+    handler: neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num
+  },
+  {
+    signatureWords: [
+      "be", "neuron",
+      "by", "name", "vec", "num",
+      "from", "name", "vec", "num",
+      "fromstate", "num",
       "to", "name", "num"
     ],
     handler: neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num
@@ -65,7 +75,7 @@ export const signatures = [
       "be", "neuron",
       "by", "name", "vec", "num",
       "from", "name", "vec", "letter",
-      "fromstate", "name", "num",
+      "fromstate", "name", "bias",
       "to", "name", "num"
     ],
     handler: neuron_by_name_vec_num_from_name_vec_num_fromstate_num_to_name_num

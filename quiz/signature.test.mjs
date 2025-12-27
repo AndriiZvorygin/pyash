@@ -116,8 +116,8 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
 
   assert.deepEqual(sig, [
     "be", "understand",
-    "become", "name", "text",
-    "fromstate", "name", "text",
+    "become", "name", "JSON",
+    "fromstate", "name", "pyash",
     "ob", "name", "text",
     "to", "name", "text"
   ]);

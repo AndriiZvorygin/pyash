@@ -72,7 +72,8 @@ export function doRemember(sentence) {
   // last-write wins without pruning def/prah blocks. Removed entries
   // shift definition indexes accordingly. New fact is appended to
   // preserve chronological order after the triggering command.
-  if (!isSandpit && subjName && !isDef && !isPrah && sentence.mood !== "then") {
+  const isDefinitionRecording = state.definitionStack.length > 0 && !state.executingBody;
+  if (!isSandpit && !isDefinitionRecording && subjName && !isDef && !isPrah && sentence.mood !== "then") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
       if (existing.su?.name !== subjName) continue;
@@ -104,6 +105,7 @@ export function remember(name) {
   if (!name) return undefined;
   for (let i = memory.length - 1; i >= 0; i--) {
     const s = memory[i];
+    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
     if (s.su?.name === name) return s;
   }
   return undefined;

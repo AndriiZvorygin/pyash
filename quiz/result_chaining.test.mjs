@@ -69,8 +69,8 @@ test("ret merges onto evoke and writes result fact", async () => {
 test("non-numeric ceremonies do not default missing results", async () => {
   forget();
 
-  await run("su name note ob name text payload be ceremony def");
   await run("su name payload ob text hello be text ya");
+  await run("su name note ob name text payload be ceremony def");
   await run("ob name payload ret");
   await run("su name note be ceremony prah");
 

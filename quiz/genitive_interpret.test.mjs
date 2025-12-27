@@ -50,7 +50,7 @@ test("genitive remains uses evoker fields", async () => {
 
   const lines = [
     "exists su name counter ob num 5 be number ya",
-    "su name modceremony ob name num value from num be ceremony def",
+    "su name modceremony ob name num value from num 0 be ceremony def",
     "ob name counter from num 3 be remains to name counter do",
     "su name modceremony  prah",
     "su name evoker ob name counter from num 3 be modceremony do"

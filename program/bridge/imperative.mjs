@@ -219,7 +219,11 @@ export async function handleImperative({
     const lhs =
       sentence.ob?.name && memory.remember(sentence.ob.name)
         ? memory.remember(sentence.ob.name).ob
-        : sentence.ob;
+        : sentence.ob !== undefined
+        ? sentence.ob
+        : sentence.su?.name && memory.remember(sentence.su.name)
+        ? memory.remember(sentence.su.name).ob
+        : sentence.su;
     const rhs =
       sentence.from?.name && memory.remember(sentence.from.name)
         ? memory.remember(sentence.from.name).ob
@@ -388,7 +392,11 @@ export async function handleImperative({
 
     if (dest) {
       dest.ob = normalizedObj;
-      if (!dest.be) dest.be = resultBe;
+      if (result.be !== undefined) {
+        dest.be = resultBe;
+      } else if (!dest.be) {
+        dest.be = resultBe;
+      }
       memory.doRemember(dest);
     }
 

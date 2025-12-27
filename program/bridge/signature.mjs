@@ -242,6 +242,10 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.hollow) return ["hollow"];
 
   if (value.name) {
+    if (caseKey === "fromstate" || caseKey === "tostate" || caseKey === "become") {
+      const stateName = normalizeWords(value.name);
+      if (stateName) return ["name", stateName];
+    }
     const inferred = remember ? remember(value.name) : null;
     const factObj = inferred?.ob;
     const vecType = factObj?.ve?.type;
@@ -257,6 +261,8 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     }
 
     if (inferred?.be === "mind") return ["name", "mind"];
+    if (inferred?.be === "csv map") return ["name", "csv", "map"];
+    if (inferred?.be === "json map") return ["name", "json", "map"];
 
     if (factObj?.ve?.values) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);

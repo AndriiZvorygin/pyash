@@ -331,8 +331,8 @@ export async function loadModule({ specifier, alias, source }) {
   const qualified = [];
   let mapDepth = 0;
   for (const s of base.sentences) {
-    const isMapDef = s?.mood === "def" && (s?.be === "map" || s?.be === "json map");
-    const isMapPrah = s?.mood === "prah" && (s?.be === "map" || s?.be === "json map");
+    const isMapDef = s?.mood === "def" && (s?.be === "map" || s?.be === "json map" || s?.be === "csv map");
+    const isMapPrah = s?.mood === "prah" && (s?.be === "map" || s?.be === "json map" || s?.be === "csv map");
     const inMap = mapDepth > 0;
     const skipSuName = inMap && s?.mood === "ya";
     const nextSentence = qualifySentence(s, { nameMap, localCeremonies: base.localCeremonies, importAliases: base.importAliases }, { skipSuName });

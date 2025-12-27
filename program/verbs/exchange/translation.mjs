@@ -274,6 +274,18 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
+    signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "english", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "javascript", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
     signatureWords: ["be", "translation", "become", "name", "text", "from", "text", "fromstate", "name", "text", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },

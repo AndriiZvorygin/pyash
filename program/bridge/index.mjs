@@ -90,8 +90,8 @@ export async function interpret(sentence) {
   if (sentence.obj) delete sentence.obj;
 
   const { mood, be, su, ob, to, from } = sentence;
-  const isMapDef = mood === "def" && (be === "map" || be === "json map");
-  const isMapPrah = mood === "prah" && (be === "map" || be === "json map");
+  const isMapDef = mood === "def" && (be === "map" || be === "json map" || be === "csv map");
+  const isMapPrah = mood === "prah" && (be === "map" || be === "json map" || be === "csv map");
   const insideMap = state.mapStack.length > 0;
 
   if (isMapDef) {

@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
+import { doRemember } from "../../remember/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -12,6 +13,127 @@ function detectType(value) {
   return "unknown";
 }
 
+function parseCsvText(text, { source }) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = "";
+  };
+  const pushRow = () => {
+    rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === "\"") {
+        if (text[i + 1] === "\"") {
+          field += "\"";
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inQuotes = true;
+      continue;
+    }
+
+    if (ch === ",") {
+      pushField();
+      continue;
+    }
+
+    if (ch === "\n") {
+      pushField();
+      pushRow();
+      continue;
+    }
+
+    if (ch === "\r") {
+      if (text[i + 1] === "\n") i += 1;
+      pushField();
+      pushRow();
+      continue;
+    }
+
+    field += ch;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    pushField();
+    pushRow();
+  }
+
+  if (rows.length === 0 || rows[0].length === 0) {
+    throwErrorSentence({
+      name: "csv header defective",
+      message: "csv header defective",
+      from: { name: source },
+      raw: { rows: rows.length }
+    });
+  }
+
+  const headerRaw = rows[0];
+  const canonical = headerRaw.map((cell) =>
+    String(cell ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase()
+  );
+
+  const seen = new Set();
+  for (const key of canonical) {
+    if (!key) {
+      throwErrorSentence({
+        name: "csv header defective",
+        message: "csv header defective",
+        from: { name: source },
+        raw: { key }
+      });
+    }
+    if (seen.has(key)) {
+      throwErrorSentence({
+        name: "csv header defective",
+        message: `csv header defective: duplicate header key ${key}`,
+        from: { name: source },
+        raw: { key }
+      });
+    }
+    seen.add(key);
+  }
+
+  const width = canonical.length;
+  const columns = canonical.map(() => []);
+  for (let r = 1; r < rows.length; r += 1) {
+    const rowCells = rows[r];
+    if (rowCells.length > width) {
+      throwErrorSentence({
+        name: "csv row defective",
+        message: "csv row defective",
+        from: { name: source },
+        raw: { row: r }
+      });
+    }
+    while (rowCells.length < width) rowCells.push("");
+    for (let c = 0; c < width; c += 1) {
+      columns[c].push(String(rowCells[c] ?? ""));
+    }
+  }
+
+  return { headerRaw, header: canonical, columns };
+}
+
 export async function read_from_filename({ from }) {
   const modulePath = path.join(__dirname, "read_from_filename.mjs");
   if (!fs.existsSync(modulePath)) {
@@ -20,6 +142,59 @@ export async function read_from_filename({ from }) {
   const mod = await import(modulePath);
   const result = await mod.default({ from });
   return { ob: result.ob, be: "text" };
+}
+
+export async function read_fromstate_csv(sentence, { remember } = {}) {
+  const source = "read csv";
+  const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+  let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
+
+  if (sourceFilename) {
+    try {
+      sourceText = await fs.promises.readFile(sourceFilename, "utf8");
+    } catch (err) {
+      throwErrorSentence({
+        name: "csv lost",
+        message: "csv lost",
+        from: { name: source },
+        raw: { filename: sourceFilename, error: err?.message }
+      });
+    }
+  }
+
+  if (typeof sourceText !== "string") {
+    throwErrorSentence({
+      name: "csv defective",
+      message: "csv defective",
+      from: { name: source },
+      raw: { filename: sourceFilename }
+    });
+  }
+
+  const normalizedText = sourceText
+    .replace(/\\r\\n/g, "\r\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r");
+  const parsed = parseCsvText(normalizedText, { source });
+  const map = {
+    "header raw": { ve: { type: "text", values: parsed.headerRaw } },
+    header: { ve: { type: "text", values: parsed.header } }
+  };
+  parsed.header.forEach((key, idx) => {
+    map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
+  });
+
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  const fact = {
+    mood: "ya",
+    su: targetName ? { name: targetName } : undefined,
+    be: "csv map",
+    ob: { map }
+  };
+  if (targetName) {
+    doRemember(fact);
+  }
+  return { ob: { map }, be: "csv map" };
 }
 
 function compareUtf8(a, b) {
@@ -168,5 +343,9 @@ export default async function read({ from }) {
 
 export const signatures = [
   { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename },
-  { signatureWords: ["be", "read", "ob", "all"], handler: read_from_json_map_all }
+  { signatureWords: ["be", "read", "ob", "all"], handler: read_from_json_map_all },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name"], handler: read_fromstate_csv },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name", "num"], handler: read_fromstate_csv },
+  { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name"], handler: read_fromstate_csv },
+  { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name", "num"], handler: read_fromstate_csv }
 ];

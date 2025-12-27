@@ -167,6 +167,71 @@ function canonicalJsonStringify(value) {
   return JSON.stringify(canonicalizeJsonValue(value));
 }
 
+function csvEscape(value) {
+  const str = String(value ?? "");
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, "\"\"")}"`;
+  }
+  return str;
+}
+
+function csvTextFromMapName(name, { rememberFn } = {}) {
+  const fact = rememberFn ? rememberFn(name) : null;
+  if (!fact || fact.be !== "csv map") {
+    throwErrorSentence({
+      name: "csv columns defective",
+      message: "csv columns defective",
+      from: { name: "write csv" },
+      raw: { name }
+    });
+  }
+  const entries = fact?.ob?.map ?? {};
+  const headerRaw = entries["header raw"]?.ve?.values;
+  const header = entries.header?.ve?.values;
+  const headers = Array.isArray(headerRaw) ? headerRaw : header;
+  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {
+    throwErrorSentence({
+      name: "csv columns defective",
+      message: "csv columns defective",
+      from: { name: "write csv" },
+      raw: { name }
+    });
+  }
+
+  const columns = header.map((key) => {
+    const col = entries[key];
+    if (!col?.ve?.values || col.ve.type !== "text") {
+      throwErrorSentence({
+        name: "csv columns defective",
+        message: "csv columns defective",
+        from: { name: "write csv" },
+        raw: { name, key }
+      });
+    }
+    return col.ve.values.map((v) => String(v ?? ""));
+  });
+
+  const length = columns[0]?.length ?? 0;
+  for (const col of columns) {
+    if (col.length !== length) {
+      throwErrorSentence({
+        name: "csv columns defective",
+        message: "csv columns defective",
+        from: { name: "write csv" },
+        raw: { name }
+      });
+    }
+  }
+
+  const lines = [];
+  lines.push(headers.map(csvEscape).join(","));
+  for (let i = 0; i < length; i += 1) {
+    const row = columns.map((col) => csvEscape(col[i] ?? ""));
+    lines.push(row.join(","));
+  }
+  return lines.join("\n") + "\n";
+}
+
 function mapDefChainFromName(name, { rememberFn } = {}) {
   const visited = new Set();
   const defs = [];
@@ -198,6 +263,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   if (typeof ob.num === "number") return ob.num;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
   if (ob.hollow) return "null";
+  if (format === "csv" && ob.name) return csvTextFromMapName(ob.name, { rememberFn });
   if (ob.genitive) {
     const v = resolveGenitive(ob.genitive, { rememberFn });
     if (v !== undefined) return v;
@@ -237,6 +303,8 @@ export default async function write(sentence, { remember: rememberFn = remember 
     format = "beautiful json";
   } else if (formatRaw.includes("json")) {
     format = "json";
+  } else if (formatRaw.includes("csv")) {
+    format = "csv";
   }
   const text = renderWriteValue(sentence.ob ?? {}, { rememberFn, format });
   if (target) {
@@ -257,6 +325,7 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "name", "num"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "hollow"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec", "num"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec", "text"], handler: write },
@@ -265,6 +334,9 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "num"], handler: write },
   { signatureWords: ["be", "write", "ob", "vec", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "num"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "bool"], handler: write },
@@ -285,6 +357,7 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "name", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "hollow", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "vec", "text", "to", "filename"], handler: write },
@@ -301,6 +374,7 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "text", "to", "filename"], handler: write },
