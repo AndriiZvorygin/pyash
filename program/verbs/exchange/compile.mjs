@@ -2837,6 +2837,19 @@ async function compile_from_filename_to_filename(sentence) {
 
   const program = buildProgram(sourceText);
   const expanded = await expandModulesForCompile(sentence?.from?.filename, program.sentences);
+  for (const s of expanded) {
+    const isRead = s?.be === "read";
+    const sourceState = (s?.fromstate?.name || s?.fromstate || "").toLowerCase();
+    if (!isRead || sourceState !== "csv") continue;
+    const filename = s?.from?.filename ?? s?.ob?.filename;
+    if (!filename) continue;
+    const hasInlineText = typeof s?.ob?.text === "string"
+      || typeof s?.from?.text === "string"
+      || typeof s?.fromtext?.text === "string";
+    if (hasInlineText) continue;
+    const fileText = await fs.readFile(filename, "utf8");
+    s.ob = { ...(s.ob || {}), text: fileText };
+  }
 
   const targetLang = targetState || "javascript";
   const body = transpileProgram(expanded, { lang: targetLang });

@@ -1,0 +1,7 @@
+su name people be csv map def
+su name header raw ob ve text Name Age ya
+su name header ob ve text name age ya
+su name name ob ve text Ada Turing ya
+su name age ob ve text 36 41 ya
+prah
+ob name people to state csv be write do
