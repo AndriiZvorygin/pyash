@@ -27,5 +27,5 @@ test("compile module import to javascript and run", async () => {
     console: { log: (...args) => logs.push(args.join(" ")) }
   });
 
-  assert.deepEqual(logs, ["su name math be map def\nsu name pi ob num 3.14 ya\nprah"]);
+  assert.deepEqual(logs, ["1"]);
 });

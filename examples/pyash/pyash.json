@@ -1,5 +1,6 @@
 {
   "imports": {
-    "count tools": "./modules/count_facts.pya"
+    "count tools": "./modules/count_facts.pya",
+    "bump tools": "./modules/bump_tools.pya"
   }
 }

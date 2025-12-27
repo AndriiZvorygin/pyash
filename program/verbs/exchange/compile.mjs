@@ -514,7 +514,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
             expr = JSON.stringify(chain);
           }
         }
-	      if (!isJsonMap && !isMap && lang === "c" && (locals?.has(name) || declared?.has(name))) {
+	      if (!isJsonMap && !isMap && lang === "c" && (locals?.has(name) || declared?.has(name) || declared?.has(ob.name))) {
 	        expr = name;
       } else if (!isJsonMap && !isMap && locals?.has(name)) {
         if (declaredTypes?.get(ob.name) === "vector") {
@@ -1298,7 +1298,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       return lines.join("\n");
     }
     if (lang === "c") {
-      return `${sentence.to.name} = ${sentence.to.name} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+      const target = sanitizeName(sentence.to.name);
+      return `${target} = ${target} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     const lines = [];
     lines.push(`${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};`);
@@ -1769,22 +1770,23 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesString = true;
         cHelpers.usesCtype = true;
       }
+      const cName = sanitizeName(name);
       const count = ob.ve.values.length;
       if (vecType === "text") {
         const values = ob.ve.values.map(v => JSON.stringify(String(v))).join(", ");
         if (shouldDeclare) {
-          return `const char *${name}_values[] = { ${values} };\npya_vec ${name} = { "text", ${count}, NULL, ${name}_values };`;
+          return `const char *${cName}_values[] = { ${values} };\npya_vec ${cName} = { "text", ${count}, NULL, ${cName}_values };`;
         }
-        return `do { const char *${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "text", ${count}, NULL, ${name}_values_${suffix} }; } while(0);`;
+        return `do { const char *${cName}_values_${suffix}[] = { ${values} }; ${cName} = (pya_vec){ "text", ${count}, NULL, ${cName}_values_${suffix} }; } while(0);`;
       }
       if (vecType === "bool") {
         const values = ob.ve.values
           .map(v => (v === "truth" || v === true || v === 1 ? 1 : 0))
           .join(", ");
         if (shouldDeclare) {
-          return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "bool", ${count}, ${name}_values, NULL };`;
+          return `double ${cName}_values[] = { ${values} };\npya_vec ${cName} = { "bool", ${count}, ${cName}_values, NULL };`;
         }
-        return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "bool", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
+        return `do { double ${cName}_values_${suffix}[] = { ${values} }; ${cName} = (pya_vec){ "bool", ${count}, ${cName}_values_${suffix}, NULL }; } while(0);`;
       }
       if (vecType !== "num") {
         return `/* TODO: vector support in C for ${vecType} */`;
@@ -1793,14 +1795,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         .map(v => (typeof v === "number" ? v : Number(v) || 0))
         .join(", ");
       if (shouldDeclare) {
-        return `double ${name}_values[] = { ${values} };\npya_vec ${name} = { "num", ${count}, ${name}_values, NULL };`;
+        return `double ${cName}_values[] = { ${values} };\npya_vec ${cName} = { "num", ${count}, ${cName}_values, NULL };`;
       }
-      return `do { double ${name}_values_${suffix}[] = { ${values} }; ${name} = (pya_vec){ "num", ${count}, ${name}_values_${suffix}, NULL }; } while(0);`;
+      return `do { double ${cName}_values_${suffix}[] = { ${values} }; ${cName} = (pya_vec){ "num", ${count}, ${cName}_values_${suffix}, NULL }; } while(0);`;
     }
+    const varName = sanitizeName(name);
     if (shouldDeclare) {
-      return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+      return `let ${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
     }
-    return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+    return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
   }
 
   if (effectiveBe === "number") {
@@ -1845,14 +1848,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const decl = shouldDeclare ? (lang === "c" ? "/* TODO: sentence object in C */" : (isPermanent ? "const" : "let")) : "";
       if (lang === "c") {
         // Fallback for C for now: keep scalar style
-        if (!shouldDeclare) return `${name} = ${safeValue};`;
+        const cName = sanitizeName(name);
+        if (!shouldDeclare) return `${cName} = ${safeValue};`;
         const cdecl = isPermanent ? "const double" : "double";
-        return `${cdecl} ${name} = ${safeValue};`;
+        return `${cdecl} ${cName} = ${safeValue};`;
       }
+      const varName = sanitizeName(name);
       if (shouldDeclare) {
-        return `${decl} ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+        return `${decl} ${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
       }
-      return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+      return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
     }
   }
 
@@ -1881,13 +1886,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesString = true;
         cHelpers.usesPrintf = true;
       }
-      if (!shouldDeclare) return `snprintf(${name}, PYA_TEXT_CAP, "%s", ${value});`;
-      return `char ${name}[PYA_TEXT_CAP] = ${value};`;
+      const cName = sanitizeName(name);
+      if (!shouldDeclare) return `snprintf(${cName}, PYA_TEXT_CAP, "%s", ${value});`;
+      return `char ${cName}[PYA_TEXT_CAP] = ${value};`;
     }
+    const varName = sanitizeName(name);
     if (shouldDeclare) {
-      return `let ${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+      return `let ${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
     }
-    return `${name} = ${sentenceObject};\nglobalThis["${name}"] = ${name};`;
+    return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
   }
 
   return null;

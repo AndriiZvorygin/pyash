@@ -35,5 +35,5 @@ test("compile module import to C and run", async () => {
   await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath, "-lm"], { timeout: 120000 });
   const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
 
-  assert.deepEqual(stdout.trim().split(/\r?\n/), ["su name math be map def", "su name pi ob num 3.14 ya", "prah"]);
+  assert.deepEqual(stdout.trim().split(/\r?\n/), ["1"]);
 });
