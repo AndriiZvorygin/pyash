@@ -28,7 +28,7 @@ export function vectorFormatHelper() {
     "  return \"\";",
     "}",
     "function formatMapSentence(name, mapFact) {",
-    "  const kind = mapFact?.be === \"json map\" ? \"json map\" : \"map\";",
+    "  const kind = mapFact?.be === \"csv map\" ? \"csv map\" : (mapFact?.be === \"json map\" ? \"json map\" : \"map\");",
     "  const entries = mapFact?.ob?.map ?? {};",
     "  const lines = [`su name ${name} be ${kind} def`];",
     "  for (const key of Object.keys(entries)) {",

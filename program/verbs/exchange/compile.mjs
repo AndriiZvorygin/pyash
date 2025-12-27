@@ -58,6 +58,182 @@ function canonicalJsonStringify(value) {
   return JSON.stringify(canonicalizeJsonValue(value));
 }
 
+function parseCsvText(text, { source }) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = "";
+  };
+  const pushRow = () => {
+    rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === "\"") {
+        if (text[i + 1] === "\"") {
+          field += "\"";
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inQuotes = true;
+      continue;
+    }
+
+    if (ch === ",") {
+      pushField();
+      continue;
+    }
+
+    if (ch === "\n") {
+      pushField();
+      pushRow();
+      continue;
+    }
+
+    if (ch === "\r") {
+      if (text[i + 1] === "\n") i += 1;
+      pushField();
+      pushRow();
+      continue;
+    }
+
+    field += ch;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    pushField();
+    pushRow();
+  }
+
+  if (rows.length === 0 || rows[0].length === 0) {
+    throwErrorSentence({
+      name: "csv header defective",
+      message: "csv header defective",
+      from: { name: source }
+    });
+  }
+
+  const headerRaw = rows[0];
+  const canonical = headerRaw.map((cell) =>
+    String(cell ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase()
+  );
+
+  const seen = new Set();
+  for (const key of canonical) {
+    if (!key) {
+      throwErrorSentence({
+        name: "csv header defective",
+        message: "csv header defective",
+        from: { name: source },
+        raw: { key }
+      });
+    }
+    if (seen.has(key)) {
+      throwErrorSentence({
+        name: "csv header defective",
+        message: `csv header defective: duplicate header key ${key}`,
+        from: { name: source },
+        raw: { key }
+      });
+    }
+    seen.add(key);
+  }
+
+  const width = canonical.length;
+  const columns = canonical.map(() => []);
+  for (let r = 1; r < rows.length; r += 1) {
+    const rowCells = rows[r];
+    if (rowCells.length > width) {
+      throwErrorSentence({
+        name: "csv row defective",
+        message: "csv row defective",
+        from: { name: source },
+        raw: { row: r }
+      });
+    }
+    while (rowCells.length < width) rowCells.push("");
+    for (let c = 0; c < width; c += 1) {
+      columns[c].push(String(rowCells[c] ?? ""));
+    }
+  }
+
+  return { headerRaw, header: canonical, columns };
+}
+
+function csvEscape(value) {
+  const str = String(value ?? "");
+  if (/[",\n\r]/.test(str)) {
+    return `"${str.replace(/"/g, "\"\"")}"`;
+  }
+  return str;
+}
+
+function csvTextFromMapSentence(mapSentence) {
+  const entries = mapSentence?.ob?.map ?? {};
+  const headerRaw = entries["header raw"]?.ve?.values;
+  const header = entries.header?.ve?.values;
+  const headers = Array.isArray(headerRaw) ? headerRaw : header;
+  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {
+    throwErrorSentence({
+      name: "csv columns defective",
+      message: "csv columns defective",
+      from: { name: "compile csv" },
+      raw: { name: mapSentence?.su?.name }
+    });
+  }
+
+  const columns = header.map((key) => {
+    const col = entries[key];
+    if (!col?.ve?.values || col.ve.type !== "text") {
+      throwErrorSentence({
+        name: "csv columns defective",
+        message: "csv columns defective",
+        from: { name: "compile csv" },
+        raw: { name: mapSentence?.su?.name, key }
+      });
+    }
+    return col.ve.values.map((v) => String(v ?? ""));
+  });
+
+  const length = columns[0]?.length ?? 0;
+  for (const col of columns) {
+    if (col.length !== length) {
+      throwErrorSentence({
+        name: "csv columns defective",
+        message: "csv columns defective",
+        from: { name: "compile csv" },
+        raw: { name: mapSentence?.su?.name }
+      });
+    }
+  }
+
+  const lines = [];
+  lines.push(headers.map(csvEscape).join(","));
+  for (let i = 0; i < length; i += 1) {
+    const row = columns.map((col) => csvEscape(col[i] ?? ""));
+    lines.push(row.join(","));
+  }
+  return lines.join("\n") + "\n";
+}
+
 function normalizeJsonMapError(err) {
   const message = err?.message ?? String(err ?? "");
   if (message.startsWith("json map contents defective")) {
@@ -130,7 +306,7 @@ function mapDefChainFromName(name, mapDefs) {
     if (!mapName || visited.has(mapName)) return;
     visited.add(mapName);
     const fact = mapDefs.get(mapName);
-    if (!fact || (fact.be !== "json map" && fact.be !== "map")) return;
+    if (!fact || (fact.be !== "json map" && fact.be !== "map" && fact.be !== "csv map")) return;
     const entries = fact?.ob?.map ?? {};
     for (const value of Object.values(entries)) {
       if (value?.name) visit(value.name);
@@ -406,6 +582,55 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
   }
 
+  if (baseBe === "read") {
+    const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+    if (sourceState === "csv") {
+      const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+      if (typeof sourceText !== "string") {
+        return null;
+      }
+      const normalizedText = sourceText
+        .replace(/\\r\\n/g, "\r\n")
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r");
+      const parsed = parseCsvText(normalizedText, { source: "compile csv" });
+      const map = {
+        "header raw": { ve: { type: "text", values: parsed.headerRaw } },
+        header: { ve: { type: "text", values: parsed.header } }
+      };
+      parsed.header.forEach((key, idx) => {
+        map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
+      });
+      const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+      const mapSentence = {
+        mood: "ya",
+        su: { name: targetName },
+        be: "csv map",
+        ob: { map }
+      };
+      mapDefs?.set(targetName, mapSentence);
+      markDeclared(declared, targetName);
+      if (declaredTypes) declaredTypes.set(targetName, "csv map");
+      if (lang === "c") {
+        try {
+          const csvText = csvTextFromMapSentence(mapSentence);
+          if (cState?.csvMapStrings) cState.csvMapStrings.set(targetName, csvText);
+        } catch (err) {
+          throwErrorSentence({
+            name: "csv columns defective",
+            message: err?.message ?? "csv columns defective",
+            from: { name: "compile" },
+            raw: { name: targetName, error: err?.message }
+          });
+        }
+        return `/* csv read compile-time */`;
+      }
+      const safeName = sanitizeName(targetName);
+      const payload = JSON.stringify(mapSentence);
+      return `const ${safeName} = ${payload};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
+    }
+  }
+
   // Say -> console.log / printf TODO
   const hasWriteIndex =
     baseBe === "write" &&
@@ -423,6 +648,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       ? (formatRaw.includes("beautiful") ? "pretty" : "canonical")
       : null;
     const wantJson = jsonMode !== null;
+    const wantCsv = formatRaw.includes("csv");
     // Special case: write to <mind> -> invoke mind (JS)
     if (baseBe === "write" && sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
@@ -502,6 +728,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	      const name = sanitizeName(ob.name);
         const isMap = declaredTypes?.get(ob.name) === "map";
         const isJsonMap = declaredTypes?.get(ob.name) === "json map";
+        const isCsvMap = declaredTypes?.get(ob.name) === "csv map";
         if (isMap) {
           const chain = mapDefs?.has(ob.name) ? mapDefChainFromName(ob.name, mapDefs) : "";
           if (lang === "c") {
@@ -526,23 +753,50 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
             expr = JSON.stringify(chain);
           }
         }
-	      if (!isJsonMap && !isMap && lang === "c" && (locals?.has(name) || declared?.has(name) || declared?.has(ob.name))) {
+        if (isCsvMap && !wantCsv) {
+          const chain = mapDefs?.has(ob.name) ? mapDefChainFromName(ob.name, mapDefs) : "";
+          if (lang === "c") {
+            expr = JSON.stringify(chain);
+          } else {
+            if (jsHelpers) jsHelpers.usesVectorFormat = true;
+            const mapExpr = (locals?.has(name) || declared?.has(name)) ? name : `remember(${JSON.stringify(ob.name)})`;
+            expr = `formatMapSentence(${JSON.stringify(ob.name)}, ${mapExpr})`;
+          }
+        }
+        if (isCsvMap && wantCsv) {
+          if (lang === "c") {
+            const mapSentence = mapDefs?.get(ob.name);
+            if (!mapSentence || mapSentence.be !== "csv map") {
+              throwErrorSentence({
+                name: "csv columns defective",
+                message: "csv columns defective",
+                from: { name: "compile" },
+                raw: { name: ob.name }
+              });
+            }
+            expr = JSON.stringify(csvTextFromMapSentence(mapSentence));
+          } else {
+            if (jsHelpers) jsHelpers.usesCsvMap = true;
+            expr = `formatCsvMap(${JSON.stringify(ob.name)})`;
+          }
+        }
+	      if (!isJsonMap && !isMap && !isCsvMap && lang === "c" && (locals?.has(name) || declared?.has(name) || declared?.has(ob.name))) {
 	        expr = name;
-      } else if (!isJsonMap && !isMap && locals?.has(name)) {
+      } else if (!isJsonMap && !isMap && !isCsvMap && locals?.has(name)) {
         if (declaredTypes?.get(ob.name) === "vector") {
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
         } else {
           expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
         }
-	      } else if (!isJsonMap && !isMap && declared?.has(name)) {
+	      } else if (!isJsonMap && !isMap && !isCsvMap && declared?.has(name)) {
 	        if (declaredTypes?.get(ob.name) === "vector") {
 	          if (jsHelpers) jsHelpers.usesVectorFormat = true;
 	          expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
 	        } else {
 	          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
 	        }
-	      } else if (!isJsonMap && !isMap) {
+	      } else if (!isJsonMap && !isMap && !isCsvMap) {
 	        expr = JSON.stringify(ob.name);
 	      }
 	    } else {
@@ -564,16 +818,18 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     if (lang === "c") {
       if (cHelpers) cHelpers.usesPrintf = true;
       const isText = typeof ob.text === "string"
-        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map"))
+        || wantCsv
+        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
-      const fmt = isText ? "%s" : "%g";
+      const fmt = wantCsv ? "%s" : (isText ? "%s" : "%g");
       if (writeFilename) {
         if (cHelpers) cHelpers.usesStdlib = true;
         const safePath = JSON.stringify(writeFilename);
         const writeLine = `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }`;
-        return isWrite ? writeLine : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
+        if (isWrite) return writeLine;
+        return wantCsv ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
-      return `printf("${fmt}\\n", ${expr});`;
+      return wantCsv ? `printf("%s", ${expr});` : `printf("${fmt}\\n", ${expr});`;
     }
     return `console.log(${expr});`;
   }
@@ -2029,8 +2285,8 @@ let lines = [header];
   const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesFs: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map() };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesFs: false, readCounter: 0 };
+  const cState = { vectorCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
@@ -2076,7 +2332,7 @@ let lines = [header];
       continue;
     }
 
-    if (sentence.mood === "def" && (sentence.be === "map" || sentence.be === "json map")) {
+    if (sentence.mood === "def" && (sentence.be === "map" || sentence.be === "json map" || sentence.be === "csv map")) {
       const body = [];
       let j = i + 1;
       for (; j < sentences.length; j++) {
@@ -2112,27 +2368,42 @@ let lines = [header];
           });
         }
       }
+      if (sentence.be === "csv map") {
+        try {
+          const csvText = csvTextFromMapSentence(mapSentence);
+          cState.csvMapStrings.set(name, csvText);
+        } catch (err) {
+          throwErrorSentence({
+            name: "csv columns defective",
+            message: err?.message ?? "csv columns defective",
+            from: { name: "compile" },
+            raw: { name, error: err?.message }
+          });
+        }
+      }
 
       if (lang === "c") {
-        cHelpers.usesMap = true;
-        cHelpers.usesMapGlobals = true;
-        cHelpers.usesString = true;
-        cHelpers.usesStdlib = true;
-        cHelpers.usesPrintf = true;
-        cHelpers.usesCtype = true;
-        const mapVar = sanitizeName(name);
-        lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
-        mainLines.push(`pya_map_init(&${mapVar});`);
-        for (const [key, value] of Object.entries(map)) {
-          if (value?.num !== undefined) {
-            const numVal = Number(value.num);
-            mainLines.push(`pya_map_set_num(&${mapVar}, ${JSON.stringify(key)}, ${Number.isNaN(numVal) ? 0 : numVal});`);
-          } else if (value?.text !== undefined) {
-            mainLines.push(`pya_map_set_text(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(String(value.text))});`);
-          } else if (value?.boolean !== undefined) {
-            mainLines.push(`pya_map_set_bool(&${mapVar}, ${JSON.stringify(key)}, ${value.boolean ? 1 : 0});`);
-          } else if (value?.hollow) {
-            mainLines.push(`pya_map_set_hollow(&${mapVar}, ${JSON.stringify(key)});`);
+        if (sentence.be !== "csv map") {
+          cHelpers.usesMap = true;
+          cHelpers.usesMapGlobals = true;
+          cHelpers.usesString = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesPrintf = true;
+          cHelpers.usesCtype = true;
+          const mapVar = sanitizeName(name);
+          lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
+          mainLines.push(`pya_map_init(&${mapVar});`);
+          for (const [key, value] of Object.entries(map)) {
+            if (value?.num !== undefined) {
+              const numVal = Number(value.num);
+              mainLines.push(`pya_map_set_num(&${mapVar}, ${JSON.stringify(key)}, ${Number.isNaN(numVal) ? 0 : numVal});`);
+            } else if (value?.text !== undefined) {
+              mainLines.push(`pya_map_set_text(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(String(value.text))});`);
+            } else if (value?.boolean !== undefined) {
+              mainLines.push(`pya_map_set_bool(&${mapVar}, ${JSON.stringify(key)}, ${value.boolean ? 1 : 0});`);
+            } else if (value?.hollow) {
+              mainLines.push(`pya_map_set_hollow(&${mapVar}, ${JSON.stringify(key)});`);
+            }
           }
         }
         if (sentence.be === "json map") {
@@ -2145,6 +2416,13 @@ let lines = [header];
           if (prettyText) {
             const varName = sanitizeName(`${name}_json_pretty`);
             lines.push(`const char *${varName} = ${JSON.stringify(prettyText)};`);
+          }
+        }
+        if (sentence.be === "csv map") {
+          const csvText = cState.csvMapStrings.get(name);
+          if (csvText) {
+            const varName = sanitizeName(`${name}_csv`);
+            lines.push(`const char *${varName} = ${JSON.stringify(csvText)};`);
           }
         }
       } else {
@@ -2238,6 +2516,9 @@ let lines = [header];
     }
     if (jsHelpers.usesJsonMap) {
       prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.su?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.ob?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction canonicalizeJson(value) {\n  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;\n  const compareUtf8 = (a, b) => {\n    if (a === b) return 0;\n    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));\n    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));\n    const len = Math.min(bufA.length, bufB.length);\n    for (let i = 0; i < len; i += 1) {\n      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;\n    }\n    return bufA.length < bufB.length ? -1 : 1;\n  };\n  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));\n  if (value && typeof value === \"object\") {\n    const out = {};\n    const keys = Object.keys(value).sort(compareUtf8);\n    for (const key of keys) out[key] = canonicalizeJson(value[key]);\n    return out;\n  }\n  return value;\n}\nfunction formatJsonMap(name, mode = \"canonical\") {\n  const json = jsonFromMap(name);\n  if (mode === \"pretty\") return JSON.stringify(json, null, 2);\n  return JSON.stringify(canonicalizeJson(json));\n}`);
+    }
+    if (jsHelpers.usesCsvMap) {
+      prelude.push(`function csvEscape(value) {\n  const str = String(value ?? \"\");\n  if (/[\",\\n\\r]/.test(str)) {\n    return \"\\\"\" + str.replace(/\"/g, \"\\\"\\\"\") + \"\\\"\";\n  }\n  return str;\n}\nfunction formatCsvMap(name) {\n  const fact = globalThis[name];\n  if (!fact || fact.be !== \"csv map\") throw new Error(\"csv columns defective\");\n  const entries = fact.ob?.map ?? {};\n  const headerRaw = entries[\"header raw\"]?.ve?.values;\n  const header = entries.header?.ve?.values;\n  const headers = Array.isArray(headerRaw) ? headerRaw : header;\n  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {\n    throw new Error(\"csv columns defective\");\n  }\n  const columns = header.map((key) => {\n    const col = entries[key];\n    if (!col?.ve?.values || col.ve.type !== \"text\") {\n      throw new Error(\"csv columns defective\");\n    }\n    return col.ve.values.map((v) => String(v ?? \"\"));\n  });\n  const length = columns[0]?.length ?? 0;\n  for (const col of columns) {\n    if (col.length !== length) {\n      throw new Error(\"csv columns defective\");\n    }\n  }\n  const lines = [];\n  lines.push(headers.map(csvEscape).join(\",\"));\n  for (let i = 0; i < length; i += 1) {\n    const row = columns.map((col) => csvEscape(col[i] ?? \"\"));\n    lines.push(row.join(\",\"));\n  }\n  return lines.join(\"\\n\") + \"\\n\";\n}`);
     }
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
@@ -2508,10 +2789,10 @@ async function compile_from_filename_to_filename(sentence) {
     });
   }
 
-  // Allow escaped newlines in inline text blocks
-  sourceText = sourceText.replaceAll("\\n", "\n");
-
   const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  if (!sourceState || sourceState === "pyash") {
+    sourceText = sourceText.replaceAll("\\n", "\n");
+  }
   const targetState = (sentence?.tostate?.name || sentence?.become?.name || "javascript").toLowerCase();
   if (sourceState === "json" && targetState === "pyash") {
     let parsed;

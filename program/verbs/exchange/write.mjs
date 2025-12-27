@@ -240,7 +240,7 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
     if (!mapName || visited.has(mapName)) return;
     visited.add(mapName);
     const fact = rememberFn ? rememberFn(mapName) : null;
-    if (!fact || (fact.be !== "json map" && fact.be !== "map")) return;
+    if (!fact || (fact.be !== "json map" && fact.be !== "map" && fact.be !== "csv map")) return;
     const entries = fact?.ob?.map ?? {};
     for (const value of Object.values(entries)) {
       if (value?.name) visit(value.name);
@@ -270,7 +270,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   }
   if (ob.name && rememberFn) {
     const fact = rememberFn(ob.name);
-    if (fact?.be === "json map" || fact?.be === "map") {
+    if (fact?.be === "json map" || fact?.be === "map" || fact?.be === "csv map") {
       if (fact.be === "json map" && format === "json") {
         const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
         return canonicalJsonStringify(json);
@@ -375,6 +375,8 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "csv", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "text", "to", "filename"], handler: write },

@@ -13,8 +13,8 @@ async function run(line) {
 test("csv parses text into column map with header raw/header and padding", async () => {
   forget();
 
-  const csv = "Name,Age\\nAda,36\\nTuring\\n";
-  await run(`ob text ${JSON.stringify(csv)} from state csv to name people be read do`);
+  const csv = "Name,Age\nAda,36\nTuring\n";
+  await run(`ob text quoted.csv.${csv}.csv.quoted from state csv to name people be read do`);
 
   const people = remember("people");
   assert.equal(people?.be, "csv map");

@@ -1,2 +1,5 @@
-ob text "Name,Age\nAda,36\nTuring\n" from state csv to name people be read do
+ob text quoted.csv.Name,Age
+Ada,36
+Turing
+.csv.quoted from state csv to name people be read do
 ob name people to state csv be write do

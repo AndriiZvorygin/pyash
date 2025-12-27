@@ -12,9 +12,9 @@ async function run(line) {
 
 test("csv rejects duplicate canonical headers", async () => {
   forget();
-  const csv = "Name, name\\nAda,36\\n";
+  const csv = "Name, name\nAda,36\n";
   await assert.rejects(
-    () => run(`ob text ${JSON.stringify(csv)} from state csv to name people be read do`),
+    () => run(`ob text quoted.csv.${csv}.csv.quoted from state csv to name people be read do`),
     /csv header defective/
   );
 });

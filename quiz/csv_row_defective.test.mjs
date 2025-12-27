@@ -12,9 +12,9 @@ async function run(line) {
 
 test("csv rejects rows with too many fields", async () => {
   forget();
-  const csv = "Name,Age\\nAda,36,extra\\n";
+  const csv = "Name,Age\nAda,36,extra\n";
   await assert.rejects(
-    () => run(`ob text ${JSON.stringify(csv)} from state csv to name people be read do`),
+    () => run(`ob text quoted.csv.${csv}.csv.quoted from state csv to name people be read do`),
     /csv row defective/
   );
 });
