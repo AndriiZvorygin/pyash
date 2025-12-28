@@ -1,0 +1,13 @@
+ob text quoted.yaml.
+name: Ada
+age: 36
+flags:
+  - true
+  - false
+pets:
+  - kind: cat
+  - kind: dog
+meta:
+  active: true
+.yaml.quoted from state yaml to name profile be read do
+ob name profile be write do

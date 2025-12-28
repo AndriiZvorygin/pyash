@@ -9,7 +9,7 @@ export function buildProgram(source) {
   let quoteTag = null;
 
   for (const rawLine of rawLines) {
-    const line = rawLine.trim();
+    const line = inQuote ? rawLine : rawLine.trim();
     if (!inQuote) {
       if (!line || line.startsWith("#")) continue;
       buffer = buffer ? `${buffer}\n${line}` : line;

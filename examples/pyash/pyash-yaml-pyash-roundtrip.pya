@@ -1,0 +1,34 @@
+exists su name source ob text quoted.pyash.
+su name profile be json map def
+su name name ob text "Ada" ya
+su name age ob num 36 ya
+su name flags ob ve bool truth lie ya
+su name pets ob ve name "profile pets 1" "profile pets 2" ya
+su name meta ob name "profile meta" ya
+prah
+su name profile pets 1 be json map def
+su name kind ob text "cat" ya
+prah
+su name profile pets 2 be json map def
+su name kind ob text "dog" ya
+prah
+su name profile meta be json map def
+su name active ob bool truth ya
+prah
+.pyash.quoted be text ya
+
+ob name source to state yaml be write do
+
+ob text quoted.yaml.
+age: 36
+flags:
+  - true
+  - false
+meta:
+  active: true
+name: Ada
+pets:
+  - kind: cat
+  - kind: dog
+.yaml.quoted from state yaml to name profile be read do
+ob name profile be write do

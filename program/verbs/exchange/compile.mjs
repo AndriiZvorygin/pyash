@@ -2,12 +2,14 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import YAML from "yaml";
 import { buildProgram } from "../../program.mjs";
+import { parseYamlToJsonValue } from "./yaml.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -18,6 +20,9 @@ const CJSON_SOURCE = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.c
   .replace(/#include\s+\"cJSON\.h\"\s*/g, "");
 const CSV_PARSE_RUNTIME_URL = pathToFileURL(
   path.resolve(process.cwd(), "node_modules/csv-parse/dist/esm/sync.js")
+).href;
+const YAML_RUNTIME_URL = pathToFileURL(
+  path.resolve(process.cwd(), "node_modules/yaml/dist/index.js")
 ).href;
 
 function sanitizeName(name = "") {
@@ -322,6 +327,200 @@ function jsonRuntimeHelper() {
     "  const json = jsonFromPyashMap(root, maps, new Set());",
     "  if (mode === \"pretty\") return JSON.stringify(json, null, 2);",
     "  return JSON.stringify(canonicalizeJsonValue(json));",
+    "}"
+  ].join("\n");
+}
+
+function yamlRuntimeHelper() {
+  return [
+    "const YAML_JSON_NUMBER_RE = /^-?(?:0|[1-9]\\\\d*)(?:\\\\.\\\\d+)?(?:[eE][+-]?\\\\d+)?$/;",
+    "function yamlScalarSource(node) {",
+    "  if (!node) return \"\";",
+    "  if (typeof node.source === \"string\") return node.source;",
+    "  return String(node.value ?? \"\");",
+    "}",
+    "function yamlClassifyScalar(node) {",
+    "  const isPlain = node?.type === \"PLAIN\";",
+    "  if (typeof node?.value === \"number\") return { type: \"num\", value: node.value };",
+    "  if (typeof node?.value === \"boolean\") return { type: \"bool\", value: node.value };",
+    "  if (node?.value === null) return { type: \"hollow\", value: null };",
+    "  const raw = String(yamlScalarSource(node) ?? \"\").trim();",
+    "  if (!isPlain) return { type: \"text\", value: String(node?.value ?? \"\") };",
+    "  if (raw === \"\" || raw === \"~\" || /^null$/i.test(raw)) return { type: \"hollow\", value: null };",
+    "  if (/^(true|false)$/i.test(raw)) return { type: \"bool\", value: /^true$/i.test(raw) };",
+    "  if (YAML_JSON_NUMBER_RE.test(raw)) return { type: \"num\", value: Number(raw) };",
+    "  return { type: \"text\", value: raw };",
+    "}",
+    "function yamlKeyText(node) {",
+    "  if (!YAML.isScalar(node)) throw new Error(\"yaml key defective\");",
+    "  const isPlain = node?.type === \"PLAIN\";",
+    "  const raw = String(yamlScalarSource(node) ?? \"\").trim();",
+    "  let key;",
+    "  if (!isPlain) key = String(node?.value ?? \"\");",
+    "  else if (raw === \"\" || raw === \"~\" || /^null$/i.test(raw)) key = \"null\";",
+    "  else if (/^(true|false)$/i.test(raw)) key = /^true$/i.test(raw) ? \"true\" : \"false\";",
+    "  else if (YAML_JSON_NUMBER_RE.test(raw)) key = raw;",
+    "  else key = raw;",
+    "  if (!String(key ?? \"\").trim()) throw new Error(\"yaml key defective\");",
+    "  return key;",
+    "}",
+    "function yamlClone(value) {",
+    "  if (Array.isArray(value)) return value.map((item) => yamlClone(item));",
+    "  if (value && typeof value === \"object\") {",
+    "    const out = {};",
+    "    for (const [key, val] of Object.entries(value)) out[key] = yamlClone(val);",
+    "    return out;",
+    "  }",
+    "  return value;",
+    "}",
+    "function yamlCollectAnchors(node, anchors) {",
+    "  if (!node || typeof node !== \"object\") return;",
+    "  if (node.anchor) anchors.set(node.anchor, node);",
+    "  if (YAML.isMap(node)) {",
+    "    for (const pair of node.items) {",
+    "      yamlCollectAnchors(pair.key, anchors);",
+    "      yamlCollectAnchors(pair.value, anchors);",
+    "    }",
+    "    return;",
+    "  }",
+    "  if (YAML.isSeq(node)) {",
+    "    for (const item of node.items) yamlCollectAnchors(item, anchors);",
+    "  }",
+    "}",
+    "function yamlResolveAlias(node, ctx) {",
+    "  const aliasName = String(node?.source ?? \"\").trim();",
+    "  if (!aliasName) throw new Error(\"yaml referential defective\");",
+    "  const target = ctx.anchors.get(aliasName);",
+    "  if (!target) throw new Error(\"yaml referential defective\");",
+    "  if (ctx.resolving.has(aliasName)) throw new Error(\"yaml referential defective\");",
+    "  ctx.resolving.add(aliasName);",
+    "  const value = yamlNodeToJson(target, ctx);",
+    "  ctx.resolving.delete(aliasName);",
+    "  return yamlClone(value);",
+    "}",
+    "function yamlMergeInto(target, source) {",
+    "  if (!source || typeof source !== \"object\" || Array.isArray(source)) {",
+    "    throw new Error(\"yaml defective\");",
+    "  }",
+    "  for (const [key, value] of Object.entries(source)) {",
+    "    if (!(key in target)) target[key] = value;",
+    "  }",
+    "}",
+    "function yamlMapToJson(node, ctx) {",
+    "  const out = {};",
+    "  for (const pair of node.items) {",
+    "    const keyText = yamlKeyText(pair.key);",
+    "    if (keyText === \"<<\") {",
+    "      const mergeValue = yamlNodeToJson(pair.value, ctx);",
+    "      if (Array.isArray(mergeValue)) {",
+    "        for (const entry of mergeValue) yamlMergeInto(out, entry);",
+    "      } else {",
+    "        yamlMergeInto(out, mergeValue);",
+    "      }",
+    "      continue;",
+    "    }",
+    "    const value = yamlNodeToJson(pair.value, ctx);",
+    "    out[keyText] = value;",
+    "  }",
+    "  return out;",
+    "}",
+    "function yamlSeqToJson(node, ctx) {",
+    "  const out = [];",
+    "  for (const item of node.items) out.push(yamlNodeToJson(item, ctx));",
+    "  return out;",
+    "}",
+    "function yamlNodeToJson(node, ctx) {",
+    "  if (!node) return null;",
+    "  if (node?.tag) throw new Error(\"yaml defective\");",
+    "  if (node?.constructor?.name === \"Alias\") return yamlResolveAlias(node, ctx);",
+    "  if (YAML.isMap(node)) return yamlMapToJson(node, ctx);",
+    "  if (YAML.isSeq(node)) return yamlSeqToJson(node, ctx);",
+    "  if (YAML.isScalar(node)) {",
+    "    const classified = yamlClassifyScalar(node);",
+    "    if (classified.type === \"hollow\") return null;",
+    "    if (classified.type === \"bool\") return Boolean(classified.value);",
+    "    if (classified.type === \"num\") return Number(classified.value);",
+    "    return String(classified.value ?? \"\");",
+    "  }",
+    "  throw new Error(\"yaml defective\");",
+    "}",
+    "function yamlToJsonValue(text) {",
+    "  const docs = YAML.parseAllDocuments(String(text ?? \"\"), { keepNodeTypes: true });",
+    "  if (!docs || docs.length === 0 || docs.length !== 1) throw new Error(\"yaml defective\");",
+    "  const doc = docs[0];",
+    "  if (doc?.errors?.length) throw new Error(\"yaml defective\");",
+    "  const root = doc.contents;",
+    "  if (!YAML.isMap(root)) throw new Error(\"yaml root defective\");",
+    "  const anchors = new Map();",
+    "  yamlCollectAnchors(root, anchors);",
+    "  const ctx = { anchors, resolving: new Set() };",
+    "  const value = yamlNodeToJson(root, ctx);",
+    "  if (!value || typeof value !== \"object\" || Array.isArray(value)) throw new Error(\"yaml root defective\");",
+    "  return canonicalizeJsonValue(value);",
+    "}",
+    "function yamlToPyashTextRuntime(text, rootName) {",
+    "  const json = yamlToJsonValue(text);",
+    "  return jsonToPyashTextRuntime(json, rootName);",
+    "}"
+  ].join("\n");
+}
+
+function yamlStringifyHelper() {
+  return [
+    "function yamlCompareUtf8(a, b) {",
+    "  if (a === b) return 0;",
+    "  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;",
+    "  const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));",
+    "  const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));",
+    "  const len = Math.min(bufA.length, bufB.length);",
+    "  for (let i = 0; i < len; i += 1) {",
+    "    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;",
+    "  }",
+    "  return bufA.length < bufB.length ? -1 : 1;",
+    "}",
+    "function yamlCanonicalize(value) {",
+    "  if (Array.isArray(value)) return value.map((item) => yamlCanonicalize(item));",
+    "  if (value && typeof value === \"object\") {",
+    "    const out = {};",
+    "    const keys = Object.keys(value).sort(yamlCompareUtf8);",
+    "    for (const key of keys) out[key] = yamlCanonicalize(value[key]);",
+    "    return out;",
+    "  }",
+    "  return value;",
+    "}",
+    "function yamlEmit(value, indent, out) {",
+    "  if (value === null) { out.push(\"null\"); return; }",
+    "  if (typeof value === \"boolean\") { out.push(value ? \"true\" : \"false\"); return; }",
+    "  if (typeof value === \"number\") { out.push(String(value)); return; }",
+    "  if (typeof value === \"string\") { out.push(JSON.stringify(value)); return; }",
+    "  if (Array.isArray(value)) {",
+    "    if (indent > 0) out.push(\"\\n\");",
+    "    for (const item of value) {",
+    "      out.push(\" \".repeat(indent));",
+    "      out.push(\"- \");",
+    "      yamlEmit(item, indent + 2, out);",
+    "      out.push(\"\\n\");",
+    "    }",
+    "    return;",
+    "  }",
+    "  if (value && typeof value === \"object\") {",
+    "    if (indent > 0) out.push(\"\\n\");",
+    "    for (const key of Object.keys(value)) {",
+    "      out.push(\" \".repeat(indent));",
+    "      out.push(JSON.stringify(String(key ?? \"\")));",
+    "      out.push(\": \");",
+    "      yamlEmit(value[key], indent + 2, out);",
+    "      out.push(\"\\n\");",
+    "    }",
+    "    return;",
+    "  }",
+    "  out.push(\"null\");",
+    "}",
+    "function yamlStringifyRuntime(value) {",
+    "  const json = yamlCanonicalize(value ?? {});",
+    "  const out = [];",
+    "  yamlEmit(json, 0, out);",
+    "  return out.join(\"\");",
     "}"
   ].join("\n");
 }
@@ -1182,6 +1381,117 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
       ].join("\n");
     }
+    if (sourceState === "yaml") {
+      const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+      const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+      const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+      if (!sourceFilename && typeof sourceText !== "string") return null;
+      const safeName = sanitizeName(targetName);
+      const alreadyDeclared = declared?.has(targetName);
+      markDeclared(declared, targetName);
+      if (declaredTypes) declaredTypes.set(targetName, "text");
+      if (lang !== "c" && !sourceFilename && typeof sourceText === "string") {
+        let parsed;
+        try {
+          parsed = parseYamlToJsonValue(sourceText, { source: "compile yaml" });
+        } catch (err) {
+          throw err;
+        }
+        parsed = canonicalizeJsonValue(parsed);
+        let text;
+        try {
+          text = jsonToPyashText(parsed, targetName).text;
+        } catch (err) {
+          throwErrorSentence({
+            name: "yaml defective",
+            message: err?.message ?? "yaml defective",
+            from: { name: "compile" },
+            raw: { error: err?.message }
+          });
+        }
+        const assignLine = alreadyDeclared
+          ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: ${JSON.stringify(text)} }, be: "pyash", mood: "ya" };`
+          : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: ${JSON.stringify(text)} }, be: "pyash", mood: "ya" };`;
+        return [
+          assignLine,
+          `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+        ].join("\n");
+      }
+      if (lang === "c") {
+        if (!sourceFilename && typeof sourceText === "string") {
+          let parsed;
+          try {
+            parsed = parseYamlToJsonValue(sourceText, { source: "compile yaml" });
+          } catch (err) {
+            throw err;
+          }
+          parsed = canonicalizeJsonValue(parsed);
+          let text;
+          try {
+            text = jsonToPyashText(parsed, targetName).text;
+          } catch (err) {
+            throwErrorSentence({
+              name: "yaml defective",
+              message: err?.message ?? "yaml defective",
+              from: { name: "compile" },
+              raw: { error: err?.message }
+            });
+          }
+          if (cHelpers) {
+            cHelpers.usesPrintf = true;
+            cHelpers.usesString = true;
+            cHelpers.usesTextHelper = true;
+          }
+          const lines = [];
+          const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+          if (needsDecl) {
+            lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+          }
+          lines.push(`snprintf(${safeName}, PYA_TEXT_CAP, "%s", ${JSON.stringify(text)});`);
+          return lines.join("\n");
+        }
+        if (cHelpers) {
+          cHelpers.usesYamlRuntime = true;
+          cHelpers.usesJsonRuntime = true;
+          cHelpers.usesTextHelper = true;
+          cHelpers.usesString = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesPrintf = true;
+          cHelpers.usesCtype = true;
+        }
+        const lines = [];
+        const sourceVar = `${safeName}_source`;
+        const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+        if (needsDecl) {
+          lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+        }
+        lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
+        if (sourceFilename) {
+          lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: yaml lost\\n"); }`);
+        } else {
+          lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+        }
+        lines.push(`pya_yaml_error ${safeName}_err = { "", 0, 0 };`);
+        lines.push(`if (!pya_yaml_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
+        return lines.join("\n");
+      }
+      if (jsHelpers) {
+        jsHelpers.usesYamlRuntime = true;
+        jsHelpers.usesJsonRuntime = true;
+        jsHelpers.usesVectorFormat = true;
+        if (sourceFilename) jsHelpers.usesFs = true;
+      }
+      const sourceExpr = sourceFilename
+        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+        : JSON.stringify(sourceText);
+      const assignLine = alreadyDeclared
+        ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: yamlToPyashTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
+        : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: yamlToPyashTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
+      return [
+        assignLine,
+        `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+      ].join("\n");
+    }
     if (sourceState === "csv") {
       const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
       const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
@@ -1283,6 +1593,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       ? (formatRaw.includes("beautiful") ? "pretty" : "canonical")
       : null;
     const wantJson = jsonMode !== null;
+    const wantYaml = formatRaw.includes("yaml");
     const wantCsv = formatRaw.includes("csv");
     // Special case: write to <mind> -> invoke mind (JS)
     if (baseBe === "write" && sentence.to?.name && lang !== "c") {
@@ -1402,7 +1713,64 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
     }
     if (!forcedExpr) {
-      if (typeof ob.text === "string") {
+      if (wantYaml && lang !== "c") {
+        const isJsonMap = ob.name && declaredTypes?.get(ob.name) === "json map";
+        const isPyashText = typeof ob.text === "string" || (ob.name && (declaredTypes?.get(ob.name) === "pyash" || declaredTypes?.get(ob.name) === "text"));
+        if (!isJsonMap && isPyashText) {
+          if (jsHelpers) {
+            jsHelpers.usesYamlStringify = true;
+            jsHelpers.usesJsonRuntime = true;
+            jsHelpers.usesVectorFormat = true;
+          }
+          const sourceExpr = typeof ob.text === "string"
+            ? JSON.stringify(ob.text)
+            : `remember(${JSON.stringify(ob.name ?? "")})?.ob?.text ?? ""`;
+          if (rememberFlag) rememberFlag.used = true;
+          const rootName = JSON.stringify(sentence?.su?.name ?? "");
+          expr = `yamlStringifyRuntime(JSON.parse(pyashToJsonTextRuntime(${sourceExpr}, ${rootName}, "canonical")))`;
+          forcedExpr = true;
+        }
+      } else if (wantYaml && lang === "c") {
+        const isJsonMap = ob.name && declaredTypes?.get(ob.name) === "json map";
+        const isPyashText = typeof ob.text === "string" || (ob.name && (declaredTypes?.get(ob.name) === "pyash" || declaredTypes?.get(ob.name) === "text"));
+        if (!isJsonMap && isPyashText) {
+          if (cHelpers) {
+            cHelpers.usesYamlStringify = true;
+            cHelpers.usesJsonRuntime = true;
+            cHelpers.usesTextHelper = true;
+            cHelpers.usesString = true;
+            cHelpers.usesStdlib = true;
+            cHelpers.usesPrintf = true;
+            cHelpers.usesCtype = true;
+          }
+          const tmpJson = sanitizeName(`${sentence?.su?.name ?? ob.name ?? "pyash"}_json`);
+          const tmpYaml = sanitizeName(`${sentence?.su?.name ?? ob.name ?? "pyash"}_yaml`);
+          const errName = `${tmpYaml}_err`;
+          const rootName = sentence?.su?.name ? JSON.stringify(sentence.su.name) : "NULL";
+          const sourceExpr = typeof ob.text === "string"
+            ? JSON.stringify(ob.text)
+            : (ob.name ? sanitizeName(ob.name) : "NULL");
+          const lines = [];
+          lines.push(`char ${tmpJson}[PYA_TEXT_CAP] = "";`);
+          lines.push(`char ${tmpYaml}[PYA_TEXT_CAP] = "";`);
+          lines.push(`pya_json_error ${tmpJson}_err = { "", 0, 0 };`);
+          lines.push(`if (!pya_pyash_to_json(${sourceExpr}, ${rootName}, ${tmpJson}, &${tmpJson}_err)) { fprintf(stderr, "%s\\n", ${tmpJson}_err.message); }`);
+          lines.push(`pya_yaml_error ${errName} = { "", 0, 0 };`);
+          lines.push(`if (!pya_json_to_yaml(${tmpJson}, ${tmpYaml}, &${errName})) { fprintf(stderr, "%s\\n", ${errName}.message); }`);
+          const writeFilename = sentence?.to?.filename;
+          if (writeFilename) {
+            const safePath = JSON.stringify(writeFilename);
+            const fileVar = `out_${cState?.fileCounter ?? 0}`;
+            if (cState) cState.fileCounter += 1;
+            lines.push(`FILE *${fileVar} = fopen(${safePath}, "w");`);
+            lines.push(`if (${fileVar}) { fprintf(${fileVar}, "%s", ${tmpYaml}); fclose(${fileVar}); }`);
+            if (!isWrite) lines.push(`printf("%s\\n", ${tmpYaml});`);
+          } else {
+            lines.push(`printf("%s\\n", ${tmpYaml});`);
+          }
+          return lines.join("\n");
+        }
+      } else if (typeof ob.text === "string") {
         expr = JSON.stringify(ob.text);
       } else if (ob.genitive) {
         if (wantsVector) {
@@ -1435,6 +1803,53 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
             } else {
               if (jsHelpers) jsHelpers.usesJsonMap = true;
               expr = `formatJsonMap(${JSON.stringify(ob.name)}, ${JSON.stringify(jsonMode)})`;
+            }
+          } else if (wantYaml) {
+            if (lang === "c") {
+              const mapSentence = mapDefs?.get(ob.name);
+              if (mapSentence && mapSentence.be === "json map") {
+                const yamlText = cState?.yamlMapStrings?.get(ob.name);
+                if (yamlText) {
+                  expr = JSON.stringify(yamlText);
+                }
+              }
+              if (expr === "undefined") {
+                if (cHelpers) {
+                  cHelpers.usesYamlStringify = true;
+                  cHelpers.usesJsonRuntime = true;
+                  cHelpers.usesTextHelper = true;
+                  cHelpers.usesString = true;
+                  cHelpers.usesStdlib = true;
+                  cHelpers.usesPrintf = true;
+                  cHelpers.usesCtype = true;
+                }
+                const tmpYaml = sanitizeName(`${ob.name}_yaml`);
+                const errName = `${tmpYaml}_err`;
+                const jsonVar = sanitizeName(`${ob.name}_json`);
+                expr = tmpYaml;
+                const lines = [];
+                lines.push(`char ${tmpYaml}[PYA_TEXT_CAP] = "";`);
+                lines.push(`pya_yaml_error ${errName} = { "", 0, 0 };`);
+                lines.push(`if (!pya_json_to_yaml(${jsonVar}, ${tmpYaml}, &${errName})) { fprintf(stderr, "%s\\n", ${errName}.message); }`);
+                const writeFilename = sentence?.to?.filename;
+                if (writeFilename) {
+                  const safePath = JSON.stringify(writeFilename);
+                  const fileVar = `out_${cState?.fileCounter ?? 0}`;
+                  if (cState) cState.fileCounter += 1;
+                  lines.push(`FILE *${fileVar} = fopen(${safePath}, "w");`);
+                  lines.push(`if (${fileVar}) { fprintf(${fileVar}, "%s", ${tmpYaml}); fclose(${fileVar}); }`);
+                  if (!isWrite) lines.push(`printf("%s\\n", ${tmpYaml});`);
+                } else {
+                  lines.push(`printf("%s\\n", ${tmpYaml});`);
+                }
+                return lines.join("\n");
+              }
+            } else {
+              if (jsHelpers) {
+                jsHelpers.usesYamlStringify = true;
+                jsHelpers.usesJsonMap = true;
+              }
+              expr = `yamlStringifyRuntime(jsonFromMap(${JSON.stringify(ob.name)}))`;
             }
           } else if (mapDefs?.has(ob.name)) {
             const chain = mapDefChainFromName(ob.name, mapDefs);
@@ -1530,9 +1945,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (cHelpers) cHelpers.usesPrintf = true;
       const isText = typeof ob.text === "string"
         || wantCsv
+        || wantYaml
         || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
-      const fmt = wantCsv ? "%s" : (isText ? "%s" : "%g");
+      const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
       if (writeFilename) {
         if (cHelpers) cHelpers.usesStdlib = true;
         const safePath = JSON.stringify(writeFilename);
@@ -1540,9 +1956,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (cState) cState.fileCounter += 1;
         const writeLine = `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }`;
         if (isWrite) return writeLine;
-        return wantCsv ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
+        return (wantCsv || wantYaml) ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
-      return wantCsv ? `printf("%s", ${expr});` : `printf("${fmt}\\n", ${expr});`;
+      return (wantCsv || wantYaml) ? `printf("%s", ${expr});` : `printf("${fmt}\\n", ${expr});`;
     }
     return `console.log(${expr});`;
   }
@@ -2995,11 +3411,11 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesCsvRuntime: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesFs: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), csvMapStrings: new Map() };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, readCounter: 0 };
+  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
@@ -3071,6 +3487,7 @@ let lines = [header];
           const jsonObj = jsonFromMapSentence(mapSentence, mapDefs, new Set());
           cState.jsonMapStrings.set(name, canonicalJsonStringify(jsonObj));
           cState.jsonMapPrettyStrings.set(name, JSON.stringify(jsonObj, null, 2));
+          cState.yamlMapStrings.set(name, YAML.stringify(canonicalizeJsonValue(jsonObj)));
         } catch (err) {
           const normalized = normalizeJsonMapError(err);
           throwErrorSentence({
@@ -3129,6 +3546,11 @@ let lines = [header];
           if (prettyText) {
             const varName = sanitizeName(`${name}_json_pretty`);
             lines.push(`const char *${varName} = ${JSON.stringify(prettyText)};`);
+          }
+          const yamlText = cState.yamlMapStrings.get(name);
+          if (yamlText) {
+            const varName = sanitizeName(`${name}_yaml`);
+            lines.push(`const char *${varName} = ${JSON.stringify(yamlText)};`);
           }
         }
         if (sentence.be === "csv map") {
@@ -3205,6 +3627,7 @@ let lines = [header];
 
   if (lang !== "c") {
     const prelude = [lines[0]];
+    if (jsHelpers.usesYamlRuntime) jsHelpers.usesJsonRuntime = true;
     if (mindShim.used) {
       prelude.push(`const mindConfigs = new Map();`);
       const waitForHelper = `function waitFor(promise) {\n  if (!promise || typeof promise.then !== \"function\") return promise;\n  const sab = new SharedArrayBuffer(4);\n  const view = new Int32Array(sab);\n  let value;\n  let error;\n  promise.then(v => { value = v; Atomics.store(view, 0, 1); Atomics.notify(view, 0); }).catch(err => { error = err; Atomics.store(view, 0, 1); Atomics.notify(view, 0); });\n  Atomics.wait(view, 0, 0);\n  if (error) throw error;\n  return value;\n}`;
@@ -3230,6 +3653,12 @@ let lines = [header];
     if (jsHelpers.usesJsonRuntime) {
       prelude.push(jsonRuntimeHelper());
     }
+    if (jsHelpers.usesYamlRuntime) {
+      prelude.push(yamlRuntimeHelper());
+    }
+    if (jsHelpers.usesYamlStringify) {
+      prelude.push(yamlStringifyHelper());
+    }
     if (jsHelpers.usesCsvRuntime) {
       prelude.push(csvRuntimeHelper());
     }
@@ -3245,6 +3674,9 @@ let lines = [header];
     if (jsHelpers.usesCsvRuntime) {
       prelude.splice(1, 0, `import { parse as parseCsv } from ${JSON.stringify(CSV_PARSE_RUNTIME_URL)};`);
     }
+    if (jsHelpers.usesYamlRuntime) {
+      prelude.splice(1, 0, `import YAML from ${JSON.stringify(YAML_RUNTIME_URL)};`);
+    }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;
       prelude.push(loopHelper);
@@ -3253,12 +3685,18 @@ let lines = [header];
   }
 
   if (lang === "c") {
+    const needsCsvRuntime = cHelpers.usesCsvRuntime
+      && [...lines, ...mainLines].some((line) => typeof line === "string" && /\bpya_csv_/.test(line));
+    const needsYamlRuntime = cHelpers.usesYamlRuntime;
+    const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
     const headers = [];
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
     if (cHelpers.usesString) headers.push("#include <string.h>");
     if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
-    if (cHelpers.usesCsvRuntime) {
+    if (needsYamlRuntime) headers.push("#include <strings.h>");
+    if (needsYamlRuntime) headers.push("#include <yaml.h>");
+    if (needsCsvRuntime) {
       headers.push("#include <zsv.h>");
     }
     if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
@@ -3288,7 +3726,9 @@ let lines = [header];
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
-    if (cHelpers.usesCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
+    if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
+    if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
+    if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
     if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");

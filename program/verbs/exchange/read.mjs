@@ -2,9 +2,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
-import { doRemember, remember } from "../../remember/index.mjs";
+import { doRemember, remember, allRemember } from "../../remember/index.mjs";
 import importFromSentence from "./import.mjs";
 import { parse as parseCsv } from "csv-parse/sync";
+import { jsonToMapSentences } from "./json_map.mjs";
+import { parseYamlToJsonValue, canonicalizeJsonValue } from "./yaml.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -210,7 +212,7 @@ export async function read_from_filename({ from }) {
 export async function read_fromstate_csv(sentence, { remember } = {}) {
   const source = "read csv";
   const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
-  let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
+  let sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
 
   if (sourceFilename) {
     try {
@@ -234,7 +236,7 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
     });
   }
 
-  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "data";
   const normalizedText = sourceText
     .replace(/\\r\\n/g, "\r\n")
     .replace(/\\n/g, "\n")
@@ -264,6 +266,70 @@ export async function read_fromstate_json(sentence, { remember: rememberFn } = {
   const targetName = sentence?.to?.name ?? sentence?.su?.name;
   await importFromSentence({ ...sentence, to: { name: targetName } });
   const fact = (rememberFn || remember)(targetName);
+  if (fact?.ob) return { ob: fact.ob, be: fact.be };
+  return { be: "json map" };
+}
+
+function collectExistingNames() {
+  const used = new Set();
+  for (const entry of allRemember()) {
+    if (entry?.su?.name) used.add(entry.su.name);
+  }
+  return used;
+}
+
+export async function read_fromstate_yaml(sentence) {
+  const source = "read yaml";
+  const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+  let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
+
+  if (sourceFilename) {
+    try {
+      sourceText = await fs.promises.readFile(sourceFilename, "utf8");
+    } catch (err) {
+      throwErrorSentence({
+        name: "yaml lost",
+        message: "yaml lost",
+        from: { name: source },
+        raw: { filename: sourceFilename, error: err?.message }
+      });
+    }
+  }
+
+  if (typeof sourceText !== "string") {
+    throwErrorSentence({
+      name: "yaml defective",
+      message: "yaml defective",
+      from: { name: source },
+      raw: { filename: sourceFilename }
+    });
+  }
+
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  let parsed;
+  try {
+    parsed = parseYamlToJsonValue(sourceText, { source });
+  } catch (err) {
+    throw err;
+  }
+  parsed = canonicalizeJsonValue(parsed);
+
+  const existingNames = collectExistingNames();
+  let sentences;
+  try {
+    ({ sentences } = jsonToMapSentences(parsed, targetName, { existingNames }));
+  } catch (err) {
+    throwErrorSentence({
+      name: "yaml defective",
+      message: err?.message ?? "yaml defective",
+      from: { name: source },
+      raw: { error: err?.message }
+    });
+  }
+  for (const mapSentence of sentences) {
+    doRemember(mapSentence);
+  }
+  const fact = targetName ? remember(targetName) : null;
   if (fact?.ob) return { ob: fact.ob, be: fact.be };
   return { be: "json map" };
 }
@@ -422,5 +488,13 @@ export const signatures = [
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name"], handler: read_fromstate_csv },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name", "num"], handler: read_fromstate_csv },
   { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name"], handler: read_fromstate_csv },
-  { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name", "num"], handler: read_fromstate_csv }
+  { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name", "num"], handler: read_fromstate_csv },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "yaml", "to", "name"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "fromstate", "name", "yaml", "ob", "text", "to", "name"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "fromstate", "name", "yaml", "ob", "text", "to", "name", "num"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "from", "text", "fromstate", "name", "yaml", "to", "name"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "from", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml }
 ];

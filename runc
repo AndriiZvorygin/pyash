@@ -24,5 +24,9 @@ if rg -q "PYA_CSV_RUNTIME" "$TMP_C"; then
   ZSV_SRC=("caterer/zsv/src/zsv.c")
   ZSV_FLAGS=("-Icaterer/zsv/include" "-Icaterer/zsv/src")
 fi
-gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm
+YAML_LIB=()
+if rg -q "PYA_YAML_RUNTIME" "$TMP_C"; then
+  YAML_LIB=("-lyaml")
+fi
+gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm "${YAML_LIB[@]}"
 "$TMP_EXE"
