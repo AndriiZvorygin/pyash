@@ -1,3 +1,20 @@
-Name,Age
-Ada,36
-Turing
+"Data Import Template"
+"Table:","Bank Transaction"
+""
+""
+"Notes:"
+"Please do not change the template headings."
+"First data column must be blank."
+"If you are uploading new records, leave the ""name"" (ID) column blank."
+"If you are uploading new records, ""Naming Series"" becomes mandatory, if present."
+"Only mandatory fields are necessary for new records. You can delete non-mandatory columns if you wish."
+"For updating, you can update only selective columns."
+"You can only upload upto 5000 records in one go. (may be less in some cases)"
+""
+"DocType:","Bank Transaction","","","","","","","","","","","","","","","","","","","","","","","~","Bank Transaction Payments","payment_entries","","","","",""
+"Column Labels:","ID","Series","Created On","Created By","Date","Status","Bank Account","Company","Amended From","Deposit","Withdrawal","Currency","Description","Reference Number","Transaction ID","Transaction Type","Allocated Amount","Unallocated Amount","Party Type","Party","Party Name/Account Holder (Bank Statement)","Party Account No. (Bank Statement)","Party IBAN (Bank Statement)","","ID","Payment Document","Payment Entry","Allocated Amount","Created On","Created By","Clearance Date"
+"Column Name:","name","naming_series","creation","owner","date","status","bank_account","company","amended_from","deposit","withdrawal","currency","description","reference_number","transaction_id","transaction_type","allocated_amount","unallocated_amount","party_type","party","bank_party_name","bank_party_account_number","bank_party_iban","~","name","payment_document","payment_entry","allocated_amount","creation","owner","clearance_date"
+"Mandatory:","Yes","Yes","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","No","","Yes","Yes","Yes","Yes","No","No","No"
+"Type:","Data","Select","Datetime","Link","Date","Select","Link","Link","Link","Currency","Currency","Link","Small Text","Small Text","Data","Data","Currency","Currency","Link","Dynamic Link","Data","Data","Data","","Data","Link","Dynamic Link","Currency","Datetime","Link","Date"
+"Info:","","One of: ACC-BTN-.YYYY.-","dd-mm-yyyy","Valid User","dd-mm-yyyy","One of: Pending, Settled, Unreconciled, Reconciled, Cancelled","Valid Bank Account","Valid Company","Valid Bank Transaction","","","Valid Currency","","","","","","","Valid DocType","","","","","","","Valid DocType","","","dd-mm-yyyy","Valid User","dd-mm-yyyy"
+"Start entering data below this line"
