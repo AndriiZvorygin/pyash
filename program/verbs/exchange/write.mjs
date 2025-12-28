@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { remember } from "../../remember/index.mjs";
+import { buildProgram } from "../../program.mjs";
 import { state } from "../../bridge/state.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
@@ -137,6 +138,47 @@ function jsonObjectFromMapSentence(mapSentence, { rememberFn, seen }) {
   return out;
 }
 
+function jsonMapDefsFromPyash(text) {
+  const program = buildProgram(String(text ?? ""));
+  const defs = new Map();
+  let currentName = null;
+
+  for (const sentence of program.sentences) {
+    if (sentence?.mood === "def" && sentence?.be === "json map" && sentence?.su?.name) {
+      currentName = sentence.su.name;
+      defs.set(currentName, { su: { name: currentName }, be: "json map", ob: { map: {} }, mood: "ya" });
+      continue;
+    }
+    if (sentence?.mood === "prah") {
+      currentName = null;
+      continue;
+    }
+    if (currentName && sentence?.mood === "ya" && sentence?.su?.name) {
+      const mapSentence = defs.get(currentName);
+      if (mapSentence) {
+        mapSentence.ob.map[sentence.su.name] = sentence.ob ?? {};
+      }
+    }
+  }
+
+  return defs;
+}
+
+function jsonObjectFromPyash(text, { rootName } = {}) {
+  const defs = jsonMapDefsFromPyash(text);
+  if (defs.size === 0) {
+    throwErrorSentence({
+      name: "json map export failed",
+      message: "json map export failed",
+      from: { name: "write" },
+      raw: { text }
+    });
+  }
+  const root = rootName ?? defs.keys().next().value;
+  const rememberFn = (name) => defs.get(name);
+  return jsonObjectFromMapName(root, { rememberFn, seen: new Set() });
+}
+
 function compareUtf8(a, b) {
   if (a === b) return 0;
   const bufA = Buffer.from(a, "utf8");
@@ -272,6 +314,17 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
 }
 
 export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
+  if (format === "json" || format === "beautiful json") {
+    const textValue = typeof ob.text === "string"
+      ? ob.text
+      : (ob.name && rememberFn ? (rememberFn(ob.name)?.ob?.text ?? null) : null);
+    if (typeof textValue === "string") {
+      const json = jsonObjectFromPyash(textValue, {});
+      return format === "json"
+        ? canonicalJsonStringify(json)
+        : JSON.stringify(json, null, 2);
+    }
+  }
   if (typeof ob.text === "string") return ob.text;
   if (typeof ob.num === "number") return ob.num;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
@@ -351,6 +404,8 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "json", "ob", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "num"], handler: write },
