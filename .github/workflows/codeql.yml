@@ -1,0 +1,28 @@
+name: codeql
+
+on: workflow_dispatch
+
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, c]
+
+    permissions:
+      security-events: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: ${{ matrix.language }}
+        build-mode: none
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4

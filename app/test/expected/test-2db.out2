@@ -1,0 +1,11 @@
+CREATE TABLE data (
+  "#",
+  "Country",
+  "City",
+  "AccentCity",
+  "Region",
+  "Population",
+  "Latitude",
+  "Longitude");
+CREATE INDEX "data_country_ix" on data(country);
+CREATE UNIQUE INDEX "data_ux" on data([#]);

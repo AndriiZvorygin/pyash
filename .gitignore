@@ -1,0 +1,82 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# IDE
+.vscode
+
+# Generated Files and Directories
+*.log
+*.mk
+*.mk.log
+*.emcc
+*.emcc.log
+*.wasm
+*.worker.js
+package.json
+package-lock.json
+node_modules
+*.c.in
+*.h.in
+*.zip
+*.tar.gz
+*.deb
+*.rpm
+*.nupkg
+build
+app/external
+install.sh
+.artifacts
+.benchmarks
+.rpmbuild
+amd64-linux-*
+amd64-windows-*
+amd64-macosx-*
+amd64-freebsd-*
+jq
+nuget-feed
+homebrew-zsv
+cppcheck*
+tmp
+include/zsv.h
+app/test/worldcitiespop_mil.csv
+app/test/worldcitiespop_mil.tsv
+data/quoted5.csv
+data/loans_2.csv
+data/.zsv/data/loans_2.csv/overwrite.sqlite3
+compile_commands.json
+.cache
+zsvsheet_filter_*
+overwrite.sqlite3
+playground/*
+!playground/index.html
+playground/favicon.ico
