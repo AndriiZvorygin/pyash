@@ -263,7 +263,11 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   if (typeof ob.num === "number") return ob.num;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
   if (ob.hollow) return "null";
-  if (format === "csv" && ob.name) return csvTextFromMapName(ob.name, { rememberFn });
+  if (format === "csv" && ob.name && rememberFn) {
+    const fact = rememberFn(ob.name);
+    if (fact?.be === "text") return fact.ob?.text ?? "";
+    return csvTextFromMapName(ob.name, { rememberFn });
+  }
   if (ob.genitive) {
     const v = resolveGenitive(ob.genitive, { rememberFn });
     if (v !== undefined) return v;
@@ -335,6 +339,8 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "text"], handler: write },
@@ -376,6 +382,8 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "text", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "csv", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "num", "to", "filename"], handler: write },

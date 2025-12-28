@@ -172,30 +172,43 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
     });
   }
 
-  const normalizedText = sourceText
-    .replace(/\\r\\n/g, "\r\n")
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r");
-  const parsed = parseCsvText(normalizedText, { source });
-  const map = {
-    "header raw": { ve: { type: "text", values: parsed.headerRaw } },
-    header: { ve: { type: "text", values: parsed.header } }
-  };
-  parsed.header.forEach((key, idx) => {
-    map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
-  });
-
   const targetName = sentence?.to?.name ?? sentence?.su?.name;
-  const fact = {
-    mood: "ya",
-    su: targetName ? { name: targetName } : undefined,
-    be: "csv map",
-    ob: { map }
-  };
-  if (targetName) {
-    doRemember(fact);
+  try {
+    const normalizedText = sourceText
+      .replace(/\\r\\n/g, "\r\n")
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r");
+    const parsed = parseCsvText(normalizedText, { source });
+    const map = {
+      "header raw": { ve: { type: "text", values: parsed.headerRaw } },
+      header: { ve: { type: "text", values: parsed.header } }
+    };
+    parsed.header.forEach((key, idx) => {
+      map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
+    });
+
+    const fact = {
+      mood: "ya",
+      su: targetName ? { name: targetName } : undefined,
+      be: "csv map",
+      ob: { map }
+    };
+    if (targetName) {
+      doRemember(fact);
+    }
+    return { ob: { map }, be: "csv map" };
+  } catch (err) {
+    const fact = {
+      mood: "ya",
+      su: targetName ? { name: targetName } : undefined,
+      be: "text",
+      ob: { text: sourceText }
+    };
+    if (targetName) {
+      doRemember(fact);
+    }
+    return { ob: { text: sourceText }, be: "text" };
   }
-  return { ob: { map }, be: "csv map" };
 }
 
 export async function read_fromstate_json(sentence, { remember: rememberFn } = {}) {
