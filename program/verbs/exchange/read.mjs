@@ -81,7 +81,7 @@ function parseCsvText(text, { source }) {
       name: "csv header defective",
       message: "csv header defective",
       from: { name: source },
-      raw: { rows: rows.length }
+      raw: { rows: rows.length, line: 1, column: 1 }
     });
   }
 
@@ -94,13 +94,14 @@ function parseCsvText(text, { source }) {
   );
 
   const seen = new Set();
-  for (const key of canonical) {
+  for (let i = 0; i < canonical.length; i += 1) {
+    const key = canonical[i];
     if (!key) {
       throwErrorSentence({
         name: "csv header defective",
         message: "csv header defective",
         from: { name: source },
-        raw: { key }
+        raw: { key, line: 1, column: i + 1 }
       });
     }
     if (seen.has(key)) {
@@ -108,7 +109,7 @@ function parseCsvText(text, { source }) {
         name: "csv header defective",
         message: `csv header defective: duplicate header key ${key}`,
         from: { name: source },
-        raw: { key }
+        raw: { key, line: 1, column: i + 1 }
       });
     }
     seen.add(key);
@@ -123,7 +124,7 @@ function parseCsvText(text, { source }) {
         name: "csv row defective",
         message: "csv row defective",
         from: { name: source },
-        raw: { row: r }
+        raw: { row: r, line: r + 1, column: rowCells.length }
       });
     }
     while (rowCells.length < width) rowCells.push("");
@@ -173,42 +174,29 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
   }
 
   const targetName = sentence?.to?.name ?? sentence?.su?.name;
-  try {
-    const normalizedText = sourceText
-      .replace(/\\r\\n/g, "\r\n")
-      .replace(/\\n/g, "\n")
-      .replace(/\\r/g, "\r");
-    const parsed = parseCsvText(normalizedText, { source });
-    const map = {
-      "header raw": { ve: { type: "text", values: parsed.headerRaw } },
-      header: { ve: { type: "text", values: parsed.header } }
-    };
-    parsed.header.forEach((key, idx) => {
-      map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
-    });
+  const normalizedText = sourceText
+    .replace(/\\r\\n/g, "\r\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r");
+  const parsed = parseCsvText(normalizedText, { source });
+  const map = {
+    "header raw": { ve: { type: "text", values: parsed.headerRaw } },
+    header: { ve: { type: "text", values: parsed.header } }
+  };
+  parsed.header.forEach((key, idx) => {
+    map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
+  });
 
-    const fact = {
-      mood: "ya",
-      su: targetName ? { name: targetName } : undefined,
-      be: "csv map",
-      ob: { map }
-    };
-    if (targetName) {
-      doRemember(fact);
-    }
-    return { ob: { map }, be: "csv map" };
-  } catch (err) {
-    const fact = {
-      mood: "ya",
-      su: targetName ? { name: targetName } : undefined,
-      be: "text",
-      ob: { text: sourceText }
-    };
-    if (targetName) {
-      doRemember(fact);
-    }
-    return { ob: { text: sourceText }, be: "text" };
+  const fact = {
+    mood: "ya",
+    su: targetName ? { name: targetName } : undefined,
+    be: "csv map",
+    ob: { map }
+  };
+  if (targetName) {
+    doRemember(fact);
   }
+  return { ob: { map }, be: "csv map" };
 }
 
 export async function read_fromstate_json(sentence, { remember: rememberFn } = {}) {

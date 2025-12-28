@@ -187,12 +187,7 @@ function csvRuntimeHelper() {
     "}",
     "function csvMapFromTextRuntime(text, targetName) {",
     "  const normalized = String(text ?? \"\").replace(/\\\\r\\\\n/g, \"\\r\\n\").replace(/\\\\n/g, \"\\n\").replace(/\\\\r/g, \"\\r\");",
-    "  let parsed;",
-    "  try {",
-    "    parsed = csvParseAdapter(normalized);",
-    "  } catch (err) {",
-    "    return { mood: \"ya\", su: { name: targetName }, be: \"text\", ob: { text: String(text ?? \"\") } };",
-    "  }",
+    "  const parsed = csvParseAdapter(normalized);",
     "  const map = {",
     "    \"header raw\": { ve: { type: \"text\", values: parsed.headerRaw } },",
     "    header: { ve: { type: \"text\", values: parsed.header } }",
@@ -290,7 +285,8 @@ function parseCsvText(text, { source }) {
     throwErrorSentence({
       name: "csv header defective",
       message: "csv header defective",
-      from: { name: source }
+      from: { name: source },
+      raw: { rows: rows.length, line: 1, column: 1 }
     });
   }
 
@@ -303,13 +299,14 @@ function parseCsvText(text, { source }) {
   );
 
   const seen = new Set();
-  for (const key of canonical) {
+  for (let i = 0; i < canonical.length; i += 1) {
+    const key = canonical[i];
     if (!key) {
       throwErrorSentence({
         name: "csv header defective",
         message: "csv header defective",
         from: { name: source },
-        raw: { key }
+        raw: { key, line: 1, column: i + 1 }
       });
     }
     if (seen.has(key)) {
@@ -317,7 +314,7 @@ function parseCsvText(text, { source }) {
         name: "csv header defective",
         message: `csv header defective: duplicate header key ${key}`,
         from: { name: source },
-        raw: { key }
+        raw: { key, line: 1, column: i + 1 }
       });
     }
     seen.add(key);
@@ -332,7 +329,7 @@ function parseCsvText(text, { source }) {
         name: "csv row defective",
         message: "csv row defective",
         from: { name: source },
-        raw: { row: r }
+        raw: { row: r, line: r + 1, column: rowCells.length }
       });
     }
     while (rowCells.length < width) rowCells.push("");
@@ -891,7 +888,28 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         .replace(/\\r\\n/g, "\r\n")
         .replace(/\\n/g, "\n")
         .replace(/\\r/g, "\r");
-      const parsed = parseCsvText(normalizedText, { source: "compile csv" });
+      const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+      let parsed;
+      try {
+        parsed = parseCsvText(normalizedText, { source: "compile csv" });
+      } catch (err) {
+        if (!sourceFilename) {
+          throw err;
+        }
+        markDeclared(declared, targetName);
+        if (declaredTypes) declaredTypes.set(targetName, "text");
+        if (lang === "c") {
+          if (cHelpers) {
+            cHelpers.usesTextHelper = true;
+            cHelpers.usesString = true;
+          }
+          const safeName = sanitizeName(targetName);
+          return `char ${safeName}[PYA_TEXT_CAP] = ${JSON.stringify(normalizedText)};`;
+        }
+        const safeName = sanitizeName(targetName);
+        const payload = JSON.stringify({ su: { name: targetName }, ob: { text: normalizedText }, be: "text", mood: "ya" });
+        return `const ${safeName} = ${payload};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
+      }
       const map = {
         "header raw": { ve: { type: "text", values: parsed.headerRaw } },
         header: { ve: { type: "text", values: parsed.header } }
@@ -899,7 +917,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       parsed.header.forEach((key, idx) => {
         map[key] = { ve: { type: "text", values: parsed.columns[idx] } };
       });
-      const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
       const mapSentence = {
         mood: "ya",
         su: { name: targetName },

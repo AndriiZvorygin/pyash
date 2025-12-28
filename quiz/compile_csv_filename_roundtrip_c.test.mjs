@@ -21,23 +21,27 @@ function unwrapQuoted(text, lang) {
 test("compile csv filename roundtrip to C and run", async () => {
   forget();
 
-  const csvPath = path.resolve("quiz/fixtures/Bank Transaction.csv");
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
+  const csvPath = path.join(outDir, "Sample Sheet.csv");
+  const outPath = path.join(outDir, "roundtrip.csv");
+  const csvText = "Name,Age\nAda,36\nTuring,\n";
+  await fs.writeFile(csvPath, csvText, "utf8");
 
   const pyash = [
     `from filename "${csvPath}" from state csv to name people be read do`,
-    "ob name people to state csv be write do"
+    `ob name people to state csv to filename "${outPath}" be write do`
   ].join("\n");
 
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
   const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
 
-  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
   const cPath = path.join(outDir, "out.c");
   const exePath = path.join(outDir, "out");
   await fs.writeFile(cPath, c, "utf8");
 
   await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath], { timeout: 120000 });
-  const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
-  assert.equal(stdout, "Name,Age\nAda,36\nTuring,\n");
+  await execFileAsync(exePath, [], { timeout: 120000 });
+  const stdout = await fs.readFile(outPath, "utf8");
+  assert.equal(stdout, csvText);
 });
