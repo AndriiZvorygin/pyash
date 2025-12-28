@@ -1,13 +1,18 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
+
+const CJSON_HEADER = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.h", import.meta.url), "utf8");
+const CJSON_SOURCE = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.c", import.meta.url), "utf8")
+  .replace(/#include\s+\"cJSON\.h\"\s*/g, "");
 
 function sanitizeName(name = "") {
   const cleaned = String(name)
@@ -37,6 +42,98 @@ function compareUtf8(a, b) {
     if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
   }
   return bufA.length < bufB.length ? -1 : 1;
+}
+
+function jsonRuntimeHelper() {
+  return [
+    "function sanitizeNamePart(value) {",
+    "  const raw = String(value ?? \"\").trim();",
+    "  if (!raw) return \"item\";",
+    "  const cleaned = raw.replace(/[^A-Za-z0-9_.-]+/g, \" \").replace(/\\s+/g, \" \").trim();",
+    "  return cleaned || \"item\";",
+    "}",
+    "function uniqueName(base, used) {",
+    "  if (!used.has(base)) { used.add(base); return base; }",
+    "  let i = 2;",
+    "  while (used.has(`${base} ${i}`)) i += 1;",
+    "  const name = `${base} ${i}`;",
+    "  used.add(name);",
+    "  return name;",
+    "}",
+    "function vectorForScalarArray(values, type) {",
+    "  if (type === \"bool\") return { ve: { type: \"bool\", values: values.map(v => (v ? \"truth\" : \"lie\")) } };",
+    "  return { ve: { type, values } };",
+    "}",
+    "function jsonArrayToObj(values, { parentName, key, used, emitMap }) {",
+    "  if (values.length === 0) return { ve: { type: \"hollow\", values: [] } };",
+    "  const typeSet = new Set();",
+    "  for (const value of values) {",
+    "    if (value === null) typeSet.add(\"hollow\");",
+    "    else if (Array.isArray(value)) typeSet.add(\"array\");",
+    "    else if (typeof value === \"object\") typeSet.add(\"object\");",
+    "    else if (typeof value === \"boolean\") typeSet.add(\"bool\");",
+    "    else if (typeof value === \"number\") typeSet.add(\"num\");",
+    "    else typeSet.add(\"text\");",
+    "  }",
+    "  if (typeSet.has(\"array\")) throw new Error(\"json map contents defective: nested arrays are unsupported\");",
+    "  if (typeSet.has(\"hollow\")) throw new Error(\"json map contents defective: null elements are unsupported in arrays\");",
+    "  if (typeSet.size > 1 && !(typeSet.size === 1 && typeSet.has(\"object\"))) {",
+    "    throw new Error(\"json map contents defective: mixed array types are unsupported\");",
+    "  }",
+    "  if (typeSet.has(\"object\")) {",
+    "    const names = values.map((value, idx) => {",
+    "      const baseKey = sanitizeNamePart(key);",
+    "      const base = `${parentName} ${baseKey} ${idx + 1}`;",
+    "      const childName = uniqueName(base, used);",
+    "      emitMap(value, childName);",
+    "      return childName;",
+    "    });",
+    "    return { ve: { type: \"name\", values: names } };",
+    "  }",
+    "  if (typeSet.has(\"bool\")) return vectorForScalarArray(values, \"bool\");",
+    "  if (typeSet.has(\"num\")) return vectorForScalarArray(values, \"num\");",
+    "  return vectorForScalarArray(values, \"text\");",
+    "}",
+    "function jsonValueToObj(value, { parentName, key, used, emitMap }) {",
+    "  if (value === null) return { hollow: true };",
+    "  if (Array.isArray(value)) return jsonArrayToObj(value, { parentName, key, used, emitMap });",
+    "  if (typeof value === \"string\") return { text: value };",
+    "  if (typeof value === \"number\") return { num: value };",
+    "  if (typeof value === \"boolean\") return { boolean: value };",
+    "  if (typeof value === \"object\") {",
+    "    const baseKey = sanitizeNamePart(key);",
+    "    const base = `${parentName} ${baseKey}`;",
+    "    const childName = uniqueName(base, used);",
+    "    emitMap(value, childName);",
+    "    return { name: childName };",
+    "  }",
+    "  return undefined;",
+    "}",
+    "function jsonToMapSentencesRuntime(value, rootName) {",
+    "  const used = new Set();",
+    "  const sentences = [];",
+    "  const emitMap = (ob, name) => {",
+    "    if (!ob || typeof ob !== \"object\" || Array.isArray(ob)) {",
+    "      throw new Error(\"json map contents defective: object expected\");",
+    "    }",
+    "    const map = {};",
+    "    for (const [key, val] of Object.entries(ob)) {",
+    "      const objValue = jsonValueToObj(val, { parentName: name, key, used, emitMap });",
+    "      if (objValue === undefined) continue;",
+    "      map[key] = objValue;",
+    "    }",
+    "    sentences.push({ mood: \"ya\", su: { name }, be: \"json map\", ob: { map } });",
+    "  };",
+    "  const root = uniqueName(sanitizeNamePart(rootName), used);",
+    "  emitMap(value, root);",
+    "  return { rootName: root, sentences };",
+    "}",
+    "function jsonToPyashTextRuntime(value, rootName) {",
+    "  const { sentences } = jsonToMapSentencesRuntime(value, rootName);",
+    "  const blocks = sentences.map((sentence) => formatMapSentence(sentence.su?.name ?? \"map\", sentence));",
+    "  return blocks.join(\"\\n\\n\") + \"\\n\";",
+    "}"
+  ].join("\n");
 }
 
 function canonicalizeJsonValue(value) {
@@ -582,8 +679,123 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
   }
 
+  if (baseBe === "import") {
+    const targetName = sentence?.to?.name ?? sentence?.su?.name;
+    if (!targetName) {
+      throwErrorSentence({
+        name: "import error",
+        message: "import: target name is required (to name <map>)",
+        from: { name: "compile" },
+        raw: sentence
+      });
+    }
+    const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+    const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+    if (!sourceFilename && typeof sourceText !== "string") return null;
+    const safeName = sanitizeName(targetName);
+    const alreadyDeclared = declared?.has(targetName);
+    markDeclared(declared, targetName);
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesJsonRuntime = true;
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+        cHelpers.usesCtype = true;
+      }
+      const lines = [];
+      const sourceVar = `${safeName}_source`;
+      const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+      if (needsDecl) {
+        lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+      }
+      lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
+      if (sourceFilename) {
+        lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
+      } else {
+        lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+      }
+      lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
+      lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
+      return lines.join("\n");
+    }
+    if (jsHelpers) {
+      jsHelpers.usesJsonRuntime = true;
+      jsHelpers.usesVectorFormat = true;
+      if (sourceFilename) jsHelpers.usesFs = true;
+    }
+    const sourceExpr = sourceFilename
+      ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+      : JSON.stringify(sourceText);
+    const parseVar = `${safeName}_json`;
+    const assignLine = alreadyDeclared
+      ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
+      : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
+    return [
+      `let ${parseVar};`,
+      `try { ${parseVar} = JSON.parse(${sourceExpr}); } catch (err) { throw new Error("import: invalid json"); }`,
+      assignLine,
+      `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+    ].join("\n");
+  }
+
   if (baseBe === "read") {
     const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+    if (sourceState === "json") {
+      const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+      const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+      const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+      if (!sourceFilename && typeof sourceText !== "string") return null;
+      const safeName = sanitizeName(targetName);
+      const alreadyDeclared = declared?.has(targetName);
+      markDeclared(declared, targetName);
+      if (declaredTypes) declaredTypes.set(targetName, "text");
+      if (lang === "c") {
+        if (cHelpers) {
+          cHelpers.usesJsonRuntime = true;
+          cHelpers.usesTextHelper = true;
+          cHelpers.usesString = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesPrintf = true;
+          cHelpers.usesCtype = true;
+        }
+        const lines = [];
+        const sourceVar = `${safeName}_source`;
+        const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+        if (needsDecl) {
+          lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+        }
+        lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
+        if (sourceFilename) {
+          lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: json lost\\n"); }`);
+        } else {
+          lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+        }
+        lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
+        lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
+        return lines.join("\n");
+      }
+      if (jsHelpers) {
+        jsHelpers.usesJsonRuntime = true;
+        jsHelpers.usesVectorFormat = true;
+        if (sourceFilename) jsHelpers.usesFs = true;
+      }
+      const sourceExpr = sourceFilename
+        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+        : JSON.stringify(sourceText);
+      const parseVar = `${safeName}_json`;
+      const assignLine = alreadyDeclared
+        ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
+        : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
+      return [
+        `let ${parseVar};`,
+        `try { ${parseVar} = JSON.parse(${sourceExpr}); } catch (err) { throw new Error("read: invalid json"); }`,
+        assignLine,
+        `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+      ].join("\n");
+    }
     if (sourceState === "csv") {
       const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
       if (typeof sourceText !== "string") {
@@ -2282,10 +2494,10 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesFs: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesFs: false, readCounter: 0 };
   const cState = { vectorCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
@@ -2514,6 +2726,9 @@ let lines = [header];
     if (jsHelpers.usesVectorFormat) {
       prelude.push(vectorFormatHelper());
     }
+    if (jsHelpers.usesJsonRuntime) {
+      prelude.push(jsonRuntimeHelper());
+    }
     if (jsHelpers.usesJsonMap) {
       prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.su?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.ob?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction canonicalizeJson(value) {\n  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;\n  const compareUtf8 = (a, b) => {\n    if (a === b) return 0;\n    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));\n    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));\n    const len = Math.min(bufA.length, bufB.length);\n    for (let i = 0; i < len; i += 1) {\n      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;\n    }\n    return bufA.length < bufB.length ? -1 : 1;\n  };\n  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));\n  if (value && typeof value === \"object\") {\n    const out = {};\n    const keys = Object.keys(value).sort(compareUtf8);\n    for (const key of keys) out[key] = canonicalizeJson(value[key]);\n    return out;\n  }\n  return value;\n}\nfunction formatJsonMap(name, mode = \"canonical\") {\n  const json = jsonFromMap(name);\n  if (mode === \"pretty\") return JSON.stringify(json, null, 2);\n  return JSON.stringify(canonicalizeJson(json));\n}`);
     }
@@ -2536,7 +2751,7 @@ let lines = [header];
     if (cHelpers.usesString) headers.push("#include <string.h>");
     if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
-    if (lines.some(l => typeof l === "string" && l.includes("fmod("))) headers.push("#include <math.h>");
+    if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
     const needsLoopGlobals =
       [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex|by)\b/.test(l));
     if (needsLoopGlobals) {
@@ -2554,6 +2769,11 @@ let lines = [header];
     if (headers.length) lines.unshift(...headers);
     const cPrelude = [];
     if (cHelpers.usesTextHelper) cPrelude.push(TEXT_HELPER);
+    if (cHelpers.usesJsonRuntime) {
+      cPrelude.push(CJSON_HEADER);
+      cPrelude.push(CJSON_SOURCE);
+      cPrelude.push(JSON_PYASH_HELPER);
+    }
     if (cHelpers.usesVectorType) cPrelude.push(VECTOR_TYPE_DECL);
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);

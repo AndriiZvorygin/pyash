@@ -2,7 +2,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
-import { doRemember } from "../../remember/index.mjs";
+import { doRemember, remember } from "../../remember/index.mjs";
+import importFromSentence from "./import.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -197,6 +198,14 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
   return { ob: { map }, be: "csv map" };
 }
 
+export async function read_fromstate_json(sentence, { remember: rememberFn } = {}) {
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  await importFromSentence({ ...sentence, to: { name: targetName } });
+  const fact = (rememberFn || remember)(targetName);
+  if (fact?.ob) return { ob: fact.ob, be: fact.be };
+  return { be: "json map" };
+}
+
 function compareUtf8(a, b) {
   if (a === b) return 0;
   const bufA = Buffer.from(a, "utf8");
@@ -344,6 +353,10 @@ export default async function read({ from }) {
 export const signatures = [
   { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename },
   { signatureWords: ["be", "read", "ob", "all"], handler: read_from_json_map_all },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name"], handler: read_fromstate_json },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name", "num"], handler: read_fromstate_json },
+  { signatureWords: ["be", "read", "fromstate", "name", "json", "ob", "text", "to", "name"], handler: read_fromstate_json },
+  { signatureWords: ["be", "read", "fromstate", "name", "json", "ob", "text", "to", "name", "num"], handler: read_fromstate_json },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name"], handler: read_fromstate_csv },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "csv", "to", "name", "num"], handler: read_fromstate_csv },
   { signatureWords: ["be", "read", "fromstate", "name", "csv", "ob", "text", "to", "name"], handler: read_fromstate_csv },
