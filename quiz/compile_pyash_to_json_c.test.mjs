@@ -39,5 +39,5 @@ test("compile pyash map def chain to canonical json and run (c)", async () => {
   await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath, "-lm"]);
   const { stdout } = await execFileAsync(exePath, []);
 
-  assert.equal(stdout.trim(), "{\"age\":36,\"name\":\"Ada\"}");
+  assert.equal(stdout.trim(), "{\"age\":36,\"flags\":[true,false],\"meta\":{\"active\":true},\"name\":\"Ada\",\"pets\":[{\"kind\":\"cat\"},{\"kind\":\"dog\"}]}");
 });

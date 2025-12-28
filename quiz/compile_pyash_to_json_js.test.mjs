@@ -22,5 +22,5 @@ test("compile pyash map def chain to canonical json and run (js)", async () => {
     }
   });
 
-  assert.deepEqual(logs, ['{"age":36,"name":"Ada"}']);
+  assert.deepEqual(logs, ['{"age":36,"flags":[true,false],"meta":{"active":true},"name":"Ada","pets":[{"kind":"cat"},{"kind":"dog"}]}']);
 });
