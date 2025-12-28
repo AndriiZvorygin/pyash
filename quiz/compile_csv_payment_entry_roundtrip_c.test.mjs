@@ -32,17 +32,19 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile bank fixture csv roundtrip to C and run", async () => {
-  const fixturePath = path.resolve("quiz/fixtures/Bank Transaction.csv");
+test("compile payment entry fixture csv roundtrip to C and run", async () => {
+  const fixturePath = path.resolve("quiz/fixtures/Payment Entry.csv");
   const fixtureBuf = await fs.readFile(fixturePath);
   const fixtureHash = sha256(fixtureBuf);
 
-  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-csv-c-fixture-"));
-  const outPath = path.join(outDir, "bank-transaction.roundtrip.csv");
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-csv-c-payment-"));
+  const outPath = path.join(outDir, "payment-entry.roundtrip.csv");
 
   forget();
   await interpret(parse(`from filename "${fixturePath}" from state csv to name people be read do`));
   const original = snapshotCsvMap("people");
+  assert.ok(original.header.includes("name"));
+  assert.ok(original.header.includes("payment_type"));
 
   const pyash = [
     `from filename "${fixturePath}" from state csv to name people be read do`,

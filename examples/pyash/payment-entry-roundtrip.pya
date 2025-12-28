@@ -1,0 +1,2 @@
+from filename "quiz/fixtures/Payment Entry.csv" from state csv to name payments be read do
+ob name payments to state csv to filename "/tmp/payment-entry.roundtrip.csv" be write do

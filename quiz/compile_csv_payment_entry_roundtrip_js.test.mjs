@@ -26,42 +26,34 @@ function snapshotCsvMap(name) {
   return { header, columns };
 }
 
-function unwrapQuoted(text, lang) {
-  return String(text || "")
-    .replace(new RegExp(`^\\s*quoted\\.${lang}\\.\\s*`), "")
-    .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
-}
-
-test("compile bank fixture csv roundtrip to C and run", async () => {
-  const fixturePath = path.resolve("quiz/fixtures/Bank Transaction.csv");
+test("compile payment entry fixture csv roundtrip to javascript and run", async () => {
+  const fixturePath = path.resolve("quiz/fixtures/Payment Entry.csv");
   const fixtureBuf = await fs.readFile(fixturePath);
   const fixtureHash = sha256(fixtureBuf);
 
-  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-csv-c-fixture-"));
-  const outPath = path.join(outDir, "bank-transaction.roundtrip.csv");
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-csv-js-payment-"));
+  const outPath = path.join(tmpDir, "payment-entry.roundtrip.csv");
 
   forget();
   await interpret(parse(`from filename "${fixturePath}" from state csv to name people be read do`));
   const original = snapshotCsvMap("people");
+  assert.ok(original.header.includes("name"));
+  assert.ok(original.header.includes("payment_type"));
 
   const pyash = [
     `from filename "${fixturePath}" from state csv to name people be read do`,
     `ob name people to state csv to filename "${outPath}" be write do`
   ].join("\n");
 
-  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
-  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
+  const wrapped = result?.ob?.text ?? result?.value?.text ?? "";
+  const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
 
-  const cPath = path.join(outDir, "out.c");
-  const exePath = path.join(outDir, "out");
-  await fs.writeFile(cPath, c, "utf8");
+  const jsPath = path.join(tmpDir, "out.mjs");
+  await fs.writeFile(jsPath, js, "utf8");
 
-  const needsCsv = /PYA_CSV_RUNTIME/.test(c);
-  const zsvFlags = needsCsv ? ["-Icaterer/zsv/include", "-Icaterer/zsv/src"] : [];
-  const zsvSrc = needsCsv ? ["caterer/zsv/src/zsv.c"] : [];
-  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, ...zsvFlags, cPath, ...zsvSrc, "-lm"], { timeout: 120000 });
-  await execFileAsync(exePath, [], { timeout: 120000 });
+  await execFileAsync("node", [jsPath], { timeout: 120000 });
 
   forget();
   await interpret(parse(`from filename "${outPath}" from state csv to name roundtrip be read do`));
