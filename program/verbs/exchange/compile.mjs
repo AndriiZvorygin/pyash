@@ -1215,7 +1215,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
         markDeclared(declared, targetName);
         if (declaredTypes) declaredTypes.set(targetName, "csv map");
-        return `pya_csv_error csv_err = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &csv_err)) { fprintf(stderr, \"%s\\n\", csv_err.message); }`;
+        const errName = `csv_err_${cState?.csvCounter ?? 0}`;
+        if (cState) cState.csvCounter += 1;
+        return `pya_csv_error ${errName} = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &${errName})) { fprintf(stderr, \"%s\\n\", ${errName}.message); }`;
       }
       const normalizedText = sourceText
         .replace(/\\r\\n/g, "\r\n")
@@ -1388,8 +1390,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         const writeFilename = sentence?.to?.filename;
         if (writeFilename) {
           const safePath = JSON.stringify(writeFilename);
-          lines.push(`FILE *out = fopen(${safePath}, "w");`);
-          lines.push(`if (out) { fprintf(out, "%s", ${tmpName}); fclose(out); }`);
+          const fileVar = `out_${cState?.fileCounter ?? 0}`;
+          if (cState) cState.fileCounter += 1;
+          lines.push(`FILE *${fileVar} = fopen(${safePath}, "w");`);
+          lines.push(`if (${fileVar}) { fprintf(${fileVar}, "%s", ${tmpName}); fclose(${fileVar}); }`);
           if (!isWrite) lines.push(`printf("%s\\n", ${tmpName});`);
         } else {
           lines.push(`printf("%s\\n", ${tmpName});`);
@@ -1517,7 +1521,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (writeFilename) {
         if (cHelpers) cHelpers.usesStdlib = true;
         const safePath = JSON.stringify(writeFilename);
-        const writeLine = `FILE *out = fopen(${safePath}, "w");\nif (out) { fprintf(out, "${fmt}", ${expr}); fclose(out); }`;
+        const fileVar = `out_${cState?.fileCounter ?? 0}`;
+        if (cState) cState.fileCounter += 1;
+        const writeLine = `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }`;
         if (isWrite) return writeLine;
         return wantCsv ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
@@ -2978,7 +2984,7 @@ let lines = [header];
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesFs: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), csvMapStrings: new Map() };
+  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
