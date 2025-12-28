@@ -40,7 +40,10 @@ test("compile csv filename roundtrip to C and run", async () => {
   const exePath = path.join(outDir, "out");
   await fs.writeFile(cPath, c, "utf8");
 
-  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath], { timeout: 120000 });
+  const needsCsv = /PYA_CSV_RUNTIME/.test(c);
+  const zsvFlags = needsCsv ? ["-Icaterer/zsv/include", "-Icaterer/zsv/src"] : [];
+  const zsvSrc = needsCsv ? ["caterer/zsv/src/zsv.c"] : [];
+  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, ...zsvFlags, cPath, ...zsvSrc, "-lm"], { timeout: 120000 });
   await execFileAsync(exePath, [], { timeout: 120000 });
   const stdout = await fs.readFile(outPath, "utf8");
   assert.equal(stdout, csvText);
