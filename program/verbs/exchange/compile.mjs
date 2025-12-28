@@ -1444,7 +1444,22 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (isCsvMap && !wantCsv) {
           const chain = mapDefs?.has(ob.name) ? mapDefChainFromName(ob.name, mapDefs) : "";
           if (lang === "c") {
-            expr = JSON.stringify(chain);
+            if (mapDefs?.has(ob.name)) {
+              expr = JSON.stringify(chain);
+            } else {
+              if (cHelpers) {
+                cHelpers.usesCsvRuntime = true;
+                cHelpers.usesStdlib = true;
+                cHelpers.usesString = true;
+                cHelpers.usesCtype = true;
+                cHelpers.usesPrintf = true;
+              }
+              if (sentence?.to?.filename) {
+                const safePath = JSON.stringify(sentence.to.filename);
+                return `pya_csv_write_pyash_file(${JSON.stringify(ob.name)}, ${safePath});`;
+              }
+              return `pya_csv_write_pyash_stdout(${JSON.stringify(ob.name)});`;
+            }
           } else {
             if (jsHelpers) jsHelpers.usesVectorFormat = true;
             const mapExpr = (locals?.has(name) || declared?.has(name)) ? name : `remember(${JSON.stringify(ob.name)})`;
