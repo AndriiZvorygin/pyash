@@ -18,5 +18,11 @@ TMP_C="/tmp/${NAME}-pyash.c"
 TMP_EXE="/tmp/${NAME}-pyash"
 
 ./compile from filename "$SRC" become c to filename "$TMP_C"
-gcc -std=c11 -O0 -o "$TMP_EXE" "$TMP_C" -lm
+ZSV_SRC=()
+ZSV_FLAGS=()
+if rg -q "PYA_CSV_RUNTIME" "$TMP_C"; then
+  ZSV_SRC=("caterer/zsv/src/zsv.c")
+  ZSV_FLAGS=("-Icaterer/zsv/include" "-Icaterer/zsv/src")
+fi
+gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm
 "$TMP_EXE"
