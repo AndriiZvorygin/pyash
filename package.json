@@ -11,6 +11,7 @@
     "compile": "node program/command/run_pya_program.mjs --gross"
   },
   "dependencies": {
-    "csv-parse": "^5.5.0"
+    "csv-parse": "^5.5.0",
+    "yaml": "^2.4.1"
   }
 }

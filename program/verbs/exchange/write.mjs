@@ -5,6 +5,7 @@ import { state } from "../../bridge/state.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
+import YAML from "yaml";
 
 function vectorLiteral(values = [], type = "num") {
   const parts = ["ve", type];
@@ -314,6 +315,15 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
 }
 
 export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
+  if (format === "yaml") {
+    const textValue = typeof ob.text === "string"
+      ? ob.text
+      : (ob.name && rememberFn ? (rememberFn(ob.name)?.ob?.text ?? null) : null);
+    if (typeof textValue === "string") {
+      const json = jsonObjectFromPyash(textValue, {});
+      return YAML.stringify(canonicalizeJsonValue(json));
+    }
+  }
   if (format === "json" || format === "beautiful json") {
     const textValue = typeof ob.text === "string"
       ? ob.text
@@ -339,6 +349,10 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   if (ob.name && rememberFn) {
     const fact = rememberFn(ob.name);
     if (fact?.be === "json map" || fact?.be === "map" || fact?.be === "csv map") {
+      if (fact.be === "json map" && format === "yaml") {
+        const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
+        return YAML.stringify(canonicalizeJsonValue(json));
+      }
       if (fact.be === "json map" && format === "json") {
         const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
         return canonicalJsonStringify(json);
@@ -371,6 +385,8 @@ export default async function write(sentence, { remember: rememberFn = remember 
     format = "beautiful json";
   } else if (formatRaw.includes("json")) {
     format = "json";
+  } else if (formatRaw.includes("yaml")) {
+    format = "yaml";
   } else if (formatRaw.includes("csv")) {
     format = "csv";
   }
@@ -404,8 +420,11 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "text"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "num"], handler: write },
@@ -446,6 +465,9 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "text", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "csv", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "num", "to", "filename"], handler: write },
