@@ -7,7 +7,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -937,6 +937,19 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
           `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
         ].join("\n");
       }
+      if (typeof sourceText !== "string" && sourceFilename && lang === "c") {
+        const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+        if (cHelpers) {
+          cHelpers.usesCsvRuntime = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesString = true;
+          cHelpers.usesCtype = true;
+          cHelpers.usesPrintf = true;
+        }
+        markDeclared(declared, targetName);
+        if (declaredTypes) declaredTypes.set(targetName, "csv map");
+        return `pya_csv_error csv_err = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &csv_err)) { fprintf(stderr, \"%s\\n\", csv_err.message); }`;
+      }
       const normalizedText = sourceText
         .replace(/\\r\\n/g, "\r\n")
         .replace(/\\n/g, "\n")
@@ -1119,15 +1132,22 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (isCsvMap && wantCsv) {
           if (lang === "c") {
             const mapSentence = mapDefs?.get(ob.name);
-            if (!mapSentence || mapSentence.be !== "csv map") {
-              throwErrorSentence({
-                name: "csv columns defective",
-                message: "csv columns defective",
-                from: { name: "compile" },
-                raw: { name: ob.name }
-              });
+            if (mapSentence && mapSentence.be === "csv map") {
+              expr = JSON.stringify(csvTextFromMapSentence(mapSentence));
+            } else {
+              if (cHelpers) {
+                cHelpers.usesCsvRuntime = true;
+                cHelpers.usesStdlib = true;
+                cHelpers.usesString = true;
+                cHelpers.usesCtype = true;
+                cHelpers.usesPrintf = true;
+              }
+              if (sentence?.to?.filename) {
+                const safePath = JSON.stringify(sentence.to.filename);
+                return `pya_csv_write_file(${JSON.stringify(ob.name)}, ${safePath});`;
+              }
+              return `pya_csv_write_stdout(${JSON.stringify(ob.name)});`;
             }
-            expr = JSON.stringify(csvTextFromMapSentence(mapSentence));
           } else {
             if (jsHelpers) jsHelpers.usesCsvMap = true;
             expr = `formatCsvMap(${JSON.stringify(ob.name)})`;
@@ -2635,7 +2655,7 @@ let lines = [header];
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesCsvRuntime: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesFs: false, readCounter: 0 };
@@ -2898,6 +2918,10 @@ let lines = [header];
     if (cHelpers.usesString) headers.push("#include <string.h>");
     if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
+    if (cHelpers.usesCsvRuntime) {
+      headers.push("#include <zsv/api.h>");
+      headers.push("#include <zsv/common.h>");
+    }
     if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
     const needsLoopGlobals =
       [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex|by)\b/.test(l));
@@ -2925,6 +2949,7 @@ let lines = [header];
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
+    if (cHelpers.usesCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
     if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
