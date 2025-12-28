@@ -138,6 +138,141 @@ function jsonRuntimeHelper() {
     "  const { sentences } = jsonToMapSentencesRuntime(value, rootName);",
     "  const blocks = sentences.map((sentence) => formatMapSentence(sentence.su?.name ?? \"map\", sentence));",
     "  return blocks.join(\"\\n\\n\") + \"\\n\";",
+    "}",
+    "function tokenizePyashLine(line) {",
+    "  const tokens = [];",
+    "  let i = 0;",
+    "  while (i < line.length) {",
+    "    while (i < line.length && /\\s/.test(line[i])) i += 1;",
+    "    if (i >= line.length) break;",
+    "    if (line[i] === '\"') {",
+    "      i += 1;",
+    "      let buf = \"\";",
+    "      while (i < line.length && line[i] !== '\"') {",
+    "        if (line[i] === '\\\\' && i + 1 < line.length) i += 1;",
+    "        buf += line[i];",
+    "        i += 1;",
+    "      }",
+    "      if (i < line.length && line[i] === '\"') i += 1;",
+    "      tokens.push(buf);",
+    "      continue;",
+    "    }",
+    "    let buf = \"\";",
+    "    while (i < line.length && !/\\s/.test(line[i])) {",
+    "      buf += line[i];",
+    "      i += 1;",
+    "    }",
+    "    if (buf) tokens.push(buf);",
+    "  }",
+    "  return tokens;",
+    "}",
+    "function parsePyashValue(tokens) {",
+    "  if (!tokens.length) return undefined;",
+    "  const [head, ...rest] = tokens;",
+    "  if (head === \"num\") return { num: Number(rest[0] ?? 0) };",
+    "  if (head === \"text\") return { text: rest[0] ?? \"\" };",
+    "  if (head === \"bool\") return { boolean: rest[0] === \"truth\" };",
+    "  if (head === \"hollow\") return { hollow: true };",
+    "  if (head === \"unspecified\") return { unspecified: true };",
+    "  if (head === \"name\") return { name: rest[0] ?? \"\" };",
+    "  if (head === \"ve\" || head === \"vec\") {",
+    "    let idx = 0;",
+    "    let type = \"num\";",
+    "    if ([\"num\", \"text\", \"bool\", \"name\", \"hollow\"].includes(rest[idx])) { type = rest[idx]; idx += 1; }",
+    "    if (type === \"hollow\") return { ve: { type: \"hollow\", values: [] } };",
+    "    const values = rest.slice(idx).map((val) => {",
+    "      if (type === \"num\") return Number(val ?? 0);",
+    "      if (type === \"text\") return val ?? \"\";",
+    "      if (type === \"bool\") return val === \"truth\";",
+    "      if (type === \"name\") return val ?? \"\";",
+    "      return val;",
+    "    });",
+    "    return { ve: { type, values } };",
+    "  }",
+    "  return undefined;",
+    "}",
+    "function parsePyashMapDefs(text) {",
+    "  const maps = new Map();",
+    "  let current = null;",
+    "  for (const rawLine of String(text ?? \"\").split(/\\n/)) {",
+    "    const line = rawLine.trim();",
+    "    if (!line) continue;",
+    "    const tokens = tokenizePyashLine(line);",
+    "    if (!tokens.length) continue;",
+    "    const mood = tokens[tokens.length - 1];",
+    "    if (mood === \"def\" && tokens[0] === \"su\" && tokens[1] === \"name\" && tokens[3] === \"be\") {",
+    "      const name = tokens[2];",
+    "      current = maps.get(name) ?? { name, entries: new Map() };",
+    "      maps.set(name, current);",
+    "      continue;",
+    "    }",
+    "    if (mood === \"prah\") {",
+    "      current = null;",
+    "      continue;",
+    "    }",
+    "    if (mood === \"ya\" && current && tokens[0] === \"su\" && tokens[1] === \"name\" && tokens[3] === \"ob\") {",
+    "      const key = tokens[2];",
+    "      const value = parsePyashValue(tokens.slice(4, -1));",
+    "      current.entries.set(key, value);",
+    "    }",
+    "  }",
+    "  return maps;",
+    "}",
+    "function canonicalizeJsonValue(value) {",
+    "  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;",
+    "  const compareUtf8 = (a, b) => {",
+    "    if (a === b) return 0;",
+    "    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));",
+    "    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));",
+    "    const len = Math.min(bufA.length, bufB.length);",
+    "    for (let i = 0; i < len; i += 1) {",
+    "      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;",
+    "    }",
+    "    return bufA.length < bufB.length ? -1 : 1;",
+    "  };",
+    "  if (Array.isArray(value)) return value.map((item) => canonicalizeJsonValue(item));",
+    "  if (value && typeof value === \"object\") {",
+    "    const out = {};",
+    "    const keys = Object.keys(value).sort(compareUtf8);",
+    "    for (const key of keys) out[key] = canonicalizeJsonValue(value[key]);",
+    "    return out;",
+    "  }",
+    "  return value;",
+    "}",
+    "function jsonFromPyashMap(name, maps, seen) {",
+    "  if (seen.has(name)) throw new Error(\"json map export self referential\");",
+    "  const map = maps.get(name);",
+    "  if (!map) throw new Error(`json map referential defective: ${name}`);",
+    "  seen.add(name);",
+    "  const out = {};",
+    "  for (const [key, value] of map.entries.entries()) {",
+    "    if (!value || value.unspecified) continue;",
+    "    let jsonValue;",
+    "    if (value.hollow) jsonValue = null;",
+    "    else if (value.text !== undefined) jsonValue = value.text;",
+    "    else if (value.num !== undefined) jsonValue = value.num;",
+    "    else if (value.boolean !== undefined) jsonValue = value.boolean;",
+    "    else if (value.name) jsonValue = jsonFromPyashMap(value.name, maps, seen);",
+    "    else if (value.ve) {",
+    "      const type = value.ve.type || \"num\";",
+    "      if (type === \"hollow\") jsonValue = [];",
+    "      else if (type === \"name\") jsonValue = value.ve.values.map((child) => jsonFromPyashMap(child, maps, seen));",
+    "      else if (type === \"bool\") jsonValue = value.ve.values.map((v) => v === \"truth\" || v === true || v === 1);",
+    "      else jsonValue = value.ve.values;",
+    "    } else if (value && Object.keys(value).length > 0) {",
+    "      throw new Error(\"json map contents defective: unsupported contents\");",
+    "    }",
+    "    if (jsonValue !== undefined) out[key] = jsonValue;",
+    "  }",
+    "  seen.delete(name);",
+    "  return out;",
+    "}",
+    "function pyashToJsonTextRuntime(text, rootName, mode = \"canonical\") {",
+    "  const maps = parsePyashMapDefs(text);",
+    "  const root = rootName || (maps.keys().next().value ?? \"data\");",
+    "  const json = jsonFromPyashMap(root, maps, new Set());",
+    "  if (mode === \"pretty\") return JSON.stringify(json, null, 2);",
+    "  return JSON.stringify(canonicalizeJsonValue(json));",
     "}"
   ].join("\n");
 }
@@ -1163,17 +1298,68 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
 
     let expr = "undefined";
-    if (typeof ob.text === "string") {
-      expr = JSON.stringify(ob.text);
-    } else if (ob.genitive) {
-      if (wantsVector) {
-        if (jsHelpers) jsHelpers.usesVectorFormat = true;
-        const vecExpr = vectorExprFromGenitive(ob.genitive, sentenceArg, { locals, declared });
-        if (vecExpr) expr = `formatVector((${vecExpr})?.values ?? [], (${vecExpr})?.type ?? "num")`;
-      } else {
-        expr = pathFromGenitive(ob.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
+    let forcedExpr = false;
+    if (lang !== "c" && wantJson) {
+      const isJsonMap = ob.name && declaredTypes?.get(ob.name) === "json map";
+      const isPyashText = typeof ob.text === "string" || (ob.name && (declaredTypes?.get(ob.name) === "pyash" || declaredTypes?.get(ob.name) === "text"));
+      if (!isJsonMap && isPyashText) {
+        if (jsHelpers) jsHelpers.usesJsonRuntime = true;
+        const sourceExpr = typeof ob.text === "string"
+          ? JSON.stringify(ob.text)
+          : `remember(${JSON.stringify(ob.name ?? "")})?.ob?.text ?? ""`;
+        if (rememberFlag) rememberFlag.used = true;
+        const rootName = JSON.stringify(sentence?.su?.name ?? "");
+        const mode = jsonMode === "pretty" ? "pretty" : "canonical";
+        expr = `pyashToJsonTextRuntime(${sourceExpr}, ${rootName}, ${JSON.stringify(mode)})`;
+        forcedExpr = true;
       }
-	    } else if (ob.name) {
+    }
+    if (lang === "c" && wantJson) {
+      const isJsonMap = ob.name && declaredTypes?.get(ob.name) === "json map";
+      const isPyashText = typeof ob.text === "string" || (ob.name && (declaredTypes?.get(ob.name) === "pyash" || declaredTypes?.get(ob.name) === "text"));
+      if (!isJsonMap && isPyashText) {
+        if (cHelpers) {
+          cHelpers.usesJsonRuntime = true;
+          cHelpers.usesTextHelper = true;
+          cHelpers.usesString = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesPrintf = true;
+          cHelpers.usesCtype = true;
+        }
+        const tmpName = sanitizeName(`${sentence?.su?.name ?? ob.name ?? "pyash"}_json`);
+        const errName = `${tmpName}_err`;
+        const rootName = sentence?.su?.name ? JSON.stringify(sentence.su.name) : "NULL";
+        const sourceExpr = typeof ob.text === "string"
+          ? JSON.stringify(ob.text)
+          : (ob.name ? sanitizeName(ob.name) : "NULL");
+        const lines = [];
+        lines.push(`char ${tmpName}[PYA_TEXT_CAP] = "";`);
+        lines.push(`pya_json_error ${errName} = { "", 0, 0 };`);
+        lines.push(`if (!pya_pyash_to_json(${sourceExpr}, ${rootName}, ${tmpName}, &${errName})) { fprintf(stderr, "%s\\n", ${errName}.message); }`);
+        const writeFilename = sentence?.to?.filename;
+        if (writeFilename) {
+          const safePath = JSON.stringify(writeFilename);
+          lines.push(`FILE *out = fopen(${safePath}, "w");`);
+          lines.push(`if (out) { fprintf(out, "%s", ${tmpName}); fclose(out); }`);
+          if (!isWrite) lines.push(`printf("%s\\n", ${tmpName});`);
+        } else {
+          lines.push(`printf("%s\\n", ${tmpName});`);
+        }
+        return lines.join("\n");
+      }
+    }
+    if (!forcedExpr) {
+      if (typeof ob.text === "string") {
+        expr = JSON.stringify(ob.text);
+      } else if (ob.genitive) {
+        if (wantsVector) {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          const vecExpr = vectorExprFromGenitive(ob.genitive, sentenceArg, { locals, declared });
+          if (vecExpr) expr = `formatVector((${vecExpr})?.values ?? [], (${vecExpr})?.type ?? "num")`;
+        } else {
+          expr = pathFromGenitive(ob.genitive, sentenceArg, { allowCGlobals: true }) ?? expr;
+        }
+      } else if (ob.name) {
 	      const name = sanitizeName(ob.name);
         const isMap = declaredTypes?.get(ob.name) === "map";
         const isJsonMap = declaredTypes?.get(ob.name) === "json map";
@@ -1256,14 +1442,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	        expr = JSON.stringify(ob.name);
 	      }
 	    } else {
-      const fallback = exprForSlot(ob, {
-        sentenceArg,
-        locals,
-        declared,
-        defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text ?? ${sentenceArg}.ob?.num` : undefined,
-        field: "text"
-      });
-      if (fallback) expr = fallback;
+        const fallback = exprForSlot(ob, {
+          sentenceArg,
+          locals,
+          declared,
+          defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text ?? ${sentenceArg}.ob?.num` : undefined,
+          field: "text"
+        });
+        if (fallback) expr = fallback;
+      }
     }
     const writeFilename = sentence?.to?.filename;
     if (writeFilename && lang !== "c") {

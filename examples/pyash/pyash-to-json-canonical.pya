@@ -1,0 +1,7 @@
+exists su name source ob text quoted.pyash.
+su name profile be json map def
+su name name ob text "Ada" ya
+su name age ob num 36 ya
+prah
+.pyash.quoted be text ya
+ob name source to state json be write do
