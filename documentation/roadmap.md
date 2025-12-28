@@ -118,46 +118,44 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Memoized parsing; multi-alias initialization supported
 * Qualified names via alias prefix (ceremonies + facts) with namespace map binding
 * Cycle detection and alias-shadowing errors
+* Spec drop: `50-modules.md` v0.1 (identity, resolution, cycles, visibility)
+
 
 ### Dec 27, 2025: CSV parity and roundtrip hardening complete
 
 * CSV spec v0.1 implemented (parser + emitter) with deterministic write output.
 * Fixture-backed roundtrip parity (interpreter/JS/C), including ERPNext Payment Entry template.
-* CSV → Pyash and Pyash → CSV → Pyash goldens added for JS/C parity.
-* Spec drop: `50-modules.md` v0.1 (identity, resolution, cycles, visibility)
 * Hardening: multi-file golden tests across interpreter/JS/C
 * Backend parity gate enforced by compile tests
 
+### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete
+
+* YAML spec v0.1 implemented (`32-yaml.md`) with deterministic canonicalization.
+* Parity goldens for interpreter/JS/C (YAML → Pyash, Pyash → YAML → Pyash).
+* YAML inline compile precompute for JS/C (no runtime YAML dependency when inline).
+* CSV → Pyash and Pyash → CSV → Pyash parity in interpreter/JS/C.
+
 ---
+## Week 1: Real-world inputs tranche v0.35
 
-## Feb 3 → Mar 1, 2026: Real-world inputs tranche (CSV + YAML + config), now module-aware
-
-Now that modules exist, config and formats can live in a proper stdlib namespace.
+**Dec 27, 2025 → Jan 2, 2026**
 
 ### Ship
 
-* CSV parse into vectors/maps
 * Group-by + aggregates: count, sum
-* YAML ↔ Pyash translation:
+* Configuration loading
 
-  * YAML → `be json map def … prah` chain (canonical)
-  * JSON maps → YAML emission (supported subset)
-* Configuration loading:
-
-  * support JSON and YAML config files
-  * merge/override precedence (CLI > env > config > defaults)
-  * stable error sentences for missing/invalid config
+  * JSON and YAML config files
+  * merge precedence: CLI > env > config > defaults
+  * stable error sentences for missing and invalid config
 
 ### Spec drops (freeze v0.35)
 
-* CSV spec v0.1
-* YAML spec v0.1 (subset explicitly stated)
 * Config spec v0.1 (formats, precedence, error rules)
 
 ### Hardening
 
-* Deterministic parsing/emission tests (CSV + YAML)
-* Golden demos:
+* Golden demos
 
   * `csv_group_by.pya`
   * `yaml_roundtrip.pya`
@@ -165,124 +163,209 @@ Now that modules exist, config and formats can live in a proper stdlib namespace
 
 ---
 
-## Mar 2 → Apr 5, 2026: Media IO v0.1 (TTS via `say`, STT via `hear`)
+## Week 2: Pipeline + replay + logging v0.6
 
-Implemented as library verbs, configured via the config system, backed by external tools.
+**Jan 3 → Jan 9, 2026**
 
 ### Ship
 
-* `say` (TTS interface):
+* Pipeline runner (stages)
+* Queue + worker pool (single-worker acceptable first)
+* Retries with backoff, checkpoints
+* Artefacts directory contract (stable layout)
+* Structured logs (machine-readable)
+* Run journal per run (manifest as JSON map)
+* Replay mode that re-executes from the journal and verifies hashes
 
-  * `ob text "..." be say do`
-  * default backend “none” with clear error sentence
-* `hear` (STT interface):
+### Spec drops (freeze v0.6)
 
-  * `from filename <audio> to name <out> be hear do`
-  * minimal output: text; optional future: segments + timestamps
-* External tool backends via config:
-
-  * TTS: eSpeak NG, Piper, system TTS
-  * STT: Whisper, whisper.cpp, or external service (explicitly gated)
-
-### Spec drops (freeze v0.4)
-
-* Speech spec v0.1:
-
-  * signatures
-  * required config keys
-  * error rules
-  * deterministic test mode requirements
+* Run journal spec v0.1 (fields, ordering, hashing rules)
+* Error model spec v0.1 (error sentences for stage failures)
+* IO model spec v0.1 (inputs, outputs, artefacts rules)
+* Log schema spec v0.1 (events, ordering, paths)
 
 ### Hardening
 
-* Deterministic test mode:
-
-  * `say` writes an artefact log or wav to artefacts dir in tests
-  * `hear` uses pinned fixture audio and pinned model/version recorded in artefacts
-* Artefact schema: backend, model, version, input hash
+* Replays match byte-stable artefacts for golden runs
+* Cross-backend parity for journal writing and stage failure errors
+* Torture tests: retries, checkpoints, partial stage failure, replay verification
 
 ---
 
-## Apr 6 → May 10, 2026: Minimal agent loop v0.1 (tests decide)
+## Week 3: Media IO v0.4
+
+**Jan 10 → Jan 16, 2026**
 
 ### Ship
 
-* Verifier loop: run quizzes, emit structured reports + artefacts dir
+* `say` (TTS interface) as a library verb, backed by pipeline stages
+* `hear` (STT interface) as a library verb, backed by pipeline stages
+* Config-driven backends
+
+  * TTS: eSpeak NG, Piper, system TTS
+  * STT: whisper.cpp, Whisper, or external service via explicit gate
+* Deterministic test mode hooks (fixtures, pinned model metadata in artefacts)
+
+### Spec drops (freeze v0.4)
+
+* Speech spec v0.1
+
+  * signatures
+  * required config keys
+  * error sentences
+  * deterministic test mode requirements
+* Speech artefact schema v0.1 (backend, model, version, input hash, output hash)
+
+### Hardening
+
+* Fixture audio pinned, outputs journaled, replays verify hashes
+* Golden demos
+
+  * `say_smoke.pya`
+  * `hear_smoke.pya`
+  * `speech_config.pya`
+
+---
+
+## Week 4: Concurrency v0.7
+
+**Jan 17 → Jan 23, 2026**
+
+### Ship
+
+* DAG scheduler for pipeline stages
+* Cancellation and timeouts
+* Backpressure rules
+* Deterministic simulation mode for scheduling (tests)
+* Journal records scheduling decisions and outcomes
+
+### Spec drops (freeze v0.7)
+
+* Concurrency spec v0.1 (DAG semantics, cancellation, timeouts)
+* Runtime lifecycle spec v0.1 (start, stop, cleanup, failure modes)
+* Simulation mode spec v0.1 (how determinism is achieved)
+
+### Hardening
+
+* Deterministic replay of a concurrent run in simulation mode
+* Torture tests: cancellation storms, timeout races, bounded queues
+* Parity: identical error sentences for timeout and cancellation across backends
+
+---
+
+## Week 5: Minimal agent loop v0.45
+
+**Jan 24 → Jan 30, 2026**
+
+### Ship
+
+* Verifier loop: run quizzes, emit structured report bundle
 * Reducer loop: store minimal repro `.pya`
-* Propose, run, report
+* Resolution chain for missing signatures
+
+  * signature search (project modules, stdlib namespaces)
+  * local mind fallback policy (config-driven)
+  * patch bundle output (diff, new signatures, tests, docs stubs)
+* Mind call caching via artefacts (content-hash keys)
 
 ### Spec drops (freeze v0.45)
 
 * Reports spec v0.1 (stable fields, ordering, paths)
+* Mind event schema v0.1 (model id, params, prompt hash, context hash, output hash)
+* Patch bundle schema v0.1 (diff layout, test expectations, provenance fields)
 
 ### Hardening
 
 * Diff-friendly deterministic reports
+* Cache hits produce identical outputs and journal entries
+* Golden demo
+
+  * `verify_and_report.pya`
+  * `missing_signature_propose_patch.pya`
 
 ---
 
-## May 11 → Jun 30, 2026: Genetic programming harness v0.1
+## Week 6: Genetic programming harness v0.5
+
+**Jan 31 → Feb 6, 2026**
 
 ### Ship
 
 * Genome: Pyash sentence lists
 * Mutations + crossover
-* Fitness: quiz pass/fail + optional penalties
+* Fitness: quiz pass/fail plus penalties
+* “Signature crystallization” workflow
+
+  * promote repeated successful patches into deterministic signatures
+  * retire mind fallback path for promoted behaviours
 
 ### Spec drops (freeze v0.5)
 
 * Evolution artefacts spec v0.1 (genomes, logs, fitness, reproducibility)
+* Crystallization policy spec v0.1 (promotion rules, required tests, docs updates)
 
 ### Hardening
 
-* Fixed seeds, time/step limits, sandboxed IO (artefacts only)
+* Fixed seeds, time and step limits
+* Sandboxed IO, artefacts only
+* Golden demo
+
+  * `evolve_small_suite.pya`
+  * `crystallize_signature.pya`
 
 ---
 
-## Jul → Aug 2026: Pipeline skeleton (systems slice)
+## Week 7: Packaging + human usability v0.8
+
+**Feb 7 → Feb 13, 2026**
 
 ### Ship
 
-* Pipeline runner (stages), queue + worker pool
-* Retries/backoff, checkpoints
-* Structured logs
+* Package layout conventions, versioned stdlib
+* Formatter + linter
+* Dependency and compatibility checks
+* “Report bundle” as a first-class output for Results-as-a-Service style runs
+* Optional read-only serving of report bundles (local)
 
-### Spec drops (freeze v0.6)
+### Spec drops (freeze v0.8)
 
-* Error model spec v0.1
-* IO model spec v0.1
-* Log schema spec v0.1
+* Package system spec v0.1
+* Stdlib stability policy spec v0.1
+* Evolution policy spec v0.1 (how crystallization changes public surfaces)
 
 ### Hardening
 
-* Reproducible runs, backpressure rules
+* Fresh clone → install → run → reproduce bundle via replay
+* Multi-platform smoke (Linux first, others gated)
+* Golden demo
+
+  * `package_smoke.pya`
+  * `bundle_replay_smoke.pya`
 
 ---
 
-## Sep 2026 onward: Concurrency + packaging + “usable by other humans”
+## Week 8: Intent compiler v0.85
 
-### Concurrency
+**Feb 14 → Feb 20, 2026**
 
-* DAG scheduler, cancellation, timeouts, torture tests
-* Deterministic simulation mode where possible
-* Concurrency spec v0.1 + runtime lifecycle spec v0.1
+### Ship
 
-### Packaging/tooling
+* Prompt → candidate Pyash call set (top K)
+* Candidate ranking via signature matching (stdlib + project modules)
+* Optional local mind assistance for candidate generation
+* Artefacts: candidates, scores, chosen call, matching trail
 
-* Package layout conventions, versioned stdlib
-* Formatter + linter, dependency/compat checks
-* GP production mode: PR-ready diffs + proof artefacts
-* Package system spec v0.1, stdlib stability policy, evolution policy spec v0.1
+### Spec drops (freeze v0.85)
+
+* Intent compiler spec v0.1 (inputs, outputs, ranking rules, artefacts)
+* Candidate format spec v0.1 (sentence shape, confidence fields)
+
+### Hardening
+
+* Deterministic ranking given fixed inputs and seed
+* Golden demo
+
+  * `intent_compile_match.pya`
+  * `intent_compile_fallback.pya`
 
 ---
-
-## Parity tags
-
-* `@core`: interpreter + JS + C
-* `@js`: JS may lead temporarily
-* `@c`: C may lag temporarily
-* Promote to `@core` only with frozen spec + golden coverage + error parity
-
----
-
-If you later decide “config before modules” for pragmatic reasons, you can still do it, but early modules will pay off immediately: it forces a clean boundary where `say/hear/csv/yaml/config` live, and prevents core from turning into a junk drawer.
