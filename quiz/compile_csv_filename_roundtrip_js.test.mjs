@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import vm from "node:vm";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
+
+const execFileAsync = promisify(execFile);
 
 test("compile csv filename roundtrip to javascript and run", async () => {
   forget();
@@ -24,12 +27,12 @@ test("compile csv filename roundtrip to javascript and run", async () => {
   const wrapped = result?.ob?.text ?? result?.value?.text ?? "";
   const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
 
-  const logs = [];
-  vm.runInNewContext(js, {
-    console: {
-      log: (...args) => logs.push(args.join(" "))
-    }
-  });
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-csv-js-"));
+  const jsPath = path.join(tmpDir, "out.mjs");
+  const outPath = path.join(tmpDir, "out.txt");
+  await fs.writeFile(jsPath, js, "utf8");
 
-  assert.deepEqual(logs, ["Name,Age\nAda,36\nTuring,\n"]);
+  await execFileAsync("bash", ["-c", `node ${jsPath} > ${outPath}`], { timeout: 120000 });
+  const stdout = await fs.readFile(outPath, "utf8");
+  assert.deepEqual(stdout.split(/\r?\n/).filter(Boolean), ["Name,Age", "Ada,36", "Turing,"]);
 });
