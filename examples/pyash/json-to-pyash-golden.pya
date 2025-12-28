@@ -1,0 +1,4 @@
+ob text quoted.json.
+{"name":"Ada","age":36,"flags":[true,false],"pets":[{"kind":"cat"},{"kind":"dog"}],"meta":{"active":true}}
+.json.quoted from state json to name profile be read do
+ob name profile be write do
