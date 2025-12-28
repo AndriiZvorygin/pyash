@@ -118,6 +118,12 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Memoized parsing; multi-alias initialization supported
 * Qualified names via alias prefix (ceremonies + facts) with namespace map binding
 * Cycle detection and alias-shadowing errors
+
+### Dec 27, 2025: CSV parity and roundtrip hardening complete
+
+* CSV spec v0.1 implemented (parser + emitter) with deterministic write output.
+* Fixture-backed roundtrip parity (interpreter/JS/C), including ERPNext Payment Entry template.
+* CSV → Pyash and Pyash → CSV → Pyash goldens added for JS/C parity.
 * Spec drop: `50-modules.md` v0.1 (identity, resolution, cycles, visibility)
 * Hardening: multi-file golden tests across interpreter/JS/C
 * Backend parity gate enforced by compile tests
