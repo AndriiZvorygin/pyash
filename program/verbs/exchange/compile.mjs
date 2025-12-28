@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { buildProgram } from "../../program.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
@@ -9,10 +11,14 @@ import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
+import { parse as parseCsv } from "csv-parse/sync";
 
 const CJSON_HEADER = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.h", import.meta.url), "utf8");
 const CJSON_SOURCE = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.c", import.meta.url), "utf8")
   .replace(/#include\s+\"cJSON\.h\"\s*/g, "");
+const CSV_PARSE_RUNTIME_URL = pathToFileURL(
+  path.resolve(process.cwd(), "node_modules/csv-parse/dist/esm/sync.js")
+).href;
 
 function sanitizeName(name = "") {
   const cleaned = String(name)
@@ -139,48 +145,67 @@ function jsonRuntimeHelper() {
 function csvRuntimeHelper() {
   return [
     "function parseCsvTextRuntime(text) {",
-    "  const rows = [];",
-    "  let row = [];",
-    "  let field = \"\";",
-    "  let inQuotes = false;",
-    "  const pushField = () => { row.push(field); field = \"\"; };",
-    "  const pushRow = () => { rows.push(row); row = []; };",
-    "  for (let i = 0; i < text.length; i += 1) {",
-    "    const ch = text[i];",
-    "    if (inQuotes) {",
-    "      if (ch === \"\\\"\") {",
-    "        if (text[i + 1] === \"\\\"\") { field += \"\\\"\"; i += 1; }",
-    "        else { inQuotes = false; }",
-    "      } else { field += ch; }",
-    "      continue;",
-    "    }",
-    "    if (ch === \"\\\"\") { inQuotes = true; continue; }",
-    "    if (ch === \",\") { pushField(); continue; }",
-    "    if (ch === \"\\n\") { pushField(); pushRow(); continue; }",
-    "    if (ch === \"\\r\") { if (text[i + 1] === \"\\n\") i += 1; pushField(); pushRow(); continue; }",
-    "    field += ch;",
+    "  const rows = parseCsv(String(text ?? \"\"), { relax_column_count: true, relax_quotes: false, skip_empty_lines: false });",
+    "  const firstCellLower = (row) => String(row?.[0] ?? \"\").trim().toLowerCase();",
+    "  const nonEmptyRowIndex = rows.findIndex((row) => Array.isArray(row) && row.some((cell) => String(cell ?? \"\").trim() !== \"\"));",
+    "  if (nonEmptyRowIndex < 0) throw new Error(\"csv header defective\");",
+    "  let headerRowIndex = rows.findIndex((row) => firstCellLower(row) === \"column labels:\");",
+    "  const isTemplate = headerRowIndex >= 0;",
+    "  if (!isTemplate) headerRowIndex = nonEmptyRowIndex;",
+    "  const headerRow = rows[headerRowIndex] || [];",
+    "  const headerRaw = isTemplate ? headerRow.slice(1) : headerRow;",
+    "  let dropIndices = new Set();",
+    "  if (isTemplate) {",
+    "    const nameRowIndex = rows.findIndex((row, idx) => idx > headerRowIndex && firstCellLower(row) === \"column name:\");",
+    "    const nameRow = nameRowIndex >= 0 ? rows[nameRowIndex].slice(1) : null;",
+    "    dropIndices = new Set(headerRaw.map((cell, idx) => {",
+    "      if (String(cell ?? \"\").trim() !== \"\") return null;",
+    "      const marker = nameRow ? String(nameRow[idx] ?? \"\").trim() : \"\";",
+    "      if (marker === \"~\" || marker === \"\") return idx;",
+    "      return null;",
+    "    }).filter((idx) => idx !== null));",
     "  }",
-    "  if (field.length > 0 || row.length > 0) { pushField(); pushRow(); }",
-    "  if (rows.length === 0 || rows[0].length === 0) throw new Error(\"csv header defective\");",
-    "  const headerRaw = rows[0];",
-    "  const canonical = headerRaw.map((cell) => String(cell ?? \"\").replace(/\\s+/g, \" \").trim().toLowerCase());",
+    "  const filteredHeader = headerRaw.filter((_, idx) => !dropIndices.has(idx));",
+    "  let canonical = filteredHeader.map((cell) => String(cell ?? \"\").replace(/\\s+/g, \" \").trim().toLowerCase());",
+    "  if (isTemplate) {",
+    "    const counts = new Map();",
+    "    canonical = canonical.map((key) => {",
+    "      if (!key) return key;",
+    "      const count = counts.get(key) ?? 0;",
+    "      counts.set(key, count + 1);",
+    "      if (count === 0) return key;",
+    "      return `${key} ${count + 1}`;",
+    "    });",
+    "  }",
     "  const seen = new Set();",
-    "  for (const key of canonical) {",
+    "  for (let i = 0; i < canonical.length; i += 1) {",
+    "    const key = canonical[i];",
     "    if (!key) throw new Error(\"csv header defective\");",
-    "    if (seen.has(key)) throw new Error(`csv header defective: duplicate header key ${key}`);",
+    "    if (!isTemplate && seen.has(key)) throw new Error(`csv header defective: duplicate header key ${key}`);",
     "    seen.add(key);",
     "  }",
     "  const width = canonical.length;",
+    "  if (width === 0) throw new Error(\"csv header defective\");",
     "  const columns = canonical.map(() => []);",
-    "  for (let r = 1; r < rows.length; r += 1) {",
-    "    const rowCells = rows[r];",
-    "    if (rowCells.length > width) throw new Error(\"csv row defective\");",
-    "    while (rowCells.length < width) rowCells.push(\"\");",
+    "  const metaLabels = new Set([\"column name:\",\"mandatory:\",\"type:\",\"info:\",\"doctype:\",\"start entering data below this line\"]);",
+    "  let dataStart = headerRowIndex + 1;",
+    "  if (isTemplate) {",
+    "    const startIndex = rows.findIndex((row, idx) => idx > headerRowIndex && firstCellLower(row) === \"start entering data below this line\");",
+    "    if (startIndex >= 0) dataStart = startIndex + 1;",
+    "  }",
+    "  for (let r = dataStart; r < rows.length; r += 1) {",
+    "    const rowCells = rows[r] || [];",
+    "    const firstLower = firstCellLower(rowCells);",
+    "    if (isTemplate && metaLabels.has(firstLower)) continue;",
+    "    if (isTemplate && rowCells.every((cell) => String(cell ?? \"\").trim() === \"\")) continue;",
+    "    const dataCells = (isTemplate ? rowCells.slice(1) : rowCells).filter((_, idx) => !dropIndices.has(idx));",
+    "    if (dataCells.length > width) throw new Error(\"csv row defective\");",
+    "    while (dataCells.length < width) dataCells.push(\"\");",
     "    for (let c = 0; c < width; c += 1) {",
-    "      columns[c].push(String(rowCells[c] ?? \"\"));",
+    "      columns[c].push(String(dataCells[c] ?? \"\"));",
     "    }",
     "  }",
-    "  return { headerRaw, header: canonical, columns };",
+    "  return { headerRaw: filteredHeader, header: canonical, columns };",
     "}",
     "function csvParseAdapter(text) {",
     "  return parseCsvTextRuntime(text);",
@@ -220,68 +245,17 @@ function canonicalJsonStringify(value) {
 }
 
 function parseCsvText(text, { source }) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
+  const rows = parseCsv(text, {
+    relax_column_count: true,
+    relax_quotes: false,
+    skip_empty_lines: false
+  });
 
-  const pushField = () => {
-    row.push(field);
-    field = "";
-  };
-  const pushRow = () => {
-    rows.push(row);
-    row = [];
-  };
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === "\"") {
-        if (text[i + 1] === "\"") {
-          field += "\"";
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === "\"") {
-      inQuotes = true;
-      continue;
-    }
-
-    if (ch === ",") {
-      pushField();
-      continue;
-    }
-
-    if (ch === "\n") {
-      pushField();
-      pushRow();
-      continue;
-    }
-
-    if (ch === "\r") {
-      if (text[i + 1] === "\n") i += 1;
-      pushField();
-      pushRow();
-      continue;
-    }
-
-    field += ch;
-  }
-
-  if (field.length > 0 || row.length > 0) {
-    pushField();
-    pushRow();
-  }
-
-  if (rows.length === 0 || rows[0].length === 0) {
+  const firstCellLower = (row) => String(row?.[0] ?? "").trim().toLowerCase();
+  const nonEmptyRowIndex = rows.findIndex((row) =>
+    Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
+  );
+  if (nonEmptyRowIndex < 0) {
     throwErrorSentence({
       name: "csv header defective",
       message: "csv header defective",
@@ -290,15 +264,52 @@ function parseCsvText(text, { source }) {
     });
   }
 
-  const headerRaw = rows[0];
-  const canonical = headerRaw.map((cell) =>
+  let headerRowIndex = rows.findIndex((row) => firstCellLower(row) === "column labels:");
+  const isTemplate = headerRowIndex >= 0;
+  if (!isTemplate) headerRowIndex = nonEmptyRowIndex;
+
+  const headerRow = rows[headerRowIndex] || [];
+  const headerRaw = isTemplate ? headerRow.slice(1) : headerRow;
+  let dropIndices = new Set();
+  if (isTemplate) {
+    const nameRowIndex = rows.findIndex(
+      (row, idx) => idx > headerRowIndex && firstCellLower(row) === "column name:"
+    );
+    const nameRow = nameRowIndex >= 0 ? rows[nameRowIndex].slice(1) : null;
+    dropIndices = new Set(
+      headerRaw
+        .map((cell, idx) => {
+          if (String(cell ?? "").trim() !== "") return null;
+          const marker = nameRow ? String(nameRow[idx] ?? "").trim() : "";
+          if (marker === "~" || marker === "") return idx;
+          return null;
+        })
+        .filter((idx) => idx !== null)
+    );
+  }
+  const filteredHeader = headerRaw.filter((_, idx) => !dropIndices.has(idx));
+  let canonical = filteredHeader.map((cell) =>
     String(cell ?? "")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase()
   );
+  if (isTemplate) {
+    const counts = new Map();
+    canonical = canonical.map((key) => {
+      if (!key) return key;
+      const count = counts.get(key) ?? 0;
+      counts.set(key, count + 1);
+      if (count === 0) return key;
+      return `${key} ${count + 1}`;
+    });
+  }
 
   const seen = new Set();
+  const headerColumnOffset = isTemplate ? 2 : 1;
+  const filteredIndexMap = headerRaw
+    .map((_, idx) => idx)
+    .filter((idx) => !dropIndices.has(idx));
   for (let i = 0; i < canonical.length; i += 1) {
     const key = canonical[i];
     if (!key) {
@@ -306,39 +317,68 @@ function parseCsvText(text, { source }) {
         name: "csv header defective",
         message: "csv header defective",
         from: { name: source },
-        raw: { key, line: 1, column: i + 1 }
+        raw: { key, line: headerRowIndex + 1, column: filteredIndexMap[i] + headerColumnOffset }
       });
     }
-    if (seen.has(key)) {
+    if (!isTemplate && seen.has(key)) {
       throwErrorSentence({
         name: "csv header defective",
         message: `csv header defective: duplicate header key ${key}`,
         from: { name: source },
-        raw: { key, line: 1, column: i + 1 }
+        raw: { key, line: headerRowIndex + 1, column: filteredIndexMap[i] + headerColumnOffset }
       });
     }
     seen.add(key);
   }
 
   const width = canonical.length;
+  if (width === 0) {
+    throwErrorSentence({
+      name: "csv header defective",
+      message: "csv header defective",
+      from: { name: source },
+      raw: { line: headerRowIndex + 1, column: headerColumnOffset }
+    });
+  }
   const columns = canonical.map(() => []);
-  for (let r = 1; r < rows.length; r += 1) {
-    const rowCells = rows[r];
-    if (rowCells.length > width) {
+  const metaLabels = new Set([
+    "column name:",
+    "mandatory:",
+    "type:",
+    "info:",
+    "doctype:",
+    "start entering data below this line"
+  ]);
+  let dataStart = headerRowIndex + 1;
+  if (isTemplate) {
+    const startIndex = rows.findIndex(
+      (row, idx) => idx > headerRowIndex && firstCellLower(row) === "start entering data below this line"
+    );
+    if (startIndex >= 0) dataStart = startIndex + 1;
+  }
+  for (let r = dataStart; r < rows.length; r += 1) {
+    const rowCells = rows[r] || [];
+    const firstLower = firstCellLower(rowCells);
+    if (isTemplate && (metaLabels.has(firstLower))) continue;
+    if (isTemplate && rowCells.every((cell) => String(cell ?? "").trim() === "")) continue;
+    const dataCells = (isTemplate ? rowCells.slice(1) : rowCells).filter(
+      (_, idx) => !dropIndices.has(idx)
+    );
+    if (dataCells.length > width) {
       throwErrorSentence({
         name: "csv row defective",
         message: "csv row defective",
         from: { name: source },
-        raw: { row: r, line: r + 1, column: rowCells.length }
+        raw: { row: r, line: r + 1, column: dataCells.length + (isTemplate ? 1 : 0) }
       });
     }
-    while (rowCells.length < width) rowCells.push("");
+    while (dataCells.length < width) dataCells.push("");
     for (let c = 0; c < width; c += 1) {
-      columns[c].push(String(rowCells[c] ?? ""));
+      columns[c].push(String(dataCells[c] ?? ""));
     }
   }
 
-  return { headerRaw, header: canonical, columns };
+  return { headerRaw: filteredHeader, header: canonical, columns };
 }
 
 function csvEscape(value) {
@@ -353,7 +393,20 @@ function csvTextFromMapSentence(mapSentence) {
   const entries = mapSentence?.ob?.map ?? {};
   const headerRaw = entries["header raw"]?.ve?.values;
   const header = entries.header?.ve?.values;
-  const headers = Array.isArray(headerRaw) ? headerRaw : header;
+  let headers = Array.isArray(headerRaw) ? headerRaw : header;
+  if (Array.isArray(headerRaw)) {
+    const seen = new Set();
+    let defective = false;
+    for (const cell of headerRaw) {
+      const key = String(cell ?? "").replace(/\\s+/g, " ").trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        defective = true;
+        break;
+      }
+      seen.add(key);
+    }
+    if (defective) headers = header;
+  }
   if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {
     throwErrorSentence({
       name: "csv columns defective",
@@ -893,22 +946,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       try {
         parsed = parseCsvText(normalizedText, { source: "compile csv" });
       } catch (err) {
-        if (!sourceFilename) {
-          throw err;
-        }
-        markDeclared(declared, targetName);
-        if (declaredTypes) declaredTypes.set(targetName, "text");
-        if (lang === "c") {
-          if (cHelpers) {
-            cHelpers.usesTextHelper = true;
-            cHelpers.usesString = true;
-          }
-          const safeName = sanitizeName(targetName);
-          return `char ${safeName}[PYA_TEXT_CAP] = ${JSON.stringify(normalizedText)};`;
-        }
-        const safeName = sanitizeName(targetName);
-        const payload = JSON.stringify({ su: { name: targetName }, ob: { text: normalizedText }, be: "text", mood: "ya" });
-        return `const ${safeName} = ${payload};\nglobalThis[${JSON.stringify(targetName)}] = ${safeName};`;
+        throw err;
       }
       const map = {
         "header raw": { ve: { type: "text", values: parsed.headerRaw } },
@@ -2839,10 +2877,13 @@ let lines = [header];
       prelude.push(`function jsonFromMap(name, seen = new Set()) {\n  const map = globalThis[name];\n  if (!map || map.be !== \"json map\") throw new Error(\"json map referential defective\");\n  const mapName = map.su?.name ?? name;\n  if (seen.has(mapName)) throw new Error(\"json map export self referential\");\n  seen.add(mapName);\n  const out = {};\n  const entries = map.ob?.map ?? {};\n  for (const key of Object.keys(entries)) {\n    const value = entries[key];\n    let jsonValue;\n    if (value?.hollow) jsonValue = null;\n    else if (value?.text !== undefined) jsonValue = value.text;\n    else if (value?.num !== undefined) jsonValue = value.num;\n    else if (value?.boolean !== undefined) jsonValue = value.boolean;\n    else if (value?.ve) {\n      const type = value.ve.type || \"num\";\n      if (type === \"hollow\") jsonValue = [];\n      else if (type === \"name\") jsonValue = (value.ve.values || []).map((child) => jsonFromMap(child, seen));\n      else if (type === \"bool\" || type === \"boolean\") jsonValue = (value.ve.values || []).map((v) => v === \"truth\" || v === true || v === 1);\n      else if (type === \"num\" || type === \"number\" || type === \"text\") jsonValue = value.ve.values || [];\n      else throw new Error(\"json map contents defective: unsupported vector type \" + type);\n    } else if (value?.name) {\n      jsonValue = jsonFromMap(value.name, seen);\n    } else if (value && Object.keys(value).length > 0) {\n      throw new Error(\"json map contents defective: unsupported contents\");\n    }\n    if (jsonValue !== undefined) out[key] = jsonValue;\n  }\n  seen.delete(mapName);\n  return out;\n}\nfunction canonicalizeJson(value) {\n  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;\n  const compareUtf8 = (a, b) => {\n    if (a === b) return 0;\n    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));\n    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));\n    const len = Math.min(bufA.length, bufB.length);\n    for (let i = 0; i < len; i += 1) {\n      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;\n    }\n    return bufA.length < bufB.length ? -1 : 1;\n  };\n  if (Array.isArray(value)) return value.map((item) => canonicalizeJson(item));\n  if (value && typeof value === \"object\") {\n    const out = {};\n    const keys = Object.keys(value).sort(compareUtf8);\n    for (const key of keys) out[key] = canonicalizeJson(value[key]);\n    return out;\n  }\n  return value;\n}\nfunction formatJsonMap(name, mode = \"canonical\") {\n  const json = jsonFromMap(name);\n  if (mode === \"pretty\") return JSON.stringify(json, null, 2);\n  return JSON.stringify(canonicalizeJson(json));\n}`);
     }
     if (jsHelpers.usesCsvMap) {
-      prelude.push(`function csvEscape(value) {\n  const str = String(value ?? \"\");\n  if (/[\",\\n\\r]/.test(str)) {\n    return \"\\\"\" + str.replace(/\"/g, \"\\\"\\\"\") + \"\\\"\";\n  }\n  return str;\n}\nfunction formatCsvMap(name) {\n  const fact = globalThis[name];\n  if (fact?.be === \"text\") return String(fact.ob?.text ?? \"\");\n  if (!fact || fact.be !== \"csv map\") throw new Error(\"csv columns defective\");\n  const entries = fact.ob?.map ?? {};\n  const headerRaw = entries[\"header raw\"]?.ve?.values;\n  const header = entries.header?.ve?.values;\n  const headers = Array.isArray(headerRaw) ? headerRaw : header;\n  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {\n    throw new Error(\"csv columns defective\");\n  }\n  const columns = header.map((key) => {\n    const col = entries[key];\n    if (!col?.ve?.values || col.ve.type !== \"text\") {\n      throw new Error(\"csv columns defective\");\n    }\n    return col.ve.values.map((v) => String(v ?? \"\"));\n  });\n  const length = columns[0]?.length ?? 0;\n  for (const col of columns) {\n    if (col.length !== length) {\n      throw new Error(\"csv columns defective\");\n    }\n  }\n  const lines = [];\n  lines.push(headers.map(csvEscape).join(\",\"));\n  for (let i = 0; i < length; i += 1) {\n    const row = columns.map((col) => csvEscape(col[i] ?? \"\"));\n    lines.push(row.join(\",\"));\n  }\n  return lines.join(\"\\n\") + \"\\n\";\n}`);
+      prelude.push(`function csvEscape(value) {\n  const str = String(value ?? \"\");\n  if (/[\",\\n\\r]/.test(str)) {\n    return \"\\\"\" + str.replace(/\"/g, \"\\\"\\\"\") + \"\\\"\";\n  }\n  return str;\n}\nfunction formatCsvMap(name) {\n  const fact = globalThis[name];\n  if (fact?.be === \"text\") return String(fact.ob?.text ?? \"\");\n  if (!fact || fact.be !== \"csv map\") throw new Error(\"csv columns defective\");\n  const entries = fact.ob?.map ?? {};\n  const headerRaw = entries[\"header raw\"]?.ve?.values;\n  const header = entries.header?.ve?.values;\n  let headers = Array.isArray(headerRaw) ? headerRaw : header;\n  if (Array.isArray(headerRaw)) {\n    const seen = new Set();\n    let defective = false;\n    for (const cell of headerRaw) {\n      const key = String(cell ?? \"\").replace(/\\s+/g, \" \").trim().toLowerCase();\n      if (!key || seen.has(key)) { defective = true; break; }\n      seen.add(key);\n    }\n    if (defective) headers = header;\n  }\n  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {\n    throw new Error(\"csv columns defective\");\n  }\n  const columns = header.map((key) => {\n    const col = entries[key];\n    if (!col?.ve?.values || col.ve.type !== \"text\") {\n      throw new Error(\"csv columns defective\");\n    }\n    return col.ve.values.map((v) => String(v ?? \"\"));\n  });\n  const length = columns[0]?.length ?? 0;\n  for (const col of columns) {\n    if (col.length !== length) {\n      throw new Error(\"csv columns defective\");\n    }\n  }\n  const lines = [];\n  lines.push(headers.map(csvEscape).join(\",\"));\n  for (let i = 0; i < length; i += 1) {\n    const row = columns.map((col) => csvEscape(col[i] ?? \"\"));\n    lines.push(row.join(\",\"));\n  }\n  return lines.join(\"\\n\") + \"\\n\";\n}`);
     }
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
+    }
+    if (jsHelpers.usesCsvRuntime) {
+      prelude.splice(1, 0, `import { parse as parseCsv } from ${JSON.stringify(CSV_PARSE_RUNTIME_URL)};`);
     }
     if (loopShim.used) {
       const loopHelper = `function runLoop(sentence, fn) {\n  for (;;) {\n    const currIdx = sentence?.fromindex?.num ?? sentence?.fromindex ?? 0;\n    const hasUntil = sentence?.toindex !== undefined;\n    const currUntil = sentence?.toindex?.num ?? sentence?.toindex;\n    sentence.fromindex = currIdx;\n    if (hasUntil) sentence.toindex = currUntil;\n    if (hasUntil ? currIdx === currUntil : currIdx === 0) break;\n    const prevIdx = sentence?.fromindex;\n    const prevUntil = sentence?.toindex;\n    const nextSentence = fn(sentence);\n    sentence = { ...sentence, ...(nextSentence || {}) };\n    if (sentence.fromindex === undefined) sentence.fromindex = prevIdx;\n    if (sentence.toindex === undefined) sentence.toindex = prevUntil;\n    let nextIdx;\n    if (hasUntil) {\n      nextIdx = currIdx + (currUntil > currIdx ? 1 : -1);\n    } else {\n      nextIdx = currIdx - 1;\n    }\n    sentence.fromindex = nextIdx;\n  }\n  return sentence;\n}`;

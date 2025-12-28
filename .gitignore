@@ -1,3 +1,4 @@
 examples/out/*.js
 examples/out/*.c
 know/input/
+node_modules/

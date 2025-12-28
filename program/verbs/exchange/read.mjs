@@ -4,6 +4,7 @@ import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import importFromSentence from "./import.mjs";
+import { parse as parseCsv } from "csv-parse/sync";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -15,68 +16,17 @@ function detectType(value) {
 }
 
 function parseCsvText(text, { source }) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
+  const rows = parseCsv(text, {
+    relax_column_count: true,
+    relax_quotes: false,
+    skip_empty_lines: false
+  });
 
-  const pushField = () => {
-    row.push(field);
-    field = "";
-  };
-  const pushRow = () => {
-    rows.push(row);
-    row = [];
-  };
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === "\"") {
-        if (text[i + 1] === "\"") {
-          field += "\"";
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === "\"") {
-      inQuotes = true;
-      continue;
-    }
-
-    if (ch === ",") {
-      pushField();
-      continue;
-    }
-
-    if (ch === "\n") {
-      pushField();
-      pushRow();
-      continue;
-    }
-
-    if (ch === "\r") {
-      if (text[i + 1] === "\n") i += 1;
-      pushField();
-      pushRow();
-      continue;
-    }
-
-    field += ch;
-  }
-
-  if (field.length > 0 || row.length > 0) {
-    pushField();
-    pushRow();
-  }
-
-  if (rows.length === 0 || rows[0].length === 0) {
+  const firstCellLower = (row) => String(row?.[0] ?? "").trim().toLowerCase();
+  const nonEmptyRowIndex = rows.findIndex((row) =>
+    Array.isArray(row) && row.some((cell) => String(cell ?? "").trim() !== "")
+  );
+  if (nonEmptyRowIndex < 0) {
     throwErrorSentence({
       name: "csv header defective",
       message: "csv header defective",
@@ -85,15 +35,52 @@ function parseCsvText(text, { source }) {
     });
   }
 
-  const headerRaw = rows[0];
-  const canonical = headerRaw.map((cell) =>
+  let headerRowIndex = rows.findIndex((row) => firstCellLower(row) === "column labels:");
+  const isTemplate = headerRowIndex >= 0;
+  if (!isTemplate) headerRowIndex = nonEmptyRowIndex;
+
+  const headerRow = rows[headerRowIndex] || [];
+  const headerRaw = isTemplate ? headerRow.slice(1) : headerRow;
+  let dropIndices = new Set();
+  if (isTemplate) {
+    const nameRowIndex = rows.findIndex(
+      (row, idx) => idx > headerRowIndex && firstCellLower(row) === "column name:"
+    );
+    const nameRow = nameRowIndex >= 0 ? rows[nameRowIndex].slice(1) : null;
+    dropIndices = new Set(
+      headerRaw
+        .map((cell, idx) => {
+          if (String(cell ?? "").trim() !== "") return null;
+          const marker = nameRow ? String(nameRow[idx] ?? "").trim() : "";
+          if (marker === "~" || marker === "") return idx;
+          return null;
+        })
+        .filter((idx) => idx !== null)
+    );
+  }
+  const filteredHeader = headerRaw.filter((_, idx) => !dropIndices.has(idx));
+  let canonical = filteredHeader.map((cell) =>
     String(cell ?? "")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase()
   );
+  if (isTemplate) {
+    const counts = new Map();
+    canonical = canonical.map((key) => {
+      if (!key) return key;
+      const count = counts.get(key) ?? 0;
+      counts.set(key, count + 1);
+      if (count === 0) return key;
+      return `${key} ${count + 1}`;
+    });
+  }
 
   const seen = new Set();
+  const headerColumnOffset = isTemplate ? 2 : 1;
+  const filteredIndexMap = headerRaw
+    .map((_, idx) => idx)
+    .filter((idx) => !dropIndices.has(idx));
   for (let i = 0; i < canonical.length; i += 1) {
     const key = canonical[i];
     if (!key) {
@@ -101,39 +88,68 @@ function parseCsvText(text, { source }) {
         name: "csv header defective",
         message: "csv header defective",
         from: { name: source },
-        raw: { key, line: 1, column: i + 1 }
+        raw: { key, line: headerRowIndex + 1, column: filteredIndexMap[i] + headerColumnOffset }
       });
     }
-    if (seen.has(key)) {
+    if (!isTemplate && seen.has(key)) {
       throwErrorSentence({
         name: "csv header defective",
         message: `csv header defective: duplicate header key ${key}`,
         from: { name: source },
-        raw: { key, line: 1, column: i + 1 }
+        raw: { key, line: headerRowIndex + 1, column: filteredIndexMap[i] + headerColumnOffset }
       });
     }
     seen.add(key);
   }
 
   const width = canonical.length;
+  if (width === 0) {
+    throwErrorSentence({
+      name: "csv header defective",
+      message: "csv header defective",
+      from: { name: source },
+      raw: { line: headerRowIndex + 1, column: headerColumnOffset }
+    });
+  }
   const columns = canonical.map(() => []);
-  for (let r = 1; r < rows.length; r += 1) {
-    const rowCells = rows[r];
-    if (rowCells.length > width) {
+  const metaLabels = new Set([
+    "column name:",
+    "mandatory:",
+    "type:",
+    "info:",
+    "doctype:",
+    "start entering data below this line"
+  ]);
+  let dataStart = headerRowIndex + 1;
+  if (isTemplate) {
+    const startIndex = rows.findIndex(
+      (row, idx) => idx > headerRowIndex && firstCellLower(row) === "start entering data below this line"
+    );
+    if (startIndex >= 0) dataStart = startIndex + 1;
+  }
+  for (let r = dataStart; r < rows.length; r += 1) {
+    const rowCells = rows[r] || [];
+    const firstLower = firstCellLower(rowCells);
+    if (isTemplate && (metaLabels.has(firstLower))) continue;
+    if (isTemplate && rowCells.every((cell) => String(cell ?? "").trim() === "")) continue;
+    const dataCells = (isTemplate ? rowCells.slice(1) : rowCells).filter(
+      (_, idx) => !dropIndices.has(idx)
+    );
+    if (dataCells.length > width) {
       throwErrorSentence({
         name: "csv row defective",
         message: "csv row defective",
         from: { name: source },
-        raw: { row: r, line: r + 1, column: rowCells.length }
+        raw: { row: r, line: r + 1, column: dataCells.length + (isTemplate ? 1 : 0) }
       });
     }
-    while (rowCells.length < width) rowCells.push("");
+    while (dataCells.length < width) dataCells.push("");
     for (let c = 0; c < width; c += 1) {
-      columns[c].push(String(rowCells[c] ?? ""));
+      columns[c].push(String(dataCells[c] ?? ""));
     }
   }
 
-  return { headerRaw, header: canonical, columns };
+  return { headerRaw: filteredHeader, header: canonical, columns };
 }
 
 export async function read_from_filename({ from }) {

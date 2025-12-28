@@ -188,7 +188,20 @@ function csvTextFromMapName(name, { rememberFn } = {}) {
   const entries = fact?.ob?.map ?? {};
   const headerRaw = entries["header raw"]?.ve?.values;
   const header = entries.header?.ve?.values;
-  const headers = Array.isArray(headerRaw) ? headerRaw : header;
+  let headers = Array.isArray(headerRaw) ? headerRaw : header;
+  if (Array.isArray(headerRaw)) {
+    const seen = new Set();
+    let defective = false;
+    for (const cell of headerRaw) {
+      const key = String(cell ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        defective = true;
+        break;
+      }
+      seen.add(key);
+    }
+    if (defective) headers = header;
+  }
   if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {
     throwErrorSentence({
       name: "csv columns defective",

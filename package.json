@@ -9,5 +9,8 @@
     "run": "node program/command/run_pya_program.mjs",
     "trace": "node program/command/read_pya_trace.mjs",
     "compile": "node program/command/run_pya_program.mjs --gross"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.0"
   }
 }
