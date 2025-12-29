@@ -4,7 +4,7 @@
 
 ## 1. Purpose
 
-Define CSV interop for Pyash using **canonical, speakable** `def … prah` constructions (no literals), with **deterministic ordering** for parsing, iteration, and emission.
+Define CSV interop for Pyash using **official, speakable** `def … prah` constructions (no literals), with **deterministic ordering** for parsing, iteration, and emission.
 
 This spec defines:
 
@@ -24,10 +24,10 @@ The CSV map has:
 * `header raw` : `ve text`
   Original header cells as read from the file, in file order.
 * `header` : `ve text`
-  Canonical header keys used as Pyash switches, in the same order.
-* one entry per canonical header key, where each value is a `ve text` column of equal length.
+  Official header keys used as Pyash switches, in the same order.
+* one entry per official header key, where each value is a `ve text` column of equal length.
 
-Canonical construction shape:
+Official construction shape:
 
 ```pyash
 su name <csv> be csv map def
@@ -46,9 +46,9 @@ CSV headers are messy. `header raw` preserves what humans wrote so roundtrip out
 
 ---
 
-## 3. Canonical header key rules (normative)
+## 3. Official header key rules (normative)
 
-Given a raw header cell text `h`, the canonical key `k` is produced by:
+Given a raw header cell text `h`, the official key `k` is produced by:
 
 1. trim leading and trailing whitespace
 2. collapse runs of whitespace to a single space
@@ -57,9 +57,9 @@ Given a raw header cell text `h`, the canonical key `k` is produced by:
 Constraints:
 
 * `k` must be non-empty
-* canonical keys must be unique within the header
+* official keys must be unique within the header
 
-If any key is empty or duplicates occur after canonicalisation, raise `csv header defective`.
+If any key is empty or duplicates occur after officialisation, raise `csv header defective`.
 
 ---
 
@@ -108,7 +108,7 @@ Column order is the order of keys in `<csv> ti header`.
 
 Row order is the index order within each column vector: `0..R-1`.
 
-### 5.3 Canonical construction order
+### 5.3 Official construction order
 
 When constructing the CSV map via `def … prah`, implementations MUST emit entries in this order:
 
@@ -116,7 +116,7 @@ When constructing the CSV map via `def … prah`, implementations MUST emit entr
 2. `header`
 3. each column entry in `header` order (`k0`, `k1`, …)
 
-This makes the canonical `def` chain stable across interpreter, JS, and C outputs.
+This makes the official `def` chain stable across interpreter, JS, and C outputs.
 
 ### 5.4 Deterministic row reconstruction
 
@@ -175,7 +175,7 @@ Errors are raised as standard error sentences. Stable error names:
 
 * `csv lost` (file missing or unreadable)
 * `csv defective` (general parse failure)
-* `csv header defective` (invalid header or duplicate canonical keys)
+* `csv header defective` (invalid header or duplicate official keys)
 * `csv row defective` (row has too many fields)
 * `csv columns defective` (missing columns or mismatched lengths)
 
@@ -211,7 +211,7 @@ Behaviour is normative, surface wording may vary.
 
 * `ob text <raw> to name <key> be csv key do`
 
-Returns the canonical key produced by §3, so tooling can explain key mapping.
+Returns the official key produced by §3, so tooling can explain key mapping.
 
 ### 9.3 Row view helper (optional, for later group-by work)
 
@@ -223,16 +223,16 @@ Returns a row map constructed in header order, where each key maps to the cell t
 
 ## 10. Deterministic tests (recommended)
 
-* parse determinism: same input yields identical canonical `def … prah` ordering and content
+* parse determinism: same input yields identical official `def … prah` ordering and content
 * roundtrip: parse → emit → parse preserves:
 
   * `header raw` text values
-  * `header` canonical keys
+  * `header` official keys
   * all cell text values
   * column and row counts
 * errors:
 
   * missing file triggers `csv lost`
-  * duplicate canonical header triggers `csv header defective`
+  * duplicate official header triggers `csv header defective`
   * wide row triggers `csv row defective`
   * mismatched columns triggers `csv columns defective`

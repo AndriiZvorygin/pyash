@@ -454,6 +454,11 @@ export function parse(line) {
       }
     }
 
+    if (current && slot && t === "unspecified") {
+      slot.unspecified = true;
+      continue;
+    }
+
     if (current && slot && t === "hollow") {
       slot.hollow = true;
       continue;

@@ -1,7 +1,7 @@
 # Control Flow
 
 ## 1. Purpose
-Define canonical conditionals and loop semantics.
+Define official conditionals and loop semantics.
 
 ## 2. Terms
 - conditional: `tiny`/`giant`/`equally` with an inline `then` consequence.

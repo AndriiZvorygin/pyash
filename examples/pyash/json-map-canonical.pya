@@ -8,7 +8,7 @@ su name b ob num 2 ya
 su name a ob num 1 ya
 su name aa ob num 3 ya
 su name inner ob name inner ya
-su name skip ya
+su name skip ob unspecified ya
 prah
 
 ob name sample to state json be write do

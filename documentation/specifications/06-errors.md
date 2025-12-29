@@ -1,7 +1,7 @@
 # Errors
 
 ## 1. Purpose
-Define the error sentence contract and canonical error names.
+Define the error sentence contract and official error names.
 
 ## 2. Terms
 - error sentence: a `be error do` sentence thrown as an exception.

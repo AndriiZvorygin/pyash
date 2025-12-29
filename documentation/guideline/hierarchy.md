@@ -8,7 +8,7 @@ This document defines:
 
 ## 1) Repository layout
 
-Canonical top-level names
+Official top-level names
 - `program/`         Authored code (Pyash language, runtime, compiler, bridge, verbs)
 - `module/`          Imported or vendored Pyash modules
 - `specification/`   Language and runtime specifications
@@ -74,7 +74,7 @@ pyash/
 
 ## 2) Linux filesystem gloss (speakable FHS sugar)
 
-Real absolute paths remain canonical. This gloss provides speakable aliases that round-trip.
+Real absolute paths remain official. This gloss provides speakable aliases that round-trip.
 
 Gloss roots
 - `root`        -> `/`
@@ -111,7 +111,7 @@ Common compounds
 
 ### Parsing rules
 
-- A path starting with `/` is canonical and stays unchanged.
+- A path starting with `/` is official and stays unchanged.
 - A gloss path starts with one gloss root segment, then `/`.
 - Expansion replaces the first segment using the table above, then joins the remainder.
 

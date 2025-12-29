@@ -79,7 +79,7 @@ so Pyash becomes a stable **pivot language** between people and machines.
 
 10. **Deterministic JSON artefacts**
 
-   * JSON output defaults to RFC 8785 canonical form via `to state json`.
+   * JSON output defaults to RFC 8785 official form via `to state json`.
    * Use `to state beautiful json` for human-readable pretty output.
 
 ---

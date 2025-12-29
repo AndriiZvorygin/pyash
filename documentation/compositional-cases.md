@@ -26,15 +26,15 @@ Every case is understood as:
 * **quantity** – counts, rates, loop registers (`times`/`per`)
 * **sequence** – ordered positions / indices (`fromindex` / `atindex` / `toindex`)
 
-The **hex value** of the case (the `hnuc` field) is the canonical ID.  
+The **hex value** of the case (the `hnuc` field) is the official ID.  
 The `(axis, context)` reading is provided by lookup tables.
 
 So for example (semantically):
 
 * “from file” is **SOURCE + space**
 * “to file” is **DESTINATION + space**
-* “as C” is **WAY + state** (canonical keyword `via`)
-* “into LLVM IR” is **DESTINATION + state** (canonical keyword `become`)
+* “as C” is **WAY + state** (official keyword `via`)
+* “into LLVM IR” is **DESTINATION + state** (official keyword `become`)
 
 All of those are backed by specific case codes, but the system thinks of them as part of a regular grid.
 
@@ -57,7 +57,7 @@ Each entry looks like:
 ````
 
 * `en`   → English-ish name of the word (used as a stable key).
-* `hnuc` → 16-bit code in hex, the canonical symbol ID in the language.
+* `hnuc` → 16-bit code in hex, the official symbol ID in the language.
 * `pya`  → the Pyash phonological shape (syllable / cluster).
 
 There are two versions of most cases:
@@ -95,7 +95,7 @@ It is a table:
 * **rows** = contexts (`space`, `interior`, `surface`, `under`, `time`, `state`, `person`, `social`, `discourse`)
 * **columns** = axes (`source`, `way`, `destination`)
 
-Each cell chooses a canonical `*_case_` word from `pyashWords.json` and ties it to:
+Each cell chooses a official `*_case_` word from `pyashWords.json` and ties it to:
 
 * its `hnuc` hex,
 * its `pya` syllable,
@@ -303,7 +303,7 @@ This is what the Node code and Codex should use when they see a case hex coming 
 
    * which **context** it belongs to,
    * which **axis** it expresses,
-   * and which canonical **keyword** it corresponds to.
+   * and which official **keyword** it corresponds to.
 
 ---
 
@@ -354,7 +354,7 @@ When generating or modifying Pyash-related code:
    Use `contextKeywords` + `axisContextToKeyword` to choose the right combination.
 
 2. **Use `compositionalGrid` / `compositionalByHnuc` for case codes.**
-   The hex `hnuc` is the canonical identity of a case.
+   The hex `hnuc` is the official identity of a case.
 
 3. **Use the object keywords for multi-object sentences.**
    Map:

@@ -20,7 +20,7 @@ Small, normative modules. Each one 1–3 pages, same template.
   Define/invoke, `this`, registers, return contract.
 
 * `05-control-flow.md`
-  Canonical conditional form, loops (`fromindex/toindex`), stop rules.
+  Official conditional form, loops (`fromindex/toindex`), stop rules.
 
 * `06-errors.md`
   Error sentence contract, stable error names, where errors originate.
