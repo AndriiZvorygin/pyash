@@ -79,7 +79,7 @@ emit, step
 
 * `vyah` MAY contain **zero or one** aspect modifier
 * If more than one aspect modifier is present, the sentence is invalid
-* If no aspect modifier is present, the **effective aspect** is `do`
+* If no aspect modifier is present, the **effective aspect** is `eval`
 * The effective aspect participates in **signature derivation and dispatch**
 
 ---

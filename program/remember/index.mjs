@@ -73,11 +73,12 @@ export function doRemember(sentence) {
   // shift definition indexes accordingly. New fact is appended to
   // preserve chronological order after the triggering command.
   const isDefinitionRecording = state.definitionStack.length > 0 && !state.executingBody;
-  if (!isSandpit && !isDefinitionRecording && subjName && !isDef && !isPrah && sentence.mood !== "then") {
+  if (!isSandpit && !isDefinitionRecording && subjName && !isDef && !isPrah && sentence.mood !== "then" && sentence.mood !== "do") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
       if (existing.su?.name !== subjName) continue;
       if (existing.mood === "def" || existing.mood === "prah") break;
+      if (existing.mood === "do") continue;
       if (isInsideDefinition(i)) continue; // protect entries recorded inside def/prah blocks
       memory.splice(i, 1);
       adjustDefinitionIndices(i);
@@ -106,6 +107,7 @@ export function remember(name) {
   for (let i = memory.length - 1; i >= 0; i--) {
     const s = memory[i];
     if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
+    if (s.mood === "do") continue;
     if (s.su?.name === name) return s;
   }
   return undefined;

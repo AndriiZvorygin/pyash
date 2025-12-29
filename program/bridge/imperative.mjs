@@ -7,6 +7,7 @@ import { resolveThisValue } from "../library/thisBinding.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
+import { handleLifecycleAspect } from "./runtime.mjs";
 
 function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -151,6 +152,21 @@ export async function handleImperative({
     if (resolved !== undefined) {
       sentence.by = { num: resolved };
     }
+  }
+
+  const lifecycleResult = handleLifecycleAspect(sentence, { remember: memory.remember, doRemember: memory.doRemember });
+  if (lifecycleResult) {
+    if (lifecycleResult?.mood && lifecycleResult?.be) {
+      if (lifecycleResult.ob !== undefined) {
+        memory.doRemember({
+          su: { name: "result" },
+          ob: lifecycleResult.ob,
+          be: lifecycleResult.be,
+          mood: "ya"
+        });
+      }
+    }
+    return lifecycleResult;
   }
 
   const hasSequenceRegisters =
@@ -353,6 +369,21 @@ export async function handleImperative({
   };
 
   const result = await fn(callSentence, { remember: memory.remember });
+
+  if (result?.mood && result?.be && result?.su) {
+    if (result.be !== "chip") {
+      memory.doRemember(result);
+    }
+    if (result.ob !== undefined) {
+      memory.doRemember({
+        su: { name: "result" },
+        ob: result.ob,
+        be: result.be,
+        mood: "ya"
+      });
+    }
+    return result;
+  }
 
   // record the command itself in history
   memory.doRemember(sentence);

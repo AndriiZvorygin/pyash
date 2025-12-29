@@ -65,6 +65,30 @@ export function sentenceToPyash(s = {}) {
     if (ordered.length) parts.push(ordered);
   }
 
+  if (s.as) {
+    parts.push("as");
+    const np = npToPyash(s.as);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.fromindex) {
+    parts.push("fromindex");
+    const np = npToPyash(s.fromindex);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.atindex) {
+    parts.push("atindex");
+    const np = npToPyash(s.atindex);
+    if (np) parts.push(np.split(" "));
+  }
+
+  if (s.toindex) {
+    parts.push("toindex");
+    const np = npToPyash(s.toindex);
+    if (np) parts.push(np.split(" "));
+  }
+
   if (s.to) {
     parts.push("to");
     const np = npToPyash(s.to);
