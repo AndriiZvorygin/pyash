@@ -221,7 +221,10 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
 
   if (mergedObj !== undefined || preferredVal !== undefined) {
     const normalizedObj = typeof effectiveObj === "object" ? effectiveObj : { num: effectiveObj };
-    const updatedEvoke = { ...evoke, ob: normalizedObj };
+    if (evoke.mood === "do") {
+      memory.doRemember(evoke);
+    }
+    const updatedEvoke = { ...evoke, ob: normalizedObj, mood: evoke.mood === "do" ? "ya" : evoke.mood };
     memory.doRemember(updatedEvoke);
 
     if (to?.name) {

@@ -41,7 +41,7 @@ export function getEffectiveVyahAspect(values = [], { verb = "", caseKey = "vyah
       raw: { verb, case: caseKey, modifiers: values }
     });
   }
-  return aspects[0] ?? "do";
+  return aspects[0] ?? "eval";
 }
 
 export function orderVyahModifiers(values = []) {

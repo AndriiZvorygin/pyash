@@ -272,10 +272,16 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
       if (factObj?.text !== undefined) return ["text"];
       if (factObj?.filename !== undefined) return ["filename"];
       if (factObj?.ve?.values) return ["vec", normalizeWords(vecType) || "num"].filter(Boolean);
+      if (inferred?.be === "duty") return ["duty"];
+      if (inferred?.be === "stream") return ["stream"];
+      if (inferred?.be === "chip") return ["chip"];
       if (inferred?.be === "mind") return ["mind"];
       return ["num"];
     }
 
+    if (inferred?.be === "duty") return ["name", "duty"];
+    if (inferred?.be === "stream") return ["name", "stream"];
+    if (inferred?.be === "chip") return ["name", "chip"];
     if (inferred?.be === "mind") return ["name", "mind"];
     if (inferred?.be === "csv map") return ["name", "csv", "map"];
     if (inferred?.be === "json map") return ["name", "json", "map"];
