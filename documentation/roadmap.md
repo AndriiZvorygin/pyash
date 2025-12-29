@@ -101,6 +101,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Dec 25, 2025: v0.2 freeze sprint complete (maps + JSON determinism lock)
 
 * Explicit note: no inline map literal; def/prah is official
+* `be map def` confirmed as the configuration format baseline
 * Determinism locked (RFC 8785 official JSON by default):
 
   * JSON export key ordering rule (stated + golden)
@@ -128,17 +129,19 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Hardening: multi-file golden tests across interpreter/JS/C
 * Backend parity gate enforced by compile tests
 
-### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete
+### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete (maps done)
 
 * YAML spec v0.1 implemented (`32-yaml.md`) with deterministic official ordering.
 * Parity goldens for interpreter/JS/C (YAML → Pyash, Pyash → YAML → Pyash).
 * YAML inline compile precompute for JS/C (no runtime YAML dependency when inline).
 * CSV → Pyash and Pyash → CSV → Pyash parity in interpreter/JS/C.
+* `be map def` now locked as the configuration format baseline.
+* Maps/JSON/YAML/CSV parity + determinism now considered done.
 
 ---
 ## Week 1: Real-world inputs tranche v0.35
 
-**Dec 27, 2025 → Jan 2, 2026**
+**Dec 29, 2025 → Jan 4, 2026**
 
 ### Ship
 
@@ -165,7 +168,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ## Week 2: Pipeline + replay + logging v0.6
 
-**Jan 3 → Jan 9, 2026**
+**Jan 5 → Jan 11, 2026**
 
 ### Ship
 
@@ -194,7 +197,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ## Week 3: Media IO v0.4
 
-**Jan 10 → Jan 16, 2026**
+**Jan 12 → Jan 18, 2026**
 
 ### Ship
 
