@@ -29,8 +29,8 @@ test("compile full module import to javascript and run", async () => {
 
   const mapText = [
     "su name settings be map def",
-    "su name mode ob text \"ready\" ya",
     "su name limit ob num 3 ya",
+    "su name mode ob text \"ready\" ya",
     "prah"
   ].join("\n");
 

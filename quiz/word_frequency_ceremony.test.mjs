@@ -24,6 +24,6 @@ test("word frequency ceremony counts tokens into map", async () => {
 
   const map = remember("wordmap");
   assert.equal(map?.be, "map");
-  assert.equal(map?.ob?.map?.one?.num, 1);
-  assert.equal(map?.ob?.map?.two?.num, 2);
+  assert.equal(map?.ob?.map?.one?.ob?.num, 1);
+  assert.equal(map?.ob?.map?.two?.ob?.num, 2);
 });

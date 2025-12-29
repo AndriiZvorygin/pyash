@@ -37,8 +37,8 @@ test("compile full module import to C and run", async () => {
 
   assert.deepEqual(stdout.trim().split(/\r?\n/), [
     "su name settings be map def",
-    "su name mode ob text \"ready\" ya",
     "su name limit ob num 3 ya",
+    "su name mode ob text \"ready\" ya",
     "prah",
     "2",
     "5",

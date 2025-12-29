@@ -128,7 +128,9 @@ function jsonRuntimeHelper() {
     "      throw new Error(\"json map contents defective: object expected\");",
     "    }",
     "    const map = {};",
-    "    for (const [key, val] of Object.entries(ob)) {",
+    "    const orderedKeys = Object.keys(ob).sort(compareUtf8);",
+    "    for (const key of orderedKeys) {",
+    "      const val = ob[key];",
     "      const objValue = jsonValueToObj(val, { parentName: name, key, used, emitMap });",
     "      if (objValue === undefined) continue;",
     "      map[key] = objValue;",
@@ -2626,7 +2628,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
             lines.push(`snprintf(_key_buf, sizeof(_key_buf), "%s", (${rawKey}) ? "truth" : "lie");`);
             keyExpr = "_key_buf";
           }
-          lines.push(`pya_map_add_num(&${mapVar}, ${keyExpr}, ${Number.isNaN(safeValue) ? 0 : safeValue});`);
+          const addFn = targetType === "map" ? "pya_map_add_sentence_num" : "pya_map_add_num";
+          lines.push(`${addFn}(&${mapVar}, ${keyExpr}, ${Number.isNaN(safeValue) ? 0 : safeValue});`);
           return lines.join("\n");
         }
         const mapVar = sanitizeName(mapName);
