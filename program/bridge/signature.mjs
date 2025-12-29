@@ -1,4 +1,5 @@
 import { throwErrorSentence } from "../error.mjs";
+import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 
 // Build canonical signature words from a verb and its cases/types.
 export function makeSignatureWords({ be, cases }) {
@@ -94,7 +95,7 @@ export function deriveSignatureFromDefinition(sentence) {
     if (NON_CASE_FIELDS.has(key)) continue;
     if (key === "su") continue; // ceremony name, not a case
     if (SEQUENCE_REGISTERS.has(key)) continue;
-    const typeWords = normalizeDefinitionTypeWords(caseTypeWords(value));
+    const typeWords = normalizeDefinitionTypeWords(caseTypeWordsForDefinition(value, key, verb));
     if (typeWords.length === 0) continue;
     cases.push({ case: key, typeWords });
   }
@@ -173,6 +174,15 @@ function caseTypeWords(value) {
   return words.filter(Boolean);
 }
 
+function caseTypeWordsForDefinition(value, caseKey, verb) {
+  if (caseKey === "vyah") {
+    const modifiers = Array.isArray(value?.ve?.values) ? value.ve.values : [];
+    const aspect = getEffectiveVyahAspect(modifiers, { verb, caseKey });
+    return aspect ? [aspect] : ["do"];
+  }
+  return caseTypeWords(value);
+}
+
 function normalizeDefinitionTypeWords(typeWords) {
   if (!typeWords || typeWords.length === 0) return [];
 
@@ -227,6 +237,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (typeof value === "number") return ["num"];
     const normalized = normalizeWords(String(value));
     return normalized ? [normalized] : [];
+  }
+
+  if (caseKey === "vyah") {
+    const modifiers = Array.isArray(value?.ve?.values) ? value.ve.values : [];
+    const aspect = getEffectiveVyahAspect(modifiers, { verb, caseKey });
+    return aspect ? [aspect] : ["do"];
   }
 
   if (value.ve) {
