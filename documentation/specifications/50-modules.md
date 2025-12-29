@@ -1,6 +1,6 @@
 # `50-modules.md`
 
-**Status:** draft (v0.1 target)
+**Status:** v0.1
 
 ## 1. Purpose
 
