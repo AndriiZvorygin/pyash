@@ -1,4 +1,4 @@
-import { npToPyash } from "../../beautiful.mjs";
+import { npToPyash, sentenceToPyash } from "../../beautiful.mjs";
 
 function sanitizeNamePart(value) {
   const raw = String(value ?? "").trim();
@@ -129,6 +129,10 @@ export function mapSentenceToPyash(sentence) {
   const lines = [`su name ${name} be ${kind} def`];
   const entries = sentence?.ob?.map ?? {};
   for (const [key, ob] of Object.entries(entries)) {
+    if (kind === "map" && ob && typeof ob === "object" && ob.mood) {
+      lines.push(sentenceToPyash(ob));
+      continue;
+    }
     const objText = npToPyash(ob);
     lines.push(`su name ${key} ob ${objText} ya`);
   }
