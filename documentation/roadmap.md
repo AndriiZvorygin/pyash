@@ -139,36 +139,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Maps/JSON/YAML/CSV parity + determinism now considered done.
 
 ---
-## Week 1: Real-world inputs tranche v0.35
+## Week 1: Pipeline + replay + logging v0.6
 
 **Dec 29, 2025 → Jan 4, 2026**
-
-### Ship
-
-* Group-by + aggregates: count, sum
-* Configuration loading
-
-  * JSON and YAML config files
-  * merge precedence: CLI > env > config > defaults
-  * stable error sentences for missing and invalid config
-
-### Spec drops (freeze v0.35)
-
-* Config spec v0.1 (formats, precedence, error rules)
-
-### Hardening
-
-* Golden demos
-
-  * `csv_group_by.pya`
-  * `yaml_roundtrip.pya`
-  * `config_precedence.pya`
-
----
-
-## Week 2: Pipeline + replay + logging v0.6
-
-**Jan 5 → Jan 11, 2026**
 
 ### Ship
 
@@ -195,9 +168,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ---
 
-## Week 3: Media IO v0.4
+## Week 2: Media IO v0.4
 
-**Jan 12 → Jan 18, 2026**
+**Jan 5 → Jan 11, 2026**
 
 ### Ship
 
