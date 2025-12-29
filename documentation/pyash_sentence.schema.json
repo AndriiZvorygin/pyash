@@ -21,7 +21,7 @@
 
     "su": {
       "$ref": "#/$defs/caseValue",
-      "description": "Canonical subject slot."
+      "description": "Official subject slot."
     },
     "subj": {
       "$ref": "#/$defs/caseValue",
@@ -30,7 +30,7 @@
 
     "ob": {
       "$ref": "#/$defs/caseValue",
-      "description": "Canonical object / payload slot."
+      "description": "Official object / payload slot."
     },
     "obj": {
       "$ref": "#/$defs/caseValue",

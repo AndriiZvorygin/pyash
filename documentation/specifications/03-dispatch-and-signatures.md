@@ -4,7 +4,7 @@
 Define how signature words are derived and used for dispatch.
 
 ## 2. Terms
-- signature: canonical word list `be <verb> <case> <type> ...`.
+- signature: official word list `be <verb> <case> <type> ...`.
 - handler: built-in verb implementation.
 - ceremony: user-defined verb with a registered signature.
 

@@ -46,12 +46,12 @@ This document summarizes the current core language model used by the interpreter
 - Text concatenation uses `be add` with `ob text ...`.
 
 ## Conditionals
-- **Single canonical form**: `ob … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence.
+- **Single official form**: `ob … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence.
 - LHS/RHS can be numbers, names (resolved to sentence.ob fields), or genitives on `this`.
 
 ## Logging
 - `be write` logs `ob text`, or resolves `ob name`/genitive to a value. JS backend uses `console.log`; C uses `printf`.
-- JSON output defaults to RFC 8785 canonical form with `to state json`; use `to state beautiful json` for human-readable pretty JSON.
+- JSON output defaults to RFC 8785 official form with `to state json`; use `to state beautiful json` for human-readable pretty JSON.
 - `be write` is used for screen/file output and mind calls; `be say` is reserved for TTS flows.
 
 ## Memory Access

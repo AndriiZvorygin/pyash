@@ -71,6 +71,7 @@ const JSON_SCALAR_VECTORS = new Set(["num", "number", "text", "bool", "boolean",
 
 function jsonValueFromObj(ob, { rememberFn, seen }) {
   if (!ob || (typeof ob === "object" && Object.keys(ob).length === 0)) return undefined;
+  if (ob.unspecified) return undefined;
   if (ob.hollow) return null;
   if (ob.text !== undefined) return ob.text;
   if (ob.num !== undefined) return ob.num;

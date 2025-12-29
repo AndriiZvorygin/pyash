@@ -11,7 +11,7 @@ This note defines how **signatures** work in Pyash and how we use them for deter
 
 The goal:
 
-- Every Pyash **sentence** has a **canonical signature**.
+- Every Pyash **sentence** has a **official signature**.
 - Every **ceremony definition** (a `be ... def` block) declares one **signature** it implements.
 - Dispatch conceptually is: *build the sentence signature → look it up → run that ceremony*.
 
@@ -53,7 +53,7 @@ This document only specifies the **signature format**; it does not dictate how t
 
 ---
 
-## 2. Signature format (canonical word list)
+## 2. Signature format (official word list)
 
 A **signature** is a flat list of **words**, in the same spirit as Pyash sentences:
 
@@ -332,7 +332,7 @@ This document does not prescribe the argument order or const-ness; the key point
 
 ## 7. Signature keys and lookup
 
-The **canonical form** of a signature is the flat word list:
+The **official form** of a signature is the flat word list:
 
 ```txt
 ["be","neuron",
@@ -356,7 +356,7 @@ Possible lookup structures include:
 
 * A hash map / dictionary keyed by the joined string.
 * A sorted array of `[key, implementation]` pairs, using binary search on the key.
-* Any other structure that uses the same canonical word sequence as the basis of equality.
+* Any other structure that uses the same official word sequence as the basis of equality.
 
 This document does not require a particular data structure; it only specifies:
 

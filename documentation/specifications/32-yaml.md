@@ -53,7 +53,7 @@ This matches common configuration shapes, including docker compose.
 
 ## 4. Parsing (v0.1)
 
-### 4.1 Inputs (canonical)
+### 4.1 Inputs (official)
 
 Entry forms use `read` with `from state yaml`, mirroring CSV. :contentReference[oaicite:10]{index=10}
 
@@ -157,9 +157,9 @@ If merge value shape fails, raise `yaml defective`.
 
 ## 5. Deterministic construction order (normative)
 
-When producing the canonical `be json map def … prah` chain:
+When producing the official `be json map def … prah` chain:
 
-- entries MUST be emitted in canonical JSON key order (RFC 8785) :contentReference[oaicite:17]{index=17}
+- entries MUST be emitted in official JSON key order (RFC 8785) :contentReference[oaicite:17]{index=17}
 - nested maps follow the same rule
 - sequences emit elements in index order
 
@@ -219,7 +219,7 @@ Recommended payload fields:
 
 ---
 
-## 8. Canonical IO shapes (surface API)
+## 8. Official IO shapes (surface API)
 
 ### 8.1 Read
 
@@ -246,13 +246,13 @@ C:
 - build node graph with anchors, resolve aliases, detect cycles
 - apply scalar classification rules to scalar text
 - apply merge key behaviour
-- produce canonical `be json map def … prah` chain using RFC 8785 ordering
+- produce official `be json map def … prah` chain using RFC 8785 ordering
 
 ---
 
 ## 10. Deterministic tests (recommended)
 
-- determinism: same input yields identical canonical `def … prah` ordering and content
+- determinism: same input yields identical official `def … prah` ordering and content
 - compose compatibility: parse common docker-compose.yml patterns including anchors and extension fields :contentReference[oaicite:19]{index=19}
 - roundtrip semantics: parse → emit (`to state yaml`) → parse preserves the JSON value tree
 - errors:

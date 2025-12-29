@@ -122,7 +122,7 @@ JSON map rules:
 
 Map storage options in Stage 1:
 - hash map for lookup
-- optional sorted key cache for JSON maps (for canonical enumeration / export)
+- optional sorted key cache for JSON maps (for official enumeration / export)
 
 ---
 
@@ -221,7 +221,7 @@ Parser produces Flat Sentence IR directly:
 
 ### 9.2 Emit (Pyash print)
 
-Emitter prints canonical Pyash surface:
+Emitter prints official Pyash surface:
 - print each case group in a stable order (sort by case keyword)
 - print mood at end
 - for conditionals, print `then <sentence>` inline

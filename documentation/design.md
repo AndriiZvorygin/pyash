@@ -140,7 +140,7 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
 
   * Supports quoted blocks, short role aliases (`su/ob`), and compositional keyword mapping.
   * Context+axis pairs become keyword roles (`fromtext`, `during`, `become`, `totext`, `as`, `fromindex`, `toindex`, etc.).
-  * Emits plain JS objects which are the canonical **sentence datatype**, e.g.:
+  * Emits plain JS objects which are the official **sentence datatype**, e.g.:
 
     ```js
     { mood, be, su, ob, fromtext, fromindex, toindex, ... }

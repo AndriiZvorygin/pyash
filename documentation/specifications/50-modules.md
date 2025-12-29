@@ -20,8 +20,8 @@ This document defines surface syntax and runtime semantics.
 
 ## 2. Terms
 
-* **module**: the contents of one module file, addressed by a canonical module id
-* **module id**: canonical identity used for caching and resolution
+* **module**: the contents of one module file, addressed by a official module id
+* **module id**: official identity used for caching and resolution
 * **module namespace value**: a runtime value bound to an alias name, used for genitive fact access
 * **export**: a symbol explicitly made visible outside a module
 * **import**: bringing a module namespace (or one exported symbol) into caller scope
@@ -38,7 +38,7 @@ This document defines surface syntax and runtime semantics.
 2. Module scoping is explicit.
 3. Names remain speakable.
 4. Determinism first in v0.1: `import` is synchronous at surface level.
-5. Parallel-ready core: loader uses a state machine and memoization keyed by canonical module id.
+5. Parallel-ready core: loader uses a state machine and memoization keyed by official module id.
 
 ---
 
@@ -256,9 +256,9 @@ Examples:
 
 If the transform yields zero segments, raise `module import incomplete` with a message explaining alias derivation failure.
 
-### 9.4 Canonical module id and normalisation
+### 9.4 Official module id and normalisation
 
-The loader resolves the specifier to a canonical module id.
+The loader resolves the specifier to a official module id.
 
 Normalisation includes:
 
@@ -270,7 +270,7 @@ Normalisation excludes in v0.1:
 
 * symlink resolution (`realpath`)
 
-Canonical module id is the memoization key.
+Official module id is the memoization key.
 
 ---
 
@@ -302,7 +302,7 @@ Representation is implementation-defined, as long as behaviour matches:
 
 ### 10.3 Loader internal state machine (parallel-ready core)
 
-Each canonical module id has a record with a state:
+Each official module id has a record with a state:
 
 * UNSEEN: no record
 * PARSING: file read and parse in progress

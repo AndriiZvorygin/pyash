@@ -109,6 +109,24 @@ export async function interpret(sentence) {
     const frame = state.mapStack.pop();
     const map = {};
     for (const entry of frame.entries) {
+      if (frame.kind === "json map") {
+        if (!entry?.su?.name) {
+          throwErrorSentence({
+            name: "json map sentence lost su",
+            message: "json map sentence lost su",
+            from: { name: "interpret" },
+            raw: entry
+          });
+        }
+        if (entry?.ob === undefined) {
+          throwErrorSentence({
+            name: "json map sentence lost ob",
+            message: "json map sentence lost ob",
+            from: { name: "interpret" },
+            raw: entry
+          });
+        }
+      }
       const key = entry?.su?.name;
       if (!key) continue;
       map[key] = entry.ob ?? {};

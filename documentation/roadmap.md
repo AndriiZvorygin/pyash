@@ -7,7 +7,7 @@
 * Feature gates allowed when a backend lags; quizzes declare the gate
 * Specs freeze truth: promote to `@core` only when spec is frozen
 * Golden corpus grows continuously; snapshots must match across backends
-* `write` is canonical for screen/file output and mind calls; `say` reserved for TTS flows
+* `write` is official for screen/file output and mind calls; `say` reserved for TTS flows
 
 
 ## Timeline summary (from the commits you pasted)
@@ -92,7 +92,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Dec 22–23, 2025: Maps and JSON maps become real infrastructure
 
 * Core semantics v0.1 drafted and clarified; error sentence contract formalized.
-* `write` introduced and migrated as canonical output (console output migration, write-to-file).
+* `write` introduced and migrated as official output (console output migration, write-to-file).
 * **JSON maps added end-to-end**: literals (`bool`, `hollow`), JSON import, JSON→Pyash compile, JS/C parity tests, default write for JSON maps, and docs updates.
 * Word frequency built as a map-driven exemplar with compile parity tests.
 * Final doc updates to map/JSON spec and roadmap.
@@ -100,8 +100,8 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 25, 2025: v0.2 freeze sprint complete (maps + JSON determinism lock)
 
-* Explicit note: no inline map literal; def/prah is canonical
-* Determinism locked (RFC 8785 canonical JSON by default):
+* Explicit note: no inline map literal; def/prah is official
+* Determinism locked (RFC 8785 official JSON by default):
 
   * JSON export key ordering rule (stated + golden)
   * `unspecified` omission rule during JSON export (golden)
@@ -130,7 +130,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete
 
-* YAML spec v0.1 implemented (`32-yaml.md`) with deterministic canonicalization.
+* YAML spec v0.1 implemented (`32-yaml.md`) with deterministic official ordering.
 * Parity goldens for interpreter/JS/C (YAML → Pyash, Pyash → YAML → Pyash).
 * YAML inline compile precompute for JS/C (no runtime YAML dependency when inline).
 * CSV → Pyash and Pyash → CSV → Pyash parity in interpreter/JS/C.

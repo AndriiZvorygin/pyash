@@ -46,7 +46,7 @@ The implementation can be a JS verb today and later a compiled ceremony built fr
 
 ## 1. Pyash surface: evoking a neuron
 
-The canonical Pyash call shape is:
+The official Pyash call shape is:
 
 ```pyash
 from      name weights     # weights vector (numeric)

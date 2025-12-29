@@ -9,7 +9,7 @@
 ### 2) Spec drop
 
 * [ ] Spec section added or updated with a version bump (example: v0.35)
-* [ ] Canonical surface forms stated (exact spellings, roles, ordering rules)
+* [ ] Official surface forms stated (exact spellings, roles, ordering rules)
 * [ ] Edge cases covered: empty inputs, malformed inputs, boundary sizes
 * [ ] Error contract defined
 
@@ -43,7 +43,7 @@
 
   * normal output (`write`)
   * error outputs
-  * JSON map canonical ordering where relevant
+  * JSON map official ordering where relevant
 
 ### 6) Backends and gates
 
