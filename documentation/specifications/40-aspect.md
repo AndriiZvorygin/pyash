@@ -16,7 +16,7 @@ This table is the consolidated reference.
 
 | Pyash aspect           | Plain English keyword | Human-language meaning                                    | Best programming analogue               |
 | ---------------------- | --------------------- | --------------------------------------------------------- | --------------------------------------- |
-| Perfective (`fa`)      | do                    | Whole event as a single bounded unit                      | Run to completion, return a value       |
+| Perfective (`fa`)      | eval                  | Whole event as a single bounded unit                      | Run to completion, return a value       |
 | Imperfective (`me`)    | stream                | Event viewed “from inside”: ongoing or evolving           | Stream of partials or updates           |
 | Retrospective (`tyih`) | await                 | Looking back from a reference point; result now available | Wait on a handle, return the value      |
 | Progressive (`pfih`)   | start                 | Action in progress                                        | Start work, return a handle immediately |
@@ -34,7 +34,13 @@ This table is the consolidated reference.
 | Continuative (`ta2`)   | status                | Still ongoing; continues to hold                          | Keepalive / still-running check         |
 | Frequentative (`ra2`)  | poll                  | Repeated often; high frequency                            | Polling / repeated calls                |
 
-**Normative note:** Docs and module APIs should prefer the Pyash aspect forms (`fa`, `me`, `pfih`, etc.). The plain English keyword is for learning, logs, and error messages.
+**Normative note:**
+For the current JavaScript implementation and all **Pyash English** surfaces (docs, module APIs, logs, error messages), use the **plain English aspect keywords** as the canonical written form. The Pyash aspect syllables (`fa`, `me`, `pfih`, etc.) are reserved for a future C-oriented internal representation and may be omitted from most English-facing specs until that layer exists.
+
+
+**Default aspect:** if a verb phrase omits an aspect marker, interpret it as **perfective (`fa`)**, returning a **Value** (synchronous, blocking). 
+
+
 
 ---
 
