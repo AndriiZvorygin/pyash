@@ -138,18 +138,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `be map def` now locked as the configuration format baseline.
 * Maps/JSON/YAML/CSV parity + determinism now considered done.
 
+### Dec 29, 2025: Pre-week hygiene gates complete
+
+* `50-modules.md` promoted to v0.1.
+* Aspect spec moved to `40-aspect.md` and referenced from the spec index.
+* Import rules locked in quizzes (entry allows top-level `do`; imported modules declarations-only).
+
+
+---
 
 # TODO
-
----
-
-## Pre-week: hygiene gates (fast)
-
-* Bump `50-modules.md` status from draft → v0.1 if implementation matches (it still says draft) 
-* Add `aspect.md` to `00-index.md` once Week 1 freezes it (index currently lists core + optional feature specs) 
-* Confirm import rules are locked in quizzes (entry module may use top-level `do`; imported modules declarations-only, else `module import incomplete`) 
-
----
 
 ## Week 1: Pipeline + replay + logging + runtime contracts v0.6
 
@@ -223,7 +221,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Log schema spec v0.1
 
   * event names, required fields, ordering, correlation ids (`traceId`, `stageEventId`)
-* Aspect spec v0.1 (`aspect.md`)
+* Aspect spec v0.1 (`40-aspect.md`)
 
   * aspect inventory
   * return typing rule (Value/TaskHandle/Stream)
@@ -590,4 +588,3 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ---
 
 Side note on your earlier “grammar words” point: `all su of <map>` / `all ob of <map>` / `all of <map>` are **map-enumeration surface forms**, and the spec even allows explicit `su name all` / `ob name all` variants when disambiguation is useful . So those belong in “map syntax” buckets more than “verb phrase” buckets.
-

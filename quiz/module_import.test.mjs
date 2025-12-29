@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { remember, forget } from "../program/remember/index.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 
 const fixturesDir = path.resolve("quiz/fixtures/modules");
 const entryPath = path.join(fixturesDir, "entry.pya");
@@ -40,4 +42,16 @@ test("module import rejects top-level do in imported module", async () => {
     () => run("from name bad module to name trouble be import do"),
     /top-level do is forbidden/
   );
+});
+
+test("entry module allows top-level do", async () => {
+  forget();
+  setEntryModulePath(entryPath);
+  const source = await fs.readFile(entryPath, "utf8");
+  const lines = splitSentences(source);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const sentence = parse(line);
+    await interpret(sentence);
+  }
 });
