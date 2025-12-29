@@ -78,6 +78,7 @@ export function parse(line) {
   const s = { mood };
   let current = null;
   let slot = null;
+  let vyahValues = null;
 
   function parseAllEnumeration(startIdx) {
     if (words[startIdx] !== "all") return null;
@@ -153,7 +154,28 @@ export function parse(line) {
       current = normalized;
       if (!s[current]) s[current] = {};
       slot = Array.isArray(s[current]) ? s[current][s[current].length - 1] : s[current];
+      if (current === "vyah") {
+        slot.ve = slot.ve ?? { type: "name", values: [] };
+        vyahValues = slot.ve.values;
+      }
       continue;
+    }
+
+    if (current === "vyah") {
+      const isBoundary =
+        ROLE_KEYS.includes(t) ||
+        CONTEXT_KEYS.includes(t) ||
+        t === "be" ||
+        t === "then" ||
+        t === "ta" ||
+        t === "ret";
+      if (!isBoundary) {
+        const value = t === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : t;
+        vyahValues = vyahValues ?? [];
+        vyahValues.push(value);
+        if (s.vyah?.ve) s.vyah.ve.values = vyahValues;
+        continue;
+      }
     }
 
     // --- compositional context tokens, e.g., "from state draft" ---

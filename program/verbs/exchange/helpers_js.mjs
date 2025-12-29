@@ -1,4 +1,10 @@
 import { compositionalGrid } from "../../library/compositionalCases.mjs";
+import {
+  VYAH_ASPECT_MODIFIERS,
+  VYAH_TENSE_MODIFIERS,
+  VYAH_OUTCOME_MODIFIERS,
+  VYAH_ATTITUDINAL_MODIFIERS
+} from "../../library/grammar/keywords.mjs";
 
 const COMPOSITIONAL_CONTEXT_ORDER = [
   "space",
@@ -23,7 +29,7 @@ for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
   }
 }
 
-const FORMAT_CASE_ORDER = ["su", "ob", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
+const FORMAT_CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
 
 export function vectorFormatHelper() {
   return [
@@ -56,6 +62,10 @@ export function vectorFormatHelper() {
     "  return bufA.length < bufB.length ? -1 : 1;",
     "}",
     `const CASE_ORDER = ${JSON.stringify(FORMAT_CASE_ORDER)};`,
+    `const VYAH_ASPECT = ${JSON.stringify(VYAH_ASPECT_MODIFIERS)};`,
+    `const VYAH_TENSE = ${JSON.stringify(VYAH_TENSE_MODIFIERS)};`,
+    `const VYAH_OUTCOME = ${JSON.stringify(VYAH_OUTCOME_MODIFIERS)};`,
+    `const VYAH_ATTITUDE = ${JSON.stringify(VYAH_ATTITUDINAL_MODIFIERS)};`,
     "function formatNp(np = {}) {",
     "  if (np.unspecified) return \"unspecified\";",
     "  if (np.name !== undefined) return `name ${np.name}`;",
@@ -67,11 +77,35 @@ export function vectorFormatHelper() {
     "  if (np.ve) return formatVector(np.ve.values || [], np.ve.type || \"num\");",
     "  return \"\";",
     "}",
+    "function orderVyah(values = []) {",
+    "  const aspects = [];",
+    "  const tenses = [];",
+    "  const outcomes = [];",
+    "  const attitudes = [];",
+    "  const other = [];",
+    "  for (const raw of values) {",
+    "    const token = typeof raw === \"string\" ? raw : String(raw ?? \"\");",
+    "    if (!token) continue;",
+    "    if (VYAH_ASPECT.includes(token)) aspects.push(token);",
+    "    else if (VYAH_TENSE.includes(token)) tenses.push(token);",
+    "    else if (VYAH_OUTCOME.includes(token)) outcomes.push(token);",
+    "    else if (VYAH_ATTITUDE.includes(token)) attitudes.push(token);",
+    "    else other.push(token);",
+    "  }",
+    "  return [...aspects, ...tenses, ...other, ...outcomes, ...attitudes];",
+    "}",
     "function formatSentence(sentence = {}) {",
     "  const parts = [];",
     "  for (const key of CASE_ORDER) {",
     "    if (sentence[key] === undefined) continue;",
-    "    parts.push(key, formatNp(sentence[key]));",
+    "    if (key === \"vyah\") {",
+    "      const values = sentence.vyah?.ve?.values ?? [];",
+    "      const ordered = orderVyah(values);",
+    "      parts.push(\"vyah\");",
+    "      if (ordered.length) parts.push(ordered.join(\" \"));",
+    "    } else {",
+    "      parts.push(key, formatNp(sentence[key]));",
+    "    }",
     "  }",
     "  if (sentence.be) parts.push(\"be\", sentence.be);",
     "  parts.push(sentence.mood || \"ya\");",

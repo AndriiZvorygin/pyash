@@ -1,5 +1,7 @@
 // beautiful.mjs
 
+import { orderVyahModifiers } from "./library/grammar/vyah.mjs";
+
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
   if (np.name !== undefined) {
@@ -54,6 +56,13 @@ export function sentenceToPyash(s = {}) {
     parts.push("ob");
     const np = npToPyash(s.ob);
     if (np) parts.push(np.split(" "));
+  }
+
+  if (s.vyah) {
+    const values = Array.isArray(s.vyah?.ve?.values) ? s.vyah.ve.values : [];
+    const ordered = orderVyahModifiers(values);
+    parts.push("vyah");
+    if (ordered.length) parts.push(ordered);
   }
 
   if (s.to) {

@@ -5,11 +5,12 @@ Purpose: provide the normative specs for Pyash. Each module follows the same tem
 Reading order (core):
 1. `01-sentence-model.md`
 2. `07-compositional-cases.md`
-3. `02-moods-and-memory.md`
-4. `03-dispatch-and-signatures.md`
-5. `04-ceremonies-and-this.md`
-6. `05-control-flow.md`
-7. `06-errors.md`
+3. `08-vyah.md`
+4. `02-moods-and-memory.md`
+5. `03-dispatch-and-signatures.md`
+6. `04-ceremonies-and-this.md`
+7. `05-control-flow.md`
+8. `06-errors.md`
 
 Recommended practice loop
 1. Read `01-sentence-model.md`, then run `examples/pyash/compile-add-to-js-text.pya`.
