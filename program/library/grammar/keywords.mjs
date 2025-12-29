@@ -1,53 +1,48 @@
+import { compositionalGrid } from "../compositionalCases.mjs";
+
 export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret"];
+
+const EXTRA_CONTEXT_KEYWORDS = {
+  sequence: { source: "fromindex", way: "atindex", destination: "toindex" }
+};
+
+export const COMPOSITIONAL_KEYWORDS = Array.from(
+  new Set(
+    Object.values(compositionalGrid)
+      .flatMap((ctx) => ["source", "way", "destination"].map((axis) => ctx?.[axis]?.prep))
+      .concat(
+        Object.values(EXTRA_CONTEXT_KEYWORDS).flatMap((ctx) => Object.values(ctx))
+      )
+      .filter(Boolean)
+  )
+);
 
 export const ROLE_KEYS = [
   "su",
   "subj",
   "ob",
   "obj",
-  "to",
-  "from",
-  "fromstate",
-  "with",
+  "vyah",
   "via",
-  "times",
-  "by",
-  "per",
-  "at",
-  "fromindex",
-  "atindex",
-  "toindex",
-  "vyah"
+  ...COMPOSITIONAL_KEYWORDS
 ];
 
 export const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "bool", "boolean", "ord"];
 
-export const CONTEXT_KEYS = [
-  "space",
-  "interior",
-  "surface",
-  "under",
-  "time",
-  "state",
-  "person",
-  "social",
-  "discourse",
-  "quantity",
-  "sequence"
-];
+export const CONTEXT_KEYS = [...Object.keys(compositionalGrid), ...Object.keys(EXTRA_CONTEXT_KEYWORDS)];
 
 export const AXIS_CONTEXT_TO_KEYWORD = {
-  space: { source: "from", way: "at", destination: "to" },
-  interior: { source: "outof", way: "inside", destination: "into" },
-  surface: { source: "offof", way: "along", destination: "onto" },
-  under: { source: "fromunder", way: "under", destination: "beneath" },
-  time: { source: "since", way: "during", destination: "until" },
-  state: { source: "fromstate", way: "as", destination: "become" },
-  person: { source: "fromperson", way: "with", destination: "for" },
-  social: { source: "fromgroup", way: "among", destination: "intogroup" },
-  discourse: { source: "fromtext", way: "accordingto", destination: "totext" },
-  quantity: { source: "times", way: "by", destination: "per" },
-  sequence: { source: "fromindex", way: "atindex", destination: "toindex" }
+  ...Object.fromEntries(
+    Object.entries(compositionalGrid).map(([context, ctx]) => [
+      context,
+      {
+        source: ctx?.source?.prep,
+        way: ctx?.way?.prep,
+        destination: ctx?.destination?.prep
+      }
+    ])
+  ),
+  ...EXTRA_CONTEXT_KEYWORDS
 };
 
 export const VYAH_ASPECT_MODIFIERS = [

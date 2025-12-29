@@ -146,21 +146,6 @@ export function parse(line) {
       }
     }
 
-    if (ROLE_KEYS.includes(t)) {
-      const normalized =
-        t === "su" || t === "subj" ? "su" :
-        t === "ob" || t === "obj" ? "ob" :
-        t;
-      current = normalized;
-      if (!s[current]) s[current] = {};
-      slot = Array.isArray(s[current]) ? s[current][s[current].length - 1] : s[current];
-      if (current === "vyah") {
-        slot.ve = slot.ve ?? { type: "name", values: [] };
-        vyahValues = slot.ve.values;
-      }
-      continue;
-    }
-
     if (current === "vyah") {
       const isBoundary =
         ROLE_KEYS.includes(t) ||
@@ -229,6 +214,21 @@ export function parse(line) {
         }
       }
 
+      continue;
+    }
+
+    if (ROLE_KEYS.includes(t)) {
+      const normalized =
+        t === "su" || t === "subj" ? "su" :
+        t === "ob" || t === "obj" ? "ob" :
+        t;
+      current = normalized;
+      if (!s[current]) s[current] = {};
+      slot = Array.isArray(s[current]) ? s[current][s[current].length - 1] : s[current];
+      if (current === "vyah") {
+        slot.ve = slot.ve ?? { type: "name", values: [] };
+        vyahValues = slot.ve.values;
+      }
       continue;
     }
 
