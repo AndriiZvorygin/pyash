@@ -4,7 +4,7 @@ import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { resolveThisValue } from "../library/thisBinding.mjs";
-import { throwErrorSentence } from "../error.mjs";
+import { throwErrorSentence, surfaceErrorSentence } from "../error.mjs";
 import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 import { handleLifecycleAspect } from "./runtime.mjs";
@@ -156,17 +156,18 @@ export async function handleImperative({
 
   const lifecycleResult = handleLifecycleAspect(sentence, { remember: memory.remember, doRemember: memory.doRemember });
   if (lifecycleResult) {
-    if (lifecycleResult?.mood && lifecycleResult?.be) {
-      if (lifecycleResult.ob !== undefined) {
+    const surfaced = surfaceErrorSentence(lifecycleResult);
+    if (surfaced?.mood && surfaced?.be) {
+      if (surfaced.ob !== undefined) {
         memory.doRemember({
           su: { name: "result" },
-          ob: lifecycleResult.ob,
-          be: lifecycleResult.be,
+          ob: surfaced.ob,
+          be: surfaced.be,
           mood: "ya"
         });
       }
     }
-    return lifecycleResult;
+    return surfaced;
   }
 
   const hasSequenceRegisters =
@@ -371,18 +372,19 @@ export async function handleImperative({
   const result = await fn(callSentence, { remember: memory.remember });
 
   if (result?.mood && result?.be && result?.su) {
-    if (result.be !== "chip") {
-      memory.doRemember(result);
+    const surfaced = surfaceErrorSentence(result);
+    if (surfaced.be !== "chip") {
+      memory.doRemember(surfaced);
     }
-    if (result.ob !== undefined) {
+    if (surfaced.ob !== undefined) {
       memory.doRemember({
         su: { name: "result" },
-        ob: result.ob,
-        be: result.be,
+        ob: surfaced.ob,
+        be: surfaced.be,
         mood: "ya"
       });
     }
-    return result;
+    return surfaced;
   }
 
   // record the command itself in history
