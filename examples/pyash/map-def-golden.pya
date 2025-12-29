@@ -1,0 +1,6 @@
+su name sample be map def
+su name beta ob num 2 ya
+su name alpha ob text "one" ya
+su name gamma ob bool truth ya
+prah
+ob name sample be write do
