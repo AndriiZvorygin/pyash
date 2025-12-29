@@ -1,3 +1,30 @@
+import { compositionalGrid } from "../../library/compositionalCases.mjs";
+
+const COMPOSITIONAL_CONTEXT_ORDER = [
+  "space",
+  "interior",
+  "surface",
+  "under",
+  "time",
+  "state",
+  "person",
+  "social",
+  "discourse",
+  "quantity"
+];
+
+const COMPOSITIONAL_PREPS = [];
+for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
+  const ctx = compositionalGrid[ctxKey];
+  if (!ctx) continue;
+  for (const axis of ["source", "way", "destination"]) {
+    const prep = ctx[axis]?.prep;
+    if (prep && !COMPOSITIONAL_PREPS.includes(prep)) COMPOSITIONAL_PREPS.push(prep);
+  }
+}
+
+const FORMAT_CASE_ORDER = ["su", "ob", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
+
 export function vectorFormatHelper() {
   return [
     "function formatVector(values = [], type = \"num\") {",
@@ -17,6 +44,18 @@ export function vectorFormatHelper() {
     "  return `su name ${name} ob ${formatVector(v.values || [], v.type || \"num\")} be vector ya`;",
     "}"
     ,
+    "function compareUtf8(a, b) {",
+    "  if (a === b) return 0;",
+    "  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;",
+    "  const bufA = encoder ? encoder.encode(String(a)) : Array.from(String(a), ch => ch.charCodeAt(0));",
+    "  const bufB = encoder ? encoder.encode(String(b)) : Array.from(String(b), ch => ch.charCodeAt(0));",
+    "  const len = Math.min(bufA.length, bufB.length);",
+    "  for (let i = 0; i < len; i += 1) {",
+    "    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;",
+    "  }",
+    "  return bufA.length < bufB.length ? -1 : 1;",
+    "}",
+    `const CASE_ORDER = ${JSON.stringify(FORMAT_CASE_ORDER)};`,
     "function formatNp(np = {}) {",
     "  if (np.unspecified) return \"unspecified\";",
     "  if (np.name !== undefined) return `name ${np.name}`;",
@@ -30,14 +69,10 @@ export function vectorFormatHelper() {
     "}",
     "function formatSentence(sentence = {}) {",
     "  const parts = [];",
-    "  if (sentence.su) parts.push(\"su\", formatNp(sentence.su));",
-    "  if (sentence.ob) parts.push(\"ob\", formatNp(sentence.ob));",
-    "  if (sentence.from) parts.push(\"from\", formatNp(sentence.from));",
-    "  if (sentence.by) parts.push(\"by\", formatNp(sentence.by));",
-    "  if (sentence.to) parts.push(\"to\", formatNp(sentence.to));",
-    "  if (sentence.fromindex) parts.push(\"fromindex\", formatNp(sentence.fromindex));",
-    "  if (sentence.atindex) parts.push(\"atindex\", formatNp(sentence.atindex));",
-    "  if (sentence.toindex) parts.push(\"toindex\", formatNp(sentence.toindex));",
+    "  for (const key of CASE_ORDER) {",
+    "    if (sentence[key] === undefined) continue;",
+    "    parts.push(key, formatNp(sentence[key]));",
+    "  }",
     "  if (sentence.be) parts.push(\"be\", sentence.be);",
     "  parts.push(sentence.mood || \"ya\");",
     "  return parts.join(\" \");",
@@ -46,7 +81,23 @@ export function vectorFormatHelper() {
     "  const kind = mapFact?.be === \"csv map\" ? \"csv map\" : (mapFact?.be === \"json map\" ? \"json map\" : \"map\");",
     "  const entries = mapFact?.ob?.map ?? {};",
     "  const lines = [`su name ${name} be ${kind} def`];",
-    "  for (const key of Object.keys(entries)) {",
+    "  let orderedKeys = Object.keys(entries).sort(compareUtf8);",
+    "  if (kind === \"csv map\") {",
+    "    const headerRaw = entries[\"header raw\"]?.ve?.values;",
+    "    const header = entries.header?.ve?.values;",
+    "    orderedKeys = [];",
+    "    if (headerRaw) orderedKeys.push(\"header raw\");",
+    "    if (header) orderedKeys.push(\"header\");",
+    "    if (Array.isArray(header)) {",
+    "      for (const key of header) {",
+    "        if (typeof key === \"string\") orderedKeys.push(key);",
+    "      }",
+    "    }",
+    "    for (const key of Object.keys(entries).sort(compareUtf8)) {",
+    "      if (!orderedKeys.includes(key)) orderedKeys.push(key);",
+    "    }",
+    "  }",
+    "  for (const key of orderedKeys) {",
     "    const entry = entries[key];",
     "    if (kind === \"map\" && entry && typeof entry === \"object\" && entry.mood) {",
     "      lines.push(formatSentence(entry));",

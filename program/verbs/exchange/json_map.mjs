@@ -1,5 +1,16 @@
 import { npToPyash, sentenceToPyash } from "../../beautiful.mjs";
 
+function compareUtf8(a, b) {
+  if (a === b) return 0;
+  const bufA = Buffer.from(String(a), "utf8");
+  const bufB = Buffer.from(String(b), "utf8");
+  const len = Math.min(bufA.length, bufB.length);
+  for (let i = 0; i < len; i += 1) {
+    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
+  }
+  return bufA.length < bufB.length ? -1 : 1;
+}
+
 function sanitizeNamePart(value) {
   const raw = String(value ?? "").trim();
   if (!raw) return "item";
@@ -102,7 +113,9 @@ export function jsonToMapSentences(value, rootName, { existingNames = [] } = {})
       throw new Error("json map contents defective: object expected");
     }
     const map = {};
-    for (const [key, val] of Object.entries(ob)) {
+    const orderedKeys = Object.keys(ob).sort(compareUtf8);
+    for (const key of orderedKeys) {
+      const val = ob[key];
       const objValue = jsonValueToObj(val, { parentName: name, key, used, emitMap });
       if (objValue === undefined) continue;
       map[key] = objValue;
@@ -128,7 +141,24 @@ export function mapSentenceToPyash(sentence) {
     : (sentence?.be === "csv map" ? "csv map" : "json map");
   const lines = [`su name ${name} be ${kind} def`];
   const entries = sentence?.ob?.map ?? {};
-  for (const [key, ob] of Object.entries(entries)) {
+  let orderedKeys = Object.keys(entries).sort(compareUtf8);
+  if (kind === "csv map") {
+    const headerRaw = entries["header raw"]?.ve?.values;
+    const header = entries.header?.ve?.values;
+    orderedKeys = [];
+    if (headerRaw) orderedKeys.push("header raw");
+    if (header) orderedKeys.push("header");
+    if (Array.isArray(header)) {
+      for (const key of header) {
+        if (typeof key === "string") orderedKeys.push(key);
+      }
+    }
+    for (const key of Object.keys(entries).sort(compareUtf8)) {
+      if (!orderedKeys.includes(key)) orderedKeys.push(key);
+    }
+  }
+  for (const key of orderedKeys) {
+    const ob = entries[key];
     if (kind === "map" && ob && typeof ob === "object" && ob.mood) {
       lines.push(sentenceToPyash(ob));
       continue;

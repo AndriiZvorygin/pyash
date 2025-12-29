@@ -46,8 +46,8 @@ test("full module import golden: run, runjs, runc parity", async () => {
 
   const mapText = [
     "su name settings be map def",
-    "su name mode ob text \"ready\" ya",
     "su name limit ob num 3 ya",
+    "su name mode ob text \"ready\" ya",
     "prah"
   ].join("\n");
 
@@ -76,8 +76,8 @@ test("full module import golden: run, runjs, runc parity", async () => {
 
   assert.deepEqual(stdout.trim().split(/\r?\n/), [
     "su name settings be map def",
-    "su name mode ob text \"ready\" ya",
     "su name limit ob num 3 ya",
+    "su name mode ob text \"ready\" ya",
     "prah",
     "2",
     "5",

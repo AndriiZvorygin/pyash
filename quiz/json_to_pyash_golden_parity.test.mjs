@@ -33,21 +33,21 @@ function normalizePyash(text) {
 }
 
 const expected = [
+  "su name profile meta be json map def",
+  "su name active ob bool truth ya",
+  "prah",
   "su name profile pets 1 be json map def",
   "su name kind ob text \"cat\" ya",
   "prah",
   "su name profile pets 2 be json map def",
   "su name kind ob text \"dog\" ya",
   "prah",
-  "su name profile meta be json map def",
-  "su name active ob bool truth ya",
-  "prah",
   "su name profile be json map def",
-  "su name name ob text \"Ada\" ya",
   "su name age ob num 36 ya",
   "su name flags ob ve bool truth lie ya",
-  "su name pets ob ve name \"profile pets 1\" \"profile pets 2\" ya",
   "su name meta ob name profile meta ya",
+  "su name name ob text \"Ada\" ya",
+  "su name pets ob ve name \"profile pets 1\" \"profile pets 2\" ya",
   "prah",
 ];
 
