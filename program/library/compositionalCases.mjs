@@ -141,7 +141,7 @@ export const compositionalGrid = {
       case: "terminative_case_",
       hnuc: "0x5957",
       pya: "tweh",
-      prep: "toindex", // DEST + time
+      prep: "until", // DEST + time
     },
   },
 
@@ -161,7 +161,7 @@ export const compositionalGrid = {
       case: "essive_case_",
       hnuc: "0x414F",
       pya: "swih",
-      prep: "via",       // WAY + state (semantically “as”)
+      prep: "as",       // WAY + state (semantically “as”)
     },
 
     destination: {
