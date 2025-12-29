@@ -138,94 +138,312 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `be map def` now locked as the configuration format baseline.
 * Maps/JSON/YAML/CSV parity + determinism now considered done.
 
+
+# TODO
+
 ---
-## Week 1: Pipeline + replay + logging v0.6
+
+## Pre-week: hygiene gates (fast)
+
+* Bump `50-modules.md` status from draft → v0.1 if implementation matches (it still says draft) 
+* Add `aspect.md` to `00-index.md` once Week 1 freezes it (index currently lists core + optional feature specs) 
+* Confirm import rules are locked in quizzes (entry module may use top-level `do`; imported modules declarations-only, else `module import incomplete`) 
+
+---
+
+## Week 1: Pipeline + replay + logging + runtime contracts v0.6
 
 **Dec 29, 2025 → Jan 4, 2026**
 
 ### Ship
 
 * Pipeline runner (stages)
-* Queue + worker pool (single-worker acceptable first)
+
+  * Explicit stage graph (linear acceptable first; stage metadata DAG-ready)
+  * Stage contract: inputs, outputs, artefacts, error sentence, deterministic hash inputs
+  * Stage ids are stable strings (used everywhere: paths, journal, logs)
+* Queue + worker pool
+
+  * Single-worker acceptable first, with stable scheduling order
+  * Stage execution isolation: per-stage working dir under artefacts (`stages/<stageId>/...`)
 * Retries with backoff, checkpoints
+
+  * Retry policy stored in journal (attempt count, delays, final outcome)
+  * Checkpoints keyed by `(stageId, inputHash, configHash)`
 * Artefacts directory contract (stable layout)
+
+  * Stable run root with `manifest`, `journal`, `logs`, `stages/<stageId>/...`
+  * Content-addressed blob store for large objects (audio, video, downloads)
 * Structured logs (machine-readable)
-* Run journal per run (manifest as JSON map)
-* Replay mode that re-executes from the journal and verifies hashes
+
+  * Event stream with stable ordering rules
+  * Log events carry correlation ids and link to journal ids + artefact paths
+* Run journal per run (manifest as JSON map value, persisted via existing JSON write)
+
+  * In-memory: json map value
+  * On disk: `write … to state json to filename …` for byte-stable output 
+  * Per-stage start/end records
+  * Per-attempt records for retries
+  * Hashes for inputs, outputs, artefacts
+* Replay mode
+
+  * Re-executes from journal
+  * Verifies hashes and byte-stability for golden runs
+* Runtime primitives (real, first-class)
+
+  * **Value** (finished result or structured error)
+  * **TaskHandle** (running job with lifecycle)
+  * **Stream** (ordered chunk sequence with lifecycle)
+* Aspect-driven evaluation contract (implemented end-to-end)
+
+  * `fa` returns Value
+  * `pfih` returns TaskHandle
+  * `me` returns Stream
+  * lifecycle/control aspects usable by plumbing: `tyih`, `mweh`, `qa`, `dweh`
+* Tool call envelope (generic, for MCP + any external tool)
+
+  * Journal records `tool.call` and `tool.result`
+  * Hashes stable and replay-verifiable
 
 ### Spec drops (freeze v0.6)
 
-* Run journal spec v0.1 (fields, ordering, hashing rules)
-* Error model spec v0.1 (error sentences for stage failures)
-* IO model spec v0.1 (inputs, outputs, artefacts rules)
-* Log schema spec v0.1 (events, ordering, paths)
+* Run journal spec v0.1
+
+  * fields, ordering, hashing rules
+  * per-stage record schema: `stageId`, `aspect`, `primitiveKind`, `attempt`, `startTs`, `endTs`, `deadlineMs`, `cancelPolicy`
+  * tool records: `toolName`, `argsHash`, `resultHash`, `backendId`, `durationMs`, `ok`
+* Error model spec v0.1
+
+  * stage failure error sentences, using global error shape (`su name`, `ob text`, `from name`) 
+  * stable kinds for: IO failure, timeout, cancellation, backend lost, hash mismatch
+* IO model spec v0.1
+
+  * inputs, outputs, artefacts rules
+  * canonical path rules and canonical ordering rules (reuse existing “official key order” concept from map write rules) 
+* Log schema spec v0.1
+
+  * event names, required fields, ordering, correlation ids (`traceId`, `stageEventId`)
+* Aspect spec v0.1 (`aspect.md`)
+
+  * aspect inventory
+  * return typing rule (Value/TaskHandle/Stream)
+  * lifecycle semantics for `mweh` and `qa`
+* Runtime primitives spec v0.1
+
+  * Value shape
+  * TaskHandle fields + lifecycle states
+  * Stream chunk envelope + lifecycle operations
 
 ### Hardening
 
 * Replays match byte-stable artefacts for golden runs
 * Cross-backend parity for journal writing and stage failure errors
-* Torture tests: retries, checkpoints, partial stage failure, replay verification
+* Torture tests
+
+  * retries with backoff
+  * checkpoints hit and miss
+  * partial stage failure
+  * replay verification and hash mismatch reporting
+* Primitive parity tests
+
+  * same stage + same aspect yields same `primitiveKind`
+  * `qa` and `mweh` produce terminal outcomes within declared deadlines
+* Tool event parity tests
+
+  * stable hashing and ordering for tool records
+  * replay detects altered tool outputs
 
 ---
 
-## Week 2: Media IO v0.4
+## Week 2: Concurrency v0.7
 
 **Jan 5 → Jan 11, 2026**
 
 ### Ship
 
-* `say` (TTS interface) as a library verb, backed by pipeline stages
-* `hear` (STT interface) as a library verb, backed by pipeline stages
-* Config-driven backends
+* DAG scheduler for pipeline stages
 
-  * TTS: eSpeak NG, Piper, system TTS
-  * STT: whisper.cpp, Whisper, or external service via explicit gate
-* Deterministic test mode hooks (fixtures, pinned model metadata in artefacts)
+  * Explicit dependency edges, ready-queue semantics
+  * Stable ordering rules when multiple nodes are ready
+* Cancellation and timeouts (real)
 
-### Spec drops (freeze v0.4)
+  * Deadline propagation to stages and tool calls
+  * `qa` cancellation semantics: terminal state guaranteed or explicit timeout failure
+  * Cancellation scopes: stage, subtree, entire run
+* Backpressure rules for Stream (real)
 
-* Speech spec v0.1
+  * Bounded queues between producers and consumers
+  * Overflow policy per stream type (block, drop, coalesce)
+  * Consumer pull model (`next`) with predictable chunk ordering
+* Deterministic simulation mode for scheduling (tests)
 
-  * signatures
-  * required config keys
-  * error sentences
-  * deterministic test mode requirements
-* Speech artefact schema v0.1 (backend, model, version, input hash, output hash)
+  * Fixed seed and simulated clock
+  * Simulated execution produces deterministic journal + stream ordering
+* Journal records scheduling decisions and outcomes
+
+  * queue events: enqueued, dequeued, blocked, unblocked
+  * stream events: chunk produced, chunk consumed, close, cancel
+  * cancellation events: requested, acknowledged, finalized
+
+### Spec drops (freeze v0.7)
+
+* Concurrency spec v0.1
+
+  * DAG semantics and readiness
+  * cancellation semantics (`qa`)
+  * timeout semantics (`dweh` timebox wrapper rules)
+  * backpressure rules for Stream
+* Runtime lifecycle spec v0.1
+
+  * start, stop, cleanup
+  * failure modes: dead worker, lost stage output, partial stream
+* Simulation mode spec v0.1
+
+  * determinism rules
+  * stable ordering rules for equal-priority scheduling
 
 ### Hardening
 
-* Fixture audio pinned, outputs journaled, replays verify hashes
-* Golden demos
+* Deterministic replay of a concurrent run in simulation mode
+* Torture tests
 
-  * `say_smoke.pya`
-  * `hear_smoke.pya`
-  * `speech_config.pya`
+  * cancellation storms
+  * timeout races
+  * bounded queues under load
+  * slow-consumer stream backpressure
+* Parity
+
+  * identical error sentences for timeout and cancellation across backends
+  * deterministic ordering of journal events for the same simulation seed
 
 ---
 
-## Week 4: Concurrency v0.7
+## Week 3: Tool bridge (MCP) v0.3
+
+**Jan 12 → Jan 16, 2026**
+
+### Ship
+
+* MCP client in runtime (stdio first)
+
+  * Launch and supervise tool servers
+  * Connect/disconnect behaviour journaled
+* Tool discovery pinned per run
+
+  * `tools/list` snapshot stored in artefacts and referenced from journal
+  * Tool identity includes name, version, schema hash
+* Schema mapping to Pyash-callable signatures
+
+  * Generated façade module(s) exposing tools as deterministic signatures
+  * Stable name mapping rules (tool names → module + verb)
+* Deadline and cancellation propagation
+
+  * `deadlineMs` passed through to tool calls
+  * `qa` cancels tool calls when transport supports it, else records best-effort cancel with explicit status
+* Streaming support policy (real, where supported)
+
+  * If MCP tool supports streaming, map to Stream
+  * One-shot-only tools map to `fa` only
+* Permission gating
+
+  * Allowlist + argument constraints in config
+  * Every deny journaled with reason + requested args hash
+* Reference MCP servers (initial set)
+
+  * `web.fetch` (HTTP fetch with caching hooks)
+  * `web.crawl` (crawler adapter)
+  * `media.download` (yt-dlp adapter)
+  * `store.kv` (SQLite or filesystem)
+  * `store.vector` optional (stub acceptable if deferred)
+
+### Spec drops (freeze v0.3)
+
+* Tool ABI spec v0.1
+
+  * request/response envelopes
+  * hashing + canonical ordering
+  * deadlines, cancellation, retries
+  * stable error sentences for tool failures (using global error sentence shape) 
+* MCP integration spec v0.1
+
+  * discovery, pinning, schema mapping
+  * transport rules (stdio first)
+  * failure policy (server crash, tool lost, schema mismatch)
+
+### Hardening
+
+* Replay includes tool list snapshot and verifies tool call hashes
+* Torture tests
+
+  * tool unavailable
+  * tool timeout
+  * tool server crash and restart rules
+  * schema change detected mid-run
+* Golden demos
+
+  * `mcp_list_tools.pya`
+  * `mcp_web_fetch_smoke.pya`
+  * `mcp_media_download_smoke.pya`
+
+---
+
+## Week 4: Media IO v0.4
 
 **Jan 17 → Jan 23, 2026**
 
 ### Ship
 
-* DAG scheduler for pipeline stages
-* Cancellation and timeouts
-* Backpressure rules
-* Deterministic simulation mode for scheduling (tests)
-* Journal records scheduling decisions and outcomes
+* `say` (TTS interface) as a library verb backed by pipeline stages
+* `hear` (STT interface) as a library verb backed by pipeline stages
+* Aspect-shaped speech API (real streaming)
 
-### Spec drops (freeze v0.7)
+  * `say fa` → Value (bytes or file path)
+  * `say me` → Stream (audio frames) with real backpressure
+  * `say pfih` → TaskHandle (background synth)
+  * `hear fa` → Value (final transcript)
+  * `hear me` → Stream (partial transcripts) with real backpressure
+  * `hear pfih` → TaskHandle (capture session)
+  * `tyih` waits, `mweh` closes/flushes, `qa` cancels
+* Config-driven backends
 
-* Concurrency spec v0.1 (DAG semantics, cancellation, timeouts)
-* Runtime lifecycle spec v0.1 (start, stop, cleanup, failure modes)
-* Simulation mode spec v0.1 (how determinism is achieved)
+  * TTS: eSpeak NG, Piper, system TTS
+  * STT: whisper.cpp, Whisper, or external service via explicit gate
+  * Optional: MCP backend for speech (adapter)
+* Deterministic test mode hooks
+
+  * fixtures
+  * pinned model metadata in artefacts
+  * output hashes verified in replay
+
+### Spec drops (freeze v0.4)
+
+* Speech spec v0.1
+
+  * signatures per aspect form
+  * required config keys
+  * error sentences
+  * deterministic test mode requirements
+  * stream chunk envelope rules for partial transcripts and audio frames
+* Speech artefact schema v0.1
+
+  * backend, model, version
+  * input hash, output hash
+  * chunking rules for streaming outputs
 
 ### Hardening
 
-* Deterministic replay of a concurrent run in simulation mode
-* Torture tests: cancellation storms, timeout races, bounded queues
-* Parity: identical error sentences for timeout and cancellation across backends
+* Fixture audio pinned, outputs journaled, replays verify hashes
+* Streaming torture tests
+
+  * slow consumer backpressure
+  * cancellation mid-utterance
+  * timebox capture with `dweh`
+* Golden demos
+
+  * `say_smoke.pya`
+  * `hear_smoke.pya`
+  * `speech_config.pya`
+  * `walkie_talkie_loop_smoke.pya`
 
 ---
 
@@ -237,12 +455,15 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Verifier loop: run quizzes, emit structured report bundle
 * Reducer loop: store minimal repro `.pya`
-* Resolution chain for missing signatures
+* Resolution chain for lost signatures
 
   * signature search (project modules, stdlib namespaces)
+  * MCP tool fallback (generated façade modules from Week 3 discovery)
   * local mind fallback policy (config-driven)
   * patch bundle output (diff, new signatures, tests, docs stubs)
 * Mind call caching via artefacts (content-hash keys)
+
+  * cached mind calls journaled as cache hits with stable hashes
 
 ### Spec drops (freeze v0.45)
 
@@ -254,10 +475,11 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Diff-friendly deterministic reports
 * Cache hits produce identical outputs and journal entries
-* Golden demo
+* Golden demos
 
   * `verify_and_report.pya`
-  * `missing_signature_propose_patch.pya`
+  * `lost_signature_propose_patch.pya`
+  * `lost_signature_resolve_via_mcp_tool.pya`
 
 ---
 
@@ -270,10 +492,11 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Genome: Pyash sentence lists
 * Mutations + crossover
 * Fitness: quiz pass/fail plus penalties
-* “Signature crystallization” workflow
+* Signature crystallization workflow
 
   * promote repeated successful patches into deterministic signatures
   * retire mind fallback path for promoted behaviours
+  * required tests and replay bundles for promoted behaviours
 
 ### Spec drops (freeze v0.5)
 
@@ -284,7 +507,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Fixed seeds, time and step limits
 * Sandboxed IO, artefacts only
-* Golden demo
+* Golden demos
 
   * `evolve_small_suite.pya`
   * `crystallize_signature.pya`
@@ -300,23 +523,30 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Package layout conventions, versioned stdlib
 * Formatter + linter
 * Dependency and compatibility checks
-* “Report bundle” as a first-class output for Results-as-a-Service style runs
+* Report bundle as a first-class output for Results-as-a-Service style runs
 * Optional read-only serving of report bundles (local)
+* Tool packaging (MCP servers)
+
+  * package metadata for tool servers (launch command, version pinning, permissions)
+  * bundles include tool server versions and tool list snapshot
+  * compatibility checks include tool schema hash changes
 
 ### Spec drops (freeze v0.8)
 
 * Package system spec v0.1
 * Stdlib stability policy spec v0.1
 * Evolution policy spec v0.1 (how crystallization changes public surfaces)
+* Tool packaging spec v0.1 (declaring, pinning, launching MCP servers)
 
 ### Hardening
 
 * Fresh clone → install → run → reproduce bundle via replay
 * Multi-platform smoke (Linux first, others gated)
-* Golden demo
+* Golden demos
 
   * `package_smoke.pya`
   * `bundle_replay_smoke.pya`
+  * `package_with_tools_smoke.pya`
 
 ---
 
@@ -327,21 +557,37 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Ship
 
 * Prompt → candidate Pyash call set (top K)
-* Candidate ranking via signature matching (stdlib + project modules)
+* Candidate ranking via signature matching
+
+  * stdlib + project modules
+  * generated MCP façade signatures (tool-discovered)
 * Optional local mind assistance for candidate generation
-* Artefacts: candidates, scores, chosen call, matching trail
+* Artefacts
+
+  * candidates
+  * scores
+  * chosen call
+  * matching trail + explanation fields
+* Aspect-aware candidates
+
+  * generate `fa/me/pfih` variants when supported by the matched signature
+  * ranking prefers aspect consistent with interaction pattern (batch vs interactive)
 
 ### Spec drops (freeze v0.85)
 
 * Intent compiler spec v0.1 (inputs, outputs, ranking rules, artefacts)
-* Candidate format spec v0.1 (sentence shape, confidence fields)
+* Candidate format spec v0.1 (sentence shape, confidence fields, aspect field)
 
 ### Hardening
 
 * Deterministic ranking given fixed inputs and seed
-* Golden demo
+* Golden demos
 
   * `intent_compile_match.pya`
   * `intent_compile_fallback.pya`
+  * `intent_compile_aspect_variants.pya`
 
 ---
+
+Side note on your earlier “grammar words” point: `all su of <map>` / `all ob of <map>` / `all of <map>` are **map-enumeration surface forms**, and the spec even allows explicit `su name all` / `ob name all` variants when disambiguation is useful . So those belong in “map syntax” buckets more than “verb phrase” buckets.
+
