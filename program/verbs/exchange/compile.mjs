@@ -2649,7 +2649,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`${mapVar}.ob.map = ${mapVar}.ob.map ?? {};`);
         lines.push(`const _key = String(${keyExpr});`);
         lines.push(`const _curr = ${mapVar}.ob.map[_key];`);
-        lines.push(`${mapVar}.ob.map[_key] = { num: (typeof _curr?.num === "number" ? _curr.num : 0) + ${Number.isNaN(safeValue) ? 0 : safeValue} };`);
+        if (targetType === "map") {
+          lines.push(`const _base = (_curr && typeof _curr === "object") ? _curr : { mood: "ya", su: { name: _key } };`);
+          lines.push(`_base.ob = _base.ob ?? {};`);
+          lines.push(`_base.ob.num = (typeof _base.ob.num === "number" ? _base.ob.num : 0) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+          lines.push(`${mapVar}.ob.map[_key] = _base;`);
+        } else {
+          lines.push(`${mapVar}.ob.map[_key] = { num: (typeof _curr?.num === "number" ? _curr.num : 0) + ${Number.isNaN(safeValue) ? 0 : safeValue} };`);
+        }
         return lines.join("\n");
       }
 	    const safeValue = typeof ob.num === "number" ? ob.num : Number(ob.num);
@@ -3470,7 +3477,27 @@ let lines = [header];
         body.push(sentences[j]);
       }
       const map = {};
+      const seen = new Set();
       for (const entry of body) {
+        if (sentence.be === "map") {
+          if (!entry?.su?.name) {
+            throwErrorSentence({
+              name: "pyash map sentence lost su",
+              message: "pyash map sentence lost su",
+              from: { name: "compile" },
+              raw: entry
+            });
+          }
+          if (seen.has(entry.su.name)) {
+            throwErrorSentence({
+              name: "pyash map switch excess",
+              message: "pyash map switch excess",
+              from: { name: "compile" },
+              raw: { name: entry.su.name }
+            });
+          }
+          seen.add(entry.su.name);
+        }
         if (sentence.be === "json map") {
           if (!entry?.su?.name) {
             throwErrorSentence({
@@ -3491,7 +3518,7 @@ let lines = [header];
         }
         const key = entry?.su?.name;
         if (!key) continue;
-        map[key] = entry.ob ?? {};
+        map[key] = sentence.be === "map" ? entry : (entry.ob ?? {});
       }
       const mapSentence = {
         mood: "ya",
@@ -3543,7 +3570,10 @@ let lines = [header];
           lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
           mainLines.push(`pya_map_init(&${mapVar});`);
           for (const [key, value] of Object.entries(map)) {
-            if (value?.num !== undefined) {
+            if (sentence.be === "map" && value && typeof value === "object" && value.mood) {
+              const pyashText = sentenceToPyash(value);
+              mainLines.push(`pya_map_set_sentence(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(pyashText)});`);
+            } else if (value?.num !== undefined) {
               const numVal = Number(value.num);
               mainLines.push(`pya_map_set_num(&${mapVar}, ${JSON.stringify(key)}, ${Number.isNaN(numVal) ? 0 : numVal});`);
             } else if (value?.text !== undefined) {

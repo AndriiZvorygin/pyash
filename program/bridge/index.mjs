@@ -108,7 +108,27 @@ export async function interpret(sentence) {
   if (insideMap && mood === "prah") {
     const frame = state.mapStack.pop();
     const map = {};
+    const seen = new Set();
     for (const entry of frame.entries) {
+      if (frame.kind === "map") {
+        if (!entry?.su?.name) {
+          throwErrorSentence({
+            name: "pyash map sentence lost su",
+            message: "pyash map sentence lost su",
+            from: { name: "interpret" },
+            raw: entry
+          });
+        }
+        if (seen.has(entry.su.name)) {
+          throwErrorSentence({
+            name: "pyash map switch excess",
+            message: "pyash map switch excess",
+            from: { name: "interpret" },
+            raw: { name: entry.su.name }
+          });
+        }
+        seen.add(entry.su.name);
+      }
       if (frame.kind === "json map") {
         if (!entry?.su?.name) {
           throwErrorSentence({
@@ -129,7 +149,7 @@ export async function interpret(sentence) {
       }
       const key = entry?.su?.name;
       if (!key) continue;
-      map[key] = entry.ob ?? {};
+      map[key] = frame.kind === "map" ? entry : (entry.ob ?? {});
     }
     const mapSentence = {
       mood: "ya",

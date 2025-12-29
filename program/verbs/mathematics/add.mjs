@@ -117,9 +117,14 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     if (keyVal !== undefined) {
       const key = String(keyVal);
       const current = mapEntries[key];
-      const currentNum = typeof current?.num === "number" ? current.num : 0;
+      const currentNum = typeof current?.ob?.num === "number"
+        ? current.ob.num
+        : (typeof current?.num === "number" ? current.num : 0);
       const delta = toNumber(sentence.ob);
-      mapEntries[key] = { num: currentNum + delta };
+      const base = (current && typeof current === "object") ? current : { mood: "ya", su: { name: key } };
+      base.ob = base.ob ?? {};
+      base.ob.num = currentNum + delta;
+      mapEntries[key] = base;
       return { ob: { map: mapEntries }, be: targetFact?.be ?? "map" };
     }
   }
