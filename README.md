@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a compact, speakable language that can be interpreted or compiled to JavaScript and C. Sentences use a subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `understand` (parse to JSON), `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a quiz-driven slice of the broader language in `documentation/pyac.txt`.
+Pyash is a compact, speakable language that can be interpreted or compiled to JavaScript and C, with `be map def` as the configuration baseline and deterministic JSON/CSV/YAML round‑trips across backends. Sentences use a subject–object–verb style (e.g., `su collector obj num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`/`exponential`, `produce` (dot product), `neuron`, `giant`/`tiny`/`equally` (conditionals), `understand` (parse to JSON), `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and implements a quiz-driven slice of the broader language in `documentation/pyac.txt`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
@@ -23,22 +23,22 @@ Dispatch is signature-first: if a call’s cases/types do not match a registered
 ## Stability Notes
 Stable enough for iteration:
 - Core parsing + compositional cases (`fromstate` -> `become`, `fromtext` -> `accordingto`, `totext`, etc.)
-- Signature derivation/dispatch for built-in numeric verbs
+- Signature derivation/dispatch for built-in verbs and ceremony signatures
 - Sandpit execution and `ret` merge for simple ceremonies
 - Vector basics (literals, `write`, element updates), loops, and 10/100 doors in interpreter + JS/C
+- `be map def` + JSON/CSV/YAML parity with golden round‑trips across interpreter/JS/C
 
 Still evolving / fragile:
 - Text-typed flows inside ceremonies (especially when mixed with numeric ops)
 - Genitive + `this` resolution in compiled code
 - Compiler conditionals with text comparisons
-- Map/loop interop in compiled backends
 
 ## Rules of the Road
 - Ceremony bodies are stored once; avoid repeating the same `subj name` in a body, because later lines overwrite earlier ones.
 - Definition signatures must match invocation signatures (cases + types). Prefer explicit types in `def` headers.
 - For empty text literals, use `quoted.text..text.quoted` (plain `""` is ignored by the parser).
 - When you need loop/register values inside a ceremony, use `this` + genitives (`obj num of fromindex of this` or `obj this by`).
-- JSON output defaults to RFC 8785 canonical form via `to state json`; use `to state beautiful json` for pretty output.
+- JSON output defaults to RFC 8785 official form via `to state json`; use `to state beautiful json` for pretty output.
 - `be write` is used for screen/file output and mind calls; `be say` is reserved for TTS flows.
 
 ## Example Sentences
@@ -64,8 +64,8 @@ Still evolving / fragile:
 See `documentation/index.md` for deeper guidance and links to design, state, and glossary notes. Examples live in `examples/` (conditionals, subtract, chaining, registers).
 
 Recent compile-focused examples (JS is the reference backend; C is catching up):
-- `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js` (legacy name; uses `write`)
-- `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`) (legacy name; uses `write`)
+- `examples/pyash/compile-say.pya` → JS logging output at `examples/out/compile-say-output.js` (legacy filename; uses `write`)
+- `examples/pyash/compile-math-say.pya` → JS arithmetic + ceremony + logging (`examples/out/compile-math-say-output.js`) (legacy filename; uses `write`)
 - `examples/pyash/compile-loop.pya` → JS `fromindex`/`toindex` loop using the runtime `runLoop` helper
 - `examples/pyash/compile-vector-produce.pya` → JS dot product for vectors (inline/named) at `examples/out/compile-vector-produce.js`
 - `examples/pyash/compile-fizzbuzz.pya` → JS fizzbuzz via compiled conditionals/loops at `examples/out/compile-fizzbuzz-output.js`
@@ -76,6 +76,6 @@ Compile-to-C status (tested with `gcc` via quizzes):
 - Scalars: `be number ya` (`double`), `be write do` (`printf`), `be add do`, `be remains do` (`fmod`), `be equally ... then ...` (`if`)
 - Vectors: literals (num/text/bool), `write`, element updates, and fill-by-count (literal `by num N`)
 - Loops: fromindex/toindex loops in ceremonies (nested loops supported with saved registers)
-- Pending: ceremony ABI parity, `at all` map, and full program parity with JS
+- Pending: ceremony ABI parity and full program parity with JS
 
 Generated outputs live under `examples/out/` (ignored by git).
