@@ -146,6 +146,22 @@ Example:
 
 When the locator is a uri, it MUST be preserved byte-for-byte as provided by the exchange subsystem. No rewriting is permitted.
 
+### 5.5 Artifacts directory contract (runner policy)
+
+If the runner chooses to persist artifacts on disk, it SHOULD use a stable, deterministic layout rooted at the run root.
+
+Recommended default layout:
+
+```
+artifacts/<run-id>/<artifact-name>
+```
+
+Notes:
+
+- `<run-id>` is the run identifier from the run start record.
+- `<artifact-name>` is the `su name` value from the artifact sentence.
+- This layout is a runner policy; it MUST NOT change evaluation semantics.
+
 ---
 
 ## 6. Artifact bytes and hashing (normative)
