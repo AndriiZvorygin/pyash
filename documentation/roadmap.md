@@ -153,33 +153,22 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Refinery spec drafted (`14-refinery.md`, refinery/platform/activity vocabulary) and indexed.
 * Interpreter captures refinery/platform definitions into a normalized registry (no execution at definition time).
+* Refinery runner shipped (deterministic scheduling + fail-fast) for interpreter/JS/C.
 * Run newspaper implemented as opt-in (`--newspaper`) and locked with parity tests across interpreter / JS / C.
 * Compiled JS/C runs emit the same newspaper format (via shared runner) when flagged.
 * `12-source-maps.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
+* Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
 
 ---
 
 # TODO
 
-## Week 1: Refinery + again + exchange v0.6 (remaining)
+## Week 1: Again + tool envelope + exchange v0.6 (remaining)
 
 **Dec 29, 2025 → Jan 4, 2026**
 
 ### Ship
-
-* Refinery runner (platform execution)
-
-  * Execute platforms (currently only definition capture exists)
-  * Depend semantics + deterministic scheduling order (already-platform tie-break)
-  * Fail-fast policy (v0.6 default)
-
-* Exchange + artifact implementation (filesystem first)
-
-  * Locator normalization + run root policy implemented and used everywhere
-  * sha256 over exact bytes for again-critical artifacts
-  * Exchange events emitted as sentences (no locator duplication)
-  * Newspaper gating: only emit artifact/exchange sentences when newspaper (or again) is enabled
 
 * Again mode (replay)
 
