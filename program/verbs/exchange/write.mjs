@@ -378,6 +378,10 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   return "";
 }
 
+function normalizeNewlines(text) {
+  return String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
 export default async function write(sentence, { remember: rememberFn = remember } = {}) {
   const target = sentence?.to?.filename;
   const formatParts = [];
@@ -395,9 +399,10 @@ export default async function write(sentence, { remember: rememberFn = remember 
     format = "csv";
   }
   const text = renderWriteValue(sentence.ob ?? {}, { rememberFn, format });
+  const normalized = normalizeNewlines(text);
   if (target) {
-    await fs.writeFile(target, String(text ?? ""), "utf8");
-    const buffer = Buffer.from(String(text ?? ""), "utf8");
+    await fs.writeFile(target, normalized, "utf8");
+    const buffer = Buffer.from(normalized, "utf8");
     const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
     if (artifact?.su?.name) {
       recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
@@ -406,7 +411,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
     // eslint-disable-next-line no-console
     console.log(text);
   }
-  return { ob: { text }, be: "write" };
+  return { ob: { text: normalized }, be: "write" };
 }
 
 export const signatures = [

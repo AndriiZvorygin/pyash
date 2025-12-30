@@ -135,8 +135,13 @@ function exchangeRuntimeHelper() {
   return [
     "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
     "let pyaArtifactCounter = 0;",
+    "const pyaArtifacts = new Map();",
+    "const pyaArtifactHashes = new Map();",
     "function pyaExchangeEnabled() {",
     "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
+    "}",
+    "function pyaNormalizeNewlines(text) {",
+    "  return String(text ?? \"\").replace(/\\r\\n/g, \"\\n\").replace(/\\r/g, \"\\n\");",
     "}",
     "function pyaNormalizeLocator(locator) {",
     "  const text = String(locator ?? \"\");",
@@ -160,9 +165,19 @@ function exchangeRuntimeHelper() {
     "}",
     "function pyaRecordArtifact(locator, bytes, op) {",
     "  if (!pyaExchangeEnabled()) return null;",
-    "  const name = `artifact-${pyaArtifactCounter++}`;",
     "  const normalized = pyaNormalizeLocator(locator);",
+    "  const existing = pyaArtifacts.get(normalized);",
     "  const hash = crypto.createHash(\"sha256\").update(bytes).digest(\"hex\");",
+    "  if (existing) {",
+    "    const priorHash = pyaArtifactHashes.get(existing);",
+    "    if (priorHash && priorHash !== hash) throw new Error(\"hash inconsistency\");",
+    "    if (!priorHash) pyaArtifactHashes.set(existing, hash);",
+    "    if (op) pyaEmitExchange(`su name ${existing} as name ${op} from name exchange be exchange ya`);",
+    "    return existing;",
+    "  }",
+    "  const name = `artifact-${pyaArtifactCounter++}`;",
+    "  pyaArtifacts.set(normalized, name);",
+    "  pyaArtifactHashes.set(name, hash);",
     "  const size = bytes?.length ?? 0;",
     "  const locatorText = JSON.stringify(normalized);",
     "  pyaEmitExchange(`su name ${name} ob text ${locatorText} accordingto name sha256 fromtext text \"${hash}\" by num ${size} from name exchange be artifact ya`);",
@@ -177,8 +192,9 @@ function exchangeRuntimeHelper() {
     "  return buf.toString(\"utf8\");",
     "}",
     "function pyaWriteTextFile(filename, text, op) {",
-    "  fs.writeFileSync(filename, text ?? \"\");",
-    "  const buf = Buffer.from(String(text ?? \"\"), \"utf8\");",
+    "  const normalized = pyaNormalizeNewlines(text);",
+    "  fs.writeFileSync(filename, normalized);",
+    "  const buf = Buffer.from(String(normalized ?? \"\"), \"utf8\");",
     "  pyaRecordArtifact(filename, buf, op);",
     "}"
   ].join("\n");
@@ -2130,11 +2146,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (cHelpers) {
           cHelpers.usesStdlib = true;
           cHelpers.usesExchange = true;
+          if (fmt === "%s") cHelpers.usesTextHelper = true;
         }
         const safePath = JSON.stringify(writeFilename);
         const fileVar = `out_${cState?.fileCounter ?? 0}`;
         if (cState) cState.fileCounter += 1;
-        const writeLine = `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }\npya_exchange_record_file(${safePath}, "write");`;
+        const writeLine = fmt === "%s"
+          ? `pya_write_text_file(${safePath}, ${expr});\npya_exchange_record_file(${safePath}, "write");`
+          : `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }\npya_exchange_record_file(${safePath}, "write");`;
         if (isWrite) return writeLine;
         return (wantCsv || wantYaml) ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
