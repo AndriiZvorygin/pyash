@@ -4,6 +4,10 @@ import { orderVyahModifiers } from "./library/grammar/vyah.mjs";
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
+  if (np.la) {
+    const embedded = sentenceToPyash(np.la);
+    return `la ${embedded} ko`;
+  }
   if (np.name !== undefined) {
     if (Array.isArray(np.nameTypeWords) && np.nameTypeWords.length > 0) {
       return `name ${np.nameTypeWords.join(" ")} ${np.name}`;

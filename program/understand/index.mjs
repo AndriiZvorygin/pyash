@@ -3,7 +3,8 @@ import {
   ROLE_KEYS,
   TYPE_TOKENS,
   CONTEXT_KEYS,
-  AXIS_CONTEXT_TO_KEYWORD
+  AXIS_CONTEXT_TO_KEYWORD,
+  MOODS
 } from "../library/grammar/keywords.mjs";
 
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
@@ -60,22 +61,22 @@ function tokenize(line) {
   return tokens;
 }
 
-export function parse(line) {
-  let quotedText = null;
-  let working = line;
-
-  const blockMatch = working.match(/quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/);
-  if (blockMatch) {
-    quotedText = blockMatch[2];
-    working = working.replace(blockMatch[0], ` ${QUOTED_PLACEHOLDER} `);
-  }
-
-  const tokens = tokenize(working.trim());
+function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) {
   if (tokens.length === 0) return null;
-
-  const mood = tokens.at(-1);
-  const words = tokens.slice(0, -1);
-  const s = { mood };
+  let mood = null;
+  let words = tokens;
+  if (allowMoodless) {
+    const maybeMood = tokens.at(-1);
+    if (MOODS.includes(maybeMood)) {
+      mood = maybeMood;
+      words = tokens.slice(0, -1);
+    }
+  } else {
+    mood = tokens.at(-1);
+    words = tokens.slice(0, -1);
+  }
+  const s = {};
+  if (mood) s.mood = mood;
   let current = null;
   let slot = null;
   let vyahValues = null;
@@ -109,6 +110,27 @@ export function parse(line) {
     return { chain, endIndex: idx };
   }
 
+  function parseClause(startIdx) {
+    if (words[startIdx] !== "la") return null;
+    let depth = 1;
+    const clauseTokens = [];
+    for (let j = startIdx + 1; j < words.length; j++) {
+      const word = words[j];
+      if (word === "la") {
+        depth += 1;
+      } else if (word === "ko") {
+        depth -= 1;
+        if (depth === 0) {
+          const clause = parseTokens(clauseTokens, { allowMoodless: true, quotedText });
+          if (!clause) throw new Error("malformed embedded sentence form");
+          return { clause, endIndex: j };
+        }
+      }
+      clauseTokens.push(word);
+    }
+    throw new Error("subordinate clause missing ko");
+  }
+
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
 
@@ -135,6 +157,20 @@ export function parse(line) {
       const subline = subTokens.join(" ");
       s.consequence = parse(subline);
       break;
+    }
+
+    if (t === "la") {
+      const parsed = parseClause(i);
+      if (parsed) {
+        const target = slot || (current ? s[current] : null);
+        if (target) {
+          target.la = parsed.clause;
+        } else {
+          s.la = parsed.clause;
+        }
+        i = parsed.endIndex;
+        continue;
+      }
     }
 
     if (t === "all") {
@@ -511,4 +547,19 @@ export function parse(line) {
   }
 
   return s;
+}
+
+export function parse(line) {
+  let quotedText = null;
+  let working = line;
+
+  const blockMatch = working.match(/quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/);
+  if (blockMatch) {
+    quotedText = blockMatch[2];
+    working = working.replace(blockMatch[0], ` ${QUOTED_PLACEHOLDER} `);
+  }
+
+  const tokens = tokenize(working.trim());
+  if (tokens.length === 0) return null;
+  return parseTokens(tokens, { allowMoodless: false, quotedText });
 }

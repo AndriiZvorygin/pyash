@@ -14,14 +14,17 @@ export function splitSentences(text) {
 
   const sentences = [];
   let sentenceTokens = [];
+  let clauseDepth = 0;
 
   let current = "";
   let inQuote = false;
 
   const pushToken = (token) => {
     if (!token) return;
+    if (token === "la") clauseDepth += 1;
+    if (token === "ko") clauseDepth = Math.max(0, clauseDepth - 1);
     sentenceTokens.push(token);
-    if (MOODS.has(token)) {
+    if (clauseDepth === 0 && MOODS.has(token)) {
       sentences.push(sentenceTokens.join(" "));
       sentenceTokens = [];
     }

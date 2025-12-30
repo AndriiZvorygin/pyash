@@ -118,6 +118,7 @@ const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
 
 function caseTypeWords(value) {
   if (value == null) return [];
+  if (value.la) return ["la"];
 
   if (Array.isArray(value)) {
     // Best-effort: derive from first element.
@@ -228,6 +229,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
 
 function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value == null) return [];
+  if (value.la) return ["la"];
 
   if (Array.isArray(value)) {
     return value.length > 0 ? caseTypeWordsWithMemory(value[0], remember) : [];
