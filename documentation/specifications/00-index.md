@@ -21,6 +21,7 @@ Recommended practice loop
 6. Read `06-errors.md`, then run `quiz/exists_do.test.mjs` and inspect `err.sentence`.
 
 Feature specs (optional, when blessed):
+- `12-source-maps.md` (v0.1)
 - `20-arithmetic.md`
 - `21-vectors.md`
 - `22-understand.md`

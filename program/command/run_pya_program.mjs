@@ -32,12 +32,13 @@ async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
+  const useNewspaper = args.includes("--newspaper");
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--gross" || arg === "--full") continue;
+    if (arg === "--gross" || arg === "--full" || arg === "--newspaper") continue;
     if (arg === "--run-id" || arg === "--run-time") {
       i += 1;
       continue;
@@ -49,7 +50,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -75,7 +76,7 @@ async function main() {
   const runTime = runTimeFlag || new Date().toISOString();
   const newspaperLines = [];
   const pushNewspaper = (line) => {
-    if (line) newspaperLines.push(line);
+    if (useNewspaper && line) newspaperLines.push(line);
   };
   const runStart = `su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
@@ -118,10 +119,12 @@ async function main() {
 
   const result = remember("result");
   pushNewspaper(`su name ${runId} be end ya`);
-  const newspaperDir = path.resolve(process.cwd(), "newspaper");
-  await fs.mkdir(newspaperDir, { recursive: true });
-  const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
-  await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
+  if (useNewspaper) {
+    const newspaperDir = path.resolve(process.cwd(), "newspaper");
+    await fs.mkdir(newspaperDir, { recursive: true });
+    const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
+    await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
+  }
   if (runError) throw runError;
 
   if (full) {
