@@ -3628,6 +3628,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
+  const refineryDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
   const ceremonyFns = new Map();
@@ -3635,6 +3636,96 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i];
     const name = sentence?.su?.name;
+
+    if (sentence.mood === "def" && sentence.be === "refinery") {
+      if (!name) {
+        throwErrorSentence({
+          name: "refinery defective",
+          message: "refinery name required",
+          from: { name: "compile" },
+          raw: sentence
+        });
+      }
+      const body = [];
+      let j = i + 1;
+      for (; j < sentences.length; j++) {
+        if (sentences[j].mood === "prah") break;
+        body.push(sentences[j]);
+      }
+      const platforms = [];
+      const seen = new Set();
+      for (const entry of body) {
+        if (entry?.mood !== "ya" || entry?.be !== "platform") {
+          throwErrorSentence({
+            name: "platform defective",
+            message: "platform declaration must be be platform ya",
+            from: { name: "compile" },
+            raw: entry
+          });
+        }
+        const platformName = entry?.su?.name;
+        if (!platformName) {
+          throwErrorSentence({
+            name: "platform defective",
+            message: "platform name required",
+            from: { name: "compile" },
+            raw: entry
+          });
+        }
+        if (seen.has(platformName)) {
+          throwErrorSentence({
+            name: "platform defective",
+            message: `platform name duplicated: ${platformName}`,
+            from: { name: "compile" },
+            raw: entry
+          });
+        }
+        seen.add(platformName);
+        let deps = [];
+        if (entry.from) {
+          if (!entry.from?.ve || entry.from.ve.type !== "name" || !Array.isArray(entry.from.ve.values)) {
+            throwErrorSentence({
+              name: "depend defective",
+              message: "depend list must be from ve name ...",
+              from: { name: "compile" },
+              raw: entry.from
+            });
+          }
+          deps = entry.from.ve.values.map((value) => String(value));
+        }
+        const ob = entry?.ob;
+        if (!ob || typeof ob !== "object" || !("la" in ob)) {
+          throwErrorSentence({
+            name: "platform defective",
+            message: "platform activity must be ob la ... ko",
+            from: { name: "compile" },
+            raw: entry
+          });
+        }
+        const extraKeys = Object.keys(ob).filter((key) => key !== "la");
+        if (extraKeys.length > 0) {
+          throwErrorSentence({
+            name: "platform defective",
+            message: "platform activity must contain exactly one embedded sentence",
+            from: { name: "compile" },
+            raw: { extra: extraKeys }
+          });
+        }
+        const clause = ob.la;
+        if (!clause || typeof clause !== "object") {
+          throwErrorSentence({
+            name: "platform defective",
+            message: "platform activity must be ob la ... ko",
+            from: { name: "compile" },
+            raw: clause
+          });
+        }
+        platforms.push({ name: platformName, deps, action: clause });
+      }
+      refineryDefs.set(name, { name, platforms });
+      i = j;
+      continue;
+    }
 
     if (sentence.mood === "def" && sentence.be === "ceremony") {
       if (sentence.su?.name && ceremonyFns.has(sentence.su.name)) {
@@ -3892,6 +3983,171 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
           declaredVectorTypes.set(name, sentence.ob.ve.type);
         }
       }
+    }
+  }
+
+  if (refineryDefs.size > 0) {
+    if (lang === "c") {
+      cHelpers.usesStdlib = true;
+      cHelpers.usesString = true;
+      cHelpers.usesExchange = true;
+      const refineryLines = [];
+      for (const [refineryName, refinery] of refineryDefs.entries()) {
+        const prefix = sanitizeName(`pya_refinery_${refineryName}`);
+        const nameVar = `${prefix}_names`;
+        const runVar = `${prefix}_runs`;
+        const depsVar = `${prefix}_deps`;
+        const depCountVar = `${prefix}_dep_counts`;
+        const actionVar = `${prefix}_actions`;
+        const depLookup = `${prefix}_find`;
+        const runFn = `${prefix}_run`;
+        const count = refinery.platforms.length;
+        const depArrays = [];
+        const runFns = [];
+        const names = [];
+        const actions = [];
+        refinery.platforms.forEach((platform) => {
+          const fnName = sanitizeName(`${prefix}_${platform.name}`);
+          const actionLine = sentenceToPyash(platform.action);
+          const actionEvoke = `ob la ${actionLine} ko be evoke ya`;
+          const bodyLine = transpileSentence(platform.action, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
+          if (typeof bodyLine === "string" && bodyLine.includes("remember(")) usesRememberShim = true;
+          if (rememberFlag.used) {
+            usesRememberShim = true;
+            rememberFlag.used = false;
+          }
+          if (typeof bodyLine === "string" && bodyLine.includes("runAtAll(")) {
+            usesMapShim = true;
+            usesRememberShim = true;
+          }
+          const linesBody = (bodyLine ?? "/* TODO: platform action */")
+            .split("\n")
+            .map(line => `  ${line}`);
+          refineryLines.push(`static void ${fnName}(void) {`);
+          refineryLines.push(...linesBody);
+          refineryLines.push("}");
+          runFns.push(fnName);
+          names.push(platform.name);
+          actions.push({ evoke: actionEvoke, result: actionLine });
+          const depName = sanitizeName(`${prefix}_${platform.name}_deps`);
+          const deps = platform.deps.map(dep => JSON.stringify(dep)).join(", ");
+          depArrays.push(`static const char *${depName}[] = { ${deps}${deps ? ", " : ""}NULL };`);
+        });
+        refineryLines.push(...depArrays);
+        refineryLines.push(`static const char *${nameVar}[] = { ${names.map(n => JSON.stringify(n)).join(", ")} };`);
+        refineryLines.push(`static void (*${runVar}[])(void) = { ${runFns.join(", ")} };`);
+        refineryLines.push(`static const char **${depsVar}[] = { ${refinery.platforms.map(p => sanitizeName(`${prefix}_${p.name}_deps`)).join(", ")} };`);
+        refineryLines.push(`static const int ${depCountVar}[] = { ${refinery.platforms.map(p => p.deps.length).join(", ")} };`);
+        refineryLines.push(`static const char *${actionVar}[] = { ${actions.map(action => JSON.stringify(action.result)).join(", ")} };`);
+        refineryLines.push(`static const char *${actionVar}_evoke[] = { ${actions.map(action => JSON.stringify(action.evoke)).join(", ")} };`);
+        refineryLines.push(`static int ${depLookup}(const char *name) {`);
+        refineryLines.push(`  for (int i = 0; i < ${count}; i++) { if (strcmp(${nameVar}[i], name) == 0) return i; }`);
+        refineryLines.push("  return -1;");
+        refineryLines.push("}");
+        refineryLines.push(`static int ${runFn}(void) {`);
+        refineryLines.push(`  int done[${count}];`);
+        refineryLines.push(`  for (int i = 0; i < ${count}; i++) done[i] = 0;`);
+        refineryLines.push("  int completed = 0;");
+        refineryLines.push(`  while (completed < ${count}) {`);
+        refineryLines.push("    int next = -1;");
+        refineryLines.push(`    for (int i = 0; i < ${count}; i++) {`);
+        refineryLines.push("      if (done[i]) continue;");
+        refineryLines.push("      int ready = 1;");
+        refineryLines.push(`      for (int d = 0; d < ${depCountVar}[i]; d++) {`);
+        refineryLines.push(`        int idx = ${depLookup}(${depsVar}[i][d]);`);
+        refineryLines.push("        if (idx < 0 || !done[idx]) { ready = 0; break; }");
+        refineryLines.push("      }");
+        refineryLines.push("      if (!ready) continue;");
+        refineryLines.push("      if (next < 0 || strcmp(" + nameVar + "[i], " + nameVar + "[next]) < 0) next = i;");
+        refineryLines.push("    }");
+        refineryLines.push("    if (next < 0) return 1;");
+        refineryLines.push(`    pya_emit_exchange(${actionVar}_evoke[next]);`);
+        refineryLines.push(`    ${runVar}[next]();`);
+        refineryLines.push(`    pya_emit_exchange(${actionVar}[next]);`);
+        refineryLines.push("    done[next] = 1;");
+        refineryLines.push("    completed += 1;");
+        refineryLines.push("  }");
+        refineryLines.push("  return 0;");
+        refineryLines.push("}");
+        mainLines.push(`if (getenv("PYA_REFINERY") && strcmp(getenv("PYA_REFINERY"), ${JSON.stringify(refineryName)}) == 0) { if (${runFn}() != 0) return 1; }`);
+      }
+      lines.push(...refineryLines);
+    } else {
+      const refineryLines = [];
+      refineryLines.push("const __pyaRefineries = {};");
+      refineryLines.push("const __pyaCompareUtf8 = (() => {");
+      refineryLines.push("  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;");
+      refineryLines.push("  return (a, b) => {");
+      refineryLines.push("    if (a === b) return 0;");
+      refineryLines.push("    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));");
+      refineryLines.push("    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));");
+      refineryLines.push("    const len = Math.min(bufA.length, bufB.length);");
+      refineryLines.push("    for (let i = 0; i < len; i += 1) {");
+      refineryLines.push("      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;");
+      refineryLines.push("    }");
+      refineryLines.push("    return bufA.length < bufB.length ? -1 : 1;");
+      refineryLines.push("  };");
+      refineryLines.push("})();");
+      refineryLines.push("const __pyaNewspaper = (typeof process !== \"undefined\" ? process.env?.PYA_NEWSPAPER : undefined) === \"1\";");
+      refineryLines.push("const __pyaEmitNewspaper = (line) => { if (__pyaNewspaper && line) console.log(\"PYA_NEWSPAPER:\" + line); };");
+      refineryLines.push("function __pyaRunRefinery(name) {");
+      refineryLines.push("  const refinery = __pyaRefineries[name];");
+      refineryLines.push("  if (!refinery) return null;");
+      refineryLines.push("  const completed = new Set();");
+      refineryLines.push("  const pending = new Set(Object.keys(refinery.platforms));");
+      refineryLines.push("  while (pending.size > 0) {");
+      refineryLines.push("    const ready = [];");
+      refineryLines.push("    for (const platformName of pending) {");
+      refineryLines.push("      const platform = refinery.platforms[platformName];");
+      refineryLines.push("      const deps = platform?.deps || [];");
+      refineryLines.push("      if (deps.every((dep) => completed.has(dep))) ready.push(platformName);");
+      refineryLines.push("    }");
+      refineryLines.push("    if (ready.length === 0) return null;");
+      refineryLines.push("    ready.sort(__pyaCompareUtf8);");
+      refineryLines.push("    const next = ready[0];");
+      refineryLines.push("    const platform = refinery.platforms[next];");
+      refineryLines.push("    __pyaEmitNewspaper(platform.evoke);");
+      refineryLines.push("    let res;");
+      refineryLines.push("    try { res = platform.run(); } catch (err) {");
+      refineryLines.push("      const msg = err?.message ? String(err.message) : \"refinery failed\";");
+      refineryLines.push("      __pyaEmitNewspaper(`su name refinery failure ob text ${msg.replace(/\\\\/g, \"\\\\\\\\\").replace(/\"/g, \"\\\\\\\"\")} from name runtime be error ya`);");
+      refineryLines.push("      return { be: \"error\" };");
+      refineryLines.push("    }");
+      refineryLines.push("    if (res && res.be === \"error\" && res.mood) { __pyaEmitNewspaper(platform.result); return res; }");
+      refineryLines.push("    __pyaEmitNewspaper(platform.result);");
+      refineryLines.push("    completed.add(next);");
+      refineryLines.push("    pending.delete(next);");
+      refineryLines.push("  }");
+      refineryLines.push("  return null;");
+      refineryLines.push("}");
+      for (const [refineryName, refinery] of refineryDefs.entries()) {
+        refineryLines.push(`__pyaRefineries[${JSON.stringify(refineryName)}] = { platforms: {} };`);
+        refinery.platforms.forEach((platform) => {
+          const fnName = sanitizeName(`pya_refinery_${refineryName}_${platform.name}`);
+          const actionLine = sentenceToPyash(platform.action);
+          const evokeLine = `ob la ${actionLine} ko be evoke ya`;
+          const bodyLine = transpileSentence(platform.action, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
+          if (typeof bodyLine === "string" && bodyLine.includes("remember(")) usesRememberShim = true;
+          if (rememberFlag.used) {
+            usesRememberShim = true;
+            rememberFlag.used = false;
+          }
+          if (typeof bodyLine === "string" && bodyLine.includes("runAtAll(")) {
+            usesMapShim = true;
+            usesRememberShim = true;
+          }
+          const bodyLines = (bodyLine ?? "// TODO: platform action")
+            .split("\n")
+            .map(line => `  ${line}`);
+          refineryLines.push(`function ${fnName}() {`);
+          refineryLines.push(...bodyLines);
+          refineryLines.push("}");
+          refineryLines.push(`__pyaRefineries[${JSON.stringify(refineryName)}].platforms[${JSON.stringify(platform.name)}] = { deps: ${JSON.stringify(platform.deps)}, run: ${fnName}, evoke: ${JSON.stringify(evokeLine)}, result: ${JSON.stringify(actionLine)} };`);
+        });
+      }
+      refineryLines.push("const __pyaRefineryName = (typeof process !== \"undefined\" ? process.env?.PYA_REFINERY : undefined) || (typeof globalThis !== \"undefined\" ? globalThis.PYA_REFINERY : undefined);");
+      refineryLines.push("if (__pyaRefineryName) __pyaRunRefinery(__pyaRefineryName);");
+      lines.push(...refineryLines);
     }
   }
 

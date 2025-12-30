@@ -2,13 +2,14 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: ./runc [--newspaper] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>" >&2
+  echo "usage: ./runc [--newspaper] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>" >&2
   exit 2
 fi
 
 NEWSPAPER=0
 RUN_ID=""
 RUN_TIME=""
+REFINERY=""
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -30,6 +31,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --run-time=*)
       RUN_TIME="${1#*=}"
+      shift
+      ;;
+    --refinery)
+      REFINERY="$2"
+      shift 2
+      ;;
+    --refinery=*)
+      REFINERY="${1#*=}"
       shift
       ;;
     --*)
@@ -74,7 +83,15 @@ if [[ "$NEWSPAPER" -eq 1 ]]; then
   if [[ -n "$RUN_TIME" ]]; then
     RUN_ARGS+=(--run-time "$RUN_TIME")
   fi
-  node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- "$TMP_EXE"
+  if [[ -n "$REFINERY" ]]; then
+    PYA_REFINERY="$REFINERY" node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- "$TMP_EXE"
+  else
+    node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- "$TMP_EXE"
+  fi
 else
-  "$TMP_EXE"
+  if [[ -n "$REFINERY" ]]; then
+    PYA_REFINERY="$REFINERY" "$TMP_EXE"
+  else
+    "$TMP_EXE"
+  fi
 fi

@@ -1,6 +1,6 @@
-# `14-refinery.md` (draft v0.1)
+# `14-refinery.md` (v0.1)
 
-**Status:** draft v0.1 (wording polish pending)
+**Status:** v0.1
 
 ---
 
@@ -106,7 +106,7 @@ The refinery name <refinery> is a su name identifier.
 
 ### 5.2 Multiple refineries
 
-A file MAY declare more than one refinery. Selecting which refinery to run is a runner policy (outside this spec). If unspecified, runners SHOULD default to su name main.
+A file MAY declare more than one refinery. Selecting which refinery to run is a runner policy (outside this spec).
 
 
 ---
@@ -196,6 +196,8 @@ failure: a surfaced error sentence be error ya (see 06-errors.md)
 
 
 If an activity returns a duty/stream/chip sentence (see 09-runtime-primitives.md), that is still an observable ya outcome and counts as platform completion. Lifecycle control of duties/streams is performed only if explicitly expressed by later activities (for example an await platform).
+
+If an activity yields no explicit result sentence, the runner MAY record the activity sentence itself as the result event (same fallback used by the main run loop).
 
 
 ---
