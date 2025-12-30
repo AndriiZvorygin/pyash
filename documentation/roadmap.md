@@ -144,6 +144,13 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Aspect spec moved to `40-aspect.md` and referenced from the spec index.
 * Import rules locked in quizzes (entry allows top-level `do`; imported modules declarations-only).
 
+### Dec 30, 2025: Refinery scaffolding + compiled run newspapers
+
+* Refinery spec drafted (`14-refinery.md`) and indexed.
+* Interpreter captures refinery/platform definitions into a normalized registry (no execution at definition time).
+* Compiled JS/C runs emit exchange artifacts into newspapers with parity tests.
+* `runjs`/`runc` use unique temp outputs to avoid collisions.
+
 
 ---
 
