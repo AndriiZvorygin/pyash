@@ -138,190 +138,186 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `be map def` now locked as the configuration format baseline.
 * Maps/JSON/YAML/CSV parity + determinism now considered done.
 
+
 ### Dec 29, 2025: Pre-week hygiene gates complete
 
 * `50-modules.md` promoted to v0.1.
 * Aspect spec moved to `40-aspect.md` and referenced from the spec index.
 * Import rules locked in quizzes (entry allows top-level `do`; imported modules declarations-only).
+* `08-vyah.md` shipped (official ordering; `vyah … sloh` success marker).
+* Subordinate clauses (`la … ko`) shipped at parity (supports embedded mood when present).
+* Runtime contracts shipped in code (duty / stream / chip + lifecycle acks; chip exhaustion errors).
+* Error surfacing shipped in code: thrown errors are `be error do`, surfaced runtime results are `be error ya`.
 
 ### Dec 30, 2025: Refinery scaffolding + compiled run newspapers
 
-* Refinery spec drafted (`14-refinery.md`) and indexed.
+* Refinery spec drafted (`14-refinery.md`, refinery/platform/activity vocabulary) and indexed.
 * Interpreter captures refinery/platform definitions into a normalized registry (no execution at definition time).
-* Compiled JS/C runs emit exchange artifacts into newspapers with parity tests.
+* Run newspaper implemented as opt-in (`--newspaper`) and locked with parity tests across interpreter / JS / C.
+* Compiled JS/C runs emit the same newspaper format (via shared runner) when flagged.
+* `12-source-maps.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
-
 
 ---
 
 # TODO
 
-## Week 1: Pipeline + replay + logging + runtime contracts v0.6
+## Week 1: Refinery + again + exchange v0.6 (remaining)
 
 **Dec 29, 2025 → Jan 4, 2026**
 
 ### Ship
 
-* Pipeline runner (stages)
+* Refinery runner (platform execution)
 
-  * Explicit stage graph (linear acceptable first; stage metadata DAG-ready)
-  * Stage contract: inputs, outputs, artefacts, error sentence, deterministic hash inputs
-  * Stage ids are stable strings (used everywhere: paths, journal, logs)
-* Queue + worker pool
+  * Execute platforms (currently only definition capture exists)
+  * Depend semantics + deterministic scheduling order (already-platform tie-break)
+  * Fail-fast policy (v0.6 default)
 
-  * Single-worker acceptable first, with stable scheduling order
-  * Stage execution isolation: per-stage working dir under artefacts (`stages/<stageId>/...`)
-* Retries with backoff, checkpoints
+* Exchange + artifact implementation (filesystem first)
 
-  * Retry policy stored in journal (attempt count, delays, final outcome)
-  * Checkpoints keyed by `(stageId, inputHash, configHash)`
-* Artefacts directory contract (stable layout)
+  * Locator normalization + run root policy implemented and used everywhere
+  * sha256 over exact bytes for again-critical artifacts
+  * Exchange events emitted as sentences (no locator duplication)
+  * Newspaper gating: only emit artifact/exchange sentences when newspaper (or again) is enabled
 
-  * Stable run root with `manifest`, `journal`, `logs`, `stages/<stageId>/...`
-  * Content-addressed blob store for large objects (audio, video, downloads)
-* Structured logs (machine-readable)
+* Again mode (replay)
 
-  * Event stream with stable ordering rules
-  * Log events carry correlation ids and link to journal ids + artefact paths
-* Run journal per run (manifest as JSON map value, persisted via existing JSON write)
-
-  * In-memory: json map value
-  * On disk: `write … to state json to filename …` for byte-stable output 
-  * Per-stage start/end records
-  * Per-attempt records for retries
-  * Hashes for inputs, outputs, artefacts
-* Replay mode
-
-  * Re-executes from journal
+  * Add `--again` (or equivalent) runner policy: forces newspaper emission + strict artifact hashing
+  * Runs again from recorded newspaper + artifacts
   * Verifies hashes and byte-stability for golden runs
-* Runtime primitives (real, first-class)
 
-  * **Value** (finished result or structured error)
-  * **TaskHandle** (running job with lifecycle)
-  * **Stream** (ordered chunk sequence with lifecycle)
-* Aspect-driven evaluation contract (implemented end-to-end)
+* Tool call envelope (generic)
 
-  * `fa` returns Value
-  * `pfih` returns TaskHandle
-  * `me` returns Stream
-  * lifecycle/control aspects usable by plumbing: `tyih`, `mweh`, `qa`, `dweh`
-* Tool call envelope (generic, for MCP + any external tool)
+  * Newspaper records `tool.call` and `tool.result` as sentences
+  * Tool outputs recorded as artifacts with sha256 so again verification is possible
 
-  * Journal records `tool.call` and `tool.result`
-  * Hashes stable and replay-verifiable
+* (Optional if time) Retries + checkpoints
+
+  * Retry policy recorded (attempt count, delays, final outcome)
+  * Checkpoints keyed by `(platformId, inputHash, configHash)`
+
+* Artifacts directory contract (stable layout)
+
+  * Stable run root layout for refinery runs
+  * Per-platform working dir: `platforms/<platformId>/...`
+  * (Optional) content-addressed blob store for large objects
 
 ### Spec drops (freeze v0.6)
 
-* Run journal spec v0.1
+* `13-exchange-and-artifact.md` v0.1 freeze
 
-  * fields, ordering, hashing rules
-  * per-stage record schema: `stageId`, `aspect`, `primitiveKind`, `attempt`, `startTs`, `endTs`, `deadlineMs`, `cancelPolicy`
-  * tool records: `toolName`, `argsHash`, `resultHash`, `backendId`, `durationMs`, `ok`
-* Error model spec v0.1
+  * Locator rules + run root policy (and how it is declared under newspaper/again)
+  * sha256 rules (exact bytes; UTF-8 + LF + no BOM when writing text)
+  * Artifact and exchange sentence forms
+  * Again mode requirements (hash required for again-critical artifacts)
 
-  * stage failure error sentences, using global error shape (`su name`, `ob text`, `from name`) 
-  * stable kinds for: IO failure, timeout, cancellation, backend lost, hash mismatch
-* IO model spec v0.1
+* `14-refinery.md` v0.1 freeze (refinery/platform/activity)
 
-  * inputs, outputs, artefacts rules
-  * canonical path rules and canonical ordering rules (reuse existing “official key order” concept from map write rules) 
-* Log schema spec v0.1
+  * Refinery + platform declarations
+  * Depend list semantics + deterministic scheduling rule
+  * Fail-fast default policy
+  * Hooks for newspaper + again mode
 
-  * event names, required fields, ordering, correlation ids (`traceId`, `stageEventId`)
-* Aspect spec v0.1 (`40-aspect.md`)
+* Error model updates (`06-errors.md`) v0.1 additions
 
-  * aspect inventory
-  * return typing rule (Value/TaskHandle/Stream)
-  * lifecycle semantics for `mweh` and `qa`
-* Runtime primitives spec v0.1
+  * stable names for exchange/artifact/hash failures:
+    `exchange defective`, `artifact defective`, `hash inconsistency`
+  * stable names for refinery failures:
+    `refinery defective`, `platform defective`, `depend defective`
 
-  * Value shape
-  * TaskHandle fields + lifecycle states
-  * Stream chunk envelope + lifecycle operations
+* (If needed) Newspaper + again policy note in `11-run-newspaper.md`
+
+  * newspaper is opt-in
+  * again mode forces the strict subset needed for replay verification
 
 ### Hardening
 
-* Replays match byte-stable artefacts for golden runs
-* Cross-backend parity for journal writing and stage failure errors
-* Torture tests
+* Again verification for golden runs
 
-  * retries with backoff
-  * checkpoints hit and miss
-  * partial stage failure
-  * replay verification and hash mismatch reporting
-* Primitive parity tests
+  * sha256 mismatch reporting is stable across backends
+  * locator normalization parity tests (interp / JS / C)
 
-  * same stage + same aspect yields same `primitiveKind`
-  * `qa` and `mweh` produce terminal outcomes within declared deadlines
+* Refinery runner torture tests (single-worker)
+
+  * depend ordering
+  * fail-fast stops downstream platforms
+  * platform isolation directory is stable
+
+* Exchange hardening
+
+  * file read/write produces identical artifact/exchange sentences across backends when enabled
+  * hashing determinism test on a known fixture
+
 * Tool event parity tests
 
   * stable hashing and ordering for tool records
-  * replay detects altered tool outputs
+  * again detects altered tool outputs
 
 ---
 
-## Week 2: Concurrency v0.7
+## Week 2: Concurrency v0.7 (remaining)
 
 **Jan 5 → Jan 11, 2026**
 
 ### Ship
 
-* DAG scheduler for pipeline stages
+* Depend scheduling upgrade (ready queue)
 
-  * Explicit dependency edges, ready-queue semantics
-  * Stable ordering rules when multiple nodes are ready
+  * Stable ordering rules when multiple platforms are already
+  * Optional parallelism only if ordering remains deterministic
+
 * Cancellation and timeouts (real)
 
-  * Deadline propagation to stages and tool calls
-  * `qa` cancellation semantics: terminal state guaranteed or explicit timeout failure
-  * Cancellation scopes: stage, subtree, entire run
+  * Deadline propagation to platforms and tool calls
+  * `qa` cancellation semantics: terminal outcome guaranteed or explicit timeout failure
+  * Cancellation scopes: platform, depend subtree, entire run
+
 * Backpressure rules for Stream (real)
 
   * Bounded queues between producers and consumers
   * Overflow policy per stream type (block, drop, coalesce)
-  * Consumer pull model (`next`) with predictable chunk ordering
+  * Consumer pull model (`next`) with predictable chip ordering
+
 * Deterministic simulation mode for scheduling (tests)
 
   * Fixed seed and simulated clock
-  * Simulated execution produces deterministic journal + stream ordering
-* Journal records scheduling decisions and outcomes
+  * Simulated execution produces deterministic newspaper ordering
+
+* Newspaper records scheduling decisions (when enabled)
 
   * queue events: enqueued, dequeued, blocked, unblocked
-  * stream events: chunk produced, chunk consumed, close, cancel
+  * stream events: chip produced, chip consumed, close, cancel
   * cancellation events: requested, acknowledged, finalized
 
 ### Spec drops (freeze v0.7)
 
 * Concurrency spec v0.1
 
-  * DAG semantics and readiness
-  * cancellation semantics (`qa`)
-  * timeout semantics (`dweh` timebox wrapper rules)
-  * backpressure rules for Stream
-* Runtime lifecycle spec v0.1
+  * ready-queue semantics and deterministic ordering
+  * cancellation semantics (`qa`) and timeout semantics (`dweh`)
+  * backpressure rules for stream/chip
 
-  * start, stop, cleanup
-  * failure modes: dead worker, lost stage output, partial stream
 * Simulation mode spec v0.1
 
-  * determinism rules
-  * stable ordering rules for equal-priority scheduling
+  * determinism rules for simulated clock + scheduling ties
 
 ### Hardening
 
-* Deterministic replay of a concurrent run in simulation mode
+* Deterministic run-again of a concurrent run in simulation mode
+
 * Torture tests
 
   * cancellation storms
   * timeout races
   * bounded queues under load
   * slow-consumer stream backpressure
+
 * Parity
 
   * identical error sentences for timeout and cancellation across backends
-  * deterministic ordering of journal events for the same simulation seed
+  * deterministic ordering of newspaper events for the same simulation seed
 
----
 
 ## Week 3: Tool bridge (MCP) v0.3
 
