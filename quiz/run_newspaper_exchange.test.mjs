@@ -18,27 +18,27 @@ function normalizeLines(text) {
     .filter(line => line.length > 0);
 }
 
-test("run writes run newspaper with evoke/result", async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-"));
+test("run newspaper records artifact + exchange for write", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-exchange-"));
   const programPath = path.join(tmpDir, "program.pya");
-  await fs.writeFile(programPath, "su name alpha ob num 1 be number ya\n", "utf8");
+  await fs.writeFile(programPath, "ob text \"hello\" to filename \"out.txt\" be write do\n", "utf8");
 
   const scriptPath = path.join(repoRoot, "program/command/run_pya_program.mjs");
   await execFileAsync(process.execPath, [
     scriptPath,
     "--newspaper",
-    "--run-id", "run-1",
+    "--run-id", "run-exchange",
     "--run-time", "2025-01-01T00:00:00Z",
     programPath
   ], { cwd: tmpDir, timeout: 120000 });
 
-  const newspaperPath = path.join(tmpDir, "newspaper", "run-1.pya");
+  const newspaperPath = path.join(tmpDir, "newspaper", "run-exchange.pya");
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.equal(lines[0], "su name run-1 from time 2025-01-01T00:00:00Z be run ya");
-  assert.ok(lines[1].startsWith("ob filename "));
-  assert.equal(lines[2], "ob la su name alpha ob num 1 be number ya ko be evoke ya");
-  assert.equal(lines[3], "su name alpha ob num 1 be number ya");
-  assert.equal(lines[4], "su name run-1 be end ya");
+  const artifactLine = lines.find(line => line.includes("be artifact") && line.includes("out.txt"));
+  const exchangeLine = lines.find(line => line.includes("be exchange") && line.includes("as name write"));
+
+  assert.ok(artifactLine);
+  assert.ok(exchangeLine);
 });

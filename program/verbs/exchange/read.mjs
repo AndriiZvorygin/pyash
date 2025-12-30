@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
+import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { doRemember, remember, allRemember } from "../../remember/index.mjs";
 import importFromSentence from "./import.mjs";
 import { parse as parseCsv } from "csv-parse/sync";
@@ -213,10 +214,12 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
   const source = "read csv";
   const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
   let sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+  let sourceBuffer = null;
 
   if (sourceFilename) {
     try {
-      sourceText = await fs.promises.readFile(sourceFilename, "utf8");
+      sourceBuffer = await fs.promises.readFile(sourceFilename);
+      sourceText = sourceBuffer.toString("utf8");
     } catch (err) {
       throwErrorSentence({
         name: "csv lost",
@@ -234,6 +237,13 @@ export async function read_fromstate_csv(sentence, { remember } = {}) {
       from: { name: source },
       raw: { filename: sourceFilename }
     });
+  }
+
+  if (sourceFilename && sourceBuffer) {
+    const artifact = recordArtifact({ locator: sourceFilename, producer: "exchange", bytes: sourceBuffer });
+    if (artifact?.su?.name) {
+      recordExchange({ artifactName: artifact.su.name, op: "read", producer: "exchange" });
+    }
   }
 
   const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "data";
@@ -282,10 +292,12 @@ export async function read_fromstate_yaml(sentence) {
   const source = "read yaml";
   const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
   let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
+  let sourceBuffer = null;
 
   if (sourceFilename) {
     try {
-      sourceText = await fs.promises.readFile(sourceFilename, "utf8");
+      sourceBuffer = await fs.promises.readFile(sourceFilename);
+      sourceText = sourceBuffer.toString("utf8");
     } catch (err) {
       throwErrorSentence({
         name: "yaml lost",
@@ -303,6 +315,13 @@ export async function read_fromstate_yaml(sentence) {
       from: { name: source },
       raw: { filename: sourceFilename }
     });
+  }
+
+  if (sourceFilename && sourceBuffer) {
+    const artifact = recordArtifact({ locator: sourceFilename, producer: "exchange", bytes: sourceBuffer });
+    if (artifact?.su?.name) {
+      recordExchange({ artifactName: artifact.su.name, op: "read", producer: "exchange" });
+    }
   }
 
   const targetName = sentence?.to?.name ?? sentence?.su?.name;

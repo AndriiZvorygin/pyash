@@ -4,6 +4,7 @@ import { buildProgram } from "../../program.mjs";
 import { state } from "../../bridge/state.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
+import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
 import YAML from "yaml";
 
@@ -396,6 +397,11 @@ export default async function write(sentence, { remember: rememberFn = remember 
   const text = renderWriteValue(sentence.ob ?? {}, { rememberFn, format });
   if (target) {
     await fs.writeFile(target, String(text ?? ""), "utf8");
+    const buffer = Buffer.from(String(text ?? ""), "utf8");
+    const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
+    if (artifact?.su?.name) {
+      recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+    }
   } else {
     // eslint-disable-next-line no-console
     console.log(text);

@@ -23,6 +23,10 @@ function sanitizeRunId(value) {
     .replace(/\s+/g, "-") || "run";
 }
 
+function normalizeRunRoot(value) {
+  return String(value ?? "").replace(/[\\]+/g, "/");
+}
+
 function resultSentenceForLine(line) {
   try {
     const sentence = parse(line);
@@ -53,12 +57,14 @@ async function run() {
   const sentences = splitSentences(text);
   const runId = runIdFlag || `run-${Date.now()}`;
   const runTime = runTimeFlag || new Date().toISOString();
+  const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   const pushLine = (line) => {
     if (line) newspaperLines.push(line);
   };
 
   pushLine(`su name ${runId} from time ${runTime} be run ya`);
+  pushLine(`ob filename "${runRoot}" be run root ya`);
   for (const raw of sentences) {
     const line = raw.trim();
     if (!line) continue;
