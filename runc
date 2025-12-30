@@ -51,8 +51,8 @@ fi
 
 BASE="$(basename "$SRC")"
 NAME="${BASE%.*}"
-TMP_C="/tmp/${NAME}-pyash.c"
-TMP_EXE="/tmp/${NAME}-pyash"
+TMP_C="$(mktemp "/tmp/${NAME}-pyash-XXXXXX.c")"
+TMP_EXE="$(mktemp "/tmp/${NAME}-pyash-XXXXXX")"
 
 "$SCRIPT_DIR/compile" from filename "$SRC" become c to filename "$TMP_C"
 ZSV_SRC=()

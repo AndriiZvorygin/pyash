@@ -10,7 +10,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -129,6 +129,59 @@ function inlineSourceMap(code, { sourceName, sourceText } = {}) {
   const encoded = Buffer.from(JSON.stringify(map)).toString("base64");
   output.push(`//# sourceMappingURL=data:application/json;base64,${encoded}`);
   return output.join("\n");
+}
+
+function exchangeRuntimeHelper() {
+  return [
+    "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
+    "let pyaArtifactCounter = 0;",
+    "function pyaExchangeEnabled() {",
+    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
+    "}",
+    "function pyaNormalizeLocator(locator) {",
+    "  const text = String(locator ?? \"\");",
+    "  if (/^[A-Za-z][A-Za-z0-9+.-]*:\\/\\//.test(text)) return text;",
+    "  const runRoot = process.cwd();",
+    "  const resolved = path.resolve(runRoot, text);",
+    "  const relative = path.relative(runRoot, resolved);",
+    "  if (relative.startsWith(\"..\") || path.isAbsolute(relative)) {",
+    "    throw new Error(\"exchange defective\");",
+    "  }",
+    "  return relative.replace(/\\\\/g, \"/\");",
+    "}",
+    "function pyaEmitExchange(line) {",
+    "  if (!pyaExchangeEnabled()) return;",
+    "  const payload = `${PYA_NEWSPAPER_PREFIX}${line}\\n`;",
+    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
+    "    process.stdout.write(payload);",
+    "  } else {",
+    "    console.log(payload.trimEnd());",
+    "  }",
+    "}",
+    "function pyaRecordArtifact(locator, bytes, op) {",
+    "  if (!pyaExchangeEnabled()) return null;",
+    "  const name = `artifact-${pyaArtifactCounter++}`;",
+    "  const normalized = pyaNormalizeLocator(locator);",
+    "  const hash = crypto.createHash(\"sha256\").update(bytes).digest(\"hex\");",
+    "  const size = bytes?.length ?? 0;",
+    "  const locatorText = JSON.stringify(normalized);",
+    "  pyaEmitExchange(`su name ${name} ob text ${locatorText} accordingto name sha256 fromtext text \"${hash}\" by num ${size} from name exchange be artifact ya`);",
+    "  if (op) {",
+    "    pyaEmitExchange(`su name ${name} as name ${op} from name exchange be exchange ya`);",
+    "  }",
+    "  return name;",
+    "}",
+    "function pyaReadTextFile(filename, op) {",
+    "  const buf = fs.readFileSync(filename);",
+    "  pyaRecordArtifact(filename, buf, op);",
+    "  return buf.toString(\"utf8\");",
+    "}",
+    "function pyaWriteTextFile(filename, text, op) {",
+    "  fs.writeFileSync(filename, text ?? \"\");",
+    "  const buf = Buffer.from(String(text ?? \"\"), \"utf8\");",
+    "  pyaRecordArtifact(filename, buf, op);",
+    "}"
+  ].join("\n");
 }
 
 function jsonRuntimeHelper() {
@@ -1376,23 +1429,30 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
       }
       lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
-      if (sourceFilename) {
-        lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
-      } else {
-        lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
-      }
+        if (sourceFilename) {
+          if (cHelpers) cHelpers.usesExchange = true;
+          lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
+        } else {
+          lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+        }
       lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
       lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
       return lines.join("\n");
     }
-    if (jsHelpers) {
-      jsHelpers.usesJsonRuntime = true;
-      jsHelpers.usesVectorFormat = true;
-      if (sourceFilename) jsHelpers.usesFs = true;
-    }
-    const sourceExpr = sourceFilename
-      ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
-      : JSON.stringify(sourceText);
+      if (jsHelpers) {
+        jsHelpers.usesJsonRuntime = true;
+        jsHelpers.usesVectorFormat = true;
+        if (sourceFilename) {
+          jsHelpers.usesFs = true;
+          jsHelpers.usesExchange = true;
+        }
+      }
+    const sourceExpr = sourceFilename && jsHelpers?.usesExchange
+      ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+      : (sourceFilename
+        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+        : JSON.stringify(sourceText));
     const parseVar = `${safeName}_json`;
     const assignLine = alreadyDeclared
       ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
@@ -1433,7 +1493,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
         lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
         if (sourceFilename) {
+          if (cHelpers) cHelpers.usesExchange = true;
           lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: json lost\\n"); }`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
         } else {
           lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
         }
@@ -1444,11 +1506,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (jsHelpers) {
         jsHelpers.usesJsonRuntime = true;
         jsHelpers.usesVectorFormat = true;
-        if (sourceFilename) jsHelpers.usesFs = true;
+        if (sourceFilename) {
+          jsHelpers.usesFs = true;
+          jsHelpers.usesExchange = true;
+        }
       }
-      const sourceExpr = sourceFilename
-        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
-        : JSON.stringify(sourceText);
+      const sourceExpr = sourceFilename && jsHelpers?.usesExchange
+        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+        : (sourceFilename
+          ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+          : JSON.stringify(sourceText));
       const parseVar = `${safeName}_json`;
       const assignLine = alreadyDeclared
         ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
@@ -1546,7 +1613,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
         lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
         if (sourceFilename) {
+          if (cHelpers) cHelpers.usesExchange = true;
           lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: yaml lost\\n"); }`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
         } else {
           lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
         }
@@ -1558,11 +1627,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         jsHelpers.usesYamlRuntime = true;
         jsHelpers.usesJsonRuntime = true;
         jsHelpers.usesVectorFormat = true;
-        if (sourceFilename) jsHelpers.usesFs = true;
+        if (sourceFilename) {
+          jsHelpers.usesFs = true;
+          jsHelpers.usesExchange = true;
+        }
       }
-      const sourceExpr = sourceFilename
-        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
-        : JSON.stringify(sourceText);
+      const sourceExpr = sourceFilename && jsHelpers?.usesExchange
+        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+        : (sourceFilename
+          ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+          : JSON.stringify(sourceText));
       const assignLine = alreadyDeclared
         ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: yamlToPyashTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
         : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: yamlToPyashTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
@@ -1585,9 +1659,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (jsHelpers) {
         jsHelpers.usesCsvRuntime = true;
         jsHelpers.usesCsvMap = true;
-        if (sourceFilename) jsHelpers.usesFs = true;
+        if (sourceFilename) {
+          jsHelpers.usesFs = true;
+          jsHelpers.usesExchange = true;
+        }
       }
-        const sourceExpr = `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`;
+        const sourceExpr = jsHelpers?.usesExchange
+          ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+          : `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`;
         return [
           `const ${safeName} = csvMapFromTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)});`,
           `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
@@ -1606,7 +1685,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (declaredTypes) declaredTypes.set(targetName, "csv map");
         const errName = `csv_err_${cState?.csvCounter ?? 0}`;
         if (cState) cState.csvCounter += 1;
-        return `pya_csv_error ${errName} = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &${errName})) { fprintf(stderr, \"%s\\n\", ${errName}.message); }`;
+        if (cHelpers) cHelpers.usesExchange = true;
+        return `pya_csv_error ${errName} = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &${errName})) { fprintf(stderr, \"%s\\n\", ${errName}.message); } pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`;
       }
       const normalizedText = sourceText
         .replace(/\\r\\n/g, "\r\n")
@@ -1951,7 +2031,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
               }
               if (sentence?.to?.filename) {
                 const safePath = JSON.stringify(sentence.to.filename);
-                return `pya_csv_write_pyash_file(${JSON.stringify(ob.name)}, ${safePath});`;
+                if (cHelpers) cHelpers.usesExchange = true;
+                return `pya_csv_write_pyash_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write");`;
               }
               return `pya_csv_write_pyash_stdout(${JSON.stringify(ob.name)});`;
             }
@@ -1976,7 +2057,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
               }
               if (sentence?.to?.filename) {
                 const safePath = JSON.stringify(sentence.to.filename);
-                return `pya_csv_write_file(${JSON.stringify(ob.name)}, ${safePath});`;
+                if (cHelpers) cHelpers.usesExchange = true;
+                return `pya_csv_write_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write");`;
               }
               return `pya_csv_write_stdout(${JSON.stringify(ob.name)});`;
             }
@@ -2027,8 +2109,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     const writeFilename = sentence?.to?.filename;
     if (writeFilename && lang !== "c") {
-      if (jsHelpers) jsHelpers.usesFs = true;
-      const writeLine = `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
+      if (jsHelpers) {
+        jsHelpers.usesFs = true;
+        jsHelpers.usesExchange = true;
+      }
+      const writeLine = jsHelpers?.usesExchange
+        ? `pyaWriteTextFile(${JSON.stringify(writeFilename)}, ${expr}, "write");`
+        : `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
       return isWrite ? writeLine : `${writeLine}\nconsole.log(${expr});`;
     }
     if (lang === "c") {
@@ -2040,11 +2127,14 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
       const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
       if (writeFilename) {
-        if (cHelpers) cHelpers.usesStdlib = true;
+        if (cHelpers) {
+          cHelpers.usesStdlib = true;
+          cHelpers.usesExchange = true;
+        }
         const safePath = JSON.stringify(writeFilename);
         const fileVar = `out_${cState?.fileCounter ?? 0}`;
         if (cState) cState.fileCounter += 1;
-        const writeLine = `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }`;
+        const writeLine = `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }\npya_exchange_record_file(${safePath}, "write");`;
         if (isWrite) return writeLine;
         return (wantCsv || wantYaml) ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
@@ -3532,10 +3622,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const declared = new Set();
@@ -3827,6 +3917,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
 	      const mapHelper = `function runAtAll(sentence, fn) {\n  // Resolve genitive by (like \"by num of fromindex of this\") against the evoker sentence once.\n  if (sentence?.by?.genitive?.chain?.[0] === \"this\") {\n    let curr = sentence;\n    for (const part of sentence.by.genitive.chain.slice(1)) {\n      if (typeof curr === \"number\") {\n        if (part === \"num\") continue;\n        curr = undefined;\n        break;\n      }\n      curr = curr?.[part];\n    }\n    const resolved = (typeof curr === \"number\") ? curr : curr?.num;\n    if (typeof resolved === \"number\") sentence.by = { num: resolved };\n  }\n  const vecFact = remember(sentence.ob?.name ?? sentence.ob);\n  const values = vecFact?.ob?.ve?.values ?? [];\n  const out = values.map((elem, i) => {\n    const elemSentence = structuredClone(sentence);\n    if (typeof elem === \"number\") elemSentence.ob = { num: elem };\n    else if (typeof elem === \"string\") elemSentence.ob = { text: elem };\n    else if (typeof elem === \"boolean\") elemSentence.ob = { boolean: elem };\n    else elemSentence.ob = elem ?? {};\n    elemSentence.atindex = { num: i, register: true };\n    elemSentence.this = { ...(elemSentence.this || {}), atindex: elemSentence.atindex, by: elemSentence.by, fromindex: elemSentence.fromindex, toindex: elemSentence.toindex };\n    const res = fn(elemSentence) ?? elemSentence;\n    const ob = res?.ob ?? elemSentence.ob;\n    if (ob?.num !== undefined) return ob.num;\n    if (ob?.text !== undefined) return ob.text;\n    if (ob?.boolean !== undefined) return ob.boolean;\n    return ob;\n  });\n  if (sentence.to?.name) {\n    const fact = { su: { name: sentence.to.name }, ob: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[sentence.to.name] = fact;\n    return fact;\n  }\n  // In-place: mutate the remembered fact and do not replace the binding object.\n  if (vecFact?.ob?.ve) {\n    vecFact.ob.ve.values = out;\n    return vecFact;\n  }\n  const targetName = sentence.ob?.name ?? vecFact?.su?.name;\n  if (targetName) {\n    const fact = { su: { name: targetName }, ob: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n    globalThis[targetName] = fact;\n    return fact;\n  }\n  return { ob: { ve: { values: out } }, be: \"vector\", mood: \"ya\" };\n}`;
       prelude.push(mapHelper);
     }
+    if (jsHelpers.usesExchange) {
+      prelude.push(exchangeRuntimeHelper());
+    }
     if (jsHelpers.usesVectorFormat) {
       prelude.push(vectorFormatHelper());
     }
@@ -3851,6 +3944,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
     }
+    if (jsHelpers.usesExchange) {
+      prelude.splice(1, 0, `import path from "node:path";`);
+      prelude.splice(1, 0, `import crypto from "node:crypto";`);
+    }
     if (jsHelpers.usesCsvRuntime) {
       prelude.splice(1, 0, `import { parse as parseCsv } from ${JSON.stringify(CSV_PARSE_RUNTIME_URL)};`);
     }
@@ -3865,6 +3962,12 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   }
 
   if (lang === "c") {
+    if (cHelpers.usesExchange) {
+      cHelpers.usesTextHelper = true;
+      cHelpers.usesString = true;
+      cHelpers.usesStdlib = true;
+      cHelpers.usesPrintf = true;
+    }
     const needsCsvRuntime = cHelpers.usesCsvRuntime
       && [...lines, ...mainLines].some((line) => typeof line === "string" && /\bpya_csv_/.test(line));
     const needsYamlRuntime = cHelpers.usesYamlRuntime;
@@ -3874,6 +3977,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesString) headers.push("#include <string.h>");
     if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
+    if (cHelpers.usesExchange) headers.push("#include <stdint.h>");
+    if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
     if (needsYamlRuntime) headers.push("#include <strings.h>");
     if (needsYamlRuntime) headers.push("#include <yaml.h>");
     if (needsCsvRuntime) {
@@ -3897,6 +4002,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (headers.length) lines.unshift(...headers);
     const cPrelude = [];
     if (cHelpers.usesTextHelper) cPrelude.push(TEXT_HELPER);
+    if (cHelpers.usesExchange) cPrelude.push(EXCHANGE_HELPER);
     if (cHelpers.usesJsonRuntime) {
       cPrelude.push(CJSON_HEADER);
       cPrelude.push(CJSON_SOURCE);
