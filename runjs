@@ -2,11 +2,48 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: ./runjs <path/to/file.pya>" >&2
+  echo "usage: ./runjs [--newspaper] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>" >&2
   exit 2
 fi
 
-SRC="$1"
+NEWSPAPER=0
+RUN_ID=""
+RUN_TIME=""
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --newspaper)
+      NEWSPAPER=1
+      shift
+      ;;
+    --run-id)
+      RUN_ID="$2"
+      shift 2
+      ;;
+    --run-time)
+      RUN_TIME="$2"
+      shift 2
+      ;;
+    --run-id=*)
+      RUN_ID="${1#*=}"
+      shift
+      ;;
+    --run-time=*)
+      RUN_TIME="${1#*=}"
+      shift
+      ;;
+    --*)
+      shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="${POSITIONAL[0]:-}"
 if [[ ! -f "$SRC" ]]; then
   echo "runjs: file not found: $SRC" >&2
   exit 2
@@ -16,5 +53,16 @@ BASE="$(basename "$SRC")"
 NAME="${BASE%.*}"
 TMP_JS="/tmp/${NAME}-pyash.mjs"
 
-./compile from filename "$SRC" become javascript to filename "$TMP_JS"
-node "$TMP_JS"
+"$SCRIPT_DIR/compile" from filename "$SRC" become javascript to filename "$TMP_JS"
+if [[ "$NEWSPAPER" -eq 1 ]]; then
+  RUN_ARGS=()
+  if [[ -n "$RUN_ID" ]]; then
+    RUN_ARGS+=(--run-id "$RUN_ID")
+  fi
+  if [[ -n "$RUN_TIME" ]]; then
+    RUN_ARGS+=(--run-time "$RUN_TIME")
+  fi
+  node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- node "$TMP_JS"
+else
+  node "$TMP_JS"
+fi

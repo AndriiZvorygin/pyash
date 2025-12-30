@@ -20,6 +20,8 @@ Thrown errors (`be error do`) NEVER appear in the newspaper. Only surfaced error
 
 The newspaper is an **official `.pya` artifact**. Other formats are optional exports and are not normative.
 
+Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). When emission is enabled, all rules in this spec apply.
+
 ---
 
 ## 2. Terms

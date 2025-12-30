@@ -2,11 +2,48 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: ./crun <path/to/file.pya>" >&2
+  echo "usage: ./runc [--newspaper] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>" >&2
   exit 2
 fi
 
-SRC="$1"
+NEWSPAPER=0
+RUN_ID=""
+RUN_TIME=""
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --newspaper)
+      NEWSPAPER=1
+      shift
+      ;;
+    --run-id)
+      RUN_ID="$2"
+      shift 2
+      ;;
+    --run-time)
+      RUN_TIME="$2"
+      shift 2
+      ;;
+    --run-id=*)
+      RUN_ID="${1#*=}"
+      shift
+      ;;
+    --run-time=*)
+      RUN_TIME="${1#*=}"
+      shift
+      ;;
+    --*)
+      shift
+      ;;
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="${POSITIONAL[0]:-}"
 if [[ ! -f "$SRC" ]]; then
   echo "crun: file not found: $SRC" >&2
   exit 2
@@ -17,7 +54,7 @@ NAME="${BASE%.*}"
 TMP_C="/tmp/${NAME}-pyash.c"
 TMP_EXE="/tmp/${NAME}-pyash"
 
-./compile from filename "$SRC" become c to filename "$TMP_C"
+"$SCRIPT_DIR/compile" from filename "$SRC" become c to filename "$TMP_C"
 ZSV_SRC=()
 ZSV_FLAGS=()
 if rg -q "PYA_CSV_RUNTIME" "$TMP_C"; then
@@ -29,4 +66,15 @@ if rg -q "PYA_YAML_RUNTIME" "$TMP_C"; then
   YAML_LIB=("-lyaml")
 fi
 gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm "${YAML_LIB[@]}"
-"$TMP_EXE"
+if [[ "$NEWSPAPER" -eq 1 ]]; then
+  RUN_ARGS=()
+  if [[ -n "$RUN_ID" ]]; then
+    RUN_ARGS+=(--run-id "$RUN_ID")
+  fi
+  if [[ -n "$RUN_TIME" ]]; then
+    RUN_ARGS+=(--run-time "$RUN_TIME")
+  fi
+  node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- "$TMP_EXE"
+else
+  "$TMP_EXE"
+fi

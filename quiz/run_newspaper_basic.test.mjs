@@ -26,6 +26,7 @@ test("run writes run newspaper with evoke/result", async () => {
   const scriptPath = path.join(repoRoot, "program/command/run_pya_program.mjs");
   await execFileAsync(process.execPath, [
     scriptPath,
+    "--newspaper",
     "--run-id", "run-1",
     "--run-time", "2025-01-01T00:00:00Z",
     programPath

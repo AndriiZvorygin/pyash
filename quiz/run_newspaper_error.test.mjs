@@ -28,6 +28,7 @@ test("run newspaper records surfaced error", async () => {
   try {
     await execFileAsync(process.execPath, [
       scriptPath,
+      "--newspaper",
       "--run-id", "run-err",
       "--run-time", "2025-01-01T00:00:00Z",
       programPath
