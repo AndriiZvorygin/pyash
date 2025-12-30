@@ -43,6 +43,7 @@ test("run newspaper records surfaced error", async () => {
   const lines = normalizeLines(newspaper);
 
   assert.equal(lines[0], "su name run-err from time 2025-01-01T00:00:00Z be run ya");
+  assert.ok(lines[1].startsWith("ob filename "));
   assert.ok(lines.some(line => line.includes("be error") && line.endsWith(" ya")));
   assert.equal(lines.at(-1), "su name run-err be end ya");
 });

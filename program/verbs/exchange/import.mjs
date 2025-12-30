@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { doRemember, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToMapSentences } from "./json_map.mjs";
+import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 
 function collectExistingNames() {
   const used = new Set();
@@ -65,7 +66,12 @@ async function importFromSentence(sentence) {
 
   let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
   if (!sourceText && sentence?.from?.filename) {
-    sourceText = await fs.readFile(sentence.from.filename, "utf8");
+    const buffer = await fs.readFile(sentence.from.filename);
+    const artifact = recordArtifact({ locator: sentence.from.filename, producer: "exchange", bytes: buffer });
+    if (artifact?.su?.name) {
+      recordExchange({ artifactName: artifact.su.name, op: "read", producer: "exchange" });
+    }
+    sourceText = buffer.toString("utf8");
   }
   if (typeof sourceText !== "string") {
     throwErrorSentence({

@@ -11,6 +11,7 @@ import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
+import { setExchangeRecorder, clearExchangeRecorder } from "../bridge/exchange.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -26,6 +27,10 @@ function sanitizeRunId(value) {
     .trim()
     .replace(/[\\/]/g, "_")
     .replace(/\s+/g, "-") || "run";
+}
+
+function normalizeRunRoot(value) {
+  return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
 async function main() {
@@ -66,6 +71,7 @@ async function main() {
   }
 
   forget();
+  clearExchangeRecorder();
   clearSignatureHandlers();
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
@@ -74,12 +80,20 @@ async function main() {
   const outputs = [];
   const runId = runIdFlag || `run-${Date.now()}`;
   const runTime = runTimeFlag || new Date().toISOString();
+  const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   const pushNewspaper = (line) => {
     if (useNewspaper && line) newspaperLines.push(line);
   };
   const runStart = `su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
+  pushNewspaper(`ob filename "${runRoot}" be run root ya`);
+  if (useNewspaper) {
+    setExchangeRecorder({
+      runRoot,
+      record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
+    });
+  }
   let runError = null;
 
   for (const raw of sentences) {
@@ -125,6 +139,7 @@ async function main() {
     const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
     await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
   }
+  clearExchangeRecorder();
   if (runError) throw runError;
 
   if (full) {
