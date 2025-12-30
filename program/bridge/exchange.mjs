@@ -6,6 +6,8 @@ import { throwErrorSentence } from "../error.mjs";
 let exchangeRecorder = null;
 let exchangeRunRoot = null;
 let artifactCounter = 0;
+const artifactByLocator = new Map();
+const artifactHashes = new Map();
 
 function isUri(locator = "") {
   return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(locator);
@@ -34,12 +36,16 @@ export function setExchangeRecorder({ record, runRoot } = {}) {
   exchangeRecorder = typeof record === "function" ? record : null;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
   artifactCounter = 0;
+  artifactByLocator.clear();
+  artifactHashes.clear();
 }
 
 export function clearExchangeRecorder() {
   exchangeRecorder = null;
   exchangeRunRoot = null;
   artifactCounter = 0;
+  artifactByLocator.clear();
+  artifactHashes.clear();
 }
 
 export function normalizeLocator(locator) {
@@ -71,6 +77,28 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
   const normalized = normalizeLocator(locator);
   const hash = bytes ? hashBytes(bytes) : null;
   const size = bytes ? bytes.length : null;
+  const existing = artifactByLocator.get(normalized);
+  if (existing) {
+    if (hash) {
+      const priorHash = artifactHashes.get(existing);
+      if (priorHash && priorHash !== hash) {
+        throwErrorSentence({
+          name: "hash inconsistency",
+          message: "hash inconsistency",
+          from: { name: "exchange" },
+          raw: { locator: normalized }
+        });
+      }
+      if (!priorHash) artifactHashes.set(existing, hash);
+    }
+    return {
+      mood: "ya",
+      be: "artifact",
+      su: { name: existing },
+      ob: { text: normalized },
+      from: { name: producer }
+    };
+  }
   const sentence = {
     mood: "ya",
     be: "artifact",
@@ -81,6 +109,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
   if (hash) {
     sentence.accordingto = { name: "sha256" };
     sentence.fromtext = { text: hash };
+    artifactHashes.set(sentence.su.name, hash);
   }
   if (size != null) {
     sentence.by = { num: size };
@@ -88,6 +117,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
   if (kind) {
     sentence.as = { name: kind };
   }
+  artifactByLocator.set(normalized, sentence.su.name);
   exchangeRecorder(sentence);
   return sentence;
 }
