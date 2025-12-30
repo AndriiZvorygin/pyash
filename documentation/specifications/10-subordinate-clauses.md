@@ -13,7 +13,7 @@ Subordinate clauses are used to:
 
 * embed sentences as values
 * pass sentences through signatures and dispatch
-* record evoked sentences in the run journal
+* record evoked sentences in the run newspaper
 * support higher-order verbs, tools, and replay
 
 This specification defines the **syntax, structural semantics, determinism rules, and dispatch interaction** for subordinate clauses.
@@ -134,7 +134,7 @@ The following conditions MUST raise an error per `06-errors.md`:
 
 ## 9. Interaction with other specifications
 
-* The run journal records evoked sentence forms using subordinate clauses:
+* The run newspaper records evoked sentence forms using subordinate clauses:
 
   ```
   ob la <embedded sentence form> ko be evoke ya

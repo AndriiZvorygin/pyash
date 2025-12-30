@@ -9,17 +9,47 @@ import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
+
+function readFlagValue(args, name) {
+  const prefix = `${name}=`;
+  const idx = args.findIndex(arg => arg === name || arg.startsWith(prefix));
+  if (idx === -1) return null;
+  const arg = args[idx];
+  if (arg.startsWith(prefix)) return arg.slice(prefix.length);
+  return args[idx + 1] ?? null;
+}
+
+function sanitizeRunId(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\\/]/g, "_")
+    .replace(/\s+/g, "-") || "run";
+}
 
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
-  const positional = args.filter(a => !a.startsWith("--"));
+  const runIdFlag = readFlagValue(args, "--run-id");
+  const runTimeFlag = readFlagValue(args, "--run-time");
+  const positional = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--gross" || arg === "--full") continue;
+    if (arg === "--run-id" || arg === "--run-time") {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--run-id=") || arg.startsWith("--run-time=")) continue;
+    if (arg.startsWith("--")) continue;
+    positional.push(arg);
+  }
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -41,16 +71,58 @@ async function main() {
   }
   const sentences = splitSentences(text);
   const outputs = [];
+  const runId = runIdFlag || `run-${Date.now()}`;
+  const runTime = runTimeFlag || new Date().toISOString();
+  const newspaperLines = [];
+  const pushNewspaper = (line) => {
+    if (line) newspaperLines.push(line);
+  };
+  const runStart = `su name ${runId} from time ${runTime} be run ya`;
+  pushNewspaper(runStart);
+  let runError = null;
 
   for (const raw of sentences) {
     const line = raw.trim();
     if (!line) continue;
     const sentence = parse(line);
-    const res = await interpret(sentence);
+    const embedded = sentenceToPyash(sentence);
+    pushNewspaper(`ob la ${embedded} ko be evoke ya`);
+    let res;
+    try {
+      res = await interpret(sentence);
+    } catch (err) {
+      const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
+      runError = err;
+      break;
+    }
+    let resultSentence = null;
+    if (res?.mood && res?.be) {
+      resultSentence = res;
+    } else if (res?.sentence?.mood && res?.sentence?.be) {
+      resultSentence = res.sentence;
+    } else {
+      const remembered = remember("result");
+      if (remembered?.mood && remembered?.be) {
+        resultSentence = remembered;
+      } else if (sentence?.mood) {
+        resultSentence = sentence;
+      }
+    }
+    if (resultSentence?.mood) {
+      const surfaced = surfaceErrorSentence(resultSentence);
+      pushNewspaper(sentenceToPyash(surfaced));
+    }
     if (sentence?.mood === "que") outputs.push(res);
   }
 
   const result = remember("result");
+  pushNewspaper(`su name ${runId} be end ya`);
+  const newspaperDir = path.resolve(process.cwd(), "newspaper");
+  await fs.mkdir(newspaperDir, { recursive: true });
+  const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
+  await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
+  if (runError) throw runError;
 
   if (full) {
     console.log("Program:");
