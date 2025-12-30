@@ -26,7 +26,7 @@ Define the error sentence contract, error propagation rules, and official error 
   * rethrow the same `be error do` sentence,
   * transform it into another `be error do` sentence, or
   * surface it as a result sentence (see §3.2).
-* `be error do` sentences are **not facts** and MUST NOT be stored in memory or journals.
+* `be error do` sentences are **not facts** and MUST NOT be stored in memory or newspapers.
 
 ### 3.2 Surfacing (observation boundaries)
 
@@ -34,7 +34,7 @@ Define the error sentence contract, error propagation rules, and official error 
 * Observation boundaries include:
 
   * returning an error as the result of an operation,
-  * storing an error outcome in memory or journal,
+  * storing an error outcome in memory or newspaper,
   * printing or emitting an error as the final outcome of evaluation.
 * Surfacing an error converts the sentence mood from `do` to `ya` and preserves all required and optional fields.
 * Surfaced errors are facts and MAY be stored; thrown errors are not.

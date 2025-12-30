@@ -94,7 +94,7 @@ Gloss roots
 - `separable`   -> `/media`
 
 Common compounds
-- `protean/press`      -> `/var/log`
+- `protean/newspaper`  -> `/var/newspaper`
 - `protean/hiding`     -> `/var/cache`
 - `protean/library`    -> `/var/lib`
 - `hierarchy/binary`   -> `/usr/bin`
@@ -105,7 +105,7 @@ Common compounds
 ### Sugar form examples
 
 - `configure/ssh/sshd_config` expands to `/etc/ssh/sshd_config`
-- `protean/press/nginx/access.log` expands to `/var/log/nginx/access.log`
+- `protean/newspaper/pyash/run-1.pya` expands to `/var/newspaper/pyash/run-1.pya`
 - `hierarchy/binary/node` expands to `/usr/bin/node`
 
 
