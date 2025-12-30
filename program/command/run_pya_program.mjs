@@ -12,6 +12,7 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../bridge/exchange.mjs";
+import { runRefinery } from "../bridge/refinery.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -40,22 +41,23 @@ async function main() {
   const useNewspaper = args.includes("--newspaper");
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
+  const refineryFlag = readFlagValue(args, "--refinery");
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--gross" || arg === "--full" || arg === "--newspaper") continue;
-    if (arg === "--run-id" || arg === "--run-time") {
+    if (arg === "--run-id" || arg === "--run-time" || arg === "--refinery") {
       i += 1;
       continue;
     }
-    if (arg.startsWith("--run-id=") || arg.startsWith("--run-time=")) continue;
+    if (arg.startsWith("--run-id=") || arg.startsWith("--run-time=") || arg.startsWith("--refinery=")) continue;
     if (arg.startsWith("--")) continue;
     positional.push(arg);
   }
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--run-id <id>] [--run-time <iso>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -95,6 +97,16 @@ async function main() {
     });
   }
   let runError = null;
+  let refineryResult = null;
+
+  const toResultSentence = (res, fallbackSentence) => {
+    if (res?.mood && res?.be) return res;
+    if (res?.sentence?.mood && res?.sentence?.be) return res.sentence;
+    const remembered = remember("result");
+    if (remembered?.mood && remembered?.be) return remembered;
+    if (fallbackSentence?.mood) return fallbackSentence;
+    return null;
+  };
 
   for (const raw of sentences) {
     const line = raw.trim();
@@ -111,19 +123,7 @@ async function main() {
       runError = err;
       break;
     }
-    let resultSentence = null;
-    if (res?.mood && res?.be) {
-      resultSentence = res;
-    } else if (res?.sentence?.mood && res?.sentence?.be) {
-      resultSentence = res.sentence;
-    } else {
-      const remembered = remember("result");
-      if (remembered?.mood && remembered?.be) {
-        resultSentence = remembered;
-      } else if (sentence?.mood) {
-        resultSentence = sentence;
-      }
-    }
+    const resultSentence = toResultSentence(res, sentence);
     if (resultSentence?.mood) {
       const surfaced = surfaceErrorSentence(resultSentence);
       pushNewspaper(sentenceToPyash(surfaced));
@@ -131,7 +131,30 @@ async function main() {
     if (sentence?.mood === "que") outputs.push(res);
   }
 
-  const result = remember("result");
+  if (!runError && refineryFlag) {
+    try {
+      refineryResult = await runRefinery({
+        name: refineryFlag,
+        interpret,
+        onEvoke: (actionSentence) => {
+          const embedded = sentenceToPyash(actionSentence);
+          pushNewspaper(`ob la ${embedded} ko be evoke ya`);
+        },
+        onResult: (res) => {
+          const resultSentence = toResultSentence(res, null);
+          if (!resultSentence?.mood) return;
+          const surfaced = surfaceErrorSentence(resultSentence);
+          pushNewspaper(sentenceToPyash(surfaced));
+        }
+      });
+    } catch (err) {
+      const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
+      runError = err;
+    }
+  }
+
+  const result = refineryResult ?? remember("result");
   pushNewspaper(`su name ${runId} be end ya`);
   if (useNewspaper) {
     const newspaperDir = path.resolve(process.cwd(), "newspaper");
