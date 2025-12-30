@@ -27,6 +27,7 @@ Feature specs (optional, when blessed):
 - `22-understand.md`
 - `23-compile.md`
 - `24-mind.md`
+- `14-refinery.md` (draft v0.1)
 - `30-maps.md` (once map semantics are locked)
 - `50-modules.md` (v0.1)
 - `40-aspect.md` (v0.6 target; add when Week 1 freezes)
