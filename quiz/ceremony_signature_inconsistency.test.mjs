@@ -12,7 +12,7 @@ function run(lines) {
   }));
 }
 
-test("evoker with mismatched signature is rejected", async () => {
+test("evoker with inconsistent signature is rejected", async () => {
   forget();
 
   const defLines = [
@@ -29,7 +29,7 @@ test("evoker with mismatched signature is rejected", async () => {
   } catch (e) {
     err = e;
   }
-  assert.ok(err, "expected error for signature mismatch");
+  assert.ok(err, "expected error for signature inconsistency");
   assert.equal(err?.sentence?.be, "error");
-  assert.match(err?.sentence?.ob?.text ?? "", /signature mismatch/i);
+  assert.match(err?.sentence?.ob?.text ?? "", /signature inconsistency/i);
 });

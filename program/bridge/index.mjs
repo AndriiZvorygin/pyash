@@ -240,7 +240,7 @@ export async function interpret(sentence) {
   if (mood === "do") {
     if (sentence.exists) {
       throwErrorSentence({
-        name: "exists invalid",
+        name: "exists defective",
         message: "exists is only valid on ya sentences",
         from: { name: "interpret" },
         raw: sentence
