@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import { parse } from "../understand/index.mjs";
@@ -73,28 +75,66 @@ async function run() {
     pushLine(`ob la ${embedded} ko be evoke ya`);
   }
 
-  let stdout = "";
-  let stderr = "";
-  const child = spawn(command[0], command.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
-  child.stdout.on("data", chunk => {
-    stdout += chunk.toString("utf8");
+  const prefix = "PYA_NEWSPAPER:";
+  const handleLine = (line) => {
+    if (!line) return;
+    if (line.startsWith(prefix)) {
+      const payload = line.slice(prefix.length);
+      if (payload) pushLine(payload);
+      return;
+    }
+    pushLine(resultSentenceForLine(line));
+  };
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-"));
+  const stdoutPath = path.join(tmpDir, "stdout.txt");
+  const stderrPath = path.join(tmpDir, "stderr.txt");
+  const stdoutFd = fsSync.openSync(stdoutPath, "w");
+  const stderrFd = fsSync.openSync(stderrPath, "w");
+  let spawnError = null;
+  const child = spawn(command[0], command.slice(1), {
+    stdio: ["ignore", stdoutFd, stderrFd],
+    env: { ...process.env, PYA_NEWSPAPER: "1" }
   });
-  child.stderr.on("data", chunk => {
-    stderr += chunk.toString("utf8");
+  child.on("error", (err) => {
+    spawnError = err;
   });
   const exitCode = await new Promise((resolve) => {
     child.on("close", resolve);
   });
+  fsSync.closeSync(stdoutFd);
+  fsSync.closeSync(stderrFd);
 
-  const outLines = stdout.split(/\r?\n/).map(line => line.trimEnd()).filter(Boolean);
-  for (const line of outLines) {
-    pushLine(resultSentenceForLine(line));
+  const stdout = await fs.readFile(stdoutPath, "utf8").catch(() => "");
+  const stderr = await fs.readFile(stderrPath, "utf8").catch(() => "");
+
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trimEnd();
+    if (trimmed) handleLine(trimmed);
+  }
+  let stderrText = "";
+  for (const line of stderr.split(/\r?\n/)) {
+    const trimmed = line.trimEnd();
+    if (!trimmed) continue;
+    if (trimmed.startsWith(prefix)) {
+      const payload = trimmed.slice(prefix.length);
+      if (payload) pushLine(payload);
+    } else {
+      stderrText += `${trimmed}\n`;
+    }
   }
 
-  if (exitCode !== 0) {
+  if (spawnError) {
     const errSentence = buildErrorSentence({
       name: "compiled run failed",
-      message: stderr.trim() || `compiled run failed (${exitCode})`,
+      message: spawnError.message || "compiled run failed",
+      from: { name: "run" }
+    });
+    pushLine(sentenceToPyash(surfaceErrorSentence(errSentence)));
+  } else if (exitCode !== 0) {
+    const errSentence = buildErrorSentence({
+      name: "compiled run failed",
+      message: stderrText.trim() || `compiled run failed (${exitCode})`,
       from: { name: "run" }
     });
     pushLine(sentenceToPyash(surfaceErrorSentence(errSentence)));

@@ -51,7 +51,7 @@ fi
 
 BASE="$(basename "$SRC")"
 NAME="${BASE%.*}"
-TMP_JS="/tmp/${NAME}-pyash.mjs"
+TMP_JS="$(mktemp "/tmp/${NAME}-pyash-XXXXXX.mjs")"
 
 "$SCRIPT_DIR/compile" from filename "$SRC" become javascript to filename "$TMP_JS"
 if [[ "$NEWSPAPER" -eq 1 ]]; then
