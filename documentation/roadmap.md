@@ -193,28 +193,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * (Optional) content-addressed blob store for large objects
 
 ### Spec drops (freeze v0.6)
-
-* `13-exchange-and-artifact.md` v0.1 freeze
-
-  * Locator rules + run root policy (and how it is declared under newspaper/again)
-  * sha256 rules (exact bytes; UTF-8 + LF + no BOM when writing text)
-  * Artifact and exchange sentence forms
-  * Again mode requirements (hash required for again-critical artifacts)
-
-* `14-refinery.md` v0.1 freeze (refinery/platform/activity)
-
-  * Refinery + platform declarations
-  * Depend list semantics + deterministic scheduling rule
-  * Fail-fast default policy
-  * Hooks for newspaper + again mode
-
-* Error model updates (`06-errors.md`) v0.1 additions
-
-  * stable names for exchange/artifact/hash failures:
-    `exchange defective`, `artifact defective`, `hash inconsistency`
-  * stable names for refinery failures:
-    `refinery defective`, `platform defective`, `depend defective`
-
 * (If needed) Newspaper + again policy note in `11-run-newspaper.md`
 
   * newspaper is opt-in
