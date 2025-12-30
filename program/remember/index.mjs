@@ -2,6 +2,7 @@
 import { clearSignatureDefinitions } from "../bridge/signature.mjs";
 import { state } from "../bridge/state.mjs";
 import { clearModuleCache } from "../bridge/modules.mjs";
+import { clearRefineries } from "../bridge/refinery.mjs";
 
 let memory = [];
 let history = []; // optional, for debugging / REPL
@@ -160,6 +161,7 @@ export function forget() {
   sandpits = [];
   clearSignatureDefinitions();
   clearModuleCache();
+  clearRefineries();
   state.lastCondition = true;
   state.definitionStack.length = 0;
   state.mapStack.length = 0;

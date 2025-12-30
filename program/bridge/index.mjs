@@ -6,6 +6,7 @@ import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
 import { handleImperative } from "./imperative.mjs";
 import { state } from "./state.mjs";
+import { startRefinery, recordPlatform, endRefinery, isInsideRefinery } from "./refinery.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -93,6 +94,9 @@ export async function interpret(sentence) {
   const isMapDef = mood === "def" && (be === "map" || be === "json map" || be === "csv map");
   const isMapPrah = mood === "prah" && (be === "map" || be === "json map" || be === "csv map");
   const insideMap = state.mapStack.length > 0;
+  const isRefineryDef = mood === "def" && be === "refinery";
+  const isRefineryPrah = mood === "prah" && be === "refinery";
+  const insideRefinery = isInsideRefinery();
 
   if (isMapDef) {
     state.mapStack.push({ name: su?.name ?? null, kind: be, entries: [] });
@@ -159,6 +163,28 @@ export async function interpret(sentence) {
     };
     doRemember(mapSentence);
     return { stored: frame.name };
+  }
+
+  if (isRefineryDef) {
+    startRefinery(su?.name ?? null);
+    return { refineryStart: true };
+  }
+
+  if (insideRefinery && mood !== "prah") {
+    return recordPlatform(sentence);
+  }
+
+  if (insideRefinery && mood === "prah") {
+    return { refineryEnd: endRefinery(sentence.su?.name ?? null) };
+  }
+
+  if (!insideRefinery && mood === "ya" && be === "platform") {
+    throwErrorSentence({
+      name: "refinery defective",
+      message: "platform outside refinery",
+      from: { name: "interpret" },
+      raw: sentence
+    });
   }
 
   // one-line skip after a false condition
