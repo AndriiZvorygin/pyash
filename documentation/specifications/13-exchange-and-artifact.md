@@ -174,6 +174,10 @@ When Pyash writes a text artifact (any artifact whose bytes are produced from te
 
 This rule exists to prevent OS-dependent bytes.
 
+### 6.4 Hash consistency within a run
+
+If the same normalized locator is recorded more than once in a run, the artifact hash MUST be identical across all recordings. A mismatch MUST surface `hash inconsistency`.
+
 ---
 
 ## 7. Artifact naming (normative)
@@ -189,6 +193,8 @@ If a verb/module/tool does not provide an explicit artifact name, the runtime MU
 - `artifact-0`, `artifact-1`, `artifact-2`, … in the order artifacts are first declared
 
 The counter increments on first declaration only (not on every exchange event).
+
+If a new exchange event targets the same normalized locator within the same run, the runtime MUST reuse the existing artifact name for that locator (and MUST NOT emit a second artifact declaration for the same locator).
 
 ---
 
