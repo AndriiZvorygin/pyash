@@ -70,6 +70,9 @@ The following error names are stable and MUST be supported:
 * `variable as not exists`
 * `stream exhausted`
 * `chip exhausted`
+* `refinery defective`
+* `platform defective`
+* `depend defective`
 
 Additional error names MAY be introduced by later specifications.
 
