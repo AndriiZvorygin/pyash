@@ -94,7 +94,7 @@ This document summarizes the current core language model used by the interpreter
 ## Error Sentence Contract (current)
 Errors are thrown as exceptions whose `.sentence` is a **`be error do`** sentence:
 
-- `su name <error-name>` — short error identifier (e.g., `unknown verb`, `signature mismatch`).
+- `su name <error-name>` — short error identifier (e.g., `unknown verb`, `signature inconsistency`).
 - `ob text <message>` — human-readable detail.
 - `from name <source>` — component that raised the error (e.g., `interpret`, `compile`, `signature`).
 - Optional context fields on `ob`:

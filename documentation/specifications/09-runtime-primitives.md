@@ -181,7 +181,7 @@ Notes:
 
 * The last chip MUST be marked `final`.
 * After a `final` chip, the stream is considered `done`.
-* Calling `chip` again after the final chip MUST raise an error sentence (stream exhausted).
+* Calling `chip` again after the final chip MUST raise an error sentence (chip exhausted).
 
 Example success:
 

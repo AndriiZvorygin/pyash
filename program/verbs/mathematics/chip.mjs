@@ -47,8 +47,8 @@ export function chip_su_stream(sentence) {
   const index = stream.ob?.index ?? 0;
   if (index >= values.length) {
     return makeRuntimeError({
-      name: "stream exhausted",
-      message: `stream exhausted: ${streamName}`
+      name: "chip exhausted",
+      message: `chip exhausted: ${streamName}`
     });
   }
 

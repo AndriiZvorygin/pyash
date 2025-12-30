@@ -311,8 +311,8 @@ export async function handleImperative({
       if (defSigKey !== callSigKey && defSigKey !== relaxedCallSigKey) {
         const pyash = sentenceToPyash(sentence);
         throwErrorSentence({
-          name: "signature mismatch",
-          message: `Ceremony signature mismatch: expected ${defSigKey}, got ${callSigKey}`,
+          name: "signature inconsistency",
+          message: `Ceremony signature inconsistency: expected ${defSigKey}, got ${callSigKey}`,
           from: { name: "interpret" },
           pyash,
           raw: sentence

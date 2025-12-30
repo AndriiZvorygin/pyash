@@ -16,13 +16,13 @@ Define how signature words are derived and used for dispatch.
 - If no handler or ceremony matches, raise `be error do` with the derived signature.
 
 ## 4. Error contracts
-- Unknown verb/signature raises `be error do` (see `quiz/ceremony_signature_mismatch.test.mjs`).
+- Unknown verb/signature raises `be error do` (see `quiz/ceremony_signature_inconsistency.test.mjs`).
 - Signature derivation failures raise `be error do` (see `quiz/derive_signature` references below).
 
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-add-two.pya`
 
 ## 6. Tests that define truth
-- `quiz/ceremony_signature_mismatch.test.mjs`
+- `quiz/ceremony_signature_inconsistency.test.mjs`
 - `quiz/ceremony_sequence_signature.test.mjs`
 - `quiz/map_signature.test.mjs`

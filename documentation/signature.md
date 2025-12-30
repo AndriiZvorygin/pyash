@@ -406,4 +406,4 @@ The runtime now uses **signature-first dispatch**:
 
 1. Reduce signature variant sprawl by improving type inference (e.g., names → vec/text when remembered) and pruning unused variants.
 2. Generate signatures from ceremony `def` headers once case/type info is captured there.
-3. Keep docs/examples in sync with strict signature dispatch (unknown/mismatched signatures surface as `Unknown verb`).
+3. Keep docs/examples in sync with strict signature dispatch (unknown/inconsistent signatures surface as `Unknown verb`).

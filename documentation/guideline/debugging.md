@@ -7,4 +7,4 @@
   - Inspect `{ memory, sandpits }` for evoker/register values.
 - If you hit `unknown verb/signature`, check:
   - The derived signature in the error sentence (`err.sentence.ob.text`).
-  - The signature declared by the ceremony (`quiz/ceremony_signature_mismatch.test.mjs`).
+  - The signature declared by the ceremony (`quiz/ceremony_signature_inconsistency.test.mjs`).
