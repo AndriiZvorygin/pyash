@@ -11,7 +11,7 @@ import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
-import { setExchangeRecorder, clearExchangeRecorder } from "../bridge/exchange.mjs";
+import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict } from "../bridge/exchange.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
 
 function readFlagValue(args, name) {
@@ -39,13 +39,14 @@ async function main() {
   const gross = args.includes("--gross");
   const full = args.includes("--full");
   const useNewspaper = args.includes("--newspaper");
+  const useAgain = args.includes("--again");
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
   const refineryFlag = readFlagValue(args, "--refinery");
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--gross" || arg === "--full" || arg === "--newspaper") continue;
+    if (arg === "--gross" || arg === "--full" || arg === "--newspaper" || arg === "--again") continue;
     if (arg === "--run-id" || arg === "--run-time" || arg === "--refinery") {
       i += 1;
       continue;
@@ -57,7 +58,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--again] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -74,6 +75,7 @@ async function main() {
 
   forget();
   clearExchangeRecorder();
+  if (useAgain) setExchangeStrict(false);
   clearSignatureHandlers();
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
@@ -85,16 +87,20 @@ async function main() {
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   const pushNewspaper = (line) => {
-    if (useNewspaper && line) newspaperLines.push(line);
+    if ((useNewspaper || useAgain) && line) newspaperLines.push(line);
   };
   const runStart = `su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
   pushNewspaper(`ob filename "${runRoot}" be run root ya`);
-  if (useNewspaper) {
+  if (useAgain) {
+    pushNewspaper(`su name ${runId} as name again be run ya`);
+  }
+  if (useNewspaper || useAgain) {
     setExchangeRecorder({
       runRoot,
       record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
     });
+    if (useAgain) setExchangeStrict(true);
   }
   let runError = null;
   let refineryResult = null;
@@ -156,7 +162,7 @@ async function main() {
 
   const result = refineryResult ?? remember("result");
   pushNewspaper(`su name ${runId} be end ya`);
-  if (useNewspaper) {
+  if (useNewspaper || useAgain) {
     const newspaperDir = path.resolve(process.cwd(), "newspaper");
     await fs.mkdir(newspaperDir, { recursive: true });
     const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);

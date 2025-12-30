@@ -73,6 +73,7 @@ The following error names are stable and MUST be supported:
 * `refinery defective`
 * `platform defective`
 * `depend defective`
+* `replay defective`
 
 Additional error names MAY be introduced by later specifications.
 

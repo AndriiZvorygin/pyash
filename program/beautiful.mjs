@@ -1,6 +1,32 @@
 // beautiful.mjs
 
+import { compositionalGrid } from "./library/compositionalCases.mjs";
 import { orderVyahModifiers } from "./library/grammar/vyah.mjs";
+
+const COMPOSITIONAL_CONTEXT_ORDER = [
+  "space",
+  "interior",
+  "surface",
+  "under",
+  "time",
+  "state",
+  "person",
+  "social",
+  "discourse",
+  "quantity"
+];
+
+const COMPOSITIONAL_PREPS = [];
+for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
+  const ctx = compositionalGrid[ctxKey];
+  if (!ctx) continue;
+  for (const axis of ["source", "way", "destination"]) {
+    const prep = ctx[axis]?.prep;
+    if (prep && !COMPOSITIONAL_PREPS.includes(prep)) COMPOSITIONAL_PREPS.push(prep);
+  }
+}
+
+const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
@@ -50,63 +76,22 @@ export function sentenceToPyash(s = {}) {
     parts.push("exists");
   }
 
-  if (s.su) {
-    parts.push("su");
-    const np = npToPyash(s.su);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.ob) {
-    parts.push("ob");
-    const np = npToPyash(s.ob);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.vyah) {
-    const values = Array.isArray(s.vyah?.ve?.values) ? s.vyah.ve.values : [];
-    const ordered = orderVyahModifiers(values);
-    parts.push("vyah");
-    if (ordered.length) parts.push(ordered);
-  }
-
-  if (s.as) {
-    parts.push("as");
-    const np = npToPyash(s.as);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.fromindex) {
-    parts.push("fromindex");
-    const np = npToPyash(s.fromindex);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.atindex) {
-    parts.push("atindex");
-    const np = npToPyash(s.atindex);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.toindex) {
-    parts.push("toindex");
-    const np = npToPyash(s.toindex);
-    if (np) parts.push(np.split(" "));
-  }
-
-  if (s.to) {
-    parts.push("to");
-    const np = npToPyash(s.to);
-    if (np) parts.push(np.split(" "));
+  for (const key of CASE_ORDER) {
+    if (s[key] === undefined) continue;
+    if (key === "vyah") {
+      const values = Array.isArray(s.vyah?.ve?.values) ? s.vyah.ve.values : [];
+      const ordered = orderVyahModifiers(values);
+      parts.push("vyah");
+      if (ordered.length) parts.push(ordered);
+    } else {
+      parts.push(key);
+      const np = npToPyash(s[key]);
+      if (np) parts.push(np.split(" "));
+    }
   }
 
   if (s.be) {
     parts.push("be", s.be);
-  }
-
-  if (s.from) {
-    parts.push("from");
-    const np = npToPyash(s.from);
-    if (np) parts.push(np.split(" "));
   }
 
   if (s.consequence) {

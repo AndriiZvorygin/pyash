@@ -42,6 +42,7 @@ async function run() {
   const args = process.argv.slice(2);
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
+  const againFlag = args.includes("--again");
   const sourcePathFlag = readFlagValue(args, "--source");
   const cmdIndex = args.indexOf("--");
   if (!sourcePathFlag || cmdIndex === -1) {
@@ -67,6 +68,9 @@ async function run() {
 
   pushLine(`su name ${runId} from time ${runTime} be run ya`);
   pushLine(`ob filename "${runRoot}" be run root ya`);
+  if (againFlag) {
+    pushLine(`su name ${runId} as name again be run ya`);
+  }
   for (const raw of sentences) {
     const line = raw.trim();
     if (!line) continue;

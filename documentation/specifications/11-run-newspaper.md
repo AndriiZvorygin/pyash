@@ -79,6 +79,12 @@ These are equivalent in meaning. The choice of `from` vs `since` MUST be fixed b
 - `outof name <seed>` — execution seed, if used
 - additional run metadata may be added by later specifications
 
+When again mode is enabled, the runner SHOULD emit a marker sentence:
+
+```
+su name <run> as name again be run ya
+```
+
 ### 4.4 Example
 
 su name run-42 from time 2025-01-12T10:00:00Z outof name seed-7 be run ya
