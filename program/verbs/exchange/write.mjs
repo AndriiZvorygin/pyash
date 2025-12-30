@@ -340,6 +340,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   if (typeof ob.num === "number") return ob.num;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
   if (ob.hollow) return "null";
+  if (ob.la) return `la ${sentenceToPyash(ob.la)} ko`;
   if (format === "csv" && ob.name && rememberFn) {
     return csvTextFromMapName(ob.name, { rememberFn });
   }
@@ -365,6 +366,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
       const chain = mapDefChainFromName(ob.name, { rememberFn });
       return chain || sentenceToPyash(fact);
     }
+    if (fact?.ob?.la) return sentenceToPyash(fact);
     if (fact?.ob?.ve?.values) return sentenceToPyash(fact);
     if (fact?.ob?.text !== undefined) return fact.ob.text;
     if (fact?.ob?.num !== undefined) return fact.ob.num;

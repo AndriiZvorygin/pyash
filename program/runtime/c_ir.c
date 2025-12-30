@@ -5,6 +5,7 @@
 
 static void pya_emit_value(FILE *out, const pya_value *value);
 static void pya_emit_sentence_inline(FILE *out, const pya_sentence *sentence);
+static void pya_emit_sentence_body(FILE *out, const pya_sentence *sentence, int inline_mode);
 
 static void pya_emit_text(FILE *out, const char *text) {
   fputs("text \"", out);
@@ -89,7 +90,9 @@ static void pya_emit_value(FILE *out, const pya_value *value) {
       fputs("map", out);
       break;
     case PYA_VALUE_SENTENCE:
+      fputs("la ", out);
       pya_emit_sentence_inline(out, value->as.sentence);
+      fputs(" ko", out);
       break;
     default:
       fputs("hollow", out);
@@ -99,10 +102,10 @@ static void pya_emit_value(FILE *out, const pya_value *value) {
 
 static void pya_emit_sentence_inline(FILE *out, const pya_sentence *sentence) {
   if (!sentence) return;
-  pya_emit_sentence(out, sentence);
+  pya_emit_sentence_body(out, sentence, 1);
 }
 
-void pya_emit_sentence(FILE *out, const pya_sentence *sentence) {
+static void pya_emit_sentence_body(FILE *out, const pya_sentence *sentence, int inline_mode) {
   if (!out || !sentence) return;
 
   if (sentence->exists && sentence->mood == PYA_MOOD_YA) {
@@ -169,5 +172,9 @@ void pya_emit_sentence(FILE *out, const pya_sentence *sentence) {
       fputs("ya", out);
       break;
   }
-  fputc('\n', out);
+  if (!inline_mode) fputc('\n', out);
+}
+
+void pya_emit_sentence(FILE *out, const pya_sentence *sentence) {
+  pya_emit_sentence_body(out, sentence, 0);
 }

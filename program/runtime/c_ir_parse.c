@@ -22,6 +22,8 @@ typedef struct {
   size_t storage_len;
 } pya_tokens;
 
+static int pya_parse_sentence_tokens(char **tokens, size_t start, size_t end, pya_sentence *out, char *err, size_t err_cap, pya_mood mood);
+
 static void pya_set_err(char *err, size_t cap, const char *message) {
   if (!err || cap == 0) return;
   snprintf(err, cap, "%s", message ? message : "parse error");
@@ -139,6 +141,39 @@ static int pya_parse_value(char **tokens, size_t count, size_t *idx, pya_value *
   if (!tokens || !idx || !out || *idx >= count) return 0;
   const char *token = tokens[*idx];
   if (!token) return 0;
+
+  if (strcmp(token, "la") == 0) {
+    size_t depth = 1;
+    size_t start = *idx + 1;
+    size_t end = start;
+    while (end < count) {
+      const char *word = tokens[end];
+      if (strcmp(word, "la") == 0) depth += 1;
+      else if (strcmp(word, "ko") == 0) {
+        depth -= 1;
+        if (depth == 0) break;
+      }
+      end += 1;
+    }
+    if (end >= count || depth != 0) { pya_set_err(err, err_cap, "parse error"); return 0; }
+    if (end <= start) { pya_set_err(err, err_cap, "parse error"); return 0; }
+    pya_mood mood = PYA_MOOD_YA;
+    size_t sentence_end = end;
+    if (sentence_end > start && pya_is_mood(tokens[sentence_end - 1], &mood)) {
+      sentence_end -= 1;
+    }
+    pya_sentence *child = (pya_sentence *)calloc(1, sizeof(pya_sentence));
+    if (!child) { pya_set_err(err, err_cap, "parse error"); return 0; }
+    if (!pya_parse_sentence_tokens(tokens, start, sentence_end, child, err, err_cap, mood)) {
+      free(child);
+      return 0;
+    }
+    child->mood = mood;
+    out->kind = PYA_VALUE_SENTENCE;
+    out->as.sentence = child;
+    *idx = end + 1;
+    return 1;
+  }
 
   if (strcmp(token, "num") == 0) {
     if (*idx + 1 >= count) { pya_set_err(err, err_cap, "parse error"); return 0; }
@@ -304,9 +339,9 @@ static int pya_parse_value(char **tokens, size_t count, size_t *idx, pya_value *
   return 0;
 }
 
-static int pya_parse_sentence_tokens(char **tokens, size_t start, size_t end, pya_sentence *out, char *err, size_t err_cap) {
+static int pya_parse_sentence_tokens(char **tokens, size_t start, size_t end, pya_sentence *out, char *err, size_t err_cap, pya_mood mood) {
   memset(out, 0, sizeof(*out));
-  out->mood = PYA_MOOD_YA;
+  out->mood = mood;
   pya_value_clear(&out->su);
   pya_value_clear(&out->ob);
   pya_value_clear(&out->to);
@@ -342,7 +377,7 @@ static int pya_parse_sentence_tokens(char **tokens, size_t start, size_t end, py
       if (idx + 1 >= end) { pya_set_err(err, err_cap, "parse error"); return 0; }
       pya_sentence *child = (pya_sentence *)calloc(1, sizeof(pya_sentence));
       if (!child) { pya_set_err(err, err_cap, "parse error"); return 0; }
-      if (!pya_parse_sentence_tokens(tokens, idx + 1, end, child, err, err_cap)) {
+        if (!pya_parse_sentence_tokens(tokens, idx + 1, end, child, err, err_cap, out->mood)) {
         free(child);
         return 0;
       }
@@ -401,7 +436,7 @@ int pya_parse_sentence(const char *input, pya_sentence *out, char *err, size_t e
     pya_set_err(err, err_cap, "parse error");
     return 0;
   }
-  if (!pya_parse_sentence_tokens(tokens.items, 0, end, out, err, err_cap)) {
+  if (!pya_parse_sentence_tokens(tokens.items, 0, end, out, err, err_cap, mood)) {
     pya_tokens_free(&tokens);
     return 0;
   }
@@ -450,6 +485,11 @@ void pya_free_sentence(pya_sentence *sentence) {
         }
       }
       free(value->as.vector.values);
+    } else if (value->kind == PYA_VALUE_SENTENCE) {
+      if (value->as.sentence) {
+        pya_free_sentence(value->as.sentence);
+        free(value->as.sentence);
+      }
     }
   }
   if (sentence->then_sentence) {

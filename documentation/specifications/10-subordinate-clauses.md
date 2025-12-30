@@ -101,10 +101,10 @@ ob la su name x be text ko be evoke ya
 * The embedded sentence form inside `la … ko` MUST be emitted using **official sentence ordering**.
 * Case order, `vyah` ordering, and vector/map ordering inside the embedded sentence form MUST follow their respective specifications.
 
-### 6.2 Verbatim preservation
+### 6.2 Normalized emission
 
-* Journals, logs, and tools MUST record subordinate clauses **verbatim**.
-* Rewriting, normalization, or reordering of the embedded sentence form is NOT permitted.
+* Journals, logs, and tools MUST emit subordinate clauses in **normalized (official)** order.
+* Implementations MAY accept arbitrary input order, but output MUST be canonical.
 
 ---
 

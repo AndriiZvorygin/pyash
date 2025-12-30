@@ -1788,6 +1788,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         const isMap = declaredTypes?.get(ob.name) === "map";
         const isJsonMap = declaredTypes?.get(ob.name) === "json map";
         const isCsvMap = declaredTypes?.get(ob.name) === "csv map";
+        const isSentence = declaredTypes?.get(ob.name) === "sentence";
         if (isMap) {
           const chain = mapDefs?.has(ob.name) ? mapDefChainFromName(ob.name, mapDefs) : "";
           if (lang === "c") {
@@ -1914,6 +1915,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (declaredTypes?.get(ob.name) === "vector") {
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
+        } else if (isSentence) {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          expr = `formatSentence(${name})`;
         } else {
           expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
         }
@@ -1921,10 +1925,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	        if (declaredTypes?.get(ob.name) === "vector") {
 	          if (jsHelpers) jsHelpers.usesVectorFormat = true;
 	          expr = `formatVectorSentence(${JSON.stringify(ob.name)}, ${name}.ob?.ve ?? ${name}.ve)`;
+        } else if (isSentence) {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          expr = `formatSentence(${name})`;
 	        } else {
 	          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
 	        }
-	      } else if (!isJsonMap && !isMap && !isCsvMap) {
+	      } else if (!isJsonMap && !isMap && !isCsvMap && isSentence) {
+        if (jsHelpers) jsHelpers.usesVectorFormat = true;
+        expr = `formatSentence(remember(${JSON.stringify(ob.name)}))`;
+        if (rememberFlag) rememberFlag.used = true;
+      } else if (!isJsonMap && !isMap && !isCsvMap) {
 	        expr = JSON.stringify(ob.name);
 	      }
 	    } else {
@@ -1949,7 +1960,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const isText = typeof ob.text === "string"
         || wantCsv
         || wantYaml
-        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
+        || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
       const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
       if (writeFilename) {
@@ -3319,6 +3330,27 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
   }
 
+  if (ob?.la && name) {
+    const laLiteral = inlineSentenceLiteral(ob.la, declared);
+    const sentenceObject = `{ su: { name: "${name}" }, ob: { la: ${laLiteral} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+      }
+      const cName = sanitizeName(name);
+      const pyash = sentenceToPyash(sentence);
+      const literal = JSON.stringify(pyash);
+      if (!shouldDeclare) return `snprintf(${cName}, PYA_TEXT_CAP, "%s", ${literal});`;
+      return `char ${cName}[PYA_TEXT_CAP] = ${literal};`;
+    }
+    const varName = sanitizeName(name);
+    if (shouldDeclare) {
+      return `let ${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
+    }
+    return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
+  }
+
   return null;
 }
 
@@ -3668,6 +3700,8 @@ let lines = [header];
         declaredTypes.set(name, "text");
       } else if (sentence.be === "number" || sentence.ob?.num !== undefined) {
         declaredTypes.set(name, "number");
+      } else if (sentence.ob?.la) {
+        declaredTypes.set(name, "sentence");
       } else if (sentence.be === "vector" || sentence.ob?.ve) {
         declaredTypes.set(name, "vector");
         if (sentence.ob?.ve?.type) {
