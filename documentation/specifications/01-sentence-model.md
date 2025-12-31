@@ -16,6 +16,9 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - Genitives resolve a field chain on a sentence:
   - Possessive: `this ti ob ti num` maps to `this.ob.num`.
   - Genitive: `num of ob of this` maps to the same chain.
+- Subordinate clauses embed a full sentence as a case value using `la … ko`:
+  - Example: `ob la su name clause ob text "ok" be text ya ko`.
+  - The embedded sentence is represented as `ob: { la: <sentence> }` in the internal model.
 - Quoted blocks use `quoted.<lang>. … .<lang>.quoted` and are parsed as text.
 - Newlines inside quoted blocks are preserved; escaped `\\n` sequences are unescaped before parsing.
 
