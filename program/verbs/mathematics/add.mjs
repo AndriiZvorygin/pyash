@@ -137,6 +137,16 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     if (typeof sentence.to?.text === "string") {
       return { ob: { text: sentence.to.text + sentence.ob.text }, be: "text" };
     }
+    if (sentence.to?.genitive) {
+      const target = resolveGenitiveTarget(sentence.to.genitive, remember);
+      if (target) {
+        const current = typeof target.value === "string"
+          ? target.value
+          : (typeof target.value?.text === "string" ? target.value.text : "");
+        target.parent[target.key] = current + sentence.ob.text;
+        return { ob: { text: target.parent[target.key] }, be: "text" };
+      }
+    }
     const rawTo = sentence.to;
     const targetName = typeof rawTo?.name === "string" ? rawTo.name : null;
     if (!targetName || !remember) throw new Error("add: to name is required for text");
