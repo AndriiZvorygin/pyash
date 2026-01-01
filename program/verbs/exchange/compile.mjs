@@ -4211,7 +4211,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       continue;
     }
 
-    if (sentence.mood === "ya" && name && !sentence.exists && !declared.has(name)) {
+    if (sentence.mood === "ya" && name && !sentence.exists && !declared.has(name) && sentence.be !== "export") {
       const pyash = sentenceToPyash(sentence);
       throwErrorSentence({
         name: "variable as not exists",
