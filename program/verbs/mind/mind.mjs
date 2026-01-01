@@ -1,9 +1,11 @@
 // pyash/verbs/mind.mjs
 import ollama from "../../motor/ollama.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
+import { sentenceToPyash } from "../../beautiful.mjs";
 
 // Per-mind discourse logs keyed by bucket name
 const mindLogs = new Map();
+const mindAnswerCounters = new Map();
 
 function historyBucketName({ callSentence, configSentence, targetName }) {
   if (typeof callSentence?.from?.text === "string") return callSentence.from.text;
@@ -28,6 +30,41 @@ function buildHistoryMessages(bucket, { window = 8 } = {}) {
   const log = mindLogs.get(bucket) || [];
   const max = window * 2;
   return log.slice(-max);
+}
+
+function nextAnswerName(targetName) {
+  const count = (mindAnswerCounters.get(targetName) || 0) + 1;
+  mindAnswerCounters.set(targetName, count);
+  return `${targetName} answer ${count}`;
+}
+
+function compareUtf8(a, b) {
+  if (a === b) return 0;
+  const encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+  const bufA = encoder ? encoder.encode(String(a)) : Array.from(String(a), ch => ch.charCodeAt(0));
+  const bufB = encoder ? encoder.encode(String(b)) : Array.from(String(b), ch => ch.charCodeAt(0));
+  const len = Math.min(bufA.length, bufB.length);
+  for (let i = 0; i < len; i += 1) {
+    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
+  }
+  return bufA.length < bufB.length ? -1 : 1;
+}
+
+function toolListFromMap(name) {
+  if (!name) return "";
+  const fact = remember(name);
+  if (!fact || fact.be !== "map") return "";
+  const entries = fact.ob?.map ?? {};
+  const keys = Object.keys(entries).sort(compareUtf8);
+  const lines = [];
+  for (const key of keys) {
+    const entry = entries[key];
+    if (entry?.mood && entry?.be) {
+      lines.push(sentenceToPyash(entry));
+    }
+  }
+  if (!lines.length) return "";
+  return `TOOLS:\n${lines.join("\n")}`;
 }
 
 export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) {
@@ -64,6 +101,9 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
 
   const promptParts = [];
   if (configPrompt) promptParts.push(configPrompt);
+  const toolMapName = sentence?.with?.name ?? null;
+  const toolList = toolListFromMap(toolMapName);
+  if (toolList) promptParts.push(toolList);
   if (callPrompt) promptParts.push(callPrompt);
   const historyMessages = buildHistoryMessages(bucket, { window: historyWindow });
   if (historyMessages.length) {
@@ -100,19 +140,18 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
     appendLog(bucket, { role: "user", content: callPrompt });
   }
   const baseConfig = configSentence || {};
-  doRemember({
+  const answerName = nextAnswerName(targetName);
+  const answerSentence = {
     mood: "ya",
-    su: { name: targetName },
-    be: "mind",
-    from: baseConfig.from,
-    as: baseConfig.as,
-    accordingto: baseConfig.accordingto,
-    exists: baseConfig.exists,
-    ob: { text: responseText, model, historyWindow }
-  });
+    su: { name: answerName },
+    be: "answer",
+    from: { name: targetName },
+    ob: { text: responseText }
+  };
+  doRemember(answerSentence);
   appendLog(bucket, { role: "assistant", content: responseText });
 
-  return { ob: { text: responseText, model } };
+  return answerSentence;
 }
 
 export default mind_to_name_text;
@@ -120,6 +159,7 @@ export default mind_to_name_text;
 export { buildHistoryMessages };
 export function resetMindLogs() {
   mindLogs.clear();
+  mindAnswerCounters.clear();
 }
 
 export const signatures = [

@@ -134,11 +134,28 @@ function inlineSourceMap(code, { sourceName, sourceText } = {}) {
 function exchangeRuntimeHelper() {
   return [
     "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
+    "function pyaNewspaperEnabled() {",
+    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
+    "}",
+    "function pyaEmitNewspaper(line) {",
+    "  if (!pyaNewspaperEnabled() || !line) return;",
+    "  const payload = `${PYA_NEWSPAPER_PREFIX}${line}\\n`;",
+    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
+    "    process.stdout.write(payload);",
+    "  } else {",
+    "    console.log(payload.trimEnd());",
+    "  }",
+    "}",
+    "let pyaToolCounter = 0;",
+    "function pyaNextToolEventId() {",
+    "  pyaToolCounter += 1;",
+    "  return String(pyaToolCounter).padStart(6, \"0\");",
+    "}",
     "let pyaArtifactCounter = 0;",
     "const pyaArtifacts = new Map();",
     "const pyaArtifactHashes = new Map();",
     "function pyaExchangeEnabled() {",
-    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
+    "  return pyaNewspaperEnabled();",
     "}",
     "function pyaNormalizeNewlines(text) {",
     "  return String(text ?? \"\").replace(/\\r\\n/g, \"\\n\").replace(/\\r/g, \"\\n\");",
@@ -155,13 +172,7 @@ function exchangeRuntimeHelper() {
     "  return relative.replace(/\\\\/g, \"/\");",
     "}",
     "function pyaEmitExchange(line) {",
-    "  if (!pyaExchangeEnabled()) return;",
-    "  const payload = `${PYA_NEWSPAPER_PREFIX}${line}\\n`;",
-    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
-    "    process.stdout.write(payload);",
-    "  } else {",
-    "    console.log(payload.trimEnd());",
-    "  }",
+    "  pyaEmitNewspaper(line);",
     "}",
     "function pyaRecordArtifact(locator, bytes, op) {",
     "  if (!pyaExchangeEnabled()) return null;",
@@ -199,6 +210,29 @@ function exchangeRuntimeHelper() {
     "  fs.writeFileSync(filename, normalized);",
     "  const buf = Buffer.from(String(normalized ?? \"\"), \"utf8\");",
     "  pyaRecordArtifact(filename, buf, op);",
+    "}"
+  ].join("\n");
+}
+
+function newspaperRuntimeHelper() {
+  return [
+    "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
+    "function pyaNewspaperEnabled() {",
+    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
+    "}",
+    "function pyaEmitNewspaper(line) {",
+    "  if (!pyaNewspaperEnabled() || !line) return;",
+    "  const payload = `${PYA_NEWSPAPER_PREFIX}${line}\\n`;",
+    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
+    "    process.stdout.write(payload);",
+    "  } else {",
+    "    console.log(payload.trimEnd());",
+    "  }",
+    "}",
+    "let pyaToolCounter = 0;",
+    "function pyaNextToolEventId() {",
+    "  pyaToolCounter += 1;",
+    "  return String(pyaToolCounter).padStart(6, \"0\");",
     "}"
   ].join("\n");
 }
@@ -1782,22 +1816,39 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const explicitModel = ob.model ? JSON.stringify(ob.model) : null;
       const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
       const lines = ["{"]; // block scope to avoid duplicate const per call
+      if (sentence.with?.name) {
+        if (jsHelpers) jsHelpers.usesVectorFormat = true;
+        if (rememberFlag) rememberFlag.used = true;
+      }
       lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
       lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
       lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
       lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
       lines.push("const messages = [];");
       lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
+      if (sentence.with?.name) {
+        const toolMapName = JSON.stringify(sentence.with.name);
+        lines.push(`const toolMap = remember(${toolMapName});`);
+        lines.push("const toolEntries = toolMap?.ob?.map ?? {};");
+        lines.push("const toolKeys = Object.keys(toolEntries).sort(compareUtf8);");
+        lines.push("const toolLines = toolKeys.map(k => { const entry = toolEntries[k]; return (entry?.mood && entry?.be) ? formatSentence(entry) : \"\"; }).filter(Boolean);");
+        lines.push("if (toolLines.length) messages.push({ role: \"system\", content: `TOOLS:\\n${toolLines.join(\"\\n\")}` });");
+      }
       lines.push("messages.push(...historyMessages);");
       lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
       lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
       const resVar = sanitizeName(resultName);
-      lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-      lines.push(`const ${resVar} = { su: { name: "${resultName}" }, ob: { text: reply }, be: "text", mood: "ya" };`);
-      lines.push(`globalThis["${resultName}"] = ${resVar};`);
-      lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
-      lines.push("}");
-      return lines.join("\n");
+    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(" + JSON.stringify(mindName) + ") || 0) + 1;");
+    lines.push(`mindAnswerCounters.set(${JSON.stringify(mindName)}, __pyaAnswerCount);`);
+    lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
+    lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
+    lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
+    lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
+    lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
+    lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
+    lines.push("}");
+    return lines.join("\n");
     }
 
     if (lang === "c" && ob.name && declaredTypes?.get(ob.name) === "map") {
@@ -2613,6 +2664,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         ? JSON.stringify(ob.name)
         : "\"\"";
     const lines = ["{"]; // block scope per invocation
+    if (sentence.with?.name) {
+      if (jsHelpers) jsHelpers.usesVectorFormat = true;
+      if (rememberFlag) rememberFlag.used = true;
+    }
     lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
     lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
     lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
@@ -2620,13 +2675,26 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const messages = [];");
     lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
+    if (sentence.with?.name) {
+      const toolMapName = JSON.stringify(sentence.with.name);
+      lines.push(`const toolMap = remember(${toolMapName});`);
+      lines.push("const toolEntries = toolMap?.ob?.map ?? {};");
+      lines.push("const toolKeys = Object.keys(toolEntries).sort(compareUtf8);");
+      lines.push("const toolLines = toolKeys.map(k => { const entry = toolEntries[k]; return (entry?.mood && entry?.be) ? formatSentence(entry) : \"\"; }).filter(Boolean);");
+      lines.push("if (toolLines.length) messages.push({ role: \"system\", content: `TOOLS:\\n${toolLines.join(\"\\n\")}` });");
+    }
     lines.push("messages.push(...historyMessages);");
     lines.push(`messages.push({ role: "user", content: ${userText} });`);
     lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
     const resVar = sanitizeName(resultName);
     lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-    lines.push(`const ${resVar} = { su: { name: "${resultName}" }, ob: { text: reply }, be: "text", mood: "ya" };`);
-    lines.push(`globalThis["${resultName}"] = ${resVar};`);
+    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(" + JSON.stringify(mindName) + ") || 0) + 1;");
+    lines.push(`mindAnswerCounters.set(${JSON.stringify(mindName)}, __pyaAnswerCount);`);
+    lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
+    lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
+    lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
+    lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
+    lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
     lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
     lines.push("}");
     return lines.join("\n");
@@ -4178,12 +4246,16 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (jsHelpers.usesYamlRuntime) jsHelpers.usesJsonRuntime = true;
     if (mindShim.used) {
       prelude.push(`const mindConfigs = new Map();`);
+      prelude.push(`const mindAnswerCounters = new Map();`);
       const waitForHelper = `function waitFor(promise) {\n  if (!promise || typeof promise.then !== \"function\") return promise;\n  const sab = new SharedArrayBuffer(4);\n  const view = new Int32Array(sab);\n  let value;\n  let error;\n  promise.then(v => { value = v; Atomics.store(view, 0, 1); Atomics.notify(view, 0); }).catch(err => { error = err; Atomics.store(view, 0, 1); Atomics.notify(view, 0); });\n  Atomics.wait(view, 0, 0);\n  if (error) throw error;\n  return value;\n}`;
       const mindHelper = `function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = transport({ host, model, messages, numCtx });\n    return waitFor(res);\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = waitFor(fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  }));\n  const data = waitFor(typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
       const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(name, windowSize = 8) {\n  const arr = mindHistory.get(name) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(name, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(name) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(name, trimmed);\n}`;
       prelude.push(waitForHelper);
       prelude.push(mindHelper);
       prelude.push(mindHistory);
+      if (!jsHelpers.usesExchange) {
+        prelude.push(newspaperRuntimeHelper());
+      }
     }
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.su?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;

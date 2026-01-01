@@ -47,12 +47,16 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
 
   const mem = allRemember();
   const fact = mem.find(s => s.su?.name === "generator");
+  const answer = mem.find(s => s.su?.name === "generator answer 1");
 
   assert.ok(fact);
   assert.equal(fact.be, "mind");
-  assert.ok(fact.ob?.text?.includes("MODEL=qwen3:8b"));
-  assert.ok(fact.ob?.text?.includes("Hello"));
-  assert.ok(fact.ob?.text?.includes("orchestrator"));
+  assert.ok(answer);
+  assert.equal(answer.be, "answer");
+  assert.equal(answer.from?.name, "generator");
+  assert.ok(answer.ob?.text?.includes("MODEL=qwen3:8b"));
+  assert.ok(answer.ob?.text?.includes("Hello"));
+  assert.ok(answer.ob?.text?.includes("orchestrator"));
 
   motor.generate = original;
 });
