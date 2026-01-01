@@ -9,7 +9,7 @@ test("compile espeak module uses command text payload", async () => {
     `from filename "examples/pyash/modules/espeak_say.pya" to state javascript to text output be compile do`
   );
   const result = await interpret(sentence);
-  const js = result?.ob?.text ?? "";
+  const js = result?.ob?.text ?? result?.value?.text ?? "";
   assert.match(js, /cmd\.ob\.text/, "compiled module should use cmd.ob.text");
   assert.doesNotMatch(js, /cmd\.ob\.wo/, "compiled module should not use cmd.ob.wo");
 });
