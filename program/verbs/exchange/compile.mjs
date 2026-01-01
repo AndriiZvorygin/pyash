@@ -10,7 +10,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, SPEAK_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -1795,8 +1795,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       sentence.ob?.at?.num != null || sentence.ob?.at?.genitive ||
       sentence.to?.at?.num != null || sentence.to?.at?.genitive);
 
-  if ((baseBe === "say") || (baseBe === "write" && !hasWriteIndex)) {
+  if (baseBe === "speak" || baseBe === "say" || (baseBe === "write" && !hasWriteIndex)) {
     const isWrite = baseBe === "write";
+    const isSpeak = baseBe === "speak";
     const formatParts = [];
     if (sentence?.become?.name) formatParts.push(sentence.become.name);
     if (sentence?.become?.text) formatParts.push(sentence.become.text);
@@ -2190,6 +2191,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (fallback) expr = fallback;
       }
     }
+    if (isSpeak && lang !== "c") {
+      if (jsHelpers) jsHelpers.usesSpeak = true;
+      return `pyaSpeak(${expr});`;
+    }
     const writeFilename = sentence?.to?.filename;
     if (writeFilename && lang !== "c") {
       if (jsHelpers) {
@@ -2209,6 +2214,19 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
       const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
+      if (isSpeak) {
+        if (cHelpers) {
+          cHelpers.usesSpeak = true;
+          cHelpers.usesTextHelper = true;
+          cHelpers.usesStdlib = true;
+          cHelpers.usesString = true;
+          cHelpers.usesPrintf = true;
+        }
+        if (fmt === "%s") return `pya_speak(${expr});`;
+        const speakBuf = `speak_${cState?.fileCounter ?? 0}`;
+        if (cState) cState.fileCounter += 1;
+        return `char ${speakBuf}[PYA_TEXT_CAP];\nsnprintf(${speakBuf}, sizeof(${speakBuf}), "${fmt}", ${expr});\npya_speak(${speakBuf});`;
+      }
       if (writeFilename) {
         if (cHelpers) {
           cHelpers.usesStdlib = true;
@@ -4346,6 +4364,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
         prelude.push(newspaperRuntimeHelper());
       }
     }
+    if (jsHelpers.usesSpeak) {
+      const speakHelper = `function pyaSpeak(value) {\n  const text = value == null ? \"\" : String(value);\n  const res = child_process.spawnSync(\"espeak-ng\", [\"-x\", text], { encoding: \"utf8\" });\n  if (res.error) throw res.error;\n  const out = res.stdout ?? \"\";\n  console.log(String(out).trimEnd());\n  return String(out ?? \"\");\n}`;
+      prelude.push(speakHelper);
+    }
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.su?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
@@ -4382,6 +4404,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     }
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
+    }
+    if (jsHelpers.usesSpeak) {
+      prelude.splice(1, 0, `import child_process from "node:child_process";`);
     }
     if (jsHelpers.usesExchange) {
       prelude.splice(1, 0, `import path from "node:path";`);
@@ -4467,6 +4492,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
+    if (cHelpers.usesSpeak) cPrelude.push(SPEAK_HELPER);
     if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
     if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
     if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);

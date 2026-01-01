@@ -21,6 +21,7 @@ import { tiny, signatures as tinySignatures } from "./regulation/tiny.mjs";
 import { equally, signatures as equallySignatures } from "./regulation/equally.mjs";
 import vector, { signatures as vectorSignatures } from "./vector/index.mjs";
 import say, { signatures as saySignatures } from "./say.mjs";
+import speak, { signatures as speakSignatures } from "./speak.mjs";
 
 export {
   add,
@@ -45,7 +46,8 @@ export {
   tiny,
   equally,
   vector,
-  say
+  say,
+  speak
 };
 
 export const builtInSignatures = [
@@ -72,4 +74,5 @@ export const builtInSignatures = [
   ...equallySignatures,
   ...vectorSignatures,
   ...saySignatures,
+  ...speakSignatures,
 ];
