@@ -1,15 +1,42 @@
 // main.mjs
+import fs from "node:fs/promises";
+import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "./understand/index.mjs";
 import { interpret } from "./bridge/index.mjs";
 import { allRemember, forget } from "./remember/index.mjs";
-import { splitSentences } from "./library/sentenceSplitter.mjs";
+import { splitSentences, splitSentencesWithLines } from "./library/sentenceSplitter.mjs";
 import { setEntryModulePath } from "./bridge/modules.mjs";
+import { state } from "./bridge/state.mjs";
+
+async function loadDefaultConfig({ cwd, interpretFn }) {
+  const configPath = path.resolve(cwd, "configure", "default.pya");
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    const lines = splitSentencesWithLines(raw);
+    for (const entry of lines) {
+      const trimmed = entry.text.trim();
+      if (!trimmed) continue;
+      state.currentSourceFilename = configPath;
+      state.currentSourceLine = entry.line;
+      const sentence = parse(trimmed);
+      state.currentSourceSentence = sentence;
+      await interpretFn(sentence);
+    }
+    state.currentSourceFilename = null;
+    state.currentSourceLine = null;
+    state.currentSourceSentence = null;
+  } catch (err) {
+    if (err?.code === "ENOENT") return;
+    throw err;
+  }
+}
 
 async function repl() {
   setEntryModulePath(process.cwd());
+  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
   const rl = readline.createInterface({ input, output });
 
   console.log("Pyash REPL");
@@ -23,10 +50,10 @@ async function repl() {
 
   const processBlock = async (block) => {
     if (block.trim() === ".") return "end";
-    const sentences = splitSentences(block);
+    const sentences = splitSentencesWithLines(block);
 
-    for (const raw of sentences) {
-      const trimmed = raw.trim();
+    for (const entry of sentences) {
+      const trimmed = entry.text.trim();
       if (!trimmed) continue;
 
       if (trimmed === "quit" || trimmed === "exit") {
@@ -45,11 +72,18 @@ async function repl() {
       }
 
       try {
+        state.currentSourceFilename = "<repl>";
+        state.currentSourceLine = entry.line ?? 1;
         const sentence = parse(trimmed);
+        state.currentSourceSentence = sentence;
         const result = await interpret(sentence);
         console.log("→", JSON.stringify(result, null, 2));
       } catch (err) {
         console.error("Error:", err.message);
+      } finally {
+        state.currentSourceFilename = null;
+        state.currentSourceLine = null;
+        state.currentSourceSentence = null;
       }
     }
   };

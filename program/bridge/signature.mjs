@@ -92,6 +92,7 @@ export function deriveSignatureFromDefinition(sentence) {
 
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
+    if (value === undefined) continue;
     if (NON_CASE_FIELDS.has(key)) continue;
     if (key === "su") continue; // ceremony name, not a case
     if (SEQUENCE_REGISTERS.has(key)) continue;
@@ -210,6 +211,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
 
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
+    if (value === undefined) continue;
     if (NON_CASE_FIELDS.has(key)) continue;
     if (key === "su" && sentence.mood !== "then") continue;
     if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
@@ -218,8 +220,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
       console.error("derive-signature-fail", { key, value, verb });
       throwErrorSentence({
         name: "signature derive",
-        message: `Cannot derive signature: missing type words for case "${key}" on verb "${verb}"`,
-        from: { name: "signature" },
+        message: `Cannot derive signature: missing type words for case "${key}" on verb "${verb}" (value: ${value === undefined ? "undefined" : JSON.stringify(value)})`,
         raw: { case: key, verb, value }
       });
     }

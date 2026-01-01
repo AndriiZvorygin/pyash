@@ -1,0 +1,6 @@
+su name tools be map def
+su name say be say ob text "" can
+prah
+
+exists su name helper be mind via state "qwen3-vl:8b-instruct" ya
+ob text "use the say tool to say hello world" to name helper with name tools be write do

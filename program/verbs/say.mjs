@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { state } from "../bridge/state.mjs";
 
@@ -61,6 +62,40 @@ export function renderSayValue(ob = {}, { rememberFn } = {}) {
 }
 
 export async function say(sentence, { remember: rememberFn = remember } = {}) {
+  const defaultFact = rememberFn?.("say");
+  const defaultTarget = defaultFact?.be === "default" ? defaultFact?.ob?.name : null;
+  if (defaultTarget && defaultTarget !== "say") {
+    const { interpret } = await import("../bridge/index.mjs");
+    const spec = defaultFact?.from?.filename ?? defaultFact?.from?.name;
+    if (spec) {
+      const moduleSpec = path.resolve(process.cwd(), spec);
+      await interpret({
+        mood: "do",
+        be: "import",
+        from: { name: moduleSpec },
+        ob: { name: "say" },
+        to: { name: defaultTarget }
+      });
+    }
+    const forwarded = { ...sentence, be: defaultTarget };
+    for (const key of Object.keys(forwarded)) {
+      if (forwarded[key] === undefined) delete forwarded[key];
+    }
+    if (forwarded.ob?.name && !forwarded.ob?.text && !forwarded.ob?.num && forwarded.ob?.boolean === undefined && !forwarded.ob?.hollow) {
+      const remembered = rememberFn?.(forwarded.ob.name);
+      if (!remembered) forwarded.ob = { text: forwarded.ob.name };
+    }
+    if (!forwarded.to) {
+      forwarded.to = { name: "result", nameTypeWords: ["text"] };
+    }
+    const prevSource = state.currentSourceSentence;
+    state.currentSourceSentence = forwarded;
+    try {
+      return await interpret(forwarded);
+    } finally {
+      state.currentSourceSentence = prevSource;
+    }
+  }
   const text = renderSayValue(sentence.ob ?? {}, { rememberFn });
   if (sentence?.to?.filename) {
     await fs.writeFile(sentence.to.filename, String(text ?? ""), "utf8");

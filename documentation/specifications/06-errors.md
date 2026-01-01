@@ -54,8 +54,8 @@ Both thrown and surfaced error sentences share the same field requirements:
 
   * `ob.pyash`
   * `ob.raw`
-  * `from la <sentence> ko`
-  * `at filename "<path>"`
+  * `at la <sentence> ko`
+  * `from filename "<path>"`
   * `by num <line-number>`
 
 No fields are added, removed, or renamed during surfacing.

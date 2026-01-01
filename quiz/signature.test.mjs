@@ -229,6 +229,17 @@ test("deriveSignatureFromCall infers vec type for at-case when vector exists", (
   ]);
 });
 
+test("deriveSignatureFromCall skips undefined cases", () => {
+  const sentence = {
+    mood: "do",
+    be: "espeak say",
+    ob: { text: "hello" },
+    to: { name: "result", nameTypeWords: ["text"] },
+    from: undefined
+  };
+  assert.doesNotThrow(() => deriveSignatureFromCall(sentence));
+});
+
 test("deriveSignatureFromCall handles multiply with named operands from memory", () => {
   const sentence = { mood: "do", be: "multiply", from: { name: "lhs" }, by: { name: "rhs" }, to: { name: "dst" } };
   const remember = name => {

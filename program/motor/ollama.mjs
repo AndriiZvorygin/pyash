@@ -45,4 +45,47 @@ async function generate(model, prompt) {
   return output.trim();
 }
 
-export default { generate };
+async function chat({ model, messages, tools = [], stream = false }) {
+  const base = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+  const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
+  const body = { model, messages, stream: !!stream };
+  if (Array.isArray(tools) && tools.length > 0) body.tools = tools;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    throw new Error(`ollama request failed: ${res.status} ${res.statusText ?? ""}`.trim());
+  }
+
+  if (stream) {
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let final = null;
+    if (!res.body) return final;
+    for await (const chunk of res.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const parts = buffer.split("\n");
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        if (!part.trim()) continue;
+        const payload = JSON.parse(part);
+        if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+        final = payload;
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      const payload = JSON.parse(buffer);
+      if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+      final = payload;
+    }
+    return final;
+  }
+
+  return res.json();
+}
+
+export default { generate, chat };

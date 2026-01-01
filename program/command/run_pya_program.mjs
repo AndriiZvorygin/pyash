@@ -7,12 +7,36 @@ import { forget, remember } from "../remember/index.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
-import { splitSentences } from "../library/sentenceSplitter.mjs";
+import { splitSentences, splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
+import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict } from "../bridge/exchange.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
+
+async function loadDefaultConfig({ cwd, interpretFn }) {
+  const configPath = path.resolve(cwd, "configure", "default.pya");
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    const lines = splitSentencesWithLines(raw);
+    for (const entry of lines) {
+      const trimmed = entry.text.trim();
+      if (!trimmed) continue;
+      state.currentSourceFilename = configPath;
+      state.currentSourceLine = entry.line;
+      const sentence = parse(trimmed);
+      state.currentSourceSentence = sentence;
+      await interpretFn(sentence);
+    }
+    state.currentSourceFilename = null;
+    state.currentSourceLine = null;
+    state.currentSourceSentence = null;
+  } catch (err) {
+    if (err?.code === "ENOENT") return;
+    throw err;
+  }
+}
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -80,7 +104,8 @@ async function main() {
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
   }
-  const sentences = splitSentences(text);
+  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  const sentences = splitSentencesWithLines(text);
   const outputs = [];
   const runId = runIdFlag || `run-${Date.now()}`;
   const runTime = runTimeFlag || new Date().toISOString();
@@ -99,7 +124,7 @@ async function main() {
   };
   const isToolSentence = (sentence) => {
     if (!sentence) return false;
-    if (sentence.be === "mind") return true;
+    if (sentence.be === "mind") return sentence.mood === "do";
     if (sentence.be === "command") return true;
     if (sentence.be !== "write") return false;
     const targetName = sentence.to?.name;
@@ -141,10 +166,13 @@ async function main() {
     return null;
   };
 
-  for (const raw of sentences) {
-    const line = raw.trim();
+  for (const entry of sentences) {
+    const line = entry.text.trim();
     if (!line) continue;
+    state.currentSourceFilename = resolved;
+    state.currentSourceLine = entry.line;
     const sentence = parse(line);
+    state.currentSourceSentence = sentence;
     const embedded = sentenceToPyash(sentence);
     const isToolCall = isToolSentence(sentence);
     pushNewspaper(`ob la ${embedded} ko be evoke ya`);
@@ -198,6 +226,9 @@ async function main() {
 
   const result = refineryResult ?? remember("result");
   pushNewspaper(`su name ${runId} be end ya`);
+  state.currentSourceFilename = null;
+  state.currentSourceLine = null;
+  state.currentSourceSentence = null;
   if (useNewspaper || useAgain) {
     const newspaperDir = path.resolve(process.cwd(), "newspaper");
     await fs.mkdir(newspaperDir, { recursive: true });

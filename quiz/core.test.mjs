@@ -73,6 +73,16 @@ test("topic sugar: ta label be topic ya", async () => {
   assert.equal(mem[0].be, "topic");
 });
 
+test("quoted text after role stays text", () => {
+  const s = parse('be say ob "hello world" do');
+  assert.deepEqual(s.ob, { text: "hello world" });
+});
+
+test("quoted text after via state becomes name without marker", () => {
+  const s = parse('exists su name helper be mind via state "qwen3-vl:8b-instruct" ya');
+  assert.equal(s.as?.name, "qwen3-vl:8b-instruct");
+});
+
 test("def mood stores definitional fact", async () => {
   forget();
 

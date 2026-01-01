@@ -14,6 +14,17 @@ test("splits combined input on unquoted moods", () => {
   ]);
 });
 
+test("splits on can mood", () => {
+  const input = "su name tools be map def su name add num be add ob num 1 to name num can prah";
+  const sentences = splitSentences(input);
+
+  assert.deepEqual(sentences, [
+    "su name tools be map def",
+    "su name add num be add ob num 1 to name num can",
+    "prah"
+  ]);
+});
+
 test("does not split on moods inside quotes", () => {
   const input = 'su name memo ob text "say ya do later" be topic ya su name next be topic ya';
   const sentences = splitSentences(input);
