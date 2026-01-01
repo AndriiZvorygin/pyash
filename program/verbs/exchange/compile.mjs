@@ -10,7 +10,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, SPEAK_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, SPEAK_HELPER, COMMAND_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -2247,6 +2247,82 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     return `console.log(${expr});`;
   }
 
+  if (baseBe === "command") {
+    const inputFilename = sentence.from?.filename;
+    const inputText = sentence.fromtext?.text;
+    if (lang !== "c") {
+      if (jsHelpers) {
+        jsHelpers.usesCommand = true;
+        if (inputFilename || sentence?.to?.filename) jsHelpers.usesFs = true;
+      }
+      const cmdExpr = exprForSlot(ob, {
+        sentenceArg,
+        locals,
+        declared,
+        defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text ?? ${sentenceArg}.ob?.wo` : undefined,
+        field: "text"
+      });
+      const inputExpr = inputFilename
+        ? `fs.readFileSync(${JSON.stringify(inputFilename)}, "utf8")`
+        : (inputText != null ? JSON.stringify(inputText) : "undefined");
+      const lines = ["{"];
+      lines.push(`const __pyaCmd = ${cmdExpr ?? "\"\""};`);
+      lines.push(`const __pyaOut = pyaCommand(__pyaCmd, ${inputExpr});`);
+      if (sentence?.to?.filename) {
+        lines.push(`fs.writeFileSync(${JSON.stringify(sentence.to.filename)}, String(__pyaOut ?? ""));`);
+      }
+      if (sentence?.to?.name) {
+        const target = sanitizeName(sentence.to.name);
+        lines.push(`const ${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
+        lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
+      }
+      lines.push("}");
+      return lines.join("\n");
+    }
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesCommand = true;
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+      }
+      if (inputFilename || inputText) {
+        throwErrorSentence({
+          name: "command defective",
+          message: "command defective",
+          from: { name: "compile" },
+          raw: { reason: "stdin unsupported in c" }
+        });
+      }
+      const cmdExpr = exprForSlot(ob, {
+        sentenceArg,
+        locals,
+        declared,
+        defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text` : undefined,
+        field: "text"
+      });
+      const outVar = `cmd_out_${cState?.fileCounter ?? 0}`;
+      if (cState) cState.fileCounter += 1;
+      const lines = [];
+      lines.push(`char *${outVar} = pya_command(${cmdExpr ?? "\"\""});`);
+      if (sentence?.to?.filename) {
+        const safePath = JSON.stringify(sentence.to.filename);
+        const fileVar = `out_${cState?.fileCounter ?? 0}`;
+        if (cState) cState.fileCounter += 1;
+        lines.push(`FILE *${fileVar} = fopen(${safePath}, "w");`);
+        lines.push(`if (${fileVar}) { fprintf(${fileVar}, "%s", ${outVar} ? ${outVar} : ""); fclose(${fileVar}); }`);
+      }
+      if (sentence?.to?.name) {
+        const target = sanitizeName(sentence.to.name);
+        lines.push(`char ${target}[PYA_TEXT_CAP];`);
+        lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
+      }
+      lines.push(`if (${outVar}) free(${outVar});`);
+      return lines.join("\n");
+    }
+  }
+
   // Json map enumeration: all su/ob/of <map> be read do
   if (baseBe === "read" && ob?.genitive?.chain?.at(-1) === "all") {
     const chain = ob.genitive.chain;
@@ -3821,10 +3897,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesSpeak: false, usesCommand: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesSpeak: false, usesCommand: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map() };
   const mapDefs = new Map();
   const refineryDefs = new Map();
@@ -4368,6 +4444,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       const speakHelper = `function pyaSpeak(value) {\n  const text = value == null ? \"\" : String(value);\n  const res = child_process.spawnSync(\"espeak-ng\", [\"-x\", text], { encoding: \"utf8\" });\n  if (res.error) throw res.error;\n  const out = res.stdout ?? \"\";\n  console.log(String(out).trimEnd());\n  return String(out ?? \"\");\n}`;
       prelude.push(speakHelper);
     }
+    if (jsHelpers.usesCommand) {
+      const commandHelper = `function pyaCommand(cmd, input) {\n  const res = child_process.spawnSync(String(cmd ?? \"\"), {\n    shell: true,\n    input: input ?? undefined,\n    encoding: \"utf8\",\n    maxBuffer: 1024 * 1024\n  });\n  if (res.error || res.status) {\n    throw new Error(\"command defective\");\n  }\n  return String(res.stdout ?? \"\");\n}`;
+      prelude.push(commandHelper);
+    }
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.su?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
@@ -4405,7 +4485,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
     }
-    if (jsHelpers.usesSpeak) {
+  if (jsHelpers.usesSpeak) {
+      prelude.splice(1, 0, `import child_process from "node:child_process";`);
+    }
+    if (jsHelpers.usesCommand && !jsHelpers.usesSpeak) {
       prelude.splice(1, 0, `import child_process from "node:child_process";`);
     }
     if (jsHelpers.usesExchange) {
@@ -4493,6 +4576,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
     if (cHelpers.usesSpeak) cPrelude.push(SPEAK_HELPER);
+    if (cHelpers.usesCommand) cPrelude.push(COMMAND_HELPER);
     if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
     if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
     if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);

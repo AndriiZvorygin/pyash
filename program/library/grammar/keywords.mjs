@@ -27,7 +27,7 @@ export const ROLE_KEYS = [
   ...COMPOSITIONAL_KEYWORDS
 ];
 
-export const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "bool", "boolean", "ord"];
+export const TYPE_TOKENS = ["name", "num", "number", "text", "filename", "bool", "boolean", "ord", "wo"];
 
 export const CONTEXT_KEYS = [...Object.keys(compositionalGrid), ...Object.keys(EXTRA_CONTEXT_KEYWORDS)];
 

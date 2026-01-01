@@ -449,8 +449,9 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         const raw = words[i + 1];
         const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
         const maybeNum = Number(value);
-        if (t === "text") {
+        if (t === "text" || t === "wo") {
           target.text = value;
+          if (t === "wo") target.wo = value;
         } else if (t === "filename") {
           target.filename = value;
         } else {

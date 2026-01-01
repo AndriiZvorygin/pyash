@@ -3173,3 +3173,32 @@ export const SPEAK_HELPER = [
   "  return pya_speak_strdup(out);",
   "}"
 ].join(\"\\n\");
+
+export const COMMAND_HELPER = [
+  "static char *pya_command_strdup(const char *s) {",
+  "  if (!s) return NULL;",
+  "  size_t len = strlen(s);",
+  "  char *out = (char *)malloc(len + 1);",
+  "  if (!out) return NULL;",
+  "  memcpy(out, s, len);",
+  "  out[len] = '\\0';",
+  "  return out;",
+  "}",
+  "",
+  "static char *pya_command(const char *cmd) {",
+  "  if (!cmd) return pya_command_strdup(\"\");",
+  "  FILE *pipe = popen(cmd, \"r\");",
+  "  if (!pipe) return pya_command_strdup(\"\");",
+  "  char out[PYA_TEXT_CAP];",
+  "  out[0] = '\\0';",
+  "  char buf[256];",
+  "  while (fgets(buf, sizeof(buf), pipe)) {",
+  "    pya_concat_buf(out, buf);",
+  "  }",
+  "  int status = pclose(pipe);",
+  "  if (status != 0) {",
+  "    return pya_command_strdup(\"\");",
+  "  }",
+  "  return pya_command_strdup(out);",
+  "}"
+].join(\"\\n\");
