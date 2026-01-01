@@ -11,6 +11,9 @@ function resolveCommandText(ob = {}, { rememberFn } = {}) {
 }
 
 export async function command(sentence, { remember: rememberFn = remember } = {}) {
+  if (process.env.PYA_COMMAND_RESPONSE) {
+    return { ob: { text: String(process.env.PYA_COMMAND_RESPONSE) }, be: "command" };
+  }
   const cmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
   if (!cmd) {
     throwErrorSentence({

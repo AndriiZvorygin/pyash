@@ -3172,7 +3172,7 @@ export const SPEAK_HELPER = [
   "  pclose(pipe);",
   "  return pya_speak_strdup(out);",
   "}"
-].join(\"\\n\");
+].join("\n");
 
 export const COMMAND_HELPER = [
   "static char *pya_command_strdup(const char *s) {",
@@ -3186,6 +3186,8 @@ export const COMMAND_HELPER = [
   "}",
   "",
   "static char *pya_command(const char *cmd) {",
+  "  const char *mock = getenv(\"PYA_COMMAND_RESPONSE\");",
+  "  if (mock) return pya_command_strdup(mock);",
   "  if (!cmd) return pya_command_strdup(\"\");",
   "  FILE *pipe = popen(cmd, \"r\");",
   "  if (!pipe) return pya_command_strdup(\"\");",
@@ -3201,4 +3203,4 @@ export const COMMAND_HELPER = [
   "  }",
   "  return pya_command_strdup(out);",
   "}"
-].join(\"\\n\");
+].join("\n");
