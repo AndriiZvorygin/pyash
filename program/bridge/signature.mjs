@@ -141,6 +141,7 @@ function caseTypeWords(value) {
     if (tail === "all") return ["all"];
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
+    if (tail === "wo") return ["wo"];
     if (tail === "filename") return ["filename"];
     if (tail === "bool") return ["bool"];
     if (tail === "hollow") return ["hollow"];
@@ -166,6 +167,7 @@ function caseTypeWords(value) {
     }
   }
 
+  if (value.wo !== undefined) return ["wo"];
   if (value.num !== undefined) words.push("num");
   if (value.boolean !== undefined) words.push("bool");
   if (value.hollow) words.push("hollow");
@@ -189,7 +191,7 @@ function normalizeDefinitionTypeWords(typeWords) {
 
   if (typeWords[0] === "name") {
     // Drop concrete variable names in definitions; keep the type
-    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "vec" || t === "filename" || t === "bool")];
+    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "wo" || t === "vec" || t === "filename" || t === "bool")];
     if (withoutTail.length === 1) {
       // default to numeric if no explicit type after name
       return ["name", "num"];
