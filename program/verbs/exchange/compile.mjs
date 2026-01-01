@@ -1841,7 +1841,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
       lines.push("messages.push(...historyMessages);");
       lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
-      lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
+      lines.push("const reply = await callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
       const resVar = sanitizeName(resultName);
     lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
@@ -2772,7 +2772,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     lines.push("messages.push(...historyMessages);");
     lines.push(`messages.push({ role: "user", content: ${userText} });`);
-    lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
+    lines.push("const reply = await callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
     const resVar = sanitizeName(resultName);
     lines.push(`recordMindTurn(dialogue, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
@@ -4338,10 +4338,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (mindShim.used) {
       prelude.push(`const mindConfigs = new Map();`);
       prelude.push(`const mindAnswerCounters = new Map();`);
-      const waitForHelper = `function waitFor(promise) {\n  if (!promise || typeof promise.then !== \"function\") return promise;\n  const sab = new SharedArrayBuffer(4);\n  const view = new Int32Array(sab);\n  let value;\n  let error;\n  promise.then(v => { value = v; Atomics.store(view, 0, 1); Atomics.notify(view, 0); }).catch(err => { error = err; Atomics.store(view, 0, 1); Atomics.notify(view, 0); });\n  Atomics.wait(view, 0, 0);\n  if (error) throw error;\n  return value;\n}`;
-      const mindHelper = `function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_MIND_RESPONSE) {\n    return process.env.PYA_MIND_RESPONSE;\n  }\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = transport({ host, model, messages, numCtx });\n    return waitFor(res);\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = waitFor(fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  }));\n  const data = waitFor(typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
+      const mindHelper = `async function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_MIND_RESPONSE) {\n    return process.env.PYA_MIND_RESPONSE;\n  }\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = await Promise.resolve(transport({ host, model, messages, numCtx }));\n    if (res && typeof res === \"object\") {\n      return res?.message?.content ?? res?.response ?? res?.output ?? res?.data ?? \"\";\n    }\n    return String(res ?? \"\");\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = await fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  });\n  const data = await (typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
       const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(dialogue, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(dialogue, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(dialogue, trimmed);\n}`;
-      prelude.push(waitForHelper);
       prelude.push(mindHelper);
       prelude.push(mindHistory);
       if (!jsHelpers.usesExchange) {
@@ -4400,6 +4398,18 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       prelude.push(loopHelper);
     }
     lines = prelude.concat(lines.slice(1));
+    if (mindShim.used) {
+      const importLines = [];
+      const bodyLines = [];
+      for (const line of lines) {
+        if (line.startsWith("import ")) {
+          importLines.push(line);
+        } else {
+          bodyLines.push(line);
+        }
+      }
+      lines = importLines.concat(["(async () => {", ...bodyLines, "})();"]);
+    }
   }
 
   if (lang === "c") {

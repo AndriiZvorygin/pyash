@@ -128,7 +128,8 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
 
   const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
 
-  const responseText = await ollama.generate(model, fullPrompt.trim());
+  const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
+  const responseText = mockResponse ?? await ollama.generate(model, fullPrompt.trim());
 
   // Record turn so future calls have context
   const { count, name: answerName } = nextAnswerName(targetName, dialogue);
