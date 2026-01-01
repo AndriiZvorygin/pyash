@@ -21,13 +21,12 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: output }, be: "command" };
   }
   const cmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
-  const sentenceText = sentenceToPyash(sentence);
   if (!cmd) {
     throwErrorSentence({
       name: "command defective",
-      message: `command defective: empty command; sentence=${sentenceText}`,
-      from: { name: "command" },
-      raw: { cmd, sentence }
+      message: "command defective: empty command",
+      from: { la: sentence },
+      raw: { cmd }
     });
   }
   let input = null;
@@ -45,9 +44,9 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   if (res.error || res.status) {
     throwErrorSentence({
       name: "command defective",
-      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}; sentence=${sentenceText}`,
-      from: { name: "command" },
-      raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "", sentence }
+      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
+      from: { la: sentence },
+      raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
     });
   }
   const output = String(res.stdout ?? "");
