@@ -4,6 +4,7 @@
     "bump tools": "./modules/bump_tools.pya",
     "full tools": "./modules/full_tools.pya",
     "complex tools": "./modules/complex_tools.pya",
-    "behavior tools": "./modules/behavior_tools.pya"
+    "behavior tools": "./modules/behavior_tools.pya",
+    "espeak say": "./modules/espeak_say.pya"
   }
 }
