@@ -285,6 +285,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (inferred?.be === "stream") return ["name", "stream"];
     if (inferred?.be === "chip") return ["name", "chip"];
     if (inferred?.be === "mind") return ["name", "mind"];
+    if (inferred?.be === "map") return ["name", "map"];
     if (inferred?.be === "csv map") return ["name", "csv", "map"];
     if (inferred?.be === "json map") return ["name", "json", "map"];
 

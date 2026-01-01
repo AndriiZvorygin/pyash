@@ -247,6 +247,7 @@ export const add = add_obj_num_to_name_num;
 export const signatures = [
   { signatureWords: ["be", "add", "ob", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "ob", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "add", "ob", "num", "to", "name", "map"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "ob", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "ob", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
   { signatureWords: ["be", "add", "ob", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
