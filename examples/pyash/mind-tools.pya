@@ -1,0 +1,7 @@
+su name tools be map def
+su name say audio be say ob text become audio can
+su name hear audio be hear ob text from state audio can
+prah
+
+su name qwenbot be mind from space "http://localhost:11434" via state "qwen3-vl:8b-instruct" via discourse "You may call tools." ya
+be write ob text "say hello world out loud" to name qwenbot with name tools do

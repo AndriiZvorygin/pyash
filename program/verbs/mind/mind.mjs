@@ -3,11 +3,11 @@ import ollama from "../../motor/ollama.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 
-// Per-mind discourse logs keyed by bucket name
+// Per-mind discourse logs keyed by dialogue name
 const mindLogs = new Map();
 const mindAnswerCounters = new Map();
 
-function historyBucketName({ callSentence, configSentence, targetName }) {
+function historyDialogueName({ callSentence, configSentence, targetName }) {
   if (typeof callSentence?.from?.text === "string") return callSentence.from.text;
   if (callSentence?.fromtext?.name) return String(callSentence.fromtext.name);
   if (typeof callSentence?.fromtext?.text === "string") return callSentence.fromtext.text;
@@ -18,24 +18,25 @@ function historyBucketName({ callSentence, configSentence, targetName }) {
   return "mind story";
 }
 
-function appendLog(bucket, entry) {
-  if (!bucket) return;
-  const arr = mindLogs.get(bucket) || [];
+function appendLog(dialogue, entry) {
+  if (!dialogue) return;
+  const arr = mindLogs.get(dialogue) || [];
   arr.push(entry);
-  mindLogs.set(bucket, arr);
+  mindLogs.set(dialogue, arr);
 }
 
-function buildHistoryMessages(bucket, { window = 8 } = {}) {
-  if (!bucket) return [];
-  const log = mindLogs.get(bucket) || [];
+function buildHistoryMessages(dialogue, { window = 8 } = {}) {
+  if (!dialogue) return [];
+  const log = mindLogs.get(dialogue) || [];
   const max = window * 2;
   return log.slice(-max);
 }
 
-function nextAnswerName(targetName) {
-  const count = (mindAnswerCounters.get(targetName) || 0) + 1;
-  mindAnswerCounters.set(targetName, count);
-  return `${targetName} answer ${count}`;
+function nextAnswerName(targetName, dialogue) {
+  const key = dialogue || targetName || "mind";
+  const count = (mindAnswerCounters.get(key) || 0) + 1;
+  mindAnswerCounters.set(key, count);
+  return { count, name: targetName ? `${targetName} answer ${count}` : `mind answer ${count}` };
 }
 
 function compareUtf8(a, b) {
@@ -71,9 +72,9 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
   const targetName = sentence?.to?.name ?? to?.name;
   const config = targetName ? remember(targetName) : null;
   const configSentence = config?.be === "mind" ? config : null;
-  const bucket = typeof sentence?.from?.text === "string"
+  const dialogue = typeof sentence?.from?.text === "string"
     ? sentence.from.text
-    : historyBucketName({ callSentence: sentence, configSentence, targetName });
+    : historyDialogueName({ callSentence: sentence, configSentence, targetName });
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
@@ -104,14 +105,14 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
   const toolMapName = sentence?.with?.name ?? null;
   const toolList = toolListFromMap(toolMapName);
   if (toolList) promptParts.push(toolList);
-  if (callPrompt) promptParts.push(callPrompt);
-  const historyMessages = buildHistoryMessages(bucket, { window: historyWindow });
+  const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
   if (historyMessages.length) {
     const histText = historyMessages
       .map(m => `${m.role.toUpperCase()}: ${m.content}`)
       .join("\n");
     promptParts.push(histText);
   }
+  if (callPrompt) promptParts.push(callPrompt);
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -130,17 +131,17 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
   const responseText = await ollama.generate(model, fullPrompt.trim());
 
   // Record turn so future calls have context
+  const { count, name: answerName } = nextAnswerName(targetName, dialogue);
   if (callPrompt) {
     doRemember({
-      mood: "do",
+      mood: "ya",
+      su: { name: `${targetName} ${dialogue} question ${count}` },
       be: "write",
-      to: { name: targetName },
+      from: { name: "user" },
       ob: { text: callPrompt }
     });
-    appendLog(bucket, { role: "user", content: callPrompt });
+    appendLog(dialogue, { role: "user", content: callPrompt });
   }
-  const baseConfig = configSentence || {};
-  const answerName = nextAnswerName(targetName);
   const answerSentence = {
     mood: "ya",
     su: { name: answerName },
@@ -149,7 +150,14 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
     ob: { text: responseText }
   };
   doRemember(answerSentence);
-  appendLog(bucket, { role: "assistant", content: responseText });
+  doRemember({
+    mood: "ya",
+    su: { name: `${targetName} ${dialogue} answer ${count}` },
+    be: "answer",
+    from: { name: targetName },
+    ob: { text: responseText }
+  });
+  appendLog(dialogue, { role: "assistant", content: responseText });
 
   return answerSentence;
 }
@@ -167,16 +175,25 @@ export const signatures = [
   { signatureWords: ["be", "mind", "ob", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   // Type-style target: write ... to name mind
   { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
+  ,
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text }
 ];
