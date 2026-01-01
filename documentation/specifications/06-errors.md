@@ -54,6 +54,7 @@ Both thrown and surfaced error sentences share the same field requirements:
 
   * `ob.pyash`
   * `ob.raw`
+  * `from la <sentence> ko`
   * `at filename "<path>"`
   * `by num <line-number>`
 
