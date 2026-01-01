@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
+import { sentenceToPyash } from "../beautiful.mjs";
 
 function resolveCommandText(ob = {}, { rememberFn } = {}) {
   if (typeof ob.wo === "string") return ob.wo;
@@ -20,12 +21,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: output }, be: "command" };
   }
   const cmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
+  const sentenceText = sentenceToPyash(sentence);
   if (!cmd) {
     throwErrorSentence({
       name: "command defective",
-      message: "command defective: empty command",
+      message: `command defective: empty command; sentence=${sentenceText}`,
       from: { name: "command" },
-      raw: { cmd }
+      raw: { cmd, sentence }
     });
   }
   let input = null;
@@ -43,9 +45,9 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   if (res.error || res.status) {
     throwErrorSentence({
       name: "command defective",
-      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
+      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}; sentence=${sentenceText}`,
       from: { name: "command" },
-      raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
+      raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "", sentence }
     });
   }
   const output = String(res.stdout ?? "");
