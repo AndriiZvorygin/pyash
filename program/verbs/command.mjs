@@ -65,5 +65,9 @@ export const signatures = [
   { signatureWords: ["be", "command", "ob", "text"], handler: command },
   { signatureWords: ["be", "command", "ob", "wo"], handler: command },
   { signatureWords: ["be", "command", "ob", "name", "text"], handler: command },
-  { signatureWords: ["be", "command", "ob", "name", "wo"], handler: command }
+  { signatureWords: ["be", "command", "ob", "name", "wo"], handler: command },
+  { signatureWords: ["be", "command", "ob", "text", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "ob", "wo", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "ob", "text", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "ob", "wo", "to", "filename"], handler: command }
 ];
