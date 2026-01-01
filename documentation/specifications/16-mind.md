@@ -79,20 +79,11 @@ window, otherwise `8`. Each window holds `window * 2` messages (user+assistant).
 
 ## 5. Result sentence
 
-After a successful call:
+After a successful call, the response SHOULD NOT overwrite the mind configuration.
+Instead, the runtime SHOULD return an answer sentence with a numbered name:
 
 ```
-su name <mind> be mind
-ob text <response>
-ob model <resolved-model>
-ob historyWindow <window>
-ya
-```
-
-The returned value from the handler is:
-
-```
-ob text <response> be text
+su name <mind> answer <n> from name <mind> ob text <response> be answer ya
 ```
 
 Additionally, the user prompt is recorded as a `be write` to `<mind>` to preserve
@@ -127,8 +118,8 @@ Example tool capability map (per model family):
 
 ```
 su name tools be map def
-be say ob text become audio can
-be hear ob text from state audio can
+su name say audio be say ob text become audio can
+su name hear audio be hear ob text from state audio can
 prah
 ```
 
@@ -138,6 +129,9 @@ Runtime behavior:
 - The adapter is chosen by the model configured on the mind (`via state <model>`).
 - The adapter converts the Pyash `can` sentences into the model’s preferred
   tool-calling representation and passes them to the model backend.
+- Tool maps use `su name <key>` entries; each entry value is a full sentence.
+- Current implementation: tool lists are appended as a `TOOLS:\n...` system
+  block in the prompt.
 
 Example invocation using a tool map:
 

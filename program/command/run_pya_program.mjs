@@ -86,8 +86,25 @@ async function main() {
   const runTime = runTimeFlag || new Date().toISOString();
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
+  let toolCounter = 0;
   const pushNewspaper = (line) => {
     if ((useNewspaper || useAgain) && line) newspaperLines.push(line);
+  };
+  const nextToolCounter = () => String(++toolCounter).padStart(6, "0");
+  const emitToolEvent = (evokedSentence, resultSentence) => {
+    if (!(useNewspaper || useAgain)) return;
+    if (!evokedSentence || !resultSentence) return;
+    const counter = nextToolCounter();
+    pushNewspaper(`su name tool event ${counter} ob la ${evokedSentence} ko to la ${resultSentence} ko be tool ya`);
+  };
+  const isMindToolCall = (sentence) => {
+    if (!sentence) return false;
+    if (sentence.be === "mind") return true;
+    if (sentence.be !== "write") return false;
+    const targetName = sentence.to?.name;
+    if (!targetName) return false;
+    const target = remember(targetName);
+    return target?.be === "mind";
   };
   const runStart = `su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
@@ -119,12 +136,14 @@ async function main() {
     if (!line) continue;
     const sentence = parse(line);
     const embedded = sentenceToPyash(sentence);
+    const isToolCall = isMindToolCall(sentence);
     pushNewspaper(`ob la ${embedded} ko be evoke ya`);
     let res;
     try {
       res = await interpret(sentence);
     } catch (err) {
       const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      if (isToolCall && surfaced?.mood) emitToolEvent(embedded, sentenceToPyash(surfaced));
       if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
       runError = err;
       break;
@@ -132,29 +151,36 @@ async function main() {
     const resultSentence = toResultSentence(res, sentence);
     if (resultSentence?.mood) {
       const surfaced = surfaceErrorSentence(resultSentence);
+      if (isToolCall && surfaced?.mood) emitToolEvent(embedded, sentenceToPyash(surfaced));
       pushNewspaper(sentenceToPyash(surfaced));
     }
     if (sentence?.mood === "que") outputs.push(res);
   }
 
   if (!runError && refineryFlag) {
+    let pendingToolEvoked = null;
     try {
       refineryResult = await runRefinery({
         name: refineryFlag,
         interpret,
         onEvoke: (actionSentence) => {
           const embedded = sentenceToPyash(actionSentence);
+          if (isMindToolCall(actionSentence)) pendingToolEvoked = embedded;
           pushNewspaper(`ob la ${embedded} ko be evoke ya`);
         },
         onResult: (res) => {
           const resultSentence = toResultSentence(res, null);
           if (!resultSentence?.mood) return;
           const surfaced = surfaceErrorSentence(resultSentence);
+          if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
+          pendingToolEvoked = null;
           pushNewspaper(sentenceToPyash(surfaced));
         }
       });
     } catch (err) {
       const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
+      pendingToolEvoked = null;
       if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
       runError = err;
     }
