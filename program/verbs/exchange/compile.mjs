@@ -3176,8 +3176,16 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
   // Text concatenation via add
-  if (baseBe === "add" && typeof ob.text === "string" && (sentence.to?.name || sentence.to?.genitive)) {
-    const literal = JSON.stringify(ob.text);
+  if (baseBe === "add" && (ob.text !== undefined || ob.genitive || ob.name) && (sentence.to?.name || sentence.to?.genitive)) {
+    const valueExpr = exprForSlot(ob, {
+      sentenceArg,
+      locals,
+      declared,
+      defaultExpr: null,
+      field: "text"
+    });
+    const literal = typeof ob.text === "string" ? JSON.stringify(ob.text) : null;
+    const textExpr = valueExpr ?? literal ?? "\"\"";
     if (sentenceArg) {
       const target = (() => {
         if (sentence.to?.name) {
@@ -3187,14 +3195,23 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         return targetPath("to", sentenceArg, "text", sentence.to, { locals, declared }) ?? sentence.to?.name;
       })();
       const init = `${target} = ${target} ?? "";`;
-      const concat = `${target} = ${target} + ${literal};`;
+      const concat = `${target} = ${target} + ${textExpr};`;
       return `${init}\n${concat}`;
     }
     if (lang === "c") {
-      const target = sentence.to.name;
-      return `/* TODO: string concat add for ${target} */`;
+      if (cHelpers) {
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+      }
+      if (sentence.to?.genitive) {
+        const target = pathFromGenitive(sentence.to.genitive, sentenceArg, { locals, declared, allowCGlobals: true });
+        if (target) return `pya_concat_buf(${target}, ${textExpr});`;
+      }
+      const target = sanitizeName(sentence.to.name);
+      return `pya_concat_buf(${target}, ${textExpr});`;
     }
-    return `${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};\n${sentence.to.name}.ob.text = (${sentence.to.name}.ob.text ?? "") + ${literal};`;
+    return `${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};\n${sentence.to.name}.ob.text = (${sentence.to.name}.ob.text ?? "") + ${textExpr};`;
   }
 
   if (baseBe === "remember" && sentenceArg) {
@@ -3731,6 +3748,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       if (lang === "c") {
         // Fallback for C for now: keep scalar style
         const cName = sanitizeName(name);
+        if (shouldDeclare) {
+          locals?.add(cName);
+          if (localsTypes) localsTypes.set(cName, "number");
+        }
         if (!shouldDeclare) return `${cName} = ${safeValue};`;
         const cdecl = isPermanent ? "const double" : "double";
         return `${cdecl} ${cName} = ${safeValue};`;
@@ -3769,6 +3790,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesPrintf = true;
       }
       const cName = sanitizeName(name);
+      if (shouldDeclare) {
+        locals?.add(cName);
+        if (localsTypes) localsTypes.set(cName, "text");
+      }
       if (!shouldDeclare) return `snprintf(${cName}, PYA_TEXT_CAP, "%s", ${value});`;
       return `char ${cName}[PYA_TEXT_CAP] = ${value};`;
     }
