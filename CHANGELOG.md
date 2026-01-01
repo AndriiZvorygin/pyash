@@ -150,6 +150,14 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
 * Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
 
+### Dec 31, 2025: Mind tooling + again terminology alignment
+
+* Mind spec and tooling aligned (tool capabilities, answer facts, dialogue facts).
+* Tool envelope/again terminology aligned; tool envelope spec removed.
+* Sentence model updated to mention subordinate clauses.
+* `caterer/curl` vendored (git subtree) for runtime HTTP parity.
+* C mind runtime added and wired for parity.
+
 ### Jan 1, 2026: Command + say module hardening
 
 * Command errors now surface full error sentences (CLI prints surfaced error sentence).
