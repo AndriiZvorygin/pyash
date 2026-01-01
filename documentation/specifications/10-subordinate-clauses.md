@@ -14,7 +14,7 @@ Subordinate clauses are used to:
 * embed sentences as values
 * pass sentences through signatures and dispatch
 * record evoked sentences in the run newspaper
-* support higher-order verbs, tools, and replay
+* support higher-order verbs, tools, and again
 
 This specification defines the **syntax, structural semantics, determinism rules, and dispatch interaction** for subordinate clauses.
 
@@ -42,7 +42,7 @@ Everything between `la` and `ko` MUST be exactly one **embedded sentence form**.
 ### 3.2 Embedded sentence form is mood-optional
 
 * The embedded sentence form MAY contain a mood marker (`ya`, `do`, or any other mood token).
-* In normal usage the embedded sentence form is moodless; moods are mainly used for logging.
+* In normal usage the embedded sentence form is moodless; moods are mainly used for newspaper records.
 * The host sentence provides mood in the normal way.
 
 ### 3.3 General form

@@ -254,7 +254,7 @@ When again mode is enabled:
 3. Again-critical artifacts MUST include sha256 hashes.
 
 
-4. Running again MUST verify hashes and MUST fail on mismatch.
+4. Running again MUST verify hashes and MUST fail on inconsistency.
 
 
 

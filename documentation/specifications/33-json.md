@@ -251,7 +251,7 @@ JSON export is official by default.
   ob name <map> to state json to filename <path> be write do
   ```
 
-Official JSON is byte-stable and suitable for hashing, signing, replay, and goldens.
+Official JSON is byte-stable and suitable for hashing, signing, again, and goldens.
 
 ### 8.2 Human-readable JSON
 

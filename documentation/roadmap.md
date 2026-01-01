@@ -170,7 +170,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship
 
-* Again mode (replay)
+* Again mode
 
   * Add `--again` (or equivalent) runner policy: forces newspaper emission + strict artifact hashing
   * Runs again from recorded newspaper + artifacts
@@ -196,7 +196,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * (If needed) Newspaper + again policy note in `11-run-newspaper.md`
 
   * newspaper is opt-in
-  * again mode forces the strict subset needed for replay verification
+  * again mode forces the strict subset needed for again verification
 
 ### Hardening
 
@@ -381,7 +381,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
   * fixtures
   * pinned model metadata in artefacts
-  * output hashes verified in replay
+  * output hashes verified in again
 
 ### Spec drops (freeze v0.4)
 
@@ -400,7 +400,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Hardening
 
-* Fixture audio pinned, outputs journaled, replays verify hashes
+* Fixture audio pinned, outputs journaled, again verifies hashes
 * Streaming torture tests
 
   * slow consumer backpressure
@@ -464,7 +464,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
   * promote repeated successful patches into deterministic signatures
   * retire mind fallback path for promoted behaviours
-  * required tests and replay bundles for promoted behaviours
+  * required tests and again bundles for promoted behaviours
 
 ### Spec drops (freeze v0.5)
 
@@ -508,12 +508,12 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Hardening
 
-* Fresh clone → install → run → reproduce bundle via replay
+* Fresh clone → install → run → reproduce bundle via again
 * Multi-platform smoke (Linux first, others gated)
 * Golden demos
 
   * `package_smoke.pya`
-  * `bundle_replay_smoke.pya`
+  * `bundle_again_smoke.pya`
   * `package_with_tools_smoke.pya`
 
 ---

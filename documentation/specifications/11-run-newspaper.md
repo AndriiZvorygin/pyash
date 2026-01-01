@@ -10,7 +10,7 @@ Define the **run newspaper**: the official, append-only record of one Pyash run.
 
 The run newspaper exists to:
 
-- make runs **replayable**
+- make runs **againable**
 - make runs **diffable**
 - provide an official record for pipelines, tools, and auditing
 
@@ -107,6 +107,7 @@ The newspaper MUST support the following event kinds:
 - `evoke`
 - `result`
 - `state`
+- `tool`
 - `artifact`
 
 Later specifications may add additional event kinds, but these MUST exist.
@@ -207,7 +208,32 @@ Rules:
 
 ---
 
-## 9. Event: artifact
+## 9. Event: tool
+
+Records a tool call and its result as an event in the newspaper.
+
+### 9.1 Meaning
+
+A **tool** event captures the evoked sentence and the surfaced result sentence for
+one tool call.
+
+### 9.2 Sentence form (official)
+
+su name tool event <counter>
+ob la <evoked sentence> ko
+to la <result sentence> ko
+be tool ya
+
+Rules:
+
+- Both embedded sentences MUST be emitted using official ordering rules.
+- The result sentence MUST be a surfaced sentence (`ya`), including `be error ya`
+  for failures.
+- The counter MUST be stable and increment per tool event in a run.
+
+---
+
+## 10. Event: artifact
 
 Records creation or reference of a persisted external object.
 
@@ -225,7 +251,7 @@ Additional artifact fields (hash, size, mime, etc.) are defined in `12-io-and-ar
 
 ---
 
-## 10. Run end record
+## 11. Run end record
 
 Each newspaper MUST end with exactly one **run end** record.
 
@@ -237,7 +263,7 @@ su name <run> be end ya
 
 ---
 
-## 11. Ordering rules (official)
+## 12. Ordering rules (official)
 
 1. **Journal ordering**  
    Records are ordered by emission order.
@@ -256,31 +282,31 @@ su name <run> be end ya
 
 ---
 
-## 12. Replay requirements
+## 13. Again requirements
 
 An implementation MUST be able to:
 
-- replay a run using only the newspaper and referenced artifacts
+- run again using only the newspaper and referenced artifacts
 - reproduce the same sequence of result sentences
-- verify artifact hashes during replay (hash rules defined in `12-io-and-artifact.md`)
+- verify artifact hashes during again (hash rules defined in `12-io-and-artifact.md`)
 
-Replay MUST fail if:
+Again MUST fail if:
 
 - an artifact hash does not match
-- a replayed result sentence differs byte-for-byte from the newspaper’s recorded result sentences
+- an again result sentence differs byte-for-byte from the newspaper’s recorded result sentences
 
 ---
 
-## 13. Conformance
+## 14. Conformance
 
 An implementation conforms to this spec if it:
 
 - emits exactly one run start record and one run end record
-- records `evoke`, `result`, `state`, and `artifact` events as specified
+- records `evoke`, `result`, `state`, `tool`, and `artifact` events as specified
 - never records `be error do` sentences in the newspaper
    - emits deterministic, byte-stable newspapers using official ordering on write
 - preserves emitted records verbatim
-- supports replay verification rules
+- supports again verification rules
 
 ---
 

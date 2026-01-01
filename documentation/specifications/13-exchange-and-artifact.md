@@ -11,7 +11,7 @@ Define **exchange** (external byte movement) and **artifact** (durable external 
 This spec exists to make runs:
 
 - deterministic across interpreter / JS / C
-- replay-verifiable when replayable mode is enabled
+- again-verifiable when againable mode is enabled
 - portable across machines and operating systems
 
 This spec defines:
@@ -32,7 +32,7 @@ This spec defines:
 - **artifact bytes** — the exact bytes of the artifact content
 - **hash** — a deterministic digest of artifact bytes
 - **run root** — the directory used to resolve relative path locators (runner policy; see §5.1)
-- **replayable mode** — a runner policy that requires recording and verification sufficient for replay (see §10)
+- **againable mode** — a runner policy that requires recording and verification sufficient for again (see §10)
 
 ---
 
@@ -71,7 +71,7 @@ su name <artifact> ob text <locator> from name <producer> be artifact ya
 
 ### 4.2 Optional fields
 
-Hash (recommended; required in replayable mode for replay-critical artifacts):
+Hash (recommended; required in againable mode for again-critical artifacts):
 
 ```
 accordingto name sha256 fromtext text "<hex>"
@@ -89,10 +89,16 @@ Kind/classification (optional):
 as name <kind>
 ```
 
+Content-addressed locator (optional but recommended when artifact bytes are persisted):
+
+```
+to filename "<content-address-path>"
+```
+
 Example (fully specified):
 
 ```
-su name artifact-0 ob text "data/input.csv" as name file accordingto name sha256 fromtext text "3a0b...ff" by num 2190 from name exchange be artifact ya
+su name artifact-0 ob filename "data/input.csv" to filename "artifacts/sha256/3a/0b/3a0b...ff.csv" as name file accordingto name sha256 fromtext text "3a0b...ff" by num 2190 from name exchange be artifact ya
 ```
 
 ### 4.3 Ordering
@@ -109,7 +115,7 @@ A locator is recorded in `ob text <locator>`.
 
 Run root is a runner policy value, selected by runner configuration (flags and/or runner defaults).
 If the runner provides an explicit run root flag, that flag determines run root. Otherwise, run root defaults to the process working directory at runner start time.
-When run newspaper emission is enabled, the runner SHOULD record the effective run root in the run start record so replay can use the same resolution base.
+When run newspaper emission is enabled, the runner SHOULD record the effective run root in the run start record so again can use the same resolution base.
 
 Recommended run start addition:
 ```
@@ -148,9 +154,16 @@ When the locator is a uri, it MUST be preserved byte-for-byte as provided by the
 
 ### 5.5 Artifacts directory contract (runner policy)
 
-If the runner chooses to persist artifacts on disk, it SHOULD use a stable, deterministic layout rooted at the run root.
+If the runner chooses to persist artifacts on disk, it SHOULD store bytes in a
+stable content-addressed layout and MAY also provide a run-root alias.
 
-Recommended default layout:
+Recommended content-addressed layout:
+
+```
+artifacts/sha256/<first2>/<next2>/<hex><ext>
+```
+
+Recommended run-root alias layout:
 
 ```
 artifacts/<run-id>/<artifact-name>
@@ -160,7 +173,11 @@ Notes:
 
 - `<run-id>` is the run identifier from the run start record.
 - `<artifact-name>` is the `su name` value from the artifact sentence.
-- This layout is a runner policy; it MUST NOT change evaluation semantics.
+- The content-addressed path SHOULD be recorded in `to filename` of the artifact sentence.
+- The run-root alias SHOULD be recorded in `ob filename` of the artifact sentence.
+- A filesystem symlink/hardlink MAY be created, but again MUST rely on the recorded
+  hash + content-addressed bytes.
+- These layouts are runner policy; they MUST NOT change evaluation semantics.
 
 ---
 
@@ -286,25 +303,25 @@ When newspaper emission is disabled:
 
 ## 10. Replayable mode (normative)
 
-Replayable mode is a runner policy intended to make replay verification possible.
+Againable mode is a runner policy intended to make again verification possible.
 
 ### 10.1 Requirements
 
-When replayable mode is enabled:
+When againable mode is enabled:
 
 1. Newspaper emission MUST be enabled.
 2. Artifact declarations and exchange events that affect results MUST be recorded in the newspaper.
 3. Replay-critical artifacts MUST include a sha256 hash in their artifact declaration sentence.
-4. Replay MUST verify recorded sha256 hashes and MUST fail on mismatch.
+4. Replay MUST verify recorded sha256 hashes and MUST fail on inconsistency.
 
 ### 10.2 Network exchange
 
 For network-backed exchange (`fetch`/`push`):
 
-- deterministic replay MUST NOT depend on live network behavior
-- fetched bytes SHOULD be persisted as an artifact with sha256 so replay can re-use recorded bytes
+- deterministic again MUST NOT depend on live network behavior
+- fetched bytes SHOULD be persisted as an artifact with sha256 so again can re-use recorded bytes
 
-If replayable mode is enabled and the implementation cannot persist and hash fetched bytes deterministically, it MUST surface an error.
+If againable mode is enabled and the implementation cannot persist and hash fetched bytes deterministically, it MUST surface an error.
 
 ---
 
@@ -332,7 +349,7 @@ An implementation conforms to this spec if it:
 - computes sha256 over exact bytes (§6)
 - assigns default artifact names deterministically and increments on first declaration only (§7)
 - emits exchange event sentences with the official form and does not repeat locators (§8)
-- supports replay verification requirements in replayable mode (§10)
+- supports again verification requirements in againable mode (§10)
 - behaves identically whether or not newspaper emission is enabled (§3.4)
 
 ---
