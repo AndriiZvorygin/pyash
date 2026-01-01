@@ -237,6 +237,11 @@ async function main() {
 try {
   await main();
 } catch (err) {
-  console.error(err?.message ?? err);
+  const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+  if (surfaced?.mood && surfaced?.be) {
+    console.error(sentenceToPyash(surfaced));
+  } else {
+    console.error(err?.message ?? err);
+  }
   process.exit(1);
 }
