@@ -19,11 +19,12 @@ test("compile mind to javascript uses PYA_MIND_RESPONSE", async () => {
   const wrapped = await compileToJs(pyash);
   const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
   const logs = [];
-  vm.runInNewContext(js, {
+  const result = vm.runInNewContext(js, {
     console: { log: (...args) => logs.push(args.join(" ")) },
-    process: { env: { PYA_MIND_RESPONSE: "OK" } },
-    SharedArrayBuffer,
-    Atomics
+    process: { env: { PYA_MIND_RESPONSE: "OK" } }
   });
+  if (result && typeof result.then === "function") {
+    await result;
+  }
   assert.equal(logs.join("\n").trim(), "OK");
 });
