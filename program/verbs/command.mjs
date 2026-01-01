@@ -23,7 +23,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   if (!cmd) {
     throwErrorSentence({
       name: "command defective",
-      message: "command defective",
+      message: "command defective: empty command",
       from: { name: "command" },
       raw: { cmd }
     });
@@ -43,7 +43,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   if (res.error || res.status) {
     throwErrorSentence({
       name: "command defective",
-      message: "command defective",
+      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
       from: { name: "command" },
       raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
     });
