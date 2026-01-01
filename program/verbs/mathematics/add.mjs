@@ -130,12 +130,16 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
   }
 
   // Text concatenation: ob text "..." to name <textVar> be add do
-  if (typeof sentence.ob?.text === "string") {
+  const obText =
+    typeof sentence.ob?.text === "string"
+      ? sentence.ob.text
+      : (sentence.ob?.genitive ? resolveScalarValue(sentence.ob, remember) : undefined);
+  if (typeof obText === "string") {
     if (typeof sentence.to === "string") {
-      return { ob: { text: sentence.to + sentence.ob.text }, be: "text" };
+      return { ob: { text: sentence.to + obText }, be: "text" };
     }
     if (typeof sentence.to?.text === "string") {
-      return { ob: { text: sentence.to.text + sentence.ob.text }, be: "text" };
+      return { ob: { text: sentence.to.text + obText }, be: "text" };
     }
     if (sentence.to?.genitive) {
       const target = resolveGenitiveTarget(sentence.to.genitive, remember);
@@ -143,7 +147,7 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
         const current = typeof target.value === "string"
           ? target.value
           : (typeof target.value?.text === "string" ? target.value.text : "");
-        target.parent[target.key] = current + sentence.ob.text;
+        target.parent[target.key] = current + obText;
         return { ob: { text: target.parent[target.key] }, be: "text" };
       }
     }
@@ -152,7 +156,7 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     if (!targetName || !remember) throw new Error("add: to name is required for text");
     const fact = remember(targetName);
     const current = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
-    return { ob: { text: current + sentence.ob.text }, be: "text" };
+    return { ob: { text: current + obText }, be: "text" };
   }
 
   if (sentence.ob?.name && remember) {
