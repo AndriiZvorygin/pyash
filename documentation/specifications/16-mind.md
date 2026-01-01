@@ -271,7 +271,7 @@ Replay divergence errors for mind calls use the tool envelope error names.
 ## 9. Current limitations
 
 * Interpreter host selection uses `OLLAMA_HOST`; `from space` is stored only.
-* Compiled C lacks a mind runtime.
+* Compiled C mind uses libcurl for `/api/chat` and requires libcurl at link time.
 * Some model families use template parsing for tool calling; the adapter owns that.
 
 ---

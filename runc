@@ -79,11 +79,17 @@ if rg -q "PYA_CSV_RUNTIME" "$TMP_C"; then
   ZSV_SRC=("caterer/zsv/src/zsv.c")
   ZSV_FLAGS=("-Icaterer/zsv/include" "-Icaterer/zsv/src")
 fi
+CURL_FLAGS=()
+CURL_LIBS=()
+if rg -q "PYA_MIND_RUNTIME" "$TMP_C"; then
+  CURL_FLAGS=("-Icaterer/curl/include")
+  CURL_LIBS=("-lcurl")
+fi
 YAML_LIB=()
 if rg -q "PYA_YAML_RUNTIME" "$TMP_C"; then
   YAML_LIB=("-lyaml")
 fi
-gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm "${YAML_LIB[@]}"
+gcc -std=c11 -O0 -o "$TMP_EXE" "${ZSV_FLAGS[@]}" "${CURL_FLAGS[@]}" "$TMP_C" "${ZSV_SRC[@]}" -lm "${YAML_LIB[@]}" "${CURL_LIBS[@]}"
 if [[ "$NEWSPAPER" -eq 1 ]]; then
   RUN_ARGS=()
   if [[ -n "$RUN_ID" ]]; then
