@@ -10,7 +10,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -1807,7 +1807,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     const wantJson = jsonMode !== null;
     const wantYaml = formatRaw.includes("yaml");
     const wantCsv = formatRaw.includes("csv");
-    // Special case: write to <mind> -> invoke mind (JS)
+    // Special case: write to <mind> -> invoke mind (JS/C)
     if (baseBe === "write" && sentence.to?.name && lang !== "c") {
       if (mindShim) mindShim.used = true;
       const mindName = sentence.to.name;
@@ -1823,7 +1823,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
       lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
       lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
-      lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+      const dialogue = sentence.from?.text
+        ?? sentence.fromtext?.name
+        ?? sentence.fromtext?.text
+        ?? `${mindName} story`;
+      lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
+      lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
       lines.push("const messages = [];");
       lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
       if (sentence.with?.name) {
@@ -1838,17 +1843,25 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
       lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
       const resVar = sanitizeName(resultName);
-    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(" + JSON.stringify(mindName) + ") || 0) + 1;");
-    lines.push(`mindAnswerCounters.set(${JSON.stringify(mindName)}, __pyaAnswerCount);`);
+    lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
+    lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");
     lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
     lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
+    lines.push(`const __pyaQuestionName = ${JSON.stringify(mindName)} + " " + dialogue + " question " + __pyaAnswerCount;`);
+    lines.push(`globalThis[__pyaQuestionName] = { su: { name: __pyaQuestionName }, from: { name: "user" }, ob: { text: ${promptVal} }, be: "write", mood: "ya" };`);
+    lines.push(`const __pyaDialogueAnswerName = ${JSON.stringify(mindName)} + " " + dialogue + " answer " + __pyaAnswerCount;`);
+    lines.push(`globalThis[__pyaDialogueAnswerName] = { su: { name: __pyaDialogueAnswerName }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
     lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
     lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
     lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
     lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
     lines.push("}");
     return lines.join("\n");
+    }
+    if (baseBe === "write" && sentence.to?.name && lang === "c" && declaredTypes?.get(sentence.to.name) === "mind") {
+      const derived = { ...sentence, be: "mind" };
+      return transpileSentence(derived, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
     }
 
     if (lang === "c" && ob.name && declaredTypes?.get(ob.name) === "map") {
@@ -2634,13 +2647,82 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 
   // Mind (JS only)
   if (baseBe === "mind") {
-    if (lang === "c") return "/* TODO: mind in C not supported */";
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesMindRuntime = true;
+        cHelpers.usesJsonRuntime = true;
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+        cHelpers.usesCtype = true;
+        cHelpers.usesExchange = true;
+        cHelpers.usesMap = true;
+      }
+      const mindName = sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
+      if (sentence.mood === "ya") {
+        if (declaredTypes) declaredTypes.set(mindName, "mind");
+        const space = sentence.from?.name ?? ob.space ?? null;
+        const model = sentence.as?.name ?? ob.model ?? null;
+        const prompt = sentence.accordingto?.name ?? ob.text ?? null;
+        const window = sentence.by?.num ?? sentence.by?.quantity?.num ?? sentence.ob?.window?.num ?? ob.window?.num ?? null;
+        const lines = [];
+        lines.push(`pya_mind_set_config(${JSON.stringify(mindName)}, ${space ? JSON.stringify(space) : "NULL"}, ${model ? JSON.stringify(model) : "NULL"}, ${prompt ? JSON.stringify(prompt) : "NULL"}, ${window ? Number(window) || 8 : 0});`);
+        return lines.join("\n");
+      }
+      const userText = ob.text
+        ? JSON.stringify(ob.text)
+        : ob.name
+          ? JSON.stringify(ob.name)
+          : "\"\"";
+      const explicitModel = ob.model ? JSON.stringify(ob.model) : "NULL";
+      const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
+      const dialogue = sentence.from?.text
+        ?? sentence.fromtext?.name
+        ?? sentence.fromtext?.text
+        ?? `${mindName} story`;
+      const toolMapName = sentence.with?.name ?? null;
+      const toolVar = toolMapName && (declaredTypes?.get(toolMapName) === "map" || declaredTypes?.get(toolMapName) === "json map" || declaredTypes?.get(toolMapName) === "csv map")
+        ? sanitizeName(toolMapName)
+        : null;
+      const lines = ["{"];
+      lines.push(`const char *dialogue = ${JSON.stringify(String(dialogue))};`);
+      if (toolVar) {
+        lines.push(`char *tool_block = pya_tool_block_from_map(&${toolVar});`);
+      } else {
+        lines.push("char *tool_block = NULL;");
+      }
+      lines.push("int __pyaAnswerCount = 0;");
+      lines.push(`char *reply = pya_mind_invoke(${JSON.stringify(mindName)}, dialogue, ${userText}, tool_block, ${explicitModel}, ${windowVal !== null ? Number(windowVal) || 8 : 0}, &__pyaAnswerCount);`);
+      lines.push("if (!reply) reply = pya_strdup(\"\");");
+      lines.push("char __pyaAnswerName[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaAnswerName, sizeof(__pyaAnswerName), "%s answer %d", ${JSON.stringify(mindName)}, __pyaAnswerCount);`);
+      lines.push("char __pyaQuestionName[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaQuestionName, sizeof(__pyaQuestionName), "%s %s question %d", ${JSON.stringify(mindName)}, dialogue, __pyaAnswerCount);`);
+      lines.push("char __pyaDialogueAnswerName[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaDialogueAnswerName, sizeof(__pyaDialogueAnswerName), "%s %s answer %d", ${JSON.stringify(mindName)}, dialogue, __pyaAnswerCount);`);
+      lines.push("char __pyaEscaped[PYA_TEXT_CAP];");
+      lines.push("pya_escape_text(reply, __pyaEscaped, sizeof(__pyaEscaped));");
+      lines.push("char __pyaToolResult[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaToolResult, sizeof(__pyaToolResult), "su name %s from name ${mindName} ob text \\\"%s\\\" be answer ya", __pyaAnswerName, __pyaEscaped);`);
+      lines.push(`char __pyaToolEvoked[PYA_TEXT_CAP];`);
+      lines.push(`snprintf(__pyaToolEvoked, sizeof(__pyaToolEvoked), "%s", ${JSON.stringify(sentenceToPyash(sentence))});`);
+      lines.push("char __pyaToolEvent[PYA_TEXT_CAP];");
+      lines.push("snprintf(__pyaToolEvent, sizeof(__pyaToolEvent), \"su name tool event %d ob la %s ko to la %s ko be tool ya\", pya_next_tool_event_id(), __pyaToolEvoked, __pyaToolResult);");
+      lines.push("pya_emit_exchange(__pyaToolEvent);");
+      lines.push("printf(\"%s\\n\", reply);");
+      lines.push("if (tool_block) free(tool_block);");
+      lines.push("free(reply);");
+      lines.push("}");
+      return lines.join("\n");
+    }
     if (mindShim) mindShim.used = true;
 
     const mindName = sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
 
     // Configuration sentence (ya mood)
     if (sentence.mood === "ya") {
+      if (declaredTypes) declaredTypes.set(mindName, "mind");
       const space = sentence.from?.name ?? ob.space ?? null;
       const model = sentence.as?.name ?? ob.model ?? null;
       const prompt = sentence.accordingto?.name ?? ob.text ?? null;
@@ -2672,7 +2754,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
     lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
     const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
-    lines.push(`const historyMessages = buildMindHistory(${JSON.stringify(mindName)}, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+    const dialogue = sentence.from?.text
+      ?? sentence.fromtext?.name
+      ?? sentence.fromtext?.text
+      ?? `${mindName} story`;
+    lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
+    lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const messages = [];");
     lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
     if (sentence.with?.name) {
@@ -2687,11 +2774,15 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     lines.push(`messages.push({ role: "user", content: ${userText} });`);
     lines.push("const reply = callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
     const resVar = sanitizeName(resultName);
-    lines.push(`recordMindTurn(${JSON.stringify(mindName)}, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(" + JSON.stringify(mindName) + ") || 0) + 1;");
-    lines.push(`mindAnswerCounters.set(${JSON.stringify(mindName)}, __pyaAnswerCount);`);
+    lines.push(`recordMindTurn(dialogue, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
+    lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");
     lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
     lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
+    lines.push(`const __pyaQuestionName = ${JSON.stringify(mindName)} + " " + dialogue + " question " + __pyaAnswerCount;`);
+    lines.push(`globalThis[__pyaQuestionName] = { su: { name: __pyaQuestionName }, from: { name: "user" }, ob: { text: ${userText} }, be: "write", mood: "ya" };`);
+    lines.push(`const __pyaDialogueAnswerName = ${JSON.stringify(mindName)} + " " + dialogue + " answer " + __pyaAnswerCount;`);
+    lines.push(`globalThis[__pyaDialogueAnswerName] = { su: { name: __pyaDialogueAnswerName }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
     lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
     lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
     lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
@@ -3712,7 +3803,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, readCounter: 0 };
@@ -4248,8 +4339,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       prelude.push(`const mindConfigs = new Map();`);
       prelude.push(`const mindAnswerCounters = new Map();`);
       const waitForHelper = `function waitFor(promise) {\n  if (!promise || typeof promise.then !== \"function\") return promise;\n  const sab = new SharedArrayBuffer(4);\n  const view = new Int32Array(sab);\n  let value;\n  let error;\n  promise.then(v => { value = v; Atomics.store(view, 0, 1); Atomics.notify(view, 0); }).catch(err => { error = err; Atomics.store(view, 0, 1); Atomics.notify(view, 0); });\n  Atomics.wait(view, 0, 0);\n  if (error) throw error;\n  return value;\n}`;
-      const mindHelper = `function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = transport({ host, model, messages, numCtx });\n    return waitFor(res);\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = waitFor(fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  }));\n  const data = waitFor(typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
-      const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(name, windowSize = 8) {\n  const arr = mindHistory.get(name) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(name, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(name) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(name, trimmed);\n}`;
+      const mindHelper = `function callMind({ host, model, messages = [], numCtx = 8192 }) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_MIND_RESPONSE) {\n    return process.env.PYA_MIND_RESPONSE;\n  }\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = transport({ host, model, messages, numCtx });\n    return waitFor(res);\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = waitFor(fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, options: { num_ctx: numCtx }, stream: false })\n  }));\n  const data = waitFor(typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data?.message?.content ?? data?.response ?? data?.output ?? data?.data ?? \"\";\n}`;
+      const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(dialogue, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(dialogue, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(dialogue, trimmed);\n}`;
       prelude.push(waitForHelper);
       prelude.push(mindHelper);
       prelude.push(mindHistory);
@@ -4334,6 +4425,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (needsCsvRuntime) {
       headers.push("#include <zsv.h>");
     }
+    if (cHelpers.usesMindRuntime) {
+      headers.push("#include <curl/curl.h>");
+    }
     if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
     const needsLoopGlobals =
       [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex|by)\b/.test(l));
@@ -4362,6 +4456,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
+    if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
     if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
     if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
     if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
