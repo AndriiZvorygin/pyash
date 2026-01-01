@@ -4540,6 +4540,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     const needsYamlRuntime = cHelpers.usesYamlRuntime;
     const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
     const headers = [];
+    if (cHelpers.usesCommand || cHelpers.usesSpeak) {
+      headers.push("#define _POSIX_C_SOURCE 200809L");
+    }
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
     if (cHelpers.usesString) headers.push("#include <string.h>");
     if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
@@ -4553,6 +4556,11 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     }
     if (cHelpers.usesMindRuntime) {
       headers.push("#include <curl/curl.h>");
+    }
+    if (cHelpers.usesCommand || cHelpers.usesSpeak) {
+      headers.push("#include <unistd.h>");
+      headers.push("#include <sys/types.h>");
+      headers.push("#include <sys/wait.h>");
     }
     if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
     const needsLoopGlobals =
