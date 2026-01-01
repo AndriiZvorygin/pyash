@@ -38,6 +38,7 @@ Define the error sentence contract, error propagation rules, and official error 
   * printing or emitting an error as the final outcome of evaluation.
 * Surfacing an error converts the sentence mood from `do` to `ya` and preserves all required and optional fields.
 * Surfaced errors are facts and MAY be stored; thrown errors are not.
+* When errors are presented to users, implementations MUST render the surfaced error sentence (not a raw exception string).
 
 ### 3.3 Required and optional fields
 
@@ -53,6 +54,8 @@ Both thrown and surfaced error sentences share the same field requirements:
 
   * `ob.pyash`
   * `ob.raw`
+  * `at filename "<path>"`
+  * `by num <line-number>`
 
 No fields are added, removed, or renamed during surfacing.
 
