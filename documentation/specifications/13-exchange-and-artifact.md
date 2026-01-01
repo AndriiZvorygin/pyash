@@ -11,7 +11,7 @@ Define **exchange** (external byte movement) and **artifact** (durable external 
 This spec exists to make runs:
 
 - deterministic across interpreter / JS / C
-- again-verifiable when againable mode is enabled
+- again-verifiable when again mode is enabled
 - portable across machines and operating systems
 
 This spec defines:
@@ -32,7 +32,7 @@ This spec defines:
 - **artifact bytes** — the exact bytes of the artifact content
 - **hash** — a deterministic digest of artifact bytes
 - **run root** — the directory used to resolve relative path locators (runner policy; see §5.1)
-- **againable mode** — a runner policy that requires recording and verification sufficient for again (see §10)
+- **again mode** — a runner policy that requires recording and verification sufficient for again (see §10)
 
 ---
 
@@ -71,7 +71,7 @@ su name <artifact> ob text <locator> from name <producer> be artifact ya
 
 ### 4.2 Optional fields
 
-Hash (recommended; required in againable mode for again-critical artifacts):
+Hash (recommended; required in again mode for again-critical artifacts):
 
 ```
 accordingto name sha256 fromtext text "<hex>"
@@ -303,11 +303,11 @@ When newspaper emission is disabled:
 
 ## 10. Replayable mode (normative)
 
-Againable mode is a runner policy intended to make again verification possible.
+Again mode is a runner policy intended to make again verification possible.
 
 ### 10.1 Requirements
 
-When againable mode is enabled:
+When again mode is enabled:
 
 1. Newspaper emission MUST be enabled.
 2. Artifact declarations and exchange events that affect results MUST be recorded in the newspaper.
@@ -321,7 +321,7 @@ For network-backed exchange (`fetch`/`push`):
 - deterministic again MUST NOT depend on live network behavior
 - fetched bytes SHOULD be persisted as an artifact with sha256 so again can re-use recorded bytes
 
-If againable mode is enabled and the implementation cannot persist and hash fetched bytes deterministically, it MUST surface an error.
+If again mode is enabled and the implementation cannot persist and hash fetched bytes deterministically, it MUST surface an error.
 
 ---
 
@@ -349,7 +349,7 @@ An implementation conforms to this spec if it:
 - computes sha256 over exact bytes (§6)
 - assigns default artifact names deterministically and increments on first declaration only (§7)
 - emits exchange event sentences with the official form and does not repeat locators (§8)
-- supports again verification requirements in againable mode (§10)
+- supports again verification requirements in again mode (§10)
 - behaves identically whether or not newspaper emission is enabled (§3.4)
 
 ---

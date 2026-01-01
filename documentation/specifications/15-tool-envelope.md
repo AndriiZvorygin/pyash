@@ -80,7 +80,7 @@ be tool ya
 Determinism rules:
 
 * `000001` is a **global monotonic counter**, zero-padded (lexical == numeric order).
-* `<evoking sentence form>` and `<returned fact sentence form>` inside `la … ko` are emitted in **official canonical sentence ordering** (your `10-subordinate-clauses.md` draft requirement).
+* `<evoking sentence form>` and `<returned fact sentence form>` inside `la … ko` are emitted in **official ordering** (your `10-subordinate-clauses.md` draft requirement).
 * Tool event records are appended in **execution order** (even if you’re in a sandpit; use the same global counter so merge is stable).
 
 ### B) Returned fact sentence (`ya`) + artifact reference

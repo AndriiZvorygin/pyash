@@ -288,7 +288,7 @@ An implementation MUST be able to:
 
 - run again using only the newspaper and referenced artifacts
 - reproduce the same sequence of result sentences
-- verify artifact hashes during again (hash rules defined in `12-io-and-artifact.md`)
+- verify artifact hashes during again (hash rules defined in `13-exchange-and-artifact.md`)
 
 Again MUST fail if:
 
