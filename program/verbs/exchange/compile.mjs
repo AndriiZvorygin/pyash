@@ -1211,6 +1211,10 @@ function exprForSlot(slot = {}, { sentenceArg, locals, declared, defaultExpr, fi
     return `${vecRef}.ob?.ve?.values?.[${idxExpr}]`;
   }
 
+  if (field === "text" && typeof slot.wo === "string") {
+    return JSON.stringify(slot.wo);
+  }
+
   if (field === "text" && typeof slot.text === "string") {
     return JSON.stringify(slot.text);
   }
@@ -2273,6 +2277,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
       if (sentence?.to?.name) {
         const target = sanitizeName(sentence.to.name);
+        if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+        markDeclared(declared, sentence.to.name);
         lines.push(`const ${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
         lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
       }
@@ -2315,6 +2321,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       }
       if (sentence?.to?.name) {
         const target = sanitizeName(sentence.to.name);
+        if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+        markDeclared(declared, sentence.to.name);
         lines.push(`char ${target}[PYA_TEXT_CAP];`);
         lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
       }
