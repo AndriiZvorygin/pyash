@@ -2,10 +2,14 @@
 import ollama from "../../motor/ollama.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
+import { throwErrorSentence } from "../../error.mjs";
+import { emitExchangeSentence } from "../../bridge/exchange.mjs";
 
 // Per-mind discourse logs keyed by dialogue name
 const mindLogs = new Map();
 const mindAnswerCounters = new Map();
+const mindDebugCounters = new Map();
 
 function historyDialogueName({ callSentence, configSentence, targetName }) {
   if (typeof callSentence?.from?.text === "string") return callSentence.from.text;
@@ -39,6 +43,36 @@ function nextAnswerName(targetName, dialogue) {
   return { count, name: targetName ? `${targetName} answer ${count}` : `mind answer ${count}` };
 }
 
+function nextDebugCount(targetName) {
+  const key = targetName || "mind";
+  const count = (mindDebugCounters.get(key) || 0) + 1;
+  mindDebugCounters.set(key, count);
+  return count;
+}
+
+function toQuotedJson(text) {
+  return `quoted.json.${text}.json.quoted`;
+}
+
+function stripContext(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  const clone = Array.isArray(obj) ? [...obj] : { ...obj };
+  if ("context" in clone) delete clone.context;
+  return clone;
+}
+
+function recordMindJson({ targetName, label, payload }) {
+  const count = nextDebugCount(targetName);
+  const jsonText = JSON.stringify(payload ?? null, null, 2);
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: `${targetName || "mind"} ${label} ${count}` },
+    be: "write",
+    from: { name: "mind" },
+    ob: { text: toQuotedJson(jsonText) }
+  });
+}
+
 function compareUtf8(a, b) {
   if (a === b) return 0;
   const encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
@@ -68,8 +102,194 @@ function toolListFromMap(name) {
   return `TOOLS:\n${lines.join("\n")}`;
 }
 
-export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) {
-  const targetName = sentence?.to?.name ?? to?.name;
+function cloneSentence(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+const TOOL_NON_CASE_FIELDS = new Set([
+  "mood",
+  "be",
+  "su",
+  "subj",
+  "vyah",
+  "exists",
+  "signature",
+  "signatureWords",
+  "ret",
+  "this",
+  "consequence"
+]);
+
+function toolTypeWordsFromValue(value, caseKey) {
+  if (value == null) return [];
+  if (value.la) return ["la"];
+  if (caseKey === "become" || caseKey === "fromstate" || caseKey === "tostate") return ["name"];
+  if (value.ve) {
+    const inner = typeof value.ve.type === "string" ? value.ve.type : "";
+    return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
+  }
+  if (value.nameTypeWords?.length) return ["name", ...value.nameTypeWords];
+  if (value.name) {
+    const tail = String(value.name).trim();
+    if (["num", "text", "bool", "filename", "vec", "ve", "wo", "mind"].includes(tail)) {
+      return ["name", tail];
+    }
+    return ["name"];
+  }
+  if (value.num !== undefined) return ["num"];
+  if (value.text !== undefined) return ["text"];
+  if (value.boolean !== undefined) return ["bool"];
+  if (value.filename !== undefined) return ["filename"];
+  if (value.wo !== undefined) return ["wo"];
+  return [];
+}
+
+function toolSchemaType(typeWords) {
+  if (!typeWords?.length) return "string";
+  if (typeWords.includes("name")) return "string";
+  if (typeWords.includes("bool")) return "boolean";
+  if (typeWords.includes("num")) return "number";
+  if (typeWords.includes("text")) return "string";
+  if (typeWords.includes("filename")) return "string";
+  if (typeWords.includes("vec")) return "array";
+  if (typeWords.includes("la")) return "object";
+  return "string";
+}
+
+function toolFunctionNameFromSignature(signatureWords) {
+  return signatureWords
+    .map(word => String(word ?? ""))
+    .join("_")
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildToolSchemas(toolMapName) {
+  if (!toolMapName) return { tools: [], toolMap: new Map(), toolBlock: "" };
+  const fact = remember(toolMapName);
+  if (!fact || fact.be !== "map") return { tools: [], toolMap: new Map(), toolBlock: "" };
+  const entries = fact.ob?.map ?? {};
+  const caps = [];
+  for (const entry of Object.values(entries)) {
+    if (entry?.mood !== "can" || !entry?.be) continue;
+    const canonical = sentenceToPyash(entry);
+    caps.push({ sentence: entry, canonical });
+  }
+  if (!caps.length) return { tools: [], toolMap: new Map(), toolBlock: "" };
+  caps.sort((a, b) => compareUtf8(a.canonical, b.canonical));
+
+  const toolMap = new Map();
+  const tools = [];
+  for (const cap of caps) {
+    const signatureWords = deriveSignatureFromCall(cap.sentence, { remember });
+    const signatureName = joinSignatureWords(signatureWords);
+    const toolName = toolFunctionNameFromSignature(signatureWords);
+    const properties = {};
+    const required = [];
+    const caseKeys = Object.keys(cap.sentence).filter(k => !TOOL_NON_CASE_FIELDS.has(k));
+    caseKeys.sort(compareUtf8);
+    for (const caseKey of caseKeys) {
+      const value = cap.sentence[caseKey];
+      const typeWords = toolTypeWordsFromValue(value, caseKey);
+      properties[caseKey] = { type: toolSchemaType(typeWords) };
+      required.push(caseKey);
+    }
+    tools.push({
+      type: "function",
+      function: {
+        name: toolName,
+        description: cap.canonical,
+        signature: signatureName,
+        parameters: {
+          type: "object",
+          properties,
+          required
+        }
+      }
+    });
+    toolMap.set(toolName, cap.sentence);
+    toolMap.set(signatureName, cap.sentence);
+  }
+  const toolBlock = `TOOLS:\n${caps.map(c => c.canonical).join("\n")}`;
+  return { tools, toolMap, toolBlock };
+}
+
+function buildToolSentence({ capability, args }) {
+  const call = cloneSentence(capability);
+  delete call.su;
+  delete call.subj;
+  delete call.signature;
+  delete call.signatureWords;
+  delete call.exists;
+  delete call.ret;
+  delete call.this;
+  delete call.consequence;
+  call.mood = "do";
+
+  const argObject = (() => {
+    if (!args) return {};
+    if (typeof args === "string") {
+      try {
+        const parsed = JSON.parse(args);
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    if (typeof args === "object") return args;
+    return {};
+  })();
+
+  for (const [caseKey, argValue] of Object.entries(argObject)) {
+    const typeWords = toolTypeWordsFromValue(capability?.[caseKey], caseKey);
+    const hasName = typeWords.includes("name");
+    const isNum = typeWords.includes("num");
+    const isBool = typeWords.includes("bool");
+    const isText = typeWords.includes("text");
+    const isFilename = typeWords.includes("filename");
+    const isVec = typeWords.includes("vec");
+
+    if (isVec && Array.isArray(argValue)) {
+      call[caseKey] = { ve: { values: argValue } };
+      continue;
+    }
+    if (hasName) {
+      call[caseKey] = { name: String(argValue) };
+      continue;
+    }
+    if (isNum) {
+      const numVal = Number(argValue);
+      call[caseKey] = { num: Number.isFinite(numVal) ? numVal : 0 };
+      continue;
+    }
+    if (isBool) {
+      call[caseKey] = { boolean: argValue === "truth" ? true : argValue === "lie" ? false : Boolean(argValue) };
+      continue;
+    }
+    if (isFilename) {
+      call[caseKey] = { filename: String(argValue) };
+      continue;
+    }
+    if (isText) {
+      call[caseKey] = { text: String(argValue) };
+      continue;
+    }
+    call[caseKey] = argValue;
+  }
+
+  return call;
+}
+
+async function resolveInterpret() {
+  const mod = await import("../../bridge/index.mjs");
+  return mod.interpret;
+}
+
+export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
+  const ob = sentence?.ob ?? {};
+  const targetName = sentence?.to?.name;
   const config = targetName ? remember(targetName) : null;
   const configSentence = config?.be === "mind" ? config : null;
   const dialogue = typeof sentence?.from?.text === "string"
@@ -100,19 +320,10 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
     ob?.text ??
     (ob?.name && !ob?.model ? ob?.name : null);
 
-  const promptParts = [];
-  if (configPrompt) promptParts.push(configPrompt);
   const toolMapName = sentence?.with?.name ?? null;
-  const toolList = toolListFromMap(toolMapName);
-  if (toolList) promptParts.push(toolList);
+  const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
+
   const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
-  if (historyMessages.length) {
-    const histText = historyMessages
-      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-      .join("\n");
-    promptParts.push(histText);
-  }
-  if (callPrompt) promptParts.push(callPrompt);
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -126,10 +337,98 @@ export async function mind_to_name_text({ sentence, ob = {}, to, inputs = [] }) 
     }
   }
 
-  const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
+  let responseText = "";
+  if (toolMapName) {
+    const messages = [];
+    if (configPrompt) messages.push({ role: "system", content: configPrompt });
+    if (toolBlock) messages.push({ role: "system", content: toolBlock });
+    if (historyMessages.length) messages.push(...historyMessages);
+    const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
+    messages.push({ role: "user", content: userContent });
 
-  const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
-  const responseText = mockResponse ?? await ollama.generate(model, fullPrompt.trim());
+    const interpret = await resolveInterpret();
+    const maxToolTurns = 6;
+    let turns = 0;
+    let lastResponse = null;
+
+    while (turns < maxToolTurns) {
+      turns += 1;
+      const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
+      if (mockResponse) {
+        try {
+          lastResponse = JSON.parse(mockResponse);
+        } catch {
+          lastResponse = { message: { content: mockResponse } };
+        }
+      } else {
+        const requestPayload = { model, messages, tools, stream: false };
+        recordMindJson({ targetName, label: "request", payload: requestPayload });
+        lastResponse = await ollama.chat(requestPayload);
+      }
+      recordMindJson({ targetName, label: "response", payload: stripContext(lastResponse) });
+
+      const toolCalls = lastResponse?.message?.tool_calls;
+      if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
+        responseText = lastResponse?.message?.content ?? "";
+        break;
+      }
+
+      const assistantMessage = {
+        role: "assistant",
+        content: lastResponse?.message?.content ?? "",
+        tool_calls: toolCalls
+      };
+      messages.push(assistantMessage);
+      appendLog(dialogue, { role: "assistant", content: assistantMessage.content });
+
+      for (const call of toolCalls) {
+        const toolName = call?.function?.name ?? call?.name;
+        if (!toolName || !toolMap.has(toolName)) {
+          throwErrorSentence({
+            name: "tool defective",
+            message: `unknown tool: ${toolName}`,
+            from: { name: "mind" },
+            raw: call
+          });
+        }
+        const capability = toolMap.get(toolName);
+        const toolSentence = buildToolSentence({
+          capability,
+          args: call?.function?.arguments ?? call?.arguments
+        });
+        const toolResult = await interpret(toolSentence);
+        const toolText = toolResult && typeof toolResult === "object" ? sentenceToPyash(toolResult) : String(toolResult ?? "");
+        messages.push({ role: "tool", tool_name: toolName, content: toolText });
+        appendLog(dialogue, { role: "tool", content: toolText });
+      }
+    }
+
+    if (!responseText) {
+      responseText = lastResponse?.message?.content ?? "";
+    }
+  } else {
+    const promptParts = [];
+    if (configPrompt) promptParts.push(configPrompt);
+    const toolList = toolListFromMap(toolMapName);
+    if (toolList) promptParts.push(toolList);
+    if (historyMessages.length) {
+      const histText = historyMessages
+        .map(m => `${m.role.toUpperCase()}: ${m.content}`)
+        .join("\n");
+      promptParts.push(histText);
+    }
+    if (callPrompt) promptParts.push(callPrompt);
+    const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
+    const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
+    if (mockResponse) {
+      responseText = mockResponse;
+    } else {
+      recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
+      const raw = await ollama.generate(model, fullPrompt.trim());
+      recordMindJson({ targetName, label: "response", payload: stripContext({ response: raw }) });
+      responseText = raw;
+    }
+  }
 
   // Record turn so future calls have context
   const { count, name: answerName } = nextAnswerName(targetName, dialogue);
@@ -169,6 +468,7 @@ export { buildHistoryMessages };
 export function resetMindLogs() {
   mindLogs.clear();
   mindAnswerCounters.clear();
+  mindDebugCounters.clear();
 }
 
 export const signatures = [

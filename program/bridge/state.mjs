@@ -5,5 +5,8 @@ export const state = {
   mapStack: [],
   currentEvoke: null,
   currentEvokeRef: null,
-  executingBody: false
+  executingBody: false,
+  currentSourceFilename: null,
+  currentSourceLine: null,
+  currentSourceSentence: null
 };

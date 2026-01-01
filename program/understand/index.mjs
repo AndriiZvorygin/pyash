@@ -8,6 +8,7 @@ import {
 } from "../library/grammar/keywords.mjs";
 
 const QUOTED_PLACEHOLDER = "__QUOTED_BLOCK__";
+const QUOTED_TEXT_PREFIX = "__QUOTED_TEXT__:";
 function tokenize(line) {
   const tokens = [];
   let current = "";
@@ -28,7 +29,7 @@ function tokenize(line) {
       }
 
       if (ch === '"') {
-        tokens.push(current);
+        tokens.push(`${QUOTED_TEXT_PREFIX}${current}`);
         current = "";
         inQuote = false;
       } else {
@@ -80,6 +81,13 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
   let current = null;
   let slot = null;
   let vyahValues = null;
+  const isQuotedTextToken = (token) => token.startsWith(QUOTED_TEXT_PREFIX);
+  const decodeQuotedTextToken = (token) => token.slice(QUOTED_TEXT_PREFIX.length);
+  const tokenValue = (token) => {
+    if (isQuotedTextToken(token)) return decodeQuotedTextToken(token);
+    if (token === QUOTED_PLACEHOLDER && quotedText !== null) return quotedText;
+    return token;
+  };
 
   function parseAllEnumeration(startIdx) {
     if (words[startIdx] !== "all") return null;
@@ -133,6 +141,16 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
 
   for (let i = 0; i < words.length; i++) {
     const t = words[i];
+
+    if (isQuotedTextToken(t)) {
+      const value = decodeQuotedTextToken(t);
+      if (current) {
+        s[current].text = value;
+      } else {
+        s.text = value;
+      }
+      continue;
+    }
 
     if (t === "exists") {
       s.exists = true;
@@ -191,7 +209,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         t === "ta" ||
         t === "ret";
       if (!isBoundary) {
-        const value = t === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : t;
+        const value = tokenValue(t);
         vyahValues = vyahValues ?? [];
         vyahValues.push(value);
         if (s.vyah?.ve) s.vyah.ve.values = vyahValues;
@@ -233,7 +251,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         !["be", "then", "ta"].includes(next) &&
         !TYPE_TOKENS.includes(next)
       ) {
-        slot.name = next;
+        slot.name = tokenValue(next);
         i++; // consume the name token
         if (t === "state" && slot.name === "beautiful") {
           const nextState = words[i + 1];
@@ -244,7 +262,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
             !TYPE_TOKENS.includes(nextState)
           ) {
             slot.text = slot.name;
-            slot.name = nextState;
+            slot.name = tokenValue(nextState);
             i++; // consume the secondary state token
           }
         }
@@ -336,7 +354,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         !CONTEXT_KEYS.includes(words[j]) &&
         !["be", "then", "ta", "ret"].includes(words[j])
       ) {
-        const token = words[j];
+        const token = tokenValue(words[j]);
         if (elemType === "num" || elemType === "number") {
           const num = Number(token);
           vector.values.push(Number.isNaN(num) ? token : num);
@@ -424,7 +442,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         while (j < words.length) {
           const look = words[j];
           if (isBoundary(look)) break;
-          parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
+          parts.push(tokenValue(look));
           j++;
         }
         const nameValue = parts.join(" ");
@@ -433,21 +451,21 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         i = j - 1;
       } else if (t === "ord") {
         const raw = words[i + 1];
-        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        const value = tokenValue(raw);
         const maybeNum = Number(value);
         const ordIndex = Number.isNaN(maybeNum) ? null : Math.max(0, Math.trunc(maybeNum) - 1);
         target.num = ordIndex ?? value;
         i++; // skip consumed value
       } else if (t === "bool" || t === "boolean") {
         const raw = words[i + 1];
-        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        const value = tokenValue(raw);
         if (value === "truth" || value === "true" || value === "1") target.boolean = true;
         else if (value === "lie" || value === "false" || value === "0") target.boolean = false;
         else target.boolean = Boolean(value);
         i++; // skip the value we just consumed
       } else {
         const raw = words[i + 1];
-        const value = raw === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : raw;
+        const value = tokenValue(raw);
         const maybeNum = Number(value);
         if (t === "text" || t === "wo") {
           target.text = value;
@@ -531,7 +549,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
           look === "ta" ||
           look === "be"; // unlikely consecutive be, but stop
         if (isBoundary) break;
-        parts.push(look === QUOTED_PLACEHOLDER && quotedText !== null ? quotedText : look);
+        parts.push(tokenValue(look));
         j++;
       }
       s.be = parts.join(" ");

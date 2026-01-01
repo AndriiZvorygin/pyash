@@ -158,6 +158,12 @@ export function recordExchange({ artifactName, op, producer = "exchange", senten
   return record;
 }
 
+export function emitExchangeSentence(sentence) {
+  if (!exchangeRecorder || !sentence) return null;
+  exchangeRecorder(sentence);
+  return sentence;
+}
+
 export function hashLocator(locator) {
   if (!locator) return null;
   const normalized = normalizeLocator(locator);

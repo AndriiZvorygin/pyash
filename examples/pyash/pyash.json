@@ -5,7 +5,7 @@
     "full tools": "./modules/full_tools.pya",
     "complex tools": "./modules/complex_tools.pya",
     "behavior tools": "./modules/behavior_tools.pya",
-    "espeak say": "./modules/espeak_say.pya",
+    "espeak say": "../../module/espeak_say.pya",
     "command tools": "./modules/command_tools.pya"
   }
 }

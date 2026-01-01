@@ -1,6 +1,6 @@
 import { compositionalGrid } from "../compositionalCases.mjs";
 
-export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret"];
+export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can"];
 
 const EXTRA_CONTEXT_KEYWORDS = {
   sequence: { source: "fromindex", way: "atindex", destination: "toindex" }

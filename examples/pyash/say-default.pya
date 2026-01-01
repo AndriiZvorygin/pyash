@@ -1,0 +1,2 @@
+be say ob "hello world" do
+ob name result be write do

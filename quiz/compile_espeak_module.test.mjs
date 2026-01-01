@@ -6,7 +6,7 @@ import { interpret } from "../program/bridge/index.mjs";
 
 test("compile espeak module uses cmd.ob.text as command input", async () => {
   const sentence = parse(
-    `from filename "examples/pyash/modules/espeak_say.pya" to state javascript to text output be compile do`
+    `from filename "module/espeak_say.pya" to state javascript to text output be compile do`
   );
   const result = await interpret(sentence);
   const js = result?.ob?.text ?? result?.value?.text ?? "";
