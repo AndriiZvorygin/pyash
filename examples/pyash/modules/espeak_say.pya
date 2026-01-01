@@ -1,4 +1,6 @@
 su name say ob text payload be ceremony def
-  ob text of ob of this be speak do
+  exists su name cmd ob wo "espeak-ng -x " be text ya
+  ob text of ob of this to name cmd be add do
+  ob wo of ob of cmd be command do
 prah
 su name say be export ya
