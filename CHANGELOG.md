@@ -149,3 +149,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `12-source-maps.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
 * Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
+
+### Jan 1, 2026: Command + say module hardening
+
+* Command errors now surface full error sentences (CLI prints surfaced error sentence).
+* `add` supports text-from-genitive concatenation and `ob text → to text`.
+* Espeak module signature tightened to require `to name text`, and payloads are quoted to preserve spaces.
+* New noop/plain say modules and examples added for non-shell parity testing.
