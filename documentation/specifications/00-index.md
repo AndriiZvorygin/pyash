@@ -29,7 +29,6 @@ Feature specs (optional, when blessed):
 - `24-mind.md`
 - `13-exchange-and-artifact.md` (v0.1)
 - `14-refinery.md` (v0.1)
-- `15-tool-envelope.md` (draft v0.1)
 - `30-maps.md` (once map semantics are locked)
 - `50-modules.md` (v0.1)
 - `40-aspect.md` (v0.6 target; add when Week 1 freezes)
