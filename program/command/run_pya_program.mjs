@@ -97,9 +97,10 @@ async function main() {
     const counter = nextToolCounter();
     pushNewspaper(`su name tool event ${counter} ob la ${evokedSentence} ko to la ${resultSentence} ko be tool ya`);
   };
-  const isMindToolCall = (sentence) => {
+  const isToolSentence = (sentence) => {
     if (!sentence) return false;
     if (sentence.be === "mind") return true;
+    if (sentence.be === "command") return true;
     if (sentence.be !== "write") return false;
     const targetName = sentence.to?.name;
     if (!targetName) return false;
@@ -145,7 +146,7 @@ async function main() {
     if (!line) continue;
     const sentence = parse(line);
     const embedded = sentenceToPyash(sentence);
-    const isToolCall = isMindToolCall(sentence);
+    const isToolCall = isToolSentence(sentence);
     pushNewspaper(`ob la ${embedded} ko be evoke ya`);
     let res;
     try {
@@ -174,7 +175,7 @@ async function main() {
         interpret,
         onEvoke: (actionSentence) => {
           const embedded = sentenceToPyash(actionSentence);
-          if (isMindToolCall(actionSentence)) pendingToolEvoked = embedded;
+          if (isToolSentence(actionSentence)) pendingToolEvoked = embedded;
           pushNewspaper(`ob la ${embedded} ko be evoke ya`);
         },
         onResult: (res) => {

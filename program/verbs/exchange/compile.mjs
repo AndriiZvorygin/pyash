@@ -2257,6 +2257,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     if (lang !== "c") {
       if (jsHelpers) {
         jsHelpers.usesCommand = true;
+        jsHelpers.usesExchange = true;
         if (inputFilename || sentence?.to?.filename) jsHelpers.usesFs = true;
       }
       const cmdExpr = exprForSlot(ob, {
@@ -2282,6 +2283,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`const ${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
         lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
       }
+      const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
+      lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
+      lines.push(`const __pyaToolResult = "su name " + ${toolTarget} + " ob text " + JSON.stringify(String(__pyaOut ?? "")) + " be text ya";`);
+      lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
       lines.push("}");
       return lines.join("\n");
     }
@@ -2292,6 +2297,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesString = true;
         cHelpers.usesStdlib = true;
         cHelpers.usesPrintf = true;
+        cHelpers.usesExchange = true;
       }
       if (inputFilename || inputText) {
         throwErrorSentence({
@@ -2326,6 +2332,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`char ${target}[PYA_TEXT_CAP];`);
         lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
       }
+      const evoked = JSON.stringify(sentenceToPyash(sentence));
+      const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
+      lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\"%s\\" be text ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${toolTarget}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);
       lines.push(`if (${outVar}) free(${outVar});`);
       return lines.join("\n");
     }
