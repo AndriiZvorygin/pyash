@@ -149,7 +149,7 @@ equanimity, melancholy, joy, shame, surprise
 
 * These modifiers are **annotations only**
 * They MUST NOT affect execution, dispatch, or control flow
-* They MAY be recorded in logs or journals
+* They MAY be recorded in the newspaper
 * Semantics are undefined unless a later spec assigns them
 
 ---
@@ -186,7 +186,7 @@ vyah satisfied cancel sloh
 
 ### 4.2 Official output order
 
-When a sentence is **emitted, stored, logged, or replayed**, modifiers inside `vyah` MUST be written in the following **official order**:
+When a sentence is **emitted, stored, logged, or agained**, modifiers inside `vyah` MUST be written in the following **official order**:
 
 1. **Aspect modifiers**
 2. **Tense / temporal modifiers**
@@ -203,8 +203,8 @@ vyah cancel past sloh satisfied
 This ordering is required for:
 
 * deterministic output
-* journaling
-* replay
+* newspaper
+* again
 * cross-implementation parity
 
 ---
@@ -240,7 +240,7 @@ Truth strength, evidence source, and certainty level MUST live in a **dedicated 
 
 ---
 
-## 7. Determinism and replay
+## 7. Determinism and again
 
 For identical inputs and configuration:
 
@@ -251,7 +251,7 @@ For identical inputs and configuration:
 
 MUST be identical across implementations.
 
-This guarantees stable logging, journaling, and replay.
+This guarantees stable newspaper records and again.
 
 ---
 

@@ -30,21 +30,21 @@ Define mood behavior (`ya`, `do`, `def`, `prah`, `then`) and memory rules.
 
 ## Appendix A: Runtime relevance ordering (v0.1)
 
-This appendix defines an **ordering of moods by practical runtime leverage**, especially for pipeline execution, journaling, replay, and deterministic contracts.
+This appendix defines an **ordering of moods by practical runtime leverage**, especially for pipeline execution, newspaper, again, and deterministic contracts.
 
 This ordering is **non-semantic**: it does not rank moods by philosophical importance, only by **how early and how often they are needed to build the core runtime**.
 
 ### A.1 Tier 1 — Core runtime moods (must exist early)
 
-These moods are required to build a functioning pipeline, journal, replay system, and tooling interface.
+These moods are required to build a functioning pipeline, newspaper, again system, and tooling interface.
 
 | Mood               | Grammar | Surface | Role                                   |
 | ------------------ | ------- | ------- | -------------------------------------- |
-| deontic_mood       | `tu`    | `do`    | Execute stages, tools, retries, replay |
+| deontic_mood       | `tu`    | `do`    | Execute stages, tools, retries, again |
 | declarative_mood   | `ksuh`  | `def`   | Define schemas, specs, contracts, APIs |
-| realis_mood        | `li`    | `ya`    | Record facts into memory and journal   |
-| interrogative_mood | `ri`    | `qwe`   | Inspect state, query journal, debug    |
-| conditional_mood   | `cu`    | `then`  | Branching logic, retry and replay flow |
+| realis_mood        | `li`    | `ya`    | Record facts into memory and newspaper |
+| interrogative_mood | `ri`    | `qwe`   | Inspect state, query newspaper, debug  |
+| conditional_mood   | `cu`    | `then`  | Branching logic, retry and again flow |
 
 **Normative rule:**
 Any runtime implementation must support these moods to be considered minimally usable.
@@ -64,7 +64,7 @@ These moods are not required for minimal execution, but sharply improve correctn
 | epistemic_mood     | `si`    | `believe` | Non-factual conclusions, weaker than `ya` |
 
 **Normative rule:**
-These moods must be journaled distinctly and must never silently upgrade to `ya`.
+These moods must be recorded in the newspaper distinctly and must never silently upgrade to `ya`.
 
 ---
 
@@ -110,7 +110,5 @@ hortative, volitive, deliberative, desiderative, optative, precative, jussive, p
 * `def` creates structure.
 * `then` controls flow.
 
-Violating these invariants breaks replay, auditability, and trust.
-
-
+Violating these invariants breaks again, auditability, and trust.
 
