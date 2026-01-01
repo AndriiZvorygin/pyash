@@ -1,3 +1,3 @@
 from name espeak say ob name say to name espeak say be import do
-ob text "hello world" to name output be espeak say do
+ob text "hello world" to name text output be espeak say do
 ob name output be write do
