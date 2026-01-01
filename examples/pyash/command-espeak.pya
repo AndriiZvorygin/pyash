@@ -1,2 +1,3 @@
 from name command tools to name command be import do
-ob wo quoted.command.espeak-ng -x "hello world".command.quoted be command do
+ob wo quoted.command.espeak-ng -x "hello world".command.quoted to name output be command do
+ob name output be write do

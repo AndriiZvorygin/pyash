@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
-import { remember } from "../remember/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 
@@ -12,7 +12,12 @@ function resolveCommandText(ob = {}, { rememberFn } = {}) {
 
 export async function command(sentence, { remember: rememberFn = remember } = {}) {
   if (process.env.PYA_COMMAND_RESPONSE) {
-    return { ob: { text: String(process.env.PYA_COMMAND_RESPONSE) }, be: "command" };
+    const output = String(process.env.PYA_COMMAND_RESPONSE);
+    if (sentence?.to?.name) {
+      const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
+      doRemember(fact);
+    }
+    return { ob: { text: output }, be: "command" };
   }
   const cmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
   if (!cmd) {
@@ -46,6 +51,10 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const output = String(res.stdout ?? "");
   if (sentence?.to?.filename) {
     await fs.writeFile(sentence.to.filename, output, "utf8");
+  }
+  if (sentence?.to?.name) {
+    const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
+    doRemember(fact);
   }
   return { ob: { text: output }, be: "command" };
 }
