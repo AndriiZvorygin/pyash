@@ -106,6 +106,15 @@ async function main() {
     const target = remember(targetName);
     return target?.be === "mind";
   };
+
+  if (full) {
+    console.log("Program:");
+    if (gross) {
+      console.log(JSON.stringify(sentences, null, 2));
+    } else {
+      console.log(text.trim());
+    }
+  }
   const runStart = `su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
   pushNewspaper(`ob filename "${runRoot}" be run root ya`);
@@ -198,12 +207,6 @@ async function main() {
   if (runError) throw runError;
 
   if (full) {
-    console.log("Program:");
-    if (gross) {
-      console.log(JSON.stringify(sentences, null, 2));
-    } else {
-      console.log(text.trim());
-    }
     console.log("\nResult:");
   }
 
