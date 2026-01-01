@@ -26,7 +26,7 @@ Feature specs (optional, when blessed):
 - `21-vectors.md`
 - `22-understand.md`
 - `23-compile.md`
-- `24-mind.md`
+- `16-mind.md` (draft v0.1)
 - `13-exchange-and-artifact.md` (v0.1)
 - `14-refinery.md` (v0.1)
 - `30-maps.md` (once map semantics are locked)
