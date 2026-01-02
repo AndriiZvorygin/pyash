@@ -87,3 +87,14 @@ test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
   assert.equal(evoker.be, "worker");
   assert.equal(evoker.ob?.num, 5);
 });
+
+test("run_pya_program.mjs uses default say mapping", async () => {
+  process.env.PYA_COMMAND_RESPONSE = "phonemes";
+  try {
+    const { logs, errors } = await runScript("program/command/run_pya_program.mjs", ["examples/pyash/say-default.pya"]);
+    assert.equal(errors.join("\n"), "");
+    assert.match(logs.join("\n"), /phonemes/);
+  } finally {
+    delete process.env.PYA_COMMAND_RESPONSE;
+  }
+});

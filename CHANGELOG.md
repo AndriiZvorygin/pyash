@@ -119,6 +119,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Hardening: multi-file golden tests across interpreter/JS/C
 * Backend parity gate enforced by compile tests
 
+
+### Jan 1, 2026: Mind tools + default say + error context hardening
+
+* Default say mapping now lives in `configure/default.pya` and autoloads in run + REPL.
+* Espeak say module moved to `module/` and wired through the import map.
+* Tool calling payloads now use safe tool names with signature metadata; tool lookup accepts both names.
+* Error sentences now include `from filename`, `by num`, and `at la ... ko` source context.
+* Quoted token handling normalized across parser + CSV/YAML/JSON roundtrips.
+* New golden example for default say (`examples/pyash/say-default.pya`) and added tests for tool payloads + error context.
+
 ### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete (maps done)
 
 * YAML spec v0.1 implemented (`32-yaml.md`) with deterministic official ordering.
