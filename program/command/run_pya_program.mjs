@@ -58,19 +58,54 @@ function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
+async function loadCheckpointIndex({ runId, cwd }) {
+  const checkpoints = new Map();
+  if (!runId) return checkpoints;
+  const newspaperPath = path.resolve(cwd, "newspaper", `${sanitizeRunId(runId)}.pya`);
+  let text = "";
+  try {
+    text = await fs.readFile(newspaperPath, "utf8");
+  } catch (err) {
+    if (err?.code === "ENOENT") return checkpoints;
+    throw err;
+  }
+  const lines = splitSentences(text);
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      continue;
+    }
+    if (sentence?.be !== "checkpoint" || sentence?.mood !== "ya") continue;
+    const refineryName = sentence?.from?.name;
+    const platformName = sentence?.su?.name;
+    const hash = sentence?.ob?.text;
+    const resultSentence = sentence?.to?.la;
+    if (!refineryName || !platformName || !hash || !resultSentence) continue;
+    const resultLine = sentenceToPyash(resultSentence);
+    if (!checkpoints.has(refineryName)) checkpoints.set(refineryName, new Map());
+    checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine });
+  }
+  return checkpoints;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
   const useNewspaper = args.includes("--newspaper");
   const useAgain = args.includes("--again");
+  const noCheckpoint = args.includes("--no-checkpoint");
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
   const refineryFlag = readFlagValue(args, "--refinery");
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--gross" || arg === "--full" || arg === "--newspaper" || arg === "--again") continue;
+    if (arg === "--gross" || arg === "--full" || arg === "--newspaper" || arg === "--again" || arg === "--no-checkpoint") continue;
     if (arg === "--run-id" || arg === "--run-time" || arg === "--refinery") {
       i += 1;
       continue;
@@ -82,7 +117,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--again] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -157,6 +192,9 @@ async function main() {
   }
   let runError = null;
   let refineryResult = null;
+  const checkpointIndex = (!noCheckpoint && refineryFlag)
+    ? await loadCheckpointIndex({ runId, cwd: process.cwd() })
+    : null;
 
   const toResultSentence = (res, fallbackSentence) => {
     if (res?.mood && res?.be) return res;
@@ -208,10 +246,18 @@ async function main() {
       refineryResult = await runRefinery({
         name: refineryFlag,
         interpret,
+        checkpointIndex,
+        checkpointEnabled: !noCheckpoint,
         onEvoke: (actionSentence) => {
           const embedded = sentenceToPyash(actionSentence);
           if (isToolSentence(actionSentence)) pendingToolEvoked = embedded;
           pushNewspaper(`ob la ${embedded} ko be evoke ya`);
+        },
+        onCheckpoint: (checkpointSentence) => {
+          pushNewspaper(sentenceToPyash(checkpointSentence));
+        },
+        onRetry: (retrySentence) => {
+          pushNewspaper(sentenceToPyash(retrySentence));
         },
         onResult: (res) => {
           const resultSentence = toResultSentence(res, null);

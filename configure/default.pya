@@ -1,1 +1,5 @@
 su say be default ob name espeak say from filename "module/espeak_say.pya" ya
+su name reiterate delay ob num 250 be number ya
+su name reiterate backoff ob num 2 be number ya
+su name reiterate attempts ob num 5 be number ya
+su name reiterate cap ob num 8000 be number ya
