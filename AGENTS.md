@@ -13,6 +13,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Build, Quiz, and Development Commands
 - `npm test` (or `node --test quiz`) runs the full suite; run it before pushing.
+- `npm test` is pre-approved; no extra confirmation is needed to run it.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
 - `node program/command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.

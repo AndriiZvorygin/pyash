@@ -1,4 +1,6 @@
 import { surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
+import { remember } from "../remember/index.mjs";
+import { sentenceToPyash } from "../beautiful.mjs";
 
 const refineryRegistry = new Map();
 const refineryStack = [];
@@ -12,6 +14,81 @@ function compareUtf8(a, b) {
     if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
   }
   return bufA.length < bufB.length ? -1 : 1;
+}
+
+function fnv1aHex(text) {
+  const bytes = Buffer.from(String(text ?? ""), "utf8");
+  let hash = 0x811c9dc5;
+  for (const byte of bytes) {
+    hash ^= byte;
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+function buildCheckpointHash(actionLine, depNames, depResults) {
+  const parts = [`action:${actionLine}`];
+  for (let i = 0; i < depNames.length; i += 1) {
+    const name = depNames[i];
+    const result = depResults[i] ?? "";
+    parts.push(`dep:${name}:${result}`);
+  }
+  return fnv1aHex(parts.join("\n"));
+}
+
+function readRetryNumber(name) {
+  const fact = remember(name);
+  const value = fact?.ob?.num ?? fact?.ob?.text;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readRetryConfig() {
+  const delay = readRetryNumber("reiterate delay");
+  const backoff = readRetryNumber("reiterate backoff");
+  const attempts = readRetryNumber("reiterate attempts");
+  const cap = readRetryNumber("reiterate cap");
+  return {
+    initialDelayMs: delay ?? 250,
+    backoff: backoff ?? 2,
+    maxAttempts: attempts ?? 5,
+    maxDelayMs: cap ?? 8000
+  };
+}
+
+function normalizeRetryConfig(config = {}) {
+  const initialDelayMs = Math.max(0, Number(config.initialDelayMs) || 0);
+  const backoff = Math.max(1, Number(config.backoff) || 1);
+  const maxAttempts = Math.max(1, Math.floor(Number(config.maxAttempts) || 1));
+  const maxDelayMs = Math.max(0, Number(config.maxDelayMs) || 0);
+  return { initialDelayMs, backoff, maxAttempts, maxDelayMs };
+}
+
+function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence }) {
+  return {
+    mood: "ya",
+    be: "checkpoint",
+    su: { name: platformName },
+    ob: { text: hash },
+    from: { name: refineryName },
+    to: { la: resultSentence }
+  };
+}
+
+function buildRetrySentence({ refineryName, platformName, attempt, message }) {
+  return {
+    mood: "ya",
+    be: "reiterate",
+    su: { name: platformName },
+    by: { num: attempt },
+    ob: { text: message },
+    from: { name: refineryName }
+  };
+}
+
+async function sleepMs(delayMs) {
+  if (!delayMs || delayMs <= 0) return;
+  await new Promise(resolve => setTimeout(resolve, delayMs));
 }
 
 function assertNameVector(value) {
@@ -158,7 +235,17 @@ export function getRefinery(name) {
   return refineryRegistry.get(name);
 }
 
-export async function runRefinery({ name, interpret, onEvoke, onResult } = {}) {
+export async function runRefinery({
+  name,
+  interpret,
+  onEvoke,
+  onResult,
+  onCheckpoint,
+  onRetry,
+  checkpointIndex,
+  checkpointEnabled = true,
+  retryConfig
+} = {}) {
   if (!name) {
     throwErrorSentence({
       name: "refinery defective",
@@ -176,7 +263,17 @@ export async function runRefinery({ name, interpret, onEvoke, onResult } = {}) {
   }
   const completed = new Set();
   const pending = new Set(refinery.platforms.keys());
+  const results = new Map();
+  const retrySettings = normalizeRetryConfig(retryConfig ?? readRetryConfig());
   let lastResult = null;
+  const resolveResultSentence = (value, fallbackSentence) => {
+    if (value?.mood && value?.be) return value;
+    if (value?.sentence?.mood && value?.sentence?.be) return value.sentence;
+    const remembered = remember("result");
+    if (remembered?.mood && remembered?.be) return remembered;
+    if (fallbackSentence?.mood) return fallbackSentence;
+    return null;
+  };
 
   while (pending.size > 0) {
     const ready = [];
@@ -204,19 +301,72 @@ export async function runRefinery({ name, interpret, onEvoke, onResult } = {}) {
       });
     }
     if (onEvoke) onEvoke(platform.actionSentence);
-    let result;
-    try {
-      result = await interpret(platform.actionSentence);
-    } catch (err) {
-      const sentence = surfaceErrorSentence(err?.sentence ?? err);
-      if (onResult) onResult(sentence);
-      return sentence;
+    const deps = platform.deps ?? [];
+    const sortedDeps = [...deps].sort(compareUtf8);
+    const depResults = sortedDeps.map(dep => results.get(dep) ?? "");
+    const actionLine = sentenceToPyash(platform.actionSentence);
+    const checkpointHash = buildCheckpointHash(actionLine, sortedDeps, depResults);
+    const checkpointMap = checkpointIndex?.get(name);
+    const checkpointRecord = checkpointEnabled ? checkpointMap?.get(nextName) : null;
+    if (checkpointEnabled && checkpointRecord?.hash === checkpointHash) {
+      const resultSentence = checkpointRecord.resultSentence;
+      const resultLine = checkpointRecord.resultLine ?? sentenceToPyash(resultSentence);
+      results.set(nextName, resultLine);
+      const checkpointSentence = buildCheckpointSentence({
+        refineryName: name,
+        platformName: nextName,
+        hash: checkpointHash,
+        resultSentence
+      });
+      if (onCheckpoint) onCheckpoint(checkpointSentence);
+      if (onResult) onResult(resultSentence);
+      lastResult = resultSentence;
+      completed.add(nextName);
+      pending.delete(nextName);
+      continue;
     }
-    const surfaced = surfaceErrorSentence(result);
-    if (onResult) onResult(surfaced);
-    lastResult = surfaced;
-    if (surfaced?.be === "error" && surfaced?.mood === "ya") {
-      return surfaced;
+    let attempt = 0;
+    let delayMs = retrySettings.initialDelayMs;
+    let result;
+    while (attempt < retrySettings.maxAttempts) {
+      attempt += 1;
+      try {
+        result = await interpret(platform.actionSentence);
+      } catch (err) {
+        result = surfaceErrorSentence(err?.sentence ?? err);
+      }
+      const resultSentence = resolveResultSentence(result, platform.actionSentence);
+      const surfaced = surfaceErrorSentence(resultSentence);
+      if (surfaced?.be === "error" && surfaced?.mood === "ya") {
+        if (attempt < retrySettings.maxAttempts) {
+          const retrySentence = buildRetrySentence({
+            refineryName: name,
+            platformName: nextName,
+            attempt: attempt + 1,
+            message: surfaced?.ob?.text ?? "reiterate"
+          });
+          if (onRetry) onRetry(retrySentence);
+          await sleepMs(delayMs);
+          delayMs = Math.min(Math.trunc(delayMs * retrySettings.backoff), retrySettings.maxDelayMs);
+          continue;
+        }
+        if (onResult) onResult(surfaced);
+        return surfaced;
+      }
+      if (surfaced?.mood) {
+        if (onResult) onResult(surfaced);
+        lastResult = surfaced;
+      }
+      const resultLine = sentenceToPyash(surfaced ?? platform.actionSentence);
+      results.set(nextName, resultLine);
+      const checkpointSentence = buildCheckpointSentence({
+        refineryName: name,
+        platformName: nextName,
+        hash: checkpointHash,
+        resultSentence: surfaced ?? platform.actionSentence
+      });
+      if (checkpointEnabled && onCheckpoint) onCheckpoint(checkpointSentence);
+      break;
     }
     completed.add(nextName);
     pending.delete(nextName);

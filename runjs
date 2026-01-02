@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: ./runjs [--again] [--newspaper] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>" >&2
+  echo "usage: ./runjs [--again] [--newspaper] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>" >&2
   exit 2
 fi
 
@@ -11,6 +11,7 @@ RUN_ID=""
 RUN_TIME=""
 REFINERY=""
 AGAIN=0
+NO_CHECKPOINT=0
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,6 +21,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --newspaper)
       NEWSPAPER=1
+      shift
+      ;;
+    --no-checkpoint)
+      NO_CHECKPOINT=1
       shift
       ;;
     --run-id)
@@ -79,6 +84,9 @@ if [[ "$NEWSPAPER" -eq 1 ]]; then
   fi
   if [[ -n "$RUN_TIME" ]]; then
     RUN_ARGS+=(--run-time "$RUN_TIME")
+  fi
+  if [[ "$NO_CHECKPOINT" -eq 1 ]]; then
+    RUN_ARGS+=(--no-checkpoint)
   fi
   if [[ "$AGAIN" -eq 1 ]]; then
     RUN_ARGS+=(--again)

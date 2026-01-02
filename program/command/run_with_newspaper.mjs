@@ -43,10 +43,11 @@ async function run() {
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
   const againFlag = args.includes("--again");
+  const noCheckpoint = args.includes("--no-checkpoint");
   const sourcePathFlag = readFlagValue(args, "--source");
   const cmdIndex = args.indexOf("--");
   if (!sourcePathFlag || cmdIndex === -1) {
-    console.error("Usage: node program/command/run_with_newspaper.mjs --source <file.pya> [--run-id <id>] [--run-time <iso>] -- <command...>");
+    console.error("Usage: node program/command/run_with_newspaper.mjs --source <file.pya> [--run-id <id>] [--run-time <iso>] [--no-checkpoint] -- <command...>");
     process.exit(1);
   }
   const command = args.slice(cmdIndex + 1);
@@ -116,15 +117,64 @@ async function run() {
     pushLine(resultSentenceForLine(line));
   };
 
+  const checkpointEnv = await (async () => {
+    if (noCheckpoint) return "";
+    const existingPath = path.resolve(process.cwd(), "newspaper", `${sanitizeRunId(runId)}.pya`);
+    let existing = "";
+    try {
+      existing = await fs.readFile(existingPath, "utf8");
+    } catch (err) {
+      if (err?.code !== "ENOENT") throw err;
+      return "";
+    }
+    const entries = [];
+    for (const raw of splitSentences(existing)) {
+      const line = raw.trim();
+      if (!line) continue;
+      let sentence;
+      try {
+        sentence = parse(line);
+      } catch {
+        continue;
+      }
+      if (sentence?.be !== "checkpoint" || sentence?.mood !== "ya") continue;
+      const refineryName = sentence?.from?.name;
+      const platformName = sentence?.su?.name;
+      const hash = sentence?.ob?.text;
+      const resultSentence = sentence?.to?.la;
+      if (!refineryName || !platformName || !hash || !resultSentence) continue;
+      const resultLine = sentenceToPyash(resultSentence);
+      const esc = (value) => String(value ?? "")
+        .replace(/\\/g, "\\\\")
+        .replace(/\t/g, "\\t")
+        .replace(/\r/g, "\\r")
+        .replace(/\n/g, "\\n");
+      entries.push([
+        esc(refineryName),
+        esc(platformName),
+        esc(hash),
+        esc(resultLine)
+      ].join("\t"));
+    }
+    return entries.join("\n");
+  })();
+
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-"));
   const stdoutPath = path.join(tmpDir, "stdout.txt");
   const stderrPath = path.join(tmpDir, "stderr.txt");
   const stdoutFd = fsSync.openSync(stdoutPath, "w");
   const stderrFd = fsSync.openSync(stderrPath, "w");
   let spawnError = null;
+  const env = {
+    ...process.env,
+    PYA_NEWSPAPER: "1",
+    PYA_RUN_ID: runId
+  };
+  if (checkpointEnv) env.PYA_CHECKPOINTS = checkpointEnv;
+  if (noCheckpoint) env.PYA_NO_CHECKPOINT = "1";
   const child = spawn(command[0], command.slice(1), {
     stdio: ["ignore", stdoutFd, stderrFd],
-    env: { ...process.env, PYA_NEWSPAPER: "1", PYA_RUN_ID: runId }
+    env
   });
   child.on("error", (err) => {
     spawnError = err;
