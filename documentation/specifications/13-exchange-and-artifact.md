@@ -152,18 +152,18 @@ Example:
 
 When the locator is a uri, it MUST be preserved byte-for-byte as provided by the exchange subsystem. No rewriting is permitted.
 
-### 5.5 Artifacts directory contract (runner policy)
+### 5.5 Artifacts + newspaper directory contract (runner policy)
 
-If the runner chooses to persist artifacts on disk, it SHOULD store bytes in a
-stable content-addressed layout and MAY also provide a run-root alias.
+The runner persists artifacts and newspapers relative to the current working
+directory. No platform subdirectories are required.
 
-Recommended content-addressed layout:
+Canonical content-addressed layout:
 
 ```
 artifacts/sha256/<first2>/<next2>/<hex><ext>
 ```
 
-Recommended run-root alias layout:
+Canonical run-root alias layout (symlink to the content-addressed blob):
 
 ```
 artifacts/<run-id>/<artifact-name>
@@ -173,11 +173,17 @@ Notes:
 
 - `<run-id>` is the run identifier from the run start record.
 - `<artifact-name>` is the `su name` value from the artifact sentence.
-- The content-addressed path SHOULD be recorded in `to filename` of the artifact sentence.
-- The run-root alias SHOULD be recorded in `ob filename` of the artifact sentence.
-- A filesystem symlink/hardlink MAY be created, but again MUST rely on the recorded
-  hash + content-addressed bytes.
+- The artifact sentence records the original locator in `to filename` and the
+  evoker name in `ob name`. The content-addressed blob path is derived from the
+  `fromtext` sha256 hash and the locator extension, not recorded in the sentence.
+- The run-root alias SHOULD be a symlink to the content-addressed blob.
 - These layouts are runner policy; they MUST NOT change evaluation semantics.
+
+Canonical newspaper layout:
+
+```
+newspaper/<run-id>.pya
+```
 
 ---
 

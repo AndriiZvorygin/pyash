@@ -176,12 +176,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * Retry policy recorded (attempt count, delays, final outcome)
   * Checkpoints keyed by `(platformId, inputHash, configHash)`
 
-* Artifacts directory contract (stable layout)
-
-  * Stable run root layout for refinery runs
-  * Per-platform working dir: `platforms/<platformId>/...`
-  * (Optional) content-addressed blob store for large objects
-
 ### Spec drops (freeze v0.6)
 * (If needed) Newspaper + again policy note in `11-run-newspaper.md`
 
