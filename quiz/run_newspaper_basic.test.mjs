@@ -38,7 +38,7 @@ test("run writes run newspaper with evoke/result", async () => {
 
   assert.equal(lines[0], "su name run-1 from time 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines[1].startsWith("ob filename "));
-  assert.equal(lines[2], "ob la su name alpha ob num 1 be number ya ko be evoke ya");
+  assert.equal(lines[2], "su name evoke-0 ob la su name alpha ob num 1 be number ya ko be evoke ya");
   assert.equal(lines[3], "su name alpha ob num 1 be number ya");
   assert.equal(lines[4], "su name run-1 be end ya");
 });
