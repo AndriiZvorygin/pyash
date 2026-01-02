@@ -1,0 +1,2 @@
+ob text "again demo" to filename "/tmp/pyash-again-demo.txt" be write do
+ob filename "/tmp/pyash-again-demo.txt" be read do
