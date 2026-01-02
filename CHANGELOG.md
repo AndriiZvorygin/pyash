@@ -178,3 +178,4 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Artifact sentences now link to the evoking sentence via `ob name evoke-<n>` and keep `to filename` as the original locator.
 * Replay prefers content-addressed bytes (derived from sha256 + locator extension), falling back to the original locator.
 * Added/updated exchange and again-mode tests to verify CA files and alias links across interpreter/JS/C.
+* Tool calling parity achieved across interpreter/JS/C with request/response JSON logging in newspapers.
