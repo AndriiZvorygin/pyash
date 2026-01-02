@@ -451,6 +451,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   };
   doRemember(answerSentence);
   doRemember({
+    ...answerSentence,
+    su: { name: "result" }
+  });
+  doRemember({
     mood: "ya",
     su: { name: `${targetName} ${dialogue} answer ${count}` },
     be: "answer",

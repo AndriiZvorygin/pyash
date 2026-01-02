@@ -65,6 +65,7 @@ async function run() {
   const pushLine = (line) => {
     if (line) newspaperLines.push(line);
   };
+  const outputs = [];
 
   pushLine(`su name ${runId} from time ${runTime} be run ya`);
   pushLine(`ob filename "${runRoot}" be run root ya`);
@@ -83,13 +84,35 @@ async function run() {
   }
 
   const prefix = "PYA_NEWSPAPER:";
+  let capturing = false;
+  let captured = [];
+  const flushCaptured = () => {
+    if (!captured.length) return;
+    pushLine(captured.join("\n"));
+    captured = [];
+  };
   const handleLine = (line) => {
+    if (line === `${prefix}BEGIN`) {
+      capturing = true;
+      captured = [];
+      return;
+    }
+    if (line === `${prefix}END`) {
+      capturing = false;
+      flushCaptured();
+      return;
+    }
+    if (capturing) {
+      captured.push(line);
+      return;
+    }
     if (!line) return;
     if (line.startsWith(prefix)) {
       const payload = line.slice(prefix.length);
       if (payload) pushLine(payload);
       return;
     }
+    outputs.push(line);
     pushLine(resultSentenceForLine(line));
   };
 
@@ -119,9 +142,26 @@ async function run() {
     const trimmed = line.trimEnd();
     if (trimmed) handleLine(trimmed);
   }
+  if (capturing) flushCaptured();
   let stderrText = "";
+  capturing = false;
+  captured = [];
   for (const line of stderr.split(/\r?\n/)) {
     const trimmed = line.trimEnd();
+    if (trimmed === `${prefix}BEGIN`) {
+      capturing = true;
+      captured = [];
+      continue;
+    }
+    if (trimmed === `${prefix}END`) {
+      capturing = false;
+      flushCaptured();
+      continue;
+    }
+    if (capturing) {
+      captured.push(trimmed);
+      continue;
+    }
     if (!trimmed) continue;
     if (trimmed.startsWith(prefix)) {
       const payload = trimmed.slice(prefix.length);
@@ -130,6 +170,7 @@ async function run() {
       stderrText += `${trimmed}\n`;
     }
   }
+  if (capturing) flushCaptured();
 
   if (spawnError) {
     const errSentence = buildErrorSentence({
@@ -152,6 +193,12 @@ async function run() {
   await fs.mkdir(newspaperDir, { recursive: true });
   const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
   await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
+
+  if (outputs.length) {
+    for (const line of outputs) {
+      console.log(line);
+    }
+  }
 
   if (exitCode !== 0) process.exit(exitCode);
 }

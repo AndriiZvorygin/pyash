@@ -71,7 +71,7 @@ BASE="$(basename "$SRC")"
 NAME="${BASE%.*}"
 TMP_JS="$(mktemp "/tmp/${NAME}-pyash-XXXXXX.mjs")"
 
-"$SCRIPT_DIR/compile" from filename "$SRC" become javascript to filename "$TMP_JS"
+"$SCRIPT_DIR/compile" from filename "$SRC" become javascript to filename "$TMP_JS" > /tmp/pyash-compile-runjs.log
 if [[ "$NEWSPAPER" -eq 1 ]]; then
   RUN_ARGS=()
   if [[ -n "$RUN_ID" ]]; then
