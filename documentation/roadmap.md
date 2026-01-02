@@ -170,17 +170,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship
 
-* Again mode
-
-  * Add `--again` (or equivalent) runner policy: forces newspaper emission + strict artifact hashing
-  * Runs again from recorded newspaper + artifacts
-  * Verifies hashes and byte-stability for golden runs
-
-* Tool call envelope (generic)
-
-  * Newspaper records `tool.call` and `tool.result` as sentences
-  * Tool outputs recorded as artifacts with sha256 so again verification is possible
-
 * (Optional if time) Retries + checkpoints
 
   * Retry policy recorded (attempt count, delays, final outcome)
