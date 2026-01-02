@@ -121,6 +121,8 @@ The newspaper MUST support the following event kinds:
 - `tool`
 - `artifact`
 
+The `tool` event schema is defined in `15-tool-envelope.md`.
+
 Later specifications may add additional event kinds, but these MUST exist.
 
 ---
@@ -195,6 +197,79 @@ Records the creation or update of a runtime primitive.
 ### 8.1 Meaning
 
 A **state** event records an observable runtime primitive sentence becoming true as a fact for this run.
+
+---
+
+## 12. Canonical golden path example (normative)
+
+The following sequence MUST be emitted in this order in the run newspaper:
+
+```pyash
+su name tools be map def
+su name say ob text "" be say can
+prah
+su name helper request 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "TOOLS:\nsu name say ob text \"\" be say can"
+    },
+    {
+      "role": "user",
+      "content": "use the say tool to say hello world"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "be_say_ob_text",
+        "description": "su name say ob text \"\" be say can",
+        "signature": "be say ob text",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "ob": { "type": "string" }
+          },
+          "required": ["ob"]
+        }
+      }
+    }
+  ],
+  "stream": false
+}.json.quoted from name mind be write ya
+su name helper response 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "message": {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
+    ]
+  },
+  "done": true
+}.json.quoted from name mind be write ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
+```
+
+---
+
+## 13. Implementation pointers
+
+- Interpreter runner: `program/command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`, `nextToolCounter`).
+- Run wrapper: `program/command/run_with_newspaper.mjs` (PYA_NEWSPAPER capture and file write).
+- Compiled JS runtime: `program/verbs/exchange/compile.mjs` (`newspaperRuntimeHelper`, `pyaEmitNewspaper`).
+- Compiled C runtime: `program/verbs/exchange/helpers_c.mjs` (`pya_emit_exchange`, PYA_NEWSPAPER block markers).
+
+---
+
+## 14. Conformance checks
+
+- Tests: `node --test quiz/run_newspaper*.test.mjs`
+- Tool event presence: `rg "be tool ya" newspaper/*.pya`
+- Multiline block markers: `rg "PYA_NEWSPAPER:BEGIN" newspaper/*.pya`
 
 ### 8.2 Sentence form (official)
 

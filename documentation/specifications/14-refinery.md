@@ -68,6 +68,8 @@ If run newspaper emission is disabled, refinery evaluation results MUST be the s
 5. Again mode is stricter
 In again mode, refinery execution MUST satisfy the recording and verification rules in 11-run-newspaper.md and 13-exchange-and-artifact.md.
 
+Checkpoint and retry records are emitted into the run newspaper per `11-run-newspaper.md` when enabled.
+
 
 
 
@@ -198,6 +200,82 @@ failure: a surfaced error sentence be error ya (see 06-errors.md)
 If an activity returns a duty/stream/chip sentence (see 09-runtime-primitives.md), that is still an observable ya outcome and counts as platform completion. Lifecycle control of duties/streams is performed only if explicitly expressed by later activities (for example an await platform).
 
 If an activity yields no explicit result sentence, the runner MAY record the activity sentence itself as the result event (same fallback used by the main run loop).
+
+### 7.5 Retries and checkpoints
+
+Retries and checkpoints are runner policy features and MUST NOT change evaluation semantics.
+
+Retry policy (default values are set in `configure/default.pya`):
+
+- `su name reiterate delay ob num <ms> ya`
+- `su name reiterate backoff ob num <factor> ya`
+- `su name reiterate attempts ob num <count> ya`
+- `su name reiterate cap ob num <ms> ya`
+
+On surfaced error from a platform, the runner MAY retry the activity up to `attempts`.
+Each retry MUST emit a surfaced `be reiterate ya` sentence to the newspaper.
+
+Checkpoint policy:
+
+- Checkpointing is enabled by default and can be disabled by runner flag (`--no-checkpoint`).
+- Runners in compiled JS/C use `PYA_CHECKPOINTS` to seed checkpoint reuse and `PYA_NO_CHECKPOINT=1` to disable checkpointing.
+- Each successful platform MAY emit a surfaced `be checkpoint ya` sentence to the newspaper.
+
+Checkpoint identity is derived from the platform activity sentence plus its dependent results.
+
+
+---
+
+## 8. Reiterate (retry) (official)
+
+Platforms may be retried when an activity yields a surfaced error sentence (be error ya).
+
+Retry behavior is per-platform and MUST NOT restart already completed platforms.
+
+### 8.1 Configuration
+
+Retry parameters are read from `configure/default.pya` (ya facts):
+
+su name reiterate delay ob num <ms> be number ya
+su name reiterate backoff ob num <factor> be number ya
+su name reiterate attempts ob num <count> be number ya
+su name reiterate cap ob num <ms> be number ya
+
+Defaults (when no config exists): 250ms delay, backoff ×2, max attempts 5, max delay 8000ms.
+
+### 8.2 Retry recording
+
+Each retry attempt MUST be recorded in the newspaper as:
+
+su name <platform> by num <attempt> ob text "<message>" from name <refinery> be reiterate ya
+
+Attempt numbers are 1-based. The message is derived from the surfaced error text when available.
+
+
+---
+
+## 9. Checkpoints (official)
+
+Refinery runners SHOULD reuse prior platform results (checkpoints) when available.
+
+Checkpoints are automatic by default and can be disabled by runner flag (for example --no-checkpoint).
+
+### 9.1 Checkpoint hash
+
+The checkpoint key is derived from:
+
+1) the platform’s action sentence (as text)
+2) the dependent platform result sentences (as text), ordered by official name ordering
+
+If any dependency result changes, the checkpoint MUST NOT be reused.
+
+### 9.2 Checkpoint recording
+
+When a platform completes (or a checkpoint is reused), the runner MUST record:
+
+su name <platform> ob text "<hash>" from name <refinery> to la <result> ko be checkpoint ya
+
+The result is the sentence that would have been emitted as the platform’s outcome.
 
 
 ---

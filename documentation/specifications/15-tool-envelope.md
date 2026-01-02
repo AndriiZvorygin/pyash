@@ -1,200 +1,126 @@
-Got it. If we start **at the mind** and go all the way through **again + artifacts dir**, you need a *closed loop* where:
+# `15-tool-envelope.md` (v0.1)
 
-* the mind only ever deals in **normal Pyash sentences** (`can` offered, `do` evoked),
-* the runtime turns some `do` into **tool executions**,
-* every tool execution yields **(a) againable facts** + **(b) againable artifacts**, and
-* again runs with **zero real tool calls**, consuming only the newspaper + artifacts.
+## 1. Purpose
 
-Below is the minimal end-to-end contract that makes that true.
+Define the **tool envelope**: the newspaper record format for tool-capable operations
+(mind calls and command-backed verbs). This spec is about **recording** and
+**determinism**, not tool selection.
 
----
+This spec links to:
 
-## End-to-end againable tool calling
-
-### Stage 0 — Runtime builds the capability set
-
-Runtime discovers which tool-backed verbs are available (module backends can be local tools / MCP / HTTP / etc; that detail stays behind the module façade). (`40-aspect.md` “Backends may be implemented via local tools, MCP, HTTP, or anything else.”)
-
-### Stage 1 — Offer capabilities to the mind (`can`)
-
-Runtime sends the mind a **deterministically ordered list** of capability sentences.
-
-**Rule: capability offer is informational only**
-
-* `can` **does not mutate memory** and **does not execute tools**.
-* Ordering is stable: sort by canonical printed bytes of the sentence.
-
-**Shape**
-Use the *same* sentence the mind would later evoke, but with mood `can`:
-
-* `be say ob text become audio can`
-* `be hear from state audio to text can`
-* `be read from state web  become markdown from url to text can` (etc.)
-
-(If you want to keep “tool-ness” explicit, add a stable marker *as a normal case*—e.g., `from name tool`—but it’s optional for again. The tool event record is where tool-ness becomes explicit.)
-
-### Stage 2 — Mind evokes intent (`do`)
-
-Mind chooses an action and emits a normal `do` sentence.
-
-* `be say ob text "hello world" do` (perfective run; your existing style)
-* `be fetch from url "http://example.com" to name example do`
-
-This is the only “call” the mind does. Everything else is runtime.
-
-(`02-moods-and-memory.md`: `do` executes; it doesn’t store a fact unless the verb returns one.)
-
-### Stage 3 — Runtime executes (live mode)
-
-If the dispatched verb is tool-backed, runtime:
-
-1. Calls the backend (hidden behind module façade).
-2. Normalizes the result into **a single returned fact sentence** (strongly recommended for determinism).
-3. Applies that fact to memory (LWW by `su name …`).
-4. Writes **newspaper entries** and stores any produced bytes into **artifacts/**.
-
-(`02-moods-and-memory.md`: `ya` stores facts; memory is last-write-wins keyed by `su name`.)
+- `11-run-newspaper.md` (where tool events live)
+- `16-mind.md` / `17-mind-tool-calling.md` (mind tool adapters)
+- `13-exchange-and-artifact.md` (artifact records)
 
 ---
 
-## What must be recorded for again
+## 2. Terms
 
-You need **two recorded products**, both deterministic:
+- **tool event**: a newspaper record that pairs an evoked sentence with a surfaced result sentence.
+- **request/response record**: `be write ya` sentences carrying raw JSON for mind calls.
 
-1. **Tool event record** in the newspaper (`ya`, newspaper-only)
-2. **Returned fact sentence** (`ya`) that encodes the semantic result (including artifact references)
+---
 
-### Tool request/response logging (normative)
+## 3. Rules (normative)
 
-When a mind call occurs, the runtime MUST record the raw request and raw response
-JSON as write sentences so runs are auditable:
+### 3.1 Tool event sentence
 
-```pyash
+```
+su name tool event <counter>
+ob la <evoked sentence> ko
+to la <result sentence> ko
+be tool ya
+```
+
+Rules:
+
+- `<counter>` is a zero-padded 6-digit monotonic counter (`000001`, `000002`, …).
+- Embedded sentences MUST be emitted using official ordering.
+- The tool event is appended to the newspaper in execution order.
+
+### 3.2 Mind request/response records
+
+Mind adapters MUST emit request/response JSON as write sentences:
+
+```
 su name <mind> request <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
 su name <mind> response <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
 ```
 
 Rules:
 
-* `<n>` matches the mind call counter for the dialogue.
-* JSON bytes are recorded in a stable, pretty-printed form.
-* Compiled JS/C emit these records using the multiline newspaper block markers
-  from `11-run-newspaper.md` so embedded newlines are preserved verbatim.
+- `<n>` is the per-dialogue mind counter.
+- JSON bytes are recorded exactly as emitted (newlines preserved).
+- Records appear in the newspaper before the tool event.
 
-### A) Tool event record (newspaper-only `ya`)
+---
 
-This is the “what happened” audit line, and where `la … ko` shines (since you’re using it only for newspaper records right now).
-
-**Normative tool event sentence schema**
+## 4. Canonical golden path example (normative)
 
 ```pyash
-su name tool event 000001
-ob la <evoking sentence form> ko
-to la <returned fact sentence form> ko
-be tool ya
+su name tools be map def
+su name say ob text "" be say can
+prah
+su name helper request 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "TOOLS:\nsu name say ob text \"\" be say can"
+    },
+    {
+      "role": "user",
+      "content": "use the say tool to say hello world"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "be_say_ob_text",
+        "description": "su name say ob text \"\" be say can",
+        "signature": "be say ob text",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "ob": { "type": "string" }
+          },
+          "required": ["ob"]
+        }
+      }
+    }
+  ],
+  "stream": false
+}.json.quoted from name mind be write ya
+su name helper response 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "message": {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
+    ]
+  },
+  "done": true
+}.json.quoted from name mind be write ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
 ```
 
-Determinism rules:
+---
 
-* `000001` is a **global monotonic counter**, zero-padded (lexical == numeric order).
-* `<evoking sentence form>` and `<returned fact sentence form>` inside `la … ko` are emitted in **official ordering** (your `10-subordinate-clauses.md` draft requirement).
-* Tool event records are appended in **execution order** (even if you’re in a sandpit; use the same global counter so merge is stable).
+## 5. Implementation pointers
 
-### B) Returned fact sentence (`ya`) + artifact reference
-
-The semantic result must be representable as ordinary facts.
-
-Minimum requirement:
-
-* a tool-backed verb must return **one** `ya` sentence (you can put maps/vectors inside it if needed).
-
-Example pattern:
-
-```pyash
-su name last audio
-ob filename artifacts/run-42/last-audio.wav
-to filename artifacts/sha256/ab/cd/abcdef... .wav
-by text sha256:abcdef...
-be artifact ya
-```
-
-Notes:
-
-* The artifact reference is a **logical path** (always `/` separators, relative to repo/run root).
-* The hash is recorded as data (`by text sha256:…` is fine; use whatever case/value combos your value grammar supports consistently).
-* The content-addressed path SHOULD be recorded in `to filename`.
+- Tool event emission (interpreter): `program/command/run_pya_program.mjs` (`emitToolEvent`).
+- Mind JSON records: `program/verbs/mind/mind.mjs` (`recordMindJson`).
+- Compiled JS tool events: `program/verbs/exchange/compile.mjs` (tool event `pyaEmitNewspaper` emissions).
+- Compiled C tool events: `program/verbs/exchange/helpers_c.mjs` (`pya_emit_exchange`).
 
 ---
 
-## Artifacts directory contract
+## 6. Conformance checks
 
-To make artifacts againable, the runtime must store them **content-addressed** and
-record a **run-root locator** as an alias.
-
-**Artifact path rules**
-
-* `artifacts/sha256/<first2>/<next2>/<hex><ext>`
-* `<ext>` is deterministic from tool-declared kind (`.wav`, `.png`, `.json`, else `.blob`).
-* File bytes are exactly what the backend returned.
-
-**Run-root alias**
-
-* The artifact sentence SHOULD include a run-root locator (e.g. `artifacts/<run-id>/<name>`)
-  as a logical alias for the content-addressed path.
-* The alias is recorded in the artifact declaration sentence (manifest entry). A filesystem
-  symlink/hardlink MAY be created, but again MUST rely on the recorded hash + content-addressed bytes.
-
-**Artifact verification rule**
-
-* On live run: compute sha256, write file, record the hash in the returned fact.
-* On again: read file, recompute sha256, compare to recorded hash.
-
-* inconsistency ⇒ throw `be error do` with stable name, e.g. `su name tool again artifact hash inconsistency …`
-  * file not present ⇒ `su name tool again artifact lost …` (use “lost”, not “missing”)
-
-(Errors must be structured `be error do` with `su name`, `ob text`, `from name` per `06-errors.md`.)
-
----
-
-## Again mode (no tool calls)
-
-When running in again mode:
-
-1. For each tool-backed `do` sentence that would execute:
-2. Consume the **next tool event record** in counter order (`000001`, `000002`, …).
-3. Verify:
-
-   * evoker structural equality (canonical bytes of embedded sentence form match)
-4. Apply the embedded returned fact sentence form (`to la … ko`) as if it had just been produced.
-5. Verify referenced artifacts (hash check) when/if accessed (or upfront—pick one and make it consistent).
-
-Any divergence ⇒ deterministic `be error do`:
-
-* `tool again lost event`
-* `tool again inconsistency`
-* `tool again artifact lost`
-* `tool again artifact hash inconsistency`
-
----
-
-
-## Minimal quizzes that define truth
-
-1. **Live run writes both products**
-
-* tool `do` ⇒ returned fact applied + tool event `be tool ya` appended + artifact stored
-
-2. **Again run produces identical final memory**
-
-* same program + newspaper + artifacts ⇒ same memory state, zero backend calls
-
-3. **Mismatch detection**
-
-* change the evoking sentence ⇒ `tool again inconsistency` error sentence
-
-4. **Artifact integrity**
-
-* corrupt artifact bytes ⇒ `tool again artifact hash inconsistency`
-* remove artifact file ⇒ `tool again artifact lost`
-
-If you want, I can turn the above into a tight spec patch (one section each for: capability offer, tool event record schema, artifacts pathing, again algorithm, error names) plus a parity checklist for interpreter/JS/C.
+- Tool event records exist: `node --test quiz/run_newspaper_command*.test.mjs`
+- Tool schema payloads: `node --test quiz/mind_tools_payload.test.mjs`
+- Tool call execution: `node --test quiz/mind_tool_call.test.mjs`
+- Newspaper grep: `rg "be tool ya" newspaper/*.pya`

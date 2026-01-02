@@ -16,6 +16,9 @@ This specification defines:
 * how the runtime selects a model-specific adapter
 * determinism rules for stable parity tests and again verification
 
+Tool request/response logging MUST follow `15-tool-envelope.md` and appear as
+`be tool ya` events in the run newspaper (`11-run-newspaper.md`).
+
 ---
 
 ## 2. Terms
@@ -197,6 +200,77 @@ can see the capability list in plain text:
 TOOLS:
 su name say ob text "" be say can
 ```
+
+---
+
+## 8. Canonical golden path example (normative)
+
+```pyash
+su name tools be map def
+su name say ob text "" be say can
+prah
+su name helper request 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "TOOLS:\nsu name say ob text \"\" be say can"
+    },
+    {
+      "role": "user",
+      "content": "use the say tool to say hello world"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "be_say_ob_text",
+        "description": "su name say ob text \"\" be say can",
+        "signature": "be say ob text",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "ob": { "type": "string" }
+          },
+          "required": ["ob"]
+        }
+      }
+    }
+  ],
+  "stream": false
+}.json.quoted from name mind be write ya
+su name helper response 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "message": {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
+    ]
+  },
+  "done": true
+}.json.quoted from name mind be write ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
+```
+
+---
+
+## 9. Implementation pointers
+
+- Tool schema generation: `program/verbs/mind/mind.mjs` (`buildToolSchemas`, `toolFunctionNameFromSignature`, `toolSchemaType`).
+- Tool sentence reconstruction: `program/verbs/mind/mind.mjs` (`buildToolSentence`).
+- Mind invocation: `program/verbs/mind/mind.mjs` (`mind_to_name_text`).
+- Compiled JS/C runtime helpers: `program/verbs/exchange/compile.mjs` (mind runtime JS), `program/verbs/exchange/helpers_c.mjs` (`MIND_RUNTIME_HELPER`).
+
+---
+
+## 10. Conformance checks
+
+- Tool schema payloads: `node --test quiz/mind_tools_payload.test.mjs`
+- Tool call execution: `node --test quiz/mind_tool_call.test.mjs`
+- Tool events in newspaper: `node --test quiz/run_newspaper_command*.test.mjs`
 
 ### 7.3 Response: tool request emitted by the model
 

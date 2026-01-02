@@ -21,6 +21,9 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
   - The embedded sentence is represented as `ob: { la: <sentence> }` in the internal model.
 - Quoted blocks use `quoted.<lang>. … .<lang>.quoted` and are parsed as text.
 - Newlines inside quoted blocks are preserved; escaped `\\n` sequences are unescaped before parsing.
+- Internal sentence objects use `su` / `ob` keys; `subj` / `obj` are accepted at the surface but canonicalize to `su` / `ob` on parse.
+- Keyword lists (moods, cases, type tokens, vyah modifiers) are defined in `program/library/grammar/keywords.mjs` and MUST be treated as the source of truth.
+- Official ordering (for sentence formatting and signature words) follows the compositional case order (`07-compositional-cases.md`) and JSON official key ordering (`33-json.md`).
 
 ## 4. Error contracts
 - If a sentence cannot be parsed, the parser raises an error (see `quiz/parser.test.mjs`).
