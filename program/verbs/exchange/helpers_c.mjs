@@ -3287,7 +3287,7 @@ export const COMMAND_HELPER = [
   "  if (mock) return pya_command_strdup(mock);",
   "  if (!cmd) return pya_command_strdup(\"\");",
   "  FILE *pipe = popen(cmd, \"r\");",
-  "  if (!pipe) return pya_command_strdup(\"\");",
+  "  if (!pipe) return NULL;",
   "  char out[PYA_TEXT_CAP];",
   "  out[0] = '\\0';",
   "  char buf[256];",
@@ -3295,9 +3295,7 @@ export const COMMAND_HELPER = [
   "    pya_concat_buf(out, buf);",
   "  }",
   "  int status = pclose(pipe);",
-  "  if (status != 0) {",
-  "    return pya_command_strdup(\"\");",
-  "  }",
+  "  if (status != 0) return NULL;",
   "  return pya_command_strdup(out);",
   "}"
 ].join("\n");
