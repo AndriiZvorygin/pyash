@@ -3205,7 +3205,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     lines.push("messages.push(...historyMessages);");
     lines.push(`messages.push({ role: "user", content: ${userText} });`);
-    lines.push("const reply = await callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
+    lines.push("const lastResponse = await callMind({ host, model, messages, numCtx: cfg.numCtx || 8192 });");
+    lines.push("const reply = lastResponse?.message?.content ?? lastResponse?.response ?? lastResponse?.output ?? String(lastResponse ?? \"\");");
     const resVar = sanitizeName(resultName);
     lines.push(`recordMindTurn(dialogue, { role: "user", content: ${userText} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
     lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
@@ -4806,6 +4807,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     const prelude = [lines[0]];
     if (jsHelpers.usesYamlRuntime) jsHelpers.usesJsonRuntime = true;
     if (mindShim.used) {
+      jsHelpers.usesVectorFormat = true;
       prelude.push(`const mindConfigs = new Map();`);
       prelude.push(`const mindAnswerCounters = new Map();`);
       const mindHelper = `async function callMind({ host, model, messages = [], tools, numCtx = 8192 }) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_MIND_RESPONSE) {\n    const raw = process.env.PYA_MIND_RESPONSE;\n    try {\n      return JSON.parse(raw);\n    } catch {\n      return { message: { content: String(raw ?? \"\") } };\n    }\n  }\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = await Promise.resolve(transport({ host, model, messages, tools, numCtx }));\n    if (res && typeof res === \"object\") {\n      return res;\n    }\n    return { message: { content: String(res ?? \"\") } };\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = await fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, tools, options: { num_ctx: numCtx }, stream: false })\n  });\n  const data = await (typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data && typeof data === \"object\" ? data : { message: { content: String(data ?? \"\") } };\n}`;
