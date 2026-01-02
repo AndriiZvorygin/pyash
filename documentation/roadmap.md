@@ -206,10 +206,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * file read/write produces identical artifact/exchange sentences across backends when enabled
   * hashing determinism test on a known fixture
 
-* Tool event parity tests
-
-  * stable hashing and ordering for tool records
-  * again detects altered tool outputs
 
 ---
 
