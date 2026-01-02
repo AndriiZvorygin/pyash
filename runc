@@ -72,7 +72,7 @@ NAME="${BASE%.*}"
 TMP_C="$(mktemp "/tmp/${NAME}-pyash-XXXXXX.c")"
 TMP_EXE="$(mktemp "/tmp/${NAME}-pyash-XXXXXX")"
 
-"$SCRIPT_DIR/compile" from filename "$SRC" become c to filename "$TMP_C"
+"$SCRIPT_DIR/compile" from filename "$SRC" become c to filename "$TMP_C" > /tmp/pyash-compile-runc.log
 ZSV_SRC=()
 ZSV_FLAGS=()
 if rg -q "PYA_CSV_RUNTIME" "$TMP_C"; then
