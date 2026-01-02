@@ -58,6 +58,7 @@ Both thrown and surfaced error sentences share the same field requirements:
   * `from filename "<path>"`
   * `by num <line-number>`
 
+When the runtime has source context, it MUST include `from filename`, `by num`, and `at la … ko`.
 No fields are added, removed, or renamed during surfacing.
 
 ---

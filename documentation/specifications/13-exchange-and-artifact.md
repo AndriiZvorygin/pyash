@@ -62,7 +62,7 @@ An artifact is declared with a single sentence.
 ### 4.1 Minimum required fields
 
 ```
-su name <artifact> ob text <locator> from name <producer> be artifact ya
+su name <artifact> to filename <locator> from name <producer> be artifact ya
 ```
 
 - `<artifact>` is the artifact name for this run
@@ -70,6 +70,18 @@ su name <artifact> ob text <locator> from name <producer> be artifact ya
 - `<producer>` identifies who produced/declared it (examples: `exchange`, `runtime`, `tool:<name>`, `module:<name>`)
 
 ### 4.2 Optional fields
+
+Evoker linkage (recommended when available):
+
+```
+ob name <evoke-id>
+```
+
+Fallback when evoker identity is unavailable:
+
+```
+ob text <locator>
+```
 
 Hash (recommended; required in again mode for again-critical artifacts):
 
@@ -92,13 +104,13 @@ as name <kind>
 Content-addressed locator (optional but recommended when artifact bytes are persisted):
 
 ```
-to filename "<content-address-path>"
+ob filename "<content-address-path>"
 ```
 
 Example (fully specified):
 
 ```
-su name artifact-0 ob filename "data/input.csv" to filename "artifacts/sha256/3a/0b/3a0b...ff.csv" as name file accordingto name sha256 fromtext text "3a0b...ff" by num 2190 from name exchange be artifact ya
+su name artifact-0 ob name evoke-0 to filename "data/input.csv" as name file accordingto name sha256 fromtext text "3a0b...ff" by num 2190 from name exchange be artifact ya
 ```
 
 ### 4.3 Ordering
@@ -109,7 +121,7 @@ All fields (including optional fields) MUST follow official sentence ordering ru
 
 ## 5. Locator rules (normative)
 
-A locator is recorded in `ob text <locator>`.
+A locator is recorded in `to filename <locator>`.
 
 ### 5.1 Run root policy
 
@@ -359,3 +371,72 @@ An implementation conforms to this spec if it:
 - behaves identically whether or not newspaper emission is enabled (§3.4)
 
 ---
+
+## 13. Canonical golden path example (normative)
+
+```pyash
+su name tools be map def
+su name say ob text "" be say can
+prah
+su name helper request 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "messages": [
+    {
+      "role": "system",
+      "content": "TOOLS:\nsu name say ob text \"\" be say can"
+    },
+    {
+      "role": "user",
+      "content": "use the say tool to say hello world"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "be_say_ob_text",
+        "description": "su name say ob text \"\" be say can",
+        "signature": "be say ob text",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "ob": { "type": "string" }
+          },
+          "required": ["ob"]
+        }
+      }
+    }
+  ],
+  "stream": false
+}.json.quoted from name mind be write ya
+su name helper response 000001 ob text quoted.json.{
+  "model": "qwen3-vl:8b-instruct",
+  "message": {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
+    ]
+  },
+  "done": true
+}.json.quoted from name mind be write ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
+```
+
+---
+
+## 14. Implementation pointers
+
+- Exchange recorder: `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`, `normalizeLocator`).
+- Interpreter verbs: `program/verbs/exchange/write.mjs`, `program/verbs/exchange/read.mjs`, `program/verbs/exchange/read_from_filename.mjs`.
+- Compiled JS runtime: `program/verbs/exchange/compile.mjs` (`exchangeRuntimeHelper`, `pyaRecordArtifact`).
+- Compiled C runtime: `program/verbs/exchange/helpers_c.mjs` (`pya_exchange_record_bytes`, `pya_exchange_record_file`).
+
+---
+
+## 15. Conformance checks
+
+- Tests: `node --test quiz/run_newspaper_exchange*.test.mjs`
+- Hash mismatch handling: `node --test quiz/run_newspaper_exchange_hash_mismatch*.test.mjs`
+- Artifact declarations: `rg "be artifact ya" newspaper/*.pya`

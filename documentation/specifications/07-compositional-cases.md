@@ -52,6 +52,7 @@ The implementation exposes **single-token keywords** for each `(axis, context)` 
 
 - Sentence formatting and signature derivation use the canonical case keywords above.
 - Keyword order is derived from the compositional grid; new cases must be added there.
+- Implementations MUST use the keyword lists from `program/library/grammar/keywords.mjs` (not hardcoded case lists).
 
 ## 7. Examples
 
@@ -66,4 +67,5 @@ fromtext "prompt" totext output be read do
 The canonical mapping is defined in:
 
 - `program/library/compositionalCases.mjs`
+- `program/library/grammar/keywords.mjs`
 - `documentation/compositional-cases.md` (expanded background)

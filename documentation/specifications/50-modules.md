@@ -202,6 +202,12 @@ Unqualified fallback into imported modules is excluded in v0.1.
 * a logical name (resolved by import map)
 * a path-like specifier (relative or absolute)
 
+Resolution base:
+
+* relative paths resolve against the importing file’s directory
+* absolute paths resolve from filesystem root
+* logical names resolve via `pyash.json` only
+
 ### 9.2 Import map (v0.1)
 
 Import map file:
@@ -378,6 +384,8 @@ Message should include module id and a short import chain trace where available.
 For JS and C backends in v0.1, compilation is closed-world:
 
 * compile of an entry module resolves and includes all transitive module imports at compile time
+* resolution uses the importing file’s directory for relative paths (same as interpreter)
+* missing module files at compile time are a compile error (`module lost`)
 
 Entry module may contain top-level `do`. Imported modules follow declarations-only rules.
 
