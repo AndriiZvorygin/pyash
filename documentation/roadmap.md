@@ -190,23 +190,13 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Hardening
 
-* Again verification for golden runs
-
-  * sha256 mismatch reporting is stable across backends
-  * locator normalization parity tests (interp / JS / C)
-
 * Refinery runner torture tests (single-worker)
 
   * depend ordering
   * fail-fast stops downstream platforms
   * platform isolation directory is stable
 
-* Exchange hardening
-
-  * file read/write produces identical artifact/exchange sentences across backends when enabled
-  * hashing determinism test on a known fixture
-
-
+ 
 ---
 
 ## Week 2: Concurrency v0.7 (remaining)
