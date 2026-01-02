@@ -12,7 +12,7 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
-import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict } from "../bridge/exchange.mjs";
+import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
 
 async function loadDefaultConfig({ cwd, interpretFn }) {
@@ -152,6 +152,7 @@ async function main() {
       runRoot,
       record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
     });
+    setExchangeRunId(runId);
     if (useAgain) setExchangeStrict(true);
   }
   let runError = null;
@@ -166,6 +167,7 @@ async function main() {
     return null;
   };
 
+  let evokeCounter = -1;
   for (const entry of sentences) {
     const line = entry.text.trim();
     if (!line) continue;
@@ -174,8 +176,13 @@ async function main() {
     const sentence = parse(line);
     state.currentSourceSentence = sentence;
     const embedded = sentenceToPyash(sentence);
+    evokeCounter += 1;
+    const sentenceId = `evoke-${evokeCounter}`;
+    if (useNewspaper || useAgain) {
+      setExchangeSentenceId(sentenceId);
+    }
     const isToolCall = isToolSentence(sentence);
-    pushNewspaper(`ob la ${embedded} ko be evoke ya`);
+    pushNewspaper(`su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
     let res;
     try {
       res = await interpret(sentence);

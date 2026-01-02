@@ -38,6 +38,11 @@ function sanitizeName(name = "") {
   return cleaned;
 }
 
+function sentenceIdForText(text, index = 0) {
+  const idx = Number.isFinite(index) ? Number(index) : 0;
+  return `evoke-${idx}`;
+}
+
 function markDeclared(declared, name) {
   if (!declared || !name) return;
   const clean = sanitizeName(name);
@@ -174,11 +179,50 @@ function exchangeRuntimeHelper() {
     "function pyaEmitExchange(line) {",
     "  pyaEmitNewspaper(line);",
     "}",
-    "function pyaRecordArtifact(locator, bytes, op) {",
+    "function pyaArtifactExt(locator) {",
+    "  try {",
+    "    const url = new URL(locator);",
+    "    return path.extname(url.pathname || \"\");",
+    "  } catch {",
+    "    return path.extname(locator);",
+    "  }",
+    "}",
+    "function pyaContentAddressPath(hash, locator) {",
+    "  const ext = pyaArtifactExt(locator);",
+    "  const rel = path.join(\"artifacts\", \"sha256\", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);",
+    "  return rel.replace(/\\\\/g, \"/\");",
+    "}",
+    "function pyaWriteArtifactBytes(relPath, bytes) {",
+    "  if (!relPath) return null;",
+    "  const abs = path.resolve(process.cwd(), relPath);",
+    "  fs.mkdirSync(path.dirname(abs), { recursive: true });",
+    "  fs.writeFileSync(abs, bytes);",
+    "  return abs;",
+    "}",
+    "function pyaLinkRunAlias(name, target) {",
+    "  const runId = typeof process !== \"undefined\" ? process?.env?.PYA_RUN_ID : null;",
+    "  if (!runId || !name || !target) return null;",
+    "  const rel = path.join(\"artifacts\", runId, name).replace(/\\\\/g, \"/\");",
+    "  const abs = path.resolve(process.cwd(), rel);",
+    "  fs.mkdirSync(path.dirname(abs), { recursive: true });",
+    "  if (!fs.existsSync(abs)) {",
+    "    try {",
+    "      fs.linkSync(target, abs);",
+    "    } catch {",
+    "      try {",
+    "        fs.symlinkSync(target, abs);",
+    "      } catch {}",
+    "    }",
+    "  }",
+    "  return rel;",
+    "}",
+    "function pyaRecordArtifact(locator, bytes, op, sentenceId) {",
     "  if (!pyaExchangeEnabled()) return null;",
     "  const normalized = pyaNormalizeLocator(locator);",
     "  const existing = pyaArtifacts.get(normalized);",
     "  const hash = crypto.createHash(\"sha256\").update(bytes).digest(\"hex\");",
+    "  const caRel = pyaContentAddressPath(hash, normalized);",
+    "  const caAbs = pyaWriteArtifactBytes(caRel, bytes);",
     "  if (existing) {",
     "    const priorHash = pyaArtifactHashes.get(existing);",
     "    if (priorHash && priorHash !== hash) {",
@@ -186,6 +230,7 @@ function exchangeRuntimeHelper() {
     "      throw new Error(\"hash inconsistency\");",
     "    }",
     "    if (!priorHash) pyaArtifactHashes.set(existing, hash);",
+    "    pyaLinkRunAlias(existing, caAbs);",
     "    if (op) pyaEmitExchange(`su name ${existing} as name ${op} from name exchange be exchange ya`);",
     "    return existing;",
     "  }",
@@ -194,22 +239,24 @@ function exchangeRuntimeHelper() {
     "  pyaArtifactHashes.set(name, hash);",
     "  const size = bytes?.length ?? 0;",
     "  const locatorText = JSON.stringify(normalized);",
-    "  pyaEmitExchange(`su name ${name} ob text ${locatorText} accordingto name sha256 fromtext text \"${hash}\" by num ${size} from name exchange be artifact ya`);",
+    "  const obText = sentenceId ? `ob name ${sentenceId}` : `ob text ${locatorText}`;",
+    "  pyaEmitExchange(`su name ${name} ${obText} to filename ${locatorText} accordingto name sha256 fromtext text \"${hash}\" by num ${size} from name exchange be artifact ya`);",
+    "  pyaLinkRunAlias(name, caAbs);",
     "  if (op) {",
     "    pyaEmitExchange(`su name ${name} as name ${op} from name exchange be exchange ya`);",
     "  }",
     "  return name;",
     "}",
-    "function pyaReadTextFile(filename, op) {",
+    "function pyaReadTextFile(filename, op, sentenceId) {",
     "  const buf = fs.readFileSync(filename);",
-    "  pyaRecordArtifact(filename, buf, op);",
+    "  pyaRecordArtifact(filename, buf, op, sentenceId);",
     "  return buf.toString(\"utf8\");",
     "}",
-    "function pyaWriteTextFile(filename, text, op) {",
+    "function pyaWriteTextFile(filename, text, op, sentenceId) {",
     "  const normalized = pyaNormalizeNewlines(text);",
     "  fs.writeFileSync(filename, normalized);",
     "  const buf = Buffer.from(String(normalized ?? \"\"), \"utf8\");",
-    "  pyaRecordArtifact(filename, buf, op);",
+    "  pyaRecordArtifact(filename, buf, op, sentenceId);",
     "}"
   ].join("\n");
 }
@@ -1454,6 +1501,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
   if (baseBe === "import") {
+    cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+    const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
     const targetName = sentence?.to?.name ?? sentence?.su?.name;
     if (!targetName) {
       throwErrorSentence({
@@ -1489,7 +1538,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (sourceFilename) {
           if (cHelpers) cHelpers.usesExchange = true;
           lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
-          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
         } else {
           lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
         }
@@ -1506,7 +1555,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
       }
     const sourceExpr = sourceFilename && jsHelpers?.usesExchange
-      ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+      ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
       : (sourceFilename
         ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
         : JSON.stringify(sourceText));
@@ -1523,6 +1572,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   }
 
   if (baseBe === "read") {
+    cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+    const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
     const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
     if (sourceState === "json") {
       const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
@@ -1552,7 +1603,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (sourceFilename) {
           if (cHelpers) cHelpers.usesExchange = true;
           lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: json lost\\n"); }`);
-          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
         } else {
           lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
         }
@@ -1569,7 +1620,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
       }
       const sourceExpr = sourceFilename && jsHelpers?.usesExchange
-        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
         : (sourceFilename
           ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
           : JSON.stringify(sourceText));
@@ -1672,7 +1723,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (sourceFilename) {
           if (cHelpers) cHelpers.usesExchange = true;
           lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: yaml lost\\n"); }`);
-          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`);
+          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
         } else {
           lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
         }
@@ -1690,7 +1741,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
       }
       const sourceExpr = sourceFilename && jsHelpers?.usesExchange
-        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+        ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
         : (sourceFilename
           ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
           : JSON.stringify(sourceText));
@@ -1722,7 +1773,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         }
       }
         const sourceExpr = jsHelpers?.usesExchange
-          ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read")`
+          ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
           : `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`;
         return [
           `const ${safeName} = csvMapFromTextRuntime(${sourceExpr}, ${JSON.stringify(targetName)});`,
@@ -1743,7 +1794,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         const errName = `csv_err_${cState?.csvCounter ?? 0}`;
         if (cState) cState.csvCounter += 1;
         if (cHelpers) cHelpers.usesExchange = true;
-        return `pya_csv_error ${errName} = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &${errName})) { fprintf(stderr, \"%s\\n\", ${errName}.message); } pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read");`;
+        return `pya_csv_error ${errName} = { \"\", 0, 0 }; if (!pya_csv_read_file(${JSON.stringify(sourceFilename)}, ${JSON.stringify(targetName)}, &${errName})) { fprintf(stderr, \"%s\\n\", ${errName}.message); } pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`;
       }
       const normalizedText = sourceText
         .replace(/\\r\\n/g, "\r\n")
@@ -1800,6 +1851,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       sentence.to?.at?.num != null || sentence.to?.at?.genitive);
 
   if (baseBe === "speak" || baseBe === "say" || (baseBe === "write" && !hasWriteIndex)) {
+    cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+    const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
     const isWrite = baseBe === "write";
     const isSpeak = baseBe === "speak";
     const formatParts = [];
@@ -2120,7 +2173,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
               if (sentence?.to?.filename) {
                 const safePath = JSON.stringify(sentence.to.filename);
                 if (cHelpers) cHelpers.usesExchange = true;
-                return `pya_csv_write_pyash_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write");`;
+                cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+                return `pya_csv_write_pyash_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write", ${JSON.stringify(sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter))});`;
               }
               return `pya_csv_write_pyash_stdout(${JSON.stringify(ob.name)});`;
             }
@@ -2146,7 +2200,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
               if (sentence?.to?.filename) {
                 const safePath = JSON.stringify(sentence.to.filename);
                 if (cHelpers) cHelpers.usesExchange = true;
-                return `pya_csv_write_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write");`;
+                cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+                return `pya_csv_write_file(${JSON.stringify(ob.name)}, ${safePath});\npya_exchange_record_file(${safePath}, "write", ${JSON.stringify(sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter))});`;
               }
               return `pya_csv_write_stdout(${JSON.stringify(ob.name)});`;
             }
@@ -2206,7 +2261,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         jsHelpers.usesExchange = true;
       }
       const writeLine = jsHelpers?.usesExchange
-        ? `pyaWriteTextFile(${JSON.stringify(writeFilename)}, ${expr}, "write");`
+        ? `pyaWriteTextFile(${JSON.stringify(writeFilename)}, ${expr}, "write", ${JSON.stringify(sentenceId)});`
         : `fs.writeFileSync(${JSON.stringify(writeFilename)}, String(${expr}));`;
       return isWrite ? writeLine : `${writeLine}\nconsole.log(${expr});`;
     }
@@ -2241,8 +2296,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         const fileVar = `out_${cState?.fileCounter ?? 0}`;
         if (cState) cState.fileCounter += 1;
         const writeLine = fmt === "%s"
-          ? `pya_write_text_file(${safePath}, ${expr});\npya_exchange_record_file(${safePath}, "write");`
-          : `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }\npya_exchange_record_file(${safePath}, "write");`;
+          ? `pya_write_text_file(${safePath}, ${expr});\npya_exchange_record_file(${safePath}, "write", ${JSON.stringify(sentenceId)});`
+          : `FILE *${fileVar} = fopen(${safePath}, "w");\nif (${fileVar}) { fprintf(${fileVar}, "${fmt}", ${expr}); fclose(${fileVar}); }\npya_exchange_record_file(${safePath}, "write", ${JSON.stringify(sentenceId)});`;
         if (isWrite) return writeLine;
         return (wantCsv || wantYaml) ? `${writeLine}\nprintf("%s", ${expr});` : `${writeLine}\nprintf("${fmt}\\n", ${expr});`;
       }
@@ -4583,6 +4638,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
     if (cHelpers.usesExchange) headers.push("#include <stdint.h>");
     if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
+    if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
+    if (cHelpers.usesExchange) headers.push("#include <errno.h>");
     if (needsYamlRuntime) headers.push("#include <strings.h>");
     if (needsYamlRuntime) headers.push("#include <yaml.h>");
     if (needsCsvRuntime) {

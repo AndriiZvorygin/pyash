@@ -37,4 +37,19 @@ test("runjs records exchange lines in newspaper", async () => {
 
   assert.ok(lines.some(line => line.includes("be artifact") && line.includes("out.txt")));
   assert.ok(lines.some(line => line.includes("be exchange") && line.includes("as name write")));
+  const artifactLine = lines.find(line => line.includes("be artifact") && line.includes("out.txt"));
+  const toMatch = artifactLine.match(/to filename (\"([^\"]+)\"|([^ ]+))/);
+  assert.ok(toMatch);
+  const locator = toMatch[2] || toMatch[3];
+  const hashMatch = artifactLine.match(/fromtext text \"([a-f0-9]+)\"/);
+  assert.ok(hashMatch);
+  const hash = hashMatch[1];
+  const ext = path.extname(locator);
+  const caRel = path.join("artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);
+  const caPath = path.join(tmpDir, caRel);
+  await fs.access(caPath);
+  const nameMatch = artifactLine.match(/su name ([^ ]+)/);
+  assert.ok(nameMatch);
+  const aliasPath = path.join(tmpDir, "artifacts", "run-js-exchange", nameMatch[1]);
+  await fs.access(aliasPath);
 });

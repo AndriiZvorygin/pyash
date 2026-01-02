@@ -22,6 +22,12 @@ function normalizeLines(text) {
     .filter(line => line.length > 0);
 }
 
+function contentAddressPath(hash, locator) {
+  if (!hash) return null;
+  const ext = locator ? path.extname(locator) : "";
+  return path.join("artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const runId = readFlagValue(args, "--run-id") || "run";
@@ -38,11 +44,17 @@ async function main() {
     if (!line.trim()) continue;
     const sentence = parse(line);
     if (sentence.be === "artifact") {
-      const locator = sentence.ob?.text;
+      const locator = sentence.to?.filename ?? sentence.ob?.text;
       const expectedHash = sentence.fromtext?.text;
       if (locator && expectedHash) {
         try {
-          const info = hashLocator(locator);
+          const caLocator = contentAddressPath(expectedHash, locator);
+          let info = null;
+          try {
+            info = hashLocator(caLocator);
+          } catch {
+            info = hashLocator(locator);
+          }
           if (!info || info.hash !== expectedHash) {
             errors.push(buildErrorSentence({
               name: "hash inconsistency",
