@@ -184,11 +184,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Hardening
 
-* Refinery runner torture tests (single-worker)
-
-  * depend ordering
-  * fail-fast stops downstream platforms
-  * platform isolation directory is stable
+ 
 
  
 ---
