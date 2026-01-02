@@ -54,6 +54,17 @@ Tooling MAY choose to emit the newspaper only when explicitly requested (for exa
 5. **No thrown errors**  
    `be error do` sentences MUST NOT appear in the newspaper. Only surfaced `be error ya` sentences may be recorded.
 
+6. **Multiline sentence blocks**  
+   Some emitters (compiled JS/C via `run_with_newspaper`) may stream multi-line sentences using a block marker:
+
+   ```
+   PYA_NEWSPAPER:BEGIN
+   <sentence bytes>
+   PYA_NEWSPAPER:END
+   ```
+
+   The block contents MUST be treated as a single newspaper record, and MUST be written verbatim to storage.
+
 ---
 
 ## 4. Run start record

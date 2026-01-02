@@ -64,6 +64,23 @@ You need **two recorded products**, both deterministic:
 1. **Tool event record** in the newspaper (`ya`, newspaper-only)
 2. **Returned fact sentence** (`ya`) that encodes the semantic result (including artifact references)
 
+### Tool request/response logging (normative)
+
+When a mind call occurs, the runtime MUST record the raw request and raw response
+JSON as write sentences so runs are auditable:
+
+```pyash
+su name <mind> request <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
+su name <mind> response <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
+```
+
+Rules:
+
+* `<n>` matches the mind call counter for the dialogue.
+* JSON bytes are recorded in a stable, pretty-printed form.
+* Compiled JS/C emit these records using the multiline newspaper block markers
+  from `11-run-newspaper.md` so embedded newlines are preserved verbatim.
+
 ### A) Tool event record (newspaper-only `ya`)
 
 This is the “what happened” audit line, and where `la … ko` shines (since you’re using it only for newspaper records right now).

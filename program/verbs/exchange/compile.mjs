@@ -115,6 +115,112 @@ function compareUtf8(a, b) {
   return bufA.length < bufB.length ? -1 : 1;
 }
 
+const TOOL_CASE_ORDER = [
+  "su",
+  "ob",
+  "vyah",
+  "fromindex",
+  "atindex",
+  "toindex",
+  "fromtext",
+  "from",
+  "to",
+  "by",
+  "with",
+  "as",
+  "accordingto",
+  "become",
+  "at",
+  "during",
+  "via",
+  "of"
+];
+
+function toolTypeWordsFromValue(value) {
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value.nameTypeWords) && value.nameTypeWords.length) return ["name", ...value.nameTypeWords];
+  if (value.name !== undefined) return ["name"];
+  if (value.num !== undefined) return ["num"];
+  if (value.text !== undefined) return ["text"];
+  if (value.boolean !== undefined) return ["bool"];
+  if (value.filename !== undefined) return ["filename"];
+  if (value.ve) return ["vec"];
+  if (value.la) return ["la"];
+  return [];
+}
+
+function toolSchemaType(typeWords) {
+  if (!typeWords?.length) return "string";
+  if (typeWords.includes("name")) return "string";
+  if (typeWords.includes("bool")) return "boolean";
+  if (typeWords.includes("num")) return "number";
+  if (typeWords.includes("text")) return "string";
+  if (typeWords.includes("filename")) return "string";
+  if (typeWords.includes("vec")) return "array";
+  if (typeWords.includes("la")) return "object";
+  return "string";
+}
+
+function toolFunctionNameFromSignature(signatureWords) {
+  return signatureWords
+    .map(word => String(word ?? ""))
+    .join("_")
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function deriveSignatureWordsForTool(sentence) {
+  const words = ["be", sentence?.be];
+  for (const key of TOOL_CASE_ORDER) {
+    if (key === "su") continue;
+    if (!sentence || sentence[key] === undefined) continue;
+    const typeWords = toolTypeWordsFromValue(sentence[key], key);
+    words.push(key, ...typeWords);
+  }
+  return words.filter(Boolean);
+}
+
+function buildToolSchemasForCompile(toolEntries = {}) {
+  const caps = [];
+  for (const entry of Object.values(toolEntries)) {
+    if (entry?.mood !== "can" || !entry?.be) continue;
+    const canonical = sentenceToPyash(entry).trim();
+    caps.push({ sentence: entry, canonical });
+  }
+  if (!caps.length) return { tools: [], toolMap: new Map(), toolBlock: "" };
+  caps.sort((a, b) => compareUtf8(a.canonical, b.canonical));
+  const toolMap = new Map();
+  const tools = [];
+  for (const cap of caps) {
+    const signatureWords = deriveSignatureWordsForTool(cap.sentence);
+    const signatureName = signatureWords.join(" ");
+    const toolName = toolFunctionNameFromSignature(signatureWords);
+    const properties = {};
+    const required = [];
+    for (const key of TOOL_CASE_ORDER) {
+      if (key === "su") continue;
+      if (cap.sentence?.[key] === undefined) continue;
+      const typeWords = toolTypeWordsFromValue(cap.sentence[key], key);
+      properties[key] = { type: toolSchemaType(typeWords) };
+      required.push(key);
+    }
+    tools.push({
+      type: "function",
+      function: {
+        name: toolName,
+        description: cap.canonical,
+        signature: signatureName,
+        parameters: { type: "object", properties, required }
+      }
+    });
+    toolMap.set(toolName, cap.sentence);
+    toolMap.set(signatureName, cap.sentence);
+  }
+  const toolBlock = "TOOLS:\n" + caps.map(c => c.canonical).join("\n");
+  return { tools, toolMap, toolBlock };
+}
+
 function sentenceLineNumbersFromText(sourceText) {
   const sentences = splitSentences(sourceText);
   const lines = [];
@@ -2959,6 +3065,58 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const toolVar = toolMapName && (declaredTypes?.get(toolMapName) === "map" || declaredTypes?.get(toolMapName) === "json map" || declaredTypes?.get(toolMapName) === "csv map")
         ? sanitizeName(toolMapName)
         : null;
+      let toolJsonLiteral = "NULL";
+      let toolDispatchName = "NULL";
+      if (toolMapName && mapDefs?.has(toolMapName)) {
+        const mapSentence = mapDefs.get(toolMapName);
+        const toolSchemas = buildToolSchemasForCompile(mapSentence?.ob?.map ?? {});
+        if (toolSchemas.tools.length) {
+          toolJsonLiteral = JSON.stringify(JSON.stringify(toolSchemas.tools));
+          toolDispatchName = "pya_tool_dispatch";
+          if (cState) {
+            cState.preMain = cState.preMain || [];
+            const dispatchLines = [];
+            dispatchLines.push("static char *pya_tool_dispatch(const char *name, const char *args_json) {");
+            dispatchLines.push("  if (!name) return NULL;");
+            dispatchLines.push("  cJSON *args = args_json && args_json[0] ? cJSON_Parse(args_json) : cJSON_CreateObject();");
+            dispatchLines.push("  static char pya_tool_ob_text[PYA_TEXT_CAP];");
+            dispatchLines.push("  pya_ob_text = \"\";");
+            dispatchLines.push("  pya_ob_num = 0;");
+            dispatchLines.push("  pya_ob_bool = 0;");
+            dispatchLines.push("  pya_from_num = 0;");
+            for (const tool of toolSchemas.tools) {
+              const toolName = tool?.function?.name;
+              if (!toolName) continue;
+              const props = tool?.function?.parameters?.properties ?? {};
+              dispatchLines.push(`  if (strcmp(name, ${JSON.stringify(toolName)}) == 0) {`);
+              if (props.ob) {
+                if (props.ob.type === "string") {
+                  dispatchLines.push("    cJSON *ob = args ? cJSON_GetObjectItemCaseSensitive(args, \"ob\") : NULL;");
+                  dispatchLines.push("    if (ob && cJSON_IsString(ob)) { snprintf(pya_tool_ob_text, sizeof(pya_tool_ob_text), \"%s\", ob->valuestring); pya_ob_text = pya_tool_ob_text; }");
+                } else if (props.ob.type === "number") {
+                  dispatchLines.push("    cJSON *ob = args ? cJSON_GetObjectItemCaseSensitive(args, \"ob\") : NULL;");
+                  dispatchLines.push("    if (ob && cJSON_IsNumber(ob)) { pya_ob_num = ob->valuedouble; }");
+                } else if (props.ob.type === "boolean") {
+                  dispatchLines.push("    cJSON *ob = args ? cJSON_GetObjectItemCaseSensitive(args, \"ob\") : NULL;");
+                  dispatchLines.push("    if (ob && cJSON_IsBool(ob)) { pya_ob_bool = cJSON_IsTrue(ob); }");
+                }
+              }
+              if (props.from && props.from.type === "number") {
+                dispatchLines.push("    cJSON *from = args ? cJSON_GetObjectItemCaseSensitive(args, \"from\") : NULL;");
+                dispatchLines.push("    if (from && cJSON_IsNumber(from)) { pya_from_num = from->valuedouble; }");
+              }
+              dispatchLines.push(`    ${toolName}();`);
+              dispatchLines.push("    if (args) cJSON_Delete(args);");
+              dispatchLines.push("    return pya_strdup(\"\");");
+              dispatchLines.push("  }");
+            }
+            dispatchLines.push("  if (args) cJSON_Delete(args);");
+            dispatchLines.push("  return NULL;");
+            dispatchLines.push("}");
+            cState.preMain.push(dispatchLines.join("\n"));
+          }
+        }
+      }
       const lines = ["{"];
       lines.push(`const char *dialogue = ${JSON.stringify(String(dialogue))};`);
       if (toolVar) {
@@ -2967,7 +3125,8 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push("char *tool_block = NULL;");
       }
       lines.push("int __pyaAnswerCount = 0;");
-      lines.push(`char *reply = pya_mind_invoke(${JSON.stringify(mindName)}, dialogue, ${userText}, tool_block, ${explicitModel}, ${windowVal !== null ? Number(windowVal) || 8 : 0}, &__pyaAnswerCount);`);
+      lines.push(`const char *tool_json = ${toolJsonLiteral};`);
+      lines.push(`char *reply = pya_mind_invoke(${JSON.stringify(mindName)}, dialogue, ${userText}, tool_block, tool_json, ${toolDispatchName}, ${explicitModel}, ${windowVal !== null ? Number(windowVal) || 8 : 0}, &__pyaAnswerCount);`);
       lines.push("if (!reply) reply = pya_strdup(\"\");");
       lines.push("char __pyaAnswerName[PYA_TEXT_CAP];");
       lines.push(`snprintf(__pyaAnswerName, sizeof(__pyaAnswerName), "%s answer %d", ${JSON.stringify(mindName)}, __pyaAnswerCount);`);
@@ -4108,7 +4267,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesSpeak: false, usesCommand: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map() };
+  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
   const mapDefs = new Map();
   const refineryDefs = new Map();
   const declared = new Set();
@@ -4931,6 +5090,7 @@ function buildToolSentence({ capability, args }) {
     if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
     if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
     if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
+    if (cState?.preMain?.length) lines.push(...cState.preMain);
     const body = mainLines.map(l => `  ${l}`).join("\n");
     lines.push("int main(void) {");
     lines.push(body || "  return 0;");
