@@ -71,12 +71,15 @@ async function run() {
   if (againFlag) {
     pushLine(`su name ${runId} as name again be run ya`);
   }
+  let evokeCounter = -1;
   for (const raw of sentences) {
     const line = raw.trim();
     if (!line) continue;
     const sentence = parse(line);
     const embedded = sentenceToPyash(sentence);
-    pushLine(`ob la ${embedded} ko be evoke ya`);
+    evokeCounter += 1;
+    const sentenceId = `evoke-${evokeCounter}`;
+    pushLine(`su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
   }
 
   const prefix = "PYA_NEWSPAPER:";
@@ -98,7 +101,7 @@ async function run() {
   let spawnError = null;
   const child = spawn(command[0], command.slice(1), {
     stdio: ["ignore", stdoutFd, stderrFd],
-    env: { ...process.env, PYA_NEWSPAPER: "1" }
+    env: { ...process.env, PYA_NEWSPAPER: "1", PYA_RUN_ID: runId }
   });
   child.on("error", (err) => {
     spawnError = err;

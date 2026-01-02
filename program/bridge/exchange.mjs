@@ -6,6 +6,8 @@ import { throwErrorSentence } from "../error.mjs";
 
 let exchangeRecorder = null;
 let exchangeRunRoot = null;
+let exchangeRunId = null;
+let exchangeSentenceId = null;
 let artifactCounter = 0;
 const artifactByLocator = new Map();
 const artifactHashes = new Map();
@@ -37,6 +39,8 @@ function normalizePath(locator) {
 export function setExchangeRecorder({ record, runRoot } = {}) {
   exchangeRecorder = typeof record === "function" ? record : null;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+  exchangeRunId = null;
+  exchangeSentenceId = null;
   artifactCounter = 0;
   artifactByLocator.clear();
   artifactHashes.clear();
@@ -46,6 +50,8 @@ export function setExchangeRecorder({ record, runRoot } = {}) {
 export function clearExchangeRecorder() {
   exchangeRecorder = null;
   exchangeRunRoot = null;
+  exchangeRunId = null;
+  exchangeSentenceId = null;
   artifactCounter = 0;
   artifactByLocator.clear();
   artifactHashes.clear();
@@ -54,6 +60,14 @@ export function clearExchangeRecorder() {
 
 export function setExchangeRunRoot(runRoot) {
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+}
+
+export function setExchangeRunId(runId) {
+  exchangeRunId = runId ? String(runId) : null;
+}
+
+export function setExchangeSentenceId(sentenceId) {
+  exchangeSentenceId = sentenceId ? String(sentenceId) : null;
 }
 
 export function setExchangeStrict(value) {
@@ -76,6 +90,52 @@ export function normalizeLocator(locator) {
 
 function hashBytes(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function artifactExtension(locator) {
+  if (!locator) return "";
+  try {
+    const url = new URL(locator);
+    return path.extname(url.pathname || "");
+  } catch {
+    return path.extname(locator);
+  }
+}
+
+function contentAddressPath(hash, locator) {
+  const ext = artifactExtension(locator);
+  const parts = ["artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`];
+  return parts.join("/");
+}
+
+function writeContentAddressed({ hash, locator, bytes } = {}) {
+  if (!hash || !bytes) return null;
+  const rel = contentAddressPath(hash, locator);
+  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const abs = path.resolve(runRoot, rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, bytes);
+  return { relative: rel, absolute: abs };
+}
+
+function linkRunAlias({ name, target } = {}) {
+  if (!exchangeRunId || !name || !target) return null;
+  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const rel = ["artifacts", exchangeRunId, name].join("/");
+  const abs = path.resolve(runRoot, rel);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  if (!fs.existsSync(abs)) {
+    try {
+      fs.linkSync(target, abs);
+    } catch {
+      try {
+        fs.symlinkSync(target, abs);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return rel;
 }
 
 function nextArtifactName() {
@@ -111,11 +171,16 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
       }
       if (!priorHash) artifactHashes.set(existing, hash);
     }
+    if (hash && bytes) {
+      const written = writeContentAddressed({ hash, locator: normalized, bytes });
+      linkRunAlias({ name: existing, target: written?.absolute });
+    }
     return {
       mood: "ya",
       be: "artifact",
       su: { name: existing },
-      ob: { text: normalized },
+      ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
+      to: { filename: normalized },
       from: { name: producer }
     };
   }
@@ -123,13 +188,16 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     mood: "ya",
     be: "artifact",
     su: { name: nextArtifactName() },
-    ob: { text: normalized },
+    ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
+    to: { filename: normalized },
     from: { name: producer }
   };
   if (hash) {
     sentence.accordingto = { name: "sha256" };
     sentence.fromtext = { text: hash };
     artifactHashes.set(sentence.su.name, hash);
+    const written = writeContentAddressed({ hash, locator: normalized, bytes });
+    linkRunAlias({ name: sentence.su.name, target: written?.absolute });
   }
   if (size != null) {
     sentence.by = { num: size };
