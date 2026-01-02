@@ -140,12 +140,26 @@ be answer ya
 ```
 The returned answer sentence may share bytes with the dialogue `answer <n>` fact.
 
+### 5.1 Result echo (run output)
+
+For CLI runs (`run`, `runjs`, `runc`) the runtime also emits a write fact to
+print the response:
+
+```pyash
+su name result ob text <response> be write ya
+```
+
+This sentence is intended for human output. It does not replace the answer fact.
+
 ---
 
 ## 6. Newspaper and again mode
 
 When newspaper and again mode are enabled, each mind invocation is recorded using the
 tool envelope specs (`15-tool-envelope.md`, `11-run-newspaper.md`).
+
+Request/response JSON is recorded as `be write ya` sentences with `quoted.json`
+payloads (see `15-tool-envelope.md`).
 
 ### 6.1 Required recorded inputs
 

@@ -128,6 +128,38 @@ Each tool uses:
 * `function.description` (recommended)
 * `function.parameters` (JSON Schema)
 
+#### 7.1.1 Pyash `can` -> tool schema (normative)
+
+Adapter generates a tool schema from the canonical Pyash sentence bytes.
+Example capability:
+
+```pyash
+su name say ob text "" be say can
+```
+
+Adapter output:
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "be_say_ob_text",
+    "description": "su name say ob text \"\" be say can",
+    "signature": "be say ob text",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "ob": { "type": "string" }
+      },
+      "required": ["ob"]
+    }
+  }
+}
+```
+
+Name is derived by joining signature words with underscores (`be_say_ob_text`).
+Description MUST be the canonical printed `can` sentence.
+
 ### 7.2 Request: provide tools to the model
 
 Example request with one tool:
@@ -156,6 +188,14 @@ Example request with one tool:
     }
   ]
 }
+```
+
+The adapter MUST also include a system prompt line describing tools so the model
+can see the capability list in plain text:
+
+```
+TOOLS:
+su name say ob text "" be say can
 ```
 
 ### 7.3 Response: tool request emitted by the model
