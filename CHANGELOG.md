@@ -120,15 +120,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Backend parity gate enforced by compile tests
 
 
-### Jan 1, 2026: Mind tools + default say + error context hardening
-
-* Default say mapping now lives in `configure/default.pya` and autoloads in run + REPL.
-* Espeak say module moved to `module/` and wired through the import map.
-* Tool calling payloads now use safe tool names with signature metadata; tool lookup accepts both names.
-* Error sentences now include `from filename`, `by num`, and `at la ... ko` source context.
-* Quoted token handling normalized across parser + CSV/YAML/JSON roundtrips.
-* New golden example for default say (`examples/pyash/say-default.pya`) and added tests for tool payloads + error context.
-
 ### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete (maps done)
 
 * YAML spec v0.1 implemented (`32-yaml.md`) with deterministic official ordering.
@@ -168,9 +159,15 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `caterer/curl` vendored (git subtree) for runtime HTTP parity.
 * C mind runtime added and wired for parity.
 
-### Jan 1, 2026: Command + say module hardening
+### Jan 1, 2026: Command, say, and mind tool hardening
 
 * Command errors now surface full error sentences (CLI prints surfaced error sentence).
 * `add` supports text-from-genitive concatenation and `ob text → to text`.
 * Espeak module signature tightened to require `to name text`, and payloads are quoted to preserve spaces.
 * New noop/plain say modules and examples added for non-shell parity testing.
+* Default say mapping now lives in `configure/default.pya` and autoloads in run + REPL.
+* Espeak say module moved to `module/` and wired through the import map.
+* Tool calling payloads now use safe tool names with signature metadata; tool lookup accepts both names.
+* Error sentences now include `from filename`, `by num`, and `at la ... ko` source context.
+* Quoted token handling normalized across parser + CSV/YAML/JSON roundtrips.
+* New golden example for default say (`examples/pyash/say-default.pya`) and added tests for tool payloads + error context.
