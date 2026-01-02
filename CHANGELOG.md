@@ -171,3 +171,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Error sentences now include `from filename`, `by num`, and `at la ... ko` source context.
 * Quoted token handling normalized across parser + CSV/YAML/JSON roundtrips.
 * New golden example for default say (`examples/pyash/say-default.pya`) and added tests for tool payloads + error context.
+
+### Jan 2, 2026: Content-addressed artifacts + evoke ids
+
+* Artifact bytes are now written to content-addressed paths with run-root links (`artifacts/<run-id>/<artifact-name>`).
+* Artifact sentences now link to the evoking sentence via `ob name evoke-<n>` and keep `to filename` as the original locator.
+* Replay prefers content-addressed bytes (derived from sha256 + locator extension), falling back to the original locator.
+* Added/updated exchange and again-mode tests to verify CA files and alias links across interpreter/JS/C.
