@@ -43,6 +43,60 @@ function sentenceIdForText(text, index = 0) {
   return `evoke-${idx}`;
 }
 
+async function loadDefaultConfigProgram(cwd) {
+  const configPath = path.resolve(cwd, "configure", "default.pya");
+  try {
+    const raw = await fs.readFile(configPath, "utf8");
+    return buildProgram(raw);
+  } catch (err) {
+    if (err?.code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+function findDefaultSayMapping(sentences) {
+  let mapping = null;
+  for (const sentence of sentences || []) {
+    if (sentence?.be !== "default") continue;
+    if (sentence?.su?.name !== "say") continue;
+    const targetName = sentence?.ob?.name;
+    if (!targetName) continue;
+    mapping = {
+      targetName,
+      fromFilename: sentence?.from?.filename,
+      fromName: sentence?.from?.name
+    };
+  }
+  return mapping;
+}
+
+function applyDefaultSayMapping(sentences, mapping) {
+  if (!mapping?.targetName) return sentences;
+  const hasSay = (sentences || []).some(s => s?.be === "say");
+  if (!hasSay) return sentences;
+  const hasImport = sentences.some(s =>
+    s?.be === "import"
+    && s?.ob?.name === "say"
+    && s?.to?.name === mapping.targetName
+    && ((mapping.fromFilename && s?.from?.filename === mapping.fromFilename)
+      || (mapping.fromName && s?.from?.name === mapping.fromName))
+  );
+  const importSentence = !hasImport ? {
+    mood: "do",
+    be: "import",
+    from: mapping.fromFilename ? { filename: mapping.fromFilename } : { name: mapping.fromName ?? mapping.targetName },
+    ob: { name: "say" },
+    to: { name: mapping.targetName }
+  } : null;
+  const rewritten = sentences.map((sentence) => {
+    if (sentence?.be !== "say") return sentence;
+    const next = { ...sentence, be: mapping.targetName };
+    if (!next.to) next.to = { name: "result", nameTypeWords: ["text"] };
+    return next;
+  });
+  return importSentence ? [importSentence, ...rewritten] : rewritten;
+}
+
 function markDeclared(declared, name) {
   if (!declared || !name) return;
   const clean = sanitizeName(name);
@@ -2326,8 +2380,17 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         ? `fs.readFileSync(${JSON.stringify(inputFilename)}, "utf8")`
         : (inputText != null ? JSON.stringify(inputText) : "undefined");
       const lines = ["{"];
+      lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
       lines.push(`const __pyaCmd = ${cmdExpr ?? "\"\""};`);
-      lines.push(`const __pyaOut = pyaCommand(__pyaCmd, ${inputExpr});`);
+      lines.push(`if (!__pyaCmd) { pyaEmitNewspaper(\`su name command defective ob text "command defective: empty command" from la \${__pyaToolEvoked} ko be error ya\`); throw new Error("command defective"); }`);
+      lines.push("let __pyaOut;");
+      lines.push("try {");
+      lines.push(`  __pyaOut = pyaCommand(__pyaCmd, ${inputExpr});`);
+      lines.push("} catch (err) {");
+      lines.push("  const __pyaMsg = `command defective: ${String(err?.message ?? \"command defective\")}`;");
+      lines.push("  pyaEmitNewspaper(`su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`);");
+      lines.push("  throw err;");
+      lines.push("}");
       if (sentence?.to?.filename) {
         lines.push(`fs.writeFileSync(${JSON.stringify(sentence.to.filename)}, String(__pyaOut ?? ""));`);
       }
@@ -2339,7 +2402,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
       }
       const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
-      lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
       lines.push(`const __pyaToolResult = "su name " + ${toolTarget} + " ob text " + JSON.stringify(String(__pyaOut ?? "")) + " be text ya";`);
       lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
       lines.push("}");
@@ -2372,7 +2434,11 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const outVar = `cmd_out_${cState?.fileCounter ?? 0}`;
       if (cState) cState.fileCounter += 1;
       const lines = [];
-      lines.push(`char *${outVar} = pya_command(${cmdExpr ?? "\"\""});`);
+      const evoked = JSON.stringify(sentenceToPyash(sentence));
+      lines.push(`const char *__pyaCmd = ${cmdExpr ?? "\"\""};`);
+      lines.push(`if (!__pyaCmd || !strlen(__pyaCmd)) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\"command defective: empty command\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+      lines.push(`char *${outVar} = pya_command(__pyaCmd);`);
+      lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\"command defective\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
       if (sentence?.to?.filename) {
         const safePath = JSON.stringify(sentence.to.filename);
         const fileVar = `out_${cState?.fileCounter ?? 0}`;
@@ -2387,7 +2453,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         lines.push(`char ${target}[PYA_TEXT_CAP];`);
         lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
       }
-      const evoked = JSON.stringify(sentenceToPyash(sentence));
       const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
       lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\"%s\\" be text ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${toolTarget}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);
       lines.push(`if (${outVar}) free(${outVar});`);
@@ -4964,8 +5029,16 @@ async function compile_from_filename_to_filename(sentence) {
     return { ob: { text: wrappedText }, be: "pyash" };
   }
 
+  const configProgram = await loadDefaultConfigProgram(process.cwd());
   const program = buildProgram(sourceText);
-  const expanded = await expandModulesForCompile(sentence?.from?.filename, program.sentences);
+  const defaultMapping = findDefaultSayMapping([
+    ...(configProgram?.sentences ?? []),
+    ...program.sentences
+  ]);
+  const entrySentences = defaultMapping
+    ? applyDefaultSayMapping(program.sentences, defaultMapping)
+    : program.sentences;
+  const expanded = await expandModulesForCompile(sentence?.from?.filename, entrySentences);
   const sourceLines = sentenceLineNumbersFromText(sourceText);
   const sourceName = sourceFilename ? path.basename(sourceFilename) : "<pyash>";
   const canMap = sourceLines.length === expanded.length;
