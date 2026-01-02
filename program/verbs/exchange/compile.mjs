@@ -2991,7 +2991,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	    }) ?? "rhs";
 	    const op = baseBe === "tiny" ? "<" : baseBe === "giant" ? ">" : (lang === "c" ? "==" : "===");
 	    const consequence = sentence.consequence;
-	    const body = transpileSentence(consequence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes }) ?? `// TODO: ${JSON.stringify(consequence)}`;
+	    const body = transpileSentence(consequence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs }) ?? `// TODO: ${JSON.stringify(consequence)}`;
 	    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
     const cLhs = lang === "c"
       ? String(lhs)
