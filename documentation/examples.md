@@ -5,7 +5,7 @@ This folder collects runnable/walkthrough examples to help future assistants and
 Notes:
 - Some examples rely on external services or binaries (for example, mind examples need an Ollama server; say/command examples may require `espeak-ng`).
 - Several examples write outputs under `examples/out/` or `quiz/sandpit/`; keep those locations writable and git-ignored.
-- To run the example suite with optional skips, use `scripts/run_examples.sh` (see flags in the script header).
+- To run the example suite with optional skips, use `command/run_examples.sh` (see flags in the script header).
 
 - `examples/core/` — minimal, happy-path interactions that show the baseline language flow (parsing, moods, verbs like add/read) and can double as smoke checks.
 - `examples/features/` — focused samples for specific capabilities or new verbs (mind, understand, compositional roles), kept small and self-contained.
