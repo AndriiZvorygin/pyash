@@ -107,7 +107,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * JSON export key ordering rule (stated + golden)
   * `unspecified` omission rule during JSON export (golden)
   * Self-referential export errors (golden)
-* Spec drop: `30-maps.md` status bumped to v0.2
+* Spec drop: `30-data-formats.md` status bumped to v0.2
 * Hardening: JSON → Pyash → JSON round-trip snapshots (byte-stable)
 * Hardening: cross-backend error parity audit for JSON map structural errors
 
@@ -131,7 +131,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete (maps done)
 
-* YAML spec v0.1 implemented (`32-yaml.md`) with deterministic official ordering.
+* YAML spec v0.1 implemented (`30-data-formats.md`) with deterministic official ordering.
 * Parity goldens for interpreter/JS/C (YAML → Pyash, Pyash → YAML → Pyash).
 * YAML inline compile precompute for JS/C (no runtime YAML dependency when inline).
 * CSV → Pyash and Pyash → CSV → Pyash parity in interpreter/JS/C.
@@ -142,9 +142,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Dec 29, 2025: Pre-week hygiene gates complete
 
 * `50-modules.md` promoted to v0.1.
-* Aspect spec moved to `40-aspect.md` and referenced from the spec index.
+* Aspect spec moved to `08-vyah-and-aspect.md` and referenced from the spec index.
 * Import rules locked in quizzes (entry allows top-level `do`; imported modules declarations-only).
-* `08-vyah.md` shipped (official ordering; `vyah … sloh` success marker).
+* `08-vyah-and-aspect.md` shipped (official ordering; `vyah … sloh` success marker).
 * Subordinate clauses (`la … ko`) shipped at parity (supports embedded mood when present).
 * Runtime contracts shipped in code (duty / stream / chip + lifecycle acks; chip exhaustion errors).
 * Error surfacing shipped in code: thrown errors are `be error do`, surfaced runtime results are `be error ya`.
@@ -156,7 +156,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Refinery runner shipped (deterministic scheduling + fail-fast) for interpreter/JS/C.
 * Run newspaper implemented as opt-in (`--newspaper`) and locked with parity tests across interpreter / JS / C.
 * Compiled JS/C runs emit the same newspaper format (via shared runner) when flagged.
-* `12-source-maps.md` shipped so JS/C can emit comparable newspapers.
+* `11-run-recording-and-artifacts.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
 * Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
 * Refinery retries + checkpoints shipped (policy config + newspaper records + parity tests).
@@ -199,238 +199,224 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Jan 3, 2026: Again subset + documentation hardening
 
-* Again-mode strict subset documented in `11-run-newspaper.md`.
+* Again-mode strict subset documented in `11-run-recording-and-artifacts.md`.
 * Fresh Codex Primer written in `documentation/handoff.md`.
 * Spec conformance pointers added, plus `90-implementation-map.md`.
 * Roadmap/changelog cleanup and guidance aligned to new doc structure.
 
 # TODO
 
-## Week 2: Concurrency v0.7 (remaining)
+## Week 2: Media IO v0.4 + Streaming Talk Loop + Streaming STT Binary
 
 **Jan 5 → Jan 11, 2026**
 
 ### Ship
 
-* Depend scheduling upgrade (ready queue)
+* **Streaming `hear` + streaming `say` (usable, interactive)**
 
-  * Stable ordering rules when multiple platforms are already
-  * Optional parallelism only if ordering remains deterministic
+  * partial STT is incremental
+  * TTS can begin before the full response is complete (where supported)
+  * parity-first; feature gates allowed with quizzes
 
-* Cancellation and timeouts (real)
+* **Minimal “talk to LLM” loop (golden demo surface)**
 
-  * Deadline propagation to platforms and tool calls
-  * `qa` cancellation semantics: terminal outcome guaranteed or explicit timeout failure
-  * Cancellation scopes: platform, depend subtree, entire run
+  * listen (`hear`) → LLM → speak (`say`)
+  * cancellation (`qa`) and timebox (`dweh`) are exercised as first-class controls
 
-* Backpressure rules for Stream (real)
+* **Drop-a-binary streaming STT for text entry**
 
-  * Bounded queues between producers and consumers
-  * Overflow policy per stream type (block, drop, coalesce)
-  * Consumer pull model (`next`) with predictable chip ordering
+  * distributable executable that emits incremental text (streaming)
+  * supports cancellation/timeboxing
+  * stable, parseable output suitable for piping into OS/editor workflows
 
-* Deterministic simulation mode for scheduling (tests)
+* **Deterministic test mode hooks**
 
-  * Fixed seed and simulated clock
-  * Simulated execution produces deterministic newspaper ordering
+  * fixture-driven speech I/O for repeatable tests
+  * recorded metadata/hashes sufficient for `again` verification when applicable
 
-* Newspaper records scheduling decisions (when enabled)
+### Spec drops (freeze v0.4)
 
-  * queue events: enqueued, dequeued, blocked, unblocked
-  * stream events: chip produced, chip consumed, close, cancel
-  * cancellation events: requested, acknowledged, finalized
+* **Speech spec v0.1**
 
-### Spec drops (freeze v0.7)
+  * includes streaming forms (partial transcript / streaming audio) and lifecycle controls
+* **Speech artefact schema v0.1**
 
-* Concurrency spec v0.1
+  * stable fields + ordering + replay/verification requirements for tests
 
-  * ready-queue semantics and deterministic ordering
-  * cancellation semantics (`qa`) and timeout semantics (`dweh`)
-  * backpressure rules for stream/chip
+### Hardening gates
 
-* Simulation mode spec v0.1
+* Golden demos:
 
-  * determinism rules for simulated clock + scheduling ties
+  * `talk_loop_smoke.pya`
+  * `talk_loop_cancel.pya`
+  * `talk_loop_timebox.pya`
+* Streaming torture:
 
-### Hardening
+  * slow consumer behavior
+  * cancel mid-utterance
+  * timebox listen and speak
+* Parity gate:
 
-* Deterministic run-again of a concurrent run in simulation mode
+  * same surfaced error sentences and stable run records for fixture runs across interpreter/JS/C
 
-* Torture tests
+### Boundary note
 
-  * cancellation storms
-  * timeout races
-  * bounded queues under load
-  * slow-consumer stream backpressure
+Week 2 streaming is **“usable streaming”**. The **formal bounded-queue / overflow backpressure contract** is frozen in Week 5 as part of Concurrency v0.7, and the Week 2 demos are updated to conform exactly at that point.
 
-* Parity
+---
 
-  * identical error sentences for timeout and cancellation across backends
-  * deterministic ordering of newspaper events for the same simulation seed
-
-
-## Week 3: Tool bridge (MCP) v0.3
+## Week 3: Minimal agent loop v0.45 + Pipeline Workload Pack
 
 **Jan 12 → Jan 16, 2026**
 
 ### Ship
 
-* MCP client in runtime (stdio first)
+* **Verifier loop**
 
-  * Launch and supervise tool servers
-  * Connect/disconnect behaviour journaled
-* Tool discovery pinned per run
+  * run quizzes and emit a deterministic structured report bundle
+* **Reducer loop**
 
-  * `tools/list` snapshot stored in artefacts and referenced from journal
-  * Tool identity includes name, version, schema hash
-* Schema mapping to Pyash-callable signatures
+  * produce minimal repro `.pya` deterministically
+* **Resolution chain for lost signatures**
 
-  * Generated façade module(s) exposing tools as deterministic signatures
-  * Stable name mapping rules (tool names → module + verb)
-* Deadline and cancellation propagation
+  * search project modules + stdlib namespaces
+  * policy-driven fallback (including mind, where enabled) with deterministic journaling
+* **Mind call caching via artefacts**
 
-  * `deadlineMs` passed through to tool calls
-  * `qa` cancels tool calls when transport supports it, else records best-effort cancel with explicit status
-* Streaming support policy (real, where supported)
+  * content-hash keys
+  * deterministic cache-hit records and stable outputs
 
-  * If MCP tool supports streaming, map to Stream
-  * One-shot-only tools map to `fa` only
-* Permission gating
+### Add: Pipeline Workload Pack (golden scenario)
 
-  * Allowlist + argument constraints in config
-  * Every deny journaled with reason + requested args hash
-* Reference MCP servers (initial set)
+Introduce and grow a real pipeline pack used to prove verifier/reducer/report determinism:
 
-  * `web.fetch` (HTTP fetch with caching hooks)
-  * `web.crawl` (crawler adapter)
-  * `media.download` (yt-dlp adapter)
-  * `store.kv` (SQLite or filesystem)
-  * `store.vector` optional (stub acceptable if deferred)
+* downloads recent videos from a source
+* transcribes
+* produces meeting minutes
+* partitions minutes into sections
+* summarizes sections
+* writes an article
+* generates an image
+* posts/publishes
 
-### Spec drops (freeze v0.3)
+(Week 3 focuses on: **reports, repros, caching, determinism**, not concurrency scheduling pressure.)
 
-* Tool ABI spec v0.1
+### Spec drops (freeze v0.45)
 
-  * request/response envelopes
-  * hashing + canonical ordering
-  * deadlines, cancellation, retries
-  * stable error sentences for tool failures (using global error sentence shape) 
-* MCP integration spec v0.1
+* **Reports spec v0.1** (fields, ordering, paths)
+* **Mind event schema v0.1** (ids, hashes, provenance)
+* **Patch bundle schema v0.1** (diff layout, tests, provenance)
 
-  * discovery, pinning, schema mapping
-  * transport rules (stdio first)
-  * failure policy (server crash, tool lost, schema mismatch)
+### Hardening gates
 
-### Hardening
+* Reports are diff-friendly and deterministic
+* Cache-hit runs produce identical outputs + identical run record entries
+* Pipeline pack has:
 
-* Replay includes tool list snapshot and verifies tool call hashes
-* Torture tests
-
-  * tool unavailable
-  * tool timeout
-  * tool server crash and restart rules
-  * schema change detected mid-run
-* Golden demos
-
-  * `mcp_list_tools.pya`
-  * `mcp_web_fetch_smoke.pya`
-  * `mcp_media_download_smoke.pya`
+  * smoke run
+  * stress run (more items)
+  * replay run (`again` verification)
 
 ---
 
-## Week 4: Media IO v0.4
+## Week 4: Tool bridge (MCP) v0.3
 
 **Jan 17 → Jan 23, 2026**
 
 ### Ship
 
-* `say` (TTS interface) as a library verb backed by pipeline stages
-* `hear` (STT interface) as a library verb backed by pipeline stages
-* Aspect-shaped speech API (real streaming)
+* MCP client in runtime (stdio first)
 
-  * `say fa` → Value (bytes or file path)
-  * `say me` → Stream (audio frames) with real backpressure
-  * `say pfih` → TaskHandle (background synth)
-  * `hear fa` → Value (final transcript)
-  * `hear me` → Stream (partial transcripts) with real backpressure
-  * `hear pfih` → TaskHandle (capture session)
-  * `tyih` waits, `mweh` closes/flushes, `qa` cancels
-* Config-driven backends
+  * launch/supervise tool servers
+  * connect/disconnect journaled deterministically
+* Tool discovery pinned per run
 
-  * TTS: eSpeak NG, Piper, system TTS
-  * STT: whisper.cpp, Whisper, or external service via explicit gate
-  * Optional: MCP backend for speech (adapter)
-* Deterministic test mode hooks
+  * tool list snapshot stored in artefacts and referenced from run record
+  * tool identity includes stable schema identity
+* Schema mapping to Pyash-callable signatures
 
-  * fixtures
-  * pinned model metadata in artefacts
-  * output hashes verified in again
+  * generated façade modules with stable naming rules
+* Deadline + cancellation propagation
 
-### Spec drops (freeze v0.4)
+  * deadlines and `qa` behavior propagate to tool calls
+  * best-effort cancel recorded deterministically when transport limitations apply
+* Permission gating
 
-* Speech spec v0.1
+  * allowlist + argument constraints; denials recorded deterministically
 
-  * signatures per aspect form
-  * required config keys
-  * error sentences
-  * deterministic test mode requirements
-  * stream chunk envelope rules for partial transcripts and audio frames
-* Speech artefact schema v0.1
+### Spec drops (freeze v0.3)
 
-  * backend, model, version
-  * input hash, output hash
-  * chunking rules for streaming outputs
+* **Tool ABI spec v0.1**
 
-### Hardening
+  * canonical envelopes, hashing/canonicalization, deadlines/cancel, error surfacing
+* **MCP integration spec v0.1**
 
-* Fixture audio pinned, outputs journaled, again verifies hashes
-* Streaming torture tests
+  * discovery pinning, schema mapping, transport rules, failure policy
 
-  * slow consumer backpressure
-  * cancellation mid-utterance
-  * timebox capture with `dweh`
-* Golden demos
+### Hardening gates
 
-  * `say_smoke.pya`
-  * `hear_smoke.pya`
-  * `speech_config.pya`
-  * `walkie_talkie_loop_smoke.pya`
+* Replay verifies tool list snapshot + tool call hashes
+* Torture: tool unavailable, tool timeout, server crash/restart rules, schema mismatch mid-run
+* Pipeline pack runs with MCP-backed tools **without changing the pipeline shape**
 
 ---
 
-## Week 5: Minimal agent loop v0.45
+## Week 5: Concurrency v0.7 (ready queue, cancellation, backpressure, simulation)
 
 **Jan 24 → Jan 30, 2026**
 
+### Anchor workloads
+
+* **Primary concurrency anchor:** the **pipeline workload pack** (wide DAG → many “ready at once” situations)
+* **Secondary concurrency anchor:** the **talk loop** (stream lifecycles + cancel/timebox + slow-consumer)
+
 ### Ship
 
-* Verifier loop: run quizzes, emit structured report bundle
-* Reducer loop: store minimal repro `.pya`
-* Resolution chain for lost signatures
+* **Ready-queue scheduling upgrade**
 
-  * signature search (project modules, stdlib namespaces)
-  * MCP tool fallback (generated façade modules from Week 3 discovery)
-  * local mind fallback policy (config-driven)
-  * patch bundle output (diff, new signatures, tests, docs stubs)
-* Mind call caching via artefacts (content-hash keys)
+  * deterministic ordering for scheduling ties
+  * optional parallelism only when ordering remains deterministic
+* **Cancellation and timeouts (real)**
 
-  * cached mind calls journaled as cache hits with stable hashes
+  * deadline propagation to platforms and tool calls
+  * stable `qa` semantics across scopes (platform / depend subtree / run)
+* **Stream backpressure (spec-locked)**
 
-### Spec drops (freeze v0.45)
+  * bounded buffering
+  * overflow policy is defined and stable
+  * deterministic chip consumption ordering
+* **Deterministic simulation mode**
 
-* Reports spec v0.1 (stable fields, ordering, paths)
-* Mind event schema v0.1 (model id, params, prompt hash, context hash, output hash)
-* Patch bundle schema v0.1 (diff layout, test expectations, provenance fields)
+  * fixed seed + simulated clock
+  * deterministic scheduling outcomes and deterministic run record ordering
+* **Schedule trace in newspaper (gated)**
 
-### Hardening
+  * queue/stream/cancel decision events when enabled
 
-* Diff-friendly deterministic reports
-* Cache hits produce identical outputs and journal entries
-* Golden demos
+### Spec drops (freeze v0.7)
 
-  * `verify_and_report.pya`
-  * `lost_signature_propose_patch.pya`
-  * `lost_signature_resolve_via_mcp_tool.pya`
+* **Concurrency spec v0.1**
+
+  * ready-queue semantics + deterministic ordering
+  * cancellation semantics (`qa`) + timeout semantics (`dweh`)
+  * stream backpressure rules
+* **Simulation mode spec v0.1**
+
+  * determinism rules for simulated clock + scheduling ties
+
+### Hardening gates
+
+* Deterministic replay of concurrent runs in simulation mode across interpreter/JS/C
+* Torture tests (seeded):
+
+  * cancellation storms
+  * timeout races
+  * bounded queues under load
+  * slow-consumer backpressure
+* Parity gate:
+
+  * identical surfaced error sentences for timeout/cancel across backends
+  * deterministic ordering of run record events for the same seed
 
 ---
 
@@ -442,26 +428,22 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Genome: Pyash sentence lists
 * Mutations + crossover
-* Fitness: quiz pass/fail plus penalties
+* Fitness: quiz pass/fail + penalties
 * Signature crystallization workflow
 
-  * promote repeated successful patches into deterministic signatures
-  * retire mind fallback path for promoted behaviours
-  * required tests and again bundles for promoted behaviours
+  * promote repeated successes into deterministic signatures
+  * retire fallback paths for promoted behaviors (policy-driven)
 
 ### Spec drops (freeze v0.5)
 
-* Evolution artefacts spec v0.1 (genomes, logs, fitness, reproducibility)
-* Crystallization policy spec v0.1 (promotion rules, required tests, docs updates)
+* Evolution artefacts spec v0.1 (genomes/logs/fitness/reproducibility)
+* Crystallization policy spec v0.1 (promotion rules, required tests/docs)
 
-### Hardening
+### Hardening gates
 
 * Fixed seeds, time and step limits
 * Sandboxed IO, artefacts only
-* Golden demos
-
-  * `evolve_small_suite.pya`
-  * `crystallize_signature.pya`
+* Golden demos: evolve small suite + crystallize signature
 
 ---
 
@@ -474,30 +456,24 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Package layout conventions, versioned stdlib
 * Formatter + linter
 * Dependency and compatibility checks
-* Report bundle as a first-class output for Results-as-a-Service style runs
-* Optional read-only serving of report bundles (local)
+* Report bundle as first-class output
+* Optional local read-only serving of report bundles
 * Tool packaging (MCP servers)
 
-  * package metadata for tool servers (launch command, version pinning, permissions)
-  * bundles include tool server versions and tool list snapshot
-  * compatibility checks include tool schema hash changes
+  * version pinning + permissions + compatibility checks
 
 ### Spec drops (freeze v0.8)
 
 * Package system spec v0.1
 * Stdlib stability policy spec v0.1
-* Evolution policy spec v0.1 (how crystallization changes public surfaces)
-* Tool packaging spec v0.1 (declaring, pinning, launching MCP servers)
+* Tool packaging spec v0.1
+* Evolution policy spec v0.1 (public surface changes from crystallization)
 
-### Hardening
+### Hardening gates
 
-* Fresh clone → install → run → reproduce bundle via again
-* Multi-platform smoke (Linux first, others gated)
-* Golden demos
-
-  * `package_smoke.pya`
-  * `bundle_again_smoke.pya`
-  * `package_with_tools_smoke.pya`
+* Fresh clone → install → run → reproduce bundle via `again`
+* Multi-platform smoke (Linux first; others gated)
+* Golden demos: package smoke + bundle replay + package with tools
 
 ---
 
@@ -510,34 +486,19 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Prompt → candidate Pyash call set (top K)
 * Candidate ranking via signature matching
 
-  * stdlib + project modules
-  * generated MCP façade signatures (tool-discovered)
-* Optional local mind assistance for candidate generation
+  * stdlib + project modules + MCP façade signatures
+* Optional mind assistance for candidate generation (gated + deterministic)
 * Artefacts
 
-  * candidates
-  * scores
-  * chosen call
-  * matching trail + explanation fields
-* Aspect-aware candidates
-
-  * generate `fa/me/pfih` variants when supported by the matched signature
-  * ranking prefers aspect consistent with interaction pattern (batch vs interactive)
+  * candidates, scores, chosen call, matching trail
 
 ### Spec drops (freeze v0.85)
 
-* Intent compiler spec v0.1 (inputs, outputs, ranking rules, artefacts)
-* Candidate format spec v0.1 (sentence shape, confidence fields, aspect field)
+* Intent compiler spec v0.1 (inputs/outputs/ranking/artefacts)
+* Candidate format spec v0.1 (sentence shape, confidence, aspect)
 
-### Hardening
+### Hardening gates
 
-* Deterministic ranking given fixed inputs and seed
-* Golden demos
+* Deterministic ranking given fixed inputs + seed
+* Golden demos: match + fallback + aspect variants
 
-  * `intent_compile_match.pya`
-  * `intent_compile_fallback.pya`
-  * `intent_compile_aspect_variants.pya`
-
----
-
-Side note on your earlier “grammar words” point: `all su of <map>` / `all ob of <map>` / `all of <map>` are **map-enumeration surface forms**, and the spec even allows explicit `su name all` / `ob name all` variants when disambiguation is useful . So those belong in “map syntax” buckets more than “verb phrase” buckets.
