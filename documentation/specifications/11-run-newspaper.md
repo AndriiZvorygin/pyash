@@ -200,7 +200,148 @@ A **state** event records an observable runtime primitive sentence becoming true
 
 ---
 
-## 12. Canonical golden path example (normative)
+### 8.2 Sentence form (official)
+
+State is recorded as the primitive sentence itself, for example:
+
+Duty:
+
+su name L7 as name running be duty ya
+
+Stream:
+
+su name S3 as name open be stream ya
+
+Chip:
+
+su name S3 atindex num 0 ob text "he" as name notfinal be chip ya
+
+Rules:
+
+- State sentences MUST be emitted using official ordering rules.
+- State sentences MUST include all required fields for that primitive as defined in `09-runtime-primitives.md`.
+
+---
+
+## 9. Event: tool
+
+Records a tool call and its result as an event in the newspaper.
+
+### 9.1 Meaning
+
+A **tool** event captures the evoked sentence and the surfaced result sentence for
+one tool call.
+
+### 9.2 Sentence form (official)
+
+su name tool event <counter>
+ob la <evoked sentence> ko
+to la <result sentence> ko
+be tool ya
+
+Rules:
+
+- Both embedded sentences MUST be emitted using official ordering rules.
+- The result sentence MUST be a surfaced sentence (`ya`), including `be error ya`
+  for failures.
+- The counter MUST be stable and increment per tool event in a run.
+
+---
+
+## 10. Event: artifact
+
+Records creation or reference of a persisted external object.
+
+### 10.1 Meaning
+
+An **artifact** event declares a durable external object used or produced by the run.
+
+### 10.2 Sentence form (minimum)
+
+Minimum required fields:
+
+su name <artifact> to filename <path-or-uri> from name <producer> be artifact ya
+
+Additional artifact fields (hash, size, mime, etc.) are defined in `13-exchange-and-artifact.md`.
+
+---
+
+## 11. Run end record
+
+Each newspaper MUST end with exactly one **run end** record.
+
+### 11.1 Sentence form (official)
+
+su name <run> be end ya
+
+`<run>` MUST be the same run id recorded in the run start record.
+
+---
+
+## 12. Ordering rules (official)
+
+1. **Journal ordering**  
+   Records are ordered by emission order.
+
+2. **Sentence ordering on write**  
+   Every sentence written in the newspaper MUST be emitted using official ordering rules:
+   - official case ordering
+   - official `vyah` ordering
+   - vectors and maps follow their own official ordering specifications
+
+3. **Embedded sentence ordering**  
+   Embedded sentences inside `la … ko` MUST be emitted using official ordering rules.
+
+4. **Verbatim preservation after write**  
+   After emission, records MUST be preserved verbatim byte-for-byte. This rule applies to the entire record, including embedded sentences.
+
+---
+
+## 13. Again requirements
+
+An implementation MUST be able to:
+
+- run again using only the newspaper and referenced artifacts
+- reproduce the same sequence of result sentences
+- verify artifact hashes during again (hash rules defined in `13-exchange-and-artifact.md`)
+
+Again MUST fail if:
+
+- an artifact hash does not match
+- an again result sentence differs byte-for-byte from the newspaper’s recorded result sentences
+
+---
+
+## 13.1 Again strict subset (normative)
+
+When `--again` is enabled, the newspaper MUST include the following required records:
+
+- run start (`su name <run> ... be run ya`)
+- run root (`ob filename "<run-root>" be run root ya`)
+- again marker (`su name <run> as name again be run ya`)
+- evoke + result for each executed sentence
+- artifact declarations + exchange events for any bytes read/written
+- tool events (`be tool ya`) when tools are used
+- checkpoint/retry lines when refinery is used and checkpointing/retry are enabled
+
+Optional records are allowed (state/debug) as long as ordering and required lines are preserved.
+
+---
+
+## 14. Conformance
+
+An implementation conforms to this spec if it:
+
+- emits exactly one run start record and one run end record
+- records `evoke`, `result`, `state`, `tool`, and `artifact` events as specified
+- never records `be error do` sentences in the newspaper
+   - emits deterministic, byte-stable newspapers using official ordering on write
+- preserves emitted records verbatim
+- supports again verification rules
+
+---
+
+## 15. Canonical golden path example (normative)
 
 The following sequence MUST be emitted in this order in the run newspaper:
 
@@ -256,7 +397,12 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 
 ---
 
-## 13. Implementation pointers
+### Summary rule
+
+> The run newspaper is the ordered list of sentences that made a run observable.
+
+---
+## 16. Implementation pointers
 
 - Interpreter runner: `program/command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`, `nextToolCounter`).
 - Run wrapper: `program/command/run_with_newspaper.mjs` (PYA_NEWSPAPER capture and file write).
@@ -265,137 +411,8 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 
 ---
 
-## 14. Conformance checks
+## 17. Conformance checks
 
 - Tests: `node --test quiz/run_newspaper*.test.mjs`
+- Again marker presence: `node --test quiz/again_mode_run.test.mjs`
 - Tool event presence: `rg "be tool ya" newspaper/*.pya`
-- Multiline block markers: `rg "PYA_NEWSPAPER:BEGIN" newspaper/*.pya`
-
-### 8.2 Sentence form (official)
-
-State is recorded as the primitive sentence itself, for example:
-
-Duty:
-
-su name L7 as name running be duty ya
-
-Stream:
-
-su name S3 as name open be stream ya
-
-Chip:
-
-su name S3 atindex num 0 ob text "he" as name notfinal be chip ya
-
-Rules:
-
-- State sentences MUST be emitted using official ordering rules.
-- State sentences MUST include all required fields for that primitive as defined in `09-runtime-primitives.md`.
-
----
-
-## 9. Event: tool
-
-Records a tool call and its result as an event in the newspaper.
-
-### 9.1 Meaning
-
-A **tool** event captures the evoked sentence and the surfaced result sentence for
-one tool call.
-
-### 9.2 Sentence form (official)
-
-su name tool event <counter>
-ob la <evoked sentence> ko
-to la <result sentence> ko
-be tool ya
-
-Rules:
-
-- Both embedded sentences MUST be emitted using official ordering rules.
-- The result sentence MUST be a surfaced sentence (`ya`), including `be error ya`
-  for failures.
-- The counter MUST be stable and increment per tool event in a run.
-
----
-
-## 10. Event: artifact
-
-Records creation or reference of a persisted external object.
-
-### 9.1 Meaning
-
-An **artifact** event declares a durable external object used or produced by the run.
-
-### 9.2 Sentence form (minimum)
-
-Minimum required fields:
-
-su name <artifact> ob text <path-or-uri> from name <producer> be artifact ya
-
-Additional artifact fields (hash, size, mime, etc.) are defined in `12-io-and-artifact.md`.
-
----
-
-## 11. Run end record
-
-Each newspaper MUST end with exactly one **run end** record.
-
-### 10.1 Sentence form (official)
-
-su name <run> be end ya
-
-`<run>` MUST be the same run id recorded in the run start record.
-
----
-
-## 12. Ordering rules (official)
-
-1. **Journal ordering**  
-   Records are ordered by emission order.
-
-2. **Sentence ordering on write**  
-   Every sentence written in the newspaper MUST be emitted using official ordering rules:
-   - official case ordering
-   - official `vyah` ordering
-   - vectors and maps follow their own official ordering specifications
-
-3. **Embedded sentence ordering**  
-   Embedded sentences inside `la … ko` MUST be emitted using official ordering rules.
-
-4. **Verbatim preservation after write**  
-   After emission, records MUST be preserved verbatim byte-for-byte. This rule applies to the entire record, including embedded sentences.
-
----
-
-## 13. Again requirements
-
-An implementation MUST be able to:
-
-- run again using only the newspaper and referenced artifacts
-- reproduce the same sequence of result sentences
-- verify artifact hashes during again (hash rules defined in `13-exchange-and-artifact.md`)
-
-Again MUST fail if:
-
-- an artifact hash does not match
-- an again result sentence differs byte-for-byte from the newspaper’s recorded result sentences
-
----
-
-## 14. Conformance
-
-An implementation conforms to this spec if it:
-
-- emits exactly one run start record and one run end record
-- records `evoke`, `result`, `state`, `tool`, and `artifact` events as specified
-- never records `be error do` sentences in the newspaper
-   - emits deterministic, byte-stable newspapers using official ordering on write
-- preserves emitted records verbatim
-- supports again verification rules
-
----
-
-### Summary rule
-
-> The run newspaper is the ordered list of sentences that made a run observable.
