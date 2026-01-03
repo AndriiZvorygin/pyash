@@ -3,18 +3,16 @@
 Purpose: provide the normative specs for Pyash. Each module follows the same template and links to existing examples and quizzes.
 
 Reading order (core):
-1. `01-sentence-model.md`
-2. `07-compositional-cases.md`
-3. `08-vyah.md`
-4. `02-moods-and-memory.md`
-5. `03-dispatch-and-signatures.md`
-6. `04-ceremonies-and-this.md`
-7. `05-control-flow.md`
-8. `06-errors.md`
+1. `01-sentence-and-grammar.md`
+2. `08-vyah-and-aspect.md`
+3. `03-dispatch-and-signatures.md`
+4. `04-ceremonies-and-this.md`
+5. `05-control-flow.md`
+6. `06-errors.md`
 
 Recommended practice loop
-1. Read `01-sentence-model.md`, then run `examples/pyash/compile-add-to-js-text.pya`.
-2. Read `02-moods-and-memory.md`, then run `examples/pyash/fizzbuzz.pya`.
+1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-add-to-js-text.pya`.
+2. Read `08-vyah-and-aspect.md`, then run `examples/pyash/fizzbuzz.pya`.
 3. Read `03-dispatch-and-signatures.md`, then trigger a signature inconsistency (see `quiz/ceremony_signature_inconsistency.test.mjs`).
 4. Read `04-ceremonies-and-this.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-add-two.pya`.
 5. Read `05-control-flow.md`, then run `examples/pyash/insertion-sort.pya`.
@@ -42,23 +40,16 @@ Contributing overview (quick)
 3. Source of truth for keywords and ordering
 - Keywords (moods, cases, types, vyah): `program/library/grammar/keywords.mjs`
 - Compositional case mapping/order: `program/library/compositionalCases.mjs`
-- Official JSON key ordering: `documentation/specifications/33-json.md`
+- Official JSON key ordering: `documentation/specifications/30-data-formats.md`
 
 Feature specs (optional, when blessed):
 - `07-c-ir.md` (v0.1)
 - `09-runtime-primitives.md` (v0.1)
-- `10-subordinate-clauses.md` (v0.1)
-- `11-run-newspaper.md` (v0.2)
-- `12-source-maps.md` (v0.1)
-- `13-exchange-and-artifact.md` (v0.2)
+- `01-sentence-and-grammar.md` (merged)
+- `11-run-recording-and-artifacts.md` (merged)
 - `14-refinery.md` (v0.1)
-- `15-tool-envelope.md` (v0.1)
-- `16-mind.md` (draft v0.2)
-- `17-mind-tool-calling.md` (draft v0.1)
+- `16-mind-and-tools.md` (merged)
 - `21-vector-at-all.md` (v0.1)
-- `30-maps.md` (v0.2)
-- `31-csv.md` (v0.2)
-- `32-yaml.md` (v0.1)
-- `33-json.md` (v0.2)
-- `40-aspect.md` (v0.6 target; add when Week 1 freezes)
+- `30-data-formats.md` (merged)
+- `08-vyah-and-aspect.md` (merged)
 - `50-modules.md` (v0.1)

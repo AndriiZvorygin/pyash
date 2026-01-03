@@ -17,8 +17,8 @@ Finished results are expressed as:
 * a normal return sentence (for success), or
 * an error sentence (`be error ya`) (for failure)
 
-`vyah` modifier rules (including `sloh`) are defined in `08-vyah.md`.
-Aspect inventory and meaning are defined in `40-aspect.md`.
+`vyah` modifier rules (including `sloh`) are defined in `08-vyah-and-aspect.md`.
+Aspect inventory and meaning are defined in `08-vyah-and-aspect.md`.
 
 ---
 

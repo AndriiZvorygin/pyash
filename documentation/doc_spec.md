@@ -7,10 +7,10 @@ Small, normative modules. Each one 1–3 pages, same template.
 * `00-index.md`
   Reading order, what is “core”, what is “feature”, and links to examples that demonstrate each concept.
 
-* `01-sentence-model.md`
+* `01-sentence-and-grammar.md`
   Fields, cases, typed terms, genitives, quoting.
 
-* `02-moods-and-memory.md`
+* `01-sentence-and-grammar.md`
   `ya/do/def/prah/then`, `exists` on `ya`, memory store and lookup.
 
 * `03-dispatch-and-signatures.md`
@@ -32,7 +32,7 @@ Feature specifications (only if you want them “blessed”):
 * `22-understand.md`
 * `23-compile.md`
 * `24-mind.md`
-* Later: `30-maps.md` (when maps harden)
+* Later: `30-data-formats.md` (when maps harden)
 
 ### `documentation/guideline/`
 
@@ -93,8 +93,8 @@ Example linking pattern inside a specification:
 
 In `documentation/specifications/00-index.md`, include a short recommended reading and practice loop:
 
-1. Read `01-sentence-model.md` then run `examples/pyash/add-basic.pya`
-2. Read `02-moods-and-memory.md` then run `examples/pyash/result-chaining.pya`
+1. Read `01-sentence-and-grammar.md` then run `examples/pyash/add-basic.pya`
+2. Read `01-sentence-and-grammar.md` then run `examples/pyash/result-chaining.pya`
 3. Read `03-dispatch-and-signatures.md` then intentionally trigger a signature error example
 4. Read `04-ceremonies-and-this.md` then run `examples/pyash/ceremony-invoke.pya` and `this-registers.pya`
 5. Read `05-control-flow.md` then run `tloh-loop.pya`, `until-loop.pya`, and a conditional example

@@ -27,20 +27,20 @@ node --test quiz/run_newspaper_command.test.mjs
 
 ## 3) Canonical contracts (source of truth)
 When docs disagree, these four specs win:
-- `documentation/specifications/17-mind-tool-calling.md` — tool calling adapter + schema rules.
-- `documentation/specifications/15-tool-envelope.md` — tool event records + request/response logging.
-- `documentation/specifications/11-run-newspaper.md` — run newspaper sentence forms + ordering.
-- `documentation/specifications/13-exchange-and-artifact.md` — artifact sentence + content addressing.
+- `documentation/specifications/16-mind-and-tools.md` — tool calling adapter + schema rules.
+- `documentation/specifications/16-mind-and-tools.md` — tool event records + request/response logging.
+- `documentation/specifications/11-run-recording-and-artifacts.md` — run newspaper sentence forms + ordering.
+- `documentation/specifications/11-run-recording-and-artifacts.md` — artifact sentence + content addressing.
 
 ## 4) Golden path (perennial)
-1. Offer tool capabilities (`can`) in canonical order — `documentation/specifications/17-mind-tool-calling.md#8-canonical-golden-path-example-normative`.
-2. Emit tool request JSON (request record) — `documentation/specifications/15-tool-envelope.md#4-canonical-golden-path-example-normative`.
-3. Execute tool boundary (`do` → tool) — `documentation/specifications/17-mind-tool-calling.md#7-adapter-ollama-native-tools-ollama-tools`.
-4. Record tool result as `be tool ya` with `la … ko` — `documentation/specifications/15-tool-envelope.md#3-rules-normative`.
-5. Store artifact bytes via content addressing — `documentation/specifications/13-exchange-and-artifact.md#5-5-artifacts--newspaper-directory-contract-runner-policy`.
-6. Emit artifact sentence with `to filename <locator>` — `documentation/specifications/13-exchange-and-artifact.md#4-1-minimum-required-fields`.
-7. Preserve ordering in the run newspaper — `documentation/specifications/11-run-newspaper.md#3-global-invariants-normative`.
-8. Ensure replay determinism (again) — `documentation/specifications/13-exchange-and-artifact.md#10-replayable-mode-normative`.
+1. Offer tool capabilities (`can`) in canonical order — `documentation/specifications/16-mind-and-tools.md#8-canonical-golden-path-example-normative`.
+2. Emit tool request JSON (request record) — `documentation/specifications/16-mind-and-tools.md#4-canonical-golden-path-example-normative`.
+3. Execute tool boundary (`do` → tool) — `documentation/specifications/16-mind-and-tools.md#7-adapter-ollama-native-tools-ollama-tools`.
+4. Record tool result as `be tool ya` with `la … ko` — `documentation/specifications/16-mind-and-tools.md#3-rules-normative`.
+5. Store artifact bytes via content addressing — `documentation/specifications/11-run-recording-and-artifacts.md#5-5-artifacts--newspaper-directory-contract-runner-policy`.
+6. Emit artifact sentence with `to filename <locator>` — `documentation/specifications/11-run-recording-and-artifacts.md#4-1-minimum-required-fields`.
+7. Preserve ordering in the run newspaper — `documentation/specifications/11-run-recording-and-artifacts.md#3-global-invariants-normative`.
+8. Ensure replay determinism (again) — `documentation/specifications/11-run-recording-and-artifacts.md#10-replayable-mode-normative`.
 
 ## 5) File map (first files to open)
 - `program/bridge/exchange.mjs`
@@ -60,11 +60,11 @@ Example milestone names (if present in roadmap):
 Note: `npm test` is pre-approved (see `AGENTS.md`).
 
 ## 7) Parity targets (perennial)
-- JS runtime artifact recording behavior: `documentation/specifications/13-exchange-and-artifact.md#14-implementation-pointers`.
-- Compiled JS helper behavior: `documentation/specifications/11-run-newspaper.md#13-implementation-pointers`.
-- Compiled C helper behavior: `documentation/specifications/11-run-newspaper.md#13-implementation-pointers`.
+- JS runtime artifact recording behavior: `documentation/specifications/11-run-recording-and-artifacts.md#14-implementation-pointers`.
+- Compiled JS helper behavior: `documentation/specifications/11-run-recording-and-artifacts.md#13-implementation-pointers`.
+- Compiled C helper behavior: `documentation/specifications/11-run-recording-and-artifacts.md#13-implementation-pointers`.
 
 ## 8) Validation expectations (perennial)
 - Newspaper line patterns include `be tool ya`, `be artifact ya`, `be run ya`.
 - Artifact path pattern: `artifacts/sha256/<first2>/<next2>/<hex><ext>`.
-- Ordering constraints are defined in `documentation/specifications/11-run-newspaper.md#3-global-invariants-normative`.
+- Ordering constraints are defined in `documentation/specifications/11-run-recording-and-artifacts.md#3-global-invariants-normative`.

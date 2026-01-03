@@ -10,7 +10,7 @@ Define how signature words are derived and used for dispatch.
 
 ## 3. Rules (normative)
 - Dispatch is signature-first: derive signature words, then resolve to a handler or ceremony.
-- Case order is normalized using the official compositional keyword order (`07-compositional-cases.md`).
+- Case order is normalized using the official compositional keyword order (`01-sentence-and-grammar.md`).
 - Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored when matching ceremony signatures.
 - If a ceremony body reads sequence registers via `this`, include those cases in the definition to make the dependency explicit.
 - If no handler or ceremony matches, raise `be error do` with the derived signature.

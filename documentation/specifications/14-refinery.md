@@ -41,7 +41,7 @@ depend — a platform name that MUST complete before another platform may start
 
 already platform — a platform whose depend list is complete
 
-again mode — runner policy that requires recording and verification sufficient to run again (see 13-exchange-and-artifact.md)
+again mode — runner policy that requires recording and verification sufficient to run again (see 11-run-recording-and-artifacts.md)
 
 
 
@@ -66,9 +66,9 @@ If run newspaper emission is disabled, refinery evaluation results MUST be the s
 
 
 5. Again mode is stricter
-In again mode, refinery execution MUST satisfy the recording and verification rules in 11-run-newspaper.md and 13-exchange-and-artifact.md.
+In again mode, refinery execution MUST satisfy the recording and verification rules in 11-run-recording-and-artifacts.md.
 
-Checkpoint and retry records are emitted into the run newspaper per `11-run-newspaper.md` when enabled.
+Checkpoint and retry records are emitted into the run newspaper per `11-run-recording-and-artifacts.md` when enabled.
 
 
 
@@ -136,7 +136,7 @@ Rules:
 
 The depend list is carried in from ve name ... as a vector of platform names.
 
-The activity is embedded using subordinate clauses (10-subordinate-clauses.md) in ob la … ko.
+The activity is embedded using subordinate clauses (01-sentence-and-grammar.md) in ob la … ko.
 
 The embedded activity MAY include an embedded mood token per subordinate clause policy. The runner MUST preserve the embedded structure when recording.
 
@@ -175,7 +175,7 @@ If more than one platform is already at the same time, the runner MUST choose th
 
 
 
-Official name ordering is the same ordering used when writing maps by sorted su switches (see the official JSON key order rule in `33-json.md`).
+Official name ordering is the same ordering used when writing maps by sorted su switches (see the official JSON key order rule in `30-data-formats.md`).
 
 ### 7.3 Single-worker default
 
@@ -300,7 +300,7 @@ A future spec MAY add “continue” policies, but fail-fast is the official def
 
 When run newspaper emission is enabled, the runner SHOULD record:
 
-an evoke record for each platform activity it evaluates (see 11-run-newspaper.md)
+an evoke record for each platform activity it evaluates (see 11-run-recording-and-artifacts.md)
 
 the resulting result record sentence (success or be error ya)
 
@@ -326,7 +326,7 @@ When again mode is enabled:
 1. Newspaper emission MUST be enabled.
 
 
-2. Any exchange/artifact activity that affects results MUST be recorded per 13-exchange-and-artifact.md.
+2. Any exchange/artifact activity that affects results MUST be recorded per 11-run-recording-and-artifacts.md.
 
 
 3. Again-critical artifacts MUST include sha256 hashes.
