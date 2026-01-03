@@ -236,10 +236,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Spec drops (freeze v0.4)
 
-* **Speech spec v0.1**
+* **Speech spec v0.1** (`18-say-and-hear.md`)
 
   * includes streaming forms (partial transcript / streaming audio) and lifecycle controls
-* **Speech artefact schema v0.1**
+* **Speech artefact schema v0.1** (`19-speech-artifacts.md`)
 
   * stable fields + ordering + replay/verification requirements for tests
 
@@ -502,3 +502,216 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 * Deterministic ranking given fixed inputs + seed
 * Golden demos: match + fallback + aspect variants
 
+## Week 9: Knowledge core v0.9 (claim identity, evidence shell, KB layout)
+
+**Feb 21 → Feb 27, 2026**
+
+### Ship
+
+* **Claim key derivation (redundancy + conflict detection)**
+
+  * canonical “same-claim” key (by `su`, `be`, `as`, time window bucket)
+  * canonical case ordering for formatting, hashing, indexing
+  * golden fixtures that prove equality and inequality cases
+
+* **Evidential shell integration (sentence-native)**
+
+  * `nwah` payload conventions, evidential type placement, provenance fields
+  * confidence via `by num`
+  * source anchoring via `fromtext <src> <anchor>` and stable anchor ids
+
+* **KB storage layout v0.1**
+
+  * entity-page format (one file per `su`)
+  * registry files: lexicon, ontology, sources
+  * held and rejected directories keyed by `su case …`
+
+* **Query views (built on `su` index)**
+
+  * “current view” resolver for a claim key
+  * “contested view” resolver when conflicts exist
+  * “provenance view” listing evidence payloads
+
+### Spec drops (freeze v0.9)
+
+* **Knowledge core spec v0.1**
+
+  * claim key rules
+  * canonical ordering rules
+  * evidential shell schema
+  * source and anchor identity rules
+* **KB layout spec v0.1**
+
+  * entity pages
+  * registries
+  * held and rejected stores
+
+### Hardening gates
+
+* Golden corpus:
+
+  * claim key equality suite (aliases, scope, time windows)
+  * evidential payload suite (reported, direct, inferential)
+  * resolver suite (current vs contested)
+
+* Parity gate:
+
+  * identical canonical formatting across interpreter / JS / C
+  * identical resolver outputs across backends for the same KB snapshot
+
+---
+
+## Week 10: Document digestion v0.92 (policy ingest to sentences, segmentation, draft extraction)
+
+**Feb 28 → Mar 6, 2026**
+
+### Ship
+
+* **Source ingest and anchoring**
+
+  * register `su src …` for each document artifact
+  * deterministic anchors: section ids, paragraph ids, line ranges, byte spans (per format)
+
+* **Segmentation pipeline**
+
+  * segment markers recorded as sentences
+  * stable mapping from document offsets to anchor ids
+
+* **High-recall extraction to draft channel**
+
+  * emit candidates in `swuh` or `pi7`, with `nwah proh …` payloads
+  * definitions extracted into `gyih` where clear
+  * unit and quantity normalization for candidates
+
+* **Normalization pass**
+
+  * alias registry updates (lexicon layer)
+  * scope registry updates (`as` scopes)
+  * relation schema checks (ontology layer)
+
+### Spec drops (freeze v0.92)
+
+* **Digestion spec v0.1**
+
+  * source registration
+  * anchoring rules
+  * segmentation contract
+  * extraction output conventions (mood and evidential requirements)
+
+### Hardening gates
+
+* Golden docs:
+
+  * one short policy
+  * one technical README-style doc
+  * one tabular doc (CSV-derived narrative)
+
+* For each golden doc:
+
+  * stable anchors across backends
+  * stable candidate sentence set (byte-stable ordering)
+  * replay via `again` produces identical candidates and identical run record entries
+
+---
+
+## Week 11: Conflict cases + adjudication harness v0.95 (proposer, defence, prosecution, judge)
+
+**Mar 7 → Mar 13, 2026**
+
+### Ship
+
+* **Conflict detection**
+
+  * conflict rule: same claim key, different value, overlapping validity
+  * emit `su conflict …` summaries for quick inspection
+  * case opener for each conflict cluster
+
+* **Case protocol**
+
+  * `su case <id>` lifecycle: open → argued → decided → disposed
+  * standard role tagging via `as` (proposer, defence, prosecution, judge)
+  * fixed reason code registry as `gyih` sentences
+
+* **Judge scoring and deterministic verdict**
+
+  * sub-scores written as sentences (evidence strength, scope match, compatibility, consensus, novelty)
+  * deterministic aggregation rule and thresholds
+  * dispositions: promote, hold, reject, request more evidence
+
+* **Promotion and archive actions**
+
+  * promote writes a new `ya` (or `gyih`) sentence for the winning claim
+  * hold routes candidates into held store
+  * reject routes candidates into rejected store, with explicit reasons and scores
+
+### Spec drops (freeze v0.95)
+
+* **Adjudication spec v0.1**
+
+  * case sentence shapes
+  * role sentence shapes
+  * reason code registry requirements
+  * scoring and verdict thresholds
+  * promotion, hold, reject semantics
+
+### Hardening gates
+
+* Golden conflict pack:
+
+  * scope mismatch conflicts (capex vs opex)
+  * unit mismatch conflicts
+  * time window overlap conflicts
+  * alias-induced conflicts
+
+* Parity gate:
+
+  * identical case files and verdict outputs across interpreter / JS / C for the same inputs
+  * identical promoted KB snapshot for the same seed and same evidence set
+
+---
+
+## Week 12: Resurrection + encyclopedia seed pack v1.0 (small world KB, revision over time)
+
+**Mar 14 → Mar 20, 2026**
+
+### Ship
+
+* **Resurrection triggers**
+
+  * reopen a rejected claim when independent evidence accumulates past thresholds
+  * open a fresh case id, link back to earlier rejected case ids
+  * deterministic scheduling and deterministic thresholds
+
+* **Encyclopedia seed pack**
+
+  * a small, curated KB that exercises the whole loop end-to-end
+  * includes lexicon, ontology, sources, entity pages, held, rejected, cases
+
+* **Local Llama integration demo**
+
+  * answer flow: query by `su` pages, resolve current view, generate response
+  * citations emitted from `nwah` payloads
+  * contested view surfaced explicitly when present
+
+### Spec drops (freeze v1.0)
+
+* **Knowledge lifecycle spec v0.1**
+
+  * resurrection rules
+  * revision history conventions
+  * view conventions (current, contested, provenance)
+
+### Hardening gates
+
+* Time-series update demo:
+
+  * initial ingestion produces held and rejected items
+  * later ingestion triggers resurrection and promotion
+  * final KB snapshot matches across backends
+
+* Golden end-to-end demos:
+
+  * `digest_policy_to_kb.pya`
+  * `conflict_case_judge_promote.pya`
+  * `resurrect_rejected_then_promote.pya`
+  * `answer_from_kb_with_provenance.pya`

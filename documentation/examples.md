@@ -2,6 +2,10 @@
 
 This folder collects runnable/walkthrough examples to help future assistants and contributors find reference scenarios quickly.
 
+Notes:
+- Some examples rely on external services or binaries (for example, mind examples need an Ollama server; say/command examples may require `espeak-ng`).
+- Several examples write outputs under `examples/out/` or `quiz/sandpit/`; keep those locations writable and git-ignored.
+
 - `examples/core/` — minimal, happy-path interactions that show the baseline language flow (parsing, moods, verbs like add/read) and can double as smoke checks.
 - `examples/features/` — focused samples for specific capabilities or new verbs (mind, understand, compositional roles), kept small and self-contained.
 - `examples/pyash/understand-to-file.pya` — minimal script that parses stored text and writes JSON to `quiz/sandpit/understand-output.json` via `be understand do`.
