@@ -20,3 +20,7 @@
 | Refinery | `examples/pyash/refinery-basic.pya` |
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
 | Command / say | `examples/pyash/command-espeak.pya`, `examples/pyash/say-espeak.pya` |
+
+Notes:
+- Mind examples expect an Ollama server; say/command examples may require `espeak-ng` or other local tools.
+- Some examples write outputs under `examples/out/` or `quiz/sandpit/`.
