@@ -162,30 +162,49 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Refinery retries + checkpoints shipped (policy config + newspaper records + parity tests).
 * Tool calling parity (interpreter/JS/C) with mind tool call newspaper logging.
 
----
+### Dec 31, 2025: Mind tooling + again terminology alignment
+
+* Mind spec and tooling aligned (tool capabilities, answer facts, dialogue facts).
+* Tool envelope/again terminology aligned; tool envelope spec removed.
+* Sentence model updated to mention subordinate clauses.
+* `caterer/curl` vendored (git subtree) for runtime HTTP parity.
+* C mind runtime added and wired for parity.
+
+### Jan 1, 2026: Command, say, and mind tool hardening
+
+* Command errors now surface full error sentences (CLI prints surfaced error sentence).
+* `add` supports text-from-genitive concatenation and `ob text → to text`.
+* Espeak module signature tightened to require `to name text`, and payloads are quoted to preserve spaces.
+* New noop/plain say modules and examples added for non-shell parity testing.
+* Default say mapping now lives in `configure/default.pya` and autoloads in run + REPL.
+* Espeak say module moved to `module/` and wired through the import map.
+* Tool calling payloads now use safe tool names with signature metadata; tool lookup accepts both names.
+* Error sentences now include `from filename`, `by num`, and `at la ... ko` source context.
+* Quoted token handling normalized across parser + CSV/YAML/JSON roundtrips.
+* New golden example for default say (`examples/pyash/say-default.pya`) and added tests for tool payloads + error context.
+
+### Jan 2, 2026: Content-addressed artifacts + evoke ids
+
+* Artifact bytes are now written to content-addressed paths with run-root links (`artifacts/<run-id>/<artifact-name>`).
+* Artifact sentences now link to the evoking sentence via `ob name evoke-<n>` and keep `to filename` as the original locator.
+* Replay prefers content-addressed bytes (derived from sha256 + locator extension), falling back to the original locator.
+* Added/updated exchange and again-mode tests to verify CA files and alias links across interpreter/JS/C.
+* Tool calling parity achieved across interpreter/JS/C with request/response JSON logging in newspapers.
+
+### Jan 2, 2026: Refinery retries + checkpoints
+
+* Retry policy added (delay/backoff/attempts/cap) via `configure/default.pya`.
+* Checkpoints recorded and reused across interpreter/JS/C with `--no-checkpoint` and `PYA_CHECKPOINTS`.
+* New parity tests for checkpoints and retries across interpreter/JS/C.
+
+### Jan 3, 2026: Again subset + documentation hardening
+
+* Again-mode strict subset documented in `11-run-newspaper.md`.
+* Fresh Codex Primer written in `documentation/handoff.md`.
+* Spec conformance pointers added, plus `90-implementation-map.md`.
+* Roadmap/changelog cleanup and guidance aligned to new doc structure.
 
 # TODO
-
-## Week 1: Again + tool envelope + exchange v0.6 (remaining)
-
-**Dec 29, 2025 → Jan 4, 2026**
-
-### Ship
-
-* (Optional if time) Retries + checkpoints (done)
-
-### Spec drops (freeze v0.6)
-* (If needed) Newspaper + again policy note in `11-run-newspaper.md`
-
-  * newspaper is opt-in
-  * again mode forces the strict subset needed for again verification
-
-### Hardening
-
- 
-
- 
----
 
 ## Week 2: Concurrency v0.7 (remaining)
 

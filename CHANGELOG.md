@@ -185,3 +185,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Retry policy added (delay/backoff/attempts/cap) via `configure/default.pya`.
 * Checkpoints recorded and reused across interpreter/JS/C with `--no-checkpoint` and `PYA_CHECKPOINTS`.
 * New parity tests for checkpoints and retries across interpreter/JS/C.
+
+### Jan 3, 2026: Again subset + documentation hardening
+
+* Again-mode strict subset documented in `11-run-newspaper.md`.
+* Fresh Codex Primer written in `documentation/handoff.md`.
+* Spec conformance pointers added, plus `90-implementation-map.md`.
+* Roadmap/changelog cleanup and guidance aligned to new doc structure.
