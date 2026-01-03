@@ -159,6 +159,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `12-source-maps.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
 * Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
+* Refinery retries + checkpoints shipped (policy config + newspaper records + parity tests).
 * Tool calling parity (interpreter/JS/C) with mind tool call newspaper logging.
 
 ---
@@ -171,10 +172,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship
 
-* (Optional if time) Retries + checkpoints
-
-  * Retry policy recorded (attempt count, delays, final outcome)
-  * Checkpoints keyed by `(platformId, inputHash, configHash)`
+* (Optional if time) Retries + checkpoints (done)
 
 ### Spec drops (freeze v0.6)
 * (If needed) Newspaper + again policy note in `11-run-newspaper.md`

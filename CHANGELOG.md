@@ -179,3 +179,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Replay prefers content-addressed bytes (derived from sha256 + locator extension), falling back to the original locator.
 * Added/updated exchange and again-mode tests to verify CA files and alias links across interpreter/JS/C.
 * Tool calling parity achieved across interpreter/JS/C with request/response JSON logging in newspapers.
+
+### Jan 2, 2026: Refinery retries + checkpoints
+
+* Retry policy added (delay/backoff/attempts/cap) via `configure/default.pya`.
+* Checkpoints recorded and reused across interpreter/JS/C with `--no-checkpoint` and `PYA_CHECKPOINTS`.
+* New parity tests for checkpoints and retries across interpreter/JS/C.
