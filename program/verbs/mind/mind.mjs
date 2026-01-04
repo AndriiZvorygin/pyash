@@ -486,11 +486,23 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   if (aspect === "stream") {
     const streamName = sentence?.su?.name ?? `${targetName ?? "mind"} stream`;
-    const chunks = (Array.isArray(streamChunks) && streamChunks.length > 0)
-      ? streamChunks
-      : String(responseText ?? "")
+    const chunks = [];
+    if (Array.isArray(streamChunks) && streamChunks.length > 0) {
+      let running = "";
+      for (const chunk of streamChunks) {
+        running += String(chunk ?? "");
+        chunks.push(running);
+      }
+    } else {
+      const words = String(responseText ?? "")
         .split(/\s+/)
         .filter(Boolean);
+      let running = "";
+      for (const word of words) {
+        running = running ? `${running} ${word}` : word;
+        chunks.push(running);
+      }
+    }
     return makeStream({
       name: streamName,
       state: "open",
