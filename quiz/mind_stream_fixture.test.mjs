@@ -26,11 +26,11 @@ test("mind stream uses config vyah stream and yields chips", async () => {
     assert.equal(first?.toindex?.num, 2);
 
     const second = await run("su name helper-stream vyah eval be chip do");
-    assert.equal(second?.ob?.text, "beta");
+    assert.equal(second?.ob?.text, "alpha beta");
     assert.equal(second?.atindex?.num, 1);
 
     const third = await run("su name helper-stream vyah eval be chip do");
-    assert.equal(third?.ob?.text, "gamma");
+    assert.equal(third?.ob?.text, "alpha beta gamma");
     assert.equal(third?.atindex?.num, 2);
     assert.equal(third?.toindex?.num, 2);
 
