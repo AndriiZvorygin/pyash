@@ -2,6 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { state } from "../bridge/state.mjs";
+import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
+import { makeStream } from "../library/runtimePrimitives.mjs";
+import { throwErrorSentence } from "../error.mjs";
 
 function resolveGenitive(genitive, { rememberFn } = {}) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -62,6 +65,8 @@ export function renderSayValue(ob = {}, { rememberFn } = {}) {
 }
 
 export async function say(sentence, { remember: rememberFn = remember } = {}) {
+  const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
+  const aspect = getEffectiveVyahAspect(modifiers, { verb: "say", caseKey: "vyah" });
   const defaultFact = rememberFn?.("say");
   const defaultTarget = defaultFact?.be === "default" ? defaultFact?.ob?.name : null;
   if (defaultTarget && defaultTarget !== "say") {
@@ -96,7 +101,26 @@ export async function say(sentence, { remember: rememberFn = remember } = {}) {
       state.currentSourceSentence = prevSource;
     }
   }
+  if (aspect !== "eval" && aspect !== "stream") {
+    throwErrorSentence({
+      name: "say aspect invalid",
+      message: `say does not support vyah ${aspect}`,
+      from: { name: "say" },
+      raw: { aspect }
+    });
+  }
+
   const text = renderSayValue(sentence.ob ?? {}, { rememberFn });
+  if (aspect === "stream") {
+    const chunks = String(text ?? "")
+      .split(/\s+/)
+      .filter(Boolean);
+    return makeStream({
+      name: sentence?.su?.name ?? "stream",
+      state: "open",
+      ob: { ve: { values: chunks }, index: 0 }
+    });
+  }
   if (sentence?.to?.filename) {
     await fs.writeFile(sentence.to.filename, String(text ?? ""), "utf8");
   }
@@ -109,6 +133,16 @@ export async function say(sentence, { remember: rememberFn = remember } = {}) {
 export default say;
 
 export const signatures = [
+  { signatureWords: ["be", "say", "ob", "text", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "num", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "bool", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "hollow", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "text", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "num", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "bool", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "hollow", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "name", "vec", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "ob", "vec", "vyah", "stream"], handler: say },
   { signatureWords: ["be", "say", "ob", "text"], handler: say },
   { signatureWords: ["be", "say", "ob", "num"], handler: say },
   { signatureWords: ["be", "say", "ob", "bool"], handler: say },

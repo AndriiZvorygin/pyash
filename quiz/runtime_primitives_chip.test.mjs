@@ -10,19 +10,19 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("chip pulls stream items and marks final", async () => {
+test("chip pulls stream items and includes toindex", async () => {
   forget();
   await run("su name S3 as name open ob ve text he llo be stream ya");
 
   const first = await run("su name S3 vyah eval be chip do");
   assert.equal(first?.be, "chip");
   assert.equal(first?.atindex?.num, 0);
-  assert.equal(first?.as?.name, "notfinal");
+  assert.equal(first?.toindex?.num, 1);
   assert.deepEqual(first?.vyah?.ve?.values, ["eval", "sloh"]);
 
   const second = await run("su name S3 vyah eval be chip do");
   assert.equal(second?.atindex?.num, 1);
-  assert.equal(second?.as?.name, "final");
+  assert.equal(second?.toindex?.num, 1);
 
   const stream = remember("S3");
   assert.equal(stream?.as?.name, "done");

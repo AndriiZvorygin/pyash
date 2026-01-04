@@ -53,7 +53,8 @@ export function chip_su_stream(sentence) {
   }
 
   const value = values[index];
-  const final = index === values.length - 1;
+  const lastIndex = values.length - 1;
+  const final = index === lastIndex;
   const ob =
     typeof value === "number" ? { num: value } :
     typeof value === "boolean" ? { boolean: value } :
@@ -64,7 +65,7 @@ export function chip_su_stream(sentence) {
     streamName,
     index,
     ob,
-    final,
+    toindex: lastIndex,
     vyahValues: ["eval", "sloh"]
   });
 
