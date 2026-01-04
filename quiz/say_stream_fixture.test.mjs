@@ -10,23 +10,23 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("chip pulls stream items and includes toindex", async () => {
+test("say stream returns a stream and chips yield text chunks", async () => {
   forget();
-  await run("su name S3 as name open ob ve text he llo be stream ya");
+  const stream = await run('su name voice ob text "hello world" be say vyah stream do');
+  assert.equal(stream?.be, "stream");
+  assert.equal(stream?.su?.name, "voice");
 
-  const first = await run("su name S3 vyah eval be chip do");
+  const first = await run("su name voice vyah eval be chip do");
   assert.equal(first?.be, "chip");
   assert.equal(first?.atindex?.num, 0);
   assert.equal(first?.toindex?.num, 1);
-  assert.deepEqual(first?.vyah?.ve?.values, ["eval", "sloh"]);
+  assert.equal(first?.ob?.text, "hello");
 
-  const second = await run("su name S3 vyah eval be chip do");
+  const second = await run("su name voice vyah eval be chip do");
   assert.equal(second?.atindex?.num, 1);
   assert.equal(second?.toindex?.num, 1);
+  assert.equal(second?.ob?.text, "world");
 
-  const stream = remember("S3");
-  assert.equal(stream?.as?.name, "done");
-
-  const third = await run("su name S3 vyah eval be chip do");
-  assert.equal(third?.be, "error");
+  const streamState = remember("voice");
+  assert.equal(streamState?.as?.name, "done");
 });

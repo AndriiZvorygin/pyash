@@ -14,14 +14,14 @@ export function makeStream({ name, state, ob }) {
   return sentence;
 }
 
-export function makeChip({ streamName, index, ob, final, vyahValues }) {
+export function makeChip({ streamName, index, ob, toindex, vyahValues }) {
   const sentence = {
     su: { name: streamName },
     atindex: { num: index },
-    as: { name: final ? "final" : "notfinal" },
     be: "chip",
     mood: "ya"
   };
+  if (toindex !== undefined) sentence.toindex = { num: toindex };
   if (ob) sentence.ob = ob;
   if (vyahValues?.length) sentence.vyah = makeVyah(vyahValues);
   return sentence;
