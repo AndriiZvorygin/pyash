@@ -1,7 +1,7 @@
 // pyash/engines/ollama.mjs
 // Streams responses from an Ollama HTTP server instead of spawning a local binary.
 
-async function generateStream({ model, prompt }) {
+async function generateStream({ model, prompt, onChunk } = {}) {
   const base = process.env.OLLAMA_HOST ?? "http://localhost:11434";
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
   const res = await fetch(endpoint, {
@@ -34,7 +34,10 @@ async function generateStream({ model, prompt }) {
         throw new Error(`ollama request error: ${payload.error}`);
       }
       payloads.push(payload);
-      if (payload.response) chunks.push(payload.response);
+      if (payload.response) {
+        chunks.push(payload.response);
+        if (typeof onChunk === "function") onChunk(payload.response, payload);
+      }
       output += payload.response ?? "";
     }
   }
@@ -44,7 +47,10 @@ async function generateStream({ model, prompt }) {
     const payload = JSON.parse(buffer);
     if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
     payloads.push(payload);
-    if (payload.response) chunks.push(payload.response);
+    if (payload.response) {
+      chunks.push(payload.response);
+      if (typeof onChunk === "function") onChunk(payload.response, payload);
+    }
     output += payload.response ?? "";
   }
 
