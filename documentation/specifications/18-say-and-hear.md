@@ -45,6 +45,70 @@ su name <result> be hear do
 Input audio source is configured by the runtime (device, file, or artifact),
 and is intentionally out of scope for this spec.
 
+### 3.3 Aspectful invocation forms
+
+Aspect is expressed via `vyah` and changes what is returned. Examples below
+pair each invocation (`do`) with its returned sentence (`ya`).
+
+`say` (one-shot, stream, start):
+
+```pyash
+su name <result> ob text <utterance> be say vyah eval do
+su name <result> ob name <artifact> be say ya
+
+su name <stream> ob text <utterance> be say vyah stream do
+su name <stream> as name open be stream ya
+
+su name <handle> ob text <utterance> be say vyah start do
+su name <handle> as name running be duty ya
+```
+
+`say` (lifecycle on handle/stream):
+
+```pyash
+su name <result> be say vyah await do
+su name <result> be say vyah await success ya
+
+su name <status> be say vyah finish do
+su name <status> be say vyah finish success ya
+
+su name <status> be say vyah cancel do
+su name <status> be say vyah cancel success ya
+```
+
+Working with the results (pull chips until `atindex == toindex` or an error):
+
+```pyash
+su name <stream> be chip vyah eval do
+su name <stream> atindex num <seq> toindex num <last> ob <payload> be chip ya
+```
+
+`hear` (one-shot, stream, start):
+
+```pyash
+su name <result> be hear vyah eval do
+su name <result> ob text <transcript> be hear ya
+
+su name <stream> be hear vyah stream do
+su name <stream> as name open be stream ya
+
+su name <handle> be hear vyah start do
+su name <handle> as name running be duty ya
+```
+
+`hear` (lifecycle on handle/stream):
+
+```pyash
+su name <result> be hear vyah await do
+su name <result> be hear vyah await success ya
+
+su name <status> be hear vyah finish do
+su name <status> be hear vyah finish success ya
+
+su name <status> be hear vyah cancel do
+su name <status> be hear vyah cancel success ya
+```
+
 ---
 
 ## 4. Aspect contracts (normative)
@@ -54,45 +118,67 @@ Aspect is part of dispatch and controls the return type (see
 
 ### 4.1 `say`
 
-- `fa` (default): return **Value** containing an audio artifact reference.
-- `me`: return **Stream** of audio frames.
-- `pfih`: return **TaskHandle** for an in-progress synthesis.
-- `tyih`: wait for a handle, return **Value**.
-- `mweh`: flush/close a stream or handle, return **Value** status.
-- `qa`: cancel a stream or handle, return **Value** status.
-- `dweh`: timebox synthesis; return **Value** or **Stream** per backend policy.
+- `eval` (default): return **Value** containing an audio artifact reference.
+- `stream`: return **Stream** of audio frames.
+- `start`: return **TaskHandle** for an in-progress synthesis.
+- `await`: wait for a handle, return **Value**.
+- `finish`: flush/close a stream or handle, return **Value** status.
+- `cancel`: cancel a stream or handle, return **Value** status.
+- `timebox`: timebox synthesis; return **Value** or **Stream** per backend policy.
 
 ### 4.2 `hear`
 
-- `fa` (default): return **Value** containing a transcript.
-- `me`: return **Stream** of partial transcripts.
-- `pfih`: return **TaskHandle** for an in-progress capture.
-- `tyih`: wait for a handle, return **Value**.
-- `mweh`: flush/close a stream or handle, return **Value** status.
-- `qa`: cancel a stream or handle, return **Value** status.
-- `dweh`: timebox capture; return **Value** or **Stream** per backend policy.
+- `eval` (default): return **Value** containing a transcript.
+- `stream`: return **Stream** of partial transcripts.
+- `start`: return **TaskHandle** for an in-progress capture.
+- `await`: wait for a handle, return **Value**.
+- `finish`: flush/close a stream or handle, return **Value** status.
+- `cancel`: cancel a stream or handle, return **Value** status.
+- `timebox`: timebox capture; return **Value** or **Stream** per backend policy.
 
 ---
 
 ## 5. Streaming payload rules
 
-### 5.1 `say me` stream
+### 5.1 `say stream`
 
 Each stream chunk MUST be an envelope with:
 
 - `seq` (integer, monotonic)
 - `payload` (audio bytes or a stable locator)
-- `final` (bool)
-- `tMs` (optional)
+- `tMs` (optional, integer milliseconds since stream start; monotonic)
+- `final` is implied when `atindex == toindex` (when `toindex` is present).
 
-### 5.2 `hear me` stream
+Pyash representation (no shadow JSON):
+
+```pyash
+su name <stream>
+atindex num <seq>
+toindex num <last>
+ob <payload>
+during num <tMs>
+be chip ya
+```
+
+### 5.2 `hear stream`
 
 Each stream chunk MUST be an envelope with:
 
 - `seq` (integer, monotonic)
 - `payload` (partial transcript text)
-- `final` (bool)
-- `tMs` (optional)
+- `tMs` (optional, integer milliseconds since stream start; monotonic)
+- `final` is implied when `atindex == toindex` (when `toindex` is present).
+
+Pyash representation (no shadow JSON):
+
+```pyash
+su name <stream>
+atindex num <seq>
+toindex num <last>
+ob text <payload>
+during num <tMs>
+be chip ya
+```
 
 Chunk ordering MUST be deterministic for the same input and fixture mode.
 
