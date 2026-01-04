@@ -298,6 +298,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     ? sentence.vyah.ve.values
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
   const aspect = getEffectiveVyahAspect(vyahValues, { verb: "mind", caseKey: "vyah" });
+  let streamChunks = null;
   const dialogue = typeof sentence?.from?.text === "string"
     ? sentence.from.text
     : historyDialogueName({ callSentence: sentence, configSentence, targetName });
@@ -439,7 +440,8 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     } else if (aspect === "stream") {
       recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const streamed = await ollama.generateStream({ model, prompt: fullPrompt.trim() });
-      recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamed.chunks }) });
+      streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
+      recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
       responseText = streamed.text;
     } else {
       recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
@@ -484,9 +486,11 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   if (aspect === "stream") {
     const streamName = sentence?.su?.name ?? `${targetName ?? "mind"} stream`;
-    const chunks = String(responseText ?? "")
-      .split(/\s+/)
-      .filter(Boolean);
+    const chunks = (Array.isArray(streamChunks) && streamChunks.length > 0)
+      ? streamChunks
+      : String(responseText ?? "")
+        .split(/\s+/)
+        .filter(Boolean);
     return makeStream({
       name: streamName,
       state: "open",
