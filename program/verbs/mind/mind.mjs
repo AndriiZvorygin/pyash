@@ -439,13 +439,14 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       responseText = mockResponse;
     } else if (aspect === "stream") {
       recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
-      const streamed = await ollama.generateStream({ model, prompt: fullPrompt.trim() });
+      const streamed = await ollama.generateStream({
+        model,
+        prompt: fullPrompt.trim(),
+        onChunk: process?.env?.PYA_STREAM_STDOUT === "1"
+          ? (chunk) => { if (chunk) process.stdout.write(String(chunk)); }
+          : undefined
+      });
       streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
-      if (process?.env?.PYA_STREAM_STDOUT === "1" && Array.isArray(streamChunks)) {
-        for (const chunk of streamChunks) {
-          if (chunk) process.stdout.write(String(chunk));
-        }
-      }
       recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
       responseText = streamed.text;
     } else {
