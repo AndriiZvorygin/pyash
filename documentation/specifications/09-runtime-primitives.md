@@ -150,19 +150,25 @@ A chip is one ordered output element from a stream.
 
 ### 7.2 Sentence form (official)
 
-`su name <stream> atindex num <n> ob <type> <literal> as name <final|notfinal> be chip ya`
+`su name <stream> atindex num <n> ob <type> <literal> be chip ya`
+
+If the runtime knows the total length, it MAY also include `toindex` in the
+same chip sentence:
+
+`su name <stream> atindex num <n> toindex num <last> ob <type> <literal> be chip ya`
 
 Examples:
 
-`su name S3 atindex num 0 ob text "he" as name notfinal be chip ya`  
-`su name S3 atindex num 1 ob text "llo" as name final be chip ya`
+`su name S3 atindex num 0 ob text "he" be chip ya`  
+`su name S3 atindex num 1 toindex num 1 ob text "llo" be chip ya`
 
 ### 7.3 Rules
 
 * `atindex` starts at `0` and increases by `1`
-* ordering is determined solely by `atindex`
-* at most one chip MAY be marked `final`
-* a `final` chip implies the stream transitions to `done`
+* ordering is determined solely by the index value
+* `toindex` (when present) expresses the last index; it MAY appear on any chip
+* if the runtime already knows the last index, it SHOULD include `toindex`
+* a chip where `atindex == toindex` implies the stream transitions to `done`
 
 ### 7.4 Pulling chips (stream consumption)
 
@@ -179,13 +185,13 @@ Output:
 
 Notes:
 
-* The last chip MUST be marked `final`.
-* After a `final` chip, the stream is considered `done`.
+* The last chip SHOULD include `toindex` when known.
+* After a chip where `atindex == toindex`, the stream is considered `done`.
 * Calling `chip` again after the final chip MUST raise an error sentence (chip exhausted).
 
 Example success:
 
-`su name S3 atindex num 0 ob text "he" as name notfinal vyah eval sloh be chip ya`
+`su name S3 atindex num 0 ob text "he" vyah eval sloh be chip ya`
 
 Example after exhaustion:
 

@@ -25,6 +25,10 @@ an artifact and referenced from the run newspaper.
 
 ## 3. Metadata record (normative)
 
+There is exactly one metadata record per speech artifact (one `say`/`hear`
+output). It is written once for the whole artifact and stored as its own
+content-addressed artifact.
+
 The metadata record is a JSON map with the following fields:
 
 - `kind` (text): `"say"` or `"hear"`.
@@ -42,16 +46,38 @@ The metadata record is a JSON map with the following fields:
 
 ### 3.1 Streaming chunk list (optional)
 
+Streaming runs may optionally include a chunk summary list for `again` mode
+verification. This list exists only inside the metadata record (not in the live
+stream) and may be omitted or capped for long streams.
+
 When `streaming` is `true`, the record MAY include:
 
 - `chunks` (array of maps), each with:
   - `seq` (num)
   - `sha256` (text)
   - `bytes` (num)
-  - `final` (bool)
+  - `toIndex` (num, optional)
   - `tMs` (num, optional)
 
-Chunk ordering MUST be ascending by `seq`.
+Each chunk entry summarizes one stream chip. Chunk ordering MUST be ascending
+by `seq`. If `toIndex` is present, `final` is implied when `seq == toIndex`.
+
+If the chunk list is serialized in Pyash sentence form, use the same hash and
+size fields as other artifacts: `accordingto name sha256 fromtext text "<hex>"`
+and `by num <bytecount>`.
+
+Pyash stream chunk (chip) example:
+
+```pyash
+su name S3
+atindex num 2
+toindex num 4
+ob text "partial"
+accordingto name sha256 fromtext text "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+by num 7
+during num 120
+be chip ya
+```
 
 ---
 
