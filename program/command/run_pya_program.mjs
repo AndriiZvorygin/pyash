@@ -300,6 +300,11 @@ async function main() {
     return;
   }
 
+  if (result?.be === "stream" && process?.env?.PYA_STREAM_STDOUT === "1") {
+    console.log("");
+    return;
+  }
+
   // If the result is a compiled artifact with a text payload, stream it directly.
   if (result?.ob?.text) {
     console.log(result.ob.text);
