@@ -99,5 +99,5 @@ async function chat({ model, messages, tools = [], stream = false }) {
   return res.json();
 }
 
-export default { generate, chat };
+export default { generate, generateStream, chat };
 export { generateStream, chat };
