@@ -3,3 +3,4 @@ su name reiterate delay ob num 250 be number ya
 su name reiterate backoff ob num 2 be number ya
 su name reiterate attempts ob num 5 be number ya
 su name reiterate cap ob num 8000 be number ya
+su name mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
