@@ -1,7 +1,7 @@
 // pyash/engines/ollama.mjs
 // Streams responses from an Ollama HTTP server instead of spawning a local binary.
 
-async function generate(model, prompt) {
+async function generateStream({ model, prompt }) {
   const base = process.env.OLLAMA_HOST ?? "http://localhost:11434";
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
   const res = await fetch(endpoint, {
@@ -17,8 +17,10 @@ async function generate(model, prompt) {
   const decoder = new TextDecoder();
   let buffer = "";
   let output = "";
+  const chunks = [];
+  const payloads = [];
 
-  if (!res.body) return output;
+  if (!res.body) return { text: output, chunks, payloads };
 
   for await (const chunk of res.body) {
     buffer += decoder.decode(chunk, { stream: true });
@@ -31,6 +33,8 @@ async function generate(model, prompt) {
       if (payload.error) {
         throw new Error(`ollama request error: ${payload.error}`);
       }
+      payloads.push(payload);
+      if (payload.response) chunks.push(payload.response);
       output += payload.response ?? "";
     }
   }
@@ -39,10 +43,17 @@ async function generate(model, prompt) {
   if (buffer.trim()) {
     const payload = JSON.parse(buffer);
     if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+    payloads.push(payload);
+    if (payload.response) chunks.push(payload.response);
     output += payload.response ?? "";
   }
 
-  return output.trim();
+  return { text: output.trim(), chunks, payloads };
+}
+
+async function generate(model, prompt) {
+  const { text } = await generateStream({ model, prompt });
+  return text;
 }
 
 async function chat({ model, messages, tools = [], stream = false }) {
@@ -89,3 +100,4 @@ async function chat({ model, messages, tools = [], stream = false }) {
 }
 
 export default { generate, chat };
+export { generateStream, chat };
