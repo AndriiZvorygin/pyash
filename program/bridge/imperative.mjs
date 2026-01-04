@@ -377,6 +377,10 @@ export async function handleImperative({
       memory.doRemember(surfaced);
     }
     if (surfaced.ob !== undefined) {
+      const priorResult = memory.remember("result");
+      if (surfaced.be === "stream" && priorResult?.be && priorResult.be !== "stream") {
+        return surfaced;
+      }
       memory.doRemember({
         su: { name: "result" },
         ob: surfaced.ob,
