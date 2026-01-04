@@ -301,7 +301,13 @@ async function main() {
   }
 
   if (result?.be === "stream" && process?.env?.PYA_STREAM_STDOUT === "1") {
+    const finalResult = remember("result") ?? result;
     console.log("");
+    try {
+      console.log(finalResult ? sentenceToPyash(finalResult) : "(no result)");
+    } catch {
+      console.log(finalResult ? JSON.stringify(finalResult, null, 2) : "(no result)");
+    }
     return;
   }
 
