@@ -48,6 +48,9 @@ export function npToPyash(np = {}) {
     if (quotedBlockMatch) {
       return `text ${np.text}`;
     }
+    if (typeof np.text === "string" && /[\n\r]/.test(np.text)) {
+      return `text quoted.text.${np.text}.text.quoted`;
+    }
     return `text ${JSON.stringify(np.text)}`;
   }
   if (np.filename !== undefined) return `filename ${np.filename}`;
