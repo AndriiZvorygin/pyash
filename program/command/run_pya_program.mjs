@@ -312,7 +312,7 @@ async function main() {
   }
 
   // If the result is a compiled artifact with a text payload, stream it directly.
-  if (result?.ob?.text) {
+  if (result?.ob?.text && !full) {
     console.log(result.ob.text);
     return;
   }
