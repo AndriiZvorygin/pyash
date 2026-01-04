@@ -441,6 +441,11 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const streamed = await ollama.generateStream({ model, prompt: fullPrompt.trim() });
       streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
+      if (process?.env?.PYA_STREAM_STDOUT === "1" && Array.isArray(streamChunks)) {
+        for (const chunk of streamChunks) {
+          if (chunk) process.stdout.write(String(chunk));
+        }
+      }
       recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
       responseText = streamed.text;
     } else {
@@ -486,23 +491,11 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   if (aspect === "stream") {
     const streamName = sentence?.su?.name ?? `${targetName ?? "mind"} stream`;
-    const chunks = [];
-    if (Array.isArray(streamChunks) && streamChunks.length > 0) {
-      let running = "";
-      for (const chunk of streamChunks) {
-        running += String(chunk ?? "");
-        chunks.push(running);
-      }
-    } else {
-      const words = String(responseText ?? "")
+    const chunks = (Array.isArray(streamChunks) && streamChunks.length > 0)
+      ? streamChunks
+      : String(responseText ?? "")
         .split(/\s+/)
         .filter(Boolean);
-      let running = "";
-      for (const word of words) {
-        running = running ? `${running} ${word}` : word;
-        chunks.push(running);
-      }
-    }
     return makeStream({
       name: streamName,
       state: "open",
