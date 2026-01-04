@@ -5,6 +5,8 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { emitExchangeSentence } from "../../bridge/exchange.mjs";
+import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
+import { makeStream } from "../../library/runtimePrimitives.mjs";
 
 // Per-mind discourse logs keyed by dialogue name
 const mindLogs = new Map();
@@ -292,6 +294,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const targetName = sentence?.to?.name;
   const config = targetName ? remember(targetName) : null;
   const configSentence = config?.be === "mind" ? config : null;
+  const vyahValues = Array.isArray(sentence?.vyah?.ve?.values)
+    ? sentence.vyah.ve.values
+    : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
+  const aspect = getEffectiveVyahAspect(vyahValues, { verb: "mind", caseKey: "vyah" });
   const dialogue = typeof sentence?.from?.text === "string"
     ? sentence.from.text
     : historyDialogueName({ callSentence: sentence, configSentence, targetName });
@@ -339,6 +345,14 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   let responseText = "";
   if (toolMapName) {
+    if (aspect === "stream") {
+      throwErrorSentence({
+        name: "mind aspect invalid",
+        message: "mind stream is not supported with tools",
+        from: { name: "mind" },
+        raw: { aspect }
+      });
+    }
     const messages = [];
     if (configPrompt) messages.push({ role: "system", content: configPrompt });
     if (toolBlock) messages.push({ role: "system", content: toolBlock });
@@ -422,6 +436,11 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
     if (mockResponse) {
       responseText = mockResponse;
+    } else if (aspect === "stream") {
+      recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
+      const streamed = await ollama.generateStream({ model, prompt: fullPrompt.trim() });
+      recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamed.chunks }) });
+      responseText = streamed.text;
     } else {
       recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const raw = await ollama.generate(model, fullPrompt.trim());
@@ -463,6 +482,18 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   });
   appendLog(dialogue, { role: "assistant", content: responseText });
 
+  if (aspect === "stream") {
+    const streamName = sentence?.su?.name ?? `${targetName ?? "mind"} stream`;
+    const chunks = String(responseText ?? "")
+      .split(/\s+/)
+      .filter(Boolean);
+    return makeStream({
+      name: streamName,
+      state: "open",
+      ob: { ve: { values: chunks }, index: 0 }
+    });
+  }
+
   return answerSentence;
 }
 
@@ -476,6 +507,16 @@ export function resetMindLogs() {
 }
 
 export const signatures = [
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
   { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
