@@ -209,6 +209,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Mind streaming now supports live chunk output to stdout with `PYA_STREAM_STDOUT=1`.
 * ISO 8601 `date` payloads added; run start timestamps honor configured timezone offsets.
 * Drafted `caterer` vendoring spec for `hear`/`say` with pyash map examples.
+* Documented caterer build layout and added whisper.cpp linux-x64 build script.
 
 # TODO
 
