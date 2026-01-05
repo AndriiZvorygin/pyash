@@ -4,3 +4,4 @@ su name reiterate backoff ob num 2 be number ya
 su name reiterate attempts ob num 5 be number ya
 su name reiterate cap ob num 8000 be number ya
 su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
+su name timezone be ob "America/Toronto" be text ya

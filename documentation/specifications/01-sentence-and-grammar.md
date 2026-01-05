@@ -21,7 +21,7 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 ## 3. Rules (normative)
 - A sentence has `mood`, `be`, and any number of cases.
 - Cases are keyworded fields (`su`, `ob`, `to`, `from`, `by`, `fromindex`, `toindex`, `atindex`).
-- `su name <x>` identifies a subject name; `ob num <n>` / `ob text <t>` are typed payloads.
+- `su name <x>` identifies a subject name; `ob num <n>` / `ob text <t>` / `ob date <d>` are typed payloads. Dates are ISO 8601.
 - Typed name references use `name <type> <literal>` (e.g., `to name num counter`, `to name text line`); the type must immediately follow `name` to allow multi-word literals.
 - Genitives resolve a field chain on a sentence:
   - Possessive: `this ti ob ti num` maps to `this.ob.num`.
@@ -229,6 +229,7 @@ The implementation exposes **single-token keywords** for each `(axis, context)` 
 from state pyash to state json be compile do
 fromindex num 1 toindex num 10 be process do
 fromtext "prompt" totext output be read do
+ob date 2025-05-01 be record ya
 ```
 
 ## 8. Source of truth

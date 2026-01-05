@@ -403,7 +403,7 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
       if (!target) continue;
 
       if (t === "name") {
-        const nameTypeTokens = ["num", "number", "text", "filename", "vec", "ve", "bool", "boolean"];
+        const nameTypeTokens = ["num", "number", "text", "filename", "vec", "ve", "bool", "boolean", "date"];
         const parts = [];
         let j = i + 1;
         const nameTypeWords = [];
@@ -463,6 +463,11 @@ function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) 
         else if (value === "lie" || value === "false" || value === "0") target.boolean = false;
         else target.boolean = Boolean(value);
         i++; // skip the value we just consumed
+      } else if (t === "date") {
+        const raw = words[i + 1];
+        const value = tokenValue(raw);
+        target.date = value;
+        i++;
       } else {
         const raw = words[i + 1];
         const value = tokenValue(raw);
