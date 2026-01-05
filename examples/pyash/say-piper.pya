@@ -1,0 +1,1 @@
+su name piper-demo ob text "Hello from piper." to filename "artifacts/say/piper-demo.wav" be say do

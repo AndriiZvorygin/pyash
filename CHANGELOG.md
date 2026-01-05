@@ -201,3 +201,5 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `be speak` verb removed (use `say` modules instead).
 * Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
 * Documented caterer build layout and added whisper.cpp linux-x64 build script.
+* Piper `say` backend now produces WAV artifacts, records metadata, and can play audio to speakers by default.
+* Default `say` mapping now targets `piper say`, with a new piper golden example and fixture quiz.
