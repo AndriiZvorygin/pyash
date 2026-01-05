@@ -203,3 +203,5 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Documented caterer build layout and added whisper.cpp linux-x64 build script.
 * Piper `say` backend now produces WAV artifacts, records metadata, and can play audio to speakers by default.
 * Default `say` mapping now targets `piper say`, with a new piper golden example and fixture quiz.
+* Fixture `hear` backend added with a refinery demo (mind → say → hear) and a matching quiz.
+* Whisper.cpp-backed `hear` flow added for real audio transcripts, plus a full refinery example.
