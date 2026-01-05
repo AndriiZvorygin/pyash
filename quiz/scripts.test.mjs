@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -89,12 +90,15 @@ test("read_pya_trace.mjs gross mode returns sandpit JSON", async () => {
 });
 
 test("run_pya_program.mjs uses default say mapping", async () => {
-  process.env.PYA_COMMAND_RESPONSE = "phonemes";
+  const output = "fixture-audio";
+  process.env.PYA_PIPER_FIXTURE = output;
   try {
-    const { logs, errors } = await runScript("program/command/run_pya_program.mjs", ["examples/pyash/say-default.pya"]);
+    const { errors } = await runScript("program/command/run_pya_program.mjs", ["examples/pyash/say-piper.pya"]);
     assert.equal(errors.join("\n"), "");
-    assert.match(logs.join("\n"), /phonemes/);
+    const data = await fs.readFile("artifacts/say/piper-demo.wav", "utf8");
+    assert.equal(data, output);
   } finally {
-    delete process.env.PYA_COMMAND_RESPONSE;
+    delete process.env.PYA_PIPER_FIXTURE;
+    await fs.rm("artifacts/say/piper-demo.wav", { force: true });
   }
 });

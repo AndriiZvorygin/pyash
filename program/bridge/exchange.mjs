@@ -70,6 +70,10 @@ export function setExchangeSentenceId(sentenceId) {
   exchangeSentenceId = sentenceId ? String(sentenceId) : null;
 }
 
+export function getExchangeSentenceId() {
+  return exchangeSentenceId;
+}
+
 export function setExchangeStrict(value) {
   exchangeStrict = Boolean(value);
 }
