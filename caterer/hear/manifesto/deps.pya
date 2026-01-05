@@ -1,0 +1,32 @@
+su name caterer hear manifesto be map def
+  su name schemaVersion ob num 1 ya
+  su name depend be reform during date 2025-05-01 ya
+  su name whisper.cpp ob text "1.8.2" with name license ti name "MIT" be tool ya
+  su name computer ob ve name win-x64 ya
+  su name template ob text "ggml-base.en" be default ya
+  su name binary whisper-main
+    from text "https://sourceforge.net/projects/whisper-cpp.mirror/files/v1.8.2/whisper-bin-x64.zip/download"
+    from name zip
+    fromtext text "Release/whisper-cli.exe"
+    accordingto name sha256 fromtext text "b1514ebc099765e39fa37eb780b92a140a94c86bb0b3b3d98226b38825979732"
+    by num 3832432
+    to filename "caterer/hear/binary/win-x64/whisper-main.exe"
+    as name win-x64
+    be binary ya
+  su name binary whisper-stream
+    from text "https://sourceforge.net/projects/whisper-cpp.mirror/files/v1.8.2/whisper-bin-x64.zip/download"
+    from name zip
+    fromtext text "Release/whisper-stream.exe"
+    accordingto name sha256 fromtext text "b1514ebc099765e39fa37eb780b92a140a94c86bb0b3b3d98226b38825979732"
+    by num 3832432
+    to filename "caterer/hear/binary/win-x64/whisper-stream.exe"
+    as name win-x64
+    be binary ya
+  su name asset ggml-base.en
+    from text "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+    accordingto name sha256 fromtext text "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002"
+    by num 147964211
+    to filename "caterer/hear/template/whisper/ggml-base.en.bin"
+    as name win-x64
+    be asset ya
+prah
