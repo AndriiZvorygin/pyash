@@ -204,6 +204,12 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Spec conformance pointers added, plus `90-implementation-map.md`.
 * Roadmap/changelog cleanup and guidance aligned to new doc structure.
 
+### Jan 4, 2026: Streaming mind + ISO dates + vendoring draft
+
+* Mind streaming now supports live chunk output to stdout with `PYA_STREAM_STDOUT=1`.
+* ISO 8601 `date` payloads added; run start timestamps honor configured timezone offsets.
+* Drafted `caterer` vendoring spec for `hear`/`say` with pyash map examples.
+
 # TODO
 
 ## Week 2: Media IO v0.4 + Streaming Talk Loop + Streaming STT Binary
