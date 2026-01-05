@@ -17,7 +17,7 @@
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-parity.pya` |
 | Tool envelope / again | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |
-| Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |
+| Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
 | Command / say | `examples/pyash/command-espeak.pya`, `examples/pyash/say-espeak.pya`, `examples/pyash/say-piper.pya` |
 
