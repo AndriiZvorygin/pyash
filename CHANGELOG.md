@@ -200,3 +200,4 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * New timezone quiz and date/timezone golden example.
 * `be speak` verb removed (use `say` modules instead).
 * Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
+* Documented caterer build layout and added whisper.cpp linux-x64 build script.
