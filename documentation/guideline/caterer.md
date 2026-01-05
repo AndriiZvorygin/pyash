@@ -10,10 +10,15 @@ Preferred structure
   - caterer/cjson/
   - caterer/zsv/
   - caterer/node-csv/ (only if we vendor Node sources)
+- runtime downloads and build outputs live under caterer/<domain>/building/ and are ignored
 
 Keep vendored trees pristine
 - avoid local edits inside caterer/<project>/
 - put glue code in program/ (preferred) or in caterer/<project>/pyash/ when needed
+
+Build outputs
+- build scripts live under command/
+- whisper.cpp linux-x64 builder: command/build_whisper_cpp_linux_x64.sh
 
 ## How to vendor
 
