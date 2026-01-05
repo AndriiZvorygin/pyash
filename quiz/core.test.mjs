@@ -83,6 +83,11 @@ test("quoted text after via state becomes name without marker", () => {
   assert.equal(s.as?.name, "qwen3-vl:8b-instruct");
 });
 
+test("date tokens parse as date payloads", () => {
+  const s = parse("ob date 2025-05-01 be record ya");
+  assert.equal(s.ob?.date, "2025-05-01");
+});
+
 test("def mood stores definitional fact", async () => {
   forget();
 

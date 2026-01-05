@@ -43,6 +43,7 @@ export function npToPyash(np = {}) {
   if (np.hollow) return "hollow";
   if (np.boolean !== undefined) return `bool ${np.boolean ? "truth" : "lie"}`;
   if (np.num !== undefined) return `num ${np.num}`;
+  if (np.date !== undefined) return `date ${np.date}`;
   if (np.text !== undefined) {
     const quotedBlockMatch = typeof np.text === "string" && np.text.match(/^quoted\.([^.]+)\.[\s\S]*\.\1\.quoted$/);
     if (quotedBlockMatch) {

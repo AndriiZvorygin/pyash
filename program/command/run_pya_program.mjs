@@ -38,6 +38,52 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
   }
 }
 
+function formatIsoWithOffset(date, timeZone) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      fractionalSecondDigits: 3,
+      hourCycle: "h23",
+      timeZoneName: "shortOffset"
+    });
+    const parts = formatter.formatToParts(date);
+    const get = (type) => parts.find(p => p.type === type)?.value ?? "";
+    const yyyy = get("year");
+    const mm = get("month");
+    const dd = get("day");
+    const hh = get("hour");
+    const min = get("minute");
+    const sec = get("second");
+    const ms = get("fractionalSecond");
+    let offset = get("timeZoneName");
+    if (offset.startsWith("GMT")) offset = offset.slice(3);
+    if (!offset || offset === "Z") return `${yyyy}-${mm}-${dd}T${hh}:${min}:${sec}.${ms}Z`;
+    const match = offset.match(/^([+-])(\d{1,2})(?::?(\d{2}))?$/);
+    if (match) {
+      const sign = match[1];
+      const hours = match[2].padStart(2, "0");
+      const minutes = (match[3] ?? "00").padStart(2, "0");
+      offset = `${sign}${hours}:${minutes}`;
+    }
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}:${sec}.${ms}${offset}`;
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function resolveTimeZone(rememberFn) {
+  const tz = rememberFn?.("timezone");
+  if (typeof tz?.ob?.text === "string") return tz.ob.text;
+  if (typeof tz?.ob?.name === "string") return tz.ob.name;
+  return null;
+}
+
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
   const idx = args.findIndex(arg => arg === name || arg.startsWith(prefix));
@@ -143,7 +189,8 @@ async function main() {
   const sentences = splitSentencesWithLines(text);
   const outputs = [];
   const runId = runIdFlag || `run-${Date.now()}`;
-  const runTime = runTimeFlag || new Date().toISOString();
+  const timeZone = resolveTimeZone(remember);
+  const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   let toolCounter = 0;
