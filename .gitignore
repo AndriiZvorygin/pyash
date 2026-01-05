@@ -3,3 +3,15 @@ artifacts/
 know/input/
 node_modules/
 newspaper/
+
+# caterer: keep manifests and licences tracked, ignore heavy and generated content
+caterer/**/binary/
+caterer/**/template/
+caterer/**/vocalization/
+caterer/**/circumstances/
+caterer/**/building/
+caterer/**/build/
+
+# optional: ignore vendored upstream source trees if present
+caterer/whisper.cpp/
+caterer/piper/
