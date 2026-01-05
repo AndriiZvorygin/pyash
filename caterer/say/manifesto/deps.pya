@@ -1,0 +1,32 @@
+su name caterer say manifesto be map def
+  su name schemaVersion ob num 1 ya
+  su name depend be reform during date 2025-05-01 ya
+  su name piper ob text "2023.11.14-2" with name license ti name "MIT" be tool ya
+  su name computer ob ve name linux-x64 ya
+  su name vocalization ob text "en_US-lessac-medium" be default ya
+  su name fallback ob text "espeak-ng" be default ya
+  su name binary piper
+    from text "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
+    from name tar.gz
+    fromtext text "piper/piper"
+    accordingto name sha256 fromtext text "a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992"
+    by num 26460462
+    to filename "caterer/say/binary/linux-x64/piper"
+    as name linux-x64
+    with name chmodX
+    be binary ya
+  su name asset en_US-lessac-medium.onnx
+    from text "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+    accordingto name sha256 fromtext text "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
+    by num 63201294
+    to filename "caterer/say/vocalization/piper/en_US-lessac-medium/en_US-lessac-medium.onnx"
+    as name linux-x64
+    be asset ya
+  su name asset en_US-lessac-medium.onnx.json
+    from text "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+    accordingto name sha256 fromtext text "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
+    by num 4885
+    to filename "caterer/say/vocalization/piper/en_US-lessac-medium/en_US-lessac-medium.onnx.json"
+    as name linux-x64
+    be asset ya
+prah
