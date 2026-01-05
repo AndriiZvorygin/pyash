@@ -10,7 +10,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, SPEAK_HELPER, COMMAND_HELPER } from "./helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER } from "./helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -2036,11 +2036,10 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       sentence.ob?.at?.num != null || sentence.ob?.at?.genitive ||
       sentence.to?.at?.num != null || sentence.to?.at?.genitive);
 
-  if (baseBe === "speak" || baseBe === "say" || (baseBe === "write" && !hasWriteIndex)) {
+  if (baseBe === "say" || (baseBe === "write" && !hasWriteIndex)) {
     cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
     const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
     const isWrite = baseBe === "write";
-    const isSpeak = baseBe === "speak";
     const formatParts = [];
     if (sentence?.become?.name) formatParts.push(sentence.become.name);
     if (sentence?.become?.text) formatParts.push(sentence.become.text);
@@ -2470,10 +2469,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         if (fallback) expr = fallback;
       }
     }
-    if (isSpeak && lang !== "c") {
-      if (jsHelpers) jsHelpers.usesSpeak = true;
-      return `pyaSpeak(${expr});`;
-    }
     const writeFilename = sentence?.to?.filename;
     if (writeFilename && lang !== "c") {
       if (jsHelpers) {
@@ -2493,19 +2488,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
         || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
       const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
-      if (isSpeak) {
-        if (cHelpers) {
-          cHelpers.usesSpeak = true;
-          cHelpers.usesTextHelper = true;
-          cHelpers.usesStdlib = true;
-          cHelpers.usesString = true;
-          cHelpers.usesPrintf = true;
-        }
-        if (fmt === "%s") return `pya_speak(${expr});`;
-        const speakBuf = `speak_${cState?.fileCounter ?? 0}`;
-        if (cState) cState.fileCounter += 1;
-        return `char ${speakBuf}[PYA_TEXT_CAP];\nsnprintf(${speakBuf}, sizeof(${speakBuf}), "${fmt}", ${expr});\npya_speak(${speakBuf});`;
-      }
       if (writeFilename) {
         if (cHelpers) {
           cHelpers.usesStdlib = true;
@@ -4281,10 +4263,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesSpeak: false, usesCommand: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesSpeak: false, usesCommand: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
   const mapDefs = new Map();
   const refineryDefs = new Map();
@@ -5226,10 +5208,6 @@ function buildToolSentence({ capability, args }) {
         prelude.push(newspaperRuntimeHelper());
       }
     }
-    if (jsHelpers.usesSpeak) {
-      const speakHelper = `function pyaSpeak(value) {\n  const text = value == null ? \"\" : String(value);\n  const res = child_process.spawnSync(\"espeak-ng\", [\"-x\", text], { encoding: \"utf8\" });\n  if (res.error) throw res.error;\n  const out = res.stdout ?? \"\";\n  console.log(String(out).trimEnd());\n  return String(out ?? \"\");\n}`;
-      prelude.push(speakHelper);
-    }
     if (jsHelpers.usesCommand) {
       const commandHelper = `function pyaCommand(cmd, input) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_COMMAND_RESPONSE !== undefined) {\n    return String(process.env.PYA_COMMAND_RESPONSE ?? \"\");\n  }\n  const res = child_process.spawnSync(String(cmd ?? \"\"), {\n    shell: true,\n    input: input ?? undefined,\n    encoding: \"utf8\",\n    maxBuffer: 1024 * 1024\n  });\n  if (res.error || res.status) {\n    throw new Error(\"command defective\");\n  }\n  return String(res.stdout ?? \"\");\n}`;
       prelude.push(commandHelper);
@@ -5271,10 +5249,7 @@ function buildToolSentence({ capability, args }) {
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
     }
-  if (jsHelpers.usesSpeak) {
-      prelude.splice(1, 0, `import child_process from "node:child_process";`);
-    }
-    if (jsHelpers.usesCommand && !jsHelpers.usesSpeak) {
+    if (jsHelpers.usesCommand) {
       prelude.splice(1, 0, `import child_process from "node:child_process";`);
     }
     if (jsHelpers.usesExchange) {
@@ -5318,7 +5293,7 @@ function buildToolSentence({ capability, args }) {
     const needsYamlRuntime = cHelpers.usesYamlRuntime;
     const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
     const headers = [];
-    if (cHelpers.usesCommand || cHelpers.usesSpeak || cHelpers.usesExchange) {
+    if (cHelpers.usesCommand || cHelpers.usesExchange) {
       headers.push("#define _POSIX_C_SOURCE 200809L");
     }
     if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
@@ -5338,7 +5313,7 @@ function buildToolSentence({ capability, args }) {
     if (cHelpers.usesMindRuntime) {
       headers.push("#include <curl/curl.h>");
     }
-    if (cHelpers.usesCommand || cHelpers.usesSpeak) {
+    if (cHelpers.usesCommand) {
       headers.push("#include <unistd.h>");
       headers.push("#include <sys/types.h>");
       headers.push("#include <sys/wait.h>");
@@ -5372,7 +5347,6 @@ function buildToolSentence({ capability, args }) {
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
-    if (cHelpers.usesSpeak) cPrelude.push(SPEAK_HELPER);
     if (cHelpers.usesCommand) cPrelude.push(COMMAND_HELPER);
     if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);
     if (needsYamlStringify) cPrelude.push(YAML_STRINGIFY_HELPER);
