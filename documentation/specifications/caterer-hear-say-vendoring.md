@@ -35,6 +35,7 @@ caterer/hear/binary/<computer>/whisper-stream[.exe] (optional)
 caterer/hear/template/whisper/<template-file>
 caterer/hear/circumstances/installed.pya
 caterer/hear/license/whisper.cpp.LICENSE.txt
+caterer/hear/building/
 
 ### Say layout
 
@@ -46,6 +47,7 @@ caterer/say/vocalization/piper/<vocalization-id>/<voice>.json
 caterer/say/circumstances/installed.pya
 caterer/say/license/piper.LICENSE.txt
 caterer/say/license/vocalization/<vocalization-id>.LICENSE.txt
+caterer/say/building/
 
 ## Computer values
 
@@ -198,6 +200,19 @@ For each binary or asset:
 * verify sizeBytes when provided
 * compute SHA-256 and match sha256
 * move into final path using atomic rename when possible
+
+Downloads and build outputs live under `caterer/<hear|say>/building/` and are not tracked.
+
+### Source builds
+
+For linux-x64 whisper.cpp, build and stage binaries with:
+
+* `command/build_whisper_cpp_linux_x64.sh`
+
+The script writes:
+
+* `caterer/hear/binary/linux-x64/whisper-main`
+* `caterer/hear/binary/linux-x64/whisper-stream` (when SDL2 is available)
 
 ### Extract
 
