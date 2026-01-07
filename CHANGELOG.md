@@ -205,3 +205,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Default `say` mapping now targets `piper say`, with a new piper golden example and fixture quiz.
 * Fixture `hear` backend added with a refinery demo (mind → say → hear) and a matching quiz.
 * Whisper.cpp-backed `hear` flow added for real audio transcripts, plus a full refinery example.
+
+### Jan 6, 2026: Mind invocation form update + refinery alignment
+
+* Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
+* `be mind do` deprecated (reserved for future use) and removed from interpreter signature support.
+* Compiler/JS/C mind paths updated to resolve `for` targets and store responses under the requested output name.
+* Mind examples, refinery demos, and quizzes updated to use the new invocation form.

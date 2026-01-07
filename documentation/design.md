@@ -354,7 +354,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
 
 * Dynamic verb dispatch: new typed handlers follow `verb_from_<type>.mjs` or `verb_obj_<type>_to_<type>.mjs` naming.
 
-* Mind config is declarative (`be mind` with `from`/`as`/`accordingto`) and reused on calls to `be mind do`.
+* Mind config is declarative (`be mind` with `from`/`as`/`accordingto`) and reused on calls to `be write ... for name <mind> to name <output> do`.
 
 * Evoking sentence pattern:
 

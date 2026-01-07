@@ -23,7 +23,7 @@ test("mind tool adapter sends non-empty tools array for with name map", async ()
   await interpret(parse("prah"));
   await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
 
-  await interpret(parse("ob text \"use add\" to name helper with name tools be write do"));
+  await interpret(parse("ob text \"use add\" for name helper to name text helper-out with name tools be write do"));
 
   motor.chat = originalChat;
 

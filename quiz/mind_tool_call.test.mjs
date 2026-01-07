@@ -45,7 +45,7 @@ test("mind tool calling executes allowed tool and returns final answer", async (
   await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
   await interpret(parse("exists su name total ob num 3 be number ya"));
 
-  await interpret(parse("ob text \"add\" to name helper with name tools be write do"));
+  await interpret(parse("ob text \"add\" for name helper to name text helper-out with name tools be write do"));
 
   const mem = allRemember();
   const total = mem.find(s => s.su?.name === "total");

@@ -16,7 +16,7 @@ test("mind stream uses config vyah stream and yields chips", async () => {
   process.env.PYA_MIND_RESPONSE = "alpha beta gamma";
   try {
     await run("exists su name helper be mind vyah stream ya");
-    const stream = await run('su name helper-stream ob text "prompt" to name helper be write do');
+    const stream = await run('su name helper-stream ob text "prompt" for name helper to name text helper-stream be write do');
     assert.equal(stream?.be, "stream");
     assert.equal(stream?.su?.name, "helper-stream");
 

@@ -518,7 +518,7 @@ test("compile write to mind emits mind call", async () => {
 
   const program = [
     "exists su name helper be mind from name http://localhost:11434 ya",
-    "ob text hello to name helper be write do"
+    "ob text hello for name helper to name text helper-out be write do"
   ].join("\\n");
 
   const sentence = parse(
@@ -540,8 +540,8 @@ test("compiled write to mind builds messages payload and uses helper transport",
 
   const program = [
     "exists su name helper by num 1 be mind from name http://localhost:11434 ya",
-    "ob text hello to name helper be write do",
-    "ob text again to name helper be write do"
+    "ob text hello for name helper to name text helper-out be write do",
+    "ob text again for name helper to name text helper-out be write do"
   ].join("\\n");
 
   const sentence = parse(

@@ -291,8 +291,9 @@ async function resolveInterpret() {
 
 export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const ob = sentence?.ob ?? {};
-  const targetName = sentence?.to?.name;
-  const config = targetName ? remember(targetName) : null;
+  const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
+  const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
+  const config = mindName ? remember(mindName) : null;
   const configSentence = config?.be === "mind" ? config : null;
   const vyahValues = Array.isArray(sentence?.vyah?.ve?.values)
     ? sentence.vyah.ve.values
@@ -301,7 +302,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   let streamChunks = null;
   const dialogue = typeof sentence?.from?.text === "string"
     ? sentence.from.text
-    : historyDialogueName({ callSentence: sentence, configSentence, targetName });
+    : historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
@@ -377,10 +378,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         }
       } else {
         const requestPayload = { model, messages, tools, stream: false };
-        recordMindJson({ targetName, label: "request", payload: requestPayload });
+        recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
         lastResponse = await ollama.chat(requestPayload);
       }
-      recordMindJson({ targetName, label: "response", payload: stripContext(lastResponse) });
+      recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
 
       const toolCalls = lastResponse?.message?.tool_calls;
       if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
@@ -438,7 +439,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     if (mockResponse) {
       responseText = mockResponse;
     } else if (aspect === "stream") {
-      recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
+      recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const streamed = await ollama.generateStream({
         model,
         prompt: fullPrompt.trim(),
@@ -447,22 +448,22 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
           : undefined
       });
       streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
-      recordMindJson({ targetName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
+      recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
       responseText = streamed.text;
     } else {
-      recordMindJson({ targetName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
+      recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const raw = await ollama.generate(model, fullPrompt.trim());
-      recordMindJson({ targetName, label: "response", payload: stripContext({ response: raw }) });
+      recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: raw }) });
       responseText = raw;
     }
   }
 
   // Record turn so future calls have context
-  const { count, name: answerName } = nextAnswerName(targetName, dialogue);
+  const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   if (callPrompt) {
     doRemember({
       mood: "ya",
-      su: { name: `${targetName} ${dialogue} question ${count}` },
+      su: { name: `${mindName} ${dialogue} question ${count}` },
       be: "write",
       from: { name: "user" },
       ob: { text: callPrompt }
@@ -473,7 +474,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     mood: "ya",
     su: { name: answerName },
     be: "answer",
-    from: { name: targetName },
+    from: { name: mindName },
     ob: { text: responseText }
   };
   doRemember(answerSentence);
@@ -481,17 +482,23 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     ...answerSentence,
     su: { name: "result" }
   });
+  if (outputName) {
+    doRemember({
+      ...answerSentence,
+      su: { name: outputName }
+    });
+  }
   doRemember({
     mood: "ya",
-    su: { name: `${targetName} ${dialogue} answer ${count}` },
+    su: { name: `${mindName} ${dialogue} answer ${count}` },
     be: "answer",
-    from: { name: targetName },
+    from: { name: mindName },
     ob: { text: responseText }
   });
   appendLog(dialogue, { role: "assistant", content: responseText });
 
   if (aspect === "stream") {
-    const streamName = sentence?.su?.name ?? `${targetName ?? "mind"} stream`;
+    const streamName = sentence?.su?.name ?? outputName ?? `${mindName ?? "mind"} stream`;
     const chunks = (Array.isArray(streamChunks) && streamChunks.length > 0)
       ? streamChunks
       : String(responseText ?? "")
@@ -517,39 +524,47 @@ export function resetMindLogs() {
 }
 
 export const signatures = [
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "vyah", "stream"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "num", "to", "name", "num"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "fromtext", "text", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
-  { signatureWords: ["be", "mind", "from", "text", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
   // Type-style target: write ... to name mind
   { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
-  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text }
-  ,
-  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text }
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "with", "name", "map"], handler: mind_to_name_text },
+  // New preferred form: for name <mind> to name <output>
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "name", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  // Legacy compatibility: to name <mind> totext name <output>
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "name", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "vyah", "stream"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "name", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "name", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"], handler: mind_to_name_text }
 ];

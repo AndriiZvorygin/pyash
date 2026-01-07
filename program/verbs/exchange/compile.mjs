@@ -2051,94 +2051,111 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     const wantYaml = formatRaw.includes("yaml");
     const wantCsv = formatRaw.includes("csv");
     // Special case: write to <mind> -> invoke mind (JS/C)
-    if (baseBe === "write" && sentence.to?.name && lang !== "c") {
-      if (mindShim) mindShim.used = true;
-      const mindName = sentence.to.name;
-      const resultName = sentence.su?.name ?? mindName;
-      const promptVal = typeof ob.text === "string" ? JSON.stringify(ob.text) : JSON.stringify(ob.name ?? "");
-      const explicitModel = ob.model ? JSON.stringify(ob.model) : null;
-      const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
-      const lines = ["{"]; // block scope to avoid duplicate const per call
-      if (sentence.with?.name) {
-        if (jsHelpers) jsHelpers.usesVectorFormat = true;
-        if (rememberFlag) rememberFlag.used = true;
+    if (baseBe === "write" && lang !== "c") {
+      const hasMindTarget =
+        sentence.for?.name ||
+        sentence.totext?.name ||
+        (sentence.to?.name && declaredTypes?.get(sentence.to.name) === "mind");
+      if (hasMindTarget) {
+        if (mindShim) mindShim.used = true;
+        const mindName = sentence.for?.name ?? sentence.to?.name;
+        const outputName = sentence.for?.name ? sentence.to?.name : sentence.totext?.name;
+        const resultName = sentence.su?.name ?? mindName;
+        const promptVal = typeof ob.text === "string" ? JSON.stringify(ob.text) : JSON.stringify(ob.name ?? "");
+        const explicitModel = ob.model ? JSON.stringify(ob.model) : null;
+        const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
+        const lines = ["{"]; // block scope to avoid duplicate const per call
+        if (sentence.with?.name) {
+          if (jsHelpers) jsHelpers.usesVectorFormat = true;
+          if (rememberFlag) rememberFlag.used = true;
+        }
+        lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
+        lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
+        lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
+        const dialogue = sentence.from?.text
+          ?? sentence.fromtext?.name
+          ?? sentence.fromtext?.text
+          ?? `${mindName} story`;
+        lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
+        lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+        lines.push("const messages = [];");
+        lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
+        if (sentence.with?.name) {
+          const toolMapName = JSON.stringify(sentence.with.name);
+          lines.push(`const toolMapFact = remember(${toolMapName});`);
+          lines.push("const toolEntries = toolMapFact?.ob?.map ?? {};");
+          lines.push("const toolSchemas = buildToolSchemas(toolEntries);");
+          lines.push("const tools = toolSchemas.tools;");
+          lines.push("const toolMap = toolSchemas.toolMap;");
+          lines.push("if (toolSchemas.toolBlock) messages.push({ role: \"system\", content: toolSchemas.toolBlock });");
+        } else {
+          lines.push("const tools = [];");
+          lines.push("const toolMap = new Map();");
+        }
+        lines.push("messages.push(...historyMessages);");
+        lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
+        lines.push("let reply = \"\";");
+        lines.push("let lastResponse = null;");
+        lines.push("let turns = 0;");
+        lines.push("const maxToolTurns = 6;");
+        lines.push("while (turns < maxToolTurns) {");
+        lines.push("  turns += 1;");
+        lines.push("  const requestPayload = { model, messages, tools, stream: false };");
+        lines.push(`  recordMindJson(${JSON.stringify(mindName)}, "request", requestPayload);`);
+        lines.push("  lastResponse = await callMind({ host, model, messages, tools, numCtx: cfg.numCtx || 8192 });");
+        lines.push(`  recordMindJson(${JSON.stringify(mindName)}, "response", stripMindContext(lastResponse));`);
+        lines.push("  const toolCalls = lastResponse?.message?.tool_calls;");
+        lines.push("  if (!Array.isArray(toolCalls) || toolCalls.length === 0) {");
+        lines.push("    reply = lastResponse?.message?.content ?? \"\";");
+        lines.push("    break;");
+        lines.push("  }");
+        lines.push("  const assistantMessage = { role: \"assistant\", content: lastResponse?.message?.content ?? \"\", tool_calls: toolCalls };");
+        lines.push("  messages.push(assistantMessage);");
+        lines.push("  for (const call of toolCalls) {");
+        lines.push("    const toolName = call?.function?.name ?? call?.name;");
+        lines.push("    if (!toolName || !toolMap.has(toolName)) { throw new Error(`tool defective: unknown tool ${toolName}`); }");
+        lines.push("    const capability = toolMap.get(toolName);");
+        lines.push("    const toolSentence = buildToolSentence({ capability, args: call?.function?.arguments ?? call?.arguments });");
+        lines.push("    const toolFn = globalThis?.[toolName];");
+        lines.push("    if (typeof toolFn !== \"function\") { throw new Error(`tool defective: missing function ${toolName}`); }");
+        lines.push("    const toolResult = await Promise.resolve(toolFn(toolSentence));");
+        lines.push("    const toolText = toolResult && typeof toolResult === \"object\" ? formatSentence(toolResult) : String(toolResult ?? \"\");");
+        lines.push("    messages.push({ role: \"tool\", tool_name: toolName, content: toolText });");
+        lines.push("  }");
+        lines.push("}");
+        lines.push("if (!reply) reply = lastResponse?.message?.content ?? \"\";");
+        const resVar = sanitizeName(resultName);
+        lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+        lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
+        lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");
+        lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
+        lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
+        lines.push(`globalThis.result = { ...${resVar}, su: { name: "result" } };`);
+        if (outputName) {
+          lines.push(`globalThis[${JSON.stringify(outputName)}] = { ...${resVar}, su: { name: ${JSON.stringify(outputName)} } };`);
+        }
+        lines.push(`const __pyaQuestionName = ${JSON.stringify(mindName)} + " " + dialogue + " question " + __pyaAnswerCount;`);
+        lines.push(`globalThis[__pyaQuestionName] = { su: { name: __pyaQuestionName }, from: { name: "user" }, ob: { text: ${promptVal} }, be: "write", mood: "ya" };`);
+        lines.push(`const __pyaDialogueAnswerName = ${JSON.stringify(mindName)} + " " + dialogue + " answer " + __pyaAnswerCount;`);
+        lines.push(`globalThis[__pyaDialogueAnswerName] = { su: { name: __pyaDialogueAnswerName }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
+        lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
+        lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
+        lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
+        lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
+        lines.push("}");
+        return lines.join("\n");
       }
-      lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
-      lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
-      lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
-      const dialogue = sentence.from?.text
-        ?? sentence.fromtext?.name
-        ?? sentence.fromtext?.text
-        ?? `${mindName} story`;
-      lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
-      lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-      lines.push("const messages = [];");
-      lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
-      if (sentence.with?.name) {
-        const toolMapName = JSON.stringify(sentence.with.name);
-        lines.push(`const toolMapFact = remember(${toolMapName});`);
-        lines.push("const toolEntries = toolMapFact?.ob?.map ?? {};");
-        lines.push("const toolSchemas = buildToolSchemas(toolEntries);");
-        lines.push("const tools = toolSchemas.tools;");
-        lines.push("const toolMap = toolSchemas.toolMap;");
-        lines.push("if (toolSchemas.toolBlock) messages.push({ role: \"system\", content: toolSchemas.toolBlock });");
-      } else {
-        lines.push("const tools = [];");
-        lines.push("const toolMap = new Map();");
-      }
-      lines.push("messages.push(...historyMessages);");
-      lines.push(`messages.push({ role: "user", content: ${promptVal} });`);
-      lines.push("let reply = \"\";");
-      lines.push("let lastResponse = null;");
-      lines.push("let turns = 0;");
-      lines.push("const maxToolTurns = 6;");
-      lines.push("while (turns < maxToolTurns) {");
-      lines.push("  turns += 1;");
-      lines.push("  const requestPayload = { model, messages, tools, stream: false };");
-      lines.push(`  recordMindJson(${JSON.stringify(mindName)}, "request", requestPayload);`);
-      lines.push("  lastResponse = await callMind({ host, model, messages, tools, numCtx: cfg.numCtx || 8192 });");
-      lines.push(`  recordMindJson(${JSON.stringify(mindName)}, "response", stripMindContext(lastResponse));`);
-      lines.push("  const toolCalls = lastResponse?.message?.tool_calls;");
-      lines.push("  if (!Array.isArray(toolCalls) || toolCalls.length === 0) {");
-      lines.push("    reply = lastResponse?.message?.content ?? \"\";");
-      lines.push("    break;");
-      lines.push("  }");
-      lines.push("  const assistantMessage = { role: \"assistant\", content: lastResponse?.message?.content ?? \"\", tool_calls: toolCalls };");
-      lines.push("  messages.push(assistantMessage);");
-      lines.push("  for (const call of toolCalls) {");
-      lines.push("    const toolName = call?.function?.name ?? call?.name;");
-      lines.push("    if (!toolName || !toolMap.has(toolName)) { throw new Error(`tool defective: unknown tool ${toolName}`); }");
-      lines.push("    const capability = toolMap.get(toolName);");
-      lines.push("    const toolSentence = buildToolSentence({ capability, args: call?.function?.arguments ?? call?.arguments });");
-      lines.push("    const toolFn = globalThis?.[toolName];");
-      lines.push("    if (typeof toolFn !== \"function\") { throw new Error(`tool defective: missing function ${toolName}`); }");
-      lines.push("    const toolResult = await Promise.resolve(toolFn(toolSentence));");
-      lines.push("    const toolText = toolResult && typeof toolResult === \"object\" ? formatSentence(toolResult) : String(toolResult ?? \"\");");
-      lines.push("    messages.push({ role: \"tool\", tool_name: toolName, content: toolText });");
-      lines.push("  }");
-      lines.push("}");
-      lines.push("if (!reply) reply = lastResponse?.message?.content ?? \"\";");
-      const resVar = sanitizeName(resultName);
-    lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
-    lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
-    lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");
-    lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
-    lines.push(`globalThis[${resVar}.su.name] = ${resVar};`);
-    lines.push(`globalThis.result = { ...${resVar}, su: { name: "result" } };`);
-    lines.push(`const __pyaQuestionName = ${JSON.stringify(mindName)} + " " + dialogue + " question " + __pyaAnswerCount;`);
-    lines.push(`globalThis[__pyaQuestionName] = { su: { name: __pyaQuestionName }, from: { name: "user" }, ob: { text: ${promptVal} }, be: "write", mood: "ya" };`);
-    lines.push(`const __pyaDialogueAnswerName = ${JSON.stringify(mindName)} + " " + dialogue + " answer " + __pyaAnswerCount;`);
-    lines.push(`globalThis[__pyaDialogueAnswerName] = { su: { name: __pyaDialogueAnswerName }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
-    lines.push(`const __pyaToolEvoked = ${JSON.stringify(sentenceToPyash(sentence))};`);
-    lines.push(`const __pyaToolResult = "su name " + ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount + " from name " + ${JSON.stringify(mindName)} + " ob text " + JSON.stringify(reply) + " be answer ya";`);
-    lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
-    lines.push(`console.log(${resVar}.ob?.text ?? ${resVar}.ob?.num);`);
-    lines.push("}");
-    return lines.join("\n");
     }
-    if (baseBe === "write" && sentence.to?.name && lang === "c" && declaredTypes?.get(sentence.to.name) === "mind") {
-      const derived = { ...sentence, be: "mind" };
-      return transpileSentence(derived, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
+    if (baseBe === "write" && lang === "c") {
+      const mindTarget = sentence.for?.name ?? sentence.to?.name;
+      const hasMindTarget =
+        sentence.for?.name ||
+        sentence.totext?.name ||
+        (sentence.to?.name && declaredTypes?.get(sentence.to.name) === "mind");
+      if (hasMindTarget) {
+        const derived = { ...sentence, be: "mind", to: mindTarget ? { name: mindTarget } : sentence.to };
+        return transpileSentence(derived, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
+      }
     }
 
     if (lang === "c" && ob.name && declaredTypes?.get(ob.name) === "map") {
@@ -3038,7 +3055,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
         cHelpers.usesExchange = true;
         cHelpers.usesMap = true;
       }
-      const mindName = sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
+      const mindName = sentence.for?.name ?? sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
       if (sentence.mood === "ya") {
         if (declaredTypes) declaredTypes.set(mindName, "mind");
         const space = sentence.from?.name ?? ob.space ?? null;
@@ -3150,7 +3167,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     }
     if (mindShim) mindShim.used = true;
 
-    const mindName = sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
+    const mindName = sentence.for?.name ?? sentence.to?.name ?? ob.to?.name ?? sentence.su?.name ?? "mind";
 
     // Configuration sentence (ya mood)
     if (sentence.mood === "ya") {

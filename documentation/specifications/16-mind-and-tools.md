@@ -19,9 +19,10 @@ newspaper and again mode are enabled.
 
 ## 1. Purpose
 
-`be mind` invokes a language-model backend and returns a text response.
+`be write` invokes a language-model backend and returns a text response.
 
-`be write ... to name <mind>` is an alias for invoking that mind.
+`be write ... for name <mind> to name <output>` is the preferred invocation form.
+`be mind do` is deprecated and reserved for future use.
 
 ---
 
@@ -51,15 +52,25 @@ Registration updates memory for `<mind>`.
 
 ## 3. Invocation
 
-Invocation uses `be mind` or `be write ... to name <mind>`:
+Invocation uses `be write ... for name <mind> to name <output>`:
 
 ```pyash
 su name <result>
 ob text <text>
-to name <mind>
-be mind do
+for name <mind>
+to name <output>
+be write do
 ```
 `ob discourse <text>` is accepted in source and parsed as `ob name <text>`.
+
+Legacy compatibility:
+
+```pyash
+ob text <text>
+to name <mind>
+totext name <output>
+be write do
+```
 
 ### 3.1 Model resolution
 
@@ -555,7 +566,7 @@ su name helper response 000001 ob text quoted.json.{
   },
   "done": true
 }.json.quoted from name mind be write ya
-su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" for name helper to name text helper-out with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
 su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
 ```
 
@@ -994,7 +1005,7 @@ su name helper response 000001 ob text quoted.json.{
   },
   "done": true
 }.json.quoted from name mind be write ya
-su name tool event 000001 ob la ob text "use the say tool to say hello world" to name helper with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
+su name tool event 000001 ob la ob text "use the say tool to say hello world" for name helper to name text helper-out with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
 su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
 ```
 

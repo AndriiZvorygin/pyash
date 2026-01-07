@@ -145,7 +145,8 @@ test("deriveSignatureFromCall infers mind and text for write with literal prompt
     mood: "do",
     be: "write",
     ob: { name: "do you like life?" },
-    to: { name: "generator" }
+    for: { name: "generator" },
+    to: { name: "output" }
   };
 
   const remember = name => (name === "generator" ? { be: "mind" } : undefined);
@@ -154,8 +155,9 @@ test("deriveSignatureFromCall infers mind and text for write with literal prompt
 
   assert.deepEqual(sig, [
     "be", "write",
+    "for", "name", "mind",
     "ob", "text",
-    "to", "name", "mind"
+    "to", "text"
   ]);
 });
 

@@ -2,12 +2,12 @@
 
 - **id**: mind-config-call
 - **status**: ready
-- **intent**: Register a mind configuration (`be mind ya/def`) and invoke it via `be mind do`.
+- **intent**: Register a mind configuration (`be mind ya/def`) and invoke it via `be write ... for name <mind> to name <output> do`.
 - **type**: REPL
 - **REPL input**:
   ```
   su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya
-  su question ob discourse "Hello" to generator be mind do
+  su question ob discourse "Hello" for name generator to name text generator-out be write do
   mem
   ```
 - **Expected output**:
