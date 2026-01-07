@@ -6,7 +6,7 @@ This document defines how a **mind** (an LLM endpoint) is configured, how Pyash 
 
 - A **mind** is an LLM endpoint plus configuration.
 - Configure once with `be mind ya` (host/model/system prompt).
-- Invoke with `be mind do` or `be write ... to <mind> do`.
+- Invoke with `be write ... for name <mind> to name <output> do`.
 - The interpreter calls `motor/ollama.mjs`.
 - The compiler (JS) emits a call into a small JS HTTP helper instead of shelling out to `curl`.
 
@@ -56,7 +56,7 @@ Internally, the runtime stores at least:
 Direct call:
 
 ```pyash
-su question ob discourse "Hello" to generator be mind do
+su question ob discourse "Hello" for name generator to name text generator-out be write do
 ```
 
 Via `write`:
@@ -67,7 +67,8 @@ be write ob text "Hello" to generator do
 
 Relevant compositional cases at call time:
 - `ob` holds the user text (`ob text` or `ob discourse`).
-- `to name <mind>` selects which mind to call.
+- `for name <mind>` selects which mind to call.
+- `to name <output>` receives the response text.
 - Optional `by num N` could override window per call (not yet wired; config-level `by num` is used).
 
 ### Runtime behaviour (high level)

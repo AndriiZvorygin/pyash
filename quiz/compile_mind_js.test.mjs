@@ -14,7 +14,7 @@ async function compileToJs(pyash) {
 test("compile mind to javascript uses PYA_MIND_RESPONSE", async () => {
   const pyash = [
     "exists su name helper be mind via state \"qwen3\" ya",
-    "su name answer ob text \"Hello\" to name helper be mind do"
+    "su name answer ob text \"Hello\" for name helper to name text helper-out be write do"
   ].join("\n");
   const wrapped = await compileToJs(pyash);
   const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");

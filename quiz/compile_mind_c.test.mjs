@@ -26,7 +26,7 @@ async function compileToC(pyash) {
 test("compile mind to C uses PYA_MIND_RESPONSE", async () => {
   const pyash = [
     "exists su name helper be mind via state \"qwen3\" ya",
-    "su name answer ob text \"Hello\" to name helper be mind do"
+    "su name answer ob text \"Hello\" for name helper to name text helper-out be write do"
   ].join("\n");
   const c = await compileToC(pyash);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-c-"));

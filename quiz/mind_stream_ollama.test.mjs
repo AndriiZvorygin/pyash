@@ -42,7 +42,7 @@ test("mind stream pulls live Ollama chunks", { skip: !process.env.PYA_OLLAMA_STR
 
   const originalStreamEnv = process.env.PYA_STREAM_STDOUT;
   process.env.PYA_STREAM_STDOUT = "1";
-  const stream = await run('su name mind-stream ob text "Write five short sentences about rain. No bullet points." to name mind be write vyah stream do');
+  const stream = await run('su name mind-stream ob text "Write five short sentences about rain. No bullet points." for name mind to name text mind-stream be write vyah stream do');
   if (originalStreamEnv === undefined) delete process.env.PYA_STREAM_STDOUT;
   else process.env.PYA_STREAM_STDOUT = originalStreamEnv;
   assert.equal(stream?.be, "stream");

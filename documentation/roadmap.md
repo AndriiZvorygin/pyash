@@ -244,6 +244,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
   * fixture-driven speech I/O for repeatable tests
   * recorded metadata/hashes sufficient for `again` verification when applicable
+  * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
 
 ### Spec drops (freeze v0.4)
 
