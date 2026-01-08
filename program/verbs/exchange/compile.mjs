@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import YAML from "yaml";
 import { buildProgram } from "../../program.mjs";
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
@@ -15,228 +14,13 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
 import { parse as parseCsv } from "csv-parse/sync";
-
-const CJSON_HEADER = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.h", import.meta.url), "utf8");
-const CJSON_SOURCE = fsSync.readFileSync(new URL("../../../caterer/cjson/cJSON.c", import.meta.url), "utf8")
-  .replace(/#include\s+\"cJSON\.h\"\s*/g, "");
-const CSV_PARSE_RUNTIME_URL = pathToFileURL(
-  path.resolve(process.cwd(), "node_modules/csv-parse/dist/esm/sync.js")
-).href;
-const YAML_RUNTIME_URL = pathToFileURL(
-  path.resolve(process.cwd(), "node_modules/yaml/dist/index.js")
-).href;
-
-function sanitizeName(name = "") {
-  const cleaned = String(name)
-    .trim()
-    .replace(/[^A-Za-z0-9_]+/g, "_")
-    .replace(/^([0-9])/, "_$1");
-  // Avoid JS reserved words and special identifiers like "this"
-  if (/^(?:this|function|return|class|default|const|let|var|if|for|while|switch|case|break|continue|do|new|try|catch|finally)$/.test(cleaned)) {
-    return `_${cleaned}`;
-  }
-  return cleaned;
-}
-
-function sentenceIdForText(text, index = 0) {
-  const idx = Number.isFinite(index) ? Number(index) : 0;
-  return `evoke-${idx}`;
-}
-
-async function loadDefaultConfigProgram(cwd) {
-  const configPath = path.resolve(cwd, "configure", "default.pya");
-  try {
-    const raw = await fs.readFile(configPath, "utf8");
-    return buildProgram(raw);
-  } catch (err) {
-    if (err?.code === "ENOENT") return null;
-    throw err;
-  }
-}
-
-function findDefaultSayMapping(sentences) {
-  let mapping = null;
-  for (const sentence of sentences || []) {
-    if (sentence?.be !== "default") continue;
-    if (sentence?.su?.name !== "say") continue;
-    const targetName = sentence?.ob?.name;
-    if (!targetName) continue;
-    mapping = {
-      targetName,
-      fromFilename: sentence?.from?.filename,
-      fromName: sentence?.from?.name
-    };
-  }
-  return mapping;
-}
-
-function findRetryConfig(sentences) {
-  const config = {};
-  for (const sentence of sentences || []) {
-    if (sentence?.mood !== "ya") continue;
-    const name = sentence?.su?.name;
-    if (!name || !name.startsWith("reiterate ")) continue;
-    const value = sentence?.ob?.num ?? sentence?.ob?.text;
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed)) continue;
-    if (name === "reiterate delay") config.initialDelayMs = parsed;
-    if (name === "reiterate backoff") config.backoff = parsed;
-    if (name === "reiterate attempts") config.maxAttempts = parsed;
-    if (name === "reiterate cap") config.maxDelayMs = parsed;
-  }
-  return config;
-}
-
-function applyDefaultSayMapping(sentences, mapping) {
-  if (!mapping?.targetName) return sentences;
-  const hasSay = (sentences || []).some(s => s?.be === "say");
-  if (!hasSay) return sentences;
-  const hasImport = sentences.some(s =>
-    s?.be === "import"
-    && s?.ob?.name === "say"
-    && s?.to?.name === mapping.targetName
-    && ((mapping.fromFilename && s?.from?.filename === mapping.fromFilename)
-      || (mapping.fromName && s?.from?.name === mapping.fromName))
-  );
-  const importSentence = !hasImport ? {
-    mood: "do",
-    be: "import",
-    from: mapping.fromFilename ? { filename: mapping.fromFilename } : { name: mapping.fromName ?? mapping.targetName },
-    ob: { name: "say" },
-    to: { name: mapping.targetName }
-  } : null;
-  const rewritten = sentences.map((sentence) => {
-    if (sentence?.be !== "say") return sentence;
-    const next = { ...sentence, be: mapping.targetName };
-    if (!next.to) next.to = { name: "result", nameTypeWords: ["text"] };
-    return next;
-  });
-  return importSentence ? [importSentence, ...rewritten] : rewritten;
-}
-
-function markDeclared(declared, name) {
-  if (!declared || !name) return;
-  const clean = sanitizeName(name);
-  declared.add(name);
-  declared.add(clean);
-}
-
-function compareUtf8(a, b) {
-  if (a === b) return 0;
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const len = Math.min(bufA.length, bufB.length);
-  for (let i = 0; i < len; i += 1) {
-    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
-  }
-  return bufA.length < bufB.length ? -1 : 1;
-}
-
-const TOOL_CASE_ORDER = [
-  "su",
-  "ob",
-  "vyah",
-  "fromindex",
-  "atindex",
-  "toindex",
-  "fromtext",
-  "from",
-  "to",
-  "by",
-  "with",
-  "as",
-  "accordingto",
-  "become",
-  "at",
-  "during",
-  "via",
-  "of"
-];
-
-function toolTypeWordsFromValue(value) {
-  if (!value || typeof value !== "object") return [];
-  if (Array.isArray(value.nameTypeWords) && value.nameTypeWords.length) return ["name", ...value.nameTypeWords];
-  if (value.name !== undefined) return ["name"];
-  if (value.num !== undefined) return ["num"];
-  if (value.text !== undefined) return ["text"];
-  if (value.boolean !== undefined) return ["bool"];
-  if (value.filename !== undefined) return ["filename"];
-  if (value.ve) return ["vec"];
-  if (value.la) return ["la"];
-  return [];
-}
-
-function toolSchemaType(typeWords) {
-  if (!typeWords?.length) return "string";
-  if (typeWords.includes("name")) return "string";
-  if (typeWords.includes("bool")) return "boolean";
-  if (typeWords.includes("num")) return "number";
-  if (typeWords.includes("text")) return "string";
-  if (typeWords.includes("filename")) return "string";
-  if (typeWords.includes("vec")) return "array";
-  if (typeWords.includes("la")) return "object";
-  return "string";
-}
-
-function toolFunctionNameFromSignature(signatureWords) {
-  return signatureWords
-    .map(word => String(word ?? ""))
-    .join("_")
-    .replace(/[^A-Za-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function deriveSignatureWordsForTool(sentence) {
-  const words = ["be", sentence?.be];
-  for (const key of TOOL_CASE_ORDER) {
-    if (key === "su") continue;
-    if (!sentence || sentence[key] === undefined) continue;
-    const typeWords = toolTypeWordsFromValue(sentence[key], key);
-    words.push(key, ...typeWords);
-  }
-  return words.filter(Boolean);
-}
-
-function buildToolSchemasForCompile(toolEntries = {}) {
-  const caps = [];
-  for (const entry of Object.values(toolEntries)) {
-    if (entry?.mood !== "can" || !entry?.be) continue;
-    const canonical = sentenceToPyash(entry).trim();
-    caps.push({ sentence: entry, canonical });
-  }
-  if (!caps.length) return { tools: [], toolMap: new Map(), toolBlock: "" };
-  caps.sort((a, b) => compareUtf8(a.canonical, b.canonical));
-  const toolMap = new Map();
-  const tools = [];
-  for (const cap of caps) {
-    const signatureWords = deriveSignatureWordsForTool(cap.sentence);
-    const signatureName = signatureWords.join(" ");
-    const toolName = toolFunctionNameFromSignature(signatureWords);
-    const properties = {};
-    const required = [];
-    for (const key of TOOL_CASE_ORDER) {
-      if (key === "su") continue;
-      if (cap.sentence?.[key] === undefined) continue;
-      const typeWords = toolTypeWordsFromValue(cap.sentence[key], key);
-      properties[key] = { type: toolSchemaType(typeWords) };
-      required.push(key);
-    }
-    tools.push({
-      type: "function",
-      function: {
-        name: toolName,
-        description: cap.canonical,
-        signature: signatureName,
-        parameters: { type: "object", properties, required }
-      }
-    });
-    toolMap.set(toolName, cap.sentence);
-    toolMap.set(signatureName, cap.sentence);
-  }
-  const toolBlock = "TOOLS:\n" + caps.map(c => c.canonical).join("\n");
-  return { tools, toolMap, toolBlock };
-}
+import { CJSON_HEADER, CJSON_SOURCE, CSV_PARSE_RUNTIME_URL, YAML_RUNTIME_URL } from "./compile/constants.mjs";
+import { applyDefaultSayMapping, findDefaultSayMapping, findRetryConfig, loadDefaultConfigProgram } from "./compile/default_config.mjs";
+import { mindHelperSource, mindHistorySource } from "./compile/mind_runtime_helper.mjs";
+import { mindToolHelperSource } from "./compile/mind_tool_helper.mjs";
+import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "./compile/runtime_helpers.mjs";
+import { buildToolSchemasForCompile } from "./compile/tooling.mjs";
+import { compareUtf8, markDeclared, sanitizeName, sentenceIdForText } from "./compile/util.mjs";
 
 function sentenceLineNumbersFromText(sourceText) {
   const sentences = splitSentences(sourceText);
@@ -313,752 +97,218 @@ function inlineSourceMap(code, { sourceName, sourceText } = {}) {
   return output.join("\n");
 }
 
-function exchangeRuntimeHelper() {
+function handleRetSentence(sentence, { lang, sentenceArg, locals, declared } = {}) {
+  if (sentence.mood !== "ret") return null;
+  const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
+  if (sourceName) {
+    return `return ${sanitizeName(sourceName)};`;
+  }
+  if (sentence.ob?.genitive && sentenceArg) {
+    const expr = pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
+    if (expr) return `return ${expr};`;
+  }
+  if (sentence.ob?.num !== undefined) return `return ${Number(sentence.ob.num) || 0};`;
+  if (typeof sentence.ob?.text === "string") return `return ${JSON.stringify(sentence.ob.text)};`;
+  return lang === "c" ? "return;" : "return sentence;";
+}
+
+function handleCompileSentence(sentence, { lang, declared, declaredTypes, cHelpers } = {}) {
+  if (lang !== "c" && lang !== "javascript") return null;
+  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  const targetState = (sentence?.tostate?.name || sentence?.become?.name || "").toLowerCase();
+  if (sourceState !== "json" || targetState !== "pyash") return null;
+  const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+  if (typeof sourceText !== "string") {
+    throwErrorSentence({
+      name: "compile error",
+      message: "compile: source text is required (from text or from filename)",
+      from: { name: "compile" }
+    });
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(sourceText);
+  } catch (err) {
+    throwErrorSentence({
+      name: "compile error",
+      message: "compile: invalid json",
+      from: { name: "compile" },
+      raw: { error: err?.message }
+    });
+  }
+  let text;
+  try {
+    text = jsonToPyashText(parsed, sentence?.su?.name ?? "data").text;
+  } catch (err) {
+    throwErrorSentence({
+      name: "compile error",
+      message: err?.message ?? "compile: json export failed",
+      from: { name: "compile" },
+      raw: { error: err?.message }
+    });
+  }
+  const wrappedText = `quoted.pyash.\n${text}.pyash.quoted`;
+  const targetName = sentence?.to?.name ?? "output";
+  const safeName = sanitizeName(targetName);
+  markDeclared(declared, targetName);
+  if (declaredTypes) declaredTypes.set(targetName, "text");
+  if (lang === "c") {
+    if (cHelpers) {
+      cHelpers.usesTextHelper = true;
+      cHelpers.usesString = true;
+    }
+    return `char ${safeName}[PYA_TEXT_CAP] = ${JSON.stringify(wrappedText)};`;
+  }
+  const sentenceObject = `{ su: { name: "${targetName}" }, ob: { text: ${JSON.stringify(wrappedText)} }, be: "pyash", mood: "ya" }`;
+  return `let ${safeName} = ${sentenceObject};\nglobalThis["${targetName}"] = ${safeName};`;
+}
+
+function handleImportSentence(sentence, { lang, declared, declaredTypes, jsHelpers, cHelpers, locals, cState } = {}) {
+  cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+  const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
+  const targetName = sentence?.to?.name ?? sentence?.su?.name;
+  if (!targetName) {
+    throwErrorSentence({
+      name: "import error",
+      message: "import: target name is required (to name <map>)",
+      from: { name: "compile" },
+      raw: sentence
+    });
+  }
+  const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+  const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+  if (sourceFilename && sourceFilename.endsWith(".pya")) {
+    return null;
+  }
+  if (!sourceFilename && typeof sourceText !== "string") return null;
+  const safeName = sanitizeName(targetName);
+  const alreadyDeclared = declared?.has(targetName);
+  markDeclared(declared, targetName);
+  if (declaredTypes) declaredTypes.set(targetName, "text");
+  if (lang === "c") {
+    if (cHelpers) {
+      cHelpers.usesJsonRuntime = true;
+      cHelpers.usesTextHelper = true;
+      cHelpers.usesString = true;
+      cHelpers.usesStdlib = true;
+      cHelpers.usesPrintf = true;
+      cHelpers.usesCtype = true;
+    }
+    const lines = [];
+    const sourceVar = `${safeName}_source`;
+    const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+    if (needsDecl) {
+      lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+    }
+    lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
+    if (sourceFilename) {
+      if (cHelpers) cHelpers.usesExchange = true;
+      lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
+      lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
+    } else {
+      lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+    }
+    lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
+    lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
+    return lines.join("\n");
+  }
+  if (jsHelpers) {
+    jsHelpers.usesJsonRuntime = true;
+    jsHelpers.usesVectorFormat = true;
+    if (sourceFilename) {
+      jsHelpers.usesFs = true;
+      jsHelpers.usesExchange = true;
+    }
+  }
+  const sourceExpr = sourceFilename && jsHelpers?.usesExchange
+    ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
+    : (sourceFilename
+      ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+      : JSON.stringify(sourceText));
+  const parseVar = `${safeName}_json`;
+  const assignLine = alreadyDeclared
+    ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
+    : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
   return [
-    "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
-    "function pyaNewspaperEnabled() {",
-    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
-    "}",
-    "function pyaEmitNewspaper(line) {",
-    "  if (!pyaNewspaperEnabled() || !line) return;",
-    "  const text = String(line);",
-    "  const payload = text.includes(\"\\n\")",
-    "    ? `${PYA_NEWSPAPER_PREFIX}BEGIN\\n${text}\\n${PYA_NEWSPAPER_PREFIX}END\\n`",
-    "    : `${PYA_NEWSPAPER_PREFIX}${text}\\n`;",
-    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
-    "    process.stdout.write(payload);",
-    "  } else {",
-    "    console.log(payload.trimEnd());",
-    "  }",
-    "}",
-    "let pyaToolCounter = 0;",
-    "function pyaNextToolEventId() {",
-    "  pyaToolCounter += 1;",
-    "  return String(pyaToolCounter).padStart(6, \"0\");",
-    "}",
-    "let pyaArtifactCounter = 0;",
-    "const pyaArtifacts = new Map();",
-    "const pyaArtifactHashes = new Map();",
-    "function pyaExchangeEnabled() {",
-    "  return pyaNewspaperEnabled();",
-    "}",
-    "function pyaNormalizeNewlines(text) {",
-    "  return String(text ?? \"\").replace(/\\r\\n/g, \"\\n\").replace(/\\r/g, \"\\n\");",
-    "}",
-    "function pyaNormalizeLocator(locator) {",
-    "  const text = String(locator ?? \"\");",
-    "  if (/^[A-Za-z][A-Za-z0-9+.-]*:\\/\\//.test(text)) return text;",
-    "  const runRoot = process.cwd();",
-    "  const resolved = path.resolve(runRoot, text);",
-    "  const relative = path.relative(runRoot, resolved);",
-    "  if (relative.startsWith(\"..\") || path.isAbsolute(relative)) {",
-    "    throw new Error(\"exchange defective\");",
-    "  }",
-    "  return relative.replace(/\\\\/g, \"/\");",
-    "}",
-    "function pyaEmitExchange(line) {",
-    "  pyaEmitNewspaper(line);",
-    "}",
-    "function pyaArtifactExt(locator) {",
-    "  try {",
-    "    const url = new URL(locator);",
-    "    return path.extname(url.pathname || \"\");",
-    "  } catch {",
-    "    return path.extname(locator);",
-    "  }",
-    "}",
-    "function pyaContentAddressPath(hash, locator) {",
-    "  const ext = pyaArtifactExt(locator);",
-    "  const rel = path.join(\"artifacts\", \"sha256\", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);",
-    "  return rel.replace(/\\\\/g, \"/\");",
-    "}",
-    "function pyaWriteArtifactBytes(relPath, bytes) {",
-    "  if (!relPath) return null;",
-    "  const abs = path.resolve(process.cwd(), relPath);",
-    "  fs.mkdirSync(path.dirname(abs), { recursive: true });",
-    "  fs.writeFileSync(abs, bytes);",
-    "  return abs;",
-    "}",
-    "function pyaLinkRunAlias(name, target) {",
-    "  const runId = typeof process !== \"undefined\" ? process?.env?.PYA_RUN_ID : null;",
-    "  if (!runId || !name || !target) return null;",
-    "  const rel = path.join(\"artifacts\", runId, name).replace(/\\\\/g, \"/\");",
-    "  const abs = path.resolve(process.cwd(), rel);",
-    "  fs.mkdirSync(path.dirname(abs), { recursive: true });",
-    "  if (!fs.existsSync(abs)) {",
-    "    try {",
-    "      fs.linkSync(target, abs);",
-    "    } catch {",
-    "      try {",
-    "        fs.symlinkSync(target, abs);",
-    "      } catch {}",
-    "    }",
-    "  }",
-    "  return rel;",
-    "}",
-    "function pyaRecordArtifact(locator, bytes, op, sentenceId) {",
-    "  if (!pyaExchangeEnabled()) return null;",
-    "  const normalized = pyaNormalizeLocator(locator);",
-    "  const existing = pyaArtifacts.get(normalized);",
-    "  const hash = crypto.createHash(\"sha256\").update(bytes).digest(\"hex\");",
-    "  const caRel = pyaContentAddressPath(hash, normalized);",
-    "  const caAbs = pyaWriteArtifactBytes(caRel, bytes);",
-    "  if (existing) {",
-    "    const priorHash = pyaArtifactHashes.get(existing);",
-    "    if (priorHash && priorHash !== hash) {",
-    "      pyaEmitExchange(`su name hash inconsistency ob text \"hash inconsistency\" from name exchange be error ya`);",
-    "      throw new Error(\"hash inconsistency\");",
-    "    }",
-    "    if (!priorHash) pyaArtifactHashes.set(existing, hash);",
-    "    pyaLinkRunAlias(existing, caAbs);",
-    "    if (op) pyaEmitExchange(`su name ${existing} as name ${op} from name exchange be exchange ya`);",
-    "    return existing;",
-    "  }",
-    "  const name = `artifact-${pyaArtifactCounter++}`;",
-    "  pyaArtifacts.set(normalized, name);",
-    "  pyaArtifactHashes.set(name, hash);",
-    "  const size = bytes?.length ?? 0;",
-    "  const locatorText = JSON.stringify(normalized);",
-    "  const obText = sentenceId ? `ob name ${sentenceId}` : `ob text ${locatorText}`;",
-    "  pyaEmitExchange(`su name ${name} ${obText} to filename ${locatorText} accordingto name sha256 fromtext text \"${hash}\" by num ${size} from name exchange be artifact ya`);",
-    "  pyaLinkRunAlias(name, caAbs);",
-    "  if (op) {",
-    "    pyaEmitExchange(`su name ${name} as name ${op} from name exchange be exchange ya`);",
-    "  }",
-    "  return name;",
-    "}",
-    "function pyaReadTextFile(filename, op, sentenceId) {",
-    "  const buf = fs.readFileSync(filename);",
-    "  pyaRecordArtifact(filename, buf, op, sentenceId);",
-    "  return buf.toString(\"utf8\");",
-    "}",
-    "function pyaWriteTextFile(filename, text, op, sentenceId) {",
-    "  const normalized = pyaNormalizeNewlines(text);",
-    "  fs.writeFileSync(filename, normalized);",
-    "  const buf = Buffer.from(String(normalized ?? \"\"), \"utf8\");",
-    "  pyaRecordArtifact(filename, buf, op, sentenceId);",
-    "}"
+    `let ${parseVar};`,
+    `try { ${parseVar} = JSON.parse(${sourceExpr}); } catch (err) { throw new Error("import: invalid json"); }`,
+    assignLine,
+    `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
   ].join("\n");
 }
 
-function newspaperRuntimeHelper() {
-  return [
-    "const PYA_NEWSPAPER_PREFIX = \"PYA_NEWSPAPER:\";",
-    "function pyaNewspaperEnabled() {",
-    "  return typeof process !== \"undefined\" && process?.env?.PYA_NEWSPAPER === \"1\";",
-    "}",
-    "function pyaEmitNewspaper(line) {",
-    "  if (!pyaNewspaperEnabled() || !line) return;",
-    "  const text = String(line);",
-    "  const payload = text.includes(\"\\n\")",
-    "    ? `${PYA_NEWSPAPER_PREFIX}BEGIN\\n${text}\\n${PYA_NEWSPAPER_PREFIX}END\\n`",
-    "    : `${PYA_NEWSPAPER_PREFIX}${text}\\n`;",
-    "  if (typeof process !== \"undefined\" && process.stdout && typeof process.stdout.write === \"function\") {",
-    "    process.stdout.write(payload);",
-    "  } else {",
-    "    console.log(payload.trimEnd());",
-    "  }",
-    "}",
-    "let pyaToolCounter = 0;",
-    "function pyaNextToolEventId() {",
-    "  pyaToolCounter += 1;",
-    "  return String(pyaToolCounter).padStart(6, \"0\");",
-    "}"
-  ].join("\n");
+function handleReadSentence(sentence, { lang, locals, declared, declaredTypes, cHelpers, jsHelpers, cState } = {}) {
+  cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
+  const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
+  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  if (sourceState === "json") {
+    const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+    const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+    const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
+    if (!sourceFilename && typeof sourceText !== "string") return null;
+    const safeName = sanitizeName(targetName);
+    const alreadyDeclared = declared?.has(targetName);
+    markDeclared(declared, targetName);
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesJsonRuntime = true;
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+        cHelpers.usesCtype = true;
+      }
+      const lines = [];
+      const sourceVar = `${safeName}_source`;
+      const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
+      if (needsDecl) {
+        lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+      }
+      lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
+      if (sourceFilename) {
+        if (cHelpers) cHelpers.usesExchange = true;
+        lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "read: json lost\\n"); }`);
+        lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
+      } else {
+        lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
+      }
+      lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
+      lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
+      return lines.join("\n");
+    }
+    if (jsHelpers) {
+      jsHelpers.usesJsonRuntime = true;
+      jsHelpers.usesVectorFormat = true;
+      if (sourceFilename) {
+        jsHelpers.usesFs = true;
+        jsHelpers.usesExchange = true;
+      }
+    }
+    const sourceExpr = sourceFilename && jsHelpers?.usesExchange
+      ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
+      : (sourceFilename
+        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
+        : JSON.stringify(sourceText));
+    const parseVar = `${safeName}_json`;
+    const assignLine = alreadyDeclared
+      ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
+      : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
+    return [
+      `let ${parseVar};`,
+      `try { ${parseVar} = JSON.parse(${sourceExpr}); } catch (err) { throw new Error("read: invalid json"); }`,
+      assignLine,
+      `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
+    ].join("\n");
+  }
+  return null;
 }
 
-function jsonRuntimeHelper() {
-  return [
-    "function sanitizeNamePart(value) {",
-    "  const raw = String(value ?? \"\").trim();",
-    "  if (!raw) return \"item\";",
-    "  const cleaned = raw.replace(/[^A-Za-z0-9_.-]+/g, \" \").replace(/\\s+/g, \" \").trim();",
-    "  return cleaned || \"item\";",
-    "}",
-    "function uniqueName(base, used) {",
-    "  if (!used.has(base)) { used.add(base); return base; }",
-    "  let i = 2;",
-    "  while (used.has(`${base} ${i}`)) i += 1;",
-    "  const name = `${base} ${i}`;",
-    "  used.add(name);",
-    "  return name;",
-    "}",
-    "function vectorForScalarArray(values, type) {",
-    "  if (type === \"bool\") return { ve: { type: \"bool\", values: values.map(v => (v ? \"truth\" : \"lie\")) } };",
-    "  return { ve: { type, values } };",
-    "}",
-    "function jsonArrayToObj(values, { parentName, key, used, emitMap }) {",
-    "  if (values.length === 0) return { ve: { type: \"hollow\", values: [] } };",
-    "  const typeSet = new Set();",
-    "  for (const value of values) {",
-    "    if (value === null) typeSet.add(\"hollow\");",
-    "    else if (Array.isArray(value)) typeSet.add(\"array\");",
-    "    else if (typeof value === \"object\") typeSet.add(\"object\");",
-    "    else if (typeof value === \"boolean\") typeSet.add(\"bool\");",
-    "    else if (typeof value === \"number\") typeSet.add(\"num\");",
-    "    else typeSet.add(\"text\");",
-    "  }",
-    "  if (typeSet.has(\"array\")) throw new Error(\"json map contents defective: nested arrays are unsupported\");",
-    "  if (typeSet.has(\"hollow\")) throw new Error(\"json map contents defective: null elements are unsupported in arrays\");",
-    "  if (typeSet.size > 1 && !(typeSet.size === 1 && typeSet.has(\"object\"))) {",
-    "    throw new Error(\"json map contents defective: mixed array types are unsupported\");",
-    "  }",
-    "  if (typeSet.has(\"object\")) {",
-    "    const names = values.map((value, idx) => {",
-    "      const baseKey = sanitizeNamePart(key);",
-    "      const base = `${parentName} ${baseKey} ${idx + 1}`;",
-    "      const childName = uniqueName(base, used);",
-    "      emitMap(value, childName);",
-    "      return childName;",
-    "    });",
-    "    return { ve: { type: \"name\", values: names } };",
-    "  }",
-    "  if (typeSet.has(\"bool\")) return vectorForScalarArray(values, \"bool\");",
-    "  if (typeSet.has(\"num\")) return vectorForScalarArray(values, \"num\");",
-    "  return vectorForScalarArray(values, \"text\");",
-    "}",
-    "function jsonValueToObj(value, { parentName, key, used, emitMap }) {",
-    "  if (value === null) return { hollow: true };",
-    "  if (Array.isArray(value)) return jsonArrayToObj(value, { parentName, key, used, emitMap });",
-    "  if (typeof value === \"string\") return { text: value };",
-    "  if (typeof value === \"number\") return { num: value };",
-    "  if (typeof value === \"boolean\") return { boolean: value };",
-    "  if (typeof value === \"object\") {",
-    "    const baseKey = sanitizeNamePart(key);",
-    "    const base = `${parentName} ${baseKey}`;",
-    "    const childName = uniqueName(base, used);",
-    "    emitMap(value, childName);",
-    "    return { name: childName };",
-    "  }",
-    "  return undefined;",
-    "}",
-    "function jsonToMapSentencesRuntime(value, rootName) {",
-    "  const used = new Set();",
-    "  const sentences = [];",
-    "  const emitMap = (ob, name) => {",
-    "    if (!ob || typeof ob !== \"object\" || Array.isArray(ob)) {",
-    "      throw new Error(\"json map contents defective: object expected\");",
-    "    }",
-    "    const map = {};",
-    "    const orderedKeys = Object.keys(ob).sort(compareUtf8);",
-    "    for (const key of orderedKeys) {",
-    "      const val = ob[key];",
-    "      const objValue = jsonValueToObj(val, { parentName: name, key, used, emitMap });",
-    "      if (objValue === undefined) continue;",
-    "      map[key] = objValue;",
-    "    }",
-    "    sentences.push({ mood: \"ya\", su: { name }, be: \"json map\", ob: { map } });",
-    "  };",
-    "  const root = uniqueName(sanitizeNamePart(rootName), used);",
-    "  emitMap(value, root);",
-    "  return { rootName: root, sentences };",
-    "}",
-    "function jsonToPyashTextRuntime(value, rootName) {",
-    "  const { sentences } = jsonToMapSentencesRuntime(value, rootName);",
-    "  const blocks = sentences.map((sentence) => formatMapSentence(sentence.su?.name ?? \"map\", sentence));",
-    "  return blocks.join(\"\\n\\n\") + \"\\n\";",
-    "}",
-    "function tokenizePyashLine(line) {",
-    "  const tokens = [];",
-    "  let i = 0;",
-    "  while (i < line.length) {",
-    "    while (i < line.length && /\\s/.test(line[i])) i += 1;",
-    "    if (i >= line.length) break;",
-    "    if (line[i] === '\"') {",
-    "      i += 1;",
-    "      let buf = \"\";",
-    "      while (i < line.length && line[i] !== '\"') {",
-    "        if (line[i] === '\\\\' && i + 1 < line.length) i += 1;",
-    "        buf += line[i];",
-    "        i += 1;",
-    "      }",
-    "      if (i < line.length && line[i] === '\"') i += 1;",
-    "      tokens.push(buf);",
-    "      continue;",
-    "    }",
-    "    let buf = \"\";",
-    "    while (i < line.length && !/\\s/.test(line[i])) {",
-    "      buf += line[i];",
-    "      i += 1;",
-    "    }",
-    "    if (buf) tokens.push(buf);",
-    "  }",
-    "  return tokens;",
-    "}",
-    "function splitNameVectorTokens(tokens, knownNames) {",
-    "  const names = [];",
-    "  const maxWords = knownNames.maxWords || 1;",
-    "  let i = 0;",
-    "  while (i < tokens.length) {",
-    "    let matched = null;",
-    "    let matchedLen = 0;",
-    "    for (let len = Math.min(maxWords, tokens.length - i); len >= 1; len -= 1) {",
-    "      const candidate = tokens.slice(i, i + len).join(\" \");",
-    "      if (knownNames.set.has(candidate)) {",
-    "        matched = candidate;",
-    "        matchedLen = len;",
-    "        break;",
-    "      }",
-    "    }",
-    "    if (matched) {",
-    "      names.push(matched);",
-    "      i += matchedLen;",
-    "    } else {",
-    "      names.push(tokens[i]);",
-    "      i += 1;",
-    "    }",
-    "  }",
-    "  return names;",
-    "}",
-    "function parsePyashValue(tokens, knownNames) {",
-    "  if (!tokens.length) return undefined;",
-    "  const [head, ...rest] = tokens;",
-    "  if (head === \"num\") return { num: Number(rest[0] ?? 0) };",
-    "  if (head === \"text\") return { text: rest[0] ?? \"\" };",
-    "  if (head === \"bool\") return { boolean: rest[0] === \"truth\" };",
-    "  if (head === \"hollow\") return { hollow: true };",
-    "  if (head === \"unspecified\") return { unspecified: true };",
-    "  if (head === \"name\") return { name: rest[0] ?? \"\" };",
-    "  if (head === \"ve\" || head === \"vec\") {",
-    "    let idx = 0;",
-    "    let type = \"num\";",
-    "    if ([\"num\", \"text\", \"bool\", \"name\", \"hollow\"].includes(rest[idx])) { type = rest[idx]; idx += 1; }",
-    "    if (type === \"hollow\") return { ve: { type: \"hollow\", values: [] } };",
-    "    const valueTokens = rest.slice(idx);",
-    "    const values = (type === \"name\" && knownNames)",
-    "      ? splitNameVectorTokens(valueTokens, knownNames)",
-    "      : valueTokens.map((val) => {",
-    "        if (type === \"num\") return Number(val ?? 0);",
-    "        if (type === \"text\") return val ?? \"\";",
-    "        if (type === \"bool\") return val === \"truth\";",
-    "        if (type === \"name\") return val ?? \"\";",
-    "        return val;",
-    "      });",
-    "    return { ve: { type, values } };",
-    "  }",
-    "  return undefined;",
-    "}",
-    "function parsePyashMapDefs(text) {",
-    "  const maps = new Map();",
-    "  const nameSet = new Set();",
-    "  let maxWords = 1;",
-    "  const lines = String(text ?? \"\").split(/\\n/);",
-    "  for (const rawLine of lines) {",
-    "    const line = rawLine.trim();",
-    "    if (!line) continue;",
-    "    const tokens = tokenizePyashLine(line);",
-    "    if (!tokens.length) continue;",
-    "    const mood = tokens[tokens.length - 1];",
-    "    if (mood === \"def\" && tokens[0] === \"su\" && tokens[1] === \"name\") {",
-    "      const beIdx = tokens.indexOf(\"be\");",
-    "      if (beIdx > 2) {",
-    "        const name = tokens.slice(2, beIdx).join(\" \");",
-    "      nameSet.add(name);",
-    "      const wordCount = name.split(\" \").length;",
-    "      if (wordCount > maxWords) maxWords = wordCount;",
-    "      }",
-    "    }",
-    "  }",
-    "  const knownNames = { set: nameSet, maxWords };",
-    "  let current = null;",
-    "  for (const rawLine of lines) {",
-    "    const line = rawLine.trim();",
-    "    if (!line) continue;",
-    "    const tokens = tokenizePyashLine(line);",
-    "    if (!tokens.length) continue;",
-    "    const mood = tokens[tokens.length - 1];",
-    "    if (mood === \"def\" && tokens[0] === \"su\" && tokens[1] === \"name\") {",
-    "      const beIdx = tokens.indexOf(\"be\");",
-    "      const name = beIdx > 2 ? tokens.slice(2, beIdx).join(\" \") : tokens[2];",
-    "      current = maps.get(name) ?? { name, entries: new Map() };",
-    "      maps.set(name, current);",
-    "      continue;",
-    "    }",
-    "    if (mood === \"prah\") {",
-    "      current = null;",
-    "      continue;",
-    "    }",
-    "    if (mood === \"ya\" && current && tokens[0] === \"su\" && tokens[1] === \"name\" && tokens[3] === \"ob\") {",
-    "      const key = tokens[2];",
-    "      const value = parsePyashValue(tokens.slice(4, -1), knownNames);",
-    "      current.entries.set(key, value);",
-    "    }",
-    "  }",
-    "  return maps;",
-    "}",
-    "function canonicalizeJsonValue(value) {",
-    "  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;",
-    "  const compareUtf8 = (a, b) => {",
-    "    if (a === b) return 0;",
-    "    const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));",
-    "    const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));",
-    "    const len = Math.min(bufA.length, bufB.length);",
-    "    for (let i = 0; i < len; i += 1) {",
-    "      if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;",
-    "    }",
-    "    return bufA.length < bufB.length ? -1 : 1;",
-    "  };",
-    "  if (Array.isArray(value)) return value.map((item) => canonicalizeJsonValue(item));",
-    "  if (value && typeof value === \"object\") {",
-    "    const out = {};",
-    "    const keys = Object.keys(value).sort(compareUtf8);",
-    "    for (const key of keys) out[key] = canonicalizeJsonValue(value[key]);",
-    "    return out;",
-    "  }",
-    "  return value;",
-    "}",
-    "function jsonFromPyashMap(name, maps, seen) {",
-    "  if (seen.has(name)) throw new Error(\"json map export self referential\");",
-    "  const map = maps.get(name);",
-    "  if (!map) throw new Error(`json map referential defective: ${name}`);",
-    "  seen.add(name);",
-    "  const out = {};",
-    "  for (const [key, value] of map.entries.entries()) {",
-    "    if (!value || value.unspecified) continue;",
-    "    let jsonValue;",
-    "    if (value.hollow) jsonValue = null;",
-    "    else if (value.text !== undefined) jsonValue = value.text;",
-    "    else if (value.num !== undefined) jsonValue = value.num;",
-    "    else if (value.boolean !== undefined) jsonValue = value.boolean;",
-    "    else if (value.name) jsonValue = jsonFromPyashMap(value.name, maps, seen);",
-    "    else if (value.ve) {",
-    "      const type = value.ve.type || \"num\";",
-    "      if (type === \"hollow\") jsonValue = [];",
-    "      else if (type === \"name\") jsonValue = value.ve.values.map((child) => jsonFromPyashMap(child, maps, seen));",
-    "      else if (type === \"bool\") jsonValue = value.ve.values.map((v) => v === \"truth\" || v === true || v === 1);",
-    "      else jsonValue = value.ve.values;",
-    "    } else if (value && Object.keys(value).length > 0) {",
-    "      throw new Error(\"json map contents defective: unsupported contents\");",
-    "    }",
-    "    if (jsonValue !== undefined) out[key] = jsonValue;",
-    "  }",
-    "  seen.delete(name);",
-    "  return out;",
-    "}",
-    "function pyashToJsonTextRuntime(text, rootName, mode = \"canonical\") {",
-    "  const maps = parsePyashMapDefs(text);",
-    "  const root = rootName || (maps.keys().next().value ?? \"data\");",
-    "  const json = jsonFromPyashMap(root, maps, new Set());",
-    "  if (mode === \"pretty\") return JSON.stringify(json, null, 2);",
-    "  return JSON.stringify(canonicalizeJsonValue(json));",
-    "}"
-  ].join("\n");
-}
-
-function yamlRuntimeHelper() {
-  return [
-    "const YAML_JSON_NUMBER_RE = /^-?(?:0|[1-9]\\\\d*)(?:\\\\.\\\\d+)?(?:[eE][+-]?\\\\d+)?$/;",
-    "function yamlScalarSource(node) {",
-    "  if (!node) return \"\";",
-    "  if (typeof node.source === \"string\") return node.source;",
-    "  return String(node.value ?? \"\");",
-    "}",
-    "function yamlClassifyScalar(node) {",
-    "  const isPlain = node?.type === \"PLAIN\";",
-    "  if (typeof node?.value === \"number\") return { type: \"num\", value: node.value };",
-    "  if (typeof node?.value === \"boolean\") return { type: \"bool\", value: node.value };",
-    "  if (node?.value === null) return { type: \"hollow\", value: null };",
-    "  const raw = String(yamlScalarSource(node) ?? \"\").trim();",
-    "  if (!isPlain) return { type: \"text\", value: String(node?.value ?? \"\") };",
-    "  if (raw === \"\" || raw === \"~\" || /^null$/i.test(raw)) return { type: \"hollow\", value: null };",
-    "  if (/^(true|false)$/i.test(raw)) return { type: \"bool\", value: /^true$/i.test(raw) };",
-    "  if (YAML_JSON_NUMBER_RE.test(raw)) return { type: \"num\", value: Number(raw) };",
-    "  return { type: \"text\", value: raw };",
-    "}",
-    "function yamlKeyText(node) {",
-    "  if (!YAML.isScalar(node)) throw new Error(\"yaml key defective\");",
-    "  const isPlain = node?.type === \"PLAIN\";",
-    "  const raw = String(yamlScalarSource(node) ?? \"\").trim();",
-    "  let key;",
-    "  if (!isPlain) key = String(node?.value ?? \"\");",
-    "  else if (raw === \"\" || raw === \"~\" || /^null$/i.test(raw)) key = \"null\";",
-    "  else if (/^(true|false)$/i.test(raw)) key = /^true$/i.test(raw) ? \"true\" : \"false\";",
-    "  else if (YAML_JSON_NUMBER_RE.test(raw)) key = raw;",
-    "  else key = raw;",
-    "  if (!String(key ?? \"\").trim()) throw new Error(\"yaml key defective\");",
-    "  return key;",
-    "}",
-    "function yamlClone(value) {",
-    "  if (Array.isArray(value)) return value.map((item) => yamlClone(item));",
-    "  if (value && typeof value === \"object\") {",
-    "    const out = {};",
-    "    for (const [key, val] of Object.entries(value)) out[key] = yamlClone(val);",
-    "    return out;",
-    "  }",
-    "  return value;",
-    "}",
-    "function yamlCollectAnchors(node, anchors) {",
-    "  if (!node || typeof node !== \"object\") return;",
-    "  if (node.anchor) anchors.set(node.anchor, node);",
-    "  if (YAML.isMap(node)) {",
-    "    for (const pair of node.items) {",
-    "      yamlCollectAnchors(pair.key, anchors);",
-    "      yamlCollectAnchors(pair.value, anchors);",
-    "    }",
-    "    return;",
-    "  }",
-    "  if (YAML.isSeq(node)) {",
-    "    for (const item of node.items) yamlCollectAnchors(item, anchors);",
-    "  }",
-    "}",
-    "function yamlResolveAlias(node, ctx) {",
-    "  const aliasName = String(node?.source ?? \"\").trim();",
-    "  if (!aliasName) throw new Error(\"yaml referential defective\");",
-    "  const target = ctx.anchors.get(aliasName);",
-    "  if (!target) throw new Error(\"yaml referential defective\");",
-    "  if (ctx.resolving.has(aliasName)) throw new Error(\"yaml referential defective\");",
-    "  ctx.resolving.add(aliasName);",
-    "  const value = yamlNodeToJson(target, ctx);",
-    "  ctx.resolving.delete(aliasName);",
-    "  return yamlClone(value);",
-    "}",
-    "function yamlMergeInto(target, source) {",
-    "  if (!source || typeof source !== \"object\" || Array.isArray(source)) {",
-    "    throw new Error(\"yaml defective\");",
-    "  }",
-    "  for (const [key, value] of Object.entries(source)) {",
-    "    if (!(key in target)) target[key] = value;",
-    "  }",
-    "}",
-    "function yamlMapToJson(node, ctx) {",
-    "  const out = {};",
-    "  for (const pair of node.items) {",
-    "    const keyText = yamlKeyText(pair.key);",
-    "    if (keyText === \"<<\") {",
-    "      const mergeValue = yamlNodeToJson(pair.value, ctx);",
-    "      if (Array.isArray(mergeValue)) {",
-    "        for (const entry of mergeValue) yamlMergeInto(out, entry);",
-    "      } else {",
-    "        yamlMergeInto(out, mergeValue);",
-    "      }",
-    "      continue;",
-    "    }",
-    "    const value = yamlNodeToJson(pair.value, ctx);",
-    "    out[keyText] = value;",
-    "  }",
-    "  return out;",
-    "}",
-    "function yamlSeqToJson(node, ctx) {",
-    "  const out = [];",
-    "  for (const item of node.items) out.push(yamlNodeToJson(item, ctx));",
-    "  return out;",
-    "}",
-    "function yamlNodeToJson(node, ctx) {",
-    "  if (!node) return null;",
-    "  if (node?.tag) throw new Error(\"yaml defective\");",
-    "  if (node?.constructor?.name === \"Alias\") return yamlResolveAlias(node, ctx);",
-    "  if (YAML.isMap(node)) return yamlMapToJson(node, ctx);",
-    "  if (YAML.isSeq(node)) return yamlSeqToJson(node, ctx);",
-    "  if (YAML.isScalar(node)) {",
-    "    const classified = yamlClassifyScalar(node);",
-    "    if (classified.type === \"hollow\") return null;",
-    "    if (classified.type === \"bool\") return Boolean(classified.value);",
-    "    if (classified.type === \"num\") return Number(classified.value);",
-    "    return String(classified.value ?? \"\");",
-    "  }",
-    "  throw new Error(\"yaml defective\");",
-    "}",
-    "function yamlToJsonValue(text) {",
-    "  const docs = YAML.parseAllDocuments(String(text ?? \"\"), { keepNodeTypes: true });",
-    "  if (!docs || docs.length === 0 || docs.length !== 1) throw new Error(\"yaml defective\");",
-    "  const doc = docs[0];",
-    "  if (doc?.errors?.length) throw new Error(\"yaml defective\");",
-    "  const root = doc.contents;",
-    "  if (!YAML.isMap(root)) throw new Error(\"yaml root defective\");",
-    "  const anchors = new Map();",
-    "  yamlCollectAnchors(root, anchors);",
-    "  const ctx = { anchors, resolving: new Set() };",
-    "  const value = yamlNodeToJson(root, ctx);",
-    "  if (!value || typeof value !== \"object\" || Array.isArray(value)) throw new Error(\"yaml root defective\");",
-    "  return canonicalizeJsonValue(value);",
-    "}",
-    "function yamlToPyashTextRuntime(text, rootName) {",
-    "  const json = yamlToJsonValue(text);",
-    "  return jsonToPyashTextRuntime(json, rootName);",
-    "}"
-  ].join("\n");
-}
-
-function yamlStringifyHelper() {
-  return [
-    "function yamlCompareUtf8(a, b) {",
-    "  if (a === b) return 0;",
-    "  const encoder = typeof TextEncoder !== \"undefined\" ? new TextEncoder() : null;",
-    "  const bufA = encoder ? encoder.encode(a) : Array.from(a, ch => ch.charCodeAt(0));",
-    "  const bufB = encoder ? encoder.encode(b) : Array.from(b, ch => ch.charCodeAt(0));",
-    "  const len = Math.min(bufA.length, bufB.length);",
-    "  for (let i = 0; i < len; i += 1) {",
-    "    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;",
-    "  }",
-    "  return bufA.length < bufB.length ? -1 : 1;",
-    "}",
-    "function yamlCanonicalize(value) {",
-    "  if (Array.isArray(value)) return value.map((item) => yamlCanonicalize(item));",
-    "  if (value && typeof value === \"object\") {",
-    "    const out = {};",
-    "    const keys = Object.keys(value).sort(yamlCompareUtf8);",
-    "    for (const key of keys) out[key] = yamlCanonicalize(value[key]);",
-    "    return out;",
-    "  }",
-    "  return value;",
-    "}",
-    "function yamlEmit(value, indent, out) {",
-    "  if (value === null) { out.push(\"null\"); return; }",
-    "  if (typeof value === \"boolean\") { out.push(value ? \"true\" : \"false\"); return; }",
-    "  if (typeof value === \"number\") { out.push(String(value)); return; }",
-    "  if (typeof value === \"string\") { out.push(JSON.stringify(value)); return; }",
-    "  if (Array.isArray(value)) {",
-    "    if (indent > 0) out.push(\"\\n\");",
-    "    for (const item of value) {",
-    "      out.push(\" \".repeat(indent));",
-    "      out.push(\"- \");",
-    "      yamlEmit(item, indent + 2, out);",
-    "      out.push(\"\\n\");",
-    "    }",
-    "    return;",
-    "  }",
-    "  if (value && typeof value === \"object\") {",
-    "    if (indent > 0) out.push(\"\\n\");",
-    "    for (const key of Object.keys(value)) {",
-    "      out.push(\" \".repeat(indent));",
-    "      out.push(JSON.stringify(String(key ?? \"\")));",
-    "      out.push(\": \");",
-    "      yamlEmit(value[key], indent + 2, out);",
-    "      out.push(\"\\n\");",
-    "    }",
-    "    return;",
-    "  }",
-    "  out.push(\"null\");",
-    "}",
-    "function yamlStringifyRuntime(value) {",
-    "  const json = yamlCanonicalize(value ?? {});",
-    "  const out = [];",
-    "  yamlEmit(json, 0, out);",
-    "  return out.join(\"\");",
-    "}"
-  ].join("\n");
-}
-
-function csvRuntimeHelper() {
-  return [
-    "function parseCsvTextRuntime(text) {",
-    "  const rows = parseCsv(String(text ?? \"\"), { relax_column_count: true, relax_quotes: false, skip_empty_lines: false });",
-    "  const firstCellText = (row) => String(row?.[0] ?? \"\").trim();",
-    "  const firstCellLower = (row) => firstCellText(row).toLowerCase();",
-    "  const nonEmptyRowIndex = rows.findIndex((row) => Array.isArray(row) && row.some((cell) => String(cell ?? \"\").trim() !== \"\"));",
-    "  if (nonEmptyRowIndex < 0) throw new Error(\"csv header defective\");",
-    "  const isTemplate = firstCellText(rows[0]) === \"Data Import Template\";",
-    "  let headerRowIndex = -1;",
-    "  if (isTemplate) {",
-    "    headerRowIndex = rows.findIndex((row) => firstCellText(row) === \"Column Name:\");",
-    "    if (headerRowIndex < 0) throw new Error(\"csv header defective\");",
-    "  } else {",
-    "    const nonEmptyRows = rows.filter((row) => Array.isArray(row) && row.some((cell) => String(cell ?? \"\").trim() !== \"\"));",
-    "    const tail = nonEmptyRows.slice(-20);",
-    "    const counts = new Map();",
-    "    for (const row of tail) {",
-    "      const width = Array.isArray(row) ? row.length : 0;",
-    "      if (width <= 0) continue;",
-    "      counts.set(width, (counts.get(width) ?? 0) + 1);",
-    "    }",
-    "    let widthMode = 0;",
-    "    let bestCount = -1;",
-    "    for (const [width, count] of counts.entries()) {",
-    "      if (count > bestCount || (count === bestCount && width > widthMode)) {",
-    "        widthMode = width;",
-    "        bestCount = count;",
-    "      }",
-    "    }",
-    "    const headerLike = (row) => {",
-    "      const cells = Array.isArray(row) ? row : [];",
-    "      if (cells.length !== widthMode) return false;",
-    "      let hasAlpha = false;",
-    "      for (const cell of cells) {",
-    "        const text = String(cell ?? \"\").trim();",
-    "        if (!text) return false;",
-    "        if (/[A-Za-z]/.test(text)) hasAlpha = true;",
-    "        if (/^\\d+(\\.\\d+)?$/.test(text)) return false;",
-    "      }",
-    "      return hasAlpha;",
-    "    };",
-    "    headerRowIndex = rows.findIndex((row) => headerLike(row));",
-    "    if (headerRowIndex < 0) {",
-    "      headerRowIndex = rows.findIndex((row) => Array.isArray(row) && row.length === widthMode);",
-    "    }",
-    "  }",
-    "  if (headerRowIndex < 0) headerRowIndex = nonEmptyRowIndex;",
-    "  const headerRow = rows[headerRowIndex] || [];",
-    "  const headerRaw = isTemplate ? headerRow.slice(1) : headerRow;",
-    "  const dropIndices = new Set();",
-    "  if (isTemplate) {",
-    "    headerRaw.forEach((cell, idx) => {",
-    "      const raw = String(cell ?? \"\").trim();",
-    "      if (raw === \"\" || raw === \"~\") dropIndices.add(idx);",
-    "    });",
-    "  }",
-    "  const filteredHeader = headerRaw.filter((_, idx) => !dropIndices.has(idx));",
-    "  let canonical = isTemplate",
-    "    ? filteredHeader.map((cell) => String(cell ?? \"\"))",
-    "    : filteredHeader.map((cell) => String(cell ?? \"\").replace(/\\s+/g, \" \").trim().toLowerCase());",
-    "  if (isTemplate) {",
-    "    const counts = new Map();",
-    "    canonical = canonical.map((key) => {",
-    "      const base = String(key ?? \"\");",
-    "      if (!base.trim()) return key;",
-    "      const count = counts.get(base) ?? 0;",
-    "      counts.set(base, count + 1);",
-    "      if (count === 0) return base;",
-    "      return `${base} ${count + 1}`;",
-    "    });",
-    "  }",
-    "  const seen = new Set();",
-    "  for (let i = 0; i < canonical.length; i += 1) {",
-    "    const key = canonical[i];",
-    "    const trimmedKey = String(key ?? \"\").trim();",
-    "    if (!trimmedKey) throw new Error(\"csv header defective\");",
-    "    if (!isTemplate && seen.has(key)) throw new Error(`csv header defective: duplicate header key ${key}`);",
-    "    seen.add(key);",
-    "  }",
-    "  const width = canonical.length;",
-    "  if (width === 0) throw new Error(\"csv header defective\");",
-    "  const columns = canonical.map(() => []);",
-    "  const metaLabels = new Set([\"column name:\",\"mandatory:\",\"type:\",\"info:\",\"doctype:\",\"column labels:\",\"start entering data below this line\"]);",
-    "  let dataStart = headerRowIndex + 1;",
-    "  if (isTemplate) {",
-    "    const startIndex = rows.findIndex((row, idx) => idx > headerRowIndex && firstCellLower(row) === \"start entering data below this line\");",
-    "    if (startIndex >= 0) dataStart = startIndex + 1;",
-    "  }",
-    "  for (let r = dataStart; r < rows.length; r += 1) {",
-    "    const rowCells = rows[r] || [];",
-    "    const firstLower = firstCellLower(rowCells);",
-    "    if (isTemplate && metaLabels.has(firstLower)) continue;",
-    "    if (isTemplate && rowCells.every((cell) => String(cell ?? \"\").trim() === \"\")) continue;",
-    "    const dataCells = (isTemplate ? rowCells.slice(1) : rowCells).filter((_, idx) => !dropIndices.has(idx));",
-    "    if (dataCells.length > width) throw new Error(\"csv row defective\");",
-    "    while (dataCells.length < width) dataCells.push(\"\");",
-    "    for (let c = 0; c < width; c += 1) {",
-    "      columns[c].push(String(dataCells[c] ?? \"\"));",
-    "    }",
-    "  }",
-    "  return { headerRaw: filteredHeader, header: canonical, columns };",
-    "}",
-    "function csvParseAdapter(text) {",
-    "  return parseCsvTextRuntime(text);",
-    "}",
-    "function csvMapFromTextRuntime(text, targetName) {",
-    "  const normalized = String(text ?? \"\").replace(/\\\\r\\\\n/g, \"\\r\\n\").replace(/\\\\n/g, \"\\n\").replace(/\\\\r/g, \"\\r\");",
-    "  const parsed = csvParseAdapter(normalized);",
-    "  const map = {",
-    "    \"header raw\": { ve: { type: \"text\", values: parsed.headerRaw } },",
-    "    header: { ve: { type: \"text\", values: parsed.header } }",
-    "  };",
-    "  parsed.header.forEach((key, idx) => {",
-    "    map[key] = { ve: { type: \"text\", values: parsed.columns[idx] } };",
-    "  });",
-    "  return { mood: \"ya\", su: { name: targetName }, be: \"csv map\", ob: { map } };",
-    "}"
-  ].join("\n");
-}
+const BASE_BE_HANDLERS = new Map([
+  ["compile", handleCompileSentence],
+  ["import", handleImportSentence],
+  ["read", handleReadSentence]
+]);
 
 function canonicalizeJsonValue(value) {
   if (Array.isArray(value)) {
@@ -1618,143 +868,13 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
   const effectiveBe = baseBe || sentence.mood;
 
-  if (sentence.mood === "ret") {
-    const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
-    if (sourceName) {
-      return `return ${sanitizeName(sourceName)};`;
-    }
-    if (sentence.ob?.genitive && sentenceArg) {
-      const expr = pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
-      if (expr) return `return ${expr};`;
-    }
-    if (sentence.ob?.num !== undefined) return `return ${Number(sentence.ob.num) || 0};`;
-    if (typeof sentence.ob?.text === "string") return `return ${JSON.stringify(sentence.ob.text)};`;
-    return lang === "c" ? "return;" : "return sentence;";
-  }
+  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared });
+  if (handledRet) return handledRet;
 
-  if (baseBe === "compile" && (lang === "c" || lang === "javascript")) {
-    const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
-    const targetState = (sentence?.tostate?.name || sentence?.become?.name || "").toLowerCase();
-    if (sourceState === "json" && targetState === "pyash") {
-      const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
-      if (typeof sourceText !== "string") {
-        throwErrorSentence({
-          name: "compile error",
-          message: "compile: source text is required (from text or from filename)",
-          from: { name: "compile" }
-        });
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(sourceText);
-      } catch (err) {
-        throwErrorSentence({
-          name: "compile error",
-          message: "compile: invalid json",
-          from: { name: "compile" },
-          raw: { error: err?.message }
-        });
-      }
-      let text;
-      try {
-        text = jsonToPyashText(parsed, sentence?.su?.name ?? "data").text;
-      } catch (err) {
-        throwErrorSentence({
-          name: "compile error",
-          message: err?.message ?? "compile: json export failed",
-          from: { name: "compile" },
-          raw: { error: err?.message }
-        });
-      }
-      const wrappedText = `quoted.pyash.\n${text}.pyash.quoted`;
-      const targetName = sentence?.to?.name ?? "output";
-      const safeName = sanitizeName(targetName);
-      markDeclared(declared, targetName);
-      if (declaredTypes) declaredTypes.set(targetName, "text");
-      if (lang === "c") {
-        if (cHelpers) {
-          cHelpers.usesTextHelper = true;
-          cHelpers.usesString = true;
-        }
-        return `char ${safeName}[PYA_TEXT_CAP] = ${JSON.stringify(wrappedText)};`;
-      }
-      const sentenceObject = `{ su: { name: "${targetName}" }, ob: { text: ${JSON.stringify(wrappedText)} }, be: "pyash", mood: "ya" }`;
-      return `let ${safeName} = ${sentenceObject};\nglobalThis["${targetName}"] = ${safeName};`;
-    }
-  }
-
-  if (baseBe === "import") {
-    cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
-    const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
-    const targetName = sentence?.to?.name ?? sentence?.su?.name;
-    if (!targetName) {
-      throwErrorSentence({
-        name: "import error",
-        message: "import: target name is required (to name <map>)",
-        from: { name: "compile" },
-        raw: sentence
-      });
-    }
-    const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
-    const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
-    if (sourceFilename && sourceFilename.endsWith(".pya")) {
-      return null;
-    }
-    if (!sourceFilename && typeof sourceText !== "string") return null;
-    const safeName = sanitizeName(targetName);
-    const alreadyDeclared = declared?.has(targetName);
-    markDeclared(declared, targetName);
-    if (declaredTypes) declaredTypes.set(targetName, "text");
-    if (lang === "c") {
-      if (cHelpers) {
-        cHelpers.usesJsonRuntime = true;
-        cHelpers.usesTextHelper = true;
-        cHelpers.usesString = true;
-        cHelpers.usesStdlib = true;
-        cHelpers.usesPrintf = true;
-        cHelpers.usesCtype = true;
-      }
-      const lines = [];
-      const sourceVar = `${safeName}_source`;
-      const needsDecl = !locals?.has(safeName) && !alreadyDeclared;
-      if (needsDecl) {
-        lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
-      }
-      lines.push(`char ${sourceVar}[PYA_TEXT_CAP] = "";`);
-        if (sourceFilename) {
-          if (cHelpers) cHelpers.usesExchange = true;
-          lines.push(`if (!pya_read_file_text(${JSON.stringify(sourceFilename)}, ${sourceVar})) { fprintf(stderr, "import: json lost\\n"); }`);
-          lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
-        } else {
-          lines.push(`snprintf(${sourceVar}, PYA_TEXT_CAP, "%s", ${JSON.stringify(sourceText)});`);
-        }
-      lines.push(`pya_json_error ${safeName}_err = { "", 0, 0 };`);
-      lines.push(`if (!pya_json_to_pyash(${sourceVar}, ${JSON.stringify(targetName)}, ${safeName}, &${safeName}_err)) { fprintf(stderr, "%s\\n", ${safeName}_err.message); }`);
-      return lines.join("\n");
-    }
-      if (jsHelpers) {
-        jsHelpers.usesJsonRuntime = true;
-        jsHelpers.usesVectorFormat = true;
-        if (sourceFilename) {
-          jsHelpers.usesFs = true;
-          jsHelpers.usesExchange = true;
-        }
-      }
-    const sourceExpr = sourceFilename && jsHelpers?.usesExchange
-      ? `pyaReadTextFile(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)})`
-      : (sourceFilename
-        ? `fs.readFileSync(${JSON.stringify(sourceFilename)}, "utf8")`
-        : JSON.stringify(sourceText));
-    const parseVar = `${safeName}_json`;
-    const assignLine = alreadyDeclared
-      ? `${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`
-      : `const ${safeName} = { su: { name: "${targetName}" }, ob: { text: jsonToPyashTextRuntime(${parseVar}, ${JSON.stringify(targetName)}) }, be: "pyash", mood: "ya" };`;
-    return [
-      `let ${parseVar};`,
-      `try { ${parseVar} = JSON.parse(${sourceExpr}); } catch (err) { throw new Error("import: invalid json"); }`,
-      assignLine,
-      `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
-    ].join("\n");
+  const baseHandler = BASE_BE_HANDLERS.get(baseBe);
+  if (baseHandler) {
+    const handled = baseHandler(sentence, { lang, declared, declaredTypes, jsHelpers, cHelpers, locals, cState });
+    if (handled) return handled;
   }
 
   if (baseBe === "read") {
@@ -5094,129 +4214,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       jsHelpers.usesVectorFormat = true;
       prelude.push(`const mindConfigs = new Map();`);
       prelude.push(`const mindAnswerCounters = new Map();`);
-      const mindHelper = `async function callMind({ host, model, messages = [], tools, numCtx = 8192 }) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_MIND_RESPONSE) {\n    const raw = process.env.PYA_MIND_RESPONSE;\n    try {\n      return JSON.parse(raw);\n    } catch {\n      return { message: { content: String(raw ?? \"\") } };\n    }\n  }\n  const transport = globalThis?.ollamaChat;\n  if (typeof transport === \"function\") {\n    const res = await Promise.resolve(transport({ host, model, messages, tools, numCtx }));\n    if (res && typeof res === \"object\") {\n      return res;\n    }\n    return { message: { content: String(res ?? \"\") } };\n  }\n  if (typeof fetch !== \"function\") {\n    throw new Error(\"mind: provide globalThis.ollamaChat or fetch\");\n  }\n  const resp = await fetch(String(host).replace(/\\/$/, \"\") + \"/api/chat\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ model, messages, tools, options: { num_ctx: numCtx }, stream: false })\n  });\n  const data = await (typeof resp.json === \"function\" ? resp.json() : Promise.resolve({ message: { content: String(resp) } }));\n  return data && typeof data === \"object\" ? data : { message: { content: String(data ?? \"\") } };\n}`;
-      const mindHistory = `const mindHistory = new Map();\nfunction buildMindHistory(dialogue, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(dialogue, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(dialogue, trimmed);\n}`;
-      const mindToolHelper = `const mindDebugCounters = new Map();
-function nextMindDebugCount(targetName) {
-  const key = targetName || "mind";
-  const count = (mindDebugCounters.get(key) || 0) + 1;
-  mindDebugCounters.set(key, count);
-  return count;
-}
-function stripMindContext(obj) {
-  if (!obj || typeof obj !== "object") return obj;
-  const clone = Array.isArray(obj) ? [...obj] : { ...obj };
-  if ("context" in clone) delete clone.context;
-  return clone;
-}
-function recordMindJson(targetName, label, payload) {
-  if (!pyaNewspaperEnabled()) return;
-  const count = nextMindDebugCount(targetName);
-  const jsonText = JSON.stringify(payload ?? null, null, 2);
-  const quoted = "quoted.json." + jsonText + ".json.quoted";
-  const name = targetName || "mind";
-  pyaEmitNewspaper("su name " + name + " " + label + " " + count + " ob text " + quoted + " from name mind be write ya");
-}
-function toolTypeWordsFromValue(value, caseKey) {
-  if (!value || typeof value !== "object") return [];
-  if (Array.isArray(value.nameTypeWords) && value.nameTypeWords.length) return ["name", ...value.nameTypeWords];
-  if (value.name !== undefined) return ["name"];
-  if (value.num !== undefined) return ["num"];
-  if (value.text !== undefined) return ["text"];
-  if (value.boolean !== undefined) return ["bool"];
-  if (value.filename !== undefined) return ["filename"];
-  if (value.ve) return ["vec"];
-  if (value.la) return ["la"];
-  return [];
-}
-function toolSchemaType(typeWords) {
-  if (!typeWords?.length) return "string";
-  if (typeWords.includes("name")) return "string";
-  if (typeWords.includes("bool")) return "boolean";
-  if (typeWords.includes("num")) return "number";
-  if (typeWords.includes("text")) return "string";
-  if (typeWords.includes("filename")) return "string";
-  if (typeWords.includes("vec")) return "array";
-  if (typeWords.includes("la")) return "object";
-  return "string";
-}
-function toolFunctionNameFromSignature(signatureWords) {
-  return signatureWords
-    .map(word => String(word ?? ""))
-    .join("_")
-    .replace(/[^A-Za-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-function deriveSignatureWordsFromCall(sentence) {
-  const words = ["be", sentence?.be];
-  for (const key of CASE_ORDER) {
-    if (key === "su") continue;
-    if (!sentence || sentence[key] === undefined) continue;
-    const typeWords = toolTypeWordsFromValue(sentence[key], key);
-    words.push(key, ...typeWords);
-  }
-  return words.filter(Boolean);
-}
-function buildToolSchemas(toolEntries = {}) {
-  const caps = [];
-  for (const entry of Object.values(toolEntries)) {
-    if (entry?.mood !== "can" || !entry?.be) continue;
-    const canonical = formatSentence(entry);
-    caps.push({ sentence: entry, canonical });
-  }
-  if (!caps.length) return { tools: [], toolMap: new Map(), toolBlock: "" };
-  caps.sort((a, b) => compareUtf8(a.canonical, b.canonical));
-  const toolMap = new Map();
-  const tools = [];
-  for (const cap of caps) {
-    const signatureWords = deriveSignatureWordsFromCall(cap.sentence);
-    const signatureName = signatureWords.join(" ");
-    const toolName = toolFunctionNameFromSignature(signatureWords);
-    const properties = {};
-    const required = [];
-    for (const key of CASE_ORDER) {
-      if (key === "su") continue;
-      if (cap.sentence?.[key] === undefined) continue;
-      const typeWords = toolTypeWordsFromValue(cap.sentence[key], key);
-      properties[key] = { type: toolSchemaType(typeWords) };
-      required.push(key);
-    }
-    tools.push({
-      type: "function",
-      function: {
-        name: toolName,
-        description: cap.canonical,
-        signature: signatureName,
-        parameters: { type: "object", properties, required }
-      }
-    });
-    toolMap.set(toolName, cap.sentence);
-    toolMap.set(signatureName, cap.sentence);
-  }
-  const toolBlock = "TOOLS:\\n" + caps.map(c => c.canonical).join("\\n");
-  return { tools, toolMap, toolBlock };
-}
-function buildToolSentence({ capability, args }) {
-  const sentence = JSON.parse(JSON.stringify(capability || {}));
-  let parsed = args;
-  if (typeof args === "string") {
-    try { parsed = JSON.parse(args); } catch { parsed = {}; }
-  }
-  const values = parsed && typeof parsed === "object" ? parsed : {};
-  for (const [key, val] of Object.entries(values)) {
-    const typeWords = toolTypeWordsFromValue(capability?.[key], key);
-    if (typeWords.includes("name")) sentence[key] = { name: String(val ?? "") };
-    else if (typeWords.includes("num")) sentence[key] = { num: Number(val ?? 0) };
-    else if (typeWords.includes("bool")) sentence[key] = { boolean: Boolean(val) };
-    else if (typeWords.includes("filename")) sentence[key] = { filename: String(val ?? "") };
-    else if (typeWords.includes("text")) sentence[key] = { text: String(val ?? "") };
-    else sentence[key] = { text: String(val ?? "") };
-  }
-  sentence.mood = "do";
-  return sentence;
-}
-`;
+      const mindHelper = mindHelperSource();
+      const mindHistory = mindHistorySource();
+      const mindToolHelper = mindToolHelperSource();
 
       prelude.push(mindHelper);
       prelude.push(mindHistory);
