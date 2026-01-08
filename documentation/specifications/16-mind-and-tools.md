@@ -24,6 +24,8 @@ newspaper and again mode are enabled.
 `be write ... for name <mind> to name <output>` is the preferred invocation form.
 `be mind do` is deprecated and reserved for future use.
 
+Canonical examples live in `documentation/examples/examples-list.md` (see `examples/pyash/mind-tool-call.pya` and `examples/pyash/mind-stream-fixture.pya`).
+
 ---
 
 ## 2. Registration (config) sentence

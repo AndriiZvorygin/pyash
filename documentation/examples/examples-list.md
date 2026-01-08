@@ -1,5 +1,7 @@
 # Examples List
 
+These are the canonical, runnable examples. When updating specs or docs, prefer referencing these paths instead of duplicating full scripts.
+
 | Concept | Example(s) |
 | --- | --- |
 | Sentence basics | `examples/pyash/add-basic.pya` |

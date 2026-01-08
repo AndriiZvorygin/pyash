@@ -31,6 +31,8 @@ The newspaper is an **official `.pya` artifact**. Other formats are optional exp
 
 Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). When emission is enabled, all rules in this spec apply.
 
+Canonical examples live in `documentation/examples/examples-list.md` (see `examples/pyash/again-newspaper.pya` and `examples/pyash/refinery-mind-say-hear.pya`).
+
 ---
 
 ## 2. Terms

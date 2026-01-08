@@ -198,6 +198,12 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Mind streaming outputs now stream chunks to stdout (`PYA_STREAM_STDOUT=1`) and keep final results for newspapers.
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
+
+### Jan 7, 2026: Compile refactor + example references
+
+* Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.
+* Centralized early compile branching with base `be` handlers for `compile`, `import`, `read`, and `ret`.
+* Documented canonical example locations and linked streaming/mind/artifact examples from specs.
 * `be speak` verb removed (use `say` modules instead).
 * Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
 * Documented caterer build layout and added whisper.cpp linux-x64 build script.
