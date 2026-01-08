@@ -26,9 +26,9 @@ Contributing overview (quick)
 - Sentence splitting: `program/library/sentenceSplitter.mjs` (`splitSentences`, `splitSentencesWithLines`)
 - Interpreter bridge/dispatch: `program/bridge/index.mjs` (`interpret`), `program/bridge/signature.mjs` (signature derivation)
 - Exchange + artifacts: `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`)
-- Compiler: `program/verbs/exchange/compile.mjs` (`transpileProgram`, runtime helpers)
+- Compiler: `program/verbs/exchange/compile.mjs` (`transpileProgram`, runtime helper wiring)
 - Runtime helpers:
-  - JS: `program/verbs/exchange/compile.mjs` (`exchangeRuntimeHelper`, `newspaperRuntimeHelper`)
+  - JS: `program/verbs/exchange/compile/runtime_helpers.mjs` (`exchangeRuntimeHelper`, `newspaperRuntimeHelper`)
   - C: `program/verbs/exchange/helpers_c.mjs` (EXCHANGE_HELPER, MIND_RUNTIME_HELPER, CSV/YAML helpers)
 
 2. Primary tests and how to run them

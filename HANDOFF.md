@@ -28,5 +28,5 @@
 ## Files of interest
 - `program/bridge/imperative.mjs`, `program/bridge/conditions.mjs`: signature-first dispatch with single-handler fallback.
 - `program/bridge/signature.mjs`: signature derivation/registry; stricter type-word enforcement.
-- Verb signatures to audit: `program/verbs/mathematics/produce.mjs`, `program/verbs/exchange/compile.mjs`, `program/verbs/mind/mind.mjs`, `program/verbs/regulation/*.mjs`.
+- Verb signatures to audit: `program/verbs/mathematics/produce.mjs`, `program/verbs/exchange/compile.mjs`, `program/verbs/mind/mind.mjs`, `program/verbs/regulation/*.mjs` (compile helpers now live under `program/verbs/exchange/compile/`).
 - Doc drift: `documentation/signature.md` (section 9/10), `README.md`, `documentation/decisions.md`.
