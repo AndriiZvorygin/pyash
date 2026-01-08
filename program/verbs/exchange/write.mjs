@@ -1,12 +1,12 @@
 import fs from "node:fs/promises";
 import { remember } from "../../remember/index.mjs";
-import { buildProgram } from "../../program.mjs";
 import { state } from "../../bridge/state.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { throwErrorSentence } from "../../error.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
-import { compareUtf8, jsonObjectFromMapName } from "./json_map_export.mjs";
+import { jsonObjectFromMapSentence } from "./json_map_export.mjs";
+import { csvTextFromMapName } from "./write_csv.mjs";
+import { canonicalJsonStringify, canonicalizeJsonValue, jsonObjectFromPyash } from "./write_json.mjs";
 import YAML from "yaml";
 
 function vectorLiteral(values = [], type = "num") {
@@ -67,149 +67,6 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
     if (curr.ve?.values) return vectorLiteral(curr.ve.values, curr.ve.type || "num");
   }
   return curr;
-}
-
-function jsonMapDefsFromPyash(text) {
-  const program = buildProgram(String(text ?? ""));
-  const defs = new Map();
-  let currentName = null;
-
-  for (const sentence of program.sentences) {
-    if (sentence?.mood === "def" && sentence?.be === "json map" && sentence?.su?.name) {
-      currentName = sentence.su.name;
-      defs.set(currentName, { su: { name: currentName }, be: "json map", ob: { map: {} }, mood: "ya" });
-      continue;
-    }
-    if (sentence?.mood === "prah") {
-      currentName = null;
-      continue;
-    }
-    if (currentName && sentence?.mood === "ya" && sentence?.su?.name) {
-      const mapSentence = defs.get(currentName);
-      if (mapSentence) {
-        mapSentence.ob.map[sentence.su.name] = sentence.ob ?? {};
-      }
-    }
-  }
-
-  return defs;
-}
-
-function jsonObjectFromPyash(text, { rootName } = {}) {
-  const defs = jsonMapDefsFromPyash(text);
-  if (defs.size === 0) {
-    throwErrorSentence({
-      name: "json map export failed",
-      message: "json map export failed",
-      from: { name: "write" },
-      raw: { text }
-    });
-  }
-  const root = rootName ?? defs.keys().next().value;
-  const rememberFn = (name) => defs.get(name);
-  return jsonObjectFromMapName(root, {
-    remember: rememberFn,
-    seen: new Set(),
-    sourceName: "write",
-    allowHollowVector: true
-  });
-}
-
-function canonicalizeJsonValue(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => canonicalizeJsonValue(item));
-  }
-  if (value && typeof value === "object") {
-    const out = {};
-    const keys = Object.keys(value).sort(compareUtf8);
-    for (const key of keys) {
-      out[key] = canonicalizeJsonValue(value[key]);
-    }
-    return out;
-  }
-  return value;
-}
-
-function canonicalJsonStringify(value) {
-  return JSON.stringify(canonicalizeJsonValue(value));
-}
-
-function csvEscape(value) {
-  const str = String(value ?? "");
-  if (/[",\n\r]/.test(str)) {
-    return `"${str.replace(/"/g, "\"\"")}"`;
-  }
-  return str;
-}
-
-function csvTextFromMapName(name, { rememberFn } = {}) {
-  const fact = rememberFn ? rememberFn(name) : null;
-  if (!fact || fact.be !== "csv map") {
-    throwErrorSentence({
-      name: "csv columns defective",
-      message: "csv columns defective",
-      from: { name: "write csv" },
-      raw: { name }
-    });
-  }
-  const entries = fact?.ob?.map ?? {};
-  const headerRaw = entries["header raw"]?.ve?.values;
-  const header = entries.header?.ve?.values;
-  let headers = Array.isArray(headerRaw) ? headerRaw : header;
-  if (Array.isArray(headerRaw)) {
-    const seen = new Set();
-    let defective = false;
-    for (const cell of headerRaw) {
-      const key = String(cell ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-      if (!key || seen.has(key)) {
-        defective = true;
-        break;
-      }
-      seen.add(key);
-    }
-    if (defective) headers = header;
-  }
-  if (!Array.isArray(headers) || headers.length === 0 || !Array.isArray(header)) {
-    throwErrorSentence({
-      name: "csv columns defective",
-      message: "csv columns defective",
-      from: { name: "write csv" },
-      raw: { name }
-    });
-  }
-
-  const columns = header.map((key) => {
-    const col = entries[key];
-    if (!col?.ve?.values || col.ve.type !== "text") {
-      throwErrorSentence({
-        name: "csv columns defective",
-        message: "csv columns defective",
-        from: { name: "write csv" },
-        raw: { name, key }
-      });
-    }
-    return col.ve.values.map((v) => String(v ?? ""));
-  });
-
-  const length = columns[0]?.length ?? 0;
-  for (const col of columns) {
-    if (col.length !== length) {
-      throwErrorSentence({
-        name: "csv columns defective",
-        message: "csv columns defective",
-        from: { name: "write csv" },
-        raw: { name }
-      });
-    }
-  }
-
-  const lines = [];
-  lines.push(headers.map(csvEscape).join(","));
-  for (let i = 0; i < length; i += 1) {
-    const row = columns.map((col) => csvEscape(col[i] ?? ""));
-    lines.push(row.join(","));
-  }
-  return lines.join("\n") + "\n";
 }
 
 function mapDefChainFromName(name, { rememberFn } = {}) {
@@ -275,15 +132,15 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
     const fact = rememberFn(ob.name);
     if (fact?.be === "json map" || fact?.be === "map" || fact?.be === "csv map") {
       if (fact.be === "json map" && format === "yaml") {
-        const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
+        const json = jsonObjectFromMapSentence(fact, { remember: rememberFn, seen: new Set(), sourceName: "write", allowHollowVector: true });
         return YAML.stringify(canonicalizeJsonValue(json));
       }
       if (fact.be === "json map" && format === "json") {
-        const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
+        const json = jsonObjectFromMapSentence(fact, { remember: rememberFn, seen: new Set(), sourceName: "write", allowHollowVector: true });
         return canonicalJsonStringify(json);
       }
       if (fact.be === "json map" && format === "beautiful json") {
-        const json = jsonObjectFromMapSentence(fact, { rememberFn, seen: new Set() });
+        const json = jsonObjectFromMapSentence(fact, { remember: rememberFn, seen: new Set(), sourceName: "write", allowHollowVector: true });
         return JSON.stringify(json, null, 2);
       }
       const chain = mapDefChainFromName(ob.name, { rememberFn });
