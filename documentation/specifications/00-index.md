@@ -29,7 +29,7 @@ Contributing overview (quick)
 - Compiler: `program/verbs/exchange/compile.mjs` (`transpileProgram`, runtime helper wiring)
 - Runtime helpers:
   - JS: `program/verbs/exchange/compile/runtime_helpers.mjs` (`exchangeRuntimeHelper`, `newspaperRuntimeHelper`)
-  - C: `program/verbs/exchange/helpers_c.mjs` (EXCHANGE_HELPER, MIND_RUNTIME_HELPER, CSV/YAML helpers)
+  - C: `program/verbs/exchange/compile/c/helpers_c.mjs` (EXCHANGE_HELPER, MIND_RUNTIME_HELPER, CSV/YAML helpers)
 
 2. Primary tests and how to run them
 - Full suite: `npm test`

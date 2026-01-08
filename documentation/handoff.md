@@ -48,7 +48,7 @@ When docs disagree, these four specs win:
 - `program/verbs/exchange/compile/runtime_helpers.mjs`
 - `program/verbs/exchange/compile/emit_mind.mjs`
 - `program/verbs/exchange/compile/emit_command.mjs`
-- `program/verbs/exchange/helpers_c.mjs`
+- `program/verbs/exchange/compile/c/helpers_c.mjs`
 - `program/library/grammar/keywords.mjs`
 - `program/verbs/mind/mind.mjs`
 

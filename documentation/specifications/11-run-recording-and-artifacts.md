@@ -418,7 +418,7 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 - Interpreter runner: `program/command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`, `nextToolCounter`).
 - Run wrapper: `program/command/run_with_newspaper.mjs` (PYA_NEWSPAPER capture and file write).
 - Compiled JS runtime: `program/verbs/exchange/compile/runtime_helpers.mjs` (`newspaperRuntimeHelper`, `pyaEmitNewspaper`).
-- Compiled C runtime: `program/verbs/exchange/helpers_c.mjs` (`pya_emit_exchange`, PYA_NEWSPAPER block markers).
+- Compiled C runtime: `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`, PYA_NEWSPAPER block markers).
 
 ---
 
@@ -934,7 +934,7 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 - Exchange recorder: `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`, `normalizeLocator`).
 - Interpreter verbs: `program/verbs/exchange/write.mjs`, `program/verbs/exchange/read.mjs`, `program/verbs/exchange/read_from_filename.mjs`.
 - Compiled JS runtime: `program/verbs/exchange/compile/runtime_helpers.mjs` (`exchangeRuntimeHelper`, `pyaRecordArtifact`).
-- Compiled C runtime: `program/verbs/exchange/helpers_c.mjs` (`pya_exchange_record_bytes`, `pya_exchange_record_file`).
+- Compiled C runtime: `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_exchange_record_bytes`, `pya_exchange_record_file`).
 
 ---
 
