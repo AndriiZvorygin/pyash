@@ -1,6 +1,6 @@
-# `18-say-and-hear.md` (draft v0.1)
+# `18-say-and-hear.md` (v0.1)
 
-**Status:** draft (semantics locked, wording polish pending)
+**Status:** v0.1 (frozen)
 
 ---
 
