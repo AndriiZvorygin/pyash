@@ -8,6 +8,7 @@ import importFromSentence from "./import.mjs";
 import { parse as parseCsv } from "csv-parse/sync";
 import { jsonToMapSentences } from "./json_map.mjs";
 import { parseYamlToJsonValue, canonicalizeJsonValue } from "./yaml.mjs";
+import { compareUtf8, jsonValueFromObj } from "./json_map_export.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -353,85 +354,6 @@ export async function read_fromstate_yaml(sentence) {
   return { be: "json map" };
 }
 
-function compareUtf8(a, b) {
-  if (a === b) return 0;
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const len = Math.min(bufA.length, bufB.length);
-  for (let i = 0; i < len; i += 1) {
-    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
-  }
-  return bufA.length < bufB.length ? -1 : 1;
-}
-
-function jsonValueFromObj(ob, { remember, seen }) {
-  if (!ob || (typeof ob === "object" && Object.keys(ob).length === 0)) return undefined;
-  if (ob.unspecified) return undefined;
-  if (ob.hollow) return null;
-  if (ob.text !== undefined) return ob.text;
-  if (ob.num !== undefined) return ob.num;
-  if (ob.boolean !== undefined) return ob.boolean;
-  if (ob.ve) {
-    const type = ob.ve.type || "num";
-    if (type === "hollow") return [];
-    if (type === "name") {
-      return ob.ve.values.map((name) => jsonObjectFromMapName(name, { remember, seen }));
-    }
-    if (type === "bool" || type === "boolean") {
-      return ob.ve.values.map((value) => value === "truth" || value === true || value === 1);
-    }
-    if (type === "num" || type === "number" || type === "text") return ob.ve.values;
-    throwErrorSentence({
-      name: "json map contents defective",
-      message: `json map contents defective: unsupported vector type ${type}`,
-      from: { name: "read" },
-      raw: { type }
-    });
-  }
-  if (ob.name) return jsonObjectFromMapName(ob.name, { remember, seen });
-  throwErrorSentence({
-    name: "json map contents defective",
-    message: "json map contents defective: unsupported contents",
-    from: { name: "read" },
-    raw: ob
-  });
-  return undefined;
-}
-
-function jsonObjectFromMapName(name, { remember, seen }) {
-  const fact = remember ? remember(name) : null;
-  if (!fact || fact.be !== "json map") {
-    throwErrorSentence({
-      name: "json map referential defective",
-      message: `json map referential defective: ${name}`,
-      from: { name: "read" },
-      raw: { name }
-    });
-  }
-  return jsonObjectFromMapSentence(fact, { remember, seen });
-}
-
-function jsonObjectFromMapSentence(mapSentence, { remember, seen }) {
-  const mapName = mapSentence?.su?.name ?? "<map>";
-  if (seen.has(mapName)) {
-    throwErrorSentence({
-      name: "json map export self referential",
-      message: "json map export self referential",
-      from: { name: "read" },
-      raw: { name: mapName }
-    });
-  }
-  seen.add(mapName);
-  const entries = mapSentence?.ob?.map ?? {};
-  const out = {};
-  for (const [key, value] of Object.entries(entries)) {
-    const jsonValue = jsonValueFromObj(value, { remember, seen });
-    if (jsonValue === undefined) continue;
-    out[key] = jsonValue;
-  }
-  seen.delete(mapName);
-  return out;
-}
 
 function parseAllGenitive(genitive) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -467,7 +389,7 @@ export async function read_from_json_map_all(sentence, { remember } = {}) {
   const outValues = [];
   const outEntries = [];
   for (const key of keys) {
-    const value = jsonValueFromObj(entries[key], { remember, seen });
+    const value = jsonValueFromObj(entries[key], { remember, seen, sourceName: "read", allowHollowVector: true });
     if (value === undefined) continue;
     outKeys.push(key);
     outValues.push(value);

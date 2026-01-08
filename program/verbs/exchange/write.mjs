@@ -6,6 +6,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
+import { compareUtf8, jsonObjectFromMapName } from "./json_map_export.mjs";
 import YAML from "yaml";
 
 function vectorLiteral(values = [], type = "num") {
@@ -68,79 +69,6 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
   return curr;
 }
 
-const JSON_SCALAR_VECTORS = new Set(["num", "number", "text", "bool", "boolean", "hollow"]);
-
-function jsonValueFromObj(ob, { rememberFn, seen }) {
-  if (!ob || (typeof ob === "object" && Object.keys(ob).length === 0)) return undefined;
-  if (ob.unspecified) return undefined;
-  if (ob.hollow) return null;
-  if (ob.text !== undefined) return ob.text;
-  if (ob.num !== undefined) return ob.num;
-  if (ob.boolean !== undefined) return ob.boolean;
-  if (ob.ve) {
-    const type = ob.ve.type || "num";
-    if (type === "hollow") return [];
-    if (type === "name") {
-      return ob.ve.values.map((name) => jsonObjectFromMapName(name, { rememberFn, seen }));
-    }
-    if (!JSON_SCALAR_VECTORS.has(type)) {
-      throwErrorSentence({
-        name: "json map contents defective",
-        message: `json map contents defective: unsupported vector type ${type}`,
-        from: { name: "write" },
-        raw: { type }
-      });
-    }
-    return ob.ve.values.map((value) => {
-      if (type === "bool" || type === "boolean") return value === "truth" || value === true || value === 1;
-      return value;
-    });
-  }
-  if (ob.name) return jsonObjectFromMapName(ob.name, { rememberFn, seen });
-  throwErrorSentence({
-    name: "json map contents defective",
-    message: "json map contents defective: unsupported contents",
-    from: { name: "write" },
-    raw: ob
-  });
-  return undefined;
-}
-
-function jsonObjectFromMapName(name, { rememberFn, seen }) {
-  const fact = rememberFn ? rememberFn(name) : null;
-  if (!fact || fact.be !== "json map") {
-    throwErrorSentence({
-      name: "json map referential defective",
-      message: `json map referential defective: ${name}`,
-      from: { name: "write" },
-      raw: { name }
-    });
-  }
-  return jsonObjectFromMapSentence(fact, { rememberFn, seen });
-}
-
-function jsonObjectFromMapSentence(mapSentence, { rememberFn, seen }) {
-  const mapName = mapSentence?.su?.name ?? "<map>";
-  if (seen.has(mapName)) {
-    throwErrorSentence({
-      name: "json map export self referential",
-      message: "json map export self referential",
-      from: { name: "write" },
-      raw: { name: mapName }
-    });
-  }
-  seen.add(mapName);
-  const entries = mapSentence?.ob?.map ?? {};
-  const out = {};
-  for (const [key, value] of Object.entries(entries)) {
-    const jsonValue = jsonValueFromObj(value, { rememberFn, seen });
-    if (jsonValue === undefined) continue;
-    out[key] = jsonValue;
-  }
-  seen.delete(mapName);
-  return out;
-}
-
 function jsonMapDefsFromPyash(text) {
   const program = buildProgram(String(text ?? ""));
   const defs = new Map();
@@ -179,18 +107,12 @@ function jsonObjectFromPyash(text, { rootName } = {}) {
   }
   const root = rootName ?? defs.keys().next().value;
   const rememberFn = (name) => defs.get(name);
-  return jsonObjectFromMapName(root, { rememberFn, seen: new Set() });
-}
-
-function compareUtf8(a, b) {
-  if (a === b) return 0;
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const len = Math.min(bufA.length, bufB.length);
-  for (let i = 0; i < len; i += 1) {
-    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
-  }
-  return bufA.length < bufB.length ? -1 : 1;
+  return jsonObjectFromMapName(root, {
+    remember: rememberFn,
+    seen: new Set(),
+    sourceName: "write",
+    allowHollowVector: true
+  });
 }
 
 function canonicalizeJsonValue(value) {
