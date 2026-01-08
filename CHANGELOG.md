@@ -204,6 +204,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.
 * Centralized early compile branching with base `be` handlers for `compile`, `import`, `read`, and `ret`.
 * Documented canonical example locations and linked streaming/mind/artifact examples from specs.
+* Split C helper exports into focused modules and re-exported them to keep compile imports stable.
 * `be speak` verb removed (use `say` modules instead).
 * Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
 * Documented caterer build layout and added whisper.cpp linux-x64 build script.
