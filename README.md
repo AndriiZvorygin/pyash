@@ -66,7 +66,7 @@ Still evolving / fragile:
 - `program/understand/` — tokenization, quoting, compositional keyword mapping (`fromtext/during/become/totext/as`, etc.)
 - `program/bridge/` — signature-first dispatch (registry in `program/bridge/signature.mjs`), mood handling, sandpits
 - `program/bridge/exchange.mjs` — artifact + exchange recorder
-- `program/verbs/exchange/compile.mjs` — JS/C compiler and runtime helpers
+- `program/verbs/exchange/compile.mjs` — JS/C compiler wiring (see `program/verbs/exchange/compile/` for handlers + runtime helpers)
 - `program/verbs/exchange/helpers_c.mjs` — C runtime helpers (exchange, mind, CSV/YAML)
 - `program/verbs/mind/mind.mjs` — mind invocation + tool adapter
 - `program/library/grammar/keywords.mjs` — canonical keyword lists
