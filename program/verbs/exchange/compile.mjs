@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
 import { buildProgram } from "../../program.mjs";
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parseYamlToJsonValue } from "./yaml.mjs";
@@ -15,9 +14,12 @@ import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
 import { CJSON_HEADER, CJSON_SOURCE, CSV_PARSE_RUNTIME_URL, YAML_RUNTIME_URL } from "./compile/constants.mjs";
 import { applyDefaultSayMapping, findDefaultSayMapping, findRetryConfig, loadDefaultConfigProgram } from "./compile/default_config.mjs";
+import { handleCeremonyDefinition } from "./compile/emit_ceremony_def.mjs";
 import { handleCommandSentence } from "./compile/emit_command.mjs";
+import { handleDoSentence } from "./compile/emit_loop.mjs";
 import { handleMindSentence } from "./compile/emit_mind.mjs";
 import { handleMapEnumeration } from "./compile/emit_map.mjs";
+import { handleMapDefinition } from "./compile/emit_map_def.mjs";
 import { handleMathSentence } from "./compile/emit_math.mjs";
 import { handleReadSentence } from "./compile/emit_read.mjs";
 import { handleSayOrWrite } from "./compile/emit_write.mjs";
@@ -665,141 +667,24 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 
   const name = sentence?.su?.name;
   const mood = sentence?.mood;
-  if (mood === "do" && sentenceArg) {
-    const fn = ceremonyFns?.get(baseBe);
-    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
-      const inlineSet = new Set([...(declared || []), ...(locals || [])]);
-      const evokerLiteral = inlineSentenceLiteral(sentence, inlineSet);
-      if (loopShim) loopShim.used = true;
-      const genFromExpr = sentence.fromindex?.genitive
-        ? pathFromGenitive(sentence.fromindex.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
-        : null;
-      const genToExpr = sentence.toindex?.genitive
-        ? pathFromGenitive(sentence.toindex.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
-        : null;
-      if (genFromExpr || genToExpr) {
-        const lines = ["{"];
-        lines.push(`const _call = ${evokerLiteral};`);
-        if (genFromExpr) lines.push(`_call.fromindex = { num: ${genFromExpr} };`);
-        if (genToExpr) lines.push(`_call.toindex = { num: ${genToExpr} };`);
-        lines.push(`runLoop(_call, ${fn});`);
-        lines.push("}");
-        return lines.join("\n");
-      }
-      return `runLoop(${evokerLiteral}, ${fn});`;
-    }
-    if (fn) {
-      const inlineSet = new Set([...(declared || []), ...(locals || [])]);
-      const arg = inlineSentenceLiteral(sentence, inlineSet);
-      const genObjExpr = sentence.ob?.genitive
-        ? pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
-        : null;
-      const genByExpr = sentence.by?.genitive
-        ? pathFromGenitive(sentence.by.genitive, sentenceArg, { locals, declared, allowCGlobals: true })
-        : null;
-      if (sentence.to?.name) {
-        const targetVar = sanitizeName(sentence.to.name);
-        const lines = [];
-        if (!locals?.has(targetVar) && !declared?.has(targetVar)) {
-          lines.push(`let ${targetVar};`);
-          locals?.add(targetVar);
-        }
-        if (genObjExpr || genByExpr) {
-          lines.push("{");
-          lines.push(`const _call = ${arg};`);
-          if (genObjExpr) {
-            lines.push(`_call.ob = { num: ${genObjExpr} };`);
-          }
-          if (genByExpr) {
-            lines.push(`_call.by = { num: ${genByExpr} };`);
-          }
-          lines.push(`${targetVar} = ${fn}(_call);`);
-          lines.push("}");
-        } else {
-          lines.push(`${targetVar} = ${fn}(${arg});`);
-        }
-        return lines.join("\n");
-      }
-      if (genObjExpr || genByExpr) {
-        const lines = ["{", `  const _call = ${arg};`];
-        if (genObjExpr) lines.push(`  _call.ob = { num: ${genObjExpr} };`);
-        if (genByExpr) lines.push(`  _call.by = { num: ${genByExpr} };`);
-        lines.push(`  ${fn}(_call);`, "}");
-        return lines.join("\n");
-      }
-      return `${fn}(${arg});`;
-    }
-  }
-
-  if (mood === "do" && !sentenceArg) {
-    const fn = ceremonyFns?.get(baseBe);
-	    if (fn && (sentence.fromindex !== undefined || sentence.toindex !== undefined)) {
-	        if (lang === "c") {
-	          const loopId = cState ? cState.vectorCounter++ : 0;
-	          const byExpr = (() => {
-	            if (sentence.by?.num !== undefined) return Number(sentence.by.num) || 0;
-	            if (sentence.by?.name) return sanitizeName(sentence.by.name);
-	            if (sentence.by?.genitive) return pathFromGenitive(sentence.by.genitive, undefined, { allowCGlobals: true }) ?? "0";
-	            return null;
-	          })();
-	          const fromGenChain = sentence.fromindex?.genitive?.chain;
-	          const fromGenFallback = (Array.isArray(fromGenChain) && typeof fromGenChain[0] === "string")
-	            ? sanitizeName(fromGenChain[0])
-	            : null;
-	          const start = sentence.fromindex?.genitive
-	            ? (pathFromGenitive(sentence.fromindex.genitive, undefined, { allowCGlobals: true }) ?? fromGenFallback ?? 0)
-	            : (sentence.fromindex?.num ?? sentence.fromindex ?? 0);
-	          const hasUntil = sentence.toindex !== undefined;
-	          const toGenChain = sentence.toindex?.genitive?.chain;
-	          const toGenFallback = (Array.isArray(toGenChain) && typeof toGenChain[0] === "string")
-	            ? sanitizeName(toGenChain[0])
-	            : null;
-	          const untilVal = sentence.toindex?.genitive
-	            ? (pathFromGenitive(sentence.toindex.genitive, undefined, { allowCGlobals: true }) ?? toGenFallback ?? 0)
-	            : (sentence.toindex?.num ?? sentence.toindex ?? 0);
-	          if (hasUntil) {
-	            const step = untilVal > start ? 1 : -1;
-	            const byAssign = byExpr !== null ? `by = ${byExpr}; ` : "";
-	            return `{ double _saved_fromindex_${loopId} = fromindex; double _saved_toindex_${loopId} = toindex; for (fromindex = ${start}; fromindex != ${untilVal}; fromindex += ${step}) { toindex = ${untilVal}; ${byAssign}${fn}(); } fromindex = _saved_fromindex_${loopId}; toindex = _saved_toindex_${loopId}; }`;
-	          }
-	          const byAssign = byExpr !== null ? `by = ${byExpr}; ` : "";
-	          return `{ double _saved_fromindex_${loopId} = fromindex; for (fromindex = ${start}; fromindex > 0; fromindex--) { ${byAssign}${fn}(); } fromindex = _saved_fromindex_${loopId}; }`;
-	        }
-	        const evokerLiteral = inlineSentenceLiteral(sentence, declared);
-	        if (loopShim) loopShim.used = true;
-      return `runLoop(${evokerLiteral}, ${fn});`;
-    }
-    if (fn) {
-      if (lang === "c") {
-        const obVal = sentence.ob?.num;
-        const fromVal = sentence.from?.num;
-        const byVal = sentence.by?.num;
-        if (obVal !== undefined || fromVal !== undefined || byVal !== undefined) {
-          if (cHelpers) cHelpers.usesMapGlobals = true;
-          const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;"];
-          if (obVal !== undefined) lines.push(`pya_ob_num = ${Number(obVal) || 0};`);
-          if (fromVal !== undefined) lines.push(`pya_from_num = ${Number(fromVal) || 0};`);
-          if (byVal !== undefined) lines.push(`by = ${Number(byVal) || 0};`);
-          lines.push(`${fn}();`, "pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "}");
-          return lines.join("\n");
-        }
-        return `${fn}();`;
-      }
-      const arg = inlineSentenceLiteral(sentence, declared);
-      if (sentence.to?.name) {
-        const targetVar = sanitizeName(sentence.to.name);
-        const lines = [];
-        if (!declared?.has(targetVar)) {
-          lines.push(`let ${targetVar};`);
-          markDeclared(declared, sentence.to.name);
-        }
-        lines.push(`${targetVar} = ${fn}(${arg});`);
-        lines.push(`globalThis["${sentence.to.name}"] = ${targetVar};`);
-        return lines.join("\n");
-      }
-      return `${fn}(${arg});`;
-    }
-  }
+  const doResult = handleDoSentence({
+    sentence,
+    baseBe,
+    lang,
+    sentenceArg,
+    ceremonyFns,
+    loopShim,
+    cHelpers,
+    cState,
+    declared,
+    locals
+  }, {
+    inlineSentenceLiteral,
+    sanitizeName,
+    pathFromGenitive,
+    markDeclared
+  });
+  if (doResult) return doResult;
   if (!name || mood === "do") return null;
 
   const shouldDeclare = Boolean(sentence.exists);
@@ -1053,96 +938,6 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   return null;
 }
 
-const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
-
-function collectSequenceDeps(sentences) {
-  const deps = new Set();
-  const scanValue = (value) => {
-    if (!value || typeof value !== "object") return;
-    if (value.thisRef && SEQUENCE_REGISTERS.has(value.thisRef)) {
-      deps.add(value.thisRef);
-    }
-    if (value.genitive?.chain) {
-      const chain = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
-      if (chain.includes("this")) {
-        for (const reg of SEQUENCE_REGISTERS) {
-          if (chain.includes(reg)) deps.add(reg);
-        }
-      }
-    }
-    if (Array.isArray(value)) value.forEach(scanValue);
-  };
-  const scanSentence = (sentence) => {
-    if (!sentence || typeof sentence !== "object") return;
-    for (const [key, value] of Object.entries(sentence)) {
-      if (key === "consequence") {
-        scanSentence(value);
-        continue;
-      }
-      scanValue(value);
-    }
-  };
-
-  if (Array.isArray(sentences)) {
-    sentences.forEach(scanSentence);
-  } else {
-    scanSentence(sentences);
-  }
-
-  return deps;
-}
-
-function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState }) {
-  const seqDeps = collectSequenceDeps(bodySentences);
-  for (const reg of seqDeps) {
-    if (!defSentence?.[reg]) {
-      throwErrorSentence({
-        name: "sequence register missing",
-        message: `ceremony "${defSentence?.su?.name ?? "ceremony"}" reads this ${reg} but definition omits ${reg}`,
-        from: { name: "compile" },
-        raw: { ceremony: defSentence?.su?.name, missing: reg }
-      });
-    }
-  }
-
-  const signatureWords = deriveSignatureFromDefinition(defSentence);
-  const fnBaseName = signatureWords
-    ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
-    : (defSentence?.su?.name || "ceremony");
-  const fnName = sanitizeName(fnBaseName);
-
-  const bodyLines = [];
-  let hasReturn = false;
-  const locals = new Set();
-  const localsTypes = new Map();
-  for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState });
-    if (line) {
-      bodyLines.push(line);
-      if (line.includes("return")) {
-        hasReturn = true;
-        break; // stop emitting after first return
-      }
-    }
-  }
-
-  const retLine =
-    hasReturn
-      ? null
-      : lang === "c"
-        ? "return;"
-        : "return sentence;";
-
-  if (lang === "c") {
-    const paramList = "void";
-    const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
-    return `void ${fnName}(${paramList}) {\n${body}\n}`;
-  }
-
-  const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
-  return `function ${fnName}(sentence) {\n${body}\n}\n` +
-    `globalThis[${JSON.stringify(fnBaseName)}] = ${fnName};`;
-}
 
 function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, collectSourceMap, retryConfig } = {}) {
   const header =
@@ -1261,30 +1056,30 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       continue;
     }
 
-    if (sentence.mood === "def" && sentence.be === "ceremony") {
-      if (sentence.su?.name && ceremonyFns.has(sentence.su.name)) {
-        console.warn(`ceremony redefined: ${sentence.su.name}`);
-      }
-      const body = [];
-      let j = i + 1;
-      for (; j < sentences.length; j++) {
-        if (sentences[j].mood === "prah") break;
-        body.push(sentences[j]);
-      }
-      const fn = transpileCeremony(sentence, body, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState });
-      const signatureWords = deriveSignatureFromDefinition(sentence);
-      const fnBaseName = signatureWords
-        ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
-        : (sentence?.su?.name || "ceremony");
-      const fnName = sanitizeName(fnBaseName);
-      ceremonyFns.set(sentence.su?.name, fnName);
-      if (signatureWords) {
-        ceremonyFns.set(joinSignatureWords(signatureWords), fnName);
-      }
-      if (typeof fn === "string" && fn.includes("remember(")) {
+    const ceremonyDef = handleCeremonyDefinition({
+      sentence,
+      sentences,
+      index: i,
+      lang,
+      declared,
+      declaredTypes,
+      declaredVectorTypes,
+      ceremonyFns,
+      cHelpers,
+      jsHelpers,
+      cState
+    }, {
+      deriveSignatureFromDefinition,
+      joinSignatureWords,
+      sanitizeName,
+      transpileSentence,
+      throwErrorSentence
+    });
+    if (ceremonyDef) {
+      if (ceremonyDef.usesRememberShim) {
         usesRememberShim = true;
       }
-      if (typeof fn === "string" && fn.includes("runAtAll(")) {
+      if (ceremonyDef.usesMapShim) {
         usesMapShim = true;
         usesRememberShim = true;
       }
@@ -1294,171 +1089,40 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       if (lang === "c" && sourceLineFor(i) && sourceFilename) {
         lines.push(`#line ${sourceLineFor(i)} "${sourceFilename}"`);
       }
-      lines.push(fn);
-      i = j; // skip to end of block
+      lines.push(ceremonyDef.fn);
+      i = ceremonyDef.endIndex;
       continue;
     }
 
-    if (sentence.mood === "def" && (sentence.be === "map" || sentence.be === "json map" || sentence.be === "csv map")) {
-      const body = [];
-      let j = i + 1;
-      for (; j < sentences.length; j++) {
-        if (sentences[j].mood === "prah") break;
-        body.push(sentences[j]);
-      }
-      const map = {};
-      const seen = new Set();
-      for (const entry of body) {
-        if (sentence.be === "map") {
-          if (!entry?.su?.name) {
-            throwErrorSentence({
-              name: "pyash map sentence lost su",
-              message: "pyash map sentence lost su",
-              from: { name: "compile" },
-              raw: entry
-            });
-          }
-          if (seen.has(entry.su.name)) {
-            throwErrorSentence({
-              name: "pyash map switch excess",
-              message: "pyash map switch excess",
-              from: { name: "compile" },
-              raw: { name: entry.su.name }
-            });
-          }
-          seen.add(entry.su.name);
-        }
-        if (sentence.be === "json map") {
-          if (!entry?.su?.name) {
-            throwErrorSentence({
-              name: "json map sentence lost su",
-              message: "json map sentence lost su",
-              from: { name: "compile" },
-              raw: entry
-            });
-          }
-          if (entry?.ob === undefined) {
-            throwErrorSentence({
-              name: "json map sentence lost ob",
-              message: "json map sentence lost ob",
-              from: { name: "compile" },
-              raw: entry
-            });
-          }
-        }
-        const key = entry?.su?.name;
-        if (!key) continue;
-        map[key] = sentence.be === "map" ? entry : (entry.ob ?? {});
-      }
-      const mapSentence = {
-        mood: "ya",
-        su: { name },
-        be: sentence.be,
-        ob: { map }
-      };
-      mapDefs.set(name, mapSentence);
-
-      if (collectSourceMap && sourceLineFor(i)) {
-        lines.push(`// @pyash-line ${sourceLineFor(i)}`);
-      }
-      if (lang === "c" && sourceLineFor(i) && sourceFilename) {
-        lines.push(`#line ${sourceLineFor(i)} "${sourceFilename}"`);
-      }
-
-      if (sentence.be === "json map") {
-        try {
-          const jsonObj = jsonFromMapSentence(mapSentence, mapDefs, new Set());
-          cState.jsonMapStrings.set(name, canonicalJsonStringify(jsonObj));
-          cState.jsonMapPrettyStrings.set(name, JSON.stringify(jsonObj, null, 2));
-          cState.yamlMapStrings.set(name, YAML.stringify(canonicalizeJsonValue(jsonObj)));
-        } catch (err) {
-          const normalized = normalizeJsonMapError(err);
-          throwErrorSentence({
-            name: normalized.name,
-            message: normalized.message,
-            from: { name: "compile" },
-            raw: { name, error: err?.message }
-          });
-        }
-      }
-      if (sentence.be === "csv map") {
-        try {
-          const csvText = csvTextFromMapSentence(mapSentence);
-          cState.csvMapStrings.set(name, csvText);
-        } catch (err) {
-          throwErrorSentence({
-            name: "csv columns defective",
-            message: err?.message ?? "csv columns defective",
-            from: { name: "compile" },
-            raw: { name, error: err?.message }
-          });
-        }
-      }
-
-      if (lang === "c") {
-        if (sentence.be !== "csv map") {
-          cHelpers.usesMap = true;
-          cHelpers.usesMapGlobals = true;
-          cHelpers.usesString = true;
-          cHelpers.usesStdlib = true;
-          cHelpers.usesPrintf = true;
-          cHelpers.usesCtype = true;
-          const mapVar = sanitizeName(name);
-          lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
-          mainLines.push(`pya_map_init(&${mapVar});`);
-          for (const [key, value] of Object.entries(map)) {
-            if (sentence.be === "map" && value && typeof value === "object" && value.mood) {
-              const pyashText = sentenceToPyash(value);
-              mainLines.push(`pya_map_set_sentence(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(pyashText)});`);
-            } else if (value?.num !== undefined) {
-              const numVal = Number(value.num);
-              mainLines.push(`pya_map_set_num(&${mapVar}, ${JSON.stringify(key)}, ${Number.isNaN(numVal) ? 0 : numVal});`);
-            } else if (value?.text !== undefined) {
-              mainLines.push(`pya_map_set_text(&${mapVar}, ${JSON.stringify(key)}, ${JSON.stringify(String(value.text))});`);
-            } else if (value?.boolean !== undefined) {
-              mainLines.push(`pya_map_set_bool(&${mapVar}, ${JSON.stringify(key)}, ${value.boolean ? 1 : 0});`);
-            } else if (value?.hollow) {
-              mainLines.push(`pya_map_set_hollow(&${mapVar}, ${JSON.stringify(key)});`);
-            }
-          }
-        }
-        if (sentence.be === "json map") {
-          const jsonText = cState.jsonMapStrings.get(name);
-          if (jsonText) {
-            const varName = sanitizeName(`${name}_json`);
-            lines.push(`const char *${varName} = ${JSON.stringify(jsonText)};`);
-          }
-          const prettyText = cState.jsonMapPrettyStrings.get(name);
-          if (prettyText) {
-            const varName = sanitizeName(`${name}_json_pretty`);
-            lines.push(`const char *${varName} = ${JSON.stringify(prettyText)};`);
-          }
-          const yamlText = cState.yamlMapStrings.get(name);
-          if (yamlText) {
-            const varName = sanitizeName(`${name}_yaml`);
-            lines.push(`const char *${varName} = ${JSON.stringify(yamlText)};`);
-          }
-        }
-        if (sentence.be === "csv map") {
-          const csvText = cState.csvMapStrings.get(name);
-          if (csvText) {
-            const varName = sanitizeName(`${name}_csv`);
-            lines.push(`const char *${varName} = ${JSON.stringify(csvText)};`);
-          }
-        }
-      } else {
-        const varName = sanitizeName(name);
-        const payload = JSON.stringify(mapSentence);
-        lines.push(`const ${varName} = ${payload};`);
-        lines.push(`globalThis[${JSON.stringify(name)}] = ${varName};`);
-      }
-
-      if (name) {
-        markDeclared(declared, name);
-        declaredTypes.set(name, sentence.be);
-      }
-
-      i = j;
+    const mapDef = handleMapDefinition({
+      sentence,
+      sentences,
+      index: i,
+      name,
+      lang,
+      collectSourceMap,
+      sourceFilename,
+      sourceLineFor,
+      lines,
+      mainLines,
+      cHelpers,
+      cState,
+      mapDefs,
+      declared,
+      declaredTypes
+    }, {
+      throwErrorSentence,
+      jsonFromMapSentence,
+      canonicalJsonStringify,
+      canonicalizeJsonValue,
+      normalizeJsonMapError,
+      csvTextFromMapSentence,
+      sanitizeName,
+      sentenceToPyash,
+      markDeclared
+    });
+    if (mapDef) {
+      i = mapDef.endIndex;
       continue;
     }
 
