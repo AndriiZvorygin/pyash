@@ -45,7 +45,7 @@ When docs disagree, these four specs win:
 ## 5) File map (first files to open)
 - `program/bridge/exchange.mjs`
 - `program/verbs/exchange/compile.mjs`
-- `program/verbs/exchange/compile/runtime_helpers.mjs`
+- `program/verbs/exchange/compile/js/runtime_helpers.mjs`
 - `program/verbs/exchange/compile/emit_mind.mjs`
 - `program/verbs/exchange/compile/emit_command.mjs`
 - `program/verbs/exchange/compile/c/helpers_c.mjs`
