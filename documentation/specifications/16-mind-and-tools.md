@@ -579,7 +579,7 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 - Tool schema generation: `program/verbs/mind/mind.mjs` (`buildToolSchemas`, `toolFunctionNameFromSignature`, `toolSchemaType`).
 - Tool sentence reconstruction: `program/verbs/mind/mind.mjs` (`buildToolSentence`).
 - Mind invocation: `program/verbs/mind/mind.mjs` (`mind_to_name_text`).
-- Compiled JS/C runtime helpers: `program/verbs/exchange/compile/mind_runtime_helper.mjs` (mind runtime JS), `program/verbs/exchange/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`).
+- Compiled JS/C runtime helpers: `program/verbs/exchange/compile/js/mind_runtime_helper.mjs` (mind runtime JS), `program/verbs/exchange/compile/c/helpers_c.mjs` (`MIND_RUNTIME_HELPER`).
 
 ---
 
