@@ -1,6 +1,6 @@
-# `19-speech-artifacts.md` (draft v0.1)
+# `19-speech-artifacts.md` (v0.1)
 
-**Status:** draft (semantics locked, wording polish pending)
+**Status:** v0.1 (frozen)
 
 ---
 

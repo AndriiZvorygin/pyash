@@ -199,6 +199,11 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 8, 2026: Speech spec freeze + talk loop goldens
+
+* Speech specs frozen as v0.1 (`18-say-and-hear.md`, `19-speech-artifacts.md`) and index labels updated.
+* Added talk loop golden examples (`examples/pyash/talk-loop-smoke.pya`, `examples/pyash/talk-loop-cancel.pya`).
+
 ### Jan 7, 2026: Compile refactor + example references
 
 * Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.

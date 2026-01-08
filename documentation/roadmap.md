@@ -246,15 +246,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * recorded metadata/hashes sufficient for `again` verification when applicable
   * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
 
-### Spec drops (freeze v0.4)
-
-* **Speech spec v0.1** (`18-say-and-hear.md`)
-
-  * includes streaming forms (partial transcript / streaming audio) and lifecycle controls
-* **Speech artefact schema v0.1** (`19-speech-artifacts.md`)
-
-  * stable fields + ordering + replay/verification requirements for tests
-
 ### Hardening gates
 
 * Golden demos:

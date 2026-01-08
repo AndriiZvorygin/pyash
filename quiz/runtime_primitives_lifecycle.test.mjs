@@ -14,7 +14,7 @@ test("cancel updates duty state and returns sloh", async () => {
   forget();
   await run("su name L7 as name running be duty ya");
 
-  const res = await run("su name L7 vyah cancel be hear do");
+  const res = await run("su name L7 be hear vyah cancel do");
   assert.equal(res?.be, "hear");
   assert.deepEqual(res?.vyah?.ve?.values, ["cancel", "sloh"]);
 
@@ -26,7 +26,7 @@ test("finish updates stream state and returns sloh", async () => {
   forget();
   await run("su name S3 as name open ob ve text he llo be stream ya");
 
-  const res = await run("su name S3 vyah finish be hear do");
+  const res = await run("su name S3 be hear vyah finish do");
   assert.equal(res?.be, "hear");
   assert.deepEqual(res?.vyah?.ve?.values, ["finish", "sloh"]);
 
@@ -38,7 +38,7 @@ test("await succeeds only when duty is done", async () => {
   forget();
   await run("su name L9 as name done be duty ya");
 
-  const res = await run("su name L9 vyah await be hear do");
+  const res = await run("su name L9 be hear vyah await do");
   assert.equal(res?.be, "hear");
   assert.deepEqual(res?.vyah?.ve?.values, ["await", "sloh"]);
 });
