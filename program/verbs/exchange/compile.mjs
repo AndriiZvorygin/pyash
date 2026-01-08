@@ -27,10 +27,10 @@ import { handleVectorElementOps } from "./compile/emit_vector.mjs";
 import { BASE_BE_HANDLERS } from "./compile/handlers.mjs";
 import { indexExprFromAt } from "./compile/index_helpers.mjs";
 import { csvTextFromMapSentence, jsonFromMapSentence, mapDefChainFromName, normalizeJsonMapError } from "./compile/map_helpers.mjs";
-import { mindHelperSource, mindHistorySource } from "./compile/mind_runtime_helper.mjs";
-import { mindToolHelperSource } from "./compile/mind_tool_helper.mjs";
+import { mindHelperSource, mindHistorySource } from "./compile/js/mind_runtime_helper.mjs";
+import { mindToolHelperSource } from "./compile/js/mind_tool_helper.mjs";
 import { canonicalJsonStringify, canonicalizeJsonValue, parseCsvText } from "./compile/parse_helpers.mjs";
-import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "./compile/runtime_helpers.mjs";
+import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "./compile/js/runtime_helpers.mjs";
 import { buildToolSchemasForCompile } from "./compile/tooling.mjs";
 import { compareUtf8, markDeclared, sanitizeName, sentenceIdForText } from "./compile/util.mjs";
 
