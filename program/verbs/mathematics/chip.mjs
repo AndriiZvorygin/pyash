@@ -29,18 +29,48 @@ export async function chip_from_filename_text(sentence) {
 async function readHearStreamLines(filename) {
   try {
     const raw = await fs.readFile(filename, "utf8");
-    const lines = raw.split(/\r?\n/)
+    const rawLines = raw.split(/\r?\n/)
       .map(line => line.trim())
       .filter(line => line.length > 0);
-    const blankIndex = lines.indexOf("[BLANK_AUDIO]");
+    const blankIndex = rawLines.indexOf("[BLANK_AUDIO]");
+    const lines = collapseStreamLines(blankIndex === -1 ? rawLines : rawLines.slice(0, blankIndex));
     if (blankIndex !== -1) {
-      return { lines: lines.slice(0, blankIndex), final: true };
+      return { lines, final: true };
     }
     return { lines, final: false };
   } catch (err) {
     if (err?.code === "ENOENT") return { lines: [], final: false };
     throw err;
   }
+}
+
+function normalizeStreamLine(line) {
+  return String(line ?? "").trim().toLowerCase();
+}
+
+function collapseStreamLines(lines) {
+  const output = [];
+  let lastLine = "";
+  for (const line of lines) {
+    const trimmed = String(line ?? "").trim();
+    if (!trimmed || trimmed === "[BLANK_AUDIO]") continue;
+    if (!lastLine) {
+      output.push(trimmed);
+      lastLine = trimmed;
+      continue;
+    }
+    const normLast = normalizeStreamLine(lastLine);
+    const normNext = normalizeStreamLine(trimmed);
+    if (normNext === normLast) continue;
+    if (normNext.startsWith(normLast)) {
+      output[output.length - 1] = trimmed;
+      lastLine = trimmed;
+      continue;
+    }
+    output.push(trimmed);
+    lastLine = trimmed;
+  }
+  return output;
 }
 
 export async function chip_su_stream(sentence) {

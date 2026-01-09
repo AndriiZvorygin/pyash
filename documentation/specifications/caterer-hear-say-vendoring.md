@@ -151,6 +151,10 @@ Common usage (capture mic ID 0, write transcript to file):
 
 If you only have the English model, use `ggml-base.en.bin` instead.
 
+Note: `whisper-stream` emits `[BLANK_AUDIO]` when silence exceeds its internal
+thresholds. Pyash integrations SHOULD treat this as an end marker and MUST NOT
+include it as transcript text.
+
 Help output (flags and defaults):
 
 ```text
