@@ -199,6 +199,13 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 7, 2026: Hear prompt + keyboard streaming
+
+* `hear` accepts `ob text` as an initial prompt for whisper-stream and whisper-cli (with a patch for whisper-stream).
+* Streaming STT de-duplicates incremental repeats (including ellipsis-style prefixes).
+* `write` supports `to name keyboard` with `xdotool` and can consume `hear` streams in real time.
+* New example: `examples/pyash/hear-stream-keyboard.pya`, plus quizzes for prompt and keyboard streaming.
+
 ### Jan 8, 2026: Speech spec freeze + talk loop goldens
 
 * Speech specs frozen as v0.1 (`18-say-and-hear.md`, `19-speech-artifacts.md`) and index labels updated.
