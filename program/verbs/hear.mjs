@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -77,7 +78,13 @@ function resolveWhisperStreamBinary() {
 
 function resolveModelPath() {
   if (process.env.PYA_HEAR_MODEL) return process.env.PYA_HEAR_MODEL;
+  const baseBin = path.join("caterer", "hear", "template", "whisper", "ggml-base.bin");
+  if (fsSync.existsSync(baseBin)) return baseBin;
   return path.join("caterer", "hear", "template", "whisper", "ggml-base.en.bin");
+}
+
+function resolveHearLanguage() {
+  return process.env.PYA_HEAR_LANGUAGE || "auto";
 }
 
 function resolveOutputPath(sentence) {
@@ -97,6 +104,32 @@ function metadataPathForOutput(outputPath) {
   return `${outputPath}.metadata.json`;
 }
 
+function startFileTail({ filename, onLine }) {
+  let offset = 0;
+  let pending = "";
+  const interval = setInterval(() => {
+    let stats;
+    try {
+      stats = fsSync.statSync(filename);
+    } catch {
+      return;
+    }
+    if (stats.size <= offset) return;
+    const fd = fsSync.openSync(filename, "r");
+    const buffer = Buffer.alloc(stats.size - offset);
+    fsSync.readSync(fd, buffer, 0, buffer.length, offset);
+    fsSync.closeSync(fd);
+    offset = stats.size;
+    const text = pending + buffer.toString("utf8");
+    const lines = text.split(/\r?\n/);
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.length) onLine(line);
+    }
+  }, 200);
+  return () => clearInterval(interval);
+}
+
 async function readInputBytes(sentence) {
   const filename = sentence?.from?.filename;
   if (!filename) return Buffer.alloc(0);
@@ -105,6 +138,22 @@ async function readInputBytes(sentence) {
   } catch {
     return Buffer.alloc(0);
   }
+}
+
+function parseFixtureLines(fixtureText) {
+  return String(fixtureText ?? "")
+    .split(/\r?\n/)
+    .filter(line => line.length > 0);
+}
+
+function maybeEnableStreamStdout(streamOutputPath) {
+  if (process.env.PYA_STREAM_STDOUT !== "1") return () => {};
+  return startFileTail({
+    filename: streamOutputPath,
+    onLine: (line) => {
+      if (line) process.stdout.write(`${line}\n`);
+    }
+  });
 }
 
 export async function hear(sentence, { remember: rememberFn = remember } = {}) {
@@ -130,7 +179,10 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   if (aspectKey === "stream") {
     const streamName = sentence?.su?.name ?? "hear stream";
     if (fixture !== undefined) {
-      const values = String(fixture ?? "").split(/\r?\n/).filter(line => line.length > 0);
+      const values = parseFixtureLines(fixture);
+      if (process.env.PYA_STREAM_STDOUT === "1") {
+        for (const line of values) process.stdout.write(`${line}\n`);
+      }
       return makeStream({
         name: streamName,
         state: "open",
@@ -142,10 +194,12 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     const modelPath = resolveModelPath();
     const streamOutputPath = resolveStreamOutputPath(sentence);
     const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
+    const language = resolveHearLanguage();
     await fs.mkdir(path.dirname(streamOutputPath), { recursive: true });
-    spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-f", String(streamOutputPath)], {
+    spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(streamOutputPath)], {
       stdio: ["ignore", "pipe", "pipe"]
     });
+    maybeEnableStreamStdout(streamOutputPath);
     return makeStream({
       name: streamName,
       state: "open",
@@ -169,9 +223,12 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       const whisperBin = resolveWhisperStreamBinary();
       const modelPath = resolveModelPath();
       const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
+      const language = resolveHearLanguage();
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
+      fsSync.writeFileSync(outputPath, "");
+      let stopTail = null;
       const res = await new Promise((resolve, reject) => {
-        const proc = spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-f", String(outputPath)], {
+        const proc = spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(outputPath)], {
           stdio: ["ignore", "pipe", "pipe"]
         });
         let stdout = "";
@@ -179,11 +236,18 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
         proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
         proc.on("error", reject);
+        stopTail = startFileTail({
+          filename: outputPath,
+          onLine: (line) => {
+            if (line) process.stdout.write(`${line}\n`);
+          }
+        });
         const timer = setTimeout(() => {
           proc.kill("SIGINT");
         }, durationMs);
         proc.on("close", status => {
           clearTimeout(timer);
+          if (stopTail) stopTail();
           resolve({ status, stdout, stderr });
         });
       });

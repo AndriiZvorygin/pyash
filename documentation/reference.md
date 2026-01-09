@@ -27,6 +27,16 @@ Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` return
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
 
+## Whisper streaming helper
+
+Run the streaming whisper helper and print incremental lines as they arrive:
+
+```bash
+node command/whisper_stream.mjs -c 0 -m caterer/hear/template/whisper/ggml-base.bin
+```
+
+If you only have the English model, use `ggml-base.en.bin` instead.
+
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
 - Imperative (add): `ob num 3 to num 4 be add do` → stores command + `result` with `num 7`

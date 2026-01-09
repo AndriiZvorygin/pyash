@@ -1,0 +1,2 @@
+su name prompt ob text "Speak now. Recording for 10 seconds." be write do
+su name record during num 10000 be hear vyah timebox do

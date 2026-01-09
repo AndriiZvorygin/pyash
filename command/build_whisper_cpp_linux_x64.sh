@@ -30,3 +30,5 @@ fi
 cp "$source_dir/LICENSE" "$license_dir/whisper.cpp.LICENSE.txt"
 
 echo "Built whisper.cpp and staged binaries in $output_dir"
+echo "Model note: default path is caterer/hear/template/whisper/ggml-base.bin (multilingual)."
+echo "If only ggml-base.en.bin is available, it will be used as a fallback."
