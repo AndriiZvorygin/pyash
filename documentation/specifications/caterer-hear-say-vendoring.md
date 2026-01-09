@@ -145,9 +145,11 @@ Common usage (capture mic ID 0, write transcript to file):
 ```bash
 ./caterer/hear/binary/linux-x64/whisper-stream \
   -c 0 \
-  -m ./caterer/hear/template/whisper/ggml-base.en.bin \
+  -m ./caterer/hear/template/whisper/ggml-base.bin \
   -f /tmp/whisper.txt
 ```
+
+If you only have the English model, use `ggml-base.en.bin` instead.
 
 Help output (flags and defaults):
 
