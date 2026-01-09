@@ -138,6 +138,44 @@ Required binaries per computer:
 * whisper-main (required)
 * whisper-stream (optional)
 
+#### Whisper-stream usage (reference)
+
+Common usage (capture mic ID 0, write transcript to file):
+
+```bash
+./caterer/hear/binary/linux-x64/whisper-stream \
+  -c 0 \
+  -m ./caterer/hear/template/whisper/ggml-base.en.bin \
+  -f /tmp/whisper.txt
+```
+
+Help output (flags and defaults):
+
+```text
+  -t N,     --threads N     [4      ] number of threads to use during computation
+            --step N        [3000   ] audio step size in milliseconds
+            --length N      [10000  ] audio length in milliseconds
+            --keep N        [200    ] audio to keep from previous step in ms
+  -c ID,    --capture ID    [-1     ] capture device ID
+  -mt N,    --max-tokens N  [32     ] maximum number of tokens per audio chunk
+  -ac N,    --audio-ctx N   [0      ] audio context size (0 - all)
+  -bs N,    --beam-size N   [-1     ] beam size for beam search
+  -vth N,   --vad-thold N   [0.60   ] voice activity detection threshold
+  -fth N,   --freq-thold N  [100.00 ] high-pass frequency cutoff
+  -tr,      --translate     [false  ] translate from source language to english
+  -nf,      --no-fallback   [false  ] do not use temperature fallback while decoding
+  -ps,      --print-special [false  ] print special tokens
+  -kc,      --keep-context  [false  ] keep context between audio chunks
+  -l LANG,  --language LANG [en     ] spoken language
+  -m FNAME, --model FNAME   [models/ggml-base.en.bin] model path
+  -f FNAME, --file FNAME    [       ] text output file name
+  -tdrz,    --tinydiarize   [false  ] enable tinydiarize (requires a tdrz model)
+  -sa,      --save-audio    [false  ] save the recorded audio to a file
+  -ng,      --no-gpu        [false  ] disable GPU inference
+  -fa,      --flash-attn    [true   ] enable flash attention during inference
+  -nfa,     --no-flash-attn [false  ] disable flash attention during inference
+```
+
 Required assets:
 
 * at least one Whisper template file under:

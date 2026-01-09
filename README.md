@@ -5,6 +5,7 @@ Pyash is a compact, speakable language that can be interpreted or compiled to Ja
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
 - Optional: reachable Ollama HTTP server for `mind` (`OLLAMA_HOST`, default `http://localhost:11434`).
+- Environment variables are documented in `configure/env.example`.
 
 ## Install & Quizzes
 ```bash

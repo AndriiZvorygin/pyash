@@ -26,7 +26,17 @@ export async function chip_from_filename_text(sentence) {
   return { chips };
 }
 
-export function chip_su_stream(sentence) {
+async function readHearStreamLines(filename) {
+  try {
+    const raw = await fs.readFile(filename, "utf8");
+    return raw.split(/\r?\n/).filter(line => line.length > 0);
+  } catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+export async function chip_su_stream(sentence) {
   const streamName = sentence.su?.name;
   if (!streamName) {
     return makeRuntimeError({
@@ -41,6 +51,33 @@ export function chip_su_stream(sentence) {
       name: "stream missing",
       message: `stream not found: ${streamName}`
     });
+  }
+
+  if (stream.ob?.kind === "hear" && stream.ob?.filename) {
+    const values = await readHearStreamLines(stream.ob.filename);
+    const index = stream.ob?.index ?? 0;
+    if (index >= values.length) return null;
+
+    const value = values[index];
+    const lastIndex = values.length - 1;
+    const final = Boolean(stream.ob?.final);
+    const chip = makeChip({
+      streamName,
+      index,
+      ob: { text: String(value) },
+      toindex: final ? lastIndex : undefined,
+      vyahValues: ["eval", "sloh"]
+    });
+
+    const nextIndex = index + 1;
+    const nextState = final && nextIndex > lastIndex ? "done" : (stream.as?.name ?? "open");
+    const updated = makeStream({
+      name: streamName,
+      state: nextState,
+      ob: { ...stream.ob, index: nextIndex }
+    });
+    doRemember(updated);
+    return chip;
   }
 
   const values = stream.ob?.ve?.values ?? [];
