@@ -212,6 +212,13 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Speech specs frozen as v0.1 (`18-say-and-hear.md`, `19-speech-artifacts.md`) and index labels updated.
 * Added talk loop golden examples (`examples/pyash/talk-loop-smoke.pya`, `examples/pyash/talk-loop-cancel.pya`).
 
+### Jan 9, 2026: Streaming say buffering + fixtures
+
+* Streaming `say` now buffers to punctuation/word boundaries to avoid partial-word speech.
+* Added streaming `say` fixtures for piper/espeak, plus tests for buffered output.
+* New streaming `say` examples (`examples/pyash/say-stream-espeak.pya`, `examples/pyash/say-stream-piper.pya`).
+* Added `PYA_SAY_STREAM_DELAY_MS` and `PYA_ESPEAK_BIN` to env guidance for stream tuning.
+
 ### Jan 7, 2026: Compile refactor + example references
 
 * Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.

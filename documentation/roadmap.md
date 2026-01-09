@@ -223,11 +223,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship (remaining)
 
-* **Streaming `say` (usable, interactive)**
-
-  * TTS can begin before the full response is complete (where supported)
-  * parity-first; feature gates allowed with quizzes
-
 * **Minimal “talk to LLM” loop (golden demo surface)**
 
   * listen (`hear`) → LLM → speak (`say`)
@@ -250,6 +245,12 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * same surfaced error sentences and stable run records for fixture runs across interpreter/JS/C
 
 ### Completed (Week 2)
+
+* **Streaming `say` (usable, interactive)**
+
+  * TTS can begin before the full response is complete (where supported)
+  * buffering flushes on punctuation/word boundaries for intelligible speech
+  * parity-first; feature gates allowed with quizzes
 
 * **Streaming `hear` (usable, interactive)**
 
