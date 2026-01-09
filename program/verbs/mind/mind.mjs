@@ -40,6 +40,16 @@ function startStreamFile(filePath) {
   fsSync.writeFileSync(filePath, "", "utf8");
 }
 
+function resolveStreamStdoutEnabled({ rememberFn } = {}) {
+  if (process?.env?.PYA_STREAM_STDOUT === "1") return true;
+  if (process?.env?.PYA_STREAM_STDOUT === "0") return false;
+  const configured = rememberFn?.("stream stdout");
+  if (configured?.be === "default" && typeof configured?.ob?.boolean === "boolean") {
+    return configured.ob.boolean;
+  }
+  return process?.stdout?.isTTY === true;
+}
+
 function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName }) {
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   if (callPrompt) {
@@ -231,6 +241,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     if (aspect === "stream") {
       const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
       startStreamFile(streamOutputPath);
+      const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
       recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       (async () => {
         let streamedText = "";
@@ -243,7 +254,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
             for (const chunk of chunks) {
               streamedText += chunk;
               writeStreamChunk(streamOutputPath, chunk);
-              if (process?.env?.PYA_STREAM_STDOUT === "1") {
+              if (streamStdoutEnabled) {
                 process.stdout.write(chunk);
               }
             }
@@ -260,7 +271,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
                 const textChunk = String(chunk);
                 streamedText += textChunk;
                 writeStreamChunk(streamOutputPath, textChunk);
-                if (process?.env?.PYA_STREAM_STDOUT === "1") {
+                if (streamStdoutEnabled) {
                   process.stdout.write(textChunk);
                 }
               }

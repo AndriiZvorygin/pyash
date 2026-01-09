@@ -59,10 +59,12 @@ whisper-stream).
 Stream mic transcription into the active window (requires `xdotool`):
 
 ```bash
-PYA_STREAM_STDOUT=0 ./run examples/pyash/hear-stream-keyboard.pya --full
+./run examples/pyash/hear-stream-keyboard.pya --full
 ```
 
 Set `PYA_KEYBOARD_BIN` to override the keyboard injection binary.
+If you need to disable stream stdout globally, set `su stream stdout ob bool lie be default ya`
+in `configure/default.pya` or in a specific example.
 
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`

@@ -268,16 +268,20 @@ function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {
   };
 }
 
-function resolveStreamStdoutEnabled() {
+function resolveStreamStdoutEnabled({ rememberFn } = {}) {
   if (process.env.PYA_STREAM_STDOUT === "1") return true;
   if (process.env.PYA_STREAM_STDOUT === "0") return false;
+  const configured = rememberFn?.("stream stdout");
+  if (configured?.be === "default" && typeof configured?.ob?.boolean === "boolean") {
+    return configured.ob.boolean;
+  }
   return process.stdout?.isTTY === true;
 }
 
-function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
+function maybeEnableStreamStdout(streamOutputPath, { onBlank, rememberFn } = {}) {
   return startStreamStdoutTail(streamOutputPath, {
     onBlank,
-    enabled: resolveStreamStdoutEnabled()
+    enabled: resolveStreamStdoutEnabled({ rememberFn })
   });
 }
 
@@ -337,7 +341,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     const streamName = sentence?.su?.name ?? "hear stream";
     if (fixture !== undefined) {
       const values = parseFixtureLines(fixture);
-      if (process.env.PYA_STREAM_STDOUT === "1") {
+      if (resolveStreamStdoutEnabled({ rememberFn })) {
         for (const line of values) {
           const trimmed = String(line ?? "").trim();
           if (trimmed) process.stdout.write(`${trimmed}\n`);
@@ -369,11 +373,11 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       });
       hearStreamProcesses.set(streamName, { proc });
 
-      if (process.stdin?.isTTY !== false && resolveStreamStdoutEnabled()) {
+      if (process.stdin?.isTTY !== false && resolveStreamStdoutEnabled({ rememberFn })) {
         let done = null;
         const waitForEnd = new Promise(resolve => { done = resolve; });
-        const stopTail = maybeEnableStreamStdout(streamOutputPath, { onBlank: () => done?.() });
-        const stopBlankWatcher = resolveStreamStdoutEnabled()
+        const stopTail = maybeEnableStreamStdout(streamOutputPath, { onBlank: () => done?.(), rememberFn });
+        const stopBlankWatcher = resolveStreamStdoutEnabled({ rememberFn })
           ? null
           : startStreamEndWatcher(streamOutputPath, { onBlank: () => done?.() });
         await new Promise(resolve => {
@@ -415,7 +419,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         if (current) {
           current.stopWatcher = stopWatcher;
         }
-        maybeEnableStreamStdout(streamOutputPath);
+        maybeEnableStreamStdout(streamOutputPath, { rememberFn });
         return makeStream({
           name: streamName,
           state: "open",

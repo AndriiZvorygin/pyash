@@ -218,6 +218,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added streaming `say` fixtures for piper/espeak, plus tests for buffered output.
 * New streaming `say` examples (`examples/pyash/say-stream-espeak.pya`, `examples/pyash/say-stream-piper.pya`).
 * Added `PYA_SAY_STREAM_DELAY_MS` and `PYA_ESPEAK_BIN` to env guidance for stream tuning.
+* Stream stdout can now be disabled via `su stream stdout ob bool lie be default ya` (configurable in `configure/default.pya` and examples).
 
 ### Jan 7, 2026: Compile refactor + example references
 
