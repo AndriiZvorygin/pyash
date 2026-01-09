@@ -84,6 +84,10 @@ function resolveStreamDelayMs() {
   return raw;
 }
 
+function hasTailBoundary(buffer) {
+  return /[\s,.;:!?]$/.test(buffer);
+}
+
 function startFileTail({ filename, onLine }) {
   let offset = 0;
   let pending = "";
@@ -191,6 +195,10 @@ export async function espeakSay(sentence, { remember: rememberFn = remember } = 
         if (flushTimer) clearTimeout(flushTimer);
         flushTimer = setTimeout(() => {
           flushTimer = null;
+          if (!hasTailBoundary(buffer)) {
+            scheduleFlush();
+            return;
+          }
           enqueue(flushBuffer);
         }, delayMs);
       };

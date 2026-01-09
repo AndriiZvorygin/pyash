@@ -168,6 +168,10 @@ during num <tMs>
 be chip ya
 ```
 
+Backends MAY buffer incoming text chunks and only emit audio once a word or
+punctuation boundary is reached. When buffering is used, flushing behavior MUST
+be deterministic for fixture runs, and partial-word audio MUST NOT be emitted.
+
 ### 5.2 `hear stream`
 
 Each stream chunk MUST be an envelope with:

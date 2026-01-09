@@ -35,6 +35,8 @@ This writes `newspaper/say-stream.pya`.
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
   - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to name keyboard` (default: `xdotool`).
+  - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
+  - `PYA_ESPEAK_BIN` overrides the espeak binary used by `espeak say` (default: `espeak-ng`).
 
 ## Whisper streaming helper
 
