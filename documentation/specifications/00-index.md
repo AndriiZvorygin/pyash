@@ -55,3 +55,4 @@ Feature specs (optional, when blessed):
 - `30-data-formats.md` (merged)
 - `08-vyah-and-aspect.md` (merged)
 - `50-modules.md` (v0.1)
+- `whisper_initial_prompt.md` (draft)
