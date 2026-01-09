@@ -308,9 +308,11 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         raw: { sentence }
       });
     }
-    const proc = hearStreamProcesses.get(targetName);
-    if (proc) {
+    const entry = hearStreamProcesses.get(targetName);
+    if (entry) {
+      const proc = entry.proc ?? entry;
       proc.kill("SIGINT");
+      if (entry.stopWatcher) entry.stopWatcher();
       hearStreamProcesses.delete(targetName);
     }
     return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "sloh"] } }, be: "hear", mood: "ya" };
@@ -365,9 +367,9 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       const proc = spawn(String(whisperBin), args, {
         stdio: ["ignore", "pipe", "pipe"]
       });
-      hearStreamProcesses.set(streamName, proc);
+      hearStreamProcesses.set(streamName, { proc });
 
-      if (process.stdin?.isTTY !== false) {
+      if (process.stdin?.isTTY !== false && resolveStreamStdoutEnabled()) {
         let done = null;
         const waitForEnd = new Promise(resolve => { done = resolve; });
         const stopTail = maybeEnableStreamStdout(streamOutputPath, { onBlank: () => done?.() });
@@ -401,6 +403,18 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         backend = "whisper-stream";
         model = modelPath;
       } else {
+        const stopWatcher = startStreamEndWatcher(streamOutputPath, {
+          onBlank: () => {
+            proc.kill("SIGINT");
+            const current = hearStreamProcesses.get(streamName);
+            if (current?.stopWatcher) current.stopWatcher();
+            hearStreamProcesses.delete(streamName);
+          }
+        });
+        const current = hearStreamProcesses.get(streamName);
+        if (current) {
+          current.stopWatcher = stopWatcher;
+        }
         maybeEnableStreamStdout(streamOutputPath);
         return makeStream({
           name: streamName,
