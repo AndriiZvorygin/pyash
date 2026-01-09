@@ -205,6 +205,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Streaming STT de-duplicates incremental repeats (including ellipsis-style prefixes).
 * `write` supports `to name keyboard` with `xdotool` and can consume `hear` streams in real time.
 * New example: `examples/pyash/hear-stream-keyboard.pya`, plus quizzes for prompt and keyboard streaming.
+* Week 2 roadmap items completed: streaming `hear`, drop-a-binary streaming STT, and deterministic test hooks.
 
 ### Jan 8, 2026: Speech spec freeze + talk loop goldens
 
