@@ -9,6 +9,7 @@ import { recordArtifact, getExchangeSentenceId } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -64,29 +65,39 @@ function resolveComputer() {
   }
 }
 
-function resolveWhisperBinary() {
-  if (process.env.PYA_HEAR_BIN) return process.env.PYA_HEAR_BIN;
+function resolveWhisperBinary({ rememberFn } = {}) {
+  const configuredBin = resolveConfigText("hear bin", { rememberFn });
+  if (configuredBin) return configuredBin;
   const computer = resolveComputer();
   const ext = computer.startsWith("win-") ? ".exe" : "";
   return path.join("caterer", "hear", "binary", computer, `whisper-main${ext}`);
 }
 
-function resolveWhisperStreamBinary() {
-  if (process.env.PYA_HEAR_STREAM_BIN) return process.env.PYA_HEAR_STREAM_BIN;
+function resolveWhisperStreamBinary({ rememberFn } = {}) {
+  const configuredBin = resolveConfigText("hear stream bin", { rememberFn });
+  if (configuredBin) return configuredBin;
   const computer = resolveComputer();
   const ext = computer.startsWith("win-") ? ".exe" : "";
   return path.join("caterer", "hear", "binary", computer, `whisper-stream${ext}`);
 }
 
-function resolveModelPath() {
-  if (process.env.PYA_HEAR_MODEL) return process.env.PYA_HEAR_MODEL;
+function resolveModelPath({ rememberFn } = {}) {
+  const configured = resolveConfigText("hear model", { rememberFn });
+  if (configured) return configured;
   const baseBin = path.join("caterer", "hear", "template", "whisper", "ggml-base.bin");
   if (fsSync.existsSync(baseBin)) return baseBin;
   return path.join("caterer", "hear", "template", "whisper", "ggml-base.en.bin");
 }
 
-function resolveHearLanguage() {
-  return process.env.PYA_HEAR_LANGUAGE || "auto";
+function resolveHearLanguage({ rememberFn } = {}) {
+  return resolveConfigText("hear language", { rememberFn }) || "auto";
+}
+
+function resolveHearCapture({ rememberFn } = {}) {
+  const num = resolveConfigNum("hear capture", { rememberFn });
+  if (num !== undefined) return String(num);
+  const text = resolveConfigText("hear capture", { rememberFn });
+  return text || "0";
 }
 
 function resolveHearPrompt(sentence) {
@@ -269,12 +280,8 @@ function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {
 }
 
 function resolveStreamStdoutEnabled({ rememberFn } = {}) {
-  if (process.env.PYA_STREAM_STDOUT === "1") return true;
-  if (process.env.PYA_STREAM_STDOUT === "0") return false;
-  const configured = rememberFn?.("stream stdout");
-  if (configured?.be === "default" && typeof configured?.ob?.boolean === "boolean") {
-    return configured.ob.boolean;
-  }
+  const configured = resolveConfigBool("stream stdout", { rememberFn });
+  if (configured !== undefined) return configured;
   return process.stdout?.isTTY === true;
 }
 
@@ -330,7 +337,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     });
   }
 
-  const fixture = process.env.PYA_HEAR_FIXTURE;
+  const fixture = resolveConfigText("hear fixture", { rememberFn });
   let transcript = "";
   let backend = "fixture";
   let model = null;
@@ -356,11 +363,11 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
     } else {
-      const whisperBin = resolveWhisperStreamBinary();
-      const modelPath = resolveModelPath();
+      const whisperBin = resolveWhisperStreamBinary({ rememberFn });
+      const modelPath = resolveModelPath({ rememberFn });
       const streamOutputPath = resolveStreamOutputPath(sentence);
-      const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
-      const language = resolveHearLanguage();
+      const captureId = resolveHearCapture({ rememberFn });
+      const language = resolveHearLanguage({ rememberFn });
       const prompt = resolveHearPrompt(sentence);
       await fs.mkdir(path.dirname(streamOutputPath), { recursive: true });
       fsSync.writeFileSync(streamOutputPath, "");
@@ -442,10 +449,10 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     if (fixture !== undefined) {
       transcript = String(fixture ?? "");
     } else {
-      const whisperBin = resolveWhisperStreamBinary();
-      const modelPath = resolveModelPath();
-      const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
-      const language = resolveHearLanguage();
+      const whisperBin = resolveWhisperStreamBinary({ rememberFn });
+      const modelPath = resolveModelPath({ rememberFn });
+      const captureId = resolveHearCapture({ rememberFn });
+      const language = resolveHearLanguage({ rememberFn });
       const prompt = resolveHearPrompt(sentence);
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       fsSync.writeFileSync(outputPath, "");
@@ -533,8 +540,8 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
           raw: { sentence }
         });
       }
-      const whisperBin = resolveWhisperBinary();
-      const modelPath = resolveModelPath();
+      const whisperBin = resolveWhisperBinary({ rememberFn });
+      const modelPath = resolveModelPath({ rememberFn });
       const prompt = resolveHearPrompt(sentence);
       backend = "whisper.cpp";
       model = modelPath;

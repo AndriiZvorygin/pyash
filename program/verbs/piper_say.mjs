@@ -9,6 +9,7 @@ import { renderSayValue } from "./say.mjs";
 import { recordArtifact, getExchangeSentenceId } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 
 let piperCounter = 0;
 
@@ -63,7 +64,8 @@ function resolveComputer() {
 }
 
 function resolveVoiceId({ rememberFn } = {}) {
-  if (process.env.PYA_PIPER_VOICE) return process.env.PYA_PIPER_VOICE;
+  const configuredVoice = resolveConfigText("piper voice", { rememberFn });
+  if (configuredVoice) return configuredVoice;
   const configured = rememberFn?.("vocalization");
   if (configured?.be === "default") {
     if (typeof configured?.ob?.text === "string") return configured.ob.text;
@@ -78,8 +80,9 @@ function resolveVoicePath(voiceId) {
   return path.join("caterer", "say", "vocalization", "piper", voiceId, `${voiceId}.onnx`);
 }
 
-function resolvePiperBinary() {
-  if (process.env.PYA_PIPER_BIN) return process.env.PYA_PIPER_BIN;
+function resolvePiperBinary({ rememberFn } = {}) {
+  const configuredBin = resolveConfigText("piper bin", { rememberFn });
+  if (configuredBin) return configuredBin;
   const computer = resolveComputer();
   const ext = computer.startsWith("win-") ? ".exe" : "";
   return path.join("caterer", "say", "binary", computer, `piper${ext}`);
@@ -165,8 +168,9 @@ function shouldFlushChunk(buffer) {
   return trimmed.length >= 180;
 }
 
-function resolveStreamDelayMs() {
-  const raw = Number(process.env.PYA_SAY_STREAM_DELAY_MS ?? 150);
+function resolveStreamDelayMs({ rememberFn } = {}) {
+  const raw = resolveConfigNum("say stream delay", { rememberFn });
+  if (raw === undefined) return 150;
   if (!Number.isFinite(raw) || raw < 0) return 150;
   return raw;
 }
@@ -204,16 +208,17 @@ function metadataPathForOutput(outputPath) {
   return `${outputPath}.metadata.json`;
 }
 
-function resolveAudioPlayer() {
-  if (process.env.PYA_AUDIO_PLAYER) return process.env.PYA_AUDIO_PLAYER;
+function resolveAudioPlayer({ rememberFn } = {}) {
+  const configuredPlayer = resolveConfigText("audio player", { rememberFn });
+  if (configuredPlayer) return configuredPlayer;
   if (process.platform === "darwin") return "afplay";
   if (process.platform === "win32") return null;
   return "aplay";
 }
 
-async function playAudio(outputPath) {
-  if (process.env.PYA_SAY_SILENT) return;
-  const player = resolveAudioPlayer();
+async function playAudio(outputPath, { rememberFn } = {}) {
+  if (resolveConfigBool("say silent", { rememberFn })) return;
+  const player = resolveAudioPlayer({ rememberFn });
   if (!player) {
     throwErrorSentence({
       name: "piper say defective",
@@ -265,8 +270,8 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
     let fullText = "";
     let chunkIndex = 0;
     const voiceId = resolveVoiceId({ rememberFn });
-    const fixture = process.env.PYA_PIPER_FIXTURE;
-    const piperBin = fixture !== undefined ? null : resolvePiperBinary();
+    const fixture = resolveConfigText("piper fixture", { rememberFn });
+    const piperBin = fixture !== undefined ? null : resolvePiperBinary({ rememberFn });
     const voicePath = fixture !== undefined ? null : resolveVoicePath(voiceId);
     const flushBuffer = async () => {
       const raw = buffer;
@@ -302,9 +307,9 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
         });
       }
       try {
-        await playAudio(outputPath);
+        await playAudio(outputPath, { rememberFn });
       } catch (err) {
-        if (process.env.PYA_SAY_STRICT_AUDIO) {
+        if (resolveConfigBool("say strict audio", { rememberFn })) {
           throwErrorSentence({
             name: "piper say defective",
             message: `piper say defective: ${err?.message ?? "audio playback failed"}`,
@@ -326,7 +331,7 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
       const enqueue = (fn) => {
         chain = chain.then(fn).catch(() => {});
       };
-      const delayMs = resolveStreamDelayMs();
+      const delayMs = resolveStreamDelayMs({ rememberFn });
       let flushTimer = null;
       const scheduleFlush = () => {
         if (flushTimer) clearTimeout(flushTimer);
@@ -393,7 +398,7 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
   const metadataPath = metadataPathForOutput(outputPath);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
-  const fixture = process.env.PYA_PIPER_FIXTURE;
+  const fixture = resolveConfigText("piper fixture", { rememberFn });
   let audioBytes;
   let voiceId = resolveVoiceId({ rememberFn });
 
@@ -401,7 +406,7 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
     audioBytes = Buffer.from(String(fixture), "utf8");
     await fs.writeFile(outputPath, audioBytes);
   } else {
-    const piperBin = resolvePiperBinary();
+    const piperBin = resolvePiperBinary({ rememberFn });
     const voicePath = resolveVoicePath(voiceId);
     const res = await new Promise((resolve, reject) => {
       const proc = spawn(String(piperBin), ["--model", String(voicePath), "--output_file", outputPath], {
@@ -429,9 +434,9 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
 
   if (!sentence?.to?.filename) {
     try {
-      await playAudio(outputPath);
+      await playAudio(outputPath, { rememberFn });
     } catch (err) {
-      if (process.env.PYA_SAY_STRICT_AUDIO) {
+      if (resolveConfigBool("say strict audio", { rememberFn })) {
         throwErrorSentence({
           name: "piper say defective",
           message: `piper say defective: ${err?.message ?? "audio playback failed"}`,

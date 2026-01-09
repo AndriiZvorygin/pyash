@@ -7,6 +7,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
+import { resolveConfigText } from "../../configure/env.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
 import { jsonObjectFromMapSentence } from "./json_map_export.mjs";
 import { csvTextFromMapName } from "./write_csv.mjs";
@@ -191,8 +192,8 @@ function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-function resolveKeyboardCommand() {
-  const bin = process.env.PYA_KEYBOARD_BIN || "xdotool";
+function resolveKeyboardCommand({ rememberFn } = {}) {
+  const bin = resolveConfigText("keyboard bin", { rememberFn }) || "xdotool";
   return { bin, args: ["type", "--clearmodifiers", "--delay", "0"] };
 }
 
@@ -328,7 +329,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
         raw: { streamName }
       });
     }
-    const keyboardCmd = resolveKeyboardCommand();
+    const keyboardCmd = resolveKeyboardCommand({ rememberFn });
     let collected = "";
     let chain = Promise.resolve();
     const append = (chunk) => {
@@ -379,7 +380,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
   const text = renderWriteValue(sentence.ob ?? {}, { rememberFn, format });
   const normalized = normalizeNewlines(text);
   if (isKeyboard) {
-    const keyboardCmd = resolveKeyboardCommand();
+    const keyboardCmd = resolveKeyboardCommand({ rememberFn });
     try {
       await sendKeyboardText(normalized, keyboardCmd);
     } catch (err) {

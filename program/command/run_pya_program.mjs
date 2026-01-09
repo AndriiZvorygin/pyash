@@ -14,6 +14,7 @@ import { setEntryModulePath } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
+import { resolveConfigBool } from "../configure/env.mjs";
 
 async function loadDefaultConfig({ cwd, interpretFn }) {
   const configPath = path.resolve(cwd, "configure", "default.pya");
@@ -347,7 +348,9 @@ async function main() {
     return;
   }
 
-  if (result?.be === "stream" && process?.env?.PYA_STREAM_STDOUT === "1") {
+  const streamStdout = resolveConfigBool("stream stdout", { rememberFn: remember });
+  const streamStdoutEnabled = streamStdout !== undefined ? streamStdout : process.stdout?.isTTY === true;
+  if (result?.be === "stream" && streamStdoutEnabled) {
     const finalResult = remember("result") ?? result;
     console.log("");
     try {
