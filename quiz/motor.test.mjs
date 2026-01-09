@@ -3,24 +3,21 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 
 import ollama from "../program/motor/ollama.mjs";
+import { doRemember, forget } from "../program/remember/index.mjs";
 
 function withMockedFetch(mock, fn) {
   const originalFetch = global.fetch;
-  const originalHost = process.env.OLLAMA_HOST;
 
   global.fetch = mock;
 
   return fn().finally(() => {
     global.fetch = originalFetch;
-    if (originalHost === undefined) delete process.env.OLLAMA_HOST;
-    else process.env.OLLAMA_HOST = originalHost;
   });
 }
 
 test("generate streams responses from HTTP server", async () => {
+  forget();
   const calls = [];
-
-  delete process.env.OLLAMA_HOST;
 
   await withMockedFetch(async (url, options) => {
     calls.push({ url, options });
@@ -46,7 +43,13 @@ test("generate streams responses from HTTP server", async () => {
 });
 
 test("generate uses configured host and fails on non-ok responses", async () => {
-  process.env.OLLAMA_HOST = "http://example.com";
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "ollama host" },
+    be: "default",
+    ob: { text: "http://example.com" }
+  });
 
   const calls = [];
 

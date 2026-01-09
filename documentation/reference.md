@@ -34,6 +34,8 @@ This writes `newspaper/say-stream.pya`.
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
+  - Env values are imported into memory as defaults (`su name ... be default ya`).
+  - `configure/default.pya` (or any in-program sentence) overrides env defaults.
   - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to name keyboard` (default: `xdotool`).
   - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
   - `PYA_ESPEAK_BIN` overrides the espeak binary used by `espeak say` (default: `espeak-ng`).
@@ -50,9 +52,9 @@ If you only have the English model, use `ggml-base.en.bin` instead.
 
 For interactive runs, incremental `hear` transcripts print as they arrive when
 stdout is a TTY. Use `PYA_STREAM_STDOUT=0` to disable or `PYA_STREAM_STDOUT=1` to
-force on. The command still returns a final transcript value when the stream
-ends (finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end marker from
-whisper-stream).
+force on, or set `su name stream stdout ob bool lie be default ya` in config/examples.
+The command still returns a final transcript value when the stream ends
+(finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end marker from whisper-stream).
 
 ## Hear stream → keyboard
 
@@ -63,7 +65,7 @@ Stream mic transcription into the active window (requires `xdotool`):
 ```
 
 Set `PYA_KEYBOARD_BIN` to override the keyboard injection binary.
-If you need to disable stream stdout globally, set `su stream stdout ob bool lie be default ya`
+If you need to disable stream stdout globally, set `su name stream stdout ob bool lie be default ya`
 in `configure/default.pya` or in a specific example.
 
 ## Example Sentences

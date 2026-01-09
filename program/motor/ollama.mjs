@@ -1,8 +1,11 @@
 // pyash/engines/ollama.mjs
 // Streams responses from an Ollama HTTP server instead of spawning a local binary.
 
+import { remember } from "../remember/index.mjs";
+import { resolveConfigText } from "../configure/env.mjs";
+
 async function generateStream({ model, prompt, onChunk } = {}) {
-  const base = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+  const base = resolveConfigText("ollama host", { rememberFn: remember }) ?? "http://localhost:11434";
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
   const res = await fetch(endpoint, {
     method: "POST",
@@ -63,7 +66,7 @@ async function generate(model, prompt) {
 }
 
 async function chat({ model, messages, tools = [], stream = false }) {
-  const base = process.env.OLLAMA_HOST ?? "http://localhost:11434";
+  const base = resolveConfigText("ollama host", { rememberFn: remember }) ?? "http://localhost:11434";
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
   const body = { model, messages, stream: !!stream };
   if (Array.isArray(tools) && tools.length > 0) body.tools = tools;

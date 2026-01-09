@@ -2,12 +2,13 @@ import { spawn } from "node:child_process";
 import fsSync from "node:fs";
 
 import { remember } from "../remember/index.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 import { renderSayValue } from "./say.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 
-function resolveEspeakBinary() {
-  return process.env.PYA_ESPEAK_BIN || "espeak-ng";
+function resolveEspeakBinary({ rememberFn } = {}) {
+  return resolveConfigText("espeak bin", { rememberFn }) || "espeak-ng";
 }
 
 function fixPunctuationSpacing(text) {
@@ -78,8 +79,9 @@ function shouldFlushChunk(buffer) {
   return trimmed.length >= 180;
 }
 
-function resolveStreamDelayMs() {
-  const raw = Number(process.env.PYA_SAY_STREAM_DELAY_MS ?? 150);
+function resolveStreamDelayMs({ rememberFn } = {}) {
+  const raw = resolveConfigNum("say stream delay", { rememberFn });
+  if (raw === undefined) return 150;
   if (!Number.isFinite(raw) || raw < 0) return 150;
   return raw;
 }
@@ -114,10 +116,10 @@ function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-async function speakText(text) {
+async function speakText(text, { rememberFn } = {}) {
   if (!text) return;
-  if (process.env.PYA_SAY_SILENT) return;
-  const bin = resolveEspeakBinary();
+  if (resolveConfigBool("say silent", { rememberFn })) return;
+  const bin = resolveEspeakBinary({ rememberFn });
   await new Promise((resolve, reject) => {
     const proc = spawn(bin, ["--stdin"], { stdio: ["pipe", "ignore", "pipe"] });
     let stderr = "";
@@ -179,7 +181,7 @@ export async function espeakSay(sentence, { remember: rememberFn = remember } = 
         return;
       }
       fullText = appendSpeechText(fullText, text);
-      await speakText(text);
+      await speakText(text, { rememberFn });
     };
     if (stream.ob?.filename) {
       const filename = stream.ob.filename;
@@ -189,7 +191,7 @@ export async function espeakSay(sentence, { remember: rememberFn = remember } = 
       const enqueue = (fn) => {
         chain = chain.then(fn).catch(() => {});
       };
-      const delayMs = resolveStreamDelayMs();
+      const delayMs = resolveStreamDelayMs({ rememberFn });
       let flushTimer = null;
       const scheduleFlush = () => {
         if (flushTimer) clearTimeout(flushTimer);
@@ -256,7 +258,7 @@ export async function espeakSay(sentence, { remember: rememberFn = remember } = 
 
   const text = renderSayValue(sentence.ob ?? {}, { rememberFn });
   try {
-    await speakText(text);
+    await speakText(text, { rememberFn });
   } catch (err) {
     throwErrorSentence({
       name: "espeak say defective",

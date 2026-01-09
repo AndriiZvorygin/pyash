@@ -5,6 +5,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { resolveConfigText } from "../configure/env.mjs";
 
 function resolveCommandText(ob = {}, { rememberFn } = {}) {
   if (typeof ob.wo === "string") return ob.wo;
@@ -12,8 +13,9 @@ function resolveCommandText(ob = {}, { rememberFn } = {}) {
 }
 
 export async function command(sentence, { remember: rememberFn = remember } = {}) {
-  if (process.env.PYA_COMMAND_RESPONSE) {
-    const output = String(process.env.PYA_COMMAND_RESPONSE);
+  const commandResponse = resolveConfigText("command response", { rememberFn });
+  if (commandResponse !== undefined) {
+    const output = String(commandResponse);
     if (sentence?.to?.name) {
       const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
       doRemember(fact);

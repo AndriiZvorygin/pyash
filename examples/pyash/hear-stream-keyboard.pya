@@ -1,4 +1,4 @@
-su stream stdout ob bool lie be default ya
+su name stream stdout ob bool lie be default ya
 su name prompt ob text "Focus the target app now. Live transcript will type into the focused window." be write do
 su name live be hear vyah stream do
 su name typer from name live to name keyboard be write vyah stream do

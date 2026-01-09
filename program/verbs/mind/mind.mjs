@@ -13,6 +13,7 @@ import { appendLog, buildHistoryMessages, historyDialogueName, nextAnswerName, r
 import { recordMindJson, resetMindDebugCounters, stripContext } from "./logging.mjs";
 import { buildToolSchemas, buildToolSentence, toolListFromMap } from "./tooling.mjs";
 import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
+import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../../bridge/index.mjs");
@@ -41,12 +42,8 @@ function startStreamFile(filePath) {
 }
 
 function resolveStreamStdoutEnabled({ rememberFn } = {}) {
-  if (process?.env?.PYA_STREAM_STDOUT === "1") return true;
-  if (process?.env?.PYA_STREAM_STDOUT === "0") return false;
-  const configured = rememberFn?.("stream stdout");
-  if (configured?.be === "default" && typeof configured?.ob?.boolean === "boolean") {
-    return configured.ob.boolean;
-  }
+  const configured = resolveConfigBool("stream stdout", { rememberFn });
+  if (configured !== undefined) return configured;
   return process?.stdout?.isTTY === true;
 }
 
@@ -171,7 +168,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
     while (turns < maxToolTurns) {
       turns += 1;
-      const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
+      const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
       if (mockResponse) {
         try {
           lastResponse = JSON.parse(mockResponse);
@@ -237,7 +234,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     }
     if (callPrompt) promptParts.push(callPrompt);
     const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
-    const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
+    const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
     if (aspect === "stream") {
       const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
       startStreamFile(streamOutputPath);

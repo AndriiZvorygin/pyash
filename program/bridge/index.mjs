@@ -10,6 +10,7 @@ import { startRefinery, recordPlatform, endRefinery, isInsideRefinery } from "./
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { applyEnvDefaults } from "../configure/env.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -85,6 +86,7 @@ function validateCeremonySequenceDeps(name) {
 
 export async function interpret(sentence) {
   if (!sentence) return;
+  applyEnvDefaults({ rememberFn: remember, doRememberFn: doRemember });
   if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
   if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;
   if (sentence.subj) delete sentence.subj;
