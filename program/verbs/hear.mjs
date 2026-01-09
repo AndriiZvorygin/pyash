@@ -89,6 +89,13 @@ function resolveHearLanguage() {
   return process.env.PYA_HEAR_LANGUAGE || "auto";
 }
 
+function resolveHearPrompt(sentence) {
+  const prompt = sentence?.ob?.text;
+  if (typeof prompt !== "string") return "";
+  const trimmed = prompt.trim();
+  return trimmed.length ? trimmed : "";
+}
+
 function resolveOutputPath(sentence) {
   const base = getExchangeSentenceId() || sentence?.su?.name || `hear-${hearCounter++}`;
   return path.join("artifacts", "hear", `${base}.txt`);
@@ -341,9 +348,14 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       const streamOutputPath = resolveStreamOutputPath(sentence);
       const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
       const language = resolveHearLanguage();
+      const prompt = resolveHearPrompt(sentence);
       await fs.mkdir(path.dirname(streamOutputPath), { recursive: true });
       fsSync.writeFileSync(streamOutputPath, "");
-      const proc = spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(streamOutputPath)], {
+      const args = ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(streamOutputPath)];
+      if (prompt) {
+        args.push("--prompt", prompt);
+      }
+      const proc = spawn(String(whisperBin), args, {
         stdio: ["ignore", "pipe", "pipe"]
       });
       hearStreamProcesses.set(streamName, proc);
@@ -409,11 +421,17 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       const modelPath = resolveModelPath();
       const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
       const language = resolveHearLanguage();
+      const prompt = resolveHearPrompt(sentence);
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       fsSync.writeFileSync(outputPath, "");
       let stopTail = null;
+      const startedAt = Date.now();
       const res = await new Promise((resolve, reject) => {
-        const proc = spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(outputPath)], {
+        const args = ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(outputPath)];
+        if (prompt) {
+          args.push("--prompt", prompt);
+        }
+        const proc = spawn(String(whisperBin), args, {
           stdio: ["ignore", "pipe", "pipe"]
         });
         let stdout = "";
@@ -423,10 +441,19 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.on("error", reject);
         let done = null;
         const waitForBlank = new Promise(resolve => { done = resolve; });
-        stopTail = startStreamStdoutTail(outputPath, {
-          enabled: true,
-          onBlank: () => {
-            if (done) done();
+        const writer = makeStreamStdoutWriter();
+        let sawTranscript = false;
+        stopTail = startFileTail({
+          filename: outputPath,
+          onLine: (line) => {
+            const trimmed = String(line ?? "").trim();
+            if (!trimmed) return;
+            if (isBlankAudioLine(trimmed)) {
+              if (sawTranscript && done) done();
+              return;
+            }
+            sawTranscript = true;
+            writer.write(trimmed);
           }
         });
         const timer = setTimeout(() => {
@@ -436,7 +463,8 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.on("close", status => {
           clearTimeout(timer);
           if (stopTail) stopTail();
-          resolve({ status, stdout, stderr });
+          writer.finish();
+          resolve({ status, stdout, stderr, elapsedMs: Date.now() - startedAt });
         });
       });
       if (res.status && res.status !== 0) {
@@ -457,6 +485,14 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
           raw: { outputPath, error: err?.message }
         });
       }
+      if (!transcript.trim() && (res.elapsedMs ?? 0) < Math.min(1000, durationMs)) {
+        throwErrorSentence({
+          name: "hear defective",
+          message: `hear defective: ended early after ${res.elapsedMs ?? 0}ms`,
+          from: { name: "hear" },
+          raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "", elapsedMs: res.elapsedMs ?? 0 }
+        });
+      }
       backend = "whisper-stream";
       model = modelPath;
     }
@@ -474,12 +510,17 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       }
       const whisperBin = resolveWhisperBinary();
       const modelPath = resolveModelPath();
+      const prompt = resolveHearPrompt(sentence);
       backend = "whisper.cpp";
       model = modelPath;
       const outputBase = outputPath.replace(/\.txt$/, "");
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       const res = await new Promise((resolve, reject) => {
-        const proc = spawn(String(whisperBin), ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-of", outputBase], {
+        const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-of", outputBase];
+        if (prompt) {
+          args.push("--prompt", prompt);
+        }
+        const proc = spawn(String(whisperBin), args, {
           stdio: ["ignore", "pipe", "pipe"]
         });
         let stdout = "";
@@ -552,23 +593,33 @@ export default hear;
 
 export const signatures = [
   { signatureWords: ["be", "hear"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text", "from", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "from", "filename", "ob", "text"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text", "from", "name", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "from", "name", "filename", "ob", "text"], handler: hear },
   { signatureWords: ["be", "hear", "to", "name", "text"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "to", "name", "text"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "to", "name", "text"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "cancel"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "timebox"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "during", "num", "vyah", "timebox"], handler: hear },
+  { signatureWords: ["be", "hear", "during", "num", "ob", "text", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "during", "num", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "during", "num", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "dweh"], handler: hear },
+  { signatureWords: ["be", "hear", "ob", "text", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "during", "num", "vyah", "dweh"], handler: hear },
+  { signatureWords: ["be", "hear", "during", "num", "ob", "text", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "during", "num", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "dweh"], handler: hear },

@@ -12,6 +12,8 @@ contracts, and the minimum observable behavior required for determinism.
 This spec focuses on **interfaces and run-record behavior**. Backend choice and
 device integration are implementation details gated by config.
 
+For whisper-stream prompt support, see `documentation/specifications/whisper_initial_prompt.md`.
+
 ---
 
 ## 2. Terms
@@ -44,6 +46,8 @@ su name <result> be hear do
 
 Input audio source is configured by the runtime (device, file, or artifact),
 and is intentionally out of scope for this spec.
+If `ob text <prompt>` is provided for `hear`, it biases the decoder (backend
+permitting). See `documentation/specifications/whisper_initial_prompt.md`.
 
 ### 3.3 Aspectful invocation forms
 
