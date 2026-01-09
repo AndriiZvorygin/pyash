@@ -44,6 +44,16 @@ force on. The command still returns a final transcript value when the stream
 ends (finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end marker from
 whisper-stream).
 
+## Hear stream → keyboard
+
+Stream mic transcription into the active window (requires `xdotool`):
+
+```bash
+PYA_STREAM_STDOUT=0 ./run examples/pyash/hear-stream-keyboard.pya --full
+```
+
+Set `PYA_KEYBOARD_BIN` to override the keyboard injection binary.
+
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
 - Imperative (add): `ob num 3 to num 4 be add do` → stores command + `result` with `num 7`
