@@ -149,6 +149,40 @@ function parseFixtureLines(fixtureText) {
     .filter(line => line.length > 0 && line !== "[BLANK_AUDIO]");
 }
 
+function normalizeStreamLine(line) {
+  return String(line ?? "").trim().toLowerCase();
+}
+
+function collapseStreamLines(lines) {
+  const output = [];
+  let lastLine = "";
+  for (const line of lines) {
+    const trimmed = String(line ?? "").trim();
+    if (!trimmed || trimmed === "[BLANK_AUDIO]") continue;
+    if (!lastLine) {
+      output.push(trimmed);
+      lastLine = trimmed;
+      continue;
+    }
+    const normLast = normalizeStreamLine(lastLine);
+    const normNext = normalizeStreamLine(trimmed);
+    if (normNext === normLast) continue;
+    if (normNext.startsWith(normLast)) {
+      output[output.length - 1] = trimmed;
+      lastLine = trimmed;
+      continue;
+    }
+    output.push(trimmed);
+    lastLine = trimmed;
+  }
+  return output;
+}
+
+function buildStreamTranscript(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  return collapseStreamLines(lines).join("\n");
+}
+
 function sanitizeTranscript(text) {
   return String(text ?? "")
     .split(/\r?\n/)
@@ -157,9 +191,47 @@ function sanitizeTranscript(text) {
     .join("\n");
 }
 
-function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
-  if (process.env.PYA_STREAM_STDOUT !== "1") return () => {};
-  return startFileTail({
+function makeStreamStdoutWriter() {
+  let lastLine = "";
+  let lineOpen = false;
+  return {
+    write(line) {
+      const trimmed = String(line ?? "").trim();
+      if (!trimmed || trimmed === "[BLANK_AUDIO]") return;
+      if (!lastLine) {
+        process.stdout.write(trimmed);
+        lastLine = trimmed;
+        lineOpen = true;
+        return;
+      }
+      const normLast = normalizeStreamLine(lastLine);
+      const normNext = normalizeStreamLine(trimmed);
+      if (normNext === normLast) return;
+      if (normNext.startsWith(normLast)) {
+        const suffix = trimmed.slice(lastLine.length);
+        if (suffix) {
+          process.stdout.write(suffix);
+          lastLine = trimmed;
+          lineOpen = true;
+        }
+        return;
+      }
+      if (lineOpen) process.stdout.write("\n");
+      process.stdout.write(trimmed);
+      lastLine = trimmed;
+      lineOpen = true;
+    },
+    finish() {
+      if (lineOpen) process.stdout.write("\n");
+      lineOpen = false;
+    }
+  };
+}
+
+function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {}) {
+  if (!enabled) return () => {};
+  const writer = makeStreamStdoutWriter();
+  const stopTail = startFileTail({
     filename: streamOutputPath,
     onLine: (line) => {
       const trimmed = String(line ?? "").trim();
@@ -168,8 +240,19 @@ function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
         if (onBlank) onBlank();
         return;
       }
-      process.stdout.write(`${trimmed}\n`);
+      writer.write(trimmed);
     }
+  });
+  return () => {
+    stopTail();
+    writer.finish();
+  };
+}
+
+function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
+  return startStreamStdoutTail(streamOutputPath, {
+    onBlank,
+    enabled: process.env.PYA_STREAM_STDOUT === "1"
   });
 }
 
@@ -259,7 +342,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         hearStreamProcesses.delete(streamName);
         stopTail();
         try {
-          transcript = sanitizeTranscript(await fs.readFile(streamOutputPath, "utf8"));
+          transcript = buildStreamTranscript(await fs.readFile(streamOutputPath, "utf8"));
         } catch (err) {
           throwErrorSentence({
             name: "hear defective",
@@ -312,16 +395,10 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.on("error", reject);
         let done = null;
         const waitForBlank = new Promise(resolve => { done = resolve; });
-        stopTail = startFileTail({
-          filename: outputPath,
-          onLine: (line) => {
-            const trimmed = String(line ?? "").trim();
-            if (!trimmed) return;
-            if (trimmed === "[BLANK_AUDIO]") {
-              if (done) done();
-              return;
-            }
-            process.stdout.write(`${trimmed}\n`);
+        stopTail = startStreamStdoutTail(outputPath, {
+          enabled: true,
+          onBlank: () => {
+            if (done) done();
           }
         });
         const timer = setTimeout(() => {
@@ -343,7 +420,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       try {
-        transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
+        transcript = buildStreamTranscript(await fs.readFile(outputPath, "utf8"));
       } catch (err) {
         throwErrorSentence({
           name: "hear defective",

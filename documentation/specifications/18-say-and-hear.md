@@ -182,6 +182,11 @@ be chip ya
 
 Chunk ordering MUST be deterministic for the same input and fixture mode.
 
+Backends MAY emit a sentinel line such as `[BLANK_AUDIO]` to signal end-of-stream.
+When present, it is treated as an end marker and MUST NOT appear as a transcript
+chip payload. Stream termination is triggered by a lifecycle finish/cancel, a
+timebox reaching its duration, or a backend end marker.
+
 ---
 
 ## 6. Run recording and artifacts
