@@ -1,8 +1,12 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import { spawn } from "node:child_process";
 import { remember } from "../../remember/index.mjs";
 import { state } from "../../bridge/state.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
+import { throwErrorSentence } from "../../error.mjs";
+import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
 import { jsonObjectFromMapSentence } from "./json_map_export.mjs";
 import { csvTextFromMapName } from "./write_csv.mjs";
@@ -161,8 +165,124 @@ function normalizeNewlines(text) {
   return String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
+function startFileTail({ filename, onLine }) {
+  let offset = 0;
+  let pending = "";
+  const interval = setInterval(() => {
+    let stats;
+    try {
+      stats = fsSync.statSync(filename);
+    } catch {
+      return;
+    }
+    if (stats.size <= offset) return;
+    const fd = fsSync.openSync(filename, "r");
+    const buffer = Buffer.alloc(stats.size - offset);
+    fsSync.readSync(fd, buffer, 0, buffer.length, offset);
+    fsSync.closeSync(fd);
+    offset = stats.size;
+    const text = pending + buffer.toString("utf8");
+    const lines = text.split(/\r?\n/);
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.length) onLine(line);
+    }
+  }, 200);
+  return () => clearInterval(interval);
+}
+
+function resolveKeyboardCommand() {
+  const bin = process.env.PYA_KEYBOARD_BIN || "xdotool";
+  return { bin, args: ["type", "--clearmodifiers", "--delay", "0"] };
+}
+
+function normalizeStreamLine(line) {
+  return String(line ?? "").trim().toLowerCase();
+}
+
+function normalizeStreamPrefix(line) {
+  const normalized = normalizeStreamLine(line);
+  return normalized.replace(/[.]+$/u, "");
+}
+
+function makeStreamIncrementalWriter(onAppend) {
+  let lastLine = "";
+  let lineOpen = false;
+  return {
+    write(line) {
+      const trimmed = String(line ?? "").trim();
+      if (!trimmed) return;
+      if (!lastLine) {
+        onAppend(trimmed);
+        lastLine = trimmed;
+        lineOpen = true;
+        return;
+      }
+      const normLast = normalizeStreamLine(lastLine);
+      const normNext = normalizeStreamLine(trimmed);
+      const normLastPrefix = normalizeStreamPrefix(lastLine);
+      if (normNext === normLast) return;
+      if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
+        const baseLen = normNext.startsWith(normLast) ? lastLine.length : lastLine.replace(/[.]+$/u, "").length;
+        const suffix = trimmed.slice(baseLen);
+        if (suffix) {
+          onAppend(suffix);
+          lastLine = trimmed;
+          lineOpen = true;
+        }
+        return;
+      }
+      if (lineOpen) onAppend("\n");
+      onAppend(trimmed);
+      lastLine = trimmed;
+      lineOpen = true;
+    },
+    finish() {
+      if (lineOpen) onAppend("\n");
+      lineOpen = false;
+    }
+  };
+}
+
+async function sendKeyboardText(text, { bin, args }) {
+  if (!text) return;
+  await new Promise((resolve, reject) => {
+    const proc = spawn(bin, [...args, text], { stdio: "ignore" });
+    proc.on("error", reject);
+    proc.on("close", status => {
+      if (status && status !== 0) {
+        reject(new Error(`keyboard command exited with ${status}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 export default async function write(sentence, { remember: rememberFn = remember } = {}) {
+  const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
+  const aspect = getEffectiveVyahAspect(modifiers, { verb: "write", caseKey: "vyah" });
+  const aspectKey = aspect === "stream" ? "stream" : "eval";
+  if (aspectKey !== "eval" && aspectKey !== "stream") {
+    throwErrorSentence({
+      name: "write aspect invalid",
+      message: `write does not support vyah ${aspect}`,
+      from: { name: "write" },
+      raw: { aspect }
+    });
+  }
+
   const target = sentence?.to?.filename;
+  const targetName = sentence?.to?.name ?? sentence?.to?.text;
+  const isKeyboard = targetName === "keyboard";
+  if (targetName && !isKeyboard && aspectKey !== "stream") {
+    throwErrorSentence({
+      name: "write target invalid",
+      message: `write target invalid: to name ${targetName}`,
+      from: { name: "write" },
+      raw: { targetName }
+    });
+  }
   const formatParts = [];
   if (sentence?.become?.name) formatParts.push(sentence.become.name);
   if (sentence?.become?.text) formatParts.push(sentence.become.text);
@@ -177,9 +297,96 @@ export default async function write(sentence, { remember: rememberFn = remember 
   } else if (formatRaw.includes("csv")) {
     format = "csv";
   }
+  if (aspectKey === "stream") {
+    if (!isKeyboard) {
+      throwErrorSentence({
+        name: "write stream invalid",
+      message: "write vyah stream requires to name keyboard",
+        from: { name: "write" },
+        raw: { sentence }
+      });
+    }
+    const streamName = sentence?.from?.name ?? sentence?.from?.text;
+    if (!streamName) {
+      throwErrorSentence({
+        name: "write stream invalid",
+        message: "write vyah stream requires from name <stream>",
+        from: { name: "write" },
+        raw: { sentence }
+      });
+    }
+    const stream = rememberFn(streamName);
+    if (!stream || stream.be !== "stream") {
+      throwErrorSentence({
+        name: "write stream missing",
+        message: `stream not found: ${streamName} (set PYA_STREAM_STDOUT=0 for hear stream handles)`,
+        from: { name: "write" },
+        raw: { streamName }
+      });
+    }
+    const keyboardCmd = resolveKeyboardCommand();
+    let collected = "";
+    let chain = Promise.resolve();
+    const append = (chunk) => {
+      if (!chunk) return;
+      collected += chunk;
+      chain = chain.then(() => sendKeyboardText(chunk, keyboardCmd)).catch(() => {});
+    };
+    if (Array.isArray(stream.ob?.ve?.values)) {
+      for (const value of stream.ob.ve.values) {
+        append(String(value ?? ""));
+        append("\n");
+      }
+      await chain;
+    } else if (stream.ob?.filename) {
+      const filename = stream.ob.filename;
+      let done = null;
+      const waitForBlank = new Promise(resolve => { done = resolve; });
+      const writer = makeStreamIncrementalWriter((chunk) => {
+        append(chunk);
+      });
+      const stopTail = startFileTail({
+        filename,
+        onLine: (line) => {
+          const trimmed = String(line ?? "").trim();
+          if (!trimmed) return;
+          if (trimmed.includes("[BLANK_AUDIO]")) {
+            if (done) done();
+            return;
+          }
+          writer.write(trimmed);
+        }
+      });
+      await waitForBlank;
+      stopTail();
+      writer.finish();
+      await chain;
+    } else {
+      throwErrorSentence({
+        name: "write stream invalid",
+        message: "write vyah stream requires a hear stream",
+        from: { name: "write" },
+        raw: { streamName }
+      });
+    }
+    return { ob: { text: normalizeNewlines(collected).trimEnd() }, be: "write" };
+  }
+
   const text = renderWriteValue(sentence.ob ?? {}, { rememberFn, format });
   const normalized = normalizeNewlines(text);
-  if (target) {
+  if (isKeyboard) {
+    const keyboardCmd = resolveKeyboardCommand();
+    try {
+      await sendKeyboardText(normalized, keyboardCmd);
+    } catch (err) {
+      throwErrorSentence({
+        name: "write keyboard defective",
+        message: `write keyboard defective: ${err?.message ?? "unknown error"}`,
+        from: { name: "write" },
+        raw: { error: err?.message ?? String(err ?? "") }
+      });
+    }
+  } else if (target) {
     await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
     const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
@@ -212,6 +419,11 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "num"], handler: write },
   { signatureWords: ["be", "write", "ob", "vec", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
+  { signatureWords: ["be", "write", "ob", "text", "to", "text"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "text"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "to", "text", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "text", "to", "text", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "stream", "to", "text", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map"], handler: write },

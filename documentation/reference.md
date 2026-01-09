@@ -26,6 +26,7 @@ Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` return
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
+  - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to name keyboard` (default: `xdotool`).
 
 ## Whisper streaming helper
 

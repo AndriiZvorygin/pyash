@@ -1,0 +1,3 @@
+su name prompt ob text "Run with PYA_STREAM_STDOUT=0. Focus the target app now. Live transcript will type into the focused window." be write do
+su name live be hear vyah stream do
+su name typer from name live to name keyboard be write vyah stream do
