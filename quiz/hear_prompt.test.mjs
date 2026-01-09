@@ -15,8 +15,7 @@ test("hear timebox accepts prompt with fixture", async () => {
   process.env.PYA_HEAR_FIXTURE = "fixture line";
   try {
     const result = await run("su name record ob text \"Proper nouns: Pyash, Ollama\" during num 1000 be hear vyah timebox do");
-    assert.equal(result?.be, "hear");
-    assert.equal(result?.ob?.text, "fixture line");
+    assert.equal(result?.value?.text, "fixture line");
   } finally {
     delete process.env.PYA_HEAR_FIXTURE;
   }
@@ -44,8 +43,7 @@ test("hear eval accepts prompt with fixture", async () => {
   process.env.PYA_HEAR_FIXTURE = "prompt fixture";
   try {
     const result = await run("su name out ob text \"Prompt\" be hear do");
-    assert.equal(result?.be, "hear");
-    assert.equal(result?.ob?.text, "prompt fixture");
+    assert.equal(result?.value?.text, "prompt fixture");
   } finally {
     delete process.env.PYA_HEAR_FIXTURE;
   }
