@@ -146,11 +146,16 @@ function parseFixtureLines(fixtureText) {
   return String(fixtureText ?? "")
     .split(/\r?\n/)
     .map(line => line.trim())
-    .filter(line => line.length > 0 && line !== "[BLANK_AUDIO]");
+    .filter(line => line.length > 0 && !isBlankAudioLine(line));
 }
 
 function normalizeStreamLine(line) {
   return String(line ?? "").trim().toLowerCase();
+}
+
+function isBlankAudioLine(line) {
+  const trimmed = String(line ?? "").trim();
+  return trimmed.includes("[BLANK_AUDIO]");
 }
 
 function collapseStreamLines(lines) {
@@ -158,7 +163,7 @@ function collapseStreamLines(lines) {
   let lastLine = "";
   for (const line of lines) {
     const trimmed = String(line ?? "").trim();
-    if (!trimmed || trimmed === "[BLANK_AUDIO]") continue;
+    if (!trimmed || isBlankAudioLine(trimmed)) continue;
     if (!lastLine) {
       output.push(trimmed);
       lastLine = trimmed;
@@ -187,7 +192,7 @@ function sanitizeTranscript(text) {
   return String(text ?? "")
     .split(/\r?\n/)
     .map(line => line.trim())
-    .filter(line => line.length > 0 && line !== "[BLANK_AUDIO]")
+    .filter(line => line.length > 0 && !isBlankAudioLine(line))
     .join("\n");
 }
 
@@ -236,7 +241,7 @@ function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {
     onLine: (line) => {
       const trimmed = String(line ?? "").trim();
       if (!trimmed) return;
-      if (trimmed === "[BLANK_AUDIO]") {
+      if (isBlankAudioLine(trimmed)) {
         if (onBlank) onBlank();
         return;
       }
@@ -249,10 +254,29 @@ function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {
   };
 }
 
+function resolveStreamStdoutEnabled() {
+  if (process.env.PYA_STREAM_STDOUT === "1") return true;
+  if (process.env.PYA_STREAM_STDOUT === "0") return false;
+  return process.stdout?.isTTY === true;
+}
+
 function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
   return startStreamStdoutTail(streamOutputPath, {
     onBlank,
-    enabled: process.env.PYA_STREAM_STDOUT === "1"
+    enabled: resolveStreamStdoutEnabled()
+  });
+}
+
+function startStreamEndWatcher(streamOutputPath, { onBlank } = {}) {
+  return startFileTail({
+    filename: streamOutputPath,
+    onLine: (line) => {
+      const trimmed = String(line ?? "").trim();
+      if (!trimmed) return;
+      if (isBlankAudioLine(trimmed)) {
+        if (onBlank) onBlank();
+      }
+    }
   });
 }
 
@@ -324,10 +348,13 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       });
       hearStreamProcesses.set(streamName, proc);
 
-      if (process.env.PYA_STREAM_STDOUT === "1" && process.stdin?.isTTY !== false) {
+      if (process.stdin?.isTTY !== false) {
         let done = null;
         const waitForEnd = new Promise(resolve => { done = resolve; });
         const stopTail = maybeEnableStreamStdout(streamOutputPath, { onBlank: () => done?.() });
+        const stopBlankWatcher = resolveStreamStdoutEnabled()
+          ? null
+          : startStreamEndWatcher(streamOutputPath, { onBlank: () => done?.() });
         await new Promise(resolve => {
           process.stdin.resume();
           const finish = () => resolve();
@@ -341,6 +368,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.kill("SIGINT");
         hearStreamProcesses.delete(streamName);
         stopTail();
+        if (stopBlankWatcher) stopBlankWatcher();
         try {
           transcript = buildStreamTranscript(await fs.readFile(streamOutputPath, "utf8"));
         } catch (err) {

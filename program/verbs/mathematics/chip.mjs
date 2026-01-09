@@ -32,7 +32,7 @@ async function readHearStreamLines(filename) {
     const rawLines = raw.split(/\r?\n/)
       .map(line => line.trim())
       .filter(line => line.length > 0);
-    const blankIndex = rawLines.indexOf("[BLANK_AUDIO]");
+    const blankIndex = rawLines.findIndex(line => isBlankAudioLine(line));
     const lines = collapseStreamLines(blankIndex === -1 ? rawLines : rawLines.slice(0, blankIndex));
     if (blankIndex !== -1) {
       return { lines, final: true };
@@ -48,12 +48,17 @@ function normalizeStreamLine(line) {
   return String(line ?? "").trim().toLowerCase();
 }
 
+function isBlankAudioLine(line) {
+  const trimmed = String(line ?? "").trim();
+  return trimmed.includes("[BLANK_AUDIO]");
+}
+
 function collapseStreamLines(lines) {
   const output = [];
   let lastLine = "";
   for (const line of lines) {
     const trimmed = String(line ?? "").trim();
-    if (!trimmed || trimmed === "[BLANK_AUDIO]") continue;
+    if (!trimmed || isBlankAudioLine(trimmed)) continue;
     if (!lastLine) {
       output.push(trimmed);
       lastLine = trimmed;
