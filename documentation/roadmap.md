@@ -221,11 +221,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 **Jan 5 → Jan 11, 2026**
 
-### Ship
+### Ship (remaining)
 
-* **Streaming `hear` + streaming `say` (usable, interactive)**
+* **Streaming `say` (usable, interactive)**
 
-  * partial STT is incremental
   * TTS can begin before the full response is complete (where supported)
   * parity-first; feature gates allowed with quizzes
 
@@ -233,18 +232,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
   * listen (`hear`) → LLM → speak (`say`)
   * cancellation (`qa`) and timebox (`dweh`) are exercised as first-class controls
-
-* **Drop-a-binary streaming STT for text entry**
-
-  * distributable executable that emits incremental text (streaming)
-  * supports cancellation/timeboxing
-  * stable, parseable output suitable for piping into OS/editor workflows
-
-* **Deterministic test mode hooks**
-
-  * fixture-driven speech I/O for repeatable tests
-  * recorded metadata/hashes sufficient for `again` verification when applicable
-  * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
 
 ### Hardening gates
 
@@ -262,6 +249,24 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
   * same surfaced error sentences and stable run records for fixture runs across interpreter/JS/C
 
+### Completed (Week 2)
+
+* **Streaming `hear` (usable, interactive)**
+
+  * partial STT is incremental
+  * parity-first; feature gates allowed with quizzes
+
+* **Drop-a-binary streaming STT for text entry**
+
+  * distributable executable that emits incremental text (streaming)
+  * supports cancellation/timeboxing
+  * stable, parseable output suitable for piping into OS/editor workflows
+
+* **Deterministic test mode hooks**
+
+  * fixture-driven speech I/O for repeatable tests
+  * recorded metadata/hashes sufficient for `again` verification when applicable
+  * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
 ### Boundary note
 
 Week 2 streaming is **“usable streaming”**. The **formal bounded-queue / overflow backpressure contract** is frozen in Week 5 as part of Concurrency v0.7, and the Week 2 demos are updated to conform exactly at that point.
