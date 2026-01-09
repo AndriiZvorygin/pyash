@@ -1,4 +1,8 @@
 // pyash/verbs/mind.mjs
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import path from "node:path";
+
 import ollama from "../../motor/ollama.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
@@ -8,10 +12,73 @@ import { makeStream } from "../../library/runtimePrimitives.mjs";
 import { appendLog, buildHistoryMessages, historyDialogueName, nextAnswerName, resetMindLogs as resetMindHistory } from "./history.mjs";
 import { recordMindJson, resetMindDebugCounters, stripContext } from "./logging.mjs";
 import { buildToolSchemas, buildToolSentence, toolListFromMap } from "./tooling.mjs";
+import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../../bridge/index.mjs");
   return mod.interpret;
+}
+
+function resolveStreamOutputPath(sentence, outputName) {
+  const base = getExchangeSentenceId() || outputName || sentence?.su?.name || "mind-stream";
+  const safeBase = String(base).replace(/[^A-Za-z0-9_.-]+/g, "-");
+  return path.join("artifacts", "mind", `${safeBase}.stream.txt`);
+}
+
+function writeStreamChunk(filePath, chunk) {
+  const text = String(chunk ?? "");
+  if (!text) return;
+  fsSync.appendFileSync(filePath, `${JSON.stringify(text)}\n`, "utf8");
+}
+
+function writeStreamEnd(filePath) {
+  fsSync.appendFileSync(filePath, "[STREAM_END]\n", "utf8");
+}
+
+function startStreamFile(filePath) {
+  fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
+  fsSync.writeFileSync(filePath, "", "utf8");
+}
+
+function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName }) {
+  const { count, name: answerName } = nextAnswerName(mindName, dialogue);
+  if (callPrompt) {
+    doRemember({
+      mood: "ya",
+      su: { name: `${mindName} ${dialogue} question ${count}` },
+      be: "write",
+      from: { name: "user" },
+      ob: { text: callPrompt }
+    });
+    appendLog(dialogue, { role: "user", content: callPrompt });
+  }
+  const answerSentence = {
+    mood: "ya",
+    su: { name: answerName },
+    be: "answer",
+    from: { name: mindName },
+    ob: { text: responseText }
+  };
+  doRemember(answerSentence);
+  doRemember({
+    ...answerSentence,
+    su: { name: "result" }
+  });
+  if (outputName) {
+    doRemember({
+      ...answerSentence,
+      su: { name: outputName }
+    });
+  }
+  doRemember({
+    mood: "ya",
+    su: { name: `${mindName} ${dialogue} answer ${count}` },
+    be: "answer",
+    from: { name: mindName },
+    ob: { text: responseText }
+  });
+  appendLog(dialogue, { role: "assistant", content: responseText });
+  return answerSentence;
 }
 
 export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
@@ -161,20 +228,66 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     if (callPrompt) promptParts.push(callPrompt);
     const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
     const mockResponse = typeof process !== "undefined" ? process?.env?.PYA_MIND_RESPONSE : undefined;
-    if (mockResponse) {
-      responseText = mockResponse;
-    } else if (aspect === "stream") {
+    if (aspect === "stream") {
+      const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
+      startStreamFile(streamOutputPath);
       recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
-      const streamed = await ollama.generateStream({
-        model,
-        prompt: fullPrompt.trim(),
-        onChunk: process?.env?.PYA_STREAM_STDOUT === "1"
-          ? (chunk) => { if (chunk) process.stdout.write(String(chunk)); }
-          : undefined
+      (async () => {
+        let streamedText = "";
+        try {
+          if (mockResponse) {
+            const chunks = String(mockResponse ?? "")
+              .split(/\s+/)
+              .filter(Boolean)
+              .map(word => `${word} `);
+            for (const chunk of chunks) {
+              streamedText += chunk;
+              writeStreamChunk(streamOutputPath, chunk);
+              if (process?.env?.PYA_STREAM_STDOUT === "1") {
+                process.stdout.write(chunk);
+              }
+            }
+            const finalText = String(mockResponse ?? "").trim();
+            recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks }) });
+            writeStreamEnd(streamOutputPath);
+            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
+          } else {
+            const streamed = await ollama.generateStream({
+              model,
+              prompt: fullPrompt.trim(),
+              onChunk: (chunk) => {
+                if (!chunk) return;
+                const textChunk = String(chunk);
+                streamedText += textChunk;
+                writeStreamChunk(streamOutputPath, textChunk);
+                if (process?.env?.PYA_STREAM_STDOUT === "1") {
+                  process.stdout.write(textChunk);
+                }
+              }
+            });
+            streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
+            const finalText = streamed.text || streamedText;
+            recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks: streamChunks }) });
+            writeStreamEnd(streamOutputPath);
+            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
+          }
+        } catch (err) {
+          writeStreamEnd(streamOutputPath);
+          throwErrorSentence({
+            name: "mind defective",
+            message: `mind defective: ${err?.message ?? "stream failed"}`,
+            from: { name: "mind" },
+            raw: { error: err?.message ?? String(err ?? "") }
+          });
+        }
+      })();
+      return makeStream({
+        name: outputName ?? sentence?.su?.name ?? `${mindName ?? "mind"} stream`,
+        state: "open",
+        ob: { filename: streamOutputPath, index: 0, kind: "mind", backend: "ollama" }
       });
-      streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
-      recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: streamed.text, chunks: streamChunks }) });
-      responseText = streamed.text;
+    } else if (mockResponse) {
+      responseText = mockResponse;
     } else {
       recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
       const raw = await ollama.generate(model, fullPrompt.trim());
@@ -184,58 +297,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   }
 
   // Record turn so future calls have context
-  const { count, name: answerName } = nextAnswerName(mindName, dialogue);
-  if (callPrompt) {
-    doRemember({
-      mood: "ya",
-      su: { name: `${mindName} ${dialogue} question ${count}` },
-      be: "write",
-      from: { name: "user" },
-      ob: { text: callPrompt }
-    });
-    appendLog(dialogue, { role: "user", content: callPrompt });
-  }
-  const answerSentence = {
-    mood: "ya",
-    su: { name: answerName },
-    be: "answer",
-    from: { name: mindName },
-    ob: { text: responseText }
-  };
-  doRemember(answerSentence);
-  doRemember({
-    ...answerSentence,
-    su: { name: "result" }
-  });
-  if (outputName) {
-    doRemember({
-      ...answerSentence,
-      su: { name: outputName }
-    });
-  }
-  doRemember({
-    mood: "ya",
-    su: { name: `${mindName} ${dialogue} answer ${count}` },
-    be: "answer",
-    from: { name: mindName },
-    ob: { text: responseText }
-  });
-  appendLog(dialogue, { role: "assistant", content: responseText });
-
-  if (aspect === "stream") {
-    const streamName = sentence?.su?.name ?? outputName ?? `${mindName ?? "mind"} stream`;
-    const chunks = (Array.isArray(streamChunks) && streamChunks.length > 0)
-      ? streamChunks
-      : String(responseText ?? "")
-        .split(/\s+/)
-        .filter(Boolean);
-    return makeStream({
-      name: streamName,
-      state: "open",
-      ob: { ve: { values: chunks }, index: 0 }
-    });
-  }
-
+  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName });
   return answerSentence;
 }
 

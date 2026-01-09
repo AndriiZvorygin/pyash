@@ -23,6 +23,8 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
 | Command / say | `examples/pyash/command-espeak.pya`, `examples/pyash/say-espeak.pya`, `examples/pyash/say-piper.pya` |
 | Hear / keyboard stream | `examples/pyash/hear-stream-keyboard.pya` |
+| Say stream | `examples/pyash/say-stream-piper.pya` |
+| Say stream (espeak) | `examples/pyash/say-stream-espeak.pya` |
 
 Notes:
 - Mind examples expect an Ollama server; say/command examples may require `piper`, `espeak-ng`, or other local tools.

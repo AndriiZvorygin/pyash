@@ -133,6 +133,8 @@ export async function say(sentence, { remember: rememberFn = remember } = {}) {
 export default say;
 
 export const signatures = [
+  { signatureWords: ["be", "say", "from", "name", "text", "vyah", "stream"], handler: say },
+  { signatureWords: ["be", "say", "from", "name", "stream", "vyah", "stream"], handler: say },
   { signatureWords: ["be", "say", "ob", "text", "vyah", "stream"], handler: say },
   { signatureWords: ["be", "say", "ob", "num", "vyah", "stream"], handler: say },
   { signatureWords: ["be", "say", "ob", "bool", "vyah", "stream"], handler: say },
