@@ -1,3 +1,5 @@
-su name prompt ob text "Focus the target app now. The transcript from artifacts/hear/input.wav will be typed into the focused window." be write do
-su name transcript from filename "artifacts/hear/input.wav" be hear do
+su name prompt ob text "Focus the target app now. Recording from the microphone for 10 seconds before typing the transcript." be write do
+su name note ob text "If ffmpeg input device differs on your OS, edit the command string below." be write do
+su name record ob text "ffmpeg -y -f alsa -i default -t 10 /tmp/pyash-hear-input.wav" be command do
+su name transcript from filename "/tmp/pyash-hear-input.wav" be hear do
 su name typed ob name transcript to name keyboard be write do
