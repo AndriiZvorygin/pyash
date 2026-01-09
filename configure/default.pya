@@ -1,4 +1,5 @@
 su say be default ob name piper say ya
+su stream stdout ob bool lie be default ya
 su name reiterate delay ob num 250 be number ya
 su name reiterate backoff ob num 2 be number ya
 su name reiterate attempts ob num 5 be number ya

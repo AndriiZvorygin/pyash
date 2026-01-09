@@ -323,7 +323,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
     if (!stream || stream.be !== "stream") {
       throwErrorSentence({
         name: "write stream missing",
-        message: `stream not found: ${streamName} (set PYA_STREAM_STDOUT=0 for hear stream handles)`,
+        message: `stream not found: ${streamName} (set PYA_STREAM_STDOUT=0 or define stream stdout default to lie for hear stream handles)`,
         from: { name: "write" },
         raw: { streamName }
       });
