@@ -37,10 +37,11 @@ node command/whisper_stream.mjs -c 0 -m caterer/hear/template/whisper/ggml-base.
 
 If you only have the English model, use `ggml-base.en.bin` instead.
 
-For interactive runs, set `PYA_STREAM_STDOUT=1` to print incremental `hear`
-transcripts as they arrive. The command still returns a final transcript value
-when the stream ends (finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end
-marker from whisper-stream).
+For interactive runs, incremental `hear` transcripts print as they arrive when
+stdout is a TTY. Use `PYA_STREAM_STDOUT=0` to disable or `PYA_STREAM_STDOUT=1` to
+force on. The command still returns a final transcript value when the stream
+ends (finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end marker from
+whisper-stream).
 
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
