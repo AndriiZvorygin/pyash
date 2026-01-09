@@ -10,6 +10,8 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 
+const hearStreamProcesses = new Map();
+
 let hearCounter = 0;
 
 function compareUtf8(a, b) {
@@ -143,15 +145,30 @@ async function readInputBytes(sentence) {
 function parseFixtureLines(fixtureText) {
   return String(fixtureText ?? "")
     .split(/\r?\n/)
-    .filter(line => line.length > 0);
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && line !== "[BLANK_AUDIO]");
 }
 
-function maybeEnableStreamStdout(streamOutputPath) {
+function sanitizeTranscript(text) {
+  return String(text ?? "")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && line !== "[BLANK_AUDIO]")
+    .join("\n");
+}
+
+function maybeEnableStreamStdout(streamOutputPath, { onBlank } = {}) {
   if (process.env.PYA_STREAM_STDOUT !== "1") return () => {};
   return startFileTail({
     filename: streamOutputPath,
     onLine: (line) => {
-      if (line) process.stdout.write(`${line}\n`);
+      const trimmed = String(line ?? "").trim();
+      if (!trimmed) return;
+      if (trimmed === "[BLANK_AUDIO]") {
+        if (onBlank) onBlank();
+        return;
+      }
+      process.stdout.write(`${trimmed}\n`);
     }
   });
 }
@@ -160,6 +177,23 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "hear", caseKey: "vyah" });
   const aspectKey = aspect === "dweh" ? "timebox" : aspect;
+  if (aspectKey === "cancel") {
+    const targetName = sentence?.su?.name;
+    if (!targetName) {
+      throwErrorSentence({
+        name: "hear cancel invalid",
+        message: "hear cancel requires su name",
+        from: { name: "hear" },
+        raw: { sentence }
+      });
+    }
+    const proc = hearStreamProcesses.get(targetName);
+    if (proc) {
+      proc.kill("SIGINT");
+      hearStreamProcesses.delete(targetName);
+    }
+    return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "sloh"] } }, be: "hear", mood: "ya" };
+  }
   if (aspectKey !== "eval" && aspectKey !== "stream" && aspectKey !== "timebox") {
     throwErrorSentence({
       name: "hear aspect invalid",
@@ -181,30 +215,70 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     if (fixture !== undefined) {
       const values = parseFixtureLines(fixture);
       if (process.env.PYA_STREAM_STDOUT === "1") {
-        for (const line of values) process.stdout.write(`${line}\n`);
+        for (const line of values) {
+          const trimmed = String(line ?? "").trim();
+          if (trimmed) process.stdout.write(`${trimmed}\n`);
+        }
+        transcript = values.join("\n");
+        backend = "fixture";
+      } else {
+        return makeStream({
+          name: streamName,
+          state: "open",
+          ob: { ve: { values }, index: 0, kind: "hear", final: true }
+        });
       }
-      return makeStream({
-        name: streamName,
-        state: "open",
-        ob: { ve: { values }, index: 0, kind: "hear", final: true }
+    } else {
+      const whisperBin = resolveWhisperStreamBinary();
+      const modelPath = resolveModelPath();
+      const streamOutputPath = resolveStreamOutputPath(sentence);
+      const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
+      const language = resolveHearLanguage();
+      await fs.mkdir(path.dirname(streamOutputPath), { recursive: true });
+      fsSync.writeFileSync(streamOutputPath, "");
+      const proc = spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(streamOutputPath)], {
+        stdio: ["ignore", "pipe", "pipe"]
       });
-    }
+      hearStreamProcesses.set(streamName, proc);
 
-    const whisperBin = resolveWhisperStreamBinary();
-    const modelPath = resolveModelPath();
-    const streamOutputPath = resolveStreamOutputPath(sentence);
-    const captureId = process.env.PYA_HEAR_CAPTURE ?? "0";
-    const language = resolveHearLanguage();
-    await fs.mkdir(path.dirname(streamOutputPath), { recursive: true });
-    spawn(String(whisperBin), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(streamOutputPath)], {
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    maybeEnableStreamStdout(streamOutputPath);
-    return makeStream({
-      name: streamName,
-      state: "open",
-      ob: { filename: streamOutputPath, index: 0, kind: "hear", backend: "whisper-stream" }
-    });
+      if (process.env.PYA_STREAM_STDOUT === "1" && process.stdin?.isTTY !== false) {
+        let done = null;
+        const waitForEnd = new Promise(resolve => { done = resolve; });
+        const stopTail = maybeEnableStreamStdout(streamOutputPath, { onBlank: () => done?.() });
+        await new Promise(resolve => {
+          process.stdin.resume();
+          const finish = () => resolve();
+          process.stdin.once("end", finish);
+          process.stdin.once("close", finish);
+          waitForEnd.then(finish);
+        });
+        if (process.stdin?.isTTY !== false) {
+          process.stdin.pause();
+        }
+        proc.kill("SIGINT");
+        hearStreamProcesses.delete(streamName);
+        stopTail();
+        try {
+          transcript = sanitizeTranscript(await fs.readFile(streamOutputPath, "utf8"));
+        } catch (err) {
+          throwErrorSentence({
+            name: "hear defective",
+            message: "hear defective: missing transcript",
+            from: { name: "hear" },
+            raw: { outputPath: streamOutputPath, error: err?.message }
+          });
+        }
+        backend = "whisper-stream";
+        model = modelPath;
+      } else {
+        maybeEnableStreamStdout(streamOutputPath);
+        return makeStream({
+          name: streamName,
+          state: "open",
+          ob: { filename: streamOutputPath, index: 0, kind: "hear", backend: "whisper-stream" }
+        });
+      }
+    }
   }
 
   if (aspectKey === "timebox") {
@@ -236,15 +310,24 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
         proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
         proc.on("error", reject);
+        let done = null;
+        const waitForBlank = new Promise(resolve => { done = resolve; });
         stopTail = startFileTail({
           filename: outputPath,
           onLine: (line) => {
-            if (line) process.stdout.write(`${line}\n`);
+            const trimmed = String(line ?? "").trim();
+            if (!trimmed) return;
+            if (trimmed === "[BLANK_AUDIO]") {
+              if (done) done();
+              return;
+            }
+            process.stdout.write(`${trimmed}\n`);
           }
         });
         const timer = setTimeout(() => {
           proc.kill("SIGINT");
         }, durationMs);
+        waitForBlank.then(() => proc.kill("SIGINT"));
         proc.on("close", status => {
           clearTimeout(timer);
           if (stopTail) stopTail();
@@ -260,7 +343,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       try {
-        transcript = await fs.readFile(outputPath, "utf8");
+        transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
       } catch (err) {
         throwErrorSentence({
           name: "hear defective",
@@ -272,9 +355,9 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       backend = "whisper-stream";
       model = modelPath;
     }
-  } else {
+  } else if (aspectKey !== "stream") {
     if (fixture !== undefined) {
-      transcript = String(fixture ?? "");
+      transcript = sanitizeTranscript(fixture);
     } else {
       if (!inputPath) {
         throwErrorSentence({
@@ -310,7 +393,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       try {
-        transcript = await fs.readFile(outputPath, "utf8");
+        transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
       } catch (err) {
         throwErrorSentence({
           name: "hear defective",
@@ -372,6 +455,7 @@ export const signatures = [
   { signatureWords: ["be", "hear", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "vyah", "cancel"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "during", "num", "vyah", "timebox"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "timebox"], handler: hear },

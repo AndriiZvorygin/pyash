@@ -29,9 +29,16 @@ export async function chip_from_filename_text(sentence) {
 async function readHearStreamLines(filename) {
   try {
     const raw = await fs.readFile(filename, "utf8");
-    return raw.split(/\r?\n/).filter(line => line.length > 0);
+    const lines = raw.split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    const blankIndex = lines.indexOf("[BLANK_AUDIO]");
+    if (blankIndex !== -1) {
+      return { lines: lines.slice(0, blankIndex), final: true };
+    }
+    return { lines, final: false };
   } catch (err) {
-    if (err?.code === "ENOENT") return [];
+    if (err?.code === "ENOENT") return { lines: [], final: false };
     throw err;
   }
 }
@@ -54,13 +61,13 @@ export async function chip_su_stream(sentence) {
   }
 
   if (stream.ob?.kind === "hear" && stream.ob?.filename) {
-    const values = await readHearStreamLines(stream.ob.filename);
+    const { lines, final: streamFinal } = await readHearStreamLines(stream.ob.filename);
     const index = stream.ob?.index ?? 0;
-    if (index >= values.length) return null;
+    if (index >= lines.length) return null;
 
-    const value = values[index];
-    const lastIndex = values.length - 1;
-    const final = Boolean(stream.ob?.final);
+    const value = lines[index];
+    const lastIndex = lines.length - 1;
+    const final = Boolean(streamFinal);
     const chip = makeChip({
       streamName,
       index,
