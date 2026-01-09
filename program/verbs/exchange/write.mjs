@@ -208,6 +208,7 @@ function normalizeStreamPrefix(line) {
 function makeStreamIncrementalWriter(onAppend) {
   let lastLine = "";
   let lineOpen = false;
+  const needsSpaceAfterPunct = (prev, next) => /[.!?]$/.test(prev) && next && !/^\s/.test(next);
   return {
     write(line) {
       const trimmed = String(line ?? "").trim();
@@ -224,7 +225,10 @@ function makeStreamIncrementalWriter(onAppend) {
       if (normNext === normLast) return;
       if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
         const baseLen = normNext.startsWith(normLast) ? lastLine.length : lastLine.replace(/[.]+$/u, "").length;
-        const suffix = trimmed.slice(baseLen);
+        let suffix = trimmed.slice(baseLen);
+        if (needsSpaceAfterPunct(lastLine, suffix)) {
+          suffix = ` ${suffix}`;
+        }
         if (suffix) {
           onAppend(suffix);
           lastLine = trimmed;
