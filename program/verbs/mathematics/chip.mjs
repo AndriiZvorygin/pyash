@@ -48,6 +48,11 @@ function normalizeStreamLine(line) {
   return String(line ?? "").trim().toLowerCase();
 }
 
+function normalizeStreamPrefix(line) {
+  const normalized = normalizeStreamLine(line);
+  return normalized.replace(/[.]+$/u, "");
+}
+
 function isBlankAudioLine(line) {
   const trimmed = String(line ?? "").trim();
   return trimmed.includes("[BLANK_AUDIO]");
@@ -66,8 +71,9 @@ function collapseStreamLines(lines) {
     }
     const normLast = normalizeStreamLine(lastLine);
     const normNext = normalizeStreamLine(trimmed);
+    const normLastPrefix = normalizeStreamPrefix(lastLine);
     if (normNext === normLast) continue;
-    if (normNext.startsWith(normLast)) {
+    if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
       output[output.length - 1] = trimmed;
       lastLine = trimmed;
       continue;
