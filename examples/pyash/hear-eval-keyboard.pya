@@ -1,0 +1,3 @@
+su name prompt ob text "Focus the target app now. The transcript from artifacts/hear/input.wav will be typed into the focused window." be write do
+su name transcript from filename "artifacts/hear/input.wav" be hear do
+su name typed ob name transcript to name keyboard be write do

@@ -22,7 +22,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
 | Command / say | `examples/pyash/command-espeak.pya`, `examples/pyash/say-espeak.pya`, `examples/pyash/say-piper.pya` |
-| Hear / keyboard stream | `examples/pyash/hear-stream-keyboard.pya` |
+| Hear / keyboard stream | `examples/pyash/hear-stream-keyboard.pya`, `examples/pyash/hear-eval-keyboard.pya` |
 | Say stream | `examples/pyash/say-stream-piper.pya` |
 | Say stream (espeak) | `examples/pyash/say-stream-espeak.pya` |
 
