@@ -23,6 +23,14 @@ node program/command/run_pya_program.mjs [--full] [--gross] path/to/file.pya
 ```
 Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` returns `{ outputs, result }` JSON; `--full` also prints the program.
 
+To emit a newspaper, add `--newspaper` and optionally `--run-id <name>`:
+
+```bash
+./run --newspaper --run-id say-stream examples/pyash/say-stream-piper.pya --full
+```
+
+This writes `newspaper/say-stream.pya`.
+
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.

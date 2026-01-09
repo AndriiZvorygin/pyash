@@ -85,6 +85,10 @@ Working with the results (pull chips until `atindex == toindex` or an error):
 ```pyash
 su name <stream> be chip vyah eval do
 su name <stream> atindex num <seq> toindex num <last> ob <payload> be chip ya
+
+Streaming output MAY be consumed by `say` itself (e.g., piping an LLM stream into
+TTS). Implementations MAY buffer by punctuation (comma/period/etc.) before
+emitting audio chunks.
 ```
 
 `hear` (one-shot, stream, start):
