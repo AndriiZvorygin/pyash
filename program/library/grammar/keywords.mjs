@@ -52,6 +52,8 @@ export const VYAH_ASPECT_MODIFIERS = [
   "await",
   "finish",
   "cancel",
+  "timebox",
+  "dweh",
   "schedule",
   "cron",
   "poll",

@@ -25,6 +25,7 @@ Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` return
 
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
+- All supported environment variables are listed in `configure/env.example`.
 
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
