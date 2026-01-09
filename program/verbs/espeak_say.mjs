@@ -58,6 +58,17 @@ function appendChunkText(buffer, chunk) {
   return buffer + text;
 }
 
+function appendWordChunkText(buffer, chunk) {
+  const text = String(chunk ?? "");
+  if (!text) return buffer;
+  if (!buffer) return text;
+  if (/^\s/.test(text)) return buffer + text;
+  if (/[A-Za-z0-9]$/.test(buffer) && /^[A-Za-z0-9]/.test(text)) {
+    return `${buffer} ${text}`;
+  }
+  return buffer + text;
+}
+
 function shouldFlushChunk(buffer) {
   const trimmed = buffer.trimEnd();
   if (!trimmed) return false;
@@ -225,7 +236,7 @@ export async function espeakSay(sentence, { remember: rememberFn = remember } = 
       return { ob: { text: fullText }, be: "say" };
     }
     for (const chunk of chunks) {
-      buffer = appendChunkText(buffer, chunk);
+      buffer = appendWordChunkText(buffer, chunk);
       if (!shouldFlushChunk(buffer)) continue;
       await flushBuffer();
     }
