@@ -1,6 +1,13 @@
+from filename "./module/ffmpeg_hear.pya" ob name microphone hear be import do
+from filename "./module/keyboard_write.pya" ob name keyboard write be import do
+from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
 su say be default ob name piper say ya
 su name stream stdout ob bool lie be default ya
+su name keyboard bin ob text "xdotool" be default ya
 su name ffmpeg input ob text "pulse" be default ya
+su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
+su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
+su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
 su name reiterate delay ob num 250 be number ya
 su name reiterate backoff ob num 2 be number ya
 su name reiterate attempts ob num 5 be number ya
