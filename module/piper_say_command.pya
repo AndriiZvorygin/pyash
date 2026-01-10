@@ -1,0 +1,6 @@
+su name say ob text payload be ceremony def
+  exists su name cmd ob text "node command/piper_say_runner.mjs" be text ya
+  ob text of cmd fromtext text of ob of this be command do
+  su name result ret
+prah
+su name say be export ya

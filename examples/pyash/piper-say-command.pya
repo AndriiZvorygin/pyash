@@ -1,0 +1,2 @@
+from filename "../../module/piper_say_command.pya" ob name say to name piper command say be import do
+su name demo ob text "Hello from the piper command runner." be piper command say do
