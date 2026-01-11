@@ -199,6 +199,14 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 10, 2026: Literals, modules, and keyboard streaming
+
+* Added `wo` literal words for strict dispatch and documented their signature behavior.
+* Added `be text` and `be filename` casts with quizzes and default verb registration.
+* Keyboard streaming now uses `to wo keyboard` with updated signatures, tests, and module helper.
+* Added ffmpeg microphone module + examples, and improved hear input path resolution from memory.
+* Documented external tool modules and added the runner contract addendum in the module spec.
+
 ### Jan 7, 2026: Hear prompt + keyboard streaming
 
 * `hear` accepts `ob text` as an initial prompt for whisper-stream and whisper-cli (with a patch for whisper-stream).
