@@ -12,6 +12,7 @@ Define how signature words are derived and used for dispatch.
 - Dispatch is signature-first: derive signature words, then resolve to a handler or ceremony.
 - Case order is normalized using the official compositional keyword order (`01-sentence-and-grammar.md`).
 - Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored when matching ceremony signatures.
+- Literal `wo` values contribute their literal word to the signature words (e.g., `from wo microphone` derives `from wo microphone`), enabling strict literal dispatch.
 - If a ceremony body reads sequence registers via `this`, include those cases in the definition to make the dependency explicit.
 - If no handler or ceremony matches, raise `be error do` with the derived signature.
 

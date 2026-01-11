@@ -66,7 +66,10 @@ function caseTypeWords(value) {
     }
   }
 
-  if (value.wo !== undefined) return ["wo"];
+  if (value.wo !== undefined) {
+    const literal = normalizeWords(String(value.wo));
+    return literal ? ["wo", literal] : ["wo"];
+  }
   if (value.num !== undefined) words.push("num");
   if (value.boolean !== undefined) words.push("bool");
   if (value.hollow) words.push("hollow");
@@ -81,6 +84,9 @@ function caseTypeWordsForDefinition(value, caseKey, verb) {
     const modifiers = Array.isArray(value?.ve?.values) ? value.ve.values : [];
     const aspect = getEffectiveVyahAspect(modifiers, { verb, caseKey });
     return aspect ? [aspect] : ["do"];
+  }
+  if (caseKey === "ob" && value?.wo !== undefined) {
+    return ["wo"];
   }
   return caseTypeWords(value);
 }
@@ -197,6 +203,11 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   }
 
   if (value.num !== undefined) return ["num"];
+  if (value.wo !== undefined) {
+    if (caseKey === "ob") return ["wo"];
+    const literal = normalizeWords(String(value.wo));
+    return literal ? ["wo", literal] : ["wo"];
+  }
   if (value.text !== undefined) return ["text"];
   if (value.filename !== undefined) return ["filename"];
   if (value.thisRef) return ["num"];
@@ -206,6 +217,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (tail === "all") return ["all"];
     if (tail === "name") return ["name", "num"];
     if (tail === "text") return ["text"];
+    if (tail === "wo") return ["wo"];
     if (tail === "filename") return ["filename"];
     if (tail === "num" || tail === "number") return ["num"];
     if (tail === "ve" || tail === "vec") return ["vec"];
