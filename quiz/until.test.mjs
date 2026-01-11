@@ -17,7 +17,7 @@ test("toindex stops loop when fromindex equals toindex", async () => {
 
   // define ceremony: add 1 to counter
   await run("su name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");
-  await run("ob num 1 to name counter be add do");
+  await run("ob num 1 to name counter be plus do");
   await run("su name loop body be ceremony prah");
 
   // call to trigger loop with registers on the evoker

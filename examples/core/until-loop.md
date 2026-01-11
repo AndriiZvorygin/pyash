@@ -8,7 +8,7 @@
   ```
   su name counter ob num 0 be number ya
 su name climb to name counter be ceremony def
-ob num 1 to name counter be add do
+ob num 1 to name counter be plus do
 su name climb be ceremony prah
   to name counter fromindex num 1 toindex num 3 be climb do
   mem

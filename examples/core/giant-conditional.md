@@ -8,18 +8,18 @@
   ```
   ob num 7 be giant from num 5 then
   su name collector ob num 1 be number ya
-  ob num 2 to name collector be add do
+  ob num 2 to name collector be plus do
   su name collector ob what que
   reset
   su name lhs ob num 6 be number ya
   su name rhs ob num 5 be number ya
   su name lhs be giant from name rhs then
-  ob num 1 to name lhs be add do
+  ob num 1 to name lhs be plus do
   su name lhs ob what que
   reset
   ob num 2 be giant from num 5 then
   su name collector ob num 1 be number ya
-  ob num 2 to name collector be add do
+  ob num 2 to name collector be plus do
   su name collector ob what que
   ```
 - **Expected output**:

@@ -7,8 +7,8 @@ su name handled ob num 0 be number ya
 ob this ti fromindex from num 3 to name rem3 be remains do
 ob this ti fromindex from num 5 to name rem5 be remains do
 
-ob name rem3 be equally from num 0 then ob num 1 to name handled be add do
-ob name rem5 be equally from num 0 then ob num 2 to name handled be add do
+ob name rem3 be equally from num 0 then ob num 1 to name handled be plus do
+ob name rem5 be equally from num 0 then ob num 2 to name handled be plus do
 
 ob name handled be equally from num 3 then ob text FizzBuzz be write do
 ob name handled be equally from num 1 then ob text Fizz be write do

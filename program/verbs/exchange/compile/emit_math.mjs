@@ -132,7 +132,7 @@ export function handleMathSentence(context, helpers) {
   }
 
   // Text concatenation via add (numeric source)
-  if (baseBe === "add" && (sentence.to?.name || sentence.to?.genitive)) {
+  if (baseBe === "plus" && (sentence.to?.name || sentence.to?.genitive)) {
     const objExpr = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
     const objTextExpr = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: null, field: "text" });
     const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
@@ -178,7 +178,7 @@ export function handleMathSentence(context, helpers) {
   }
 
   // Imperative add
-  if (baseBe === "add" && ob.num !== undefined && sentenceArg && !sentence.to) {
+  if (baseBe === "plus" && ob.num !== undefined && sentenceArg && !sentence.to) {
     const increment = typeof ob.num === "number" ? ob.num : Number(ob.num);
     const safeInc = Number.isNaN(increment) ? 0 : increment;
     const lines = [];
@@ -188,7 +188,7 @@ export function handleMathSentence(context, helpers) {
     return lines.join("\n");
   }
 
-  if (baseBe === "add" && ob.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
+  if (baseBe === "plus" && ob.num !== undefined && (sentence.to?.name || sentence.to?.genitive)) {
     const mapName = sentence.to?.name;
     const targetType = mapName ? declaredTypes?.get(mapName) : null;
     if (mapName && (targetType === "map" || targetType === "json map" || mapDefs?.has(mapName))) {
@@ -312,7 +312,7 @@ export function handleMathSentence(context, helpers) {
   }
 
   // Text concatenation via add
-  if (baseBe === "add" && (ob.text !== undefined || ob.genitive || ob.name) && (sentence.to?.name || sentence.to?.genitive)) {
+  if (baseBe === "plus" && (ob.text !== undefined || ob.genitive || ob.name) && (sentence.to?.name || sentence.to?.genitive)) {
     const valueExpr = exprForSlot(ob, {
       sentenceArg,
       locals,

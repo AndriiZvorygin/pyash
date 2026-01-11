@@ -8,7 +8,7 @@ import { forget } from "../program/remember/index.mjs";
 test("exists is rejected on do sentences", async () => {
   forget();
 
-  const sentence = parse("exists su name alpha ob num 1 be add do");
+  const sentence = parse("exists su name alpha ob num 1 be plus do");
   let err;
   try {
     await interpret(sentence);

@@ -41,9 +41,9 @@ This document summarizes the current core language model used by the interpreter
 - Permanent values use `be permanent number/text` (compiled to `const` in JS).
 
 ## Arithmetic Verbs
-- `be add/subtract/multiply/divide` operate on `ob num` and `to` target.
+- `be plus/subtract/multiply/divide` operate on `ob num` and `to` target.
 - `remains` computes modulus; `from num` sets the divisor. Targets can be names or genitives.
-- Text concatenation uses `be add` with `ob text ...`.
+- Text concatenation uses `be plus` with `ob text ...`.
 
 ## Conditionals
 - **Single official form**: `ob … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence.
@@ -111,13 +111,13 @@ The thrown exception message mirrors `ob.text` when present.
 ## Examples
 - Declare and add:
   - `exists su name bucket ob num 0 be number ya`
-  - `ob num 2 to name bucket be add do`
+  - `ob num 2 to name bucket be plus do`
 - Loop:
   - `to name counter fromindex num 3 be loop body do`
 - Ceremony:
   - ```
     su name add two to name bucket be ceremony def
-    ob num 2 to name bucket be add do
+    ob num 2 to name bucket be plus do
     su name add two be ceremony prah
     ```
 - FizzBuzz (compiled to JS): see `examples/pyash/compile-fizzbuzz.txt`.

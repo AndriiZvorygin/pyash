@@ -44,7 +44,7 @@ test("compile emits C if-statement for tiny then", async () => {
 
   const program = [
     "exists su name total ob num 0 be number ya",
-    "ob num 3 be tiny from num 5 then ob num 1 to name total be add do"
+    "ob num 3 be tiny from num 5 then ob num 1 to name total be plus do"
   ].join("\\n");
 
   const sentence = parse(

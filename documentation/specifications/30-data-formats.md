@@ -116,12 +116,12 @@ This rule exists to keep config files and other pyash maps diff-friendly, even t
 
 ## 6. Dynamic map updates (normative)
 
-`be add` updates a **pyash map** entry whose key is the update sentence’s `su` value.
+`be plus` updates a **pyash map** entry whose key is the update sentence’s `su` value.
 
 Example:
 
 ```
-su text of ob of this ob num 1 to name wordmap be add do
+su text of ob of this ob num 1 to name wordmap be plus do
 ```
 
 Rules:

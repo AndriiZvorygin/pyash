@@ -1,7 +1,7 @@
   su name result ob num 5 be number ya
   su name result ob num 0 be number ya
   su name add two to name num target be ceremony def
-  ob num 2 to name result be add do
+  ob num 2 to name result be plus do
   su name add two be ceremony prah
-  to name result be add two do
+  to name result be plus two do
   mem

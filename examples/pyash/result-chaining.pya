@@ -1,4 +1,4 @@
 exists su name a ob num 1 be number ya
-ob num 2 to name a be add do
-ob num 4 to name result be add do
+ob num 2 to name a be plus do
+ob num 4 to name result be plus do
 su name result ob what que

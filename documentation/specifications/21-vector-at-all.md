@@ -20,7 +20,7 @@ Examples:
 
 ```pyash
 be invert ob name vector at all do
-be add    ob name vector from num 1 at all do
+be plus    ob name vector from num 1 at all do
 ```
 
 ### 1.2 Map to a new vector (`to` present)
@@ -33,7 +33,7 @@ Examples:
 
 ```pyash
 be invert ob name vector to name out at all do
-be add    ob name vector from num 1 to name out at all do
+be plus    ob name vector from num 1 to name out at all do
 ```
 
 ---
@@ -184,7 +184,7 @@ JS (explicit):
 Pyash:
 
 ```pyash
-be add ob name vector from num 1 to name out at all do
+be plus ob name vector from num 1 to name out at all do
 ```
 
 JS (explicit):
@@ -211,7 +211,7 @@ JS (explicit):
 You can mutate a single vector slot without `at all` by combining `at num` with a vector reference:
 
 ```pyash
-ob name vector from num 5 at num 1 be add do        # vector[1] += 5
+ob name vector from num 5 at num 1 be plus do        # vector[1] += 5
 ob num 3 from name vector at num 0 be subtract do   # vector[0] -= 3
 ```
 

@@ -75,7 +75,7 @@ in `configure/default.pya` or in a specific example.
 
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
-- Imperative (add): `ob num 3 to num 4 be add do` → stores command + `result` with `num 7`
+- Imperative (add): `ob num 3 to num 4 be plus do` → stores command + `result` with `num 7`
 - Query: `su collector ob what que`
 - Text read: `su file be read from filename "quiz/sandpit/compile.txt" do` → stores text content
 - Parse text to JSON: see end-to-end example below

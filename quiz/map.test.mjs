@@ -55,7 +55,7 @@ test("at all can increment each element via ceremony in place", async () => {
   const program = [
     "exists su name values ob ve num 1 2 3 be vector ya",
     "su name bump ob num value be ceremony def",
-    "ob num 1 to this ti ob ti num be add do",
+    "ob num 1 to this ti ob ti num be plus do",
     "su name bump be ceremony prah",
     "ob name values at name all be bump do"
   ].join("\n");
@@ -75,9 +75,9 @@ test("10 doors via at all toggles only square positions open (map, by pass)", as
     // Toggle a single door if (atindex+1) % pass === 0.
     "su name toggle pass by num 0 ob num value atindex num 0 be ceremony def",
     "su name door ob this atindex be number ya",
-    "ob num 1 to num of ob of door be add do",
+    "ob num 1 to num of ob of door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
-    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be add do",
+    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",
     "ob name rem be equally from num 0 then ob this ti ob ti num from num 2 to this ti ob ti num be remains do",
     "su name toggle pass be ceremony prah",
     // For passes 1..10 inclusive: stop when fromindex==11.
@@ -163,9 +163,9 @@ test("100 doors via at all toggles only square positions open", async () => {
     "su name toggle-door be ceremony def",
     "su name val ob this ob be number ya",
     "su name idx ob this atindex be number ya",
-    "ob num 1 to name idx be add do",
+    "ob num 1 to name idx be plus do",
     "ob name idx from name current-pass to name rem be remains do",
-    "ob name rem be equally from num 0 then ob num 1 to name val be add do",
+    "ob name rem be equally from num 0 then ob num 1 to name val be plus do",
     "ob name rem be equally from num 0 then ob name val from num 2 to name val be remains do",
     "su name val ret",
     "su name toggle-door be ceremony prah"

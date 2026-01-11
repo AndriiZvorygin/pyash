@@ -30,7 +30,7 @@ test("translation from Pyash conditional to English", async () => {
 
   const program = [
     "su name total ob num 0 be number ya",
-    "ob num 3 be tiny from num 5 then ob num 1 to name total be add do"
+    "ob num 3 be tiny from num 5 then ob num 1 to name total be plus do"
   ].join("\\n");
 
   const sentence = parse(
@@ -49,7 +49,7 @@ test("translation Pyash -> English -> Pyash roundtrip", async () => {
 
   const pyashProgram = [
     "su name alpha ob num 1 be number ya",
-    "ob num 2 to name alpha be add do"
+    "ob num 2 to name alpha be plus do"
   ].join("\\n");
 
   // Pyash -> English

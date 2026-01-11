@@ -18,8 +18,8 @@ test("genitive tails derive numeric for remains ob/by", () => {
 });
 
 test("genitive tail name derives name num for target", () => {
-  assert.equal(words("ob num of ob of this to name of this be add do"),
-    "be add ob num to name num");
+  assert.equal(words("ob num of ob of this to name of this be plus do"),
+    "be plus ob num to name num");
 });
 
 test("genitive tail text derives text", () => {

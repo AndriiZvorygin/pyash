@@ -2,9 +2,9 @@ exists su name doors ob ve num 0 0 0 0 0 0 0 0 0 0 be vector ya
 
 su name toggle pass by num 0 atindex num 0 ob num 0 be ceremony def
 su name door ob this atindex be number ya
-ob num 1 to door be add do
+ob num 1 to door be plus do
 ob num of ob of door from num of by of this to name rem be remains do
-ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be add do
+ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do
 ob name rem be equally from num 0 then ob this ti ob ti num from num 2 to this ti ob ti num be remains do
 su name toggle pass be ceremony prah
 

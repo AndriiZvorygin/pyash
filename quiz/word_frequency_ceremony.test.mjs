@@ -17,7 +17,7 @@ test("word frequency ceremony counts tokens into map", async () => {
   await run("prah");
 
   await run("su name word frequency ob text token be ceremony def");
-  await run("su text of ob of this ob num 1 to name wordmap be add do");
+  await run("su text of ob of this ob num 1 to name wordmap be plus do");
   await run("prah");
 
   await run("ob name words at all be word frequency do");

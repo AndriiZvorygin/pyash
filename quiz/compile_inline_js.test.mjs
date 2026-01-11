@@ -25,7 +25,7 @@ test("compile emits JS for simple add", async () => {
 
   const program = [
     "exists su name collector ob num 0 be number ya",
-    "ob num 2 to name collector be add do"
+    "ob num 2 to name collector be plus do"
   ].join("\\n");
 
   const sentence = parse(
@@ -123,7 +123,7 @@ test("compile emits JS for text concatenation via add", async () => {
 
   const program = [
     "exists su name message ob text hi be text ya",
-    "ob text there to name message be add do"
+    "ob text there to name message be plus do"
   ].join("\\n");
 
   const sentence = parse(
@@ -161,7 +161,7 @@ test("compile emits JS ceremony with param and body", async () => {
   const program = [
     "exists su name bucket ob num 0 be number ya",
     "su name add two to name num bucket be ceremony def",
-    "ob num 2 to name bucket be add do",
+    "ob num 2 to name bucket be plus do",
     "su name add two be ceremony prah"
   ].join("\\n");
 
@@ -184,7 +184,7 @@ test("compiled ceremony function can be invoked (JS)", async () => {
   const program = [
     "exists su name bucket ob num 0 be number ya",
     "su name add two be ceremony def",
-    "ob num 2 to num of ob of this be add do",
+    "ob num 2 to num of ob of this be plus do",
     "su name add two be ceremony prah"
   ].join("\\n");
 
@@ -212,7 +212,7 @@ test("compile emits JS ceremony mutating this.ob.num via genitive", async () => 
 
   const program = [
     "su name bump be ceremony def",
-    "ob num 2 to num of ob of this be add do",
+    "ob num 2 to num of ob of this be plus do",
     "su name bump be ceremony prah"
   ].join("\\n");
 
@@ -234,7 +234,7 @@ test("compile emits JS if-statement for tiny then", async () => {
 
   const program = [
     "exists su name total ob num 0 be number ya",
-    "ob num 3 be tiny from num 5 then ob num 1 to name total be add do"
+    "ob num 3 be tiny from num 5 then ob num 1 to name total be plus do"
   ].join("\\n");
 
   const sentence = parse(
@@ -294,7 +294,7 @@ test("compile emits nested conditionals", async () => {
 
   const program = [
     "exists su name counter ob num 0 be number ya",
-    "ob num 2 be tiny from num 3 then ob num 4 be giant from num 1 then ob num 1 to name counter be add do"
+    "ob num 2 be tiny from num 3 then ob num 4 be giant from num 1 then ob num 1 to name counter be plus do"
   ].join("\\n");
 
   const sentence = parse(

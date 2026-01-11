@@ -21,7 +21,7 @@ ob num 2 to name primes at num 0 be write do
 su name collect primes fromindex num 0 be ceremony def
 ob name composite at num of fromindex of this be read to name status do
 ob name status be equally from text lie then ob num of fromindex of this to name primes at num of ob of primes_index be write do
-ob name status be equally from text lie then ob num 1 to name primes_index be add do
+ob name status be equally from text lie then ob num 1 to name primes_index be plus do
 su name collect primes be ceremony prah
 
 fromindex num 3 toindex num 10 be collect primes do

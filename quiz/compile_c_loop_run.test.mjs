@@ -24,7 +24,7 @@ test("compile to C: fromindex/toindex loop invokes ceremony body (gcc + run)", a
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name loop body fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name loop body be ceremony prah",
     // stop-when-equal loop: 3,2,1 then stop at 0
     "fromindex num 3 toindex num 0 be loop body do",
@@ -51,7 +51,7 @@ test("compile to C: loop stops at toindex when ascending", async () => {
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name inc fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name inc be ceremony prah",
     "fromindex num 1 toindex num 4 be inc do",
     "ob name counter be write do",
@@ -77,7 +77,7 @@ test("compile to C: loop stops at toindex when descending", async () => {
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name inc fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name inc be ceremony prah",
     "fromindex num 4 toindex num 1 be inc do",
     "ob name counter be write do",

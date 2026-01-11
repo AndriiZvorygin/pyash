@@ -110,7 +110,7 @@ export function handleVectorElementOps(context, helpers) {
       lines.push("}");
       return lines.join("\n");
     }
-    if ((baseBe === "add" || baseBe === "subtract" || baseBe === "invert") && vecNameRaw && (atNum != null || atGenitive)) {
+    if ((baseBe === "plus" || baseBe === "subtract" || baseBe === "invert") && vecNameRaw && (atNum != null || atGenitive)) {
       if (cHelpers) {
         cHelpers.usesVectorType = true;
         cHelpers.usesString = true;
@@ -134,7 +134,7 @@ export function handleVectorElementOps(context, helpers) {
       lines.push(`  if (!${vecName}.type || strcmp(${vecName}.type, "num") == 0) {`);
       if (baseBe === "invert") {
         lines.push(`    ${vecName}.num_values[_idx] = -${vecName}.num_values[_idx];`);
-      } else if (baseBe === "add") {
+      } else if (baseBe === "plus") {
         lines.push(`    ${vecName}.num_values[_idx] += ${delta};`);
       } else {
         lines.push(`    ${vecName}.num_values[_idx] -= ${delta};`);

@@ -18,10 +18,10 @@ test("loop body can implement fizzbuzz logic using remains + inline then", async
   await interpret(parse("su name handled ob num 0 be number ya"));
   await interpret(parse("ob this ti fromindex from num 3 to name rem3 be remains do"));
   await interpret(parse("ob this ti fromindex from num 5 to name rem5 be remains do"));
-  await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name fizzHits be add do"));
-  await interpret(parse("ob name rem5 be equally from num 0 then ob num 1 to name buzzHits be add do"));
-  await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name handled be add do"));
-  await interpret(parse("ob name rem5 be equally from num 0 then ob num 2 to name handled be add do"));
+  await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name fizzHits be plus do"));
+  await interpret(parse("ob name rem5 be equally from num 0 then ob num 1 to name buzzHits be plus do"));
+  await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name handled be plus do"));
+  await interpret(parse("ob name rem5 be equally from num 0 then ob num 2 to name handled be plus do"));
   await interpret(parse("su name fizzbuzz step be ceremony prah"));
 
   await interpret(parse("to name outside fromindex num 1 toindex num 16 be fizzbuzz step do"));

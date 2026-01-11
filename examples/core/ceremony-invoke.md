@@ -8,9 +8,9 @@
   ```
   su name result ob num 5 be number ya
 su name add two to name result be ceremony def
-ob num 2 to name result be add do
+ob num 2 to name result be plus do
 su name add two be ceremony prah
-  to name result be add two do
+  to name result be plus two do
   mem
   ```
 - **Expected output**:
@@ -31,4 +31,4 @@ su name add two be ceremony prah
     { "to": { "name": "result" }, "be": "add two", "mood": "do" }
   ]
   ```
-- **Notes**: Demonstrates definition indexing (`def`...`prah`) and invocation of the stored paragraph via `be add two do`; memory shows recorded body, closing marker, and executed body on call.
+- **Notes**: Demonstrates definition indexing (`def`...`prah`) and invocation of the stored paragraph via `be plus two do`; memory shows recorded body, closing marker, and executed body on call.

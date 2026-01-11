@@ -12,7 +12,7 @@ test("loop body can run inline conditional against this.fromindex (via remains p
 
   await interpret(parse("su name count odd to name num bucket fromindex num 0 be ceremony def"));
   await interpret(parse("ob this ti fromindex from num 2 to name mod be remains do"));
-  await interpret(parse("ob name mod be equally from num 1 then ob num 1 to name hits be add do"));
+  await interpret(parse("ob name mod be equally from num 1 then ob num 1 to name hits be plus do"));
   await interpret(parse("su name count odd be ceremony prah"));
 
   // stop-when-equal loop: executes for 0..4, stops at 5

@@ -8,7 +8,7 @@ import { forget, remember } from "../program/remember/index.mjs";
 test("add concatenates text into a named text target", async () => {
   forget();
   await interpret(parse("exists su name greeting ob text hello be text ya"));
-  await interpret(parse("ob text world to name greeting be add do"));
+  await interpret(parse("ob text world to name greeting be plus do"));
   assert.equal(remember("greeting")?.ob?.text, "helloworld");
 });
 

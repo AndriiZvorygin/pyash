@@ -1,14 +1,14 @@
 su name add one to name num result be ceremony def
-ob num 1 to name result be add do
+ob num 1 to name result be plus do
 this ret
 su name add one be ceremony prah
 
 su name add two to name num result be ceremony def
-ob num 2 to name result be add do
+ob num 2 to name result be plus do
 this ret
 su name add two be ceremony prah
 
-to name result be add one do
+to name result be plus one do
 su name result ob what que
-to name result be add two do
+to name result be plus two do
 su name result ob what que

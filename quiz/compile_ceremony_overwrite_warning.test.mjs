@@ -11,10 +11,10 @@ test("compile warns when a ceremony is redefined", async () => {
   const source = [
     "exists su name counter ob num 0 be number ya",
     "su name bump to name num counter be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name bump be ceremony prah",
     "su name bump to name num counter be ceremony def",
-    "ob num 2 to name counter be add do",
+    "ob num 2 to name counter be plus do",
     "su name bump be ceremony prah",
     "to name counter be bump do"
   ].join("\n");

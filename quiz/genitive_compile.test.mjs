@@ -9,7 +9,7 @@ test("compile uses genitive num of ob of this without remember", async () => {
   const program = [
     "exists su name bucket ob num 1 be number ya",
     "su name bump be ceremony def",
-    "ob num 2 to num of ob of this be add do",
+    "ob num 2 to num of ob of this be plus do",
     "su name bump be ceremony prah",
     "su name evoker ob name bucket be bump do",
     "ob name bucket be write do"
@@ -34,7 +34,7 @@ test("compile uses genitive this ti ob ti num without remember", async () => {
   const program = [
     "exists su name bucket ob num 1 be number ya",
     "su name bump be ceremony def",
-    "ob num 2 to this ti ob ti num be add do",
+    "ob num 2 to this ti ob ti num be plus do",
     "su name bump be ceremony prah",
     "su name evoker ob name bucket be bump do",
     "ob name bucket be write do"

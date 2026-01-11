@@ -23,7 +23,7 @@ test("genitive read + add updates map entry", async () => {
   console.log = (...args) => logs.push(args.join(" "));
   try {
     await run("ob count of profile be write do");
-    await run("ob num 1 to count of profile be add do");
+    await run("ob num 1 to count of profile be plus do");
     await run("ob count of profile be write do");
   } finally {
     // eslint-disable-next-line no-console

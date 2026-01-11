@@ -8,7 +8,7 @@
   ```
   su name counter ob num 0 be number ya
 su name loop body to name counter be ceremony def
-ob num 1 to name counter be add do
+ob num 1 to name counter be plus do
 su name loop body be ceremony prah
   to name counter fromindex num 3 be loop body do
   mem

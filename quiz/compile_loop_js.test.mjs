@@ -12,7 +12,7 @@ test("compile ceremony loop to javascript and run", async () => {
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name loop_body to name num target fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name loop_body be ceremony prah",
     "to name counter fromindex num 3 be loop_body do",
     "ob name counter be write do"
@@ -40,7 +40,7 @@ test("compile loop: def to-name differs from call to-name", async () => {
     "exists su name alpha ob num 0 be number ya",
     // Definition binds to name bucket, but the caller invokes with to name alpha.
     "su name inc_loop to name num bucket fromindex num 0 be ceremony def",
-    "ob num 1 to name alpha be add do",
+    "ob num 1 to name alpha be plus do",
     "su name inc_loop be ceremony prah",
     "to name alpha fromindex num 3 be inc_loop do",
     "ob name alpha be write do"
@@ -134,7 +134,7 @@ test("compile loop stops at toindex when ascending", async () => {
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name inc fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name inc be ceremony prah",
     "fromindex num 1 toindex num 4 be inc do",
     "ob name counter be write do"
@@ -156,7 +156,7 @@ test("compile loop stops at toindex when descending", async () => {
   const pyash = [
     "exists su name counter ob num 0 be number ya",
     "su name inc fromindex num 0 be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name inc be ceremony prah",
     "fromindex num 4 toindex num 1 be inc do",
     "ob name counter be write do"
@@ -181,7 +181,7 @@ test("compile loop can perform 10-doors toggle (squares end open) using nested l
     "exists su name doors ob ve bool lie lie lie lie lie lie lie lie lie lie be vector ya",
     "su name toggle door by num 0 fromindex num 0 be ceremony def",
     "su name doorNum ob this fromindex be number ya",
-    "ob num 1 to name doorNum be add do",
+    "ob num 1 to name doorNum be plus do",
     "ob name doorNum from num of ob of by of this to name rem be remains do",
     "ob name rem be equally from num 0 then ob name doors at num of fromindex of this be invert do",
     "su name toggle door be ceremony prah",

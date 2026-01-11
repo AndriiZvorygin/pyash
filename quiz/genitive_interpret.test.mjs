@@ -11,7 +11,7 @@ test("genitive num of ob of this mutates target", async () => {
   const lines = [
     "exists su name bucket ob num 1 be number ya",
     "su name bump ob name num value be ceremony def",
-    "ob num 2 to num of ob of this be add do",
+    "ob num 2 to num of ob of this be plus do",
     "su name bump be ceremony prah",
     "su name evoker ob name bucket be bump do"
   ];
@@ -31,7 +31,7 @@ test("genitive this ti ob ti num mutates target", async () => {
   const lines = [
     "exists su name bucket ob num 1 be number ya",
     "su name bump ob name num value be ceremony def",
-    "ob num 2 to this ti ob ti num be add do",
+    "ob num 2 to this ti ob ti num be plus do",
     "su name bump be ceremony prah",
     "su name evoker ob name bucket be bump do"
   ];

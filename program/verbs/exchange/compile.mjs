@@ -538,7 +538,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	      }
 	      return `runAtAll(${literal}, ${fn});`;
 	    }
-	    if (baseBe === "add" || baseBe === "subtract" || baseBe === "invert") {
+	    if (baseBe === "plus" || baseBe === "subtract" || baseBe === "invert") {
 	      if (sentenceArg) return `// TODO: ${JSON.stringify(sentence)}`;
 	      const vecName = sentence.ob?.name;
 	      const toName = sentence.to?.name;
@@ -547,7 +547,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
       const opBody =
         baseBe === "invert"
           ? `let val = elem;\n    if (typeof val === "number") return val * -1;\n    if (val === "truth" || val === true) return "lie";\n    if (val === "lie" || val === false) return "truth";\n    return val;`
-          : baseBe === "add"
+          : baseBe === "plus"
             ? `return (Number(elem) || 0) + ${Number.isNaN(delta) ? 0 : delta};`
             : `return (Number(elem) || 0) - ${Number.isNaN(delta) ? 0 : delta};`;
       const lines = [];

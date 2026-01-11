@@ -153,7 +153,7 @@ Signature (cases sorted: `by`, `from`, `fromstate`, `to`):
 ```text
 ob num 3
 to  name num acc
-be add
+be plus
 <mood>
 ```
 

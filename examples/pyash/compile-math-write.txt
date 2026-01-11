@@ -1,11 +1,11 @@
 exists su name alpha ob num 1 be number ya
-ob num 2 to name alpha be add do
+ob num 2 to name alpha be plus do
 ob num 1 to name alpha be subtract do
 ob name alpha be write do
 
 su name inc to name num target be ceremony def
 ob this ti to be remember to name target exists do
-ob num 3 to name target be add do
+ob num 3 to name target be plus do
 su name target ret
 su name inc be ceremony prah
 

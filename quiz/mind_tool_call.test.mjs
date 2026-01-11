@@ -12,7 +12,7 @@ test("mind tool calling executes allowed tool and returns final answer", async (
   forget();
   resetMindLogs();
 
-  const toolSentence = parse("su name add num be add ob num 1 to name num can");
+  const toolSentence = parse("su name add num be plus ob num 1 to name num can");
   const toolName = joinSignatureWords(deriveSignatureFromCall(toolSentence));
 
   let callCount = 0;
@@ -40,7 +40,7 @@ test("mind tool calling executes allowed tool and returns final answer", async (
   };
 
   await interpret(parse("su name tools be map def"));
-  await interpret(parse("su name add num be add ob num 1 to name num can"));
+  await interpret(parse("su name add num be plus ob num 1 to name num can"));
   await interpret(parse("prah"));
   await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
   await interpret(parse("exists su name total ob num 3 be number ya"));

@@ -150,8 +150,8 @@ export async function handleImperative({
     if (resolved !== null && resolved !== undefined) {
       sentence.ob = typeof resolved === "number" ? { num: resolved } : resolved;
     }
-    if (sentence.be === "add" && sentence.ob?.num === undefined && sentence.ob?.thisRef === "by") {
-      console.log("debug add ob thisRef by", resolved);
+    if (sentence.be === "plus" && sentence.ob?.num === undefined && sentence.ob?.thisRef === "by") {
+      console.log("debug plus ob thisRef by", resolved);
     }
   } else if (sentence.ob?.genitive) {
     const resolved = resolveInlineGenitive(sentence.ob.genitive, state);
@@ -369,7 +369,7 @@ export async function handleImperative({
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
-  const shouldBootstrapNumber = addressedName && ["add", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
+  const shouldBootstrapNumber = addressedName && ["plus", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
   if (!target && shouldBootstrapNumber) {
     // create default numeric fact if it doesn't exist for math-like verbs
     target = { su: { name: addressedName }, be: "number", ob: { num: 0 }, mood: "ya" };
@@ -380,7 +380,7 @@ export async function handleImperative({
     be === "mind" ||
     be === "say" ||
     be === "write" ||
-    (be === "add" && (sentence.ob?.text || target?.ob?.text !== undefined));
+    (be === "plus" && (sentence.ob?.text || target?.ob?.text !== undefined));
   const toValue = useRawTo ? (to ?? sentence.to) : (target?.ob ?? to);
 
   // pass the current value, not the name

@@ -13,7 +13,7 @@ test("compile at all map toggles vector elements", async () => {
       // Ceremony: val = this ob + 1
       "su name toggle be ceremony def",
       "su name val ob this ob be number ya",
-      "ob num 1 be add do",
+      "ob num 1 be plus do",
       "su name val ret",
       "su name toggle be ceremony prah",
       // Invoke at all (in-place)

@@ -7,7 +7,7 @@ test("buildProgram preserves multiline quoted text blocks", () => {
     'ob text quoted.text.',
     'line one',
     'line two',
-    '.text.quoted to name output be add do',
+    '.text.quoted to name output be plus do',
   ].join("\n");
 
   const program = buildProgram(source);

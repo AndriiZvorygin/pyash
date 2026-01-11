@@ -492,7 +492,7 @@ su name pi ob num 3.14159 ya
 su name pi be export ya
 
 su name add two to name bucket be ceremony def
-  ob num 2 to name bucket be add do
+  ob num 2 to name bucket be plus do
   su name bucket ret
 prah
 su name add two be export ya

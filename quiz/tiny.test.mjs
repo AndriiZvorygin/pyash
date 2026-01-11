@@ -15,7 +15,7 @@ test("tiny conditional controls next statement (less-than)", async () => {
 
   await run("su name collector ob num 3 be number ya");
   await run("ob num 3 be tiny from num 5 then");
-  await run("ob num 2 to name collector be add do"); // should run (3 < 5 based on stored collector)
+  await run("ob num 2 to name collector be plus do"); // should run (3 < 5 based on stored collector)
 
   const res = await run("su name collector ob what que");
   assert.equal(res, "su name collector ob num 5 be number ya");
@@ -24,7 +24,7 @@ test("tiny conditional controls next statement (less-than)", async () => {
   forget();
   await run("su name collector ob num 10 be number ya");
   await run("ob num 10 be tiny from num 5 then"); // 10 < 5 is false
-  await run("ob num 2 to name collector be add do"); // should be skipped
+  await run("ob num 2 to name collector be plus do"); // should be skipped
 
   const res2 = await run("su name collector ob what que");
   assert.equal(res2, "su name collector ob num 10 be number ya");
@@ -35,7 +35,7 @@ test("tiny compares against stored subject value when su provided", async () => 
 
   await run("su name collector ob num 4 be number ya");
   await run("su name collector be tiny from num 5 then");
-  await run("ob num 1 to name collector be add do"); // should run (collector.num 4 < 5)
+  await run("ob num 1 to name collector be plus do"); // should run (collector.num 4 < 5)
 
   const res = await run("su name collector ob what que");
   assert.equal(res, "su name collector ob num 5 be number ya");
@@ -47,14 +47,14 @@ test("tiny compares su against another su value", async () => {
   await run("su name lhs ob num 2 be number ya");
   await run("su name rhs ob num 5 be number ya");
   await run("su name lhs be tiny from name rhs then");
-  await run("ob num 1 to name lhs be add do"); // should run (2 < 5)
+  await run("ob num 1 to name lhs be plus do"); // should run (2 < 5)
 
   const res = await run("su name lhs ob what que");
   assert.equal(res, "su name lhs ob num 3 be number ya");
 
   await run("su name lhs ob num 6 be number ya");
   await run("su name lhs be tiny from name rhs then");
-  await run("ob num 1 to name lhs be add do"); // should skip (6 < 5 false)
+  await run("ob num 1 to name lhs be plus do"); // should skip (6 < 5 false)
 
   const res2 = await run("su name lhs ob what que");
   assert.equal(res2, "su name lhs ob num 6 be number ya");
@@ -66,14 +66,14 @@ test("giant compares su against another su value", async () => {
   await run("su name lhs ob num 7 be number ya");
   await run("su name rhs ob num 5 be number ya");
   await run("su name lhs be giant from name rhs then");
-  await run("ob num 1 to name lhs be add do"); // should run (7 > 5)
+  await run("ob num 1 to name lhs be plus do"); // should run (7 > 5)
 
   const res = await run("su name lhs ob what que");
   assert.equal(res, "su name lhs ob num 8 be number ya");
 
   await run("su name lhs ob num 4 be number ya");
   await run("su name lhs be giant from name rhs then");
-  await run("ob num 1 to name lhs be add do"); // should skip (4 > 5 false)
+  await run("ob num 1 to name lhs be plus do"); // should skip (4 > 5 false)
 
   const res2 = await run("su name lhs ob what que");
   assert.equal(res2, "su name lhs ob num 4 be number ya");

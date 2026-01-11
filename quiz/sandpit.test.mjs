@@ -15,7 +15,7 @@ test("ceremony runs in sandpit and merges results to main memory only", async ()
 
   await run("su name target ob num 1 be number ya");
   await run("su name incrementer to name num target be ceremony def");
-  await run("ob num 2 to name target be add do");
+  await run("ob num 2 to name target be plus do");
   await run("su name incrementer be ceremony prah");
 
   await run("to name target be incrementer do");

@@ -15,7 +15,7 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
 
   const lines = [
     "su name worker to name num target be ceremony def",
-    "ob num 4 to name target be add do",
+    "ob num 4 to name target be plus do",
     "this ob name target ret",
     "su name worker be ceremony prah",
     "su name target ob num 1 fromindex num 3 toindex num 5 be number ya",

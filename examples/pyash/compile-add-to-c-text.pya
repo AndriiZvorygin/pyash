@@ -1,6 +1,6 @@
 exists su name output be c ya
 from text quoted.pyash.
 exists su name collector ob num 0 be number ya
-ob num 2 to name collector be add do
+ob num 2 to name collector be plus do
 .pyash.quoted to state c to name output be compile do
 su name output be c que
