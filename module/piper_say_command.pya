@@ -40,7 +40,7 @@ su name say ob text payload to filename output be ceremony def
   ob text of ob of this to name text input be text do
   exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
   ob filename of to of this to name text path be text do
-  ob name path to name cmd be add do
+  ob name path to name cmd be plus do
   ob name input to filename "/tmp/pyash-piper-input.txt" be write do
   ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
 prah
@@ -48,7 +48,7 @@ su name say ob num payload to filename output be ceremony def
   ob num of ob of this to name text input be text do
   exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
   ob filename of to of this to name text path be text do
-  ob name path to name cmd be add do
+  ob name path to name cmd be plus do
   ob name input to filename "/tmp/pyash-piper-input.txt" be write do
   ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
 prah
@@ -56,7 +56,7 @@ su name say ob bool payload to filename output be ceremony def
   ob boolean of ob of this to name text input be text do
   exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
   ob filename of to of this to name text path be text do
-  ob name path to name cmd be add do
+  ob name path to name cmd be plus do
   ob name input to filename "/tmp/pyash-piper-input.txt" be write do
   ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
 prah
@@ -64,7 +64,7 @@ su name say ob hollow payload to filename output be ceremony def
   ob text "null" to name text input be text do
   exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
   ob filename of to of this to name text path be text do
-  ob name path to name cmd be add do
+  ob name path to name cmd be plus do
   ob name input to filename "/tmp/pyash-piper-input.txt" be write do
   ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
 prah

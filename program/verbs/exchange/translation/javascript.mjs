@@ -67,7 +67,7 @@ function javascriptLineToSentence(line) {
   if (match) {
     const [, name, op, numRaw] = match;
     const verb =
-      op === "+" ? "add" :
+      op === "+" ? "plus" :
       op === "-" ? "subtract" :
       op === "*" ? "multiply" :
       "divide";
@@ -84,7 +84,7 @@ function javascriptLineToSentence(line) {
   if (match) {
     const [, name, op, numRaw] = match;
     const verb =
-      op === "+" ? "add" :
+      op === "+" ? "plus" :
       op === "-" ? "subtract" :
       op === "*" ? "multiply" :
       "divide";

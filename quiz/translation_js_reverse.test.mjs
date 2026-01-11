@@ -33,7 +33,7 @@ test("translation from JavaScript text back to Pyash sentences (assignments + ma
   assert.equal(constDecl.exists, true);
   assert.equal(assign.ob.num, 5);
   assert.match(out.text, /exists su name alpha ob num 1 be number ya/);
-  assert.match(out.text, /ob num 2 to name alpha be add do/);
+  assert.match(out.text, /ob num 2 to name alpha be plus do/);
 });
 
 test("translation from JavaScript math assignments covers compound ops", async () => {

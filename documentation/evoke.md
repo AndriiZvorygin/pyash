@@ -5,7 +5,7 @@
 An **evoke sentence** is how you call a ceremony:
 
 ```pyash
-ob num 5 to name result be add two do
+ob num 5 to name result be plus two do
 ```
 
 This *is* the call frame. Internally you treat it as:
@@ -60,7 +60,7 @@ Semantics:
 Now you can use existing verbs on `acc`:
 
 ```pyash
-ob num 2 to name acc be add do
+ob num 2 to name acc be plus do
 ```
 
 (Your JS `add` dispatcher can still live in `program/verbs/add.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
@@ -93,7 +93,7 @@ So a complete ceremony flow for “add two” in Pyash surface form looks like:
 
 ```pyash
 # evoke
-ob num 5 to name result be add two do
+ob num 5 to name result be plus two do
 
 # inside "add two" ceremony:
 
@@ -101,7 +101,7 @@ ob num 5 to name result be add two do
 su name acc ob this ob be number ya
 
 # acc := acc + 2
-ob num 2 to name acc be add do
+ob num 2 to name acc be plus do
 
 # return acc as new ob of the evoke
 this ob name acc ret
@@ -110,7 +110,7 @@ this ob name acc ret
 From the outside, the modified evoke sentence now behaves like:
 
 ```pyash
-ob num 7 to name result be add two do
+ob num 7 to name result be plus two do
 ```
 
 ---
@@ -151,7 +151,7 @@ this fromindex num 1 ya
 Again, verb phrases stay space-separated, and registers stay attached to the evoke:
 
 * `be count up do`
-* `be add two do`
+* `be plus two do`
 * `be subtract one do`
 
 and your JS side is free to normalize them (e.g. `"count up"` → `count_up.mjs`) for file names.
@@ -160,7 +160,7 @@ and your JS side is free to normalize them (e.g. `"count up"` → `count_up.mjs`
 
 If you’d like, next we can:
 
-* Sketch how your `program/understand/index.mjs` should treat `be` + multi-word verb phrases (`be add two do`, `be count up do`) and
+* Sketch how your `program/understand/index.mjs` should treat `be` + multi-word verb phrases (`be plus two do`, `be count up do`) and
 * Add quizzes to lock in that **surface Pyash never uses underscores**, while the dispatcher still finds the right JS verb modules.
 
 ## 6. Examples

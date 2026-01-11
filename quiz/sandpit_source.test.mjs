@@ -15,7 +15,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
 
   // ceremony: start from invoke sentence with ob/fromindex/toindex; mutate ob; return invoke
   await run("su name worker to name num target be ceremony def");
-  await run("ob num 4 to name target be add do");
+  await run("ob num 4 to name target be plus do");
   await run("this ob name target ret");
   await run("su name worker be ceremony prah");
 

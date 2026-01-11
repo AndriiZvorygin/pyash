@@ -14,12 +14,12 @@ test("result facts chain across evocations", async () => {
   forget();
 
   await run("su name a ob num 1 be number ya");
-  await run("ob num 2 to name a be add do");
+  await run("ob num 2 to name a be plus do");
 
   const first = remember("result");
   assert.equal(first?.ob?.num, 3);
 
-  await run("ob num 4 to name result be add do");
+  await run("ob num 4 to name result be plus do");
 
   const second = remember("result");
   assert.equal(second?.ob?.num, 7);
@@ -31,17 +31,17 @@ test("ceremony defs feed result into the next call", async () => {
   await run("su name result ob num 0 be number ya");
 
   await run("su name add one to name num target be ceremony def");
-  await run("ob num 1 to name result be add do");
+  await run("ob num 1 to name result be plus do");
   await run("this ret");
   await run("su name add one be ceremony prah");
 
   await run("su name add two to name num target be ceremony def");
-  await run("ob num 2 to name result be add do");
+  await run("ob num 2 to name result be plus do");
   await run("this ret");
   await run("su name add two be ceremony prah");
 
-  await run("to name result be add one do");
-  await run("to name result be add two do");
+  await run("to name result be plus one do");
+  await run("to name result be plus two do");
 
   const chained = remember("result");
   assert.equal(chained?.ob?.num, 3);

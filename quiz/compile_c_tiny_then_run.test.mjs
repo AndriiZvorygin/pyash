@@ -23,7 +23,7 @@ test("compile to C: tiny then controls execution (gcc + run)", async () => {
 
   const pyash = [
     "exists su name counter ob num 0 be number ya",
-    "ob name counter be tiny from num 1 then ob num 1 to name counter be add do",
+    "ob name counter be tiny from num 1 then ob num 1 to name counter be plus do",
     "ob name counter be write do",
   ].join("\n");
 

@@ -34,7 +34,7 @@ test("add updates collector via imperative", async () => {
   forget();
 
   await run("su name collector ob num 7 be number ya");
-  const act = await run("ob num 2 to name collector be add do");
+  const act = await run("ob num 2 to name collector be plus do");
   const res = await run("su name collector ob what que");
 
   assert.equal(act.acted, "collector");
@@ -47,7 +47,7 @@ test("giant conditional controls next statement", async () => {
 
   await run("su name collector ob num 7 be number ya");
   await run("su name collector from num 5 be giant then");
-  await run("ob num 2 to name collector be add do");
+  await run("ob num 2 to name collector be plus do");
 
   const res = await run("su name collector ob what que");
   assert.deepEqual(res, "su name collector ob num 9 be number ya");
@@ -56,7 +56,7 @@ test("giant conditional controls next statement", async () => {
   forget();
   await run("su name collector ob num 3 be number ya");
   await run("su name collector from num 5 be giant then");
-  await run("ob num 2 to name collector be add do");
+  await run("ob num 2 to name collector be plus do");
 
   const res2 = await run("su name collector ob what que");
   assert.deepEqual(res2, "su name collector ob num 3 be number ya");
@@ -117,7 +117,7 @@ test("do mood is stored in history and returns result", async () => {
   forget();
 
   await run("su target ob num 4 be number ya");
-  const res = await run("su add_demo ob num 3 to name target be add do");
+  const res = await run("su add_demo ob num 3 to name target be plus do");
   const mem = allRemember();
   const fact = mem.find(s => s.su?.name === "add_demo");
   const target = mem.find(s => s.su?.name === "target");
@@ -133,7 +133,7 @@ test("bare add imperative without target name creates and stores result", async 
   forget();
 
   await run("su temp ob num 4 be number ya");
-  const res = await run("su temp ob num 3 to name temp be add do");
+  const res = await run("su temp ob num 3 to name temp be plus do");
   const mem = allRemember();
   const fact = mem.find(s => s.su?.name === "temp" && s.ob?.num === 7);
 
@@ -154,8 +154,8 @@ test("false condition skips one statement and then resets", async () => {
 
   await run("su name counter ob num 1 be number ya");
   await run("ob num 1 be tiny from num 0 then"); // false -> skip next statement
-  await run("ob num 10 to name counter be add do"); // should be skipped
-  await run("ob num 2 to name counter be add do"); // should run
+  await run("ob num 10 to name counter be plus do"); // should be skipped
+  await run("ob num 2 to name counter be plus do"); // should run
 
   const res = await run("su name counter ob what que");
   assert.equal(res, "su name counter ob num 3 be number ya");
@@ -164,7 +164,7 @@ test("false condition skips one statement and then resets", async () => {
 test("imperative creates default numeric target when missing", async () => {
   forget();
 
-  await run("ob num 5 to name scratch be add do");
+  await run("ob num 5 to name scratch be plus do");
 
   const scratch = remember("scratch");
   assert.ok(scratch, "target should be created");
@@ -184,6 +184,6 @@ test("unknown imperative verb throws", async () => {
 test("add missing roles triggers signature error", async () => {
   forget();
 
-  await assert.rejects(() => run("ob num 1 be add do"), /add: to is required/);
-  await assert.rejects(() => run("to name target be add do"), /add: ob is required/);
+  await assert.rejects(() => run("ob num 1 be plus do"), /add: to is required/);
+  await assert.rejects(() => run("to name target be plus do"), /add: ob is required/);
 });

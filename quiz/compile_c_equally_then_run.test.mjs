@@ -23,7 +23,7 @@ test("compile to C: equally then controls execution (gcc + run)", async () => {
 
   const pyash = [
     "exists su name counter ob num 0 be number ya",
-    "ob name counter be equally from num 0 then ob num 1 to name counter be add do",
+    "ob name counter be equally from num 0 then ob num 1 to name counter be plus do",
     "ob name counter be write do",
   ].join("\n");
 
@@ -46,7 +46,7 @@ test("compile to C: equally compares text", async () => {
 
   const pyash = [
     "exists su name counter ob num 0 be number ya",
-    "ob text truth be equally from text truth then ob num 1 to name counter be add do",
+    "ob text truth be equally from text truth then ob num 1 to name counter be plus do",
     "ob name counter be write do",
   ].join("\n");
 

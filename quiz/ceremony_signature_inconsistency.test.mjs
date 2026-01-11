@@ -17,7 +17,7 @@ test("evoker with inconsistent signature is rejected", async () => {
 
   const defLines = [
     "su name foo ob name num value to name num bar be ceremony def",
-    "ob num 1 to name bar be add do",
+    "ob num 1 to name bar be plus do",
     "su name foo be ceremony prah"
   ];
   await run(defLines);

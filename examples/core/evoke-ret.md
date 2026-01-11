@@ -8,10 +8,10 @@
   ```
 su name add two to name acc be ceremony def
 su name acc ob this ob be number ya
-ob num 2 to name acc be add do
+ob num 2 to name acc be plus do
 this ob name acc ret
 su name add two be ceremony prah
-  ob num 5 to name result be add two do
+  ob num 5 to name result be plus two do
   mem
   ```
 - **Expected output**:
@@ -36,4 +36,4 @@ su name add two be ceremony prah
     { "su": { "name": "result" }, "ob": { "num": 7 }, "be": "add two", "mood": "ya" }
   ]
   ```
-- **Notes**: Memory shows the evoke (`be add two do`), local binding of `this ob` to `acc`, the `add` on `acc`, the `ret`, and the returned value applied to the caller’s target.
+- **Notes**: Memory shows the evoke (`be plus two do`), local binding of `this ob` to `acc`, the `add` on `acc`, the `ret`, and the returned value applied to the caller’s target.

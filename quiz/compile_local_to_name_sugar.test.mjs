@@ -14,9 +14,9 @@ test("compile sugar: add to <local name> inside ceremony mutates local fact (not
     // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.ob.num in JS.
     "su name bumpIndex by num 0 ob name num value atindex num 0 be ceremony def",
     "su name door ob this atindex be number ya",
-    "ob num 1 to door be add do",
+    "ob num 1 to door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
-    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be add do",
+    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",
     "su name bumpIndex be ceremony prah",
     // Apply once: pass=1 toggles every element by +1
     "be bumpIndex ob name values by num 1 at name all do"

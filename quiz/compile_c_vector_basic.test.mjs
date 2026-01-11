@@ -82,7 +82,7 @@ test("compile C supports vector element add at index", async () => {
   forget();
   const pyash = [
     "exists su name values ob ve num 1 2 3 be vector ya",
-    "ob num 2 to name values at num 2 be add do",
+    "ob num 2 to name values at num 2 be plus do",
     "ob ve of values be write do"
   ].join("\n");
   const c = await compileToC(pyash);

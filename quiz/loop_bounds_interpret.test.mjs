@@ -14,7 +14,7 @@ test("loop stops when ascending fromindex reaches toindex", async () => {
 
   await run("exists su name counter ob num 0 be number ya");
   await run("su name inc fromindex num 0 be ceremony def");
-  await run("ob num 1 to name counter be add do");
+  await run("ob num 1 to name counter be plus do");
   await run("su name inc be ceremony prah");
 
   await run("fromindex num 1 toindex num 4 be inc do");
@@ -28,7 +28,7 @@ test("loop stops when descending fromindex reaches toindex", async () => {
 
   await run("exists su name counter ob num 0 be number ya");
   await run("su name inc fromindex num 0 be ceremony def");
-  await run("ob num 1 to name counter be add do");
+  await run("ob num 1 to name counter be plus do");
   await run("su name inc be ceremony prah");
 
   await run("fromindex num 4 toindex num 1 be inc do");

@@ -49,7 +49,7 @@ test("compile renders simple add into direct assignment when name provided", asy
 
   const program = [
     "exists su name produce ob num 0 be number ya",
-    "ob num 2 to name produce be add do"
+    "ob num 2 to name produce be plus do"
   ].join("\\n");
 
   const sentence = parse(
@@ -69,7 +69,7 @@ test("compile keeps math inside ceremony after remember", async () => {
   const program = [
     "su name add two be ceremony def",
     "ob this ti to be remember to name produce exists do",
-    "ob num 2 to name produce be add do",
+    "ob num 2 to name produce be plus do",
     "su name add two be ceremony prah"
   ].join("\\n");
 
@@ -91,9 +91,9 @@ test("compile emits ceremony invocation as sentence object", async () => {
   const program = [
     "exists su name bucket ob num 0 be number ya",
     "su name add two to name num target be ceremony def",
-    "ob num 2 to name num be add do",
+    "ob num 2 to name num be plus do",
     "su name add two be ceremony prah",
-    "be add two to bucket do"
+    "be plus two to bucket do"
   ].join("\\n");
 
   const sentence = parse(

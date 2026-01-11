@@ -17,7 +17,7 @@ test("ceremony repeats using fromindex countdown until zero", async () => {
 
   // define ceremony: add 1 to counter
   await run("su name loop_body to name num target fromindex num 0 be ceremony def");
-  await run("ob num 1 to name counter be add do");
+  await run("ob num 1 to name counter be plus do");
   await run("su name loop_body be ceremony prah");
 
   // invoke with register on the evoker
@@ -37,7 +37,7 @@ test("ceremony repeats using fromindex/toindex aliases", async () => {
   await run("su name counter ob num 0 be number ya");
 
   await run("su name loop_body to name num target fromindex num 0 be ceremony def");
-  await run("ob num 1 to name counter be add do");
+  await run("ob num 1 to name counter be plus do");
   await run("su name loop_body be ceremony prah");
 
   await run("to name counter fromindex num 3 toindex num 0 be loop_body do");
@@ -72,7 +72,7 @@ test("loop ceremony uses caller to-name regardless of internal binding name", as
 
   // Definition says to name bucket, but caller uses to name alpha.
   await run("su name inc_loop to name num bucket fromindex num 0 be ceremony def");
-  await run("ob num 1 to name alpha be add do");
+  await run("ob num 1 to name alpha be plus do");
   await run("su name inc_loop be ceremony prah");
 
   await run("to name alpha fromindex num 3 be inc_loop do");
@@ -125,7 +125,7 @@ test("loop can perform 10-doors toggle (squares end open) using at all + by pass
   // Toggle current element when its (atindex+1) is divisible by the current pass (provided via `by`).
   await run("su name toggle pass by num 0 ob text placeholder be ceremony def");
   await run("su name door ob this atindex be number ya");
-  await run("ob num 1 to num of ob of door be add do");
+  await run("ob num 1 to num of ob of door be plus do");
   await run("ob name door from num of by of this to name rem be remains do");
   await run("ob name rem be equally from num 0 then ob this ob be invert do");
   await run("su name toggle pass be ceremony prah");
@@ -149,7 +149,7 @@ test("loop can perform 10-doors toggle (squares end open) using nested loops onl
   // Inner loop: iterate door indices 0..9, toggling if (doorIndex+1) % pass === 0.
   await run("su name toggle door by num 0 fromindex num 0 be ceremony def");
   await run("su name doorNum ob this fromindex be number ya");
-  await run("ob num 1 to name doorNum be add do");
+  await run("ob num 1 to name doorNum be plus do");
   await run("ob name doorNum from num of ob of by of this to name rem be remains do");
   await run("ob name rem be equally from num 0 then ob name doors at num of fromindex of this be invert do");
   await run("su name toggle door be ceremony prah");

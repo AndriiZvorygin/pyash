@@ -23,7 +23,7 @@ test("compile to C: add updates a scalar and write prints it (gcc + run)", async
 
   const pyash = [
     "exists su name x ob num 1 be number ya",
-    "ob num 2 to name x be add do",
+    "ob num 2 to name x be plus do",
     "ob name x be write do",
   ].join("\n");
 

@@ -16,7 +16,7 @@ test("compile emits loop for fromindex countdown", async () => {
   const program = [
     "exists su name counter ob num 0 be number ya",
     "su name loop body to name num counter be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
     "ob name counter be write do"
@@ -50,7 +50,7 @@ test("compile emits C loop for fromindex countdown", async () => {
   const program = [
     "exists su name counter ob num 0 be number ya",
     "su name loop body to name num counter be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do"
   ].join("\\n");
@@ -72,7 +72,7 @@ test("compiled C loop builds and runs", async (t) => {
   const program = [
     "exists su name counter ob num 0 be number ya",
     "su name loop body to name num counter be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name loop body be ceremony prah",
     "to name counter fromindex num 3 be loop body do",
     "ob name counter be write do"

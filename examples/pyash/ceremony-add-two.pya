@@ -2,7 +2,7 @@ exists su name bucket ob num 0 be number ya
 
 su name add two to name num target be ceremony def
 ob this ti to be remember to name produce exists do
-ob num 2 to num ti ob ti produce be add do
+ob num 2 to num ti ob ti produce be plus do
 su name produce ret
 su name add two be ceremony prah
 
@@ -11,10 +11,10 @@ su name program ob text quoted.pyash.
 exists su name bucket ob num 0 be number ya
 su name add two to name num target be ceremony def
 ob this ti to be remember to name produce exists do
-ob num 2 to produce be add do
+ob num 2 to produce be plus do
 su name produce ret
 su name add two be ceremony prah
-be add two to bucket do 
+be plus two to bucket do 
 .pyash.quoted be text ya
 ob name program from state pyash to state javascript to name output be compile do
 su name output be javascript que

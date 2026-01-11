@@ -5,9 +5,9 @@ exists su name rem5 ob num 0 be number ya
 ob this by from num 3 to name rem3 be remains do
 ob this by from num 5 to name rem5 be remains do
 
-ob name rem3 be equally from num 0 then ob text Fizz to name line be add do
-ob name rem5 be equally from num 0 then ob text Buzz to name line be add do
-ob name line be equally from text quoted.text..text.quoted then ob this by to name line be add do
+ob name rem3 be equally from num 0 then ob text Fizz to name line be plus do
+ob name rem5 be equally from num 0 then ob text Buzz to name line be plus do
+ob name line be equally from text quoted.text..text.quoted then ob this by to name line be plus do
 ob name line ret
 su name fizzbuzz line be ceremony prah
 

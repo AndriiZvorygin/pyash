@@ -129,7 +129,7 @@ export async function add_obj_num_to_name_num(sentence, { remember }) {
     }
   }
 
-  // Text concatenation: ob text "..." to name <textVar> be add do
+  // Text concatenation: ob text "..." to name <textVar> be plus do
   const obText =
     typeof sentence.ob?.text === "string"
       ? sentence.ob.text
@@ -221,7 +221,7 @@ export async function add_obj_num_to_name_vec_at_num(sentence, { remember }) {
   return { ob: fact.ob };
 }
 
-// Vector element add: be add ob name vec from num X at num idx
+// Vector element add: be plus ob name vec from num X at num idx
 export async function add_obj_name_vec_from_num_at_num(sentence, { remember }) {
   const vecName = sentence.ob?.name;
   const idx = sentence.at?.num;
@@ -238,7 +238,7 @@ export async function add_obj_name_vec_from_num_at_num(sentence, { remember }) {
   return { ob: fact.ob };
 }
 
-// Vector element add: be add ob num X from name vec at num idx
+// Vector element add: be plus ob num X from name vec at num idx
 export async function add_obj_num_from_name_vec_at_num(sentence, { remember }) {
   const vecName = sentence.from?.name;
   const idx = sentence.at?.num;
@@ -259,28 +259,28 @@ export async function add_obj_num_from_name_vec_at_num(sentence, { remember }) {
 export const add = add_obj_num_to_name_num;
 
 export const signatures = [
-  { signatureWords: ["be", "add", "ob", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "num", "to", "name", "map"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "text", "to", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "name", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "num", "to", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "ob", "num"], handler: add_obj_num_to_name_num },
-  { signatureWords: ["be", "add", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "name", "num", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "to", "name", "map"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "text", "to", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "text", "to", "name", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "name", "text", "to", "name", "text"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "to", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num"], handler: add_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "to", "name", "num"], handler: add_obj_num_to_name_num },
   // Vector element: ob num ... to vec at idx
-  { signatureWords: ["be", "add", "ob", "num", "to", "name", "vec", "at", "num"], handler: add_obj_num_to_name_vec_at_num },
-  { signatureWords: ["be", "add", "ob", "num", "at", "num", "to", "name", "vec"], handler: add_obj_num_to_name_vec_at_num },
+  { signatureWords: ["be", "plus", "ob", "num", "to", "name", "vec", "at", "num"], handler: add_obj_num_to_name_vec_at_num },
+  { signatureWords: ["be", "plus", "ob", "num", "at", "num", "to", "name", "vec"], handler: add_obj_num_to_name_vec_at_num },
   // Vector element: ob vec ... from num ... at idx
-  { signatureWords: ["be", "add", "ob", "name", "vec", "from", "num", "at", "num"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "vec"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "num"], handler: add_obj_name_vec_from_num_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "num", "ob", "name", "vec", "num"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "plus", "ob", "name", "vec", "from", "num", "at", "num"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "plus", "at", "num", "from", "num", "ob", "name", "vec"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "plus", "at", "num", "from", "num", "ob", "name", "num"], handler: add_obj_name_vec_from_num_at_num },
+  { signatureWords: ["be", "plus", "at", "num", "from", "num", "ob", "name", "vec", "num"], handler: add_obj_name_vec_from_num_at_num },
   // Vector element: ob num ... from vec ... at idx
-  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "at", "num", "from", "name", "vec", "num", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "ob", "num", "at", "num", "from", "name", "vec"], handler: add_obj_num_from_name_vec_at_num },
-  { signatureWords: ["be", "add", "ob", "num", "from", "name", "vec", "at", "num"], handler: add_obj_num_from_name_vec_at_num }
+  { signatureWords: ["be", "plus", "at", "num", "from", "name", "vec", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "plus", "at", "num", "from", "name", "vec", "num", "ob", "num"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "plus", "ob", "num", "at", "num", "from", "name", "vec"], handler: add_obj_num_from_name_vec_at_num },
+  { signatureWords: ["be", "plus", "ob", "num", "from", "name", "vec", "at", "num"], handler: add_obj_num_from_name_vec_at_num }
 ];

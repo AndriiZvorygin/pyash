@@ -17,8 +17,8 @@ test("inline then consequence executes without gating the next line", async () =
 
   await run([
     "exists su name counter ob num 0 be number ya",
-    "ob num 1 be tiny from num 2 then ob num 1 to name counter be add do",
-    "ob num 2 to name counter be add do"
+    "ob num 1 be tiny from num 2 then ob num 1 to name counter be plus do",
+    "ob num 2 to name counter be plus do"
   ]);
 
   const counter = remember("counter");

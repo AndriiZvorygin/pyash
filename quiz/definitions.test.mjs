@@ -55,7 +55,7 @@ test("definition index captures end via prah and supports invoking the paragraph
 
   await run("su name result ob num 5 be number ya");
   await run("su name add two to name num target be ceremony def");
-  await run("ob num 2 to name result be add do");
+  await run("ob num 2 to name result be plus do");
   await run("su name add two be ceremony prah");
 
   const entry = dumpDefinitionIndex().find(e => e.name === "add two");
@@ -63,7 +63,7 @@ test("definition index captures end via prah and supports invoking the paragraph
   assert.equal(entry.index, 1, "start index should point to def sentence");
   assert.equal(entry.end, 3, "end index should point to closing prah");
 
-  await run("to name result be add two do");
+  await run("to name result be plus two do");
 
   const latestResult = remember("result");
   assert.ok(latestResult, "result should be retrievable after function call");
@@ -74,7 +74,7 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
   forget();
 
   await run("su name result ob num 5 be number ya");
-  await run("ob num 2 to name result be add do");
+  await run("ob num 2 to name result be plus do");
 
   const mem = allRemember();
   const resultFacts = mem.filter(s => s.su?.name === "result" && s.mood === "ya");
@@ -106,7 +106,7 @@ test("invoking while definition is still open just records and does not run", as
   forget();
 
   await run("su name incomplete be ceremony def");
-  await run("ob num 1 to name result be add do"); // recorded inside open block
+  await run("ob num 1 to name result be plus do"); // recorded inside open block
 
   const before = allRemember().length;
   const res = await run("be incomplete do");
@@ -133,7 +133,7 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   forget();
 
   await run("su name add two to name num bucket be ceremony def");
-  await run("ob num 2 to name bucket be add do");
+  await run("ob num 2 to name bucket be plus do");
   await run("su name add two be ceremony prah");
 
   const def = getDefinition("add two");
@@ -143,7 +143,7 @@ test("ceremony def headers declare signature cases/types (new signature style)",
   );
 
   // Invocation should resolve by signature (not bare name) and update target
-  await run("to name bucket be add two do");
+  await run("to name bucket be plus two do");
   const bucket = remember("bucket");
   assert.equal(bucket.ob.num, 2);
 });

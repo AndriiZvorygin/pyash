@@ -3,7 +3,7 @@ su name wordmap be map def
 prah
 
 su name word frequency ob text token be ceremony def
-su text of ob of this ob num 1 to name wordmap be add do
+su text of ob of this ob num 1 to name wordmap be plus do
 prah
 
 ob name words at name all be word frequency do

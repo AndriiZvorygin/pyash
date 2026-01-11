@@ -28,7 +28,7 @@ Outputs:
 ```bash
 node program/main.mjs
 ```
-Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be add two do`). Ceremonies run in a sandpit. Conditionals use inline `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then obj num 1 to name counter be add do`.
+Commands: `mem` (dump memory), `reset` (clear), `quit` (exit), `paste` (multi-line). Enter Pyash sentences to evaluate them; verbs/ceremony names stay speakable (e.g., `be plus two do`). Ceremonies run in a sandpit. Conditionals use inline `then` with `giant`/`tiny`/`equally`, e.g., `obj num 3 be tiny from num 5 then obj num 1 to name counter be plus do`.
 Dispatch is signature-first: if a call’s cases/types do not match a registered signature, you’ll see `Unknown verb/signature: ...`.
 
 ## Stability Notes
@@ -56,7 +56,7 @@ Still evolving / fragile:
 
 ## Example Sentences
 - Declarative: `su name counter ob num 7 be number ya`
-- Imperative (add): `obj num 3 to num 4 be add do` → stores command + result fact (`num 7`)
+- Imperative (add): `obj num 3 to num 4 be plus do` → stores command + result fact (`num 7`)
 - Query: `su collector obj what que`
 - Read file: `su file be read from filename "quiz/sandpit/compile.txt" do`
 - Ceremony `ret`: see `examples/pyash/evoke-ret.pya`.

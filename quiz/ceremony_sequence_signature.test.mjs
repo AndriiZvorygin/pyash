@@ -20,7 +20,7 @@ test("evoker can supply sequence registers even if def omits them", async () => 
   const defLines = [
     "exists su name counter ob num 0 be number ya",
     "su name climb to name num counter be ceremony def",
-    "ob num 1 to name counter be add do",
+    "ob num 1 to name counter be plus do",
     "su name climb be ceremony prah"
   ];
   await run(defLines);

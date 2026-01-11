@@ -5,18 +5,18 @@ import { parse } from "../program/understand/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
 
 test("vyah aspect participates in signature derivation", () => {
-  const sentence = parse("ob num 1 vyah cancel be add do");
+  const sentence = parse("ob num 1 vyah cancel be plus do");
   const sig = deriveSignatureFromCall(sentence);
-  assert.equal(joinSignatureWords(sig), "be add ob num vyah cancel");
+  assert.equal(joinSignatureWords(sig), "be plus ob num vyah cancel");
 });
 
 test("vyah defaults to do when aspect missing", () => {
-  const sentence = parse("ob num 1 vyah sloh be add do");
+  const sentence = parse("ob num 1 vyah sloh be plus do");
   const sig = deriveSignatureFromCall(sentence);
-  assert.equal(joinSignatureWords(sig), "be add ob num vyah eval");
+  assert.equal(joinSignatureWords(sig), "be plus ob num vyah eval");
 });
 
 test("vyah rejects multiple aspect modifiers", () => {
-  const sentence = parse("ob num 1 vyah cancel start be add do");
+  const sentence = parse("ob num 1 vyah cancel start be plus do");
   assert.throws(() => deriveSignatureFromCall(sentence), /vyah allows at most one aspect/);
 });

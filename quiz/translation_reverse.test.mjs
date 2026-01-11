@@ -52,5 +52,5 @@ test("translation from English conditional back to Pyash sentences", async () =>
   assert.equal(cond.consequence?.be, "add");
   assert.equal(cond.consequence?.to?.name, "total");
   assert.match(out.text, /su name total ob num 0 be number ya/);
-  assert.match(out.text, /ob num 3 from num 5 be tiny then ob num 1 to name total be add do/);
+  assert.match(out.text, /ob num 3 from num 5 be tiny then ob num 1 to name total be plus do/);
 });

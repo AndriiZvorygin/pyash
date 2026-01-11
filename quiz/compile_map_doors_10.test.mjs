@@ -14,9 +14,9 @@ test("compile map 10-doors (at all) to javascript and run", async () => {
     // Toggle a single door if (atindex+1) % pass === 0.
     "su name toggle pass by num 0 ob name num value atindex num 0 be ceremony def",
     "su name door ob this atindex be number ya",
-    "ob num 1 to num of ob of door be add do",
+    "ob num 1 to num of ob of door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
-    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be add do",
+    "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",
     "ob name rem be equally from num 0 then ob this ti ob ti num from num 2 to this ti ob ti num be remains do",
     "su name toggle pass be ceremony prah",
     // For passes 1..10 inclusive: stop when fromindex==11.
