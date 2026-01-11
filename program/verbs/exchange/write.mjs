@@ -278,7 +278,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
   }
 
   const target = sentence?.to?.filename;
-  const targetName = sentence?.to?.name ?? sentence?.to?.text;
+  const targetName = sentence?.to?.name ?? sentence?.to?.wo ?? sentence?.to?.text;
   const isKeyboard = targetName === "keyboard";
   if (targetName && !isKeyboard && aspectKey !== "stream") {
     throwErrorSentence({
@@ -306,7 +306,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
     if (!isKeyboard) {
       throwErrorSentence({
         name: "write stream invalid",
-      message: "write vyah stream requires to name keyboard",
+        message: "write vyah stream requires to wo keyboard",
         from: { name: "write" },
         raw: { sentence }
       });
@@ -355,7 +355,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
         onLine: (line) => {
           const trimmed = String(line ?? "").trim();
           if (!trimmed) return;
-          if (trimmed.includes("[BLANK_AUDIO]")) {
+          if (trimmed.includes("[BLANK_AUDIO]") || trimmed.includes("[PYA_STREAM_END]")) {
             if (done) done();
             return;
           }
@@ -426,9 +426,14 @@ export const signatures = [
   { signatureWords: ["be", "write", "ob", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "text", "to", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "text", "to", "text"], handler: write },
+  { signatureWords: ["be", "write", "ob", "text", "to", "wo", "keyboard"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "text", "to", "wo", "keyboard"], handler: write },
   { signatureWords: ["be", "write", "from", "name", "to", "text", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "from", "name", "text", "to", "text", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "from", "name", "stream", "to", "text", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "text", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "stream", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map"], handler: write },
