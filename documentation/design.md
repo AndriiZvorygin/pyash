@@ -207,13 +207,13 @@ Compiled ceremonies and the interpreter can therefore be swapped or composed whi
   * Verb modules accept sentence(s) and return sentence(s); they don’t define new ad hoc data structures for communication.
   * Patterns:
 
-    * `add.mjs` / `read.mjs`: dynamic dispatch to type-specific handlers (`read_from_filename.mjs`, `add_obj_num_to_num.mjs`, etc.).
+    * `plus.mjs` / `read.mjs`: dynamic dispatch to type-specific handlers (`read_from_filename.mjs`, `add_obj_num_to_num.mjs`, etc.).
     * `giant.mjs`, `tiny.mjs`, `equally.mjs`: conditional control:
       * `then` mood gates the next statement (skip-next-line),
       * inline `then <sentence>` runs an attached consequence immediately.
     * `understand.mjs`: builds programs via `program/program.mjs` and writes JSON/text results to memory, wrapping them in result sentences.
     * `mind.mjs`: resolves model/prompt from stored mind config (sentences with keywords `as`, `accordingto`) and calls Ollama HTTP via `program/motor/ollama.mjs`, then packages responses back into result sentences.
-    * Vector helpers: single-element mutations (`at num`) and “at all” mapping run through a shared helper (`runAtAll`) so primitive verbs (`add`, `subtract`, `invert`) can be mapped without ceremonies.
+    * Vector helpers: single-element mutations (`at num`) and “at all” mapping run through a shared helper (`runAtAll`) so primitive verbs (`plus`, `subtract`, `invert`) can be mapped without ceremonies.
 
 * `program/program.mjs`: Program builder.
 
@@ -346,7 +346,7 @@ Some sentences (e.g. ceremony definitions and similar constructs) are executed i
   * `exists … ya` compiles to **sentence objects** (`let name = { su, ob, be, exists, mood }`), not raw scalars, so compiled code matches interpreter expectations and ceremony codegen.
   * The JS remember shim now returns `undefined` for missing names (no implicit fallback objects), making absent facts explicit.
 
-* Always add quizzes first (red→green); every verb or control-flow change gets coverage.
+* Always plus quizzes first (red→green); every verb or control-flow change gets coverage.
 
 * Keywordized compositional roles: contexts are mapped to keywords (`as`, `fromtext`, `fromindex`, `toindex`, etc.), not stored as nested `{context: ...}` objects.
 

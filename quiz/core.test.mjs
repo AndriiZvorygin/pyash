@@ -30,7 +30,7 @@ test("last write wins: collector becomes 10", async () => {
   assert.deepEqual(res, "su name collector ob num 10 be number ya");
 });
 
-test("add updates collector via imperative", async () => {
+test("plus updates collector via imperative", async () => {
   forget();
 
   await run("su name collector ob num 7 be number ya");
@@ -38,7 +38,7 @@ test("add updates collector via imperative", async () => {
   const res = await run("su name collector ob what que");
 
   assert.equal(act.acted, "collector");
-  assert.equal(act.value.ob ?? act.value, 9); // depending on how add returns
+  assert.equal(act.value.ob ?? act.value, 9); // depending on how plus returns
   assert.deepEqual(res, "su name collector ob num 9 be number ya");
 });
 
@@ -129,7 +129,7 @@ test("do mood is stored in history and returns result", async () => {
   assert.deepEqual(target.ob, { num: 7 });
 });
 
-test("bare add imperative without target name creates and stores result", async () => {
+test("bare plus imperative without target name creates and stores result", async () => {
   forget();
 
   await run("su temp ob num 4 be number ya");
@@ -181,9 +181,9 @@ test("unknown imperative verb throws", async () => {
   await assert.rejects(() => run("ob num 1 be nowhere do"), /Unknown verb\/signature: be nowhere ob num/);
 });
 
-test("add missing roles triggers signature error", async () => {
+test("plus missing roles triggers signature error", async () => {
   forget();
 
-  await assert.rejects(() => run("ob num 1 be plus do"), /add: to is required/);
-  await assert.rejects(() => run("to name target be plus do"), /add: ob is required/);
+  await assert.rejects(() => run("ob num 1 be plus do"), /plus: to is required/);
+  await assert.rejects(() => run("to name target be plus do"), /plus: ob is required/);
 });

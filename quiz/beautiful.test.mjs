@@ -48,7 +48,7 @@ test("sentenceToPyash prints all NP slots correctly", () => {
     ob: { num: 2 },
     from: { num: 3 },
     to: { name: "y" },
-    be: "add"
+    be: "plus"
   };
 
   const out = sentenceToPyash(sentence);

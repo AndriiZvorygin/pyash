@@ -35,7 +35,7 @@ FizzBuzz quick checks
 - Genitive order is root-first: `this ti ob ti num` means `this.ob.num` (avoid reversed chains like `num ti this ti ob`).
 
 Compile-to-C status (quick reality check):
-- Verified by gcc+run quizzes: scalars (`number`/`text`), `write`, `add`/`subtract`/`remains` (`fmod`), `equally`/`tiny`/`giant` with `then`, loops (`fromindex`/`toindex`), and vectors (read/write + print).
+- Verified by gcc+run quizzes: scalars (`number`/`text`), `write`, `plus`/`subtract`/`remains` (`fmod`), `equally`/`tiny`/`giant` with `then`, loops (`fromindex`/`toindex`), and vectors (read/write + print).
 - Still incomplete: full ceremony parity, `at all` map helpers, and higher-level translation paths.
 
 Stability notes and workflow guardrails live in `README.md` under "Stability Notes" and "Rules of the Road".

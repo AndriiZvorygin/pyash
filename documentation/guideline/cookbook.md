@@ -2,7 +2,7 @@
 
 Pick a behavior and run the example:
 
-- Arithmetic: `examples/pyash/compile-add-to-js-text.pya`
+- Arithmetic: `examples/pyash/compile-plus-to-js-text.pya`
 - Conditionals: `examples/pyash/fizzbuzz.pya`
 - Loops: `examples/pyash/insertion-sort.pya`
 - Vectors: `examples/pyash/vector-write-index.pya`

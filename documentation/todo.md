@@ -5,7 +5,7 @@
   - Add loop lowering (`fromindex`/`toindex`) for C and cover with gcc+run quizzes.
   - Add conditional lowering variants (`tiny`/`giant` as `<`/`>`) and cover with gcc+run quizzes.
   - Start a C vector runtime (or choose a simpler C representation) to support 10/100 doors in C.
-- Mind: add streaming path and richer reply envelopes per `mind.md`.
+- Mind: plus streaming path and richer reply envelopes per `mind.md`.
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
 ## Soon
@@ -13,7 +13,7 @@
 - Add hnuc/code validation utilities for compositional cases to align runtime with `compositionalCases.mjs` and the longer-term spec.
 - Improve mind integration: streaming handling for Ollama responses and richer reply mapping (assistant/thinking/timestamps) per `mind.md`.
 - Add error-handling paths for ceremonies/sandpits using `ret` with `be error`, and surface those in main memory/results.
-- Strengthen CLI UX: document `./compile`, `./run`, `./interpret` case-parsed args; add smoke tests for CLI wrappers.
+- Strengthen CLI UX: document `./compile`, `./run`, `./interpret` case-parsed args; plus smoke tests for CLI wrappers.
 
 ## Later
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.

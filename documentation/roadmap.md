@@ -79,7 +79,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Genitive tests restored, parity stabilised, signature checks hardened.
 * `say` verb added and broadened; vector toggle/invert examples land.
-* C compiler smoke tests expand: add/remains/equally/loops/conditionals; text concatenation lands.
+* C compiler smoke tests expand: plus/remains/equally/loops/conditionals; text concatenation lands.
 * FizzBuzz parity + regressions land; doors begins to harden.
 
 ### Dec 20–21, 2025: Algorithms as parity drivers
@@ -173,7 +173,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Jan 1, 2026: Command, say, and mind tool hardening
 
 * Command errors now surface full error sentences (CLI prints surfaced error sentence).
-* `add` supports text-from-genitive concatenation and `ob text → to text`.
+* `plus` supports text-from-genitive concatenation and `ob text → to text`.
 * Espeak module signature tightened to require `to name text`, and payloads are quoted to preserve spaces.
 * New noop/plain say modules and examples added for non-shell parity testing.
 * Default say mapping now lives in `configure/default.pya` and autoloads in run + REPL.

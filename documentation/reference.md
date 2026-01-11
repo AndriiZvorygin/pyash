@@ -23,7 +23,7 @@ node program/command/run_pya_program.mjs [--full] [--gross] path/to/file.pya
 ```
 Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` returns `{ outputs, result }` JSON; `--full` also prints the program.
 
-To emit a newspaper, add `--newspaper` and optionally `--run-id <name>`:
+To emit a newspaper, plus `--newspaper` and optionally `--run-id <name>`:
 
 ```bash
 ./run --newspaper --run-id say-stream examples/pyash/say-stream-piper.pya --full
@@ -75,7 +75,7 @@ in `configure/default.pya` or in a specific example.
 
 ## Example Sentences
 - Declarative: `su collector ob num 7 be number ya`
-- Imperative (add): `ob num 3 to num 4 be plus do` → stores command + `result` with `num 7`
+- Imperative (plus): `ob num 3 to num 4 be plus do` → stores command + `result` with `num 7`
 - Query: `su collector ob what que`
 - Text read: `su file be read from filename "quiz/sandpit/compile.txt" do` → stores text content
 - Parse text to JSON: see end-to-end example below
@@ -99,5 +99,5 @@ This stores parsed sentences and JSON under `output`; memory keeps the command, 
 - Inline to JS text: see `examples/pyash/compile-text-to-js-text.pya`
 - Inline to C text: see `examples/pyash/compile-text-to-c-text.pya`
 - Translate Pyash text to English text: see `examples/pyash/translate-text-to-english.pya`
-- Translate English text back to Pyash sentences: see `examples/pyash/translate-add-to-english.pya` and related translation examples.
+- Translate English text back to Pyash sentences: see `examples/pyash/translate-plus-to-english.pya` and related translation examples.
 - Translate simple JavaScript assignments/arithmetic back to Pyash sentences: see `examples/pyash/translate-javascript-to-pyash.pya`.

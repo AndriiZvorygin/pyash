@@ -8,8 +8,8 @@ test("compile names ceremony function with signature words", async () => {
   forget();
 
   const program = [
-    "su name add two to name num target be ceremony def",
-    "su name add two be ceremony prah"
+    "su name plus two to name num target be ceremony def",
+    "su name plus two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -20,16 +20,16 @@ test("compile names ceremony function with signature words", async () => {
   const js = result?.ob?.text ?? result?.value?.text ?? "";
   const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
 
-  assert.match(unwrapped, /function\s+be_add_two_to_name_num\s*\(/, "function name should reflect ceremony signature words");
+  assert.match(unwrapped, /function\s+be_plus_two_to_name_num\s*\(/, "function name should reflect ceremony signature words");
 });
 
 test("compile renders remember line from this->to genitive", async () => {
   forget();
 
   const program = [
-    "su name add two be ceremony def",
+    "su name plus two be ceremony def",
     "ob this ti to be remember to name produce exists do",
-    "su name add two be ceremony prah"
+    "su name plus two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -44,7 +44,7 @@ test("compile renders remember line from this->to genitive", async () => {
   assert.match(unwrapped, /produce\s*=\s*remember\(sentence\.to\)/, "should remember sentence.to into produce");
 });
 
-test("compile renders simple add into direct assignment when name provided", async () => {
+test("compile renders simple plus into direct assignment when name provided", async () => {
   forget();
 
   const program = [
@@ -60,17 +60,17 @@ test("compile renders simple add into direct assignment when name provided", asy
   const js = result?.ob?.text ?? result?.value?.text ?? "";
   const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
 
-  assert.match(unwrapped, /produce\.ob\.num\s*=\s*\(produce\.ob\.num \?\? 0\)\s*\+\s*2;/, "should emit direct add assignment");
+  assert.match(unwrapped, /produce\.ob\.num\s*=\s*\(produce\.ob\.num \?\? 0\)\s*\+\s*2;/, "should emit direct plus assignment");
 });
 
 test("compile keeps math inside ceremony after remember", async () => {
   forget();
 
   const program = [
-    "su name add two be ceremony def",
+    "su name plus two be ceremony def",
     "ob this ti to be remember to name produce exists do",
     "ob num 2 to name produce be plus do",
-    "su name add two be ceremony prah"
+    "su name plus two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -82,7 +82,7 @@ test("compile keeps math inside ceremony after remember", async () => {
   const unwrapped = js.replace(/^quoted\\.javascript\\.\\n?/, "").replace(/\\.javascript\\.quoted\\s*$/, "");
 
   assert.match(unwrapped, /remember\(sentence\.to\)/, "remember line should be present");
-  assert.match(unwrapped, /produce\.ob\.num\s*=\s*\(produce\.ob\.num\s*\?\?\s*0\)\s*\+\s*2;/, "add line should remain in ceremony body");
+  assert.match(unwrapped, /produce\.ob\.num\s*=\s*\(produce\.ob\.num\s*\?\?\s*0\)\s*\+\s*2;/, "plus line should remain in ceremony body");
 });
 
 test("compile emits ceremony invocation as sentence object", async () => {
@@ -90,9 +90,9 @@ test("compile emits ceremony invocation as sentence object", async () => {
 
   const program = [
     "exists su name bucket ob num 0 be number ya",
-    "su name add two to name num target be ceremony def",
+    "su name plus two to name num target be ceremony def",
     "ob num 2 to name num be plus do",
-    "su name add two be ceremony prah",
+    "su name plus two be ceremony prah",
     "be plus two to bucket do"
   ].join("\\n");
 
@@ -106,7 +106,7 @@ test("compile emits ceremony invocation as sentence object", async () => {
 
   assert.match(
     unwrapped,
-    /be_add_two_to_name_num\(\{\s*mood:\s*"do",\s*be:\s*"add two",\s*to:\s*(bucket|\{\s*name:\s*(bucket|"bucket")\s*\})\s*\}\);?/,
+    /be_plus_two_to_name_num\(\{\s*mood:\s*"do",\s*be:\s*"plus two",\s*to:\s*(bucket|\{\s*name:\s*(bucket|"bucket")\s*\})\s*\}\);?/,
     "should invoke ceremony with sentence object and bucket reference"
   );
 });

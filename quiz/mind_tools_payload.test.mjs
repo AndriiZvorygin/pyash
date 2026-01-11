@@ -19,18 +19,18 @@ test("mind tool adapter sends non-empty tools array for with name map", async ()
   };
 
   await interpret(parse("su name tools be map def"));
-  await interpret(parse("su name add num be plus ob num 1 to name num can"));
+  await interpret(parse("su name plus num be plus ob num 1 to name num can"));
   await interpret(parse("prah"));
   await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
 
-  await interpret(parse("ob text \"use add\" for name helper to name text helper-out with name tools be write do"));
+  await interpret(parse("ob text \"use plus\" for name helper to name text helper-out with name tools be write do"));
 
   motor.chat = originalChat;
 
   assert.ok(Array.isArray(capturedTools), "tools should be passed to chat");
   assert.ok(capturedTools.length > 0, "tools should be non-empty");
   const tool = capturedTools[0]?.function ?? {};
-  assert.equal(tool.name, "be_add_ob_num_to_name_num");
+  assert.equal(tool.name, "be_plus_ob_num_to_name_num");
   assert.equal(tool.signature, "be plus ob num to name num");
   assert.ok(tool.parameters?.properties?.ob, "tool should include ob");
   assert.ok(tool.parameters?.properties?.to, "tool should include to");

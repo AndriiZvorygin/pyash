@@ -15,12 +15,12 @@ test("splits combined input on unquoted moods", () => {
 });
 
 test("splits on can mood", () => {
-  const input = "su name tools be map def su name add num be plus ob num 1 to name num can prah";
+  const input = "su name tools be map def su name plus num be plus ob num 1 to name num can prah";
   const sentences = splitSentences(input);
 
   assert.deepEqual(sentences, [
     "su name tools be map def",
-    "su name add num be plus ob num 1 to name num can",
+    "su name plus num be plus ob num 1 to name num can",
     "prah"
   ]);
 });

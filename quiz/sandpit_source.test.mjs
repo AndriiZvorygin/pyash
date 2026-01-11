@@ -44,9 +44,9 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   assert.equal(sandpitInvoke.fromindex?.num ?? sandpitInvoke.fromindex, latestTarget.fromindex?.num ?? latestTarget.fromindex, "fromindex retained on evoke sentence");
   assert.equal(sandpitInvoke.toindex?.num ?? sandpitInvoke.toindex, latestTarget.toindex?.num ?? latestTarget.toindex, "toindex retained on evoke sentence");
 
-  // No additional body leakage into main memory beyond definition-time add
-  const adds = mem.filter(s => s.be === "add" && s.mood === "do");
-  assert.ok(adds.length <= 1, "sandpit body should not leak additional add commands");
+  // No additional body leakage into main memory beyond definition-time plus
+  const adds = mem.filter(s => s.be === "plus" && s.mood === "do");
+  assert.ok(adds.length <= 1, "sandpit body should not leak additional plus commands");
 
   assert.equal(remember("fromindex"), undefined, "fromindex should remain attached to the invoke only");
   assert.equal(remember("toindex"), undefined, "toindex should remain attached to the invoke only");

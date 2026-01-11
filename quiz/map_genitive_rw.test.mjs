@@ -10,7 +10,7 @@ async function run(line) {
   return interpret(s);
 }
 
-test("genitive read + add updates map entry", async () => {
+test("genitive read + plus updates map entry", async () => {
   forget();
 
   await run("su name profile be json map def");

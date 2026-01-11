@@ -36,7 +36,7 @@ Semantically, the neuron computes:
 1. `aggregation = weighted_sum(weights, inputs)`  
    using the `produce` verb (dot product).
 2. `aggregation = aggregation + bias`  
-   using the scalar `add` verb.
+   using the scalar `plus` verb.
 3. `output = activation(aggregation)`  
    default activation is `twice crescent`.
 
@@ -123,13 +123,13 @@ The neuron behaviour is:
    // aggregation.num = total
    ```
 
-2. **Add bias with scalar `add`**
+2. **Add bias with scalar `plus`**
 
    ```pyash
    ob  num  from name aggregation
    from name bias
    to   name aggregation
-   be   add
+   be   plus
    do
    ```
 
@@ -183,7 +183,7 @@ do
 ob  num  from name aggregation
 from name bias
 to   name aggregation
-be   add
+be   plus
 do
 
 ob  num  from name aggregation
@@ -216,7 +216,7 @@ For Codex:
 
 * **Scalar RISC core** (irreducible):
 
-  * `add`, `subtract`, `multiply`, `divide`, `negate`, `exponent`, comparisons (`giant`, `tiny`, `equally`)
+  * `plus`, `subtract`, `multiply`, `divide`, `negate`, `exponent`, comparisons (`giant`, `tiny`, `equally`)
 
 * **Vector / ML macro-ops** (built from the scalar core, but treated as library-level primitives):
 
@@ -225,7 +225,7 @@ For Codex:
 
 * **Neuron**:
 
-  * A **ceremonial verb** built from `produce`, `add`, and `twice crescent`.
+  * A **ceremonial verb** built from `produce`, `plus`, and `twice crescent`.
   * May be implemented as a JS verb now, and later compiled from its Pyash `prah` body.
 
 Codex should preserve this layering: never fold neuron behaviour back into ad-hoc code elsewhere. Always treat `neuron` as a single, named unit that sits on top of the RISC and vector core.

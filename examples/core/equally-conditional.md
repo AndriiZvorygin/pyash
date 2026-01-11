@@ -28,4 +28,4 @@
   su name lhs ob num 6 be number ya
   su name collector ob num 1 be number ya
   ```
-- **Notes**: `equally` is true when the subject equals `from`. The first branch uses inline numbers; the second compares two stored subjects; the third shows the false branch skipping the add.
+- **Notes**: `equally` is true when the subject equals `from`. The first branch uses inline numbers; the second compares two stored subjects; the third shows the false branch skipping the plus.

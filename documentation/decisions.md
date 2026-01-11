@@ -6,7 +6,7 @@
 
 - **Result facts for imperatives**: Always store a `result` fact with normalized `ob` (and `be` from verb or `result`). Chosen to make REPL/testing expectations explicit; fabricating ad-hoc subjects per verb was deferred.
 
-- **Dynamic verb dispatch for type combos**: `add`/`read` load handlers based on operand types/inputs (e.g., `add_obj_num_to_num.mjs`, `read_from_filename.mjs`). Chosen for extensibility; a monolithic switch was rejected. The `understand` verb is parse-to-JSON only; no JS emission yet.
+- **Dynamic verb dispatch for type combos**: `plus`/`read` load handlers based on operand types/inputs (e.g., `add_obj_num_to_num.mjs`, `read_from_filename.mjs`). Chosen for extensibility; a monolithic switch was rejected. The `understand` verb is parse-to-JSON only; no JS emission yet.
 - **Translation/compile**: `compile` currently emits basic JS or C declarations from Pyash sentences; `translation` renders Pyash text into simple English strings (“alpha is number 1.”). Both use signature-first dispatch and store results under the addressed target.
 
 - **Mind configuration as declarative fact**: Register minds with keyword roles (`from`, `as`, `accordingto`) and reuse on invocation. Chosen to align with `mind.md` and compositional mapping; embedding config per call was rejected.
@@ -21,6 +21,6 @@
 
 - **Exists emits sentence objects, not scalars**: Compiled `exists … ya` now produces `let <name> = { su, ob, be, exists, mood }` (not raw scalars) to stay ABI-aligned with the interpreter and later ceremony codegen. Reassignment reuses the same fact shape.
 
-- **Vector `at all` uses map helper**: Mapping over vectors with primitive verbs (`add`, `subtract`, `invert`) lowers to an inline `map`/`runAtAll` helper rather than ceremony-only paths. The helper feeds per-element sentences, preserves `atindex`, and writes results either in-place or to `to` targets.
+- **Vector `at all` uses map helper**: Mapping over vectors with primitive verbs (`plus`, `subtract`, `invert`) lowers to an inline `map`/`runAtAll` helper rather than ceremony-only paths. The helper feeds per-element sentences, preserves `atindex`, and writes results either in-place or to `to` targets.
 
 - **Remember shim returns undefined for missing names**: The JS prelude shim now resolves objects, globals by name, or `undefined` (no implicit fallback objects). This avoids silent truthy objects that masked missing facts during compilation/run.

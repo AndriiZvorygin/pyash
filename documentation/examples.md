@@ -7,7 +7,7 @@ Notes:
 - Several examples write outputs under `examples/out/` or `quiz/sandpit/`; keep those locations writable and git-ignored.
 - To run the example suite with optional skips, use `command/run_examples.sh` (see flags in the script header).
 
-- `examples/core/` — minimal, happy-path interactions that show the baseline language flow (parsing, moods, verbs like add/read) and can double as smoke checks.
+- `examples/core/` — minimal, happy-path interactions that show the baseline language flow (parsing, moods, verbs like plus/read) and can double as smoke checks.
 - `examples/features/` — focused samples for specific capabilities or new verbs (mind, understand, compositional roles), kept small and self-contained.
 - `examples/pyash/understand-to-file.pya` — minimal script that parses stored text and writes JSON to `quiz/sandpit/understand-output.json` via `be understand do`.
 - `examples/pyash/understand-file-to-file.pya` — parses Pyash text directly from `quiz/sandpit/compile.txt` and writes JSON to `quiz/sandpit/understand-output.json`.
@@ -15,9 +15,9 @@ Notes:
 - `examples/pyash/compile-text-to-js-text.pya` — compiles inline Pyash text to JavaScript (with `const` for `permanent` facts) and stores the JS in a text target.
 - `examples/pyash/compile-text-to-c-text.pya` — compiles inline Pyash text to C declarations and stores the C code as text.
 - `examples/pyash/translate-text-to-english.pya` — translates inline Pyash text to simple English sentences and stores the result as text.
-- `examples/pyash/compile-add-to-js-text.pya` — compiles an inline add program to JavaScript, emitting the expected assignment for `collector = collector + 2;`.
-- `examples/pyash/compile-add-to-c-text.pya` — compiles an inline add program to C, emitting a `double` declaration and an updated assignment.
-- `examples/pyash/translate-add-to-english.pya` — translates an inline add program to English text (`collector is number 0`, `collector is add do`, etc.).
+- `examples/pyash/compile-plus-to-js-text.pya` — compiles an inline plus program to JavaScript, emitting the expected assignment for `collector = collector + 2;`.
+- `examples/pyash/compile-plus-to-c-text.pya` — compiles an inline plus program to C, emitting a `double` declaration and an updated assignment.
+- `examples/pyash/translate-plus-to-english.pya` — translates an inline plus program to English text (`collector is number 0`, `collector is plus do`, etc.).
 - `examples/pyash/compile-subtract-to-js-text.pya` — compiles an inline subtract program to JavaScript.
 - `examples/pyash/compile-subtract-to-c-text.pya` — compiles an inline subtract program to C.
 - `examples/pyash/translate-subtract-to-english.pya` — translates an inline subtract program to English.
@@ -26,8 +26,8 @@ Notes:
 - `examples/pyash/translate-multiply-divide-to-english.pya` — translates inline multiply/divide to English.
 - `examples/pyash/translate-english-to-pyash.pya` — translates controlled English lines back into Pyash sentences.
 - `examples/pyash/translate-javascript-to-pyash.pya` — translates simple JavaScript assignments/arithmetic back into Pyash sentences.
-- `examples/pyash/compile-conditional-to-js-text.pya` / `compile-conditional-to-c-text.pya` — compile a tiny/then add into JS/C.
-- `examples/pyash/compile-mixed-to-js-text.pya` — shows `exists` declaration, reassignment, and conditional add compiled to JS.
+- `examples/pyash/compile-conditional-to-js-text.pya` / `compile-conditional-to-c-text.pya` — compile a tiny/then plus into JS/C.
+- `examples/pyash/compile-mixed-to-js-text.pya` — shows `exists` declaration, reassignment, and conditional plus compiled to JS.
 - `examples/pyash/vector-write-index.pya` — writes a vector element by index and prints the updated vector.
 - `examples/pyash/word-frequency.pya` — word-frequency via ceremony + map update (word-agnostic).
 - `examples/pyash/translate-conditional-to-english.pya` / `translate-conditional-from-english.pya` — translate conditionals between Pyash and English.

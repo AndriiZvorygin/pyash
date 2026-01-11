@@ -93,7 +93,7 @@ Example linking pattern inside a specification:
 
 In `documentation/specifications/00-index.md`, include a short recommended reading and practice loop:
 
-1. Read `01-sentence-and-grammar.md` then run `examples/pyash/add-basic.pya`
+1. Read `01-sentence-and-grammar.md` then run `examples/pyash/plus-basic.pya`
 2. Read `01-sentence-and-grammar.md` then run `examples/pyash/result-chaining.pya`
 3. Read `03-dispatch-and-signatures.md` then intentionally trigger a signature error example
 4. Read `04-ceremonies-and-this.md` then run `examples/pyash/ceremony-invoke.pya` and `this-registers.pya`
@@ -107,6 +107,6 @@ That gives the model a tight, reproducible mental model.
 1. Create `documentation/specifications/00-index.md` plus the six core modules as stubs with headings.
 2. Fill each module by **linking to the best existing examples** first, then write the rules.
 3. Add `documentation/indexes/examples-index.md` with a table mapping your current examples.
-4. Only after that, add feature specifications (compile, understand, mind).
+4. Only after that, plus feature specifications (compile, understand, mind).
 
 If you want, paste your current `core.md` into `documentation/specifications/` as `99-core-monolith.md` and treat it as a transitional source, then progressively split it into the modules above.

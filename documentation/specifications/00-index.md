@@ -11,10 +11,10 @@ Reading order (core):
 6. `06-errors.md`
 
 Recommended practice loop
-1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-add-to-js-text.pya`.
+1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-plus-to-js-text.pya`.
 2. Read `08-vyah-and-aspect.md`, then run `examples/pyash/fizzbuzz.pya`.
 3. Read `03-dispatch-and-signatures.md`, then trigger a signature inconsistency (see `quiz/ceremony_signature_inconsistency.test.mjs`).
-4. Read `04-ceremonies-and-this.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-add-two.pya`.
+4. Read `04-ceremonies-and-this.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-plus-two.pya`.
 5. Read `05-control-flow.md`, then run `examples/pyash/insertion-sort.pya`.
 6. Read `06-errors.md`, then run `quiz/exists_do.test.mjs` and inspect `err.sentence`.
 

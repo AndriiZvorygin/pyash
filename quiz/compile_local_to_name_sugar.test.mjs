@@ -6,7 +6,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 
-test("compile sugar: add to <local name> inside ceremony mutates local fact (not global)", async () => {
+test("compile sugar: plus to <local name> inside ceremony mutates local fact (not global)", async () => {
   forget();
 
   const pyash = [

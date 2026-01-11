@@ -18,7 +18,7 @@ su name worker be ceremony prah
   ```
   Memory: [
     { "mood": "def", "su": { "name": "worker" }, "be": "ceremony" },
-    { "mood": "do", "ob": { "num": 4 }, "to": { "name": "target" }, "be": "add" },
+    { "mood": "do", "ob": { "num": 4 }, "to": { "name": "target" }, "be": "plus" },
     { "mood": "ret", "ret": { "role": "ob", "name": "target" } },
     { "mood": "prah", "su": { "name": "worker" }, "be": "ceremony" },
     { "mood": "do", "to": { "name": "target" }, "be": "worker", "ob": { "num": 5 }, "fromindex": { "num": 3 }, "toindex": { "num": 5 } },

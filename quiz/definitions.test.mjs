@@ -54,12 +54,12 @@ test("definition index captures end via prah and supports invoking the paragraph
   forget();
 
   await run("su name result ob num 5 be number ya");
-  await run("su name add two to name num target be ceremony def");
+  await run("su name plus two to name num target be ceremony def");
   await run("ob num 2 to name result be plus do");
-  await run("su name add two be ceremony prah");
+  await run("su name plus two be ceremony prah");
 
-  const entry = dumpDefinitionIndex().find(e => e.name === "add two");
-  assert.ok(entry, "definition index should include add two");
+  const entry = dumpDefinitionIndex().find(e => e.name === "plus two");
+  assert.ok(entry, "definition index should include plus two");
   assert.equal(entry.index, 1, "start index should point to def sentence");
   assert.equal(entry.end, 3, "end index should point to closing prah");
 
@@ -80,7 +80,7 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
   const resultFacts = mem.filter(s => s.su?.name === "result" && s.mood === "ya");
 
   assert.equal(resultFacts.length, 1, "only one result fact should remain");
-  assert.equal(resultFacts[0].ob.num, 7, "result fact should be updated after add");
+  assert.equal(resultFacts[0].ob.num, 7, "result fact should be updated after plus");
   assert.equal(mem[0].mood, "do", "command should remain before updated fact");
 
   // Protect facts inside def/prah blocks
@@ -132,14 +132,14 @@ test("ceremony def captures signature words from typed header", async () => {
 test("ceremony def headers declare signature cases/types (new signature style)", async () => {
   forget();
 
-  await run("su name add two to name num bucket be ceremony def");
+  await run("su name plus two to name num bucket be ceremony def");
   await run("ob num 2 to name bucket be plus do");
-  await run("su name add two be ceremony prah");
+  await run("su name plus two be ceremony prah");
 
-  const def = getDefinition("add two");
+  const def = getDefinition("plus two");
   assert.deepEqual(
     def.signatureWords,
-    ["be", "add two", "to", "name", "num"]
+    ["be", "plus two", "to", "name", "num"]
   );
 
   // Invocation should resolve by signature (not bare name) and update target

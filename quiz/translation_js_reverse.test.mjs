@@ -22,13 +22,13 @@ test("translation from JavaScript text back to Pyash sentences (assignments + ma
   const out = result?.ob ?? result?.value;
 
   assert.ok(out?.sentences, "should return sentences array");
-  const [decl, add, constDecl, assign] = out.sentences;
+  const [decl, plus, constDecl, assign] = out.sentences;
   assert.equal(decl.su.name, "alpha");
   assert.equal(decl.exists, true);
   assert.equal(decl.ob.num, 1);
-  assert.equal(add.be, "add");
-  assert.equal(add.ob.num, 2);
-  assert.equal(add.to.name, "alpha");
+  assert.equal(plus.be, "plus");
+  assert.equal(plus.ob.num, 2);
+  assert.equal(plus.to.name, "alpha");
   assert.equal(constDecl.be, "permanent text");
   assert.equal(constDecl.exists, true);
   assert.equal(assign.ob.num, 5);

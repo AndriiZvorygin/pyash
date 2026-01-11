@@ -78,7 +78,7 @@ test("compile C supports text vector + write vector only", async () => {
   assert.equal(out, "ve text hello world");
 });
 
-test("compile C supports vector element add at index", async () => {
+test("compile C supports vector element plus at index", async () => {
   forget();
   const pyash = [
     "exists su name values ob ve num 1 2 3 be vector ya",

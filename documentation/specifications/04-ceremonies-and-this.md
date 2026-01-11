@@ -19,7 +19,7 @@ Define ceremony definition/invocation, `this` access, and return behavior.
 
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-invoke.pya`
-- Run: `examples/pyash/ceremony-add-two.pya`
+- Run: `examples/pyash/ceremony-plus-two.pya`
 
 ## 6. Tests that define truth
 - `quiz/ceremony_signature_inconsistency.test.mjs`

@@ -1,12 +1,12 @@
-su name add one to name num result be ceremony def
+su name plus one to name num result be ceremony def
 ob num 1 to name result be plus do
 this ret
-su name add one be ceremony prah
+su name plus one be ceremony prah
 
-su name add two to name num result be ceremony def
+su name plus two to name num result be ceremony def
 ob num 2 to name result be plus do
 this ret
-su name add two be ceremony prah
+su name plus two be ceremony prah
 
 to name result be plus one do
 su name result ob what que

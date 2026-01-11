@@ -13,7 +13,7 @@ This *is* the call frame. Internally you treat it as:
 ```js
 {
   mood: "do",
-  be: "add two",       // ceremony being evoked (surface form, no underscore)
+  be: "plus two",       // ceremony being evoked (surface form, no underscore)
   ob: { num: 5 },
   to:  { name: "result" },
   // optional registers also live here: fromindex, toindex, etc.
@@ -21,13 +21,13 @@ This *is* the call frame. Internally you treat it as:
 ```
 
 > Implementation note for JS:
-> You can still map `"add two"` → `"add_two"` for module names (`program/verbs/add_two.mjs`), but that’s internal. On the Pyash side, it’s always `add two`.
+> You can still map `"plus two"` → `"add_two"` for module names (`program/verbs/add_two.mjs`), but that’s internal. On the Pyash side, it’s always `plus two`.
 
 ---
 
 ## 2. `this` refers to the current evoke sentence
 
-Inside the ceremony body for **add two**, `this` points at that evoke sentence:
+Inside the ceremony body for **plus two**, `this` points at that evoke sentence:
 
 * `this ob` → the `ob` register of the current evoke.
 * `this to` → the `to` register.
@@ -63,7 +63,7 @@ Now you can use existing verbs on `acc`:
 ob num 2 to name acc be plus do
 ```
 
-(Your JS `add` dispatcher can still live in `program/verbs/add.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
+(Your JS `plus` dispatcher can still live in `program/verbs/plus.mjs` and resolve to `add_obj_num_to_num.mjs` etc; surface Pyash never sees underscores.)
 
 ---
 
@@ -89,13 +89,13 @@ Meaning:
 
 3. Mark the ceremony as finished; the **final evoke sentence** is the return value. Registers (e.g., `fromindex`, `toindex`, `to`) travel on the evoke sentence; no extra register facts are required, and returning does not materialize standalone `fromindex`/`toindex` facts.
 
-So a complete ceremony flow for “add two” in Pyash surface form looks like:
+So a complete ceremony flow for “plus two” in Pyash surface form looks like:
 
 ```pyash
 # evoke
 ob num 5 to name result be plus two do
 
-# inside "add two" ceremony:
+# inside "plus two" ceremony:
 
 # bind argument into acc
 su name acc ob this ob be number ya
