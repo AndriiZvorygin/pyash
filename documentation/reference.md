@@ -40,6 +40,11 @@ This writes `newspaper/say-stream.pya`.
   - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
   - `PYA_ESPEAK_BIN` overrides the espeak binary used by `espeak say` (default: `espeak-ng`).
 
+## External tools via modules
+External tools (ffmpeg, xdotool, piper, espeak, whisper.cpp) should be wrapped as Pyash modules and configured in `configure/default.pya`.
+- Modules live under `module/` and are imported in defaults so programs don’t repeat setup.
+- Defaults provide the runtime wiring (`su say be default ob name piper say ya`, `su name ffmpeg input ... be default ya`, etc.).
+
 ## Whisper streaming helper
 
 Run the streaming whisper helper and print incremental lines as they arrive:

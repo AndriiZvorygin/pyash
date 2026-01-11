@@ -1,8 +1,5 @@
+from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do
 su name prompt ob text "Focus the target app now. Recording from the microphone for 10 seconds before typing the transcript." be write do
 su name note ob text "Override 'ffmpeg input' if your OS uses a different device (e.g., pipewire)." be write do
-su name record ob text "ffmpeg -y -f " to name record be add do
-su name record ob name ffmpeg input to name record be add do
-su name record ob text " -i default -t 10 /tmp/pyash-hear-input.wav" to name record be add do
-su name record ob name record be command do
-su name transcript from filename "/tmp/pyash-hear-input.wav" be hear do
-su name typed ob name transcript to name keyboard be write do
+su name transcript from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be hear do
+su name typed ob name transcript to wo keyboard be write do

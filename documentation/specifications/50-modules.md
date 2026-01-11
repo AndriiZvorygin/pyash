@@ -6,6 +6,8 @@
 
 Define a **file-based module system** for Pyash that stays compatible with **signature-first dispatch** and supports interpreter, JS, and C targets.
 
+External tool wrappers (ffmpeg, xdotool, piper, espeak, whisper.cpp, etc.) SHOULD be expressed as modules and imported via `configure/default.pya`, so defaults wire external dependencies once and programs stay declarative.
+
 Modules should:
 
 * treat a module file as a unit of execution and compilation
@@ -15,6 +17,92 @@ Modules should:
 * load each module once per run (memoized)
 
 This document defines surface syntax and runtime semantics.
+
+---
+
+## Addendum: external tool runner contract (v0.1)
+
+This addendum defines a minimal, backend-agnostic contract for invoking external tools from Pyash modules while keeping built-ins small. It complements the tool envelope specs (`16-mind-and-tools.md`, `11-run-recording-and-artifacts.md`) by defining how a module calls an external command and how results are surfaced.
+
+### A.1 Tool runner goals
+
+* Provide a single runtime entry point for external processes.
+* Allow modules to express tool behavior in Pyash while delegating IO to the runner.
+* Preserve determinism and tool event recording rules.
+
+### A.2 Required runner behavior
+
+The runtime MUST provide a generic command runner that can:
+
+1. Execute a command (binary plus args) specified by the module.
+2. Accept an optional input payload (text or filename).
+3. Return:
+   * a surfaced result sentence (always),
+   * optional streamed chunks (when enabled),
+   * artifact records for created files when applicable.
+
+### A.3 Invocation shape (module side)
+
+Modules SHOULD express tool execution via a dedicated ceremony (module wrapper) and pass the command line as text. A command runner invocation MUST include:
+
+* a command line (`text`)
+* optional input:
+  * `from filename <path>` (read bytes)
+  * `fromtext text <payload>` (literal text)
+* optional streaming mode (`vyah stream`)
+
+#### A.3.1 Core invocation (normative)
+
+```
+su name <handle>
+ob text "<command line>"
+from filename "<path>"     # optional
+fromtext text "<payload>"  # optional
+to filename "<path>"       # optional
+vyah stream                # optional
+be command do
+```
+
+Notes:
+
+* `from filename` and `fromtext text` are mutually exclusive.
+* `su name <handle>` is required for streaming (so `vyah cancel` can target it).
+* `to filename` is optional for non-streaming output capture; when omitted, the runner returns the stdout text.
+
+### A.4 Streaming contract
+
+When `vyah stream` is requested:
+
+* The runner MUST emit a stream handle (`be stream ya`) whose `ob` contains either:
+  * `ve values [...]` for in-memory streams, or
+  * `filename <path>` pointing to a file that the runner appends to incrementally.
+* Modules may consume the stream with `be write vyah stream` or other stream-aware verbs.
+* The stream MUST close deterministically (end-of-process, explicit cancel, or backend-specific end token).
+
+#### A.4.1 Stream exit conditions
+
+The runner MUST define one or more explicit exit conditions:
+
+* **process exit**: when the external tool exits, the stream closes.
+* **explicit cancel**: a `vyah cancel` call for the same stream name stops the process and closes the stream.
+* **end token (optional)**: if configured, a backend-specific terminal token (e.g., `[BLANK_AUDIO]`) closes the stream without waiting for process exit.
+
+### A.5 Tool event recording
+
+Each command execution used as a tool runner MUST emit a tool event as specified in `16-mind-and-tools.md` and `11-run-recording-and-artifacts.md`:
+
+```
+su name tool event <counter>
+ob la <evoked sentence> ko
+to la <result sentence> ko
+be tool ya
+```
+
+The tool event MUST appear after any `write` records that capture raw tool request/response payloads.
+
+### A.6 Artifact recording
+
+If the tool creates files (audio, transcripts, metadata), the runner MUST emit `be artifact ya` records as described in `11-run-recording-and-artifacts.md`. Modules SHOULD pass explicit filenames to enable deterministic artifact names.
 
 ---
 

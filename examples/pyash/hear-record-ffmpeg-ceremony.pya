@@ -1,0 +1,15 @@
+su name microphone hear from wo microphone during num 0 to filename output be ceremony def
+  exists su name cmd ob text "ffmpeg -y -f " be text ya
+  ob name ffmpeg input to name cmd be add do
+  ob text " -i default -t " to name cmd be add do
+  ob num of during of this to name cmd be add do
+  ob text " " to name cmd be add do
+  ob filename of to of this to name text path be text do
+  ob name path to name cmd be add do
+  ob text of cmd be command do
+  ob name path to name filename path be filename do
+  su name transcript from name filename path be hear do
+  su name transcript ret
+prah
+su name prompt ob text "Recording 10 seconds from the microphone into /tmp/pyash-hear-input.wav." be write do
+su name record from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be microphone hear do

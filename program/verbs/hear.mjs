@@ -107,6 +107,18 @@ function resolveHearPrompt(sentence) {
   return trimmed.length ? trimmed : "";
 }
 
+export function resolveHearInputPath(sentence, { rememberFn } = {}) {
+  if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
+  if (typeof sentence?.from?.text === "string") return sentence.from.text;
+  const fromName = sentence?.from?.name;
+  if (!fromName || !rememberFn) return null;
+  const fact = rememberFn(fromName);
+  if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
+  if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  if (typeof fact?.ob?.name === "string") return fact.ob.name;
+  return null;
+}
+
 function resolveOutputPath(sentence) {
   const base = getExchangeSentenceId() || sentence?.su?.name || `hear-${hearCounter++}`;
   return path.join("artifacts", "hear", `${base}.txt`);
@@ -341,7 +353,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   let transcript = "";
   let backend = "fixture";
   let model = null;
-  const inputPath = sentence?.from?.filename;
+  const inputPath = resolveHearInputPath(sentence, { rememberFn });
   const outputPath = resolveOutputPath(sentence);
   const metadataPath = metadataPathForOutput(outputPath);
   if (aspectKey === "stream") {
