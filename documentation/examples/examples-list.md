@@ -4,8 +4,8 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 
 | Concept | Example(s) |
 | --- | --- |
-| Sentence basics | `examples/pyash/add-basic.pya` |
-| Ceremonies | `examples/pyash/ceremony-add-two.pya`, `examples/pyash/ceremony-invoke.pya` |
+| Sentence basics | `examples/pyash/plus-basic.pya` |
+| Ceremonies | `examples/pyash/ceremony-plus-two.pya`, `examples/pyash/ceremony-invoke.pya` |
 | Conditionals | `examples/pyash/fizzbuzz.pya`, `examples/pyash/tiny-conditional.pya` |
 | Loops | `examples/pyash/doors-loop-10.pya`, `examples/pyash/insertion-sort.pya` |
 | Vectors | `examples/pyash/vector-write-index.pya`, `examples/pyash/vector-invert-boolean.pya` |

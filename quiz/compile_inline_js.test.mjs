@@ -20,7 +20,7 @@ test("compile converts inline Pyash text to JavaScript text with const for perma
   assert.match(js, /let beta = \{[\s\S]*su:\s*\{\s*name:\s*"beta"\s*\}[\s\S]*ob:\s*\{\s*text:\s*"hello"/s);
 });
 
-test("compile emits JS for simple add", async () => {
+test("compile emits JS for simple plus", async () => {
   forget();
 
   const program = [
@@ -118,7 +118,7 @@ test("compile emits JS for simple multiply and divide", async () => {
   assert.match(js, /collector\.ob\.num = \(collector\.ob\.num \?\? 0\) \/ 2;/);
 });
 
-test("compile emits JS for text concatenation via add", async () => {
+test("compile emits JS for text concatenation via plus", async () => {
   forget();
 
   const program = [
@@ -160,9 +160,9 @@ test("compile emits JS ceremony with param and body", async () => {
 
   const program = [
     "exists su name bucket ob num 0 be number ya",
-    "su name add two to name num bucket be ceremony def",
+    "su name plus two to name num bucket be ceremony def",
     "ob num 2 to name bucket be plus do",
-    "su name add two be ceremony prah"
+    "su name plus two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -174,7 +174,7 @@ test("compile emits JS ceremony with param and body", async () => {
 
   assert.ok(js);
   assert.match(js, /let bucket = \{ su: \{ name: "bucket" \}, ob: \{ num: 0 \}/);
-  assert.match(js, /function\s+be_add_two_to_name_num\(sentence\)[\s\S]*bucket\.ob\.num\s*=\s*\(bucket\.ob\.num\s*\?\?\s*0\)\s*\+\s*2;/s);
+  assert.match(js, /function\s+be_plus_two_to_name_num\(sentence\)[\s\S]*bucket\.ob\.num\s*=\s*\(bucket\.ob\.num\s*\?\?\s*0\)\s*\+\s*2;/s);
   assert.match(js, /return\s+sentence\s*;/);
 });
 
@@ -183,9 +183,9 @@ test("compiled ceremony function can be invoked (JS)", async () => {
 
   const program = [
     "exists su name bucket ob num 0 be number ya",
-    "su name add two be ceremony def",
+    "su name plus two be ceremony def",
     "ob num 2 to num of ob of this be plus do",
-    "su name add two be ceremony prah"
+    "su name plus two be ceremony prah"
   ].join("\\n");
 
   const sentence = parse(
@@ -202,8 +202,8 @@ test("compiled ceremony function can be invoked (JS)", async () => {
     .replace(/\.javascript\.quoted\s*$/, "");
   vm.runInContext(unwrapped, sandbox);
 
-  assert.equal(typeof sandbox.be_add_two, "function");
-  const r = sandbox.be_add_two({ ob: { num: 0 }, to: { num: 0, name: "bucket" } });
+  assert.equal(typeof sandbox.be_plus_two, "function");
+  const r = sandbox.be_plus_two({ ob: { num: 0 }, to: { num: 0, name: "bucket" } });
   assert.equal(r.ob?.num ?? r.to?.num, 2);
 });
 

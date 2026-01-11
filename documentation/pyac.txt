@@ -1156,7 +1156,7 @@ basically this transformation process would generate a new sentence where all th
 are resolved values, and only the output is a variable name. it then outputs the output
 variable declaration with it's new value.
 SSA
-2018-02-22 15:05:13 htafdwes also, my current architecture actually does add a declaration
+2018-02-22 15:05:13 htafdwes also, my current architecture actually does plus a declaration
 of a variable for every time the variable is updated, and adds it to the top of the cache,
 then removes the old declaration, in order to perform an atomic update. that's the only
 way I can see of doing asynchronous updates when you have multiple processors processing
@@ -1475,7 +1475,7 @@ stages of compilation
 3. Pyash language text
 4. Pyash encoded tiles
 5. if is declarative specification then evolve imperative implementation
-6. add imperative implementation function to library if not available
+6. plus imperative implementation function to library if not available
 7. compile to (OpenCL) C with Pyash names
 8. (OpenCL) C with analytic names (perhaps)
 6.2
@@ -1830,7 +1830,7 @@ throw an error otherwise.
 Extension
 This encoding already can represent over 17,000 words, which if they were all assigned would
 take 15bits, so it is a fairly efficient encoding. However the amount of words can be extended
-by increasing number of vowels, as well as tones. And it may even be possible to add an
+by increasing number of vowels, as well as tones. And it may even be possible to plus an
 initial consonant if only one or two of the quote types is necessary. However this extension
 isn't likely to be necessary anytime in the near future, because adult vocabulary goes up
 to around 17,000 words, which includes a large number of synonyms. For instance the Lyash
@@ -2239,7 +2239,7 @@ which functions may be helpful in accomplishing the task.
 At which point the machine programmer will start evolving functions that meet the specification
 and examples. If it is taking more than a few seconds user can start writing the program
 as they think it should be. the functions they thought would be necessary would be in comments,
-they can remove or add to them as necessary or uncomment them to include them in the code.
+they can remove or plus to them as necessary or uncomment them to include them in the code.
 If the user decides that will need to make a new support function in order to achieve
 this task, then can save state of this development. and switch over to developing the supporting
 function.
@@ -2489,7 +2489,7 @@ Each worker grabs a line
 Program Queue
 Instead of having a program counter, which says the current instruction, can instead have
 a program queue. This is valuable for function calls since they are outside the main program.
-If a worker happens upon a function call, it can add the contents of the function to the
+If a worker happens upon a function call, it can plus the contents of the function to the
 queue, so the next available workers will process it. Thus the program queue is more of
 a LIFO stack than a pipe.
 However it doesn't have a stack pointer. The main program loads all the lines of a program

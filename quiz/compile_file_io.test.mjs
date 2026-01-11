@@ -87,7 +87,7 @@ test("file-based compile with math, ceremony, and write logs final value", async
   vm.runInNewContext(fileText, context);
 
   assert.equal(logs.length, 2, "should log twice");
-  assert.equal(logs[0], 2, "first log after add/subtract is 2");
+  assert.equal(logs[0], 2, "first log after plus/subtract is 2");
   assert.equal(logs[1], 5, "second log after ceremony is 5");
 
   await fs.rm(outputFile, { force: true });

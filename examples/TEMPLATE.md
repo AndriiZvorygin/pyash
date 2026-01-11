@@ -1,6 +1,6 @@
 # Example Template
 
-- **id**: unique slug (e.g., `add-sum-basic`)
+- **id**: unique slug (e.g., `plus-sum-basic`)
 - **status**: draft | ready | regression | archived
 - **intent**: brief purpose of the example (what it demonstrates or reproduces)
 - **type**: REPL | test | doc — choose REPL for interactive transcripts, test for runnable snippets, doc for explanatory notes

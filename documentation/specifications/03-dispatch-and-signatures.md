@@ -22,7 +22,7 @@ Define how signature words are derived and used for dispatch.
 - Surfaced errors MUST follow `06-errors.md`, including `from filename`, `by num`, and `at la … ko` when available.
 
 ## 5. Examples (existing files only)
-- Run: `examples/pyash/ceremony-add-two.pya`
+- Run: `examples/pyash/ceremony-plus-two.pya`
 
 ## 6. Tests that define truth
 - `quiz/ceremony_signature_inconsistency.test.mjs`

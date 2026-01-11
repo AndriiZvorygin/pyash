@@ -30,15 +30,15 @@ test("ceremony defs feed result into the next call", async () => {
 
   await run("su name result ob num 0 be number ya");
 
-  await run("su name add one to name num target be ceremony def");
+  await run("su name plus one to name num target be ceremony def");
   await run("ob num 1 to name result be plus do");
   await run("this ret");
-  await run("su name add one be ceremony prah");
+  await run("su name plus one be ceremony prah");
 
-  await run("su name add two to name num target be ceremony def");
+  await run("su name plus two to name num target be ceremony def");
   await run("ob num 2 to name result be plus do");
   await run("this ret");
-  await run("su name add two be ceremony prah");
+  await run("su name plus two be ceremony prah");
 
   await run("to name result be plus one do");
   await run("to name result be plus two do");

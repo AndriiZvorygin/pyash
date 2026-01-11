@@ -18,7 +18,7 @@ su name climb be ceremony prah
   Memory: [
     { "mood": "ya", "su": { "name": "counter" }, "ob": { "num": 2 }, "be": "number" },
     { "mood": "def", "su": { "name": "climb" }, "be": "ceremony" },
-    { "mood": "do", "ob": { "num": 1 }, "to": { "name": "counter" }, "be": "add" },
+    { "mood": "do", "ob": { "num": 1 }, "to": { "name": "counter" }, "be": "plus" },
     { "mood": "prah", "su": { "name": "climb" }, "be": "ceremony" },
     { "mood": "do", "to": { "name": "counter" }, "fromindex": 3, "toindex": 3, "be": "climb", "ob": { "num": 2 } },
     { "su": { "name": "counter" }, "ob": { "num": 2 }, "be": "climb", "mood": "ya" },

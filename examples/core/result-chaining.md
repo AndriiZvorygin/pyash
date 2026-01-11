@@ -15,4 +15,4 @@
   ```
   su name result ob num 7 be plus ya
   ```
-- **Notes**: After the first add (1 + 2 = 3), the `result` fact is addressed by name in the next add, producing 7. Demonstrates chaining via `result`.
+- **Notes**: After the first plus (1 + 2 = 3), the `result` fact is addressed by name in the next plus, producing 7. Demonstrates chaining via `result`.

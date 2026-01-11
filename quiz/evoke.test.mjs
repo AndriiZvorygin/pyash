@@ -13,12 +13,12 @@ async function run(line) {
 test("ceremony binds this ob into local and returns via ret", async () => {
   forget();
 
-  // define ceremony add two: acc := this.ob; acc += 2; ret acc into evoke.ob
-  await run("su name add two ob num 0 to name num target be ceremony def");
+  // define ceremony plus two: acc := this.ob; acc += 2; ret acc into evoke.ob
+  await run("su name plus two ob num 0 to name num target be ceremony def");
   await run("su name acc ob this ob name acc be number ya");
   await run("ob num 2 to name acc be plus do");
   await run("this ob name acc ret");
-  await run("su name add two be ceremony prah");
+  await run("su name plus two be ceremony prah");
 
   // call
   await run("ob num 5 to name result be plus two do");

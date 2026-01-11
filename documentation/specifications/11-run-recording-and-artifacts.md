@@ -134,7 +134,7 @@ The newspaper MUST support the following event kinds:
 
 The `tool` event schema is defined in `16-mind-and-tools.md`.
 
-Later specifications may add additional event kinds, but these MUST exist.
+Later specifications may plus additional event kinds, but these MUST exist.
 
 ---
 
@@ -853,7 +853,7 @@ Failures related to exchange and artifacts MUST follow `06-errors.md`:
 - thrown as `be error do`
 - surfaced as `be error ya` at observation boundaries
 
-Recommended stable error names for this spec (add to `06-errors.md` if not already present):
+Recommended stable error names for this spec (plus to `06-errors.md` if not already present):
 
 - `exchange defective`
 - `artifact defective`

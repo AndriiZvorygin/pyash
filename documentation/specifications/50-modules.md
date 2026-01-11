@@ -248,7 +248,7 @@ Qualified ceremony name is a composite verb phrase:
 Example:
 
 ```
-ob num 3 to name out be math add two do
+ob num 3 to name out be math plus two do
 ```
 
 Dispatcher treats the composite verb phrase as a normal ceremony name for signature dispatch.
@@ -385,7 +385,7 @@ To support genitive access, importing binds the alias name to a **module namespa
 Observable behaviour:
 
 * `math` behaves like a namespace for exported facts under genitive access (`math ti pi`, `pi of math`)
-* exported ceremonies are registered in the signature registry under composite verb phrases (`math add two`, etc.)
+* exported ceremonies are registered in the signature registry under composite verb phrases (`math plus two`, etc.)
 
 Representation is implementation-defined, as long as behaviour matches:
 
@@ -491,11 +491,11 @@ If a backend lacks multi-module parity, keep it gated behind `@js` or `@c` until
 su name pi ob num 3.14159 ya
 su name pi be export ya
 
-su name add two to name bucket be ceremony def
+su name plus two to name bucket be ceremony def
   ob num 2 to name bucket be plus do
   su name bucket ret
 prah
-su name add two be export ya
+su name plus two be export ya
 ```
 
 ### 13.2 Import with alias and use
@@ -503,14 +503,14 @@ su name add two be export ya
 ```
 from name number tools to name math be import do
 
-ob num 3 to name out be math add two do
+ob num 3 to name out be math plus two do
 su name approx ob num (pi of math) ya
 ```
 
 ### 13.3 Import one symbol
 
 ```
-from name number tools ob name add two to name plus two be import do
+from name number tools ob name plus two to name plus two be import do
 ob num 3 to name out be plus two do
 ```
 

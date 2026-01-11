@@ -18,7 +18,7 @@ su name loop body be ceremony prah
   Memory: [
     { "mood": "ya", "su": { "name": "counter" }, "ob": { "num": 3 }, "be": "number" },
     { "mood": "def", "su": { "name": "loop body" }, "be": "ceremony" },
-    { "mood": "do", "ob": { "num": 1 }, "to": { "name": "counter" }, "be": "add" },
+    { "mood": "do", "ob": { "num": 1 }, "to": { "name": "counter" }, "be": "plus" },
     { "mood": "prah", "su": { "name": "loop body" }, "be": "ceremony" },
     { "mood": "do", "to": { "name": "counter" }, "fromindex": 0, "be": "loop body", "toindex": null, "ob": { "num": 3 } },
     { "su": { "name": "counter" }, "ob": { "num": 3 }, "be": "loop body", "mood": "ya" },

@@ -186,7 +186,7 @@ the runner starts one platform at a time
 the runner waits for the platform activity evaluation to produce an observable result sentence before starting the next platform
 
 
-A future spec MAY add parallel execution, but MUST preserve deterministic ordering (for example by limiting concurrency to platforms chosen in the deterministic already order).
+A future spec MAY plus parallel execution, but MUST preserve deterministic ordering (for example by limiting concurrency to platforms chosen in the deterministic already order).
 
 ### 7.4 What “platform completes” means
 
@@ -289,7 +289,7 @@ if any platform completes with be error ya, the refinery MUST stop and the refin
 platforms not yet started are not executed
 
 
-A future spec MAY add “continue” policies, but fail-fast is the official default.
+A future spec MAY plus “continue” policies, but fail-fast is the official default.
 
 
 ---
@@ -350,7 +350,7 @@ thrown as be error do
 surfaced as be error ya at observation boundaries
 
 
-Recommended stable error names for this spec (add to 06-errors.md if not already present):
+Recommended stable error names for this spec (plus to 06-errors.md if not already present):
 
 refinery defective
 

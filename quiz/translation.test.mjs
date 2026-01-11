@@ -41,7 +41,7 @@ test("translation from Pyash conditional to English", async () => {
   const translation = result?.ob?.text ?? result?.value?.text;
 
   assert.ok(translation);
-  assert.match(translation, /if 3 is tiny from 5 then do add 1 to total/);
+  assert.match(translation, /if 3 is tiny from 5 then do plus 1 to total/);
 });
 
 test("translation Pyash -> English -> Pyash roundtrip", async () => {
@@ -70,7 +70,7 @@ test("translation Pyash -> English -> Pyash roundtrip", async () => {
   assert.equal(sentences.length, 2);
   assert.equal(sentences[0].su?.name, "alpha");
   assert.equal(sentences[0].ob?.num, 1);
-  assert.equal(sentences[1].be, "add");
+  assert.equal(sentences[1].be, "plus");
   assert.equal(sentences[1].ob?.num, 2);
   assert.equal(sentences[1].to?.name, "alpha");
 });

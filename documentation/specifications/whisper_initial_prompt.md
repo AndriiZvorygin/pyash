@@ -83,7 +83,7 @@ bool carry_prompt = false;
 
 ### Arg parsing
 
-In the existing `for (int i = 1; i < argc; ++i)` loop (or equivalent), add:
+In the existing `for (int i = 1; i < argc; ++i)` loop (or equivalent), plus:
 
 ```cpp
 else if (arg == "-p" || arg == "--prompt") {

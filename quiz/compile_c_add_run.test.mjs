@@ -18,7 +18,7 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile to C: add updates a scalar and write prints it (gcc + run)", async () => {
+test("compile to C: plus updates a scalar and write prints it (gcc + run)", async () => {
   forget();
 
   const pyash = [

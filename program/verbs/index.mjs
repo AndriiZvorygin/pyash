@@ -1,4 +1,4 @@
-import { add, signatures as addSignatures } from "./mathematics/add.mjs";
+import { plus, signatures as plusSignatures } from "./mathematics/plus.mjs";
 import { subtract, signatures as subtractSignatures } from "./mathematics/subtract.mjs";
 import { invert, signatures as invertSignatures } from "./mathematics/invert.mjs";
 import { exponential, signatures as exponentialSignatures } from "./mathematics/exponential.mjs";
@@ -29,7 +29,7 @@ import hear, { signatures as hearSignatures } from "./hear.mjs";
 import command, { signatures as commandSignatures } from "./command.mjs";
 
 export {
-  add,
+  plus,
   subtract,
   invert,
   exponential,
@@ -61,7 +61,7 @@ export {
 };
 
 export const builtInSignatures = [
-  ...addSignatures,
+  ...plusSignatures,
   ...multiplySignatures,
   ...divideSignatures,
   ...subtractSignatures,

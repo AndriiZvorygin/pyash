@@ -1,8 +1,8 @@
-# Example: add-basic
+# Example: plus-basic
 
-- **id**: add-basic
+- **id**: plus-basic
 - **status**: ready
-- **intent**: Minimal addition via imperative `add` storing command and result in memory.
+- **intent**: Minimal addition via imperative `plus` storing command and result in memory.
 - **type**: REPL
 - **REPL input**:
   ```
@@ -26,7 +26,7 @@
     {
       "ob": { "num": 2 },
       "to": { "name": "collector" },
-      "be": "add",
+      "be": "plus",
       "mood": "do"
     },
     {
@@ -38,9 +38,9 @@
     {
       "su": { "name": "result" },
       "ob": { "num": 9 },
-      "be": "add",
+      "be": "plus",
       "mood": "ya"
     }
   ]
   ```
-- **Notes**: Mirrors the `add` coverage in `test/core.test.mjs`; shows command, updated target fact, and result fact.
+- **Notes**: Mirrors the `plus` coverage in `test/core.test.mjs`; shows command, updated target fact, and result fact.

@@ -14,9 +14,9 @@ import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
-test("ceremony-add-two example runs via run_pya_program flow", async () => {
+test("ceremony-plus-two example runs via run_pya_program flow", async () => {
   const text = await fs.readFile(
-    path.join(root, "examples/pyash/ceremony-add-two.pya"),
+    path.join(root, "examples/pyash/ceremony-plus-two.pya"),
     "utf8"
   );
 
@@ -36,5 +36,5 @@ test("ceremony-add-two example runs via run_pya_program flow", async () => {
     }
   }
 
-  assert.match(lastOutput, /function be_add_two_to_name_num/);
+  assert.match(lastOutput, /function be_plus_two_to_name_num/);
 });

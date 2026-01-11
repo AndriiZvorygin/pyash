@@ -138,7 +138,7 @@ Update behaviour:
 
 Errors:
 
-* If an existing entry sentence for `switch` lacks `ob num …`, raise `pyash map add defective`.
+* If an existing entry sentence for `switch` lacks `ob num …`, raise `pyash map plus defective`.
 
 ---
 
@@ -150,7 +150,7 @@ Stable error names:
 
 * `pyash map sentence lost su`
 * `pyash map switch excess`
-* `pyash map add defective`
+* `pyash map plus defective`
 
 Errors are raised only for structural violations.
 

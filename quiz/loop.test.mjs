@@ -15,7 +15,7 @@ test("ceremony repeats using fromindex countdown until zero", async () => {
 
   await run("su name counter ob num 0 be number ya");
 
-  // define ceremony: add 1 to counter
+  // define ceremony: plus 1 to counter
   await run("su name loop_body to name num target fromindex num 0 be ceremony def");
   await run("ob num 1 to name counter be plus do");
   await run("su name loop_body be ceremony prah");

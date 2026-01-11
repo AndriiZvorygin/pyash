@@ -179,7 +179,7 @@ JS (explicit):
 }
 ```
 
-### 5.2 Map: add 1 into `out`
+### 5.2 Map: plus 1 into `out`
 
 Pyash:
 
@@ -198,7 +198,7 @@ JS (explicit):
     const s = structuredClone(base);
     s.ob = elem;
     s.atindex = { num: i };
-    s.ob = add(s.ob, 1);        // or execVerb("add", s)
+    s.ob = plus(s.ob, 1);        // or execVerb("plus", s)
     return s.ob;
   });
 
@@ -215,7 +215,7 @@ ob name vector from num 5 at num 1 be plus do        # vector[1] += 5
 ob num 3 from name vector at num 0 be subtract do   # vector[0] -= 3
 ```
 
-Interpreter signatures recognize these shapes for `add` and `subtract` and update the vector in place. Indexes are 0-based (JS-style).
+Interpreter signatures recognize these shapes for `plus` and `subtract` and update the vector in place. Indexes are 0-based (JS-style).
 
 ---
 

@@ -33,7 +33,7 @@ test("translation from English conditional back to Pyash sentences", async () =>
 
   const englishText = [
     "total is number 0.",
-    "if 3 is tiny from 5 then do add 1 to total."
+    "if 3 is tiny from 5 then do plus 1 to total."
   ].join("\\n");
 
   const sentence = parse(
@@ -49,7 +49,7 @@ test("translation from English conditional back to Pyash sentences", async () =>
   assert.equal(cond.ob.num, 3);
   assert.equal(cond.from.num, 5);
   assert.equal(cond.mood, "do");
-  assert.equal(cond.consequence?.be, "add");
+  assert.equal(cond.consequence?.be, "plus");
   assert.equal(cond.consequence?.to?.name, "total");
   assert.match(out.text, /su name total ob num 0 be number ya/);
   assert.match(out.text, /ob num 3 from num 5 be tiny then ob num 1 to name total be plus do/);

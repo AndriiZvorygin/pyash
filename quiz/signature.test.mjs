@@ -36,13 +36,13 @@ test("multi-word verbs and case arrays normalize whitespace", () => {
 });
 
 test("joinSignatureWords renders a space-joined key", () => {
-  const words = ["be", "add", "ob", "num", "to", "name", "num"];
+  const words = ["be", "plus", "ob", "num", "to", "name", "num"];
   assert.equal(joinSignatureWords(words), "be plus ob num to name num");
 });
 
 test("missing type words throws", () => {
   assert.throws(
-    () => makeSignatureWords({ be: "add", cases: [{ case: "ob", typeWords: [] }] }),
+    () => makeSignatureWords({ be: "plus", cases: [{ case: "ob", typeWords: [] }] }),
     /needs at least one type word/
   );
 });
@@ -126,7 +126,7 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
 test("deriveSignatureFromCall defaults unknown name to name num", () => {
   const sentence = {
     mood: "do",
-    be: "add",
+    be: "plus",
     ob: { name: "lhs" },
     to: { name: "dest" }
   };
@@ -134,7 +134,7 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
   const sig = deriveSignatureFromCall(sentence, { remember: () => undefined });
 
   assert.deepEqual(sig, [
-    "be", "add",
+    "be", "plus",
     "ob", "name", "num",
     "to", "name", "num"
   ]);
@@ -162,7 +162,7 @@ test("deriveSignatureFromCall infers mind and text for write with literal prompt
 });
 
 test("deriveSignatureFromCall throws when a case lacks type words", () => {
-  const sentence = { mood: "do", be: "add", ob: {}, to: { name: "z" } };
+  const sentence = { mood: "do", be: "plus", ob: {}, to: { name: "z" } };
 
   assert.throws(
     () => deriveSignatureFromCall(sentence),
@@ -170,13 +170,13 @@ test("deriveSignatureFromCall throws when a case lacks type words", () => {
   );
 });
 
-test("deriveSignatureFromCall handles add with inline number + target name", () => {
-  const sentence = { mood: "do", be: "add", ob: { num: 2 }, to: { name: "acc" } };
+test("deriveSignatureFromCall handles plus with inline number + target name", () => {
+  const sentence = { mood: "do", be: "plus", ob: { num: 2 }, to: { name: "acc" } };
 
   const sig = deriveSignatureFromCall(sentence);
 
   assert.deepEqual(sig, [
-    "be", "add",
+    "be", "plus",
     "ob", "num",
     "to", "name", "num"
   ]);

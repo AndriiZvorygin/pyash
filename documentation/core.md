@@ -5,7 +5,7 @@ This document summarizes the current core language model used by the interpreter
 ## Sentence Model
 - A program is a sequence of sentences. Each sentence has:
   - `mood`: how to treat the sentence (`ya`, `do`, `def`, `prah`, `then`/conditionals).
-  - `be`: the verb (e.g., `number`, `text`, `add`, `subtract`, `multiply`, `divide`, `remains`, `write`, `say`, `ceremony`, `compile`, `understand`).
+  - `be`: the verb (e.g., `number`, `text`, `plus`, `subtract`, `multiply`, `divide`, `remains`, `write`, `say`, `ceremony`, `compile`, `understand`).
   - Roles (keyworded fields):
     - `su`: primary subject (`su name alpha`).
     - `ob`: payload (`ob num 1`, `ob text hello`, or `ob genitive …`).
@@ -80,7 +80,7 @@ This document summarizes the current core language model used by the interpreter
 - `atindex` is injected into the evoker as a register (0-based index).
 - With `to name <dest>`, the result is written to a new vector.
 - Without `to`, the source vector is updated in place.
-- For primitive verbs (e.g., `invert`, `add`, `subtract`) the element index is 0-based and passed as `at num <index>` per element.
+- For primitive verbs (e.g., `invert`, `plus`, `subtract`) the element index is 0-based and passed as `at num <index>` per element.
 
 ## Translation / Compile Verbs
 - `understand`: parse Pyash text to JSON sentences, optionally writing to a name or filename.
@@ -109,15 +109,15 @@ The thrown exception message mirrors `ob.text` when present.
 - Keep example outputs in git-ignored paths (e.g., `examples/out/`).
 
 ## Examples
-- Declare and add:
+- Declare and plus:
   - `exists su name bucket ob num 0 be number ya`
   - `ob num 2 to name bucket be plus do`
 - Loop:
   - `to name counter fromindex num 3 be loop body do`
 - Ceremony:
   - ```
-    su name add two to name bucket be ceremony def
+    su name plus two to name bucket be ceremony def
     ob num 2 to name bucket be plus do
-    su name add two be ceremony prah
+    su name plus two be ceremony prah
     ```
 - FizzBuzz (compiled to JS): see `examples/pyash/compile-fizzbuzz.txt`.

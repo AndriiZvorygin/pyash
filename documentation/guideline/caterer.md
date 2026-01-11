@@ -24,7 +24,7 @@ Build outputs
 
 C/C++ libraries
 - use git subtree:
-  git subtree add --prefix caterer/<project> <upstream_url> <tag_or_commit> --squash
+  git subtree plus --prefix caterer/<project> <upstream_url> <tag_or_commit> --squash
 
 Updates:
   git subtree pull --prefix caterer/<project> <upstream_url> <tag_or_commit> --squash

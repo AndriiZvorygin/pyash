@@ -805,7 +805,7 @@ Tool request (assistant emits `tool_calls`, arguments as a JSON string):
           {
             "id": "call_001",
             "type": "function",
-            "function": { "name": "add", "arguments": "{\"a\":2,\"b\":3}" }
+            "function": { "name": "plus", "arguments": "{\"a\":2,\"b\":3}" }
           }
         ]
       }
@@ -831,7 +831,7 @@ Tool request:
 ```json
 {
   "content": [
-    { "type": "tool_use", "id": "toolu_001", "name": "add", "input": { "a": 2, "b": 3 } }
+    { "type": "tool_use", "id": "toolu_001", "name": "plus", "input": { "a": 2, "b": 3 } }
   ],
   "stop_reason": "tool_use"
 }
@@ -859,7 +859,7 @@ Tool request:
     "tool_calls": [
       {
         "type": "function",
-        "function": { "index": 0, "name": "add", "arguments": { "a": 2, "b": 3 } }
+        "function": { "index": 0, "name": "plus", "arguments": { "a": 2, "b": 3 } }
       }
     ]
   }
@@ -871,7 +871,7 @@ Tool result message:
 ```json
 {
   "messages": [
-    { "role": "tool", "tool_name": "add", "content": "5" }
+    { "role": "tool", "tool_name": "plus", "content": "5" }
   ]
 }
 ```

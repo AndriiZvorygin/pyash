@@ -6,15 +6,15 @@
 - **type**: REPL
 - **REPL input**:
   ```
-su name add one to name result be ceremony def
+su name plus one to name result be ceremony def
 ob num 1 to name result be plus do
 this ret
-su name add one be ceremony prah
+su name plus one be ceremony prah
 
-su name add two to name result be ceremony def
+su name plus two to name result be ceremony def
 ob num 2 to name result be plus do
 this ret
-su name add two be ceremony prah
+su name plus two be ceremony prah
 
   to name result be plus one do
   to name result be plus two do

@@ -28,4 +28,4 @@
   su name lhs ob num 7 be number ya
   su name collector ob num 1 be number ya
   ```
-- **Notes**: `giant` is true when the subject is greater than `from`. First branch uses inline numbers; second compares two stored subjects (`lhs` vs `rhs`); third shows the false branch skipping the add. `then` skip behaviour matches `tiny`/`equally`.
+- **Notes**: `giant` is true when the subject is greater than `from`. First branch uses inline numbers; second compares two stored subjects (`lhs` vs `rhs`); third shows the false branch skipping the plus. `then` skip behaviour matches `tiny`/`equally`.

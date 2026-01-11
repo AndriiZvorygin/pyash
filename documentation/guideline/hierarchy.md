@@ -134,4 +134,4 @@ Conventions
 - prefer full words, single concept per directory
 - prefer singular form for containers (`module/`, `example/`)
 - use kebab-case for multiword names where needed
-- add a one-line definition here before introducing a new top-level name
+- plus a one-line definition here before introducing a new top-level name

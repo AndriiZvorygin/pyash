@@ -31,7 +31,7 @@ type NameRef = {
 
 type Sentence = {
   mood: string; // e.g. "do", "ya", ...
-  be: string;   // the verb, e.g. "add", "neuron", "twice crescent"
+  be: string;   // the verb, e.g. "plus", "neuron", "twice crescent"
 
   // cases as properties; may or may not be present on a given sentence
   su?: any;
@@ -160,7 +160,7 @@ be plus
 Signature:
 
 ```txt
-["be","add",
+["be","plus",
  "ob","num",
  "to","name","num"]
 ```
@@ -271,7 +271,7 @@ Examples:
 * Signature:
 
   ```txt
-  ["be","add",
+  ["be","plus",
    "ob","num",
    "to","name","num"]
   ```
