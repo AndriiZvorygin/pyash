@@ -14,7 +14,7 @@ test("write to keyboard sends text", async () => {
   forget();
   process.env.PYA_KEYBOARD_BIN = "true";
   try {
-    const result = await run("su name typed ob text \"hello\" to name keyboard be write do");
+    const result = await run("su name typed ob text \"hello\" to wo keyboard be write do");
     assert.equal(result?.value?.text, "hello");
   } finally {
     delete process.env.PYA_KEYBOARD_BIN;
@@ -30,7 +30,7 @@ test("write stream to keyboard consumes hear stream", async () => {
     const stream = await run("su name H1 be hear vyah stream do");
     assert.equal(stream?.be, "stream");
 
-    const result = await run("su name typed from name H1 to name keyboard be write vyah stream do");
+    const result = await run("su name typed from name H1 to wo keyboard be write vyah stream do");
     assert.equal(result?.value?.text, "first line\nsecond line");
   } finally {
     delete process.env.PYA_KEYBOARD_BIN;

@@ -21,7 +21,7 @@ test("write stream stops at blank audio and preserves spacing", async () => {
     process.env.PYA_KEYBOARD_BIN = "true";
     try {
       await run(`su name live ob filename "${fixturePath}" be stream ya`);
-      const result = await run("su name typed from name live to name keyboard be write vyah stream do");
+      const result = await run("su name typed from name live to wo keyboard be write vyah stream do");
       assert.equal(result?.value?.text, "Hello. Again.");
     } finally {
       delete process.env.PYA_KEYBOARD_BIN;

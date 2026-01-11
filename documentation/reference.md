@@ -36,7 +36,7 @@ This writes `newspaper/say-stream.pya`.
 - All supported environment variables are listed in `configure/env.example`.
   - Env values are imported into memory as defaults (`su name ... be default ya`).
   - `configure/default.pya` (or any in-program sentence) overrides env defaults.
-  - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to name keyboard` (default: `xdotool`).
+  - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to wo keyboard` (default: `xdotool`).
   - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
   - `PYA_ESPEAK_BIN` overrides the espeak binary used by `espeak say` (default: `espeak-ng`).
 
