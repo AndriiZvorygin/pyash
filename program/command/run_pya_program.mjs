@@ -10,7 +10,7 @@ import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/sign
 import { splitSentences, splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
-import { setEntryModulePath } from "../bridge/modules.mjs";
+import { setEntryModulePath, pushModuleDir, popModuleDir } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
@@ -21,6 +21,7 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
   try {
     const raw = await fs.readFile(configPath, "utf8");
     const lines = splitSentencesWithLines(raw);
+    pushModuleDir(cwd);
     for (const entry of lines) {
       const trimmed = entry.text.trim();
       if (!trimmed) continue;
@@ -30,10 +31,12 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
       state.currentSourceSentence = sentence;
       await interpretFn(sentence);
     }
+    popModuleDir();
     state.currentSourceFilename = null;
     state.currentSourceLine = null;
     state.currentSourceSentence = null;
   } catch (err) {
+    popModuleDir();
     if (err?.code === "ENOENT") return;
     throw err;
   }

@@ -1,0 +1,4 @@
+su name prompt ob text "Transcribing /tmp/pyash-hear-input.wav with hear." be write do
+exists su name output ob text "" be text ya
+from filename "/tmp/pyash-hear-input.wav" to name text output be hear do
+ob name output be write do
