@@ -41,8 +41,8 @@ export async function handleImperative({
   const { mood, be, ob, to, from, su } = sentence;
   if (mood !== "do") return null;
 
-  if (be === "import" && sentence.from?.name) {
-    const specifier = sentence.from.name;
+  if (be === "import" && (sentence.from?.name || sentence.from?.filename)) {
+    const specifier = sentence.from.name ?? sentence.from.filename;
     const symbol = sentence.ob?.name;
     const alias = symbol ? null : sentence.to?.name;
     const source = "interpret import";
@@ -91,9 +91,8 @@ export async function handleImperative({
 
       if (record.localCeremonies.has(symbol)) {
         const mapped = record.nameMap.get(symbol);
-        const def = mapped ? memory.getDefinition(mapped) : null;
-        const sig = def?.signatureWords ?? (def ? deriveSignatureFromDefinition(def) : null);
-        if (!sig) {
+        const entries = mapped ? memory.getDefinitionEntries(mapped) : [];
+        if (!entries.length) {
           throwErrorSentence({
             name: "module export incomplete",
             message: `module ceremony signature missing: ${symbol}`,
@@ -102,9 +101,22 @@ export async function handleImperative({
           });
         }
         const localName = sentence.to?.name ?? symbol;
-        const aliasSig = [...sig];
-        aliasSig[1] = localName;
-        registerSignatureAlias({ name: mapped, signatureWords: aliasSig });
+        const all = memory.allRemember();
+        for (const entry of entries) {
+          const def = all[entry.index];
+          const sig = def?.signatureWords ?? (def ? deriveSignatureFromDefinition(def) : null);
+          if (!sig) {
+            throwErrorSentence({
+              name: "module export incomplete",
+              message: `module ceremony signature missing: ${symbol}`,
+              from: { name: source },
+              raw: sentence
+            });
+          }
+          const aliasSig = [...sig];
+          aliasSig[1] = localName;
+          registerSignatureAlias({ name: mapped, signatureWords: aliasSig });
+        }
         return { imported: localName };
       }
 
@@ -175,7 +187,6 @@ export async function handleImperative({
   let fn = null;
   let defEntry = getDefinitionEntry(be);
   let defResolvedBySignature = false;
-  let defSignatureWords = defEntry ? memory.getDefinition(defEntry.name)?.signatureWords : null;
   const hasLoopRegisters = sentence.fromindex != null || sentence.toindex != null;
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
@@ -198,7 +209,9 @@ export async function handleImperative({
     if (!fn && !defEntry) {
       const defName = lookupSignature(sigKey);
       if (defName) {
-        defEntry = getDefinitionEntry(defName);
+        const sigForDef = Array.isArray(sigWords) ? [...sigWords] : null;
+        if (sigForDef) sigForDef[1] = defName;
+        defEntry = memory.getDefinitionEntryBySignature(defName, sigForDef ?? sigWords) ?? getDefinitionEntry(defName);
         defResolvedBySignature = true;
       }
     }
@@ -210,7 +223,9 @@ export async function handleImperative({
     if (!fn) {
       const defName = lookupSignature(baseSigKey);
       if (defName) {
-        defEntry = getDefinitionEntry(defName);
+        const sigForDef = Array.isArray(baseSigWords) ? [...baseSigWords] : null;
+        if (sigForDef) sigForDef[1] = defName;
+        defEntry = memory.getDefinitionEntryBySignature(defName, sigForDef ?? baseSigWords) ?? getDefinitionEntry(defName);
         defResolvedBySignature = true;
       }
     }
@@ -281,6 +296,13 @@ export async function handleImperative({
   }
 
   if (!fn && defEntry) {
+    if (sigWords && !defResolvedBySignature && defEntry?.name) {
+      const matched = memory.getDefinitionEntryBySignature(defEntry.name, sigWords);
+      if (matched) {
+        defEntry = matched;
+        defResolvedBySignature = true;
+      }
+    }
     if (su?.name === "tloh" || sentence.be === "tloh" || sentence.until !== undefined || sentence.tloh !== undefined) {
       throw new Error("tloh/until no longer supported; use fromindex/toindex");
     }
@@ -302,7 +324,8 @@ export async function handleImperative({
     }
 
     // Enforce signature compatibility between evoker and definition
-    const defSignatureWords = memory.getDefinition(defEntry.name)?.signatureWords;
+    const defSentence = memory.allRemember()[defEntry.index];
+    const defSignatureWords = defSentence?.signatureWords;
     const callSignatureWords = sigWords;
     if (!defResolvedBySignature && Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
       const defSigKey = joinSignatureWords(defSignatureWords);

@@ -1,6 +1,81 @@
-su name say ob text payload be ceremony def
+su name say internal ob name text payload be ceremony def
   exists su name cmd ob text "node command/piper_say_runner.mjs" be text ya
-  ob text of cmd fromtext text of ob of this be command do
+  ob name payload to filename "/tmp/pyash-piper-input.txt" be write do
+  ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
   su name result ret
+prah
+su name say ob text payload be ceremony def
+  ob text of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob num payload be ceremony def
+  ob num of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob bool payload be ceremony def
+  ob boolean of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob hollow payload be ceremony def
+  ob text "null" to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob text payload to name text output be ceremony def
+  ob text of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob num payload to name text output be ceremony def
+  ob num of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob bool payload to name text output be ceremony def
+  ob boolean of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob hollow payload to name text output be ceremony def
+  ob text "null" to name text input be text do
+  ob name input be say internal do
+prah
+su name say ob text payload to filename output be ceremony def
+  ob text of ob of this to name text input be text do
+  exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
+  ob filename of to of this to name text path be text do
+  ob name path to name cmd be add do
+  ob name input to filename "/tmp/pyash-piper-input.txt" be write do
+  ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
+prah
+su name say ob num payload to filename output be ceremony def
+  ob num of ob of this to name text input be text do
+  exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
+  ob filename of to of this to name text path be text do
+  ob name path to name cmd be add do
+  ob name input to filename "/tmp/pyash-piper-input.txt" be write do
+  ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
+prah
+su name say ob bool payload to filename output be ceremony def
+  ob boolean of ob of this to name text input be text do
+  exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
+  ob filename of to of this to name text path be text do
+  ob name path to name cmd be add do
+  ob name input to filename "/tmp/pyash-piper-input.txt" be write do
+  ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
+prah
+su name say ob hollow payload to filename output be ceremony def
+  ob text "null" to name text input be text do
+  exists su name cmd ob text "node command/piper_say_runner.mjs --output " be text ya
+  ob filename of to of this to name text path be text do
+  ob name path to name cmd be add do
+  ob name input to filename "/tmp/pyash-piper-input.txt" be write do
+  ob text of cmd from filename "/tmp/pyash-piper-input.txt" be command do
+prah
+su name say from name stream vyah stream be ceremony def
+  exists su name cmd ob text "node command/piper_say_runner.mjs" be text ya
+  su name run ob text of cmd from name of from of this vyah stream be command do
+  su name run ret
+prah
+su name say from name stream to name text output vyah stream be ceremony def
+  exists su name cmd ob text "node command/piper_say_runner.mjs" be text ya
+  su name run ob text of cmd from name of from of this vyah stream be command do
+  su name run ret
 prah
 su name say be export ya

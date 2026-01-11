@@ -1,57 +1,53 @@
 // memory.mjs
-import { clearSignatureDefinitions } from "../bridge/signature.mjs";
+import { clearSignatureDefinitions, joinSignatureWords } from "../bridge/signature.mjs";
 import { state } from "../bridge/state.mjs";
 import { clearModuleCache } from "../bridge/modules.mjs";
 import { clearRefineries } from "../bridge/refinery.mjs";
 
 let memory = [];
 let history = []; // optional, for debugging / REPL
-const definitionIndex = [];
+const definitionIndex = new Map(); // name -> [{ name, index, end, signatureKey }]
 const contextStack = [];
 
 let sandpits = [];
 
-function findDefinitionSlot(name) {
-  let low = 0;
-  let high = definitionIndex.length;
-
-  while (low < high) {
-    const mid = (low + high) >> 1;
-    const cmp = definitionIndex[mid].name.localeCompare(name);
-    if (cmp === 0) return mid;
-    if (cmp < 0) {
-      low = mid + 1;
-    } else {
-      high = mid;
-    }
-  }
-
-  return low; // insertion point
+function upsertDefinition(name, index, end = undefined, signatureWords = null) {
+  const entries = definitionIndex.get(name) ?? [];
+  const signatureKey = Array.isArray(signatureWords) && signatureWords.length
+    ? joinSignatureWords(signatureWords)
+    : undefined;
+  entries.push({ name, index, end, signatureKey });
+  definitionIndex.set(name, entries);
 }
 
-function upsertDefinition(name, index, end = undefined) {
-  const slot = findDefinitionSlot(name);
-  if (definitionIndex[slot]?.name === name) {
-    const prevEnd = definitionIndex[slot].end;
-    definitionIndex[slot] = { name, index, end: end ?? prevEnd };
-  } else {
-    definitionIndex.splice(slot, 0, { name, index, end });
+function closeDefinition(name, endIdx) {
+  const entries = definitionIndex.get(name);
+  if (!entries) return;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    if (typeof entries[i].end !== "number") {
+      entries[i].end = endIdx;
+      break;
+    }
   }
 }
 
 function isInsideDefinition(idx) {
-  for (const entry of definitionIndex) {
-    if (typeof entry.end === "number" && idx >= entry.index && idx <= entry.end) {
-      return true;
+  for (const entries of definitionIndex.values()) {
+    for (const entry of entries) {
+      if (typeof entry.end === "number" && idx >= entry.index && idx <= entry.end) {
+        return true;
+      }
     }
   }
   return false;
 }
 
 function adjustDefinitionIndices(removedIdx) {
-  for (const entry of definitionIndex) {
-    if (entry.index > removedIdx) entry.index -= 1;
-    if (typeof entry.end === "number" && entry.end > removedIdx) entry.end -= 1;
+  for (const entries of definitionIndex.values()) {
+    for (const entry of entries) {
+      if (entry.index > removedIdx) entry.index -= 1;
+      if (typeof entry.end === "number" && entry.end > removedIdx) entry.end -= 1;
+    }
   }
 }
 
@@ -90,13 +86,10 @@ export function doRemember(sentence) {
   const idx = memory.length;
   memory.push(sentence);
   if (isDef && subjName) {
-    upsertDefinition(subjName, idx);
+    upsertDefinition(subjName, idx, undefined, sentence.signatureWords ?? null);
   }
   if (isPrah && subjName) {
-    const slot = findDefinitionSlot(subjName);
-    if (definitionIndex[slot]?.name === subjName) {
-      definitionIndex[slot] = { ...definitionIndex[slot], end: idx };
-    }
+    closeDefinition(subjName, idx);
   }
 
   history.push(sentence);
@@ -124,25 +117,40 @@ export function dumpHistory() {
 
 export function getDefinition(name) {
   if (!name) return undefined;
-  const slot = findDefinitionSlot(name);
-  const entry = definitionIndex[slot];
-  if (!entry || entry.name !== name) return undefined;
+  const entry = getDefinitionEntry(name);
+  if (!entry) return undefined;
   return memory[entry.index];
 }
 
 export function getDefinitionEntry(name) {
   if (!name) return undefined;
-  const slot = findDefinitionSlot(name);
-  const entry = definitionIndex[slot];
-  if (!entry || entry.name !== name) return undefined;
-  return entry;
+  const entries = definitionIndex.get(name);
+  if (!entries || entries.length === 0) return undefined;
+  return entries[entries.length - 1];
+}
+
+export function getDefinitionEntries(name) {
+  if (!name) return [];
+  return definitionIndex.get(name) ?? [];
+}
+
+export function getDefinitionEntryBySignature(name, signatureWordsOrKey) {
+  if (!name || !signatureWordsOrKey) return undefined;
+  const entries = definitionIndex.get(name);
+  if (!entries || entries.length === 0) return undefined;
+  const key = Array.isArray(signatureWordsOrKey)
+    ? joinSignatureWords(signatureWordsOrKey)
+    : String(signatureWordsOrKey);
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    if (entries[i].signatureKey === key) return entries[i];
+  }
+  return undefined;
 }
 
 export function getDefinitionBody(name) {
   if (!name) return [];
-  const slot = findDefinitionSlot(name);
-  const entry = definitionIndex[slot];
-  if (!entry || entry.name !== name) return [];
+  const entry = getDefinitionEntry(name);
+  if (!entry) return [];
   const start = entry.index + 1;
   const end = typeof entry.end === "number" ? entry.end : memory.length;
   if (end <= start) return [];
@@ -150,13 +158,18 @@ export function getDefinitionBody(name) {
 }
 
 export function dumpDefinitionIndex() {
-  return definitionIndex;
+  const list = [];
+  for (const [name, entries] of definitionIndex.entries()) {
+    const entry = entries[entries.length - 1];
+    if (entry) list.push(entry);
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function forget() {
   memory = [];
   history = [];
-  definitionIndex.length = 0;
+  definitionIndex.clear();
   contextStack.length = 0;
   sandpits = [];
   clearSignatureDefinitions();
