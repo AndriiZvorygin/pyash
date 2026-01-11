@@ -1,6 +1,18 @@
 // bridge (formerly dispatcher)
 import { add, subtract, invert, exponential, multiply, divide, produce, neuron, twiceCrescent, chip, understand, read, mind, giant, tiny, equally } from "../verbs/index.mjs";
-import { remember, doRemember, allRemember, getDefinition, getDefinitionEntry, getDefinitionBody, pushMemoryContext, popMemoryContext, recordSandpitTrace } from "../remember/index.mjs";
+import {
+  remember,
+  doRemember,
+  allRemember,
+  getDefinition,
+  getDefinitionEntry,
+  getDefinitionEntryBySignature,
+  getDefinitionEntries,
+  getDefinitionBody,
+  pushMemoryContext,
+  popMemoryContext,
+  recordSandpitTrace
+} from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
@@ -236,12 +248,12 @@ export async function interpret(sentence) {
 
   if (mood === "ya" || mood === "def") {
     if (mood === "def" && be === "ceremony") {
-      if (su?.name && getDefinition(su.name)) {
-        console.warn(`ceremony redefined: ${su.name}`);
-      }
       const sig = deriveSignatureFromDefinition(sentence);
       if (sig) {
         sentence.signatureWords = sig;
+        if (su?.name && getDefinitionEntryBySignature(su.name, sig)) {
+          console.warn(`ceremony redefined: ${su.name}`);
+        }
         registerSignature({ name: su?.name, signatureWords: sig });
       }
     }
@@ -277,7 +289,16 @@ export async function interpret(sentence) {
     const imperativeResult = await handleImperative({
       sentence,
       state,
-      memory: { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext, getDefinition },
+      memory: {
+        remember,
+        doRemember,
+        allRemember,
+        pushMemoryContext,
+        popMemoryContext,
+        getDefinition,
+        getDefinitionEntries,
+        getDefinitionEntryBySignature
+      },
       recordSandpitTrace,
       getDefinitionEntry,
       interpret

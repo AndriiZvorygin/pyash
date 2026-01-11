@@ -10,16 +10,10 @@ const signatureHandlers = new Map(); // key -> fn
 export function registerSignature({ name, signatureWords }) {
   if (!name || !signatureWords?.length) return;
   const key = joinSignatureWords(signatureWords);
-
-  // Remove previous registrations for this name
-  const prev = nameToKeys.get(name);
-  if (prev) {
-    for (const k of prev) signatureRegistry.delete(k);
-    prev.clear();
-  }
-
   signatureRegistry.set(key, name);
-  nameToKeys.set(name, new Set([key]));
+  const keys = nameToKeys.get(name) ?? new Set();
+  keys.add(key);
+  nameToKeys.set(name, keys);
 }
 
 export function registerSignatureAlias({ name, signatureWords }) {

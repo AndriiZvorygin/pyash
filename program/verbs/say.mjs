@@ -69,7 +69,7 @@ export async function say(sentence, { remember: rememberFn = remember } = {}) {
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "say", caseKey: "vyah" });
   const defaultFact = rememberFn?.("say");
   const defaultTarget = defaultFact?.be === "default" ? defaultFact?.ob?.name : null;
-  if (defaultTarget && defaultTarget !== "say") {
+  if (aspect !== "stream" && defaultTarget && defaultTarget !== "say") {
     const { interpret } = await import("../bridge/index.mjs");
     const spec = defaultFact?.from?.filename ?? defaultFact?.from?.name;
     if (spec) {
@@ -87,8 +87,8 @@ export async function say(sentence, { remember: rememberFn = remember } = {}) {
       if (forwarded[key] === undefined) delete forwarded[key];
     }
     if (forwarded.ob?.name && !forwarded.ob?.text && !forwarded.ob?.num && forwarded.ob?.boolean === undefined && !forwarded.ob?.hollow) {
-      const remembered = rememberFn?.(forwarded.ob.name);
-      if (!remembered) forwarded.ob = { text: forwarded.ob.name };
+      const rendered = renderSayValue(forwarded.ob, { rememberFn });
+      forwarded.ob = { text: String(rendered ?? forwarded.ob.name ?? "") };
     }
     if (!forwarded.to) {
       forwarded.to = { name: "result", nameTypeWords: ["text"] };
