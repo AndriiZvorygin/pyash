@@ -1,0 +1,5 @@
+whisper english input:
+  do be plus object number 5 to name result
+
+pyash output:
+  ob num 5 to name result be plus do

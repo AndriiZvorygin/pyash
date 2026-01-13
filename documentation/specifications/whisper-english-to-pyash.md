@@ -28,6 +28,11 @@ Normalisation steps:
 * collapse repeated whitespace
 * split into space-delimited tokens
 
+Quoted block delimiters are spoken as tokens, not punctuation:
+* `quoted.<lang>.` is spoken as `quoted <lang>`
+* `.<lang>.quoted` is spoken as `<lang> quoted`
+After normalization, these remain two-token delimiters (`quoted <lang>` / `<lang> quoted`) and MUST be preserved as quoting boundaries.
+
 No reliance on commas, semicolons, or periods.
 
 ---
@@ -98,6 +103,7 @@ Rules:
 * If the first token is a mood, treat it as `moodPrefix`.
 * Else, require a mood token at the end as `moodSuffix`.
 * If both appear, raise a parse error.
+* Prefer suffix moods when parsing to avoid conflicts with text payloads.
 
 `exists` remains valid only with `ya`. 
 
@@ -120,6 +126,8 @@ Speech mapping keeps these tokens explicit:
 * “object number 5” -> `ob num 5`
 * “to name num counter” -> `to name num counter`
 
+For multi-word or free-form text payloads, use quoted blocks (`quoted <lang> ... <lang> quoted`) to avoid keyword collisions.
+
 ### 6.2 Literal-word dispatch (`wo`)
 
 Support `wo` in speech exactly, since it affects signature words and strict literal dispatch.  
@@ -135,6 +143,14 @@ Speech MUST include the delimiters `la` and `ko` as spoken tokens. Everything be
 Example speech:
 
 * “object la subject name clause object text ok be text ya ko be evoke ya” 
+
+### 6.4 Quoted blocks (`quoted <lang>` / `<lang> quoted`)
+
+Speech MUST include the two-token delimiters `quoted <lang>` and `<lang> quoted`. Everything between them is treated as text and may include keywords.
+
+Example speech:
+
+* “object quoted pyash su name alpha ob num 1 be number ya pyash quoted”
 
 ---
 
