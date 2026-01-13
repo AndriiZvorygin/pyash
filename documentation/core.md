@@ -44,6 +44,7 @@ This document summarizes the current core language model used by the interpreter
 - `be plus/subtract/multiply/divide` operate on `ob num` and `to` target.
 - `remains` computes modulus; `from num` sets the divisor. Targets can be names or genitives.
 - Text concatenation uses `be plus` with `ob text ...`.
+- Verb aliases are resolved before signature dispatch: `add` is accepted as an alias for `plus` unless a ceremony named `add` exists. The alias map lives in `program/library/verb_aliases.json`.
 
 ## Conditionals
 - **Single official form**: `ob … be tiny/giant/equally from … then <sentence>` computes a truth value and, when true, immediately interprets the attached consequence sentence.

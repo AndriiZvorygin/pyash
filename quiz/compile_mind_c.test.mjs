@@ -23,7 +23,7 @@ async function compileToC(pyash) {
   return unwrapQuoted(res?.ob?.text ?? res?.value?.text ?? "", "c");
 }
 
-test("compile mind to C uses PYA_MIND_RESPONSE", async () => {
+test("compile mind to C uses PYA_MIND_RESPONSE", async (t) => {
   const pyash = [
     "exists su name helper be mind via state \"qwen3\" ya",
     "su name answer ob text \"Hello\" for name helper to name text helper-out be write do"
@@ -33,15 +33,24 @@ test("compile mind to C uses PYA_MIND_RESPONSE", async () => {
   const cPath = path.join(tmpDir, "out.c");
   const exePath = path.join(tmpDir, "out");
   await fs.writeFile(cPath, c);
-  await execFileAsync("gcc", [
-    "-std=c11",
-    "-O0",
-    "-Icaterer/curl/include",
-    "-o",
-    exePath,
-    cPath,
-    "-lcurl"
-  ], { timeout: 120000 });
+  try {
+    await execFileAsync("gcc", [
+      "-std=c11",
+      "-O0",
+      "-Icaterer/curl/include",
+      "-o",
+      exePath,
+      cPath,
+      "-lcurl"
+    ], { timeout: 120000 });
+  } catch (err) {
+    const stderr = String(err?.stderr ?? "");
+    if (stderr.includes("cannot find -lcurl") || err?.code === "ENOENT") {
+      t.skip("gcc/libcurl not available");
+      return;
+    }
+    throw err;
+  }
   const { stdout } = await execFileAsync(exePath, [], {
     env: { ...process.env, PYA_MIND_RESPONSE: "OK" }
   });

@@ -8,6 +8,7 @@ import { throwErrorSentence, surfaceErrorSentence } from "../error.mjs";
 import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerModuleAlias, isModuleExecuting, pushModuleExecution, popModuleExecution } from "./modules.mjs";
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 import { handleLifecycleAspect } from "./runtime.mjs";
+import { resolveVerbAlias } from "../library/verbAliases.mjs";
 
 function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -38,6 +39,14 @@ export async function handleImperative({
   getDefinitionEntry,
   interpret
 }) {
+  if (sentence?.be) {
+    const resolved = resolveVerbAlias(sentence.be);
+    if (resolved !== sentence.be) {
+      const hasDefinition = typeof getDefinitionEntry === "function" && getDefinitionEntry(sentence.be);
+      if (!hasDefinition) sentence.be = resolved;
+    }
+  }
+
   const { mood, be, ob, to, from, su } = sentence;
   if (mood !== "do") return null;
 
