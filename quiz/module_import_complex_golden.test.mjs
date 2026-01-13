@@ -24,10 +24,28 @@ function unwrapQuoted(text, lang) {
 test("complex module import golden: run, runjs, runc parity", async () => {
   forget();
   const entryPath = path.resolve("examples/pyash/module-import-complex.pya");
-  setEntryModulePath(entryPath);
-
   const source = await fs.readFile(entryPath, "utf8");
-  const lines = splitSentences(source);
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-import-"));
+  const entryTmpDir = path.join(tmpRoot, "examples", "pyash");
+  await fs.mkdir(entryTmpDir, { recursive: true });
+  const rewritten = source.replaceAll("/home/htaf/pyac/pyash", tmpRoot);
+  const tmpEntryPath = path.join(entryTmpDir, "module-import-complex.pya");
+  const exampleDir = path.dirname(entryPath);
+  await fs.writeFile(tmpEntryPath, rewritten, "utf8");
+  await fs.writeFile(
+    path.join(entryTmpDir, "pyash.json"),
+    await fs.readFile(path.join(exampleDir, "pyash.json"), "utf8"),
+    "utf8"
+  );
+  try {
+    await fs.symlink(path.join(exampleDir, "modules"), path.join(entryTmpDir, "modules"), "dir");
+  } catch {
+    // Fallback: keep relative imports working by copying the modules directory when symlink fails.
+    await fs.cp(path.join(exampleDir, "modules"), path.join(entryTmpDir, "modules"), { recursive: true });
+  }
+  setEntryModulePath(tmpEntryPath);
+
+  const lines = splitSentences(rewritten);
 
   const logs = [];
   const originalLog = console.log;
@@ -55,7 +73,7 @@ test("complex module import golden: run, runjs, runc parity", async () => {
     mapText
   ]);
 
-  const jsSentence = parse(`from filename "${entryPath}" to state javascript to text output be compile do`);
+  const jsSentence = parse(`from filename "${tmpEntryPath}" to state javascript to text output be compile do`);
   const jsResult = await interpret(jsSentence);
   const js = unwrapQuoted(jsResult?.ob?.text ?? jsResult?.value?.text ?? "", "javascript");
   const jsLogs = [];
@@ -66,7 +84,7 @@ test("complex module import golden: run, runjs, runc parity", async () => {
     mapText
   ]);
 
-  const cSentence = parse(`from filename "${entryPath}" to state c to text output be compile do`);
+  const cSentence = parse(`from filename "${tmpEntryPath}" to state c to text output be compile do`);
   const cResult = await interpret(cSentence);
   const c = unwrapQuoted(cResult?.ob?.text ?? cResult?.value?.text ?? "", "c");
 

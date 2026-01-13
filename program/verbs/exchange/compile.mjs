@@ -33,6 +33,7 @@ import { canonicalJsonStringify, canonicalizeJsonValue, parseCsvText } from "./c
 import { csvRuntimeHelper, exchangeRuntimeHelper, jsonRuntimeHelper, newspaperRuntimeHelper, yamlRuntimeHelper, yamlStringifyHelper } from "./compile/js/runtime_helpers.mjs";
 import { buildToolSchemasForCompile } from "./compile/tooling.mjs";
 import { compareUtf8, markDeclared, sanitizeName, sentenceIdForText } from "./compile/util.mjs";
+import { resolveVerbAlias } from "../../library/verbAliases.mjs";
 
 function sentenceLineNumbersFromText(sourceText) {
   const sentences = splitSentences(sourceText);
@@ -319,7 +320,9 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
   const isPermanent = beWords[0] === "permanent";
-  const baseBe = isPermanent ? beWords.slice(1).join(" ") : verb;
+  const baseBeRaw = isPermanent ? beWords.slice(1).join(" ") : verb;
+  const aliasBe = resolveVerbAlias(baseBeRaw);
+  const baseBe = aliasBe !== baseBeRaw && !ceremonyFns?.has(baseBeRaw) ? aliasBe : baseBeRaw;
   const effectiveBe = baseBe || sentence.mood;
 
   const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared });
