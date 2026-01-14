@@ -1,0 +1,70 @@
+su name hear from filename input be ceremony def
+  exists su name cmd ob text "node command/whisper_main.mjs --input " be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name cmd be plus do
+  ob text " --bin " to name cmd be plus do
+  ob name hear bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+su name hear from filename input ob text prompt be ceremony def
+  exists su name cmd ob text "node command/whisper_main.mjs --input " be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name cmd be plus do
+  ob text " --bin " to name cmd be plus do
+  ob name hear bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  ob text " --prompt \"" to name cmd be plus do
+  ob text of ob of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+su name hear during num duration vyah timebox be ceremony def
+  exists su name cmd ob text "node command/whisper_stream.mjs --final --timebox " be text ya
+  ob num of during of this to name cmd be plus do
+  ob text " --bin " to name cmd be plus do
+  ob name hear stream bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+su name hear during num duration ob text prompt vyah timebox be ceremony def
+  exists su name cmd ob text "node command/whisper_stream.mjs --final --timebox " be text ya
+  ob num of during of this to name cmd be plus do
+  ob text " --bin " to name cmd be plus do
+  ob name hear stream bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  ob text " --prompt \"" to name cmd be plus do
+  ob text of ob of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+su name hear vyah stream be ceremony def
+  exists su name cmd ob text "node command/whisper_stream.mjs" be text ya
+  ob text " --bin " to name cmd be plus do
+  ob name hear stream bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  su name run ob text of cmd vyah stream be command do
+  su name run ret
+prah
+su name hear ob text prompt vyah stream be ceremony def
+  exists su name cmd ob text "node command/whisper_stream.mjs" be text ya
+  ob text " --bin " to name cmd be plus do
+  ob name hear stream bin to name cmd be plus do
+  ob text " --model " to name cmd be plus do
+  ob name hear model to name cmd be plus do
+  ob text " --prompt \"" to name cmd be plus do
+  ob text of ob of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  su name run ob text of cmd vyah stream be command do
+  su name run ret
+prah
+su name hear be export ya

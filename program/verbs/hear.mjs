@@ -10,6 +10,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
+import { state } from "../bridge/state.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -350,6 +351,42 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   }
 
   const fixture = resolveConfigText("hear fixture", { rememberFn });
+  const defaultFact = rememberFn?.("hear");
+  const defaultTarget = defaultFact?.be === "default" ? defaultFact?.ob?.name : null;
+  if (!fixture && defaultTarget && defaultTarget !== "hear") {
+    const hasInputPath = Boolean(resolveHearInputPath(sentence, { rememberFn }));
+    const hasTarget = Boolean(sentence?.to?.name || sentence?.to?.filename);
+    const canForward =
+      !hasTarget &&
+      (aspectKey === "stream" ||
+      (aspectKey === "timebox" && Number.isFinite(Number(sentence?.during?.num ?? sentence?.during))) ||
+      (aspectKey === "eval" && hasInputPath));
+    if (canForward) {
+      const { interpret } = await import("../bridge/index.mjs");
+      const spec = defaultFact?.from?.filename ?? defaultFact?.from?.name;
+      if (spec) {
+        const moduleSpec = path.resolve(process.cwd(), spec);
+        await interpret({
+          mood: "do",
+          be: "import",
+          from: { name: moduleSpec },
+          ob: { name: "hear" },
+          to: { name: defaultTarget }
+        });
+      }
+      const forwarded = { ...sentence, be: defaultTarget };
+      for (const key of Object.keys(forwarded)) {
+        if (forwarded[key] === undefined) delete forwarded[key];
+      }
+      const prevSource = state.currentSourceSentence;
+      state.currentSourceSentence = forwarded;
+      try {
+        return await interpret(forwarded);
+      } finally {
+        state.currentSourceSentence = prevSource;
+      }
+    }
+  }
   let transcript = "";
   let backend = "fixture";
   let model = null;
