@@ -3,7 +3,17 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 function parseArgs(argv) {
-  const out = { capture: null, model: null, file: null, language: null, help: false };
+  const out = {
+    capture: null,
+    model: null,
+    file: null,
+    language: null,
+    prompt: null,
+    bin: null,
+    timebox: null,
+    final: false,
+    help: false
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "-h" || arg === "--help") {
@@ -28,6 +38,25 @@ function parseArgs(argv) {
     if (arg === "-l" || arg === "--language") {
       out.language = argv[i + 1];
       i += 1;
+      continue;
+    }
+    if (arg === "--prompt") {
+      out.prompt = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--bin") {
+      out.bin = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--timebox") {
+      out.timebox = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--final") {
+      out.final = true;
     }
   }
   return out;
@@ -51,7 +80,8 @@ function resolveComputer() {
   }
 }
 
-function resolveWhisperStreamBinary() {
+function resolveWhisperStreamBinary(binArg) {
+  if (binArg) return binArg;
   if (process.env.PYA_HEAR_STREAM_BIN) return process.env.PYA_HEAR_STREAM_BIN;
   const computer = resolveComputer();
   const ext = computer.startsWith("win-") ? ".exe" : "";
@@ -65,8 +95,53 @@ function resolveModelPath() {
   return path.join("caterer", "hear", "template", "whisper", "ggml-base.en.bin");
 }
 
-function resolveHearLanguage() {
-  return process.env.PYA_HEAR_LANGUAGE || "auto";
+function resolveHearLanguage(langArg) {
+  return langArg || process.env.PYA_HEAR_LANGUAGE || "auto";
+}
+
+function normalizeStreamLine(line) {
+  return String(line ?? "").trim().toLowerCase();
+}
+
+function normalizeStreamPrefix(line) {
+  const normalized = normalizeStreamLine(line);
+  return normalized.replace(/[.]+$/u, "");
+}
+
+function isBlankAudioLine(line) {
+  const trimmed = String(line ?? "").trim();
+  return trimmed.includes("[BLANK_AUDIO]");
+}
+
+function collapseStreamLines(lines) {
+  const output = [];
+  let lastLine = "";
+  for (const line of lines) {
+    const trimmed = String(line ?? "").trim();
+    if (!trimmed || isBlankAudioLine(trimmed)) continue;
+    if (!lastLine) {
+      output.push(trimmed);
+      lastLine = trimmed;
+      continue;
+    }
+    const normLast = normalizeStreamLine(lastLine);
+    const normNext = normalizeStreamLine(trimmed);
+    const normLastPrefix = normalizeStreamPrefix(lastLine);
+    if (normNext === normLast) continue;
+    if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
+      output[output.length - 1] = trimmed;
+      lastLine = trimmed;
+      continue;
+    }
+    output.push(trimmed);
+    lastLine = trimmed;
+  }
+  return output;
+}
+
+function buildStreamTranscript(text) {
+  const lines = String(text ?? "").split(/\r?\n/);
+  return collapseStreamLines(lines).join("\n");
 }
 
 function printHelp() {
@@ -78,6 +153,10 @@ Options:
   -m, --model <path>   Whisper model path (default: PYA_HEAR_MODEL or ggml-base.bin)
   -l, --language <id>  Language id (default: PYA_HEAR_LANGUAGE or auto)
   -f, --file <path>    Output text file (default: /tmp/whisper-stream.txt)
+  --prompt <text>      Initial prompt (optional)
+  --bin <path>         Whisper-stream binary path (optional)
+  --timebox <ms>       Stop after duration (optional)
+  --final              Print only the final transcript (optional)
 
 Environment:
   PYA_HEAR_STREAM_BIN  Override whisper-stream binary path
@@ -96,13 +175,20 @@ async function main() {
   const captureId = args.capture ?? process.env.PYA_HEAR_CAPTURE ?? "0";
   const modelPath = args.model ?? resolveModelPath();
   const outputPath = args.file ?? "/tmp/whisper-stream.txt";
-  const language = args.language ?? resolveHearLanguage();
-  const binPath = resolveWhisperStreamBinary();
+  const language = resolveHearLanguage(args.language);
+  const binPath = resolveWhisperStreamBinary(args.bin);
+  const prompt = args.prompt ?? "";
+  const finalOnly = Boolean(args.final);
+  const timeboxMs = args.timebox ? Number(args.timebox) : null;
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, "");
 
-  const proc = spawn(String(binPath), ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(outputPath)], {
+  const whisperArgs = ["-c", String(captureId), "-m", String(modelPath), "-l", String(language), "-f", String(outputPath)];
+  if (prompt) {
+    whisperArgs.push("--prompt", prompt);
+  }
+  const proc = spawn(String(binPath), whisperArgs, {
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -113,6 +199,7 @@ async function main() {
 
   let offset = 0;
   let pending = "";
+  let sawTranscript = false;
   const interval = setInterval(() => {
     let stats;
     try {
@@ -130,7 +217,13 @@ async function main() {
     const lines = text.split(/\r?\n/);
     pending = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.length) console.log(line);
+      if (!line.length) continue;
+      if (isBlankAudioLine(line)) {
+        if (sawTranscript) proc.kill("SIGINT");
+        continue;
+      }
+      sawTranscript = true;
+      if (!finalOnly) console.log(line);
     }
   }, 200);
 
@@ -141,9 +234,28 @@ async function main() {
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
 
-  proc.on("close", () => {
+  let timeboxTimer = null;
+  if (Number.isFinite(timeboxMs) && timeboxMs > 0) {
+    timeboxTimer = setTimeout(() => {
+      proc.kill("SIGINT");
+    }, timeboxMs);
+  }
+
+  proc.on("close", async () => {
     clearInterval(interval);
-    if (pending.trim()) console.log(pending.trim());
+    if (timeboxTimer) clearTimeout(timeboxTimer);
+    if (!finalOnly && pending.trim()) console.log(pending.trim());
+    if (finalOnly) {
+      try {
+        const raw = fs.readFileSync(outputPath, "utf8");
+        const transcript = buildStreamTranscript(raw);
+        if (transcript.length) {
+          console.log(transcript);
+        }
+      } catch {
+        // ignore missing output
+      }
+    }
     process.exit(0);
   });
 }
