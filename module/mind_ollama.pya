@@ -3,4 +3,10 @@ su name mind ob text payload be ceremony def
   exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd from filename "/tmp/pyash-mind-ollama-request.json" be command do
 prah
+su name mind ob text payload vyah stream be ceremony def
+  ob text of ob of this to filename "/tmp/pyash-mind-ollama-request.json" be write do
+  exists su name cmd ob text "node command/mind_ollama_runner.mjs --stream" be text ya
+  su name run ob text of cmd from filename "/tmp/pyash-mind-ollama-request.json" vyah stream be command do
+  su name run ret
+prah
 su name mind be export ya
