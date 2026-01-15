@@ -38,7 +38,7 @@ function collectSequenceDeps(sentences) {
   return deps;
 }
 
-export function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState, throwErrorSentence, deriveSignatureFromDefinition, joinSignatureWords, sanitizeName, transpileSentence }) {
+export function transpileCeremony(defSentence, bodySentences, { lang, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, cHelpers, jsHelpers, cState, throwErrorSentence, deriveSignatureFromDefinition, joinSignatureWords, sanitizeName, transpileSentence }) {
   const seqDeps = collectSequenceDeps(bodySentences);
   for (const reg of seqDeps) {
     if (!defSentence?.[reg]) {
@@ -62,7 +62,7 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
   const locals = new Set();
   const localsTypes = new Map();
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, cHelpers, jsHelpers, cState });
+    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, cHelpers, jsHelpers, cState });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {
@@ -76,13 +76,17 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
     hasReturn
       ? null
       : lang === "c"
-        ? "return;"
+        ? "return pya_value_none();"
         : "return sentence;";
 
   if (lang === "c") {
     const paramList = "void";
     const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
-    return `void ${fnName}(${paramList}) {\n${body}\n}`;
+    if (cHelpers) {
+      cHelpers.usesCeremonyValue = true;
+      cHelpers.usesMapGlobals = true;
+    }
+    return `pya_value ${fnName}(${paramList}) {\n${body}\n}`;
   }
 
   const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
@@ -100,6 +104,7 @@ export function handleCeremonyDefinition(context, helpers) {
     declaredTypes,
     declaredVectorTypes,
     ceremonyFns,
+    ceremonyReturnTypes,
     cHelpers,
     jsHelpers,
     cState
@@ -143,6 +148,15 @@ export function handleCeremonyDefinition(context, helpers) {
     ? joinSignatureWords(signatureWords).replace(/\s+/g, "_")
     : (sentence?.su?.name || "ceremony");
   const fnName = sanitizeName(fnBaseName);
+  if (ceremonyReturnTypes) {
+    const returnType = signatureWords?.includes("text")
+      ? "text"
+      : signatureWords?.includes("num")
+        ? "number"
+        : "number";
+    ceremonyReturnTypes.set(sentence.su?.name, returnType);
+    if (signatureWords) ceremonyReturnTypes.set(joinSignatureWords(signatureWords), returnType);
+  }
   ceremonyFns.set(sentence.su?.name, fnName);
   if (signatureWords) {
     ceremonyFns.set(joinSignatureWords(signatureWords), fnName);
