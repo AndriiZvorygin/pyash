@@ -5,6 +5,7 @@ import { englishLineToSentence, sentenceToEnglish } from "./translation/english.
 import { frenchLineToSentence, sentenceToFrench } from "./translation/french.mjs";
 import { javascriptLineToSentence } from "./translation/javascript.mjs";
 import { russianLineToSentence, sentenceToRussian } from "./translation/russian.mjs";
+import { whisperEnglishLineToSentence } from "./translation/whisper_english.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -20,10 +21,16 @@ export async function translation_from_text_to_name_text(sentence) {
   const sourceLang = (sentence?.fromstate?.name || "").toLowerCase();
   const targetLang = (sentence?.become?.name || sentence?.tostate?.name || "").toLowerCase();
   const isEnglishSource = sourceLang === "english";
+  const isWhisperEnglishSource =
+    sourceLang === "whisper-english" ||
+    sourceLang === "whisperenglish" ||
+    sourceLang === "whisper_english";
   const isJavaScriptSource = sourceLang === "javascript" || sourceLang === "js";
   const isRussianSource = sourceLang === "russian" || sourceLang === "ru";
   const isFrenchSource = sourceLang === "french" || sourceLang === "fr";
-  const sourceAdapter = isEnglishSource
+  const sourceAdapter = isWhisperEnglishSource
+    ? whisperEnglishLineToSentence
+    : isEnglishSource
     ? englishLineToSentence
     : isJavaScriptSource
       ? javascriptLineToSentence
@@ -84,6 +91,30 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "english", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper-english", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper-english", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisperenglish", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisperenglish", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper_english", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper_english", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
   {

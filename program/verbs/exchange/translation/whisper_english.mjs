@@ -1,5 +1,6 @@
 import { MOODS } from "../../../library/grammar/keywords.mjs";
 import { QUOTED_TEXT_PREFIX } from "../../../understand/constants.mjs";
+import { parseTokens } from "../../../understand/parse_tokens.mjs";
 
 const PUNCTUATION_RE = /[.,;:!?]/g;
 const WHITESPACE_RE = /\s+/g;
@@ -81,4 +82,10 @@ export function normalizeWhisperEnglishTokens(line) {
     return ROLE_ALIASES.get(token) ?? token;
   });
   return normalizeMoodSuffix(aliased);
+}
+
+export function whisperEnglishLineToSentence(line) {
+  const tokens = normalizeWhisperEnglishTokens(line);
+  if (tokens.length === 0) return null;
+  return parseTokens(tokens);
 }
