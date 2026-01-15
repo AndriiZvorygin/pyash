@@ -45,3 +45,55 @@ test("compile to C: ceremony ret updates target via to-name", async () => {
   const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
   assert.equal(stdout.trim(), "7");
 });
+
+test("compile to C: ceremony ret defaults to this ob when no source", async () => {
+  forget();
+
+  const pyash = [
+    "exists su name result ob num 0 be number ya",
+    "su name echo ob num 0 be ceremony def",
+    "this ret",
+    "su name echo be ceremony prah",
+    "ob num 5 to name result be echo do",
+    "ob name result be write do",
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
+  const result = await interpret(sentence);
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
+  const cPath = path.join(tmpDir, "out.c");
+  const exePath = path.join(tmpDir, "out");
+  await fs.writeFile(cPath, c, "utf8");
+
+  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath], { timeout: 120000 });
+  const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
+  assert.equal(stdout.trim(), "5");
+});
+
+test("compile to C: ceremony ret supports text return", async () => {
+  forget();
+
+  const pyash = [
+    "exists su name output ob text quoted.text..text.quoted be text ya",
+    "su name echo ob text 0 to name text out be ceremony def",
+    "this ret",
+    "su name echo be ceremony prah",
+    "ob text \"hello\" to name output be echo do",
+    "ob name output be write do",
+  ].join("\n");
+
+  const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
+  const result = await interpret(sentence);
+  const c = unwrapQuoted(result?.ob?.text ?? result?.value?.text ?? "", "c");
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-c-"));
+  const cPath = path.join(tmpDir, "out.c");
+  const exePath = path.join(tmpDir, "out");
+  await fs.writeFile(cPath, c, "utf8");
+
+  await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath], { timeout: 120000 });
+  const { stdout } = await execFileAsync(exePath, [], { timeout: 120000 });
+  assert.equal(stdout.trim(), "hello");
+});
