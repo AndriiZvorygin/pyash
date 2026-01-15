@@ -20,6 +20,29 @@ async function resolveInterpret() {
   return mod.interpret;
 }
 
+async function callMindBackend({ backendName, payload }) {
+  if (!backendName) return null;
+  const interpret = await resolveInterpret();
+  const response = await interpret({
+    mood: "do",
+    be: backendName,
+    ob: { text: JSON.stringify(payload) }
+  });
+  const rawText =
+    response?.ob?.text ??
+    response?.value?.text ??
+    response?.result?.text ??
+    response?.result?.ob?.text ??
+    response?.ob?.name ??
+    "";
+  if (!rawText) return null;
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return { response: rawText };
+  }
+}
+
 function resolveStreamOutputPath(sentence, outputName) {
   const base = getExchangeSentenceId() || outputName || sentence?.su?.name || "mind-stream";
   const safeBase = String(base).replace(/[^A-Za-z0-9_.-]+/g, "-");
@@ -131,6 +154,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
 
   const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
+  const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -176,9 +200,13 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
           lastResponse = { message: { content: mockResponse } };
         }
       } else {
-        const requestPayload = { model, messages, tools, stream: false };
+        const requestPayload = { mode: "chat", model, messages, tools };
         recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
-        lastResponse = await ollama.chat(requestPayload);
+        if (backendName) {
+          lastResponse = await callMindBackend({ backendName, payload: requestPayload });
+        } else {
+          lastResponse = await ollama.chat({ model, messages, tools, stream: false });
+        }
       }
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
 
@@ -297,10 +325,17 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     } else if (mockResponse) {
       responseText = mockResponse;
     } else {
-      recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
-      const raw = await ollama.generate(model, fullPrompt.trim());
-      recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: raw }) });
-      responseText = raw;
+      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      if (backendName) {
+        const backendResponse = await callMindBackend({ backendName, payload: requestPayload });
+        responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+        recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
+      } else {
+        const raw = await ollama.generate(model, fullPrompt.trim());
+        recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: raw }) });
+        responseText = raw;
+      }
     }
   }
 

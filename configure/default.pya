@@ -1,9 +1,11 @@
 from filename "./module/ffmpeg_hear.pya" ob name microphone hear be import do
 from filename "./module/whisper_hear.pya" ob name hear to name whisper command hear be import do
+from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do
 from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
 su say be default ob name piper command say ya
 su hear be default ob name whisper command hear ya
+su name mind backend be default ob name ollama command mind ya
 su name stream stdout ob bool lie be default ya
 su name keyboard bin ob text "xdotool" be default ya
 su name ffmpeg input ob text "pulse" be default ya
