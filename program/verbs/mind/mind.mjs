@@ -43,6 +43,17 @@ async function callMindBackend({ backendName, payload }) {
   }
 }
 
+async function callMindBackendStream({ backendName, payload }) {
+  if (!backendName) return null;
+  const interpret = await resolveInterpret();
+  return interpret({
+    mood: "do",
+    be: backendName,
+    ob: { text: JSON.stringify(payload) },
+    vyah: { ve: { type: "name", values: ["stream"] } }
+  });
+}
+
 function resolveStreamOutputPath(sentence, outputName) {
   const base = getExchangeSentenceId() || outputName || sentence?.su?.name || "mind-stream";
   const safeBase = String(base).replace(/[^A-Za-z0-9_.-]+/g, "-");
@@ -62,6 +73,37 @@ function writeStreamEnd(filePath) {
 function startStreamFile(filePath) {
   fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
   fsSync.writeFileSync(filePath, "", "utf8");
+}
+
+function startStreamTail({ filename, onLine, onEnd }) {
+  let offset = 0;
+  let pending = "";
+  const interval = setInterval(() => {
+    let stats;
+    try {
+      stats = fsSync.statSync(filename);
+    } catch {
+      return;
+    }
+    if (stats.size <= offset) return;
+    const fd = fsSync.openSync(filename, "r");
+    const buffer = Buffer.alloc(stats.size - offset);
+    fsSync.readSync(fd, buffer, 0, buffer.length, offset);
+    fsSync.closeSync(fd);
+    offset = stats.size;
+    const text = pending + buffer.toString("utf8");
+    const lines = text.split(/\r?\n/);
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.length) continue;
+      if (line.trim() === "[STREAM_END]") {
+        if (onEnd) onEnd();
+        return;
+      }
+      if (onLine) onLine(line);
+    }
+  }, 50);
+  return () => clearInterval(interval);
 }
 
 function resolveStreamStdoutEnabled({ rememberFn } = {}) {
@@ -267,7 +309,8 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
       startStreamFile(streamOutputPath);
       const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
-      recordMindJson({ targetName: mindName, label: "request", payload: { model, prompt: fullPrompt.trim(), stream: true } });
+      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: true };
+      recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       (async () => {
         let streamedText = "";
         try {
@@ -287,6 +330,39 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
             recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks }) });
             writeStreamEnd(streamOutputPath);
             recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
+          } else if (backendName) {
+            const backendStream = await callMindBackendStream({ backendName, payload: requestPayload });
+            const backendPath =
+              backendStream?.ob?.filename ??
+              backendStream?.result?.ob?.filename ??
+              backendStream?.result?.filename ??
+              null;
+            if (!backendPath) {
+              throw new Error("mind backend stream missing filename");
+            }
+            await new Promise((resolve) => {
+              const stop = startStreamTail({
+                filename: backendPath,
+                onLine: (line) => {
+                  try {
+                    const chunk = JSON.parse(line);
+                    const textChunk = String(chunk ?? "");
+                    streamedText += textChunk;
+                    writeStreamChunk(streamOutputPath, textChunk);
+                    if (streamStdoutEnabled) process.stdout.write(textChunk);
+                  } catch {
+                    // ignore malformed chunk lines
+                  }
+                },
+                onEnd: () => {
+                  stop();
+                  resolve();
+                }
+              });
+            });
+            recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: streamedText }) });
+            writeStreamEnd(streamOutputPath);
+            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName });
           } else {
             const streamed = await ollama.generateStream({
               model,

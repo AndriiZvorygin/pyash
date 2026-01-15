@@ -1,5 +1,9 @@
 import fs from "node:fs";
 
+function parseArgs(argv) {
+  return { stream: argv.slice(2).includes("--stream") };
+}
+
 function readStdin() {
   return new Promise((resolve, reject) => {
     let input = "";
@@ -26,22 +30,71 @@ async function requestJson(endpoint, body) {
   return res.json();
 }
 
+async function requestStream(endpoint, body) {
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    throw new Error(`ollama request failed: ${res.status} ${res.statusText ?? ""}`.trim());
+  }
+  if (!res.body) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of res.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const parts = buffer.split("\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      if (!part.trim()) continue;
+      const payload = JSON.parse(part);
+      if (payload.error) {
+        throw new Error(`ollama request error: ${payload.error}`);
+      }
+      const textChunk = payload.response ?? payload.message?.content ?? "";
+      if (textChunk) {
+        process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
+      }
+    }
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    const payload = JSON.parse(buffer);
+    if (payload.error) throw new Error(`ollama request error: ${payload.error}`);
+    const textChunk = payload.response ?? payload.message?.content ?? "";
+    if (textChunk) {
+      process.stdout.write(`${JSON.stringify(String(textChunk))}\n`);
+    }
+  }
+  process.stdout.write("[STREAM_END]\n");
+}
+
 async function runGenerate(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
-  const body = { model: payload.model, prompt: payload.prompt, stream: false };
+  const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+  if (payload.stream) {
+    await requestStream(endpoint, body);
+    return null;
+  }
   return requestJson(endpoint, body);
 }
 
 async function runChat(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
-  const body = { model: payload.model, messages: payload.messages, stream: false };
+  const body = { model: payload.model, messages: payload.messages, stream: !!payload.stream };
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
+  if (payload.stream) {
+    await requestStream(endpoint, body);
+    return null;
+  }
   return requestJson(endpoint, body);
 }
 
 async function main() {
+  const args = parseArgs(process.argv);
   const stdin = await readStdin();
   if (!stdin.trim()) {
     throw new Error("mind_ollama_runner: missing request payload");
@@ -52,10 +105,12 @@ async function main() {
   } catch (err) {
     throw new Error(`mind_ollama_runner: invalid JSON payload (${err?.message ?? err})`);
   }
+  if (args.stream && !payload.stream) payload.stream = true;
   const mode = payload?.mode ?? "generate";
   const response = mode === "chat"
     ? await runChat(payload)
     : await runGenerate(payload);
+  if (payload?.stream) return;
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
