@@ -57,5 +57,5 @@ test("again can replay from newspaper", async () => {
     "--run-root", tmpDir
   ]);
 
-  assert.match(replay.logs.join("\n"), new RegExp(`su name ${runId} be replay ya`));
+  assert.match(replay.logs.join("\n"), new RegExp(`exists su name ${runId} be replay ya`));
 });

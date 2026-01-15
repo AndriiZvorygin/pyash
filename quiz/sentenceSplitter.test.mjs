@@ -26,18 +26,18 @@ test("splits on can mood", () => {
 });
 
 test("does not split on moods inside quotes", () => {
-  const input = 'su name memo ob text "say ya do later" be topic ya su name next be topic ya';
+  const input = 'exists su name memo ob text "say ya do later" be topic ya exists su name next be topic ya';
   const sentences = splitSentences(input);
 
   assert.deepEqual(sentences, [
-    'su name memo ob text "say ya do later" be topic ya',
-    "su name next be topic ya"
+    'exists su name memo ob text "say ya do later" be topic ya',
+    "exists su name next be topic ya"
   ]);
 });
 
 test("splits multi-line paste blocks on moods and preserves commands without moods", () => {
   const input = [
-    "su name a be number ya",
+    "exists su name a be number ya",
     "ob num 2 to name a be plus do",
     "mem"
   ].join("\n");
@@ -45,7 +45,7 @@ test("splits multi-line paste blocks on moods and preserves commands without moo
   const sentences = splitSentences(input);
 
   assert.deepEqual(sentences, [
-    "su name a be number ya",
+    "exists su name a be number ya",
     "ob num 2 to name a be plus do",
     "mem"
   ]);

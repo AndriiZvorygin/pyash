@@ -17,7 +17,7 @@ test("wo literal values participate in ceremony signatures", async () => {
 
   await run([
     "su name listen from wo microphone to name text output be ceremony def",
-    "su name out ob text \"ok\" be text ya",
+    "exists su name out ob text \"ok\" be text ya",
     "su name out ret",
     "su name listen be ceremony prah"
   ]);

@@ -14,10 +14,10 @@ test("refinery retries on error and records reiterate", async () => {
   const configureDir = path.join(tmpDir, "configure");
   await fs.mkdir(configureDir, { recursive: true });
   await fs.writeFile(path.join(configureDir, "default.pya"), [
-    "su name reiterate delay ob num 0 be number ya",
-    "su name reiterate backoff ob num 2 be number ya",
-    "su name reiterate attempts ob num 2 be number ya",
-    "su name reiterate cap ob num 0 be number ya",
+    "exists su name reiterate delay ob num 0 be number ya",
+    "exists su name reiterate backoff ob num 2 be number ya",
+    "exists su name reiterate attempts ob num 2 be number ya",
+    "exists su name reiterate cap ob num 0 be number ya",
     ""
   ].join("\n"), "utf8");
 

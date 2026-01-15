@@ -15,8 +15,8 @@ test("this fromindex/this toindex bindings inside sandpit preserve registers on 
 
   const lines = [
     "su name inspector to name num target fromindex num 0 toindex num 0 be ceremony def",
-    "su name seen-fromindex ob this fromindex be number ya",
-    "su name seen-toindex ob this toindex be number ya",
+    "exists su name seen-fromindex ob this fromindex be number ya",
+    "exists su name seen-toindex ob this toindex be number ya",
     "this ret",
     "su name inspector be ceremony prah",
     "to name sink fromindex num 2 toindex num 2 be inspector do",

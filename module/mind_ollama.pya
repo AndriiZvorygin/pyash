@@ -9,4 +9,4 @@ su name mind ob text payload vyah stream be ceremony def
   su name run ob text of cmd from filename "/tmp/pyash-mind-ollama-request.json" vyah stream be command do
   su name run ret
 prah
-su name mind be export ya
+exists su name mind be export ya

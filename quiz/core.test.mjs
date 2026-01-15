@@ -14,58 +14,67 @@ async function run(line) {
 test("declarative + query: collector is 7", async () => {
   forget();
 
-  await run("su name collector ob num 7 be number ya");
+  await run("exists su name collector ob num 7 be number ya");
   const res = await run("su name collector ob what que");
 
-  assert.deepEqual(res, "su name collector ob num 7 be number ya");
+  assert.deepEqual(res, "exists su name collector ob num 7 be number ya");
+});
+
+test("missing exists on first assignment throws", async () => {
+  forget();
+
+  await assert.rejects(
+    () => run("su name alpha ob num 1 be number ya"),
+    /variable as not exists/
+  );
 });
 
 test("last write wins: collector becomes 10", async () => {
   forget();
 
-  await run("su name collector ob num 7 be number ya");
-  await run("su name collector ob num 10 be number ya");
+  await run("exists su name collector ob num 7 be number ya");
+  await run("exists su name collector ob num 10 be number ya");
 
   const res = await run("su name collector ob what que");
-  assert.deepEqual(res, "su name collector ob num 10 be number ya");
+  assert.deepEqual(res, "exists su name collector ob num 10 be number ya");
 });
 
 test("plus updates collector via imperative", async () => {
   forget();
 
-  await run("su name collector ob num 7 be number ya");
+  await run("exists su name collector ob num 7 be number ya");
   const act = await run("ob num 2 to name collector be plus do");
   const res = await run("su name collector ob what que");
 
   assert.equal(act.acted, "collector");
   assert.equal(act.value.ob ?? act.value, 9); // depending on how plus returns
-  assert.deepEqual(res, "su name collector ob num 9 be number ya");
+  assert.deepEqual(res, "exists su name collector ob num 9 be number ya");
 });
 
 test("giant conditional controls next statement", async () => {
   forget();
 
-  await run("su name collector ob num 7 be number ya");
+  await run("exists su name collector ob num 7 be number ya");
   await run("su name collector from num 5 be giant then");
   await run("ob num 2 to name collector be plus do");
 
   const res = await run("su name collector ob what que");
-  assert.deepEqual(res, "su name collector ob num 9 be number ya");
+  assert.deepEqual(res, "exists su name collector ob num 9 be number ya");
 
   // Now a false condition should skip the next line
   forget();
-  await run("su name collector ob num 3 be number ya");
+  await run("exists su name collector ob num 3 be number ya");
   await run("su name collector from num 5 be giant then");
   await run("ob num 2 to name collector be plus do");
 
   const res2 = await run("su name collector ob what que");
-  assert.deepEqual(res2, "su name collector ob num 3 be number ya");
+  assert.deepEqual(res2, "exists su name collector ob num 3 be number ya");
 });
 
 test("topic sugar: ta label be topic ya", async () => {
   forget();
 
-  await run("ta loop_head be topic ya");
+  await run("exists ta loop_head be topic ya");
 
   const mem = allRemember();
   assert.equal(mem.length, 1);
@@ -116,7 +125,7 @@ test("prah mood marks end of paragraph and is stored", async () => {
 test("do mood is stored in history and returns result", async () => {
   forget();
 
-  await run("su target ob num 4 be number ya");
+  await run("exists su name target ob num 4 be number ya");
   const res = await run("su add_demo ob num 3 to name target be plus do");
   const mem = allRemember();
   const fact = mem.find(s => s.su?.name === "add_demo");
@@ -132,7 +141,7 @@ test("do mood is stored in history and returns result", async () => {
 test("bare plus imperative without target name creates and stores result", async () => {
   forget();
 
-  await run("su temp ob num 4 be number ya");
+  await run("exists su name temp ob num 4 be number ya");
   const res = await run("su temp ob num 3 to name temp be plus do");
   const mem = allRemember();
   const fact = mem.find(s => s.su?.name === "temp" && s.ob?.num === 7);
@@ -152,13 +161,13 @@ test("que on unknown subject returns null", async () => {
 test("false condition skips one statement and then resets", async () => {
   forget();
 
-  await run("su name counter ob num 1 be number ya");
+  await run("exists su name counter ob num 1 be number ya");
   await run("ob num 1 be tiny from num 0 then"); // false -> skip next statement
   await run("ob num 10 to name counter be plus do"); // should be skipped
   await run("ob num 2 to name counter be plus do"); // should run
 
   const res = await run("su name counter ob what que");
-  assert.equal(res, "su name counter ob num 3 be number ya");
+  assert.equal(res, "exists su name counter ob num 3 be number ya");
 });
 
 test("imperative creates default numeric target when missing", async () => {

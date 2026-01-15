@@ -13,7 +13,7 @@ async function run(line) {
 test("result facts chain across evocations", async () => {
   forget();
 
-  await run("su name a ob num 1 be number ya");
+  await run("exists su name a ob num 1 be number ya");
   await run("ob num 2 to name a be plus do");
 
   const first = remember("result");
@@ -28,7 +28,7 @@ test("result facts chain across evocations", async () => {
 test("ceremony defs feed result into the next call", async () => {
   forget();
 
-  await run("su name result ob num 0 be number ya");
+  await run("exists su name result ob num 0 be number ya");
 
   await run("su name plus one to name num target be ceremony def");
   await run("ob num 1 to name result be plus do");
@@ -50,7 +50,7 @@ test("ceremony defs feed result into the next call", async () => {
 test("ret merges onto evoke and writes result fact", async () => {
   forget();
 
-  await run("su name target ob num 0 be number ya");
+  await run("exists su name target ob num 0 be number ya");
   await run("su name mark to name num target be ceremony def");
   await run("ob num 5 to name target ret");
   await run("su name mark be ceremony prah");
@@ -69,7 +69,7 @@ test("ret merges onto evoke and writes result fact", async () => {
 test("non-numeric ceremonies do not default missing results", async () => {
   forget();
 
-  await run("su name payload ob text hello be text ya");
+  await run("exists su name payload ob text hello be text ya");
   await run("su name note ob name text payload be ceremony def");
   await run("ob name payload ret");
   await run("su name note be ceremony prah");

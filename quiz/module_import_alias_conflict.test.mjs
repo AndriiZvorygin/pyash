@@ -15,8 +15,8 @@ test("module import rejects alias shadowing by different modules", async () => {
   const twoPath = path.join(tmpDir, "two.pya");
   const entryPath = path.join(tmpDir, "entry.pya");
 
-  await fs.writeFile(onePath, "su name value ob num 1 ya\nsu name value be export ya\n", "utf8");
-  await fs.writeFile(twoPath, "su name value ob num 2 ya\nsu name value be export ya\n", "utf8");
+  await fs.writeFile(onePath, "exists su name value ob num 1 ya\nexists su name value be export ya\n", "utf8");
+  await fs.writeFile(twoPath, "exists su name value ob num 2 ya\nexists su name value be export ya\n", "utf8");
 
   await fs.writeFile(
     entryPath,

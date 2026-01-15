@@ -22,7 +22,7 @@ test("imported ceremonies with same name stay isolated by alias", async () => {
       "su name bump be ceremony def",
       "  ob num 1 be write do",
       "prah",
-      "su name bump be export ya"
+      "exists su name bump be export ya"
     ].join("\n"),
     "utf8"
   );
@@ -33,7 +33,7 @@ test("imported ceremonies with same name stay isolated by alias", async () => {
       "su name bump be ceremony def",
       "  ob num 2 be write do",
       "prah",
-      "su name bump be export ya"
+      "exists su name bump be export ya"
     ].join("\n"),
     "utf8"
   );

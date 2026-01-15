@@ -1,6 +1,6 @@
 # Pyash
 
-Pyash is a compact, speakable language that can be interpreted or compiled to JavaScript and C, with `be map def` as the configuration baseline and deterministic JSON/CSV/YAML round-trips across backends. Sentences use a subject-object-verb style (e.g., `su name counter ob num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`, `giant`/`tiny`/`equally` (conditionals), `understand` (parse to JSON), `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and the specs live under `documentation/specifications/`.
+Pyash is a compact, speakable language that can be interpreted or compiled to JavaScript and C, with `be map def` as the configuration baseline and deterministic JSON/CSV/YAML round-trips across backends. Sentences use a subject-object-verb style (e.g., `exists su name counter ob num 7 be number ya`), and verbs like `add`/`subtract`/`multiply`/`divide`/`invert`, `giant`/`tiny`/`equally` (conditionals), `understand` (parse to JSON), `mind`, `read`, and `chip` drive behavior. Typed nouns include numbers, text, filenames, and vectors (`ve/vec num 1 2 3`). The runtime is native ESM, uses the built-in `node:test` runner, and the specs live under `documentation/specifications/`.
 
 ## Requirements
 - Node 20+ (ESM + built-in test runner)
@@ -55,7 +55,7 @@ Still evolving / fragile:
 - Internal sentence objects use `su`/`ob` (legacy `subj`/`obj` are parsed but normalized).
 
 ## Example Sentences
-- Declarative: `su name counter ob num 7 be number ya`
+- Declarative: `exists su name counter ob num 7 be number ya`
 - Imperative (add): `obj num 3 to num 4 be plus do` → stores command + result fact (`num 7`)
 - Query: `su collector obj what que`
 - Read file: `su file be read from filename "quiz/sandpit/compile.txt" do`

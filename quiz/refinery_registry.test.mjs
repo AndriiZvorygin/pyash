@@ -16,8 +16,8 @@ test("refinery registry captures platforms and deps", async () => {
   forget();
   await runLines([
     "su name build be refinery def",
-    "su name parse ob la su name src ob text \"a\" be load ya ko be platform ya",
-    "su name compile from ve name parse ob la su name ast be compile ya ko be platform ya",
+    "exists su name parse ob la exists su name src ob text \"a\" be load ya ko be platform ya",
+    "exists su name compile from ve name parse ob la exists su name ast be compile ya ko be platform ya",
     "prah"
   ]);
 
@@ -37,7 +37,7 @@ test("refinery rejects invalid depend list", async () => {
   forget();
   await interpret(parse("su name build be refinery def"));
   await assert.rejects(
-    () => interpret(parse("su name step from num 1 ob la su name x be noop ya ko be platform ya")),
+    () => interpret(parse("exists su name step from num 1 ob la exists su name x be noop ya ko be platform ya")),
     (err) => err?.sentence?.su?.name === "depend defective"
   );
 });
@@ -46,7 +46,7 @@ test("refinery rejects missing activity clause", async () => {
   forget();
   await interpret(parse("su name build be refinery def"));
   await assert.rejects(
-    () => interpret(parse("su name step be platform ya")),
+    () => interpret(parse("exists su name step be platform ya")),
     (err) => err?.sentence?.su?.name === "platform defective"
   );
 });

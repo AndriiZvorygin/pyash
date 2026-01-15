@@ -7,7 +7,7 @@ import { forget } from "../program/remember/index.mjs";
 test("write on text vector name prints full sentence", async () => {
   forget();
 
-  await interpret(parse("su name words ob ve text hello world be vector ya"));
+  await interpret(parse("exists su name words ob ve text hello world be vector ya"));
 
   const logs = [];
   const originalLog = console.log;
@@ -21,13 +21,13 @@ test("write on text vector name prints full sentence", async () => {
   }
 
   assert.equal(logs.length, 1);
-  assert.equal(logs[0], "su name words ob ve text hello world be vector ya");
+  assert.equal(logs[0], "exists su name words ob ve text hello world be vector ya");
 });
 
 test("write on text vector literal prints vector only", async () => {
   forget();
 
-  await interpret(parse("su name words ob ve text hello world be vector ya"));
+  await interpret(parse("exists su name words ob ve text hello world be vector ya"));
 
   const logs = [];
   const originalLog = console.log;

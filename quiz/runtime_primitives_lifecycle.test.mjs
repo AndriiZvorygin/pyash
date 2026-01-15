@@ -12,7 +12,7 @@ async function run(line) {
 
 test("cancel updates duty state and returns sloh", async () => {
   forget();
-  await run("su name L7 as name running be duty ya");
+  await run("exists su name L7 as name running be duty ya");
 
   const res = await run("su name L7 be hear vyah cancel do");
   assert.equal(res?.be, "hear");
@@ -24,7 +24,7 @@ test("cancel updates duty state and returns sloh", async () => {
 
 test("finish updates stream state and returns sloh", async () => {
   forget();
-  await run("su name S3 as name open ob ve text he llo be stream ya");
+  await run("exists su name S3 as name open ob ve text he llo be stream ya");
 
   const res = await run("su name S3 be hear vyah finish do");
   assert.equal(res?.be, "hear");
@@ -36,7 +36,7 @@ test("finish updates stream state and returns sloh", async () => {
 
 test("await succeeds only when duty is done", async () => {
   forget();
-  await run("su name L9 as name done be duty ya");
+  await run("exists su name L9 as name done be duty ya");
 
   const res = await run("su name L9 be hear vyah await do");
   assert.equal(res?.be, "hear");

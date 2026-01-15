@@ -33,7 +33,7 @@ function splitPyashBlocks(text) {
 
 function normalizeCsvBlock(block) {
   return block
-    .filter((line) => !line.startsWith("su name header raw "))
+    .filter((line) => !line.startsWith("exists su name header raw ") && !line.startsWith("su name header raw "))
     .map((line) => {
       if (/^su name .+ be csv map def$/.test(line)) {
         return "su name map be csv map def";

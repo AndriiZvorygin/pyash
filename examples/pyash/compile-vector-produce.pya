@@ -1,3 +1,3 @@
-su name output be javascript ya
+exists su name output be javascript ya
 
 from filename "examples/pyash/compile-vector-produce.txt" from state pyash to filename "examples/out/compile-vector-produce.js" to state javascript be compile do

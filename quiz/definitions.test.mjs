@@ -10,7 +10,7 @@ async function run(line) {
   return interpret(s);
 }
 
-test("def sentences are indexed by su name with position in memory", async () => {
+test("def sentences are indexed by exists su name with position in memory", async () => {
   forget();
 
   await run("su alpha be paragraph def");
@@ -53,7 +53,7 @@ test("redef updates index to latest memory position and reset clears", async () 
 test("definition index captures end via prah and supports invoking the paragraph", async () => {
   forget();
 
-  await run("su name result ob num 5 be number ya");
+  await run("exists su name result ob num 5 be number ya");
   await run("su name plus two to name num target be ceremony def");
   await run("ob num 2 to name result be plus do");
   await run("su name plus two be ceremony prah");
@@ -73,7 +73,7 @@ test("definition index captures end via prah and supports invoking the paragraph
 test("last-write wins keeps updated fact after command and preserves def/prah block entries", async () => {
   forget();
 
-  await run("su name result ob num 5 be number ya");
+  await run("exists su name result ob num 5 be number ya");
   await run("ob num 2 to name result be plus do");
 
   const mem = allRemember();
@@ -85,10 +85,10 @@ test("last-write wins keeps updated fact after command and preserves def/prah bl
 
   // Protect facts inside def/prah blocks
   await run("su name block be ceremony def");
-  await run("su name collector ob num 1 be number ya"); // inside block
+  await run("exists su name collector ob num 1 be number ya"); // inside block
   await run("su name block be ceremony prah");
 
-  await run("su name collector ob num 10 be number ya"); // outside block update
+  await run("exists su name collector ob num 10 be number ya"); // outside block update
   const collectors = allRemember().filter(s => s.su?.name === "collector");
 
   assert.equal(

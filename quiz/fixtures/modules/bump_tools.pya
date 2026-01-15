@@ -1,8 +1,8 @@
 exists su name counter ob num 0 be number ya
-su name counter be export ya
+exists su name counter be export ya
 
 su name bump be ceremony def
   ob num 1 to name counter be plus do
   ob name counter be write do
 prah
-su name bump be export ya
+exists su name bump be export ya

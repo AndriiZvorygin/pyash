@@ -13,7 +13,7 @@ async function run(line) {
 test("add alias runs plus in interpreter", async () => {
   forget();
 
-  await run("su name collector ob num 0 be number ya");
+  await run("exists su name collector ob num 0 be number ya");
   await run("ob num 2 to name collector be add do");
 
   const fact = remember("collector");

@@ -18,11 +18,11 @@ test("whisper english normalizes mood prefix and role aliases", () => {
 
 test("whisper english collapses quoted blocks to text tokens", () => {
   const tokens = normalizeWhisperEnglishTokens(
-    "object quoted pyash su name alpha ob num 1 be number ya pyash quoted be text ya"
+    "object quoted pyash exists su name alpha ob num 1 be number ya pyash quoted be text ya"
   );
   assert.deepEqual(tokens, [
     "ob",
-    "__QUOTED_TEXT__:su name alpha ob num 1 be number ya",
+    "__QUOTED_TEXT__:exists su name alpha ob num 1 be number ya",
     "be",
     "text",
     "ya"
@@ -31,7 +31,7 @@ test("whisper english collapses quoted blocks to text tokens", () => {
   const sentence = parseTokens(tokens);
   assert.equal(sentence.mood, "ya");
   assert.equal(sentence.be, "text");
-  assert.equal(sentence.ob.text, "su name alpha ob num 1 be number ya");
+  assert.equal(sentence.ob.text, "exists su name alpha ob num 1 be number ya");
 });
 
 test("whisper english rejects duplicate mood tokens", () => {

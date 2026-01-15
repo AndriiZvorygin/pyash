@@ -19,7 +19,7 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   await run("this ob name target ret");
   await run("su name worker be ceremony prah");
 
-  await run("su name target ob num 1 fromindex num 3 toindex num 5 be number ya");
+  await run("exists su name target ob num 1 fromindex num 3 toindex num 5 be number ya");
   await run("to name target be worker do");
 
   const mem = allRemember();

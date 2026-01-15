@@ -14,7 +14,7 @@ test("ya facts inside ceremony body do not leak to main memory", async () => {
   forget();
 
   await run("su name maker be ceremony def");
-  await run("su name local ob num 7 be number ya");
+  await run("exists su name local ob num 7 be number ya");
   await run("su name maker be ceremony prah");
 
   const before = allRemember().filter(s => s.su?.name === "local").length;

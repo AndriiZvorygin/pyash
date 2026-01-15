@@ -28,7 +28,7 @@ test("compile write json map to filename (c) writes file", async () => {
 
   const pyash = [
     "su name profile be json map def",
-    "su name name ob text \"Ada\" ya",
+    "exists su name name ob text \"Ada\" ya",
     "prah",
     "ob name profile to state beautiful json to filename out.json be write do"
   ].join("\n");

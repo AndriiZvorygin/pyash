@@ -13,7 +13,7 @@ test("loop ceremony can print fizzbuzz outputs using remains + inline then", asy
   await interpret(parse("exists su name rem5 ob num 0 be number ya"));
 
   await interpret(parse("su name fizzbuzz step to name num bucket fromindex num 0 toindex num 0 be ceremony def"));
-  await interpret(parse("su name handled ob num 0 be number ya"));
+  await interpret(parse("exists su name handled ob num 0 be number ya"));
   await interpret(parse("ob this ti fromindex from num 3 to name rem3 be remains do"));
   await interpret(parse("ob this ti fromindex from num 5 to name rem5 be remains do"));
   await interpret(parse("ob name rem3 be equally from num 0 then ob num 1 to name handled be plus do"));

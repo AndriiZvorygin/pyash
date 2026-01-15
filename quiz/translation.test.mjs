@@ -7,7 +7,7 @@ import { forget, allRemember } from "../program/remember/index.mjs";
 test("translation from Pyash text to English text", async () => {
   forget();
 
-  const program = "su name alpha ob num 1 be number ya\nsubj name beta ob text hello be permanent text ya";
+  const program = "exists su name alpha ob num 1 be number ya\nsubj name beta ob text hello be permanent text ya";
   const sentence = parse(
     `from text quoted.pyash.${program}.pyash.quoted from state pyash to state english to name output be translation do`
   );
@@ -29,7 +29,7 @@ test("translation from Pyash conditional to English", async () => {
   forget();
 
   const program = [
-    "su name total ob num 0 be number ya",
+    "exists su name total ob num 0 be number ya",
     "ob num 3 be tiny from num 5 then ob num 1 to name total be plus do"
   ].join("\\n");
 
@@ -48,7 +48,7 @@ test("translation Pyash -> English -> Pyash roundtrip", async () => {
   forget();
 
   const pyashProgram = [
-    "su name alpha ob num 1 be number ya",
+    "exists su name alpha ob num 1 be number ya",
     "ob num 2 to name alpha be plus do"
   ].join("\\n");
 

@@ -139,9 +139,12 @@ test("pyash->yaml->pyash roundtrip (compiled C)", async () => {
   await execFileAsync("gcc", gccArgs);
   const { stdout } = await execFileAsync(exePath, []);
   const marker = "\nsu name ";
+  const altMarker = "\nexists su name ";
   const idx = stdout.indexOf(marker);
-  const yamlText = idx >= 0 ? stdout.slice(0, idx) : stdout;
-  const rest = idx >= 0 ? stdout.slice(idx + 1) : "";
+  const altIdx = stdout.indexOf(altMarker);
+  const startIdx = idx >= 0 && altIdx >= 0 ? Math.min(idx, altIdx) : Math.max(idx, altIdx);
+  const yamlText = startIdx >= 0 ? stdout.slice(0, startIdx) : stdout;
+  const rest = startIdx >= 0 ? stdout.slice(startIdx + 1) : "";
 
   assert.deepEqual(parseYaml(yamlText), expectedYaml);
   assert.deepEqual(normalizePyash(rest), expectedPyash);

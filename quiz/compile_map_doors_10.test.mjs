@@ -13,7 +13,7 @@ test("compile map 10-doors (at all) to javascript and run", async () => {
     "exists su name doors ob ve num 0 0 0 0 0 0 0 0 0 0 be vector ya",
     // Toggle a single door if (atindex+1) % pass === 0.
     "su name toggle pass by num 0 ob name num value atindex num 0 be ceremony def",
-    "su name door ob this atindex be number ya",
+    "exists su name door ob this atindex be number ya",
     "ob num 1 to num of ob of door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
     "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",

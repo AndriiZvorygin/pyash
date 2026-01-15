@@ -101,7 +101,10 @@ test("pyash->csv->pyash roundtrip (compiled C)", async () => {
   await execFileAsync("gcc", ["-std=c11", "-O0", "-o", exePath, cPath, "-lm"]);
   const { stdout } = await execFileAsync(exePath, []);
   const lines = stdout.split(/\r?\n/);
-  const firstPyash = lines.findIndex((line) => line.trim().startsWith("su name "));
+  const firstPyash = lines.findIndex((line) => {
+    const trimmed = line.trim();
+    return trimmed.startsWith("su name ") || trimmed.startsWith("exists su name ");
+  });
   const csvText = (firstPyash >= 0 ? lines.slice(0, firstPyash) : lines)
     .filter((line) => line.length > 0)
     .join("\n") + "\n";

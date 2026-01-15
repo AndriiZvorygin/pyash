@@ -23,7 +23,7 @@ test("multiply two numbers via by and store result", async () => {
 test("multiply using named operand and target", async () => {
   forget();
 
-  await run("su name acc ob num 5 be number ya");
+  await run("exists su name acc ob num 5 be number ya");
   await run("ob name acc by num 2 to name acc be multiply do");
 
   const acc = remember("acc");
@@ -36,7 +36,7 @@ test("multiply using named operand and target", async () => {
 test("divide using by for divisor and update target", async () => {
   forget();
 
-  await run("su name acc ob num 20 be number ya");
+  await run("exists su name acc ob num 20 be number ya");
   await run("ob name acc by num 4 to name acc be divide do");
 
   const acc = remember("acc");
@@ -55,8 +55,8 @@ test("divide by zero throws", async () => {
 test("multiply supports from/by named operands and target", async () => {
   forget();
 
-  await run("su name w ob num 2 be number ya");
-  await run("su name x ob num 3 be number ya");
+  await run("exists su name w ob num 2 be number ya");
+  await run("exists su name x ob num 3 be number ya");
   await run("from name w by name x to name z be multiply do");
 
   const z = remember("z");
@@ -68,8 +68,8 @@ test("multiply supports from/by named operands and target", async () => {
 test("divide supports from/by named operands and target", async () => {
   forget();
 
-  await run("su name w ob num 12 be number ya");
-  await run("su name x ob num 4 be number ya");
+  await run("exists su name w ob num 12 be number ya");
+  await run("exists su name x ob num 4 be number ya");
   await run("from name w by name x to name z be divide do");
 
   const z = remember("z");

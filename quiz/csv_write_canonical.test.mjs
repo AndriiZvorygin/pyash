@@ -14,10 +14,10 @@ test("csv write emits canonical order using header raw when present", async () =
   forget();
 
   await run("su name people be csv map def");
-  await run("su name header raw ob ve text Name Age ya");
-  await run("su name header ob ve text name age ya");
-  await run("su name name ob ve text Ada Turing ya");
-  await run("su name age ob ve text 36 \"\" ya");
+  await run("exists su name header raw ob ve text Name Age ya");
+  await run("exists su name header ob ve text name age ya");
+  await run("exists su name name ob ve text Ada Turing ya");
+  await run("exists su name age ob ve text 36 \"\" ya");
   await run("prah");
 
   const logs = [];

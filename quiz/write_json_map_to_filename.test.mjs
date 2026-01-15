@@ -17,7 +17,7 @@ test("write json map to filename writes json", async () => {
   forget();
 
   await run("su name profile be json map def");
-  await run('su name name ob text "Ada" ya');
+  await run('exists su name name ob text "Ada" ya');
   await run("prah");
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-json-"));

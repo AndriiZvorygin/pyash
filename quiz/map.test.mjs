@@ -37,7 +37,7 @@ test("at all provides atindex register inside ceremony body", async () => {
   const program = [
     "exists su name values ob ve num 4 5 6 be vector ya",
     "su name capture-index ob num value atindex num 0 be ceremony def",
-    "su name picked ob this atindex be number ya",
+    "exists su name picked ob this atindex be number ya",
     "su name picked ret",
     "su name capture-index be ceremony prah",
     "be capture-index ob name values at name all do"
@@ -74,7 +74,7 @@ test("10 doors via at all toggles only square positions open (map, by pass)", as
     "exists su name doors ob ve num 0 0 0 0 0 0 0 0 0 0 be vector ya",
     // Toggle a single door if (atindex+1) % pass === 0.
     "su name toggle pass by num 0 ob num value atindex num 0 be ceremony def",
-    "su name door ob this atindex be number ya",
+    "exists su name door ob this atindex be number ya",
     "ob num 1 to num of ob of door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
     "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",
@@ -127,7 +127,7 @@ test("at all provides by register for index inside ceremony body", async () => {
   const program = [
     "exists su name values ob ve num 4 5 6 be vector ya",
     "su name capture-index to name num atindex num 0 be ceremony def",
-    "su name picked ob this atindex be number ya",
+    "exists su name picked ob this atindex be number ya",
     "su name picked ret",
     "su name capture-index be ceremony prah",
     "be capture-index ob name values to name out at name all do"
@@ -161,8 +161,8 @@ test("100 doors via at all toggles only square positions open", async () => {
   const program = [
     // Toggle a single door if its index is divisible by the current pass (fromindex)
     "su name toggle-door be ceremony def",
-    "su name val ob this ob be number ya",
-    "su name idx ob this atindex be number ya",
+    "exists su name val ob this ob be number ya",
+    "exists su name idx ob this atindex be number ya",
     "ob num 1 to name idx be plus do",
     "ob name idx from name current-pass to name rem be remains do",
     "ob name rem be equally from num 0 then ob num 1 to name val be plus do",
@@ -175,7 +175,7 @@ test("100 doors via at all toggles only square positions open", async () => {
   for (const s of sentences) await interpret(s);
 
   for (let pass = 1; pass <= 100; pass++) {
-    await interpret(parse(`su name current-pass ob num ${pass} be number ya`));
+    await interpret(parse(`exists su name current-pass ob num ${pass} be number ya`));
     await interpret(parse("ob name doors by name current-pass to name doors at name all be toggle-door do"));
   }
 

@@ -15,11 +15,11 @@ test("env defaults populate memory and can be overridden in program", async () =
   const original = process.env.PYA_STREAM_STDOUT;
   process.env.PYA_STREAM_STDOUT = "0";
   try {
-    await run("su name alpha ob num 1 be number ya");
+    await run("exists su name alpha ob num 1 be number ya");
     const envFact = remember("stream stdout");
     assert.equal(envFact?.ob?.boolean, false);
 
-    await run("su name stream stdout ob bool truth be default ya");
+    await run("exists su name stream stdout ob bool truth be default ya");
     const overrideFact = remember("stream stdout");
     assert.equal(overrideFact?.ob?.boolean, true);
   } finally {

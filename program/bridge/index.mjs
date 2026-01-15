@@ -247,6 +247,19 @@ export async function interpret(sentence) {
   }
 
   if (mood === "ya" || mood === "def") {
+    if (mood === "ya") {
+      const name = su?.name;
+      if (name && !sentence.exists && sentence.be !== "export" && !remember(name)) {
+        const pyash = sentenceToPyash(sentence);
+        throwErrorSentence({
+          name: "variable as not exists",
+          message: `su quoted.pyash.${pyash}.pyash.quoted be error ob name variable as not exists ya`,
+          from: { name: "interpret" },
+          pyash,
+          raw: sentence
+        });
+      }
+    }
     if (mood === "def" && be === "ceremony") {
       const sig = deriveSignatureFromDefinition(sentence);
       if (sig) {

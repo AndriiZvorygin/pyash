@@ -2,7 +2,7 @@ su name fizzbuzz fromindex num 0 be ceremony def
 exists su name handled ob num 0 be number ya
 exists su name rem3 ob num 0 be number ya
 exists su name rem5 ob num 0 be number ya
-su name handled ob num 0 be number ya
+exists su name handled ob num 0 be number ya
 
 ob this ti fromindex from num 3 to name rem3 be remains do
 ob this ti fromindex from num 5 to name rem5 be remains do

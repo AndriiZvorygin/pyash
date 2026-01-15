@@ -15,9 +15,9 @@ test("pyash map write orders entries by official key order", async () => {
 
   const lines = [
     "su name sample be map def",
-    "su name b ob num 2 be number ya",
-    "su name a ob num 1 be number ya",
-    "su name aa ob text \"x\" be text ya",
+    "exists su name b ob num 2 be number ya",
+    "exists su name a ob num 1 be number ya",
+    "exists su name aa ob text \"x\" be text ya",
     "prah"
   ];
   for (const line of lines) {
@@ -38,9 +38,9 @@ test("pyash map write orders entries by official key order", async () => {
   const outputLines = logs.join("\n").split("\n").filter(Boolean);
   assert.deepEqual(outputLines, [
     "su name sample be map def",
-    "su name a ob num 1 be number ya",
-    "su name aa ob text \"x\" be text ya",
-    "su name b ob num 2 be number ya",
+    "exists su name a ob num 1 be number ya",
+    "exists su name aa ob text \"x\" be text ya",
+    "exists su name b ob num 2 be number ya",
     "prah"
   ]);
 });

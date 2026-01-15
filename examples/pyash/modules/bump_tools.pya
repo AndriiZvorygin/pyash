@@ -5,4 +5,4 @@ su name bump be ceremony def
   ob num 1 to name counter be plus do
   ob name counter be write do
 prah
-su name bump be export ya
+exists su name bump be export ya

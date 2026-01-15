@@ -2,4 +2,4 @@ su name say ob text payload to name text output be ceremony def
   ob text "noop: " to name output be plus do
   ob text of ob of this to name output be plus do
 prah
-su name say be export ya
+exists su name say be export ya

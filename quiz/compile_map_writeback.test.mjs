@@ -9,7 +9,7 @@ test("compile at all map writes back per-element ceremony mutations", async () =
   const pyash = [
     "exists su name values ob ve num 1 2 3 be vector ya",
     "su name bump ob name num value be ceremony def",
-    "su name val ob this ob be number ya",
+    "exists su name val ob this ob be number ya",
     "ob num 1 be plus do",
     "su name val ret",
     "su name bump be ceremony prah",

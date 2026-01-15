@@ -24,7 +24,7 @@ test("compile converts inline Pyash text to C with reassignment", async () => {
 
   const program = [
     "exists su name alpha ob num 1 be number ya",
-    "su name alpha ob num 3 be number ya"
+    "exists su name alpha ob num 3 be number ya"
   ].join("\\n");
 
   const sentence = parse(

@@ -18,7 +18,7 @@ test("evoker with registers returns via ret and stays first in sandpit trace", a
     "ob num 4 to name target be plus do",
     "this ob name target ret",
     "su name worker be ceremony prah",
-    "su name target ob num 1 fromindex num 3 toindex num 5 be number ya",
+    "exists su name target ob num 1 fromindex num 3 toindex num 5 be number ya",
     "to name target be worker do",
   ];
 

@@ -15,8 +15,8 @@ test("mind uses backend module response when configured", async () => {
 
   try {
     await run('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do');
-    await run("su name mind backend be default ob name ollama command mind ya");
-    await run("su name mind be mind ya");
+    await run("exists su name mind backend be default ob name ollama command mind ya");
+    await run("exists su name mind be mind ya");
 
     const res = await run('su name prompt ob text "Hello" for name mind to name text out be write do');
     assert.equal(res?.ob?.text, "module ok");

@@ -82,7 +82,7 @@ async function main() {
     console.error(sentenceToPyash(errSentence));
     process.exit(1);
   }
-  console.log(`su name ${runId} be replay ya`);
+  console.log(`exists su name ${runId} be replay ya`);
 }
 
 main().catch(err => {

@@ -45,7 +45,7 @@ test("compile reassigns without redeclaring when name already exists", async () 
 
   const program = [
     "exists su name alpha ob num 1 be number ya",
-    "su name alpha ob num 2 be number ya"
+    "exists su name alpha ob num 2 be number ya"
   ].join("\\n");
 
   const sentence = parse(

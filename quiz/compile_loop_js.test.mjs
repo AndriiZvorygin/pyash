@@ -180,13 +180,13 @@ test("compile loop can perform 10-doors toggle (squares end open) using nested l
   const pyash = [
     "exists su name doors ob ve bool lie lie lie lie lie lie lie lie lie lie be vector ya",
     "su name toggle door by num 0 fromindex num 0 be ceremony def",
-    "su name doorNum ob this fromindex be number ya",
+    "exists su name doorNum ob this fromindex be number ya",
     "ob num 1 to name doorNum be plus do",
     "ob name doorNum from num of ob of by of this to name rem be remains do",
     "ob name rem be equally from num 0 then ob name doors at num of fromindex of this be invert do",
     "su name toggle door be ceremony prah",
     "su name process pass fromindex num 0 be ceremony def",
-    "su name pass ob this fromindex be number ya",
+    "exists su name pass ob this fromindex be number ya",
     "by name pass fromindex num 0 toindex num 10 be toggle door do",
     "su name process pass be ceremony prah",
     "fromindex num 1 toindex num 11 be process pass do"

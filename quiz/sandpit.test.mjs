@@ -13,7 +13,7 @@ async function run(line) {
 test("ceremony runs in sandpit and merges results to main memory only", async () => {
   forget();
 
-  await run("su name target ob num 1 be number ya");
+  await run("exists su name target ob num 1 be number ya");
   await run("su name incrementer to name num target be ceremony def");
   await run("ob num 2 to name target be plus do");
   await run("su name incrementer be ceremony prah");

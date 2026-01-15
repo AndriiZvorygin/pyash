@@ -1,8 +1,8 @@
 exists su name values ob ve num 5 2 4 6 1 3 be vector ya
 
 su name insertion inner fromindex num 0 be ceremony def
-su name j ob this fromindex be number ya
-su name prevIndex ob this fromindex be number ya
+exists su name j ob this fromindex be number ya
+exists su name prevIndex ob this fromindex be number ya
 ob num 1 from name prevIndex be subtract do
 ob name values at num of ob of j be read to name curr do
 ob name values at num of ob of prevIndex be read to name prev do
@@ -11,7 +11,7 @@ ob name prev be giant from name curr then ob num of ob of prev to name values at
 su name insertion inner be ceremony prah
 
 su name insertion outer fromindex num 0 be ceremony def
-su name i ob this fromindex be number ya
+exists su name i ob this fromindex be number ya
 fromindex num of ob of i toindex num 0 be insertion inner do
 su name insertion outer be ceremony prah
 

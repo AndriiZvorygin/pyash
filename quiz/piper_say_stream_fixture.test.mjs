@@ -14,7 +14,7 @@ test("piper say streams with punctuation buffering", async () => {
   forget();
   process.env.PYA_PIPER_FIXTURE = "fixture";
   try {
-    await run("su name words ob ve text Hello world. Next sentence! be stream ya");
+    await run("exists su name words ob ve text Hello world. Next sentence! be stream ya");
     const result = await run("su name speak from name words be piper say vyah stream do");
     assert.equal(result?.value?.text, "Hello world. Next sentence!");
   } finally {
