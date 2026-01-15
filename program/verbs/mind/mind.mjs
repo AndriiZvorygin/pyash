@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 
-import ollama from "../../motor/ollama.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
@@ -163,7 +162,6 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     ? sentence.vyah.ve.values
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
   const aspect = getEffectiveVyahAspect(vyahValues, { verb: "mind", caseKey: "vyah" });
-  let streamChunks = null;
   const dialogue = typeof sentence?.from?.text === "string"
     ? sentence.from.text
     : historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
@@ -220,6 +218,26 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         raw: { aspect }
       });
     }
+    const mockResponseRaw = resolveConfigText("mind response", { rememberFn: remember });
+    let mockResponseQueue = null;
+    if (mockResponseRaw) {
+      try {
+        const parsed = JSON.parse(mockResponseRaw);
+        if (Array.isArray(parsed)) mockResponseQueue = parsed;
+      } catch {
+        // ignore; handled below as a raw string
+      }
+    }
+    let mockIndex = 0;
+    const nextMockResponse = () => {
+      if (!mockResponseRaw) return null;
+      if (mockResponseQueue && mockResponseQueue.length > 0) {
+        const idx = Math.min(mockIndex, mockResponseQueue.length - 1);
+        mockIndex += 1;
+        return mockResponseQueue[idx];
+      }
+      return mockResponseRaw;
+    };
     const messages = [];
     if (configPrompt) messages.push({ role: "system", content: configPrompt });
     if (toolBlock) messages.push({ role: "system", content: toolBlock });
@@ -234,21 +252,29 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
     while (turns < maxToolTurns) {
       turns += 1;
-      const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
+      const requestPayload = { mode: "chat", model, messages, tools };
+      recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      const mockResponse = nextMockResponse();
       if (mockResponse) {
-        try {
-          lastResponse = JSON.parse(mockResponse);
-        } catch {
-          lastResponse = { message: { content: mockResponse } };
+        if (typeof mockResponse === "string") {
+          try {
+            lastResponse = JSON.parse(mockResponse);
+          } catch {
+            lastResponse = { message: { content: mockResponse } };
+          }
+        } else {
+          lastResponse = mockResponse;
         }
       } else {
-        const requestPayload = { mode: "chat", model, messages, tools };
-        recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
-        if (backendName) {
-          lastResponse = await callMindBackend({ backendName, payload: requestPayload });
-        } else {
-          lastResponse = await ollama.chat({ model, messages, tools, stream: false });
+        if (!backendName) {
+          throwErrorSentence({
+            name: "mind backend missing",
+            message: "mind backend missing for chat/tooling request",
+            from: { name: "mind" },
+            raw: { requestPayload }
+          });
         }
+        lastResponse = await callMindBackend({ backendName, payload: requestPayload });
       }
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
 
@@ -364,24 +390,12 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
             writeStreamEnd(streamOutputPath);
             recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName });
           } else {
-            const streamed = await ollama.generateStream({
-              model,
-              prompt: fullPrompt.trim(),
-              onChunk: (chunk) => {
-                if (!chunk) return;
-                const textChunk = String(chunk);
-                streamedText += textChunk;
-                writeStreamChunk(streamOutputPath, textChunk);
-                if (streamStdoutEnabled) {
-                  process.stdout.write(textChunk);
-                }
-              }
+            throwErrorSentence({
+              name: "mind backend missing",
+              message: "mind backend missing for stream request",
+              from: { name: "mind" },
+              raw: { requestPayload }
             });
-            streamChunks = Array.isArray(streamed?.chunks) ? streamed.chunks : null;
-            const finalText = streamed.text || streamedText;
-            recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks: streamChunks }) });
-            writeStreamEnd(streamOutputPath);
-            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
           }
         } catch (err) {
           writeStreamEnd(streamOutputPath);
@@ -399,19 +413,23 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         ob: { filename: streamOutputPath, index: 0, kind: "mind", backend: "ollama" }
       });
     } else if (mockResponse) {
+      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       responseText = mockResponse;
     } else {
       const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
-      if (backendName) {
-        const backendResponse = await callMindBackend({ backendName, payload: requestPayload });
-        responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
-        recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
-      } else {
-        const raw = await ollama.generate(model, fullPrompt.trim());
-        recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: raw }) });
-        responseText = raw;
+      if (!backendName) {
+        throwErrorSentence({
+          name: "mind backend missing",
+          message: "mind backend missing for generate request",
+          from: { name: "mind" },
+          raw: { requestPayload }
+        });
       }
+      const backendResponse = await callMindBackend({ backendName, payload: requestPayload });
+      responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+      recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
     }
   }
 
