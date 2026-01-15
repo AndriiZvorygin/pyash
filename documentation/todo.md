@@ -2,8 +2,6 @@
 
 ## Now
 - Parity gaps to close (non-external):
-  - Full ceremony parity across interpreter/JS/C (compile + run coverage).
-  - `at all` map helpers parity for C.
   - Higher-level translation paths parity (interpreter vs compiled backends).
 - Mind: plus streaming path and richer reply envelopes per `mind.md`.
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).

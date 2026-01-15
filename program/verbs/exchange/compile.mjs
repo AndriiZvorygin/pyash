@@ -550,25 +550,135 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
 	  // Map/foreach over vector: at all (ceremony or primitive verbs)
 	  if (sentence.at?.name === "all" && lang === "c") {
       const fn = ceremonyFns?.get(baseBe);
+      const isPrimitive = baseBe === "plus" || baseBe === "subtract" || baseBe === "invert";
       const vecName = sentence.ob?.name;
-      if (!fn || !vecName) {
+      if (!vecName || (!fn && !isPrimitive)) {
         return `/* TODO: ${JSON.stringify(sentence)} */`;
       }
-      cHelpers.usesMapGlobals = true;
       const vecVar = sanitizeName(vecName);
       const vecType = declaredVectorTypes?.get(vecName) ?? "num";
-      const lines = [];
-      lines.push(`for (int i = 0; i < ${vecVar}.length; i++) {`);
-      lines.push(`  atindex = i;`);
-      if (vecType === "text") {
-        lines.push(`  pya_ob_text = ${vecVar}.text_values[i];`);
-      } else if (vecType === "bool" || vecType === "boolean") {
-        lines.push(`  pya_ob_bool = ${vecVar}.num_values[i] != 0;`);
-      } else {
-        lines.push(`  pya_ob_num = ${vecVar}.num_values[i];`);
+      const targetName = sentence.to?.name ?? vecName;
+      const targetVar = sanitizeName(targetName);
+      const needsDecl = sentence.to?.name && !locals?.has(targetVar) && !declared?.has(targetName);
+      const retType = fn ? (ceremonyReturnTypes?.get(baseBe) ?? "number") : null;
+      const outType = fn
+        ? (retType === "text" ? "text" : "num")
+        : (baseBe === "invert" && (vecType === "bool" || vecType === "boolean") ? "bool" : "num");
+      if (cHelpers) {
+        cHelpers.usesVectorType = true;
+        cHelpers.usesStdlib = true;
+        if (fn) cHelpers.usesMapGlobals = true;
+        if (fn) cHelpers.usesCeremonyValue = true;
       }
-      lines.push(`  ${fn}();`);
-      lines.push(`}`);
+      if (sentence.to?.name) {
+        markDeclared(declared, targetName);
+        declaredTypes?.set(targetName, "vector");
+        if (declaredVectorTypes) declaredVectorTypes.set(targetName, outType);
+      } else if (declaredVectorTypes && vecName) {
+        declaredVectorTypes.set(vecName, outType);
+      }
+      if (vecType === "text" && isPrimitive) {
+        return `/* TODO: ${JSON.stringify(sentence)} */`;
+      }
+      const outSuffix = cState ? cState.vectorCounter++ : 0;
+      const outNumVar = `_pya_out_num_${outSuffix}`;
+      const outTextVar = `_pya_out_text_${outSuffix}`;
+      const outVecVar = `_pya_out_vec_${outSuffix}`;
+      const outAssignVar = sentence.to?.name ? targetVar : vecVar;
+      const lines = [];
+      if (needsDecl) lines.push(`pya_vec ${targetVar};`);
+      lines.push(`int _pya_len_${outSuffix} = ${vecVar}.length;`);
+      if (outType === "text") {
+        lines.push(`const char **${outTextVar} = (const char **)malloc(sizeof(char *) * _pya_len_${outSuffix});`);
+      } else {
+        lines.push(`double *${outNumVar} = (double *)malloc(sizeof(double) * _pya_len_${outSuffix});`);
+      }
+      if (fn) {
+        const fromExpr = (() => {
+          if (sentence.from?.num !== undefined) return String(Number(sentence.from.num) || 0);
+          if (sentence.from?.name) return sanitizeName(sentence.from.name);
+          if (sentence.from?.genitive) {
+            return pathFromGenitive(sentence.from.genitive, undefined, { locals, declared, localsTypes, declaredTypes, allowCGlobals: true }) ?? "0";
+          }
+          return null;
+        })();
+        const byExpr = (() => {
+          if (sentence.by?.num !== undefined) return String(Number(sentence.by.num) || 0);
+          if (sentence.by?.name) return sanitizeName(sentence.by.name);
+          if (sentence.by?.genitive) {
+            return pathFromGenitive(sentence.by.genitive, undefined, { locals, declared, localsTypes, declaredTypes, allowCGlobals: true }) ?? "0";
+          }
+          return null;
+        })();
+        lines.push("{");
+        lines.push("double _saved_ob = pya_ob_num;");
+        lines.push("double _saved_from = pya_from_num;");
+        lines.push("double _saved_by = by;");
+        lines.push("double _saved_atindex = atindex;");
+        lines.push("const char *_saved_ob_text = pya_ob_text;");
+        lines.push("int _saved_ob_bool = pya_ob_bool;");
+        lines.push("pya_ob_num = 0;");
+        lines.push("pya_ob_text = 0;");
+        lines.push("pya_ob_bool = 0;");
+        lines.push("pya_from_num = 0;");
+        lines.push("by = 0;");
+        if (fromExpr) lines.push(`pya_from_num = ${fromExpr};`);
+        if (byExpr) lines.push(`by = ${byExpr};`);
+        lines.push(`for (int i = 0; i < _pya_len_${outSuffix}; i++) {`);
+        lines.push("  atindex = i;");
+        if (vecType === "text") {
+          lines.push(`  pya_ob_text = ${vecVar}.text_values[i];`);
+          lines.push("  pya_ob_num = 0;");
+          lines.push("  pya_ob_bool = 0;");
+        } else if (vecType === "bool" || vecType === "boolean") {
+          lines.push(`  pya_ob_bool = ${vecVar}.num_values[i] != 0;`);
+          lines.push(`  pya_ob_num = ${vecVar}.num_values[i];`);
+          lines.push("  pya_ob_text = 0;");
+        } else {
+          lines.push(`  pya_ob_num = ${vecVar}.num_values[i];`);
+          lines.push("  pya_ob_text = 0;");
+          lines.push("  pya_ob_bool = 0;");
+        }
+        const retVar = `_pya_ret_${outSuffix}`;
+        lines.push(`  pya_value ${retVar} = ${fn}();`);
+        if (outType === "text") {
+          lines.push(`  ${outTextVar}[i] = ${retVar}.text ? ${retVar}.text : "";`);
+        } else {
+          lines.push(`  ${outNumVar}[i] = ${retVar}.num;`);
+        }
+        lines.push("}");
+        lines.push("pya_ob_num = _saved_ob;");
+        lines.push("pya_from_num = _saved_from;");
+        lines.push("by = _saved_by;");
+        lines.push("atindex = _saved_atindex;");
+        lines.push("pya_ob_text = _saved_ob_text;");
+        lines.push("pya_ob_bool = _saved_ob_bool;");
+        lines.push("}");
+      } else {
+        const deltaVal = Number(sentence.from?.num ?? sentence.ob?.num ?? 0);
+        const delta = Number.isNaN(deltaVal) ? 0 : deltaVal;
+        lines.push(`for (int i = 0; i < _pya_len_${outSuffix}; i++) {`);
+        if (baseBe === "invert") {
+          if (vecType === "bool" || vecType === "boolean") {
+            lines.push(`  ${outNumVar}[i] = ${vecVar}.num_values[i] != 0 ? 0 : 1;`);
+          } else {
+            lines.push(`  ${outNumVar}[i] = -${vecVar}.num_values[i];`);
+          }
+        } else if (baseBe === "plus") {
+          lines.push(`  ${outNumVar}[i] = ${vecVar}.num_values[i] + ${delta};`);
+        } else {
+          lines.push(`  ${outNumVar}[i] = ${vecVar}.num_values[i] - ${delta};`);
+        }
+        lines.push("}");
+      }
+      if (outType === "text") {
+        lines.push(`pya_vec ${outVecVar} = { "text", _pya_len_${outSuffix}, NULL, ${outTextVar} };`);
+      } else if (outType === "bool") {
+        lines.push(`pya_vec ${outVecVar} = { "bool", _pya_len_${outSuffix}, ${outNumVar}, NULL };`);
+      } else {
+        lines.push(`pya_vec ${outVecVar} = { "num", _pya_len_${outSuffix}, ${outNumVar}, NULL };`);
+      }
+      lines.push(`${outAssignVar} = ${outVecVar};`);
       return lines.join("\n");
     }
 	  if (sentence.at?.name === "all" && lang !== "c") {
