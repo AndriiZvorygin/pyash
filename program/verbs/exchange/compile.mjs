@@ -8,7 +8,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER } from "./compile/c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER } from "./compile/c/helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -110,19 +110,60 @@ function inlineSourceMap(code, { sourceName, sourceText } = {}) {
   return output.join("\n");
 }
 
-function handleRetSentence(sentence, { lang, sentenceArg, locals, declared } = {}) {
+function inferRetKind(slot, { localsTypes, declaredTypes } = {}) {
+  if (!slot) return "number";
+  if (slot.text !== undefined) return "text";
+  if (slot.num !== undefined) return "number";
+  if (slot.boolean !== undefined) return "bool";
+  if (slot.name) {
+    const base = sanitizeName(slot.name);
+    const localType = localsTypes?.get(base);
+    const declaredType = declaredTypes?.get(base);
+    const knownType = localType || declaredType;
+    if (knownType === "text") return "text";
+    if (knownType === "number") return "number";
+  }
+  if (slot.genitive) {
+    const chainArr = Array.isArray(slot.genitive) ? slot.genitive : slot.genitive?.chain;
+    if (Array.isArray(chainArr)) {
+      if (chainArr.includes("text")) return "text";
+      if (chainArr.includes("bool") || chainArr.includes("boolean")) return "bool";
+    }
+  }
+  return "number";
+}
+
+function wrapRetValue(expr, kind, lang) {
+  if (lang !== "c") return `return ${expr};`;
+  if (kind === "text") return `return pya_value_text(${expr});`;
+  if (kind === "bool") return `return pya_value_num(${expr} ? 1 : 0);`;
+  return `return pya_value_num(${expr});`;
+}
+
+function handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers } = {}) {
   if (sentence.mood !== "ret") return null;
   const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
+  if (lang === "c" && cHelpers) cHelpers.usesCeremonyValue = true;
   if (sourceName) {
-    return `return ${sanitizeName(sourceName)};`;
+    const sourceVar = sanitizeName(sourceName);
+    const kind = inferRetKind({ name: sourceName }, { localsTypes, declaredTypes });
+    return wrapRetValue(sourceVar, kind, lang);
   }
-  if (sentence.ob?.genitive && sentenceArg) {
+  if (sentence.ob?.genitive) {
     const expr = pathFromGenitive(sentence.ob.genitive, sentenceArg, { locals, declared, allowCGlobals: lang === "c" });
-    if (expr) return `return ${expr};`;
+    if (expr) {
+      const kind = inferRetKind(sentence.ob, { localsTypes, declaredTypes });
+      return wrapRetValue(expr, kind, lang);
+    }
   }
-  if (sentence.ob?.num !== undefined) return `return ${Number(sentence.ob.num) || 0};`;
-  if (typeof sentence.ob?.text === "string") return `return ${JSON.stringify(sentence.ob.text)};`;
-  return lang === "c" ? "return;" : "return sentence;";
+  if (sentence.ob?.num !== undefined) {
+    return wrapRetValue(`${Number(sentence.ob.num) || 0}`, "number", lang);
+  }
+  if (typeof sentence.ob?.text === "string") {
+    return wrapRetValue(JSON.stringify(sentence.ob.text), "text", lang);
+  }
+  if (lang === "c") return "return pya_value_from_this();";
+  return "return sentence;";
 }
 
 
@@ -315,7 +356,7 @@ function cExpr(expr) {
     .replace(/\s*\?\?\s*[^)]+/g, "");
 }
 
-function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
+function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
   const ob = sentence.ob ?? {};
   const verb = sentence.be || sentence.mood || "";
   const beWords = verb.split(" ").filter(Boolean);
@@ -325,7 +366,7 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
   const baseBe = aliasBe !== baseBeRaw && !ceremonyFns?.has(baseBeRaw) ? aliasBe : baseBeRaw;
   const effectiveBe = baseBe || sentence.mood;
 
-  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared });
+  const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers });
   if (handledRet) return handledRet;
 
   const baseHandler = BASE_BE_HANDLERS.get(baseBe);
@@ -676,10 +717,12 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     lang,
     sentenceArg,
     ceremonyFns,
+    ceremonyReturnTypes,
     loopShim,
     cHelpers,
     cState,
     declared,
+    declaredTypes,
     locals
   }, {
     inlineSentenceLiteral,
@@ -954,16 +997,17 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCeremonyValue: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
     const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, readCounter: 0 };
-  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
+  const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, ceremonyCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
   const mapDefs = new Map();
   const refineryDefs = new Map();
   const declared = new Set();
   const declaredTypes = new Map();
   const ceremonyFns = new Map();
+  const ceremonyReturnTypes = new Map();
   const declaredVectorTypes = new Map();
   for (let i = 0; i < sentences.length; i++) {
     const sentence = sentences[i];
@@ -1068,6 +1112,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       declaredTypes,
       declaredVectorTypes,
       ceremonyFns,
+      ceremonyReturnTypes,
       cHelpers,
       jsHelpers,
       cState
@@ -1140,7 +1185,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       });
     }
 
-    const line = transpileSentence(sentence, { lang, ceremonyFns, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
+    const line = transpileSentence(sentence, { lang, ceremonyFns, ceremonyReturnTypes, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs });
     if (typeof line === "string" && line.includes("remember(")) {
       usesRememberShim = true;
     }
@@ -1777,6 +1822,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     const cPrelude = [];
     if (cHelpers.usesTextHelper) cPrelude.push(TEXT_HELPER);
     if (cHelpers.usesExchange) cPrelude.push(EXCHANGE_HELPER);
+    if (cHelpers.usesCeremonyValue) cPrelude.push(CEREMONY_VALUE_HELPER);
     if (cHelpers.usesJsonRuntime) {
       cPrelude.push(CJSON_HEADER);
       cPrelude.push(CJSON_SOURCE);

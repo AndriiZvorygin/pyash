@@ -5,10 +5,12 @@ export function handleDoSentence(context, helpers) {
     lang,
     sentenceArg,
     ceremonyFns,
+    ceremonyReturnTypes,
     loopShim,
     cHelpers,
     cState,
     declared,
+    declaredTypes,
     locals
   } = context;
   const {
@@ -127,19 +129,63 @@ export function handleDoSentence(context, helpers) {
   }
   if (fn) {
     if (lang === "c") {
-      const obVal = sentence.ob?.num;
-      const fromVal = sentence.from?.num;
-      const byVal = sentence.by?.num;
-      if (obVal !== undefined || fromVal !== undefined || byVal !== undefined) {
-        if (cHelpers) cHelpers.usesMapGlobals = true;
-        const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;"];
-        if (obVal !== undefined) lines.push(`pya_ob_num = ${Number(obVal) || 0};`);
-        if (fromVal !== undefined) lines.push(`pya_from_num = ${Number(fromVal) || 0};`);
-        if (byVal !== undefined) lines.push(`by = ${Number(byVal) || 0};`);
-        lines.push(`${fn}();`, "pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "}");
-        return lines.join("\n");
+      const retType = ceremonyReturnTypes?.get(baseBe) ?? null;
+      const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
+      const toIsText = targetName && (declaredTypes?.get(targetName) === "text" || retType === "text");
+      if (cHelpers) {
+        cHelpers.usesMapGlobals = true;
+        cHelpers.usesCeremonyValue = true;
+        if (toIsText) {
+          cHelpers.usesTextHelper = true;
+          cHelpers.usesString = true;
+          cHelpers.usesPrintf = true;
+        }
       }
-      return `${fn}();`;
+      const obNum = sentence.ob?.num;
+      const obText = typeof sentence.ob?.text === "string" ? sentence.ob.text : null;
+      const obName = sentence.ob?.name ? sanitizeName(sentence.ob.name) : null;
+      const obNameType = obName ? declaredTypes?.get(obName) : null;
+      const fromVal = sentence.from?.num;
+      const fromName = sentence.from?.name ? sanitizeName(sentence.from.name) : null;
+      const fromNameType = fromName ? declaredTypes?.get(fromName) : null;
+      const byVal = sentence.by?.num;
+      const byName = sentence.by?.name ? sanitizeName(sentence.by.name) : null;
+      const byNameType = byName ? declaredTypes?.get(byName) : null;
+      const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;", "const char *_saved_ob_text = pya_ob_text;"];
+      lines.push("pya_ob_num = 0;");
+      lines.push("pya_ob_text = 0;");
+      lines.push("pya_from_num = 0;");
+      lines.push("by = 0;");
+      if (obNum !== undefined) lines.push(`pya_ob_num = ${Number(obNum) || 0};`);
+      if (obText !== null) lines.push(`pya_ob_text = ${JSON.stringify(obText)};`);
+      if (obName && obNameType === "text") lines.push(`pya_ob_text = ${obName};`);
+      if (obName && obNameType === "number") lines.push(`pya_ob_num = ${obName};`);
+      if (fromVal !== undefined) lines.push(`pya_from_num = ${Number(fromVal) || 0};`);
+      if (fromName && fromNameType === "number") lines.push(`pya_from_num = ${fromName};`);
+      if (byVal !== undefined) lines.push(`by = ${Number(byVal) || 0};`);
+      if (byName && byNameType === "number") lines.push(`by = ${byName};`);
+      const retVar = `_pya_ret_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
+      lines.push(`pya_value ${retVar} = ${fn}();`);
+      if (targetName) {
+        const needsDecl = !declared?.has(targetName) && !locals?.has(targetName);
+        if (toIsText) {
+          if (needsDecl) {
+            lines.unshift(`char ${targetName}[PYA_TEXT_CAP] = "";`);
+            markDeclared(declared, targetName);
+            declaredTypes?.set(targetName, "text");
+          }
+          lines.push(`snprintf(${targetName}, PYA_TEXT_CAP, "%s", ${retVar}.text ? ${retVar}.text : "");`);
+        } else {
+          if (needsDecl) {
+            lines.unshift(`double ${targetName} = 0;`);
+            markDeclared(declared, targetName);
+            declaredTypes?.set(targetName, "number");
+          }
+          lines.push(`${targetName} = ${retVar}.num;`);
+        }
+      }
+      lines.push("pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "pya_ob_text = _saved_ob_text;", "}");
+      return lines.join("\n");
     }
     const arg = inlineSentenceLiteral(sentence, declared);
     if (sentence.to?.name) {
