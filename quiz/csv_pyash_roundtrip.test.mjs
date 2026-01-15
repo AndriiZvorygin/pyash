@@ -17,10 +17,10 @@ test("pyash csv map writes csv and reads back to pyash", async () => {
 
   const lines = [
     "su name people be csv map def",
-    "su name header raw ob ve text Name Age ya",
-    "su name header ob ve text name age ya",
-    "su name name ob ve text Ada Turing ya",
-    "su name age ob ve text 36 41 ya",
+    "exists su name header raw ob ve text Name Age ya",
+    "exists su name header ob ve text name age ya",
+    "exists su name name ob ve text Ada Turing ya",
+    "exists su name age ob ve text 36 41 ya",
     "prah",
     `ob name people to state csv to filename "${csvPath}" be write do`,
     `from filename "${csvPath}" from state csv to name round be read do`,

@@ -35,7 +35,7 @@ test("runc can emit a newspaper when requested", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.equal(lines[0], "su name run-c from time 2025-01-01T00:00:00Z be run ya");
+  assert.equal(lines[0], "exists su name run-c from time 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines.some(line => line.includes("be evoke ya")));
-  assert.equal(lines.at(-1), "su name run-c be end ya");
+  assert.equal(lines.at(-1), "exists su name run-c be end ya");
 });

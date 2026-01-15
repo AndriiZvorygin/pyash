@@ -12,7 +12,7 @@ async function run(line) {
 
 test("chip pulls stream items and includes toindex", async () => {
   forget();
-  await run("su name S3 as name open ob ve text he llo be stream ya");
+  await run("exists su name S3 as name open ob ve text he llo be stream ya");
 
   const first = await run("su name S3 vyah eval be chip do");
   assert.equal(first?.be, "chip");

@@ -34,7 +34,7 @@ This writes `newspaper/say-stream.pya`.
 ## Environment
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
-  - Env values are imported into memory as defaults (`su name ... be default ya`).
+  - Env values are imported into memory as defaults (`exists su name ... be default ya`).
   - `configure/default.pya` (or any in-program sentence) overrides env defaults.
   - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to wo keyboard` (default: `xdotool`).
   - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
@@ -43,7 +43,7 @@ This writes `newspaper/say-stream.pya`.
 ## External tools via modules
 External tools (ffmpeg, xdotool, piper, espeak, whisper.cpp) should be wrapped as Pyash modules and configured in `configure/default.pya`.
 - Modules live under `module/` and are imported in defaults so programs don’t repeat setup.
-- Defaults provide the runtime wiring (`su say be default ob name piper say ya`, `su name ffmpeg input ... be default ya`, etc.).
+- Defaults provide the runtime wiring (`exists su say be default ob name piper say ya`, `exists su name ffmpeg input ... be default ya`, etc.).
 
 ## Whisper streaming helper
 
@@ -57,7 +57,7 @@ If you only have the English model, use `ggml-base.en.bin` instead.
 
 For interactive runs, incremental `hear` transcripts print as they arrive when
 stdout is a TTY. Use `PYA_STREAM_STDOUT=0` to disable or `PYA_STREAM_STDOUT=1` to
-force on, or set `su name stream stdout ob bool lie be default ya` in config/examples.
+force on, or set `exists su name stream stdout ob bool lie be default ya` in config/examples.
 The command still returns a final transcript value when the stream ends
 (finish/cancel, timebox expiry, or a `[BLANK_AUDIO]` end marker from whisper-stream).
 
@@ -70,13 +70,13 @@ Stream mic transcription into the active window (requires `xdotool`):
 ```
 
 Set `PYA_KEYBOARD_BIN` to override the keyboard injection binary.
-If you need to disable stream stdout globally, set `su name stream stdout ob bool lie be default ya`
+If you need to disable stream stdout globally, set `exists su name stream stdout ob bool lie be default ya`
 in `configure/default.pya` or in a specific example.
 
 ## Example Sentences
-- Declarative: `su collector ob num 7 be number ya`
+- Declarative: `exists su name collector ob num 7 be number ya`
 - Imperative (plus): `ob num 3 to num 4 be plus do` → stores command + `result` with `num 7`
-- Query: `su collector ob what que`
+- Query: `su name collector ob what que`
 - Text read: `su file be read from filename "quiz/sandpit/compile.txt" do` → stores text content
 - Parse text to JSON: see end-to-end example below
 - Conditionals: `ob num 3 be tiny from num 5 then ...`; `su name lhs be giant from name rhs then ...`; `su name x be equally from num 10 then ...`
@@ -86,8 +86,8 @@ in `configure/default.pya` or in a specific example.
 ## End-to-End Example (text understand)
 ```bash
 # Provide a program as text
-su input ob text "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" be text ya
-su output be text ya
+exists su name input ob text "su name alpha ob num 1 be number ya\nsubj name beta ob num 2 be number ya" be text ya
+exists su name output be text ya
 
 # Parse from state pyash to JSON
 su artifact ob name input from state pyash to state JSON name output be understand do

@@ -15,7 +15,7 @@ test("ceremony binds this ob into local and returns via ret", async () => {
 
   // define ceremony plus two: acc := this.ob; acc += 2; ret acc into evoke.ob
   await run("su name plus two ob num 0 to name num target be ceremony def");
-  await run("su name acc ob this ob name acc be number ya");
+  await run("exists su name acc ob this ob name acc be number ya");
   await run("ob num 2 to name acc be plus do");
   await run("this ob name acc ret");
   await run("su name plus two be ceremony prah");
@@ -35,9 +35,9 @@ test("ceremony binds this ob into local and returns via ret", async () => {
 test("ceremony copies this ob into a named fact and returns that fact", async () => {
   forget();
 
-  await run("su name holder ob num 0 be number ya");
+  await run("exists su name holder ob num 0 be number ya");
   await run("su name copycat ob num 0 to name num target be ceremony def");
-  await run("su name snapshot ob this ob be number ya");
+  await run("exists su name snapshot ob this ob be number ya");
   await run("ob num 5 to name snapshot be plus do");
   await run("ob name snapshot ret");
   await run("su name copycat be ceremony prah");
@@ -54,11 +54,11 @@ test("ceremony copies this ob into a named fact and returns that fact", async ()
 test("ceremony ret returns full sentence with multiple registers", async () => {
   forget();
 
-  await run("su name target ob num 1 be number ya");
-  await run("su name limiter ob num 2 be number ya");
+  await run("exists su name target ob num 1 be number ya");
+  await run("exists su name limiter ob num 2 be number ya");
 
   await run("su name combo to name num target be ceremony def");
-  await run("su name payload ob num 3 to name target fromindex num 4 toindex num 6 be number ya");
+  await run("exists su name payload ob num 3 to name target fromindex num 4 toindex num 6 be number ya");
   await run("ob name payload ret");
   await run("su name combo be ceremony prah");
 

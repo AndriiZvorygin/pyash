@@ -181,6 +181,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     }
     return {
       mood: "ya",
+      exists: true,
       be: "artifact",
       su: { name: existing },
       ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
@@ -190,6 +191,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
   }
   const sentence = {
     mood: "ya",
+    exists: true,
     be: "artifact",
     su: { name: nextArtifactName() },
     ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
@@ -218,6 +220,7 @@ export function recordExchange({ artifactName, op, producer = "exchange", senten
   if (!exchangeRecorder || !artifactName || !op) return null;
   const record = {
     mood: "ya",
+    exists: true,
     be: "exchange",
     su: { name: artifactName },
     as: { name: op },

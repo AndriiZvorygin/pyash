@@ -9,15 +9,15 @@ test("understand verb reads Pyash text and stores JSON", async () => {
   forget();
 
   const program = [
-    "su name alpha ob num 1 be number ya",
-    "su name beta ob num 2 be number ya"
+    "exists su name alpha ob num 1 be number ya",
+    "exists su name beta ob num 2 be number ya"
   ].join("\n");
 
   // store input text and placeholder output
   await interpret(
     parse(`exists su name input ob text "${program}" be text ya`)
   );
-  await interpret(parse("su name output be text ya"));
+  await interpret(parse("exists su name output be text ya"));
 
   const sentence = parse(
     "ob name input from state pyash to state JSON to name output be understand do"
@@ -41,15 +41,15 @@ test("understand can write parsed JSON to filename", async () => {
   forget();
 
   const program = [
-    "su name alpha ob num 1 be number ya",
-    "su name beta ob num 2 be number ya"
+    "exists su name alpha ob num 1 be number ya",
+    "exists su name beta ob num 2 be number ya"
   ].join("\n");
 
   const outputFile = "quiz/sandpit/understand-output.json";
   await fs.rm(outputFile, { force: true });
 
   await interpret(
-    parse(`su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`)
+    parse(`exists su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`)
   );
 
   const sentence = parse(

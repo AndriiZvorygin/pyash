@@ -68,10 +68,10 @@ async function run() {
   };
   const outputs = [];
 
-  pushLine(`su name ${runId} from time ${runTime} be run ya`);
+  pushLine(`exists su name ${runId} from time ${runTime} be run ya`);
   pushLine(`ob filename "${runRoot}" be run root ya`);
   if (againFlag) {
-    pushLine(`su name ${runId} as name again be run ya`);
+    pushLine(`exists su name ${runId} as name again be run ya`);
   }
   let evokeCounter = -1;
   for (const raw of sentences) {
@@ -81,7 +81,7 @@ async function run() {
     const embedded = sentenceToPyash(sentence);
     evokeCounter += 1;
     const sentenceId = `evoke-${evokeCounter}`;
-    pushLine(`su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
+    pushLine(`exists su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
   }
 
   const prefix = "PYA_NEWSPAPER:";
@@ -238,7 +238,7 @@ async function run() {
     pushLine(sentenceToPyash(surfaceErrorSentence(errSentence)));
   }
 
-  pushLine(`su name ${runId} be end ya`);
+  pushLine(`exists su name ${runId} be end ya`);
   const newspaperDir = path.resolve(process.cwd(), "newspaper");
   await fs.mkdir(newspaperDir, { recursive: true });
   const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);

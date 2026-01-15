@@ -12,7 +12,7 @@ test("compile at all map toggles vector elements", async () => {
       "exists su name values ob ve num 0 0 0 be vector ya",
       // Ceremony: val = this ob + 1
       "su name toggle be ceremony def",
-      "su name val ob this ob be number ya",
+      "exists su name val ob this ob be number ya",
       "ob num 1 be plus do",
       "su name val ret",
       "su name toggle be ceremony prah",

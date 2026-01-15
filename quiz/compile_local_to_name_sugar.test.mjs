@@ -13,7 +13,7 @@ test("compile sugar: plus to <local name> inside ceremony mutates local fact (no
     "exists su name values ob ve num 0 0 0 be vector ya",
     // Ceremony body has a local 'door' fact derived from atindex; `to door` should mean door.ob.num in JS.
     "su name bumpIndex by num 0 ob name num value atindex num 0 be ceremony def",
-    "su name door ob this atindex be number ya",
+    "exists su name door ob this atindex be number ya",
     "ob num 1 to door be plus do",
     "ob num of ob of door from num of by of this to name rem be remains do",
     "ob name rem be equally from num 0 then ob num 1 to this ti ob ti num be plus do",

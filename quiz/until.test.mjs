@@ -13,7 +13,7 @@ async function run(line) {
 test("toindex stops loop when fromindex equals toindex", async () => {
   forget();
 
-  await run("su name counter ob num 0 be number ya");
+  await run("exists su name counter ob num 0 be number ya");
 
   // define ceremony: plus 1 to counter
   await run("su name loop body to name num target fromindex num 0 toindex num 0 be ceremony def");

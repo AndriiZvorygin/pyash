@@ -3,18 +3,18 @@ from filename "./module/whisper_hear.pya" ob name hear to name whisper command h
 from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do
 from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
-su say be default ob name piper command say ya
-su hear be default ob name whisper command hear ya
-su name mind backend be default ob name ollama command mind ya
-su name stream stdout ob bool lie be default ya
-su name keyboard bin ob text "xdotool" be default ya
-su name ffmpeg input ob text "pulse" be default ya
-su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
-su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
-su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
-su name reiterate delay ob num 250 be number ya
-su name reiterate backoff ob num 2 be number ya
-su name reiterate attempts ob num 5 be number ya
-su name reiterate cap ob num 8000 be number ya
-su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
-su name timezone be ob "America/Toronto" be text ya
+exists su say be default ob name piper command say ya
+exists su hear be default ob name whisper command hear ya
+exists su name mind backend be default ob name ollama command mind ya
+exists su name stream stdout ob bool lie be default ya
+exists su name keyboard bin ob text "xdotool" be default ya
+exists su name ffmpeg input ob text "pulse" be default ya
+exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
+exists su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
+exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
+exists su name reiterate delay ob num 250 be number ya
+exists su name reiterate backoff ob num 2 be number ya
+exists su name reiterate attempts ob num 5 be number ya
+exists su name reiterate cap ob num 8000 be number ya
+exists su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
+exists su name timezone be ob "America/Toronto" be text ya

@@ -1,3 +1,3 @@
-su name output be c ya
+exists su name output be c ya
 
 from filename "examples/pyash/compile-loop.txt" from state pyash to filename "examples/out/compile-loop-output.c" to state c be compile do

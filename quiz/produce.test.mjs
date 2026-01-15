@@ -25,8 +25,8 @@ test("dot product from inline vectors", async () => {
 test("dot product from named vectors", async () => {
   forget();
 
-  await run("su name w ob vec num 1 1 1 be vector ya");
-  await run("su name x ob vec num 2 3 4 be vector ya");
+  await run("exists su name w ob vec num 1 1 1 be vector ya");
+  await run("exists su name x ob vec num 2 3 4 be vector ya");
 
   await run("from name w by name x to name z be produce do");
 
@@ -40,8 +40,8 @@ test("dot product from named vectors", async () => {
 test("mismatched vector lengths throw", async () => {
   forget();
 
-  await run("su name w ob vec num 1 2 be vector ya");
-  await run("su name x ob vec num 1 2 3 be vector ya");
+  await run("exists su name w ob vec num 1 2 be vector ya");
+  await run("exists su name x ob vec num 1 2 3 be vector ya");
 
   await assert.rejects(() => run("from name w by name x be produce do"), /same length/);
 });

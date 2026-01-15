@@ -51,7 +51,7 @@ test("run newspaper records artifact + exchange for write", async () => {
   const caRel = path.join("artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);
   const caPath = path.join(tmpDir, caRel);
   await fs.access(caPath);
-  const nameMatch = artifactLine.match(/su name ([^ ]+)/);
+  const nameMatch = artifactLine.match(/exists su name ([^ ]+)/);
   assert.ok(nameMatch);
   const aliasPath = path.join(tmpDir, "artifacts", "run-exchange", nameMatch[1]);
   await fs.access(aliasPath);

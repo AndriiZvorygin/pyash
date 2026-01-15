@@ -22,7 +22,7 @@ test("mind registration stores engine/model/prompt contexts", async () => {
   forget();
 
   const sentence = parse(
-    'su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya'
+    'exists su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya'
   );
 
   await interpret(sentence);
@@ -47,7 +47,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
   try {
     // Register the mind
     await interpret(
-      parse('su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+      parse('exists su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
     );
 
     // Ask the mind (no model/prompt on the call; should resolve from memory)
@@ -85,7 +85,7 @@ test("mind invocation includes recent history in prompt with per-mind window", a
 
   try {
     await interpret(
-      parse('su generator by num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+      parse('exists su generator by num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
     );
 
     await interpret(parse('be write ob text "Hi" for name generator to name text generator-out do'));
@@ -114,11 +114,11 @@ test("mind history is isolated by fromtext bucket", async () => {
   try {
     // Mind A with custom bucket
     await interpret(
-      parse('su helperA from text bucketA be mind via state "qwen3:8b" ya')
+      parse('exists su helperA from text bucketA be mind via state "qwen3:8b" ya')
     );
     // Mind B with different bucket
     await interpret(
-      parse('su helperB from text bucketB be mind via state "qwen3:8b" ya')
+      parse('exists su helperB from text bucketB be mind via state "qwen3:8b" ya')
     );
 
     await interpret(parse('be write ob text "Hi A" for name helperA to name text helperA-out do'));
@@ -150,7 +150,7 @@ test("mind history defaults to `<name> story` bucket when fromtext absent", asyn
   setExchangeRecorder({ record: (sentence) => records.push(sentence) });
 
   try {
-    await interpret(parse('su helper be mind via state "qwen3:8b" ya'));
+    await interpret(parse('exists su helper be mind via state "qwen3:8b" ya'));
     await interpret(parse('be write ob text "Ping" for name helper to name text helper-out do'));
     await interpret(parse('su q ob discourse "Hello" for name helper to name text helper-out be write do'));
 

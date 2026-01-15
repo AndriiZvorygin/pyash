@@ -17,9 +17,9 @@ function closeEnough(actual, expected, tol = 1e-6) {
 test("neuron computes dot product + bias + sigmoid", async () => {
   forget();
 
-  await run("su name weights ob vec num 1 2 3 be vector ya");
-  await run("su name inputs ob vec num 4 5 6 be vector ya");
-  await run("su name bias ob num 0 be number ya");
+  await run("exists su name weights ob vec num 1 2 3 be vector ya");
+  await run("exists su name inputs ob vec num 4 5 6 be vector ya");
+  await run("exists su name bias ob num 0 be number ya");
 
   await run("from name weights by name inputs fromstate name bias to name output be neuron do");
 
@@ -34,9 +34,9 @@ test("neuron computes dot product + bias + sigmoid", async () => {
 test("neuron length mismatch throws", async () => {
   forget();
 
-  await run("su name weights ob vec num 1 2 be vector ya");
-  await run("su name inputs ob vec num 1 2 3 be vector ya");
-  await run("su name bias ob num 0 be number ya");
+  await run("exists su name weights ob vec num 1 2 be vector ya");
+  await run("exists su name inputs ob vec num 1 2 3 be vector ya");
+  await run("exists su name bias ob num 0 be number ya");
 
   await assert.rejects(
     () => run("from name weights by name inputs fromstate name bias to name output be neuron do"),
@@ -55,16 +55,16 @@ test("twice crescent activation can be called directly", async () => {
 test("neuron throws on non-numeric vectors or missing bias", async () => {
   forget();
 
-  await run("su name weights ob vec letter a b c be vector ya");
-  await run("su name inputs ob vec num 1 2 3 be vector ya");
-  await run("su name bias ob num 0 be number ya");
+  await run("exists su name weights ob vec letter a b c be vector ya");
+  await run("exists su name inputs ob vec num 1 2 3 be vector ya");
+  await run("exists su name bias ob num 0 be number ya");
   await assert.rejects(
     () => run("from name weights by name inputs fromstate name bias to name output be neuron do"),
     /numeric/
   );
 
   forget();
-  await run("su name weights ob vec num 1 2 3 be vector ya");
-  await run("su name inputs ob vec num 1 2 3 be vector ya");
+  await run("exists su name weights ob vec num 1 2 3 be vector ya");
+  await run("exists su name inputs ob vec num 1 2 3 be vector ya");
   await assert.rejects(() => run("from name weights by name inputs to name output be neuron do"), /bias is required/);
 });

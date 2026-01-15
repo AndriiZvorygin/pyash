@@ -1,5 +1,5 @@
-  su name result ob num 5 be number ya
-  su name result ob num 0 be number ya
+  exists su name result ob num 5 be number ya
+  exists su name result ob num 0 be number ya
   su name plus two to name num target be ceremony def
   ob num 2 to name result be plus do
   su name plus two be ceremony prah

@@ -227,11 +227,11 @@ async function main() {
       console.log(text.trim());
     }
   }
-  const runStart = `su name ${runId} from time ${runTime} be run ya`;
+  const runStart = `exists su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
   pushNewspaper(`ob filename "${runRoot}" be run root ya`);
   if (useAgain) {
-    pushNewspaper(`su name ${runId} as name again be run ya`);
+    pushNewspaper(`exists su name ${runId} as name again be run ya`);
   }
   if (useNewspaper || useAgain) {
     setExchangeRecorder({
@@ -271,7 +271,7 @@ async function main() {
       setExchangeSentenceId(sentenceId);
     }
     const isToolCall = isToolSentence(sentence);
-    pushNewspaper(`su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
+    pushNewspaper(`exists su name ${sentenceId} ob la ${embedded} ko be evoke ya`);
     let res;
     try {
       res = await interpret(sentence);
@@ -329,7 +329,7 @@ async function main() {
   }
 
   const result = refineryResult ?? remember("result");
-  pushNewspaper(`su name ${runId} be end ya`);
+  pushNewspaper(`exists su name ${runId} be end ya`);
   state.currentSourceFilename = null;
   state.currentSourceLine = null;
   state.currentSourceSentence = null;

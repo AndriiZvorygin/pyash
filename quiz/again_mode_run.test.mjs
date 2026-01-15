@@ -36,8 +36,8 @@ test("--again forces newspaper and records again marker", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.ok(lines.some(line => line === "su name run-again as name again be run ya"));
-  assert.ok(lines.some(line => line.includes("be run ya") && line.includes("su name run-again")), "expected run start record");
+  assert.ok(lines.some(line => line === "exists su name run-again as name again be run ya"));
+  assert.ok(lines.some(line => line.includes("be run ya") && line.includes("exists su name run-again")), "expected run start record");
   assert.ok(lines.some(line => line.includes("be run root ya")), "expected run root record");
   assert.ok(lines.some(line => line.includes("be artifact") && line.includes("out.txt")));
 });

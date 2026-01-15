@@ -13,7 +13,7 @@ async function run(line) {
 test("subtract number from named target", async () => {
   forget();
 
-  await run("su name collector ob num 10 be number ya");
+  await run("exists su name collector ob num 10 be number ya");
   await run("ob num 3 from name collector be subtract do");
 
   const res = remember("collector");
@@ -26,8 +26,8 @@ test("subtract number from named target", async () => {
 test("subtract using named subtrahend and target via from", async () => {
   forget();
 
-  await run("su name lhs ob num 8 be number ya");
-  await run("su name rhs ob num 5 be number ya");
+  await run("exists su name lhs ob num 8 be number ya");
+  await run("exists su name rhs ob num 5 be number ya");
   await run("ob name rhs from name lhs be subtract do");
 
   const lhs = remember("lhs");

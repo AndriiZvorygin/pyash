@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
 
 test("parses quoted text tokens", () => {
-  const s = parse('su name prompt with text "hello world" be topic ya');
+  const s = parse('exists su name prompt with text "hello world" be topic ya');
 
   assert.equal(s.mood, "ya");
   assert.equal(s.su.name, "prompt");
@@ -13,7 +13,7 @@ test("parses quoted text tokens", () => {
 });
 
 test("supports escaped quotes inside text", () => {
-  const s = parse('su name note with text "say \\\"hi\\\"" be topic ya');
+  const s = parse('exists su name note with text "say \\\"hi\\\"" be topic ya');
 
   assert.equal(s.with.text, 'say "hi"');
 });
@@ -45,7 +45,7 @@ test("parses vector literals with element type", () => {
 });
 
 test("parses typed name in name <type> <literal> order", () => {
-  const s = parse("su name alpha to name text line be topic ya");
+  const s = parse("exists su name alpha to name text line be topic ya");
 
   assert.equal(s.to.name, "line");
   assert.deepEqual(s.to.nameTypeWords, ["text"]);

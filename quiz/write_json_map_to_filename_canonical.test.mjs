@@ -17,8 +17,8 @@ test("write json map to filename writes canonical json", async () => {
   forget();
 
   await run("su name sample be json map def");
-  await run("su name b ob num 3 ya");
-  await run("su name a ob num 1 ya");
+  await run("exists su name b ob num 3 ya");
+  await run("exists su name a ob num 1 ya");
   await run("prah");
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-json-"));

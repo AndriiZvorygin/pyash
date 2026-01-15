@@ -15,7 +15,7 @@ test("espeak say streams with punctuation buffering", async () => {
   process.env.PYA_ESPEAK_BIN = "true";
   process.env.PYA_SAY_SILENT = "1";
   try {
-    await run("su name words ob ve text Hello world. Next sentence! be stream ya");
+    await run("exists su name words ob ve text Hello world. Next sentence! be stream ya");
     const result = await run("su name speak from name words be espeak say vyah stream do");
     assert.equal(result?.value?.text, "Hello world. Next sentence!");
   } finally {

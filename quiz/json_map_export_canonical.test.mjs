@@ -14,10 +14,10 @@ test("json map exports canonical json with key ordering and omission", async () 
   forget();
 
   await run("su name sample be json map def");
-  await run("su name b ob num 3 ya");
-  await run("su name a ob num 1 ya");
-  await run("su name aa ob num 2 ya");
-  await run("su name skip ob unspecified ya");
+  await run("exists su name b ob num 3 ya");
+  await run("exists su name a ob num 1 ya");
+  await run("exists su name aa ob num 2 ya");
+  await run("exists su name skip ob unspecified ya");
   await run("prah");
 
   const logs = [];

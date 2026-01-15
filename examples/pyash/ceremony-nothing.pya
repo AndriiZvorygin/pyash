@@ -1,6 +1,6 @@
 su name nothing be ceremony def
 su name nothing be ceremony prah
 
-su name output be javascript ya
+exists su name output be javascript ya
 from text "su name nothing be ceremony def\nsubj name nothing be ceremony prah" to state javascript to name num output be compile do
 su name output be javascript que

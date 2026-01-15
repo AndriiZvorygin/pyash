@@ -1,13 +1,13 @@
 exists su name composite ob ve bool lie by num 10 be vector ya
 
 su name mark multiples by num 0 fromindex num 0 be ceremony def
-su name i ob this fromindex be number ya
+exists su name i ob this fromindex be number ya
 from name i by num of ob of by of this to name product be multiply do
 su name product be tiny from num 10 then ob text truth to name composite at num of ob of product be write do
 su name mark multiples be ceremony prah
 
 su name process passes fromindex num 0 be ceremony def
-su name pass ob this fromindex be number ya
+exists su name pass ob this fromindex be number ya
 by name pass fromindex num 2 toindex num 10 be mark multiples do
 su name process passes be ceremony prah
 

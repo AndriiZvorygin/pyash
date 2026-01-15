@@ -23,7 +23,7 @@ test("invert negates numeric ob and stores result", async () => {
 test("invert named operand and update target", async () => {
   forget();
 
-  await run("su name var ob num 5 be number ya");
+  await run("exists su name var ob num 5 be number ya");
   await run("ob name var to name var be invert do");
 
   const varFact = remember("var");
@@ -46,8 +46,8 @@ test("exponential computes power with literal base/exponent and target", async (
 test("exponential accepts named base and exponent", async () => {
   forget();
 
-  await run("su name angle ob num 2 be number ya");
-  await run("su name power ob num 5 be number ya");
+  await run("exists su name angle ob num 2 be number ya");
+  await run("exists su name power ob num 5 be number ya");
   await run("ob name angle from name power be exponential do");
 
   const res = remember("result");

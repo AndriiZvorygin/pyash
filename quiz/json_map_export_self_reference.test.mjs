@@ -14,7 +14,7 @@ test("json map export errors on self reference", async () => {
   forget();
 
   await run("su name loop be json map def");
-  await run("su name self ob name loop ya");
+  await run("exists su name self ob name loop ya");
   await run("prah");
 
   let err;
@@ -32,11 +32,11 @@ test("json map export errors on indirect self reference", async () => {
   forget();
 
   await run("su name first be json map def");
-  await run("su name link ob name second ya");
+  await run("exists su name link ob name second ya");
   await run("prah");
 
   await run("su name second be json map def");
-  await run("su name link ob name first ya");
+  await run("exists su name link ob name first ya");
   await run("prah");
 
   let err;

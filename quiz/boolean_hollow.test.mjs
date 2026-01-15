@@ -8,11 +8,11 @@ import { forget, remember } from "../program/remember/index.mjs";
 test("bool literal stores boolean payload", async () => {
   forget();
 
-  await interpret(parse("su name flag ob bool truth be boolean ya"));
+  await interpret(parse("exists su name flag ob bool truth be boolean ya"));
   const flag = remember("flag");
   assert.equal(flag?.ob?.boolean, true);
 
-  await interpret(parse("su name off ob bool lie be boolean ya"));
+  await interpret(parse("exists su name off ob bool lie be boolean ya"));
   const off = remember("off");
   assert.equal(off?.ob?.boolean, false);
 });
@@ -20,7 +20,7 @@ test("bool literal stores boolean payload", async () => {
 test("hollow literal stores null marker", async () => {
   forget();
 
-  await interpret(parse("su name empty ob hollow be null ya"));
+  await interpret(parse("exists su name empty ob hollow be null ya"));
   const empty = remember("empty");
   assert.equal(empty?.ob?.hollow, true);
 });

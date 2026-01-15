@@ -14,10 +14,10 @@ test("json map exports pretty JSON via write", async () => {
   forget();
 
   await run("su name profile be json map def");
-  await run('su name name ob text "Ada" ya');
-  await run("su name age ob num 36 ya");
-  await run("su name alive ob bool truth ya");
-  await run("su name note ob hollow ya");
+  await run('exists su name name ob text "Ada" ya');
+  await run("exists su name age ob num 36 ya");
+  await run("exists su name alive ob bool truth ya");
+  await run("exists su name note ob hollow ya");
   await run("prah");
 
   const logs = [];
@@ -42,7 +42,7 @@ test("json map allows genitive access by switch", async () => {
   forget();
 
   await run("su name profile be json map def");
-  await run("su name age ob num 36 ya");
+  await run("exists su name age ob num 36 ya");
   await run("prah");
 
   const logs = [];

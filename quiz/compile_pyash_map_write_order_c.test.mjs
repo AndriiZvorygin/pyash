@@ -28,9 +28,9 @@ test("compile pyash map write preserves official key order (c)", async () => {
 
   const pyash = [
     "su name sample be map def",
-    "su name b ob num 2 be number ya",
-    "su name a ob num 1 be number ya",
-    "su name aa ob text \"x\" be text ya",
+    "exists su name b ob num 2 be number ya",
+    "exists su name a ob num 1 be number ya",
+    "exists su name aa ob text \"x\" be text ya",
     "prah",
     "ob name sample be write do"
   ].join("\n");
@@ -51,9 +51,9 @@ test("compile pyash map write preserves official key order (c)", async () => {
   const outputLines = stdout.split("\n").filter(Boolean);
   assert.deepEqual(outputLines, [
     "su name sample be map def",
-    "su name a ob num 1 be number ya",
-    "su name aa ob text \"x\" be text ya",
-    "su name b ob num 2 be number ya",
+    "exists su name a ob num 1 be number ya",
+    "exists su name aa ob text \"x\" be text ya",
+    "exists su name b ob num 2 be number ya",
     "prah"
   ]);
 });

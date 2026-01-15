@@ -17,8 +17,8 @@ test("forget clears module cache so re-import reloads module", async () => {
   await fs.writeFile(
     modulePath,
     [
-      "su name value ob num 1 ya",
-      "su name value be export ya"
+      "exists su name value ob num 1 ya",
+      "exists su name value be export ya"
     ].join("\n"),
     "utf8"
   );
@@ -38,8 +38,8 @@ test("forget clears module cache so re-import reloads module", async () => {
   await fs.writeFile(
     modulePath,
     [
-      "su name value ob num 2 ya",
-      "su name value be export ya"
+      "exists su name value ob num 2 ya",
+      "exists su name value be export ya"
     ].join("\n"),
     "utf8"
   );

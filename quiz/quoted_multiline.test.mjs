@@ -8,12 +8,12 @@ test("quoted.pyash multiline blocks parse as single text without literal \\n tok
   forget();
 
   const program = [
-    "su name alpha ob num 1 be number ya",
-    "su name beta ob num 2 be number ya"
+    "exists su name alpha ob num 1 be number ya",
+    "exists su name beta ob num 2 be number ya"
   ].join("\n");
 
   const sentence = parse(
-    `su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`
+    `exists su name input ob text quoted.pyash.${program}.pyash.quoted be text ya`
   );
 
   assert.ok(sentence?.ob?.text);

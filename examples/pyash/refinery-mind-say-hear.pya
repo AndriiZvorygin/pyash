@@ -1,6 +1,6 @@
 su name loop be refinery def
-su name draft ob la su name lines ob text "Write three short sentences about rain." for name mind to name text mind-out be write do ko be platform ya
-su name speak from ve name draft ob la su name audio ob name mind-out to filename "artifacts/say/refinery.wav" be say do ko be platform ya
-su name listen from ve name speak ob la su name transcript from filename "artifacts/say/refinery.wav" be hear do ko be platform ya
-su name report from ve name listen ob la ob name transcript be write do ko be platform ya
+exists su name draft ob la su name lines ob text "Write three short sentences about rain." for name mind to name text mind-out be write do ko be platform ya
+exists su name speak from ve name draft ob la su name audio ob name mind-out to filename "artifacts/say/refinery.wav" be say do ko be platform ya
+exists su name listen from ve name speak ob la su name transcript from filename "artifacts/say/refinery.wav" be hear do ko be platform ya
+exists su name report from ve name listen ob la ob name transcript be write do ko be platform ya
 prah

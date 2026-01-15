@@ -53,7 +53,10 @@ test("run uses timezone from config when writing run start", async () => {
     await fs.mkdir(path.join(tmpDir, "configure"), { recursive: true });
     await fs.writeFile(
       path.join(tmpDir, "configure", "default.pya"),
-      'su name timezone ob text "America/Toronto" be text ya\n',
+      [
+        'exists su name timezone ob text "America/Toronto" be text ya',
+        ""
+      ].join("\n"),
       "utf8"
     );
     const programPath = path.join(tmpDir, "program.pya");

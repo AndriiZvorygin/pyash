@@ -20,7 +20,7 @@ async function runProgram(text) {
 test("json map structural errors match across interpret/compile", async () => {
   const pyash = [
     "su name sample be json map def",
-    "su name bad ob ve foo bar ya",
+    "exists su name bad ob ve foo bar ya",
     "prah",
     "ob name sample to state json be write do"
   ].join("\n");
@@ -88,7 +88,7 @@ test("json map def requires su and ob in entries across interpret/compile", asyn
 
   const missingOb = [
     "su name sample be json map def",
-    "su name alpha ya",
+    "exists su name alpha ya",
     "prah"
   ].join("\n");
 
