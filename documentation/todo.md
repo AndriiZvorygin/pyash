@@ -1,10 +1,10 @@
 # TODO
 
 ## Now
-- C backend MVP parity (JS remains reference):
-  - Add loop lowering (`fromindex`/`toindex`) for C and cover with gcc+run quizzes.
-  - Add conditional lowering variants (`tiny`/`giant` as `<`/`>`) and cover with gcc+run quizzes.
-  - Start a C vector runtime (or choose a simpler C representation) to support 10/100 doors in C.
+- Parity gaps to close (non-external):
+  - Full ceremony parity across interpreter/JS/C (compile + run coverage).
+  - `at all` map helpers parity for C.
+  - Higher-level translation paths parity (interpreter vs compiled backends).
 - Mind: plus streaming path and richer reply envelopes per `mind.md`.
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
