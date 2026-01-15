@@ -1,11 +1,7 @@
 import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
-import { englishLineToSentence, sentenceToEnglish } from "./translation/english.mjs";
-import { frenchLineToSentence, sentenceToFrench } from "./translation/french.mjs";
-import { javascriptLineToSentence } from "./translation/javascript.mjs";
-import { russianLineToSentence, sentenceToRussian } from "./translation/russian.mjs";
-import { whisperEnglishLineToSentence } from "./translation/whisper_english.mjs";
+import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -20,25 +16,7 @@ export async function translation_from_text_to_name_text(sentence) {
 
   const sourceLang = (sentence?.fromstate?.name || "").toLowerCase();
   const targetLang = (sentence?.become?.name || sentence?.tostate?.name || "").toLowerCase();
-  const isEnglishSource = sourceLang === "english";
-  const isWhisperEnglishSource =
-    sourceLang === "whisper-english" ||
-    sourceLang === "whisperenglish" ||
-    sourceLang === "whisper_english";
-  const isJavaScriptSource = sourceLang === "javascript" || sourceLang === "js";
-  const isRussianSource = sourceLang === "russian" || sourceLang === "ru";
-  const isFrenchSource = sourceLang === "french" || sourceLang === "fr";
-  const sourceAdapter = isWhisperEnglishSource
-    ? whisperEnglishLineToSentence
-    : isEnglishSource
-    ? englishLineToSentence
-    : isJavaScriptSource
-      ? javascriptLineToSentence
-      : isRussianSource
-        ? russianLineToSentence
-        : isFrenchSource
-          ? frenchLineToSentence
-          : null;
+  const sourceAdapter = resolveTranslationSource(sourceLang);
   const outputLang = targetLang || (sourceAdapter ? "pyash" : "english");
   let translation = "";
   let sentences = [];
@@ -49,7 +27,7 @@ export async function translation_from_text_to_name_text(sentence) {
       .split("\n")
       .map(l => l.trim())
       .filter(Boolean)
-      .map(sourceAdapter)
+      .map(sourceAdapter.fromLine)
       .filter(Boolean);
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
@@ -58,9 +36,11 @@ export async function translation_from_text_to_name_text(sentence) {
     const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
     sentences = program.sentences;
     const formatter =
-      outputLang === "french" ? sentenceToFrench :
-      outputLang === "russian" ? sentenceToRussian :
-      sentenceToEnglish;
+      resolveTranslationTarget(outputLang)?.toSentence ??
+      resolveTranslationTarget("english")?.toSentence;
+    if (!formatter) {
+      throw new Error("translation: target adapter missing");
+    }
     const lines = program.sentences.map(formatter);
     translation = lines.join("\n");
   }
