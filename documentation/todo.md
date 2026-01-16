@@ -2,7 +2,7 @@
 
 ## Now
 - Parity gaps to close (non-external):
-  - Higher-level translation paths parity (interpreter vs compiled backends).
+  - Higher-level translation paths parity (interpreter/JS only; defer C parity until stable).
 - Mind: plus streaming path and richer reply envelopes per `mind.md`.
 - Docs sweep: remove stale `tloh` wording in documentation (it is deprecated; loops are `fromindex`/`toindex` stop-when-equal).
 
