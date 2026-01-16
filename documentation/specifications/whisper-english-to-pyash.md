@@ -24,14 +24,16 @@ Input: a Whisper transcript.
 Normalisation steps:
 
 * lowercase
-* replace punctuation with spaces
+* replace punctuation `[.,;:!?]` with spaces
 * collapse repeated whitespace
 * split into space-delimited tokens
 
 Quoted block delimiters are spoken as tokens, not punctuation:
-* `quoted.<lang>.` is spoken as `quoted <lang>`
-* `.<lang>.quoted` is spoken as `<lang> quoted`
-After normalization, these remain two-token delimiters (`quoted <lang>` / `<lang> quoted`) and MUST be preserved as quoting boundaries.
+* `quoted <lang>` opens a block
+* `<lang> quoted` closes a block
+Punctuation is stripped before this scan, so `quoted.<lang>.` and `.<lang>.quoted` collapse to the same token pairs.
+
+Quoted blocks are collapsed into a single internal token (`__QUOTED_TEXT__:<text>`). The `<lang>` token is only used to find the closing delimiter and is not preserved. Because normalization lowercases and strips punctuation before collapsing, quoted content is lowercased and punctuation removed.
 
 No reliance on commas, semicolons, or periods.
 
@@ -100,12 +102,12 @@ Normalise internally to the canonical form with mood suffix.
 
 Rules:
 
-* If the first token is a mood, treat it as `moodPrefix`.
+* If the first non-quoted token is a mood, treat it as `moodPrefix`.
 * Else, require a mood token at the end as `moodSuffix`.
 * If both appear, raise a parse error.
-* Prefer suffix moods when parsing to avoid conflicts with text payloads.
+* Prefix moods are normalized to suffix moods.
 
-`exists` remains valid only with `ya`. 
+`exists` is not enforced by the Whisper normalizer; enforcement remains a core/runtime concern.
 
 ---
 
@@ -146,7 +148,7 @@ Example speech:
 
 ### 6.4 Quoted blocks (`quoted <lang>` / `<lang> quoted`)
 
-Speech MUST include the two-token delimiters `quoted <lang>` and `<lang> quoted`. Everything between them is treated as text and may include keywords.
+Speech MUST include the two-token delimiters `quoted <lang>` and `<lang> quoted`. Everything between them is treated as text and may include keywords; the Whisper normalizer lowercases and strips punctuation before collapsing the block.
 
 Example speech:
 
@@ -164,12 +166,14 @@ Given token stream:
    * `object` -> `ob`
    * `subj` -> `su`
    * `obj` -> `ob`
-2. Normalise split compositional cases as per core rules. 
+2. Normalise split compositional cases as per core rules.
 3. Determine mood:
 
-   * prefix mood if token[0] in moods
-   * else suffix mood must exist as final mood token
-4. Parse optional `exists` and validate mood is `ya`. 
+   * prefix mood if the first non-quoted token is in moods
+   * else suffix mood must exist as final non-quoted mood token
+   * if both appear, error
+   * prefix moods are normalized to suffix moods
+4. Parse optional `exists` (Whisper normalizer does not validate mood).
 5. Parse a sequence of cases:
 
    * read a case keyword
