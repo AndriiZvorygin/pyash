@@ -321,7 +321,8 @@ export default async function write(sentence, { remember: rememberFn = remember 
       });
     }
     const stream = rememberFn(streamName);
-    if (!stream || stream.be !== "stream") {
+    const streamLike = stream && (stream.be === "stream" || stream.ob?.filename || Array.isArray(stream.ob?.ve?.values));
+    if (!streamLike) {
       throwErrorSentence({
         name: "write stream missing",
         message: `stream not found: ${streamName} (set PYA_STREAM_STDOUT=0 or define stream stdout default to lie for hear stream handles)`,
@@ -337,13 +338,13 @@ export default async function write(sentence, { remember: rememberFn = remember 
       collected += chunk;
       chain = chain.then(() => sendKeyboardText(chunk, keyboardCmd)).catch(() => {});
     };
-    if (Array.isArray(stream.ob?.ve?.values)) {
+    if (Array.isArray(stream?.ob?.ve?.values)) {
       for (const value of stream.ob.ve.values) {
         append(String(value ?? ""));
         append("\n");
       }
       await chain;
-    } else if (stream.ob?.filename) {
+    } else if (stream?.ob?.filename) {
       const filename = stream.ob.filename;
       let done = null;
       const waitForBlank = new Promise(resolve => { done = resolve; });
@@ -434,6 +435,7 @@ export const signatures = [
   { signatureWords: ["be", "write", "from", "name", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "from", "name", "text", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "from", "name", "stream", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
+  { signatureWords: ["be", "write", "from", "name", "filename", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map"], handler: write },

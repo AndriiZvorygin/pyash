@@ -1,5 +1,8 @@
 from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do
-su name prompt ob text "Recording 10 seconds from the microphone into /tmp/pyash-hear-input.wav and transcribing it." be write do
+exists su name ffmpeg input ob text "lavfi" be default ya
+exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya
+su name prompt ob text "Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav and transcribing it." be write do
+su name note ob text "Override 'ffmpeg input' and 'ffmpeg input device' to use your microphone." be write do
 exists su name output ob text "" be text ya
-su name output from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be hear do
+su name output from wo microphone during num 1 to filename "/tmp/pyash-hear-input.wav" be hear do
 ob name output be write do

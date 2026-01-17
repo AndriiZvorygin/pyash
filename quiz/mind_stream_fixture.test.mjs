@@ -28,7 +28,7 @@ test("mind stream uses config vyah stream and yields chips", async () => {
     const lines = content.split(/\r?\n/).filter(Boolean);
     const chunks = [];
     for (const line of lines) {
-      if (line.trim() === "[STREAM_END]") break;
+      if (line.trim() === "[PYA_STREAM_END]") break;
       chunks.push(JSON.parse(line));
     }
     assert.equal(chunks.join("").trim(), "alpha beta gamma");
@@ -43,7 +43,7 @@ async function waitForStreamEnd(filename, { timeoutMs = 1000 } = {}) {
   while (Date.now() - start < timeoutMs) {
     try {
       const content = await fs.readFile(filename, "utf8");
-      if (content.includes("[STREAM_END]")) return content;
+      if (content.includes("[PYA_STREAM_END]")) return content;
     } catch {
       // ignore
     }

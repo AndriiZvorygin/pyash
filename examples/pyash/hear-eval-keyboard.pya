@@ -1,5 +1,8 @@
 from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do
-su name prompt ob text "Focus the target app now. Recording from the microphone for 10 seconds before typing the transcript." be write do
-su name note ob text "Override 'ffmpeg input' if your OS uses a different device (e.g., pipewire)." be write do
-su name transcript from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be hear do
+exists su name ffmpeg input ob text "lavfi" be default ya
+exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya
+exists su name keyboard bin ob text "true" be default ya
+su name prompt ob text "Focus the target app now. Recording 1 second from ffmpeg input before typing the transcript." be write do
+su name note ob text "Override 'ffmpeg input' and 'ffmpeg input device' to use your microphone." be write do
+su name transcript from wo microphone during num 1 to filename "/tmp/pyash-hear-input.wav" be hear do
 su name typed ob name transcript to wo keyboard be write do

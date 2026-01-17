@@ -1,15 +1,20 @@
 su name microphone hear from wo microphone during num 0 to filename output be ceremony def
   exists su name cmd ob text "ffmpeg -y -f " be text ya
   ob name ffmpeg input to name cmd be plus do
-  ob text " -i default -t " to name cmd be plus do
+  ob text " -i " to name cmd be plus do
+  ob name ffmpeg input device to name cmd be plus do
+  ob text " -t " to name cmd be plus do
   ob num of during of this to name cmd be plus do
   ob text " " to name cmd be plus do
-  ob filename of to of this to name text path be text do
-  ob name path to name cmd be plus do
+  ob filename of to of this to name text recording be text do
+  ob name recording to name cmd be plus do
   ob text of cmd be command do
-  ob name path to name filename path be filename do
-  su name transcript from name filename path be hear do
+  exists su hear be default ob name hear ya
+  su name transcript from name recording be hear do
   su name transcript ret
 prah
-su name prompt ob text "Recording 10 seconds from the microphone into /tmp/pyash-hear-input.wav." be write do
-su name record from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be microphone hear do
+exists su name ffmpeg input ob text "lavfi" be default ya
+exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya
+su name prompt ob text "Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav." be write do
+su name note ob text "Override 'ffmpeg input' and 'ffmpeg input device' to use your microphone." be write do
+su name record from wo microphone during num 1 to filename "/tmp/pyash-hear-input.wav" be microphone hear do
