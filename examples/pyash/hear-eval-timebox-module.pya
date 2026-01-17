@@ -1,0 +1,4 @@
+from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do
+su name prompt ob text "Recording 10 seconds from the microphone, then transcribing via the module." be write do
+su name output from wo microphone during num 10 to filename "/tmp/pyash-hear-input.wav" be hear do
+ob name output be write do
