@@ -14,7 +14,7 @@ test("hear timebox accepts prompt with fixture", async () => {
   forget();
   process.env.PYA_HEAR_FIXTURE = "fixture line";
   try {
-    const result = await run("su name record ob text \"Proper nouns: Pyash, Ollama\" during num 1000 be hear vyah timebox do");
+    const result = await run("su name record ob text \"Proper nouns: Pyash, Ollama\" during num 1 be hear vyah timebox do");
     assert.equal(result?.value?.text, "fixture line");
   } finally {
     delete process.env.PYA_HEAR_FIXTURE;

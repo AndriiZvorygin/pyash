@@ -1,7 +1,6 @@
-su name loop be refinery def
-exists su name listen ob la su name transcript during num 10000 be hear vyah timebox do ko be platform ya
-exists su name transcript out from ve name listen ob la ob name transcript be write do ko be platform ya
-exists su name draft from ve name listen ob la su name lines ob text "Reply in one short sentence." for name mind to name text mind-out be write do ko be platform ya
-exists su name draft out from ve name draft ob la ob name mind-out be write do ko be platform ya
-exists su name speak from ve name draft ob la su name audio ob name mind-out to filename "artifacts/say/talk-loop-timebox.wav" be say do ko be platform ya
-prah
+su name transcript during num 10 be hear vyah timebox do
+su name transcript out ob name transcript be write do
+su name mind be mind accordingto name "Reply in one short sentence." ya
+su name mind-out ob text of ob of name transcript for name mind to name text mind-out be write do
+su name draft out ob name mind-out be write do
+su name audio ob name mind-out to filename "artifacts/say/talk-loop-timebox.wav" be say do

@@ -515,15 +515,16 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   }
 
   if (aspectKey === "timebox") {
-    const durationMs = Number(sentence?.during?.num ?? sentence?.during);
-    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+    const durationSeconds = Number(sentence?.during?.num ?? sentence?.during);
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
       throwErrorSentence({
         name: "hear timebox invalid",
-        message: "hear timebox requires during num <ms>",
+        message: "hear timebox requires during num <s>",
         from: { name: "hear" },
         raw: { during: sentence?.during }
       });
     }
+    const durationMs = Math.max(1, Math.round(durationSeconds * 1000));
     if (fixture !== undefined) {
       transcript = String(fixture ?? "");
     } else {

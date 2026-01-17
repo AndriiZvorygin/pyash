@@ -14,7 +14,7 @@ test("hear timebox fixture returns transcript", async () => {
   forget();
   process.env.PYA_HEAR_FIXTURE = "Timed transcript.";
   try {
-    await run("su name H2 during num 10000 be hear vyah timebox do");
+    await run("su name H2 during num 10 be hear vyah timebox do");
     const fact = remember("H2");
     assert.equal(fact?.be, "hear");
     assert.equal(fact?.ob?.text, "Timed transcript.");

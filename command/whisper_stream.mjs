@@ -174,7 +174,7 @@ Options:
   -f, --file <path>    Output text file (default: /tmp/whisper-stream.txt)
   --prompt <text>      Initial prompt (optional)
   --bin <path>         Whisper-stream binary path (optional)
-  --timebox <ms>       Stop after duration (optional)
+  --timebox <s>        Stop after duration in seconds (optional)
   --final              Print only the final transcript (optional)
 
 Environment:
@@ -198,7 +198,10 @@ async function main() {
   const binPath = resolveWhisperStreamBinary(args.bin);
   const prompt = args.prompt ?? "";
   const finalOnly = Boolean(args.final);
-  const timeboxMs = args.timebox ? Number(args.timebox) : null;
+  const timeboxSeconds = args.timebox ? Number(args.timebox) : null;
+  const timeboxMs = Number.isFinite(timeboxSeconds) && timeboxSeconds > 0
+    ? Math.round(timeboxSeconds * 1000)
+    : null;
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, "");
