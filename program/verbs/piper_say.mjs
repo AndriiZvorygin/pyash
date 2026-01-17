@@ -345,7 +345,8 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
         onLine: (line) => {
           const raw = String(line ?? "");
           if (!raw.trim()) return;
-          if (raw.trim() === "[STREAM_END]") {
+          const trimmed = raw.trim();
+          if (trimmed === "[PYA_STREAM_END]" || trimmed === "[STREAM_END]") {
             if (done) done();
             return;
           }
