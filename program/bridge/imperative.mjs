@@ -211,32 +211,32 @@ export async function handleImperative({
   let baseSigKey = null;
   if (sigWords) {
     sigKey = joinSignatureWords(sigWords);
-    if (!fn) {
-      const handler = lookupSignatureHandler(sigKey);
-      if (handler) fn = handler;
-    }
-    if (!fn && !defEntry) {
+    if (!defEntry) {
       const defName = lookupSignature(sigKey);
       if (defName) {
         const sigForDef = Array.isArray(sigWords) ? [...sigWords] : null;
         if (sigForDef) sigForDef[1] = defName;
         defEntry = memory.getDefinitionEntryBySignature(defName, sigForDef ?? sigWords) ?? getDefinitionEntry(defName);
-        defResolvedBySignature = true;
+        defResolvedBySignature = Boolean(defEntry);
       }
+    }
+    if (!fn && !defEntry) {
+      const handler = lookupSignatureHandler(sigKey);
+      if (handler) fn = handler;
     }
   }
   if (!fn && !defEntry && baseSigWords) {
     baseSigKey = joinSignatureWords(baseSigWords);
-    const handler = lookupSignatureHandler(baseSigKey);
-    if (handler) fn = handler;
-    if (!fn) {
-      const defName = lookupSignature(baseSigKey);
-      if (defName) {
-        const sigForDef = Array.isArray(baseSigWords) ? [...baseSigWords] : null;
-        if (sigForDef) sigForDef[1] = defName;
-        defEntry = memory.getDefinitionEntryBySignature(defName, sigForDef ?? baseSigWords) ?? getDefinitionEntry(defName);
-        defResolvedBySignature = true;
-      }
+    const defName = lookupSignature(baseSigKey);
+    if (defName) {
+      const sigForDef = Array.isArray(baseSigWords) ? [...baseSigWords] : null;
+      if (sigForDef) sigForDef[1] = defName;
+      defEntry = memory.getDefinitionEntryBySignature(defName, sigForDef ?? baseSigWords) ?? getDefinitionEntry(defName);
+      defResolvedBySignature = Boolean(defEntry);
+    }
+    if (!fn && !defEntry) {
+      const handler = lookupSignatureHandler(baseSigKey);
+      if (handler) fn = handler;
     }
   }
 
