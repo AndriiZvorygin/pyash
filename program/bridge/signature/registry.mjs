@@ -10,6 +10,10 @@ const signatureHandlers = new Map(); // key -> fn
 export function registerSignature({ name, signatureWords }) {
   if (!name || !signatureWords?.length) return;
   const key = joinSignatureWords(signatureWords);
+  const existing = signatureRegistry.get(key);
+  if (existing && existing !== name) {
+    throw new Error(`signature conflict: ${key} already mapped to ${existing} (tried ${name})`);
+  }
   signatureRegistry.set(key, name);
   const keys = nameToKeys.get(name) ?? new Set();
   keys.add(key);
@@ -19,6 +23,10 @@ export function registerSignature({ name, signatureWords }) {
 export function registerSignatureAlias({ name, signatureWords }) {
   if (!name || !signatureWords?.length) return;
   const key = joinSignatureWords(signatureWords);
+  const existing = signatureRegistry.get(key);
+  if (existing && existing !== name) {
+    throw new Error(`signature conflict: ${key} already mapped to ${existing} (tried ${name})`);
+  }
   signatureRegistry.set(key, name);
   const keys = nameToKeys.get(name) ?? new Set();
   keys.add(key);
