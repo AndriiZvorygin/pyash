@@ -7,8 +7,7 @@ su name microphone hear from wo microphone during num 0 to filename output be ce
   ob filename of to of this to name text path be text do
   ob name path to name cmd be plus do
   ob text of cmd be command do
-  ob name path to name filename path be filename do
-  su name transcript from name filename path be hear do
+  su name transcript from filename of to of this be hear do
   su name transcript ret
 prah
 exists su name microphone hear be export ya
