@@ -267,7 +267,10 @@ export async function interpret(sentence) {
         if (su?.name && getDefinitionEntryBySignature(su.name, sig)) {
           console.warn(`ceremony redefined: ${su.name}`);
         }
-        registerSignature({ name: su?.name, signatureWords: sig });
+        const source = state.currentSourceFilename
+          ? `${state.currentSourceFilename}${state.currentSourceLine ? `:${state.currentSourceLine}` : ""}`
+          : null;
+        registerSignature({ name: su?.name, signatureWords: sig, source });
       }
     }
 

@@ -124,7 +124,7 @@ export async function handleImperative({
           }
           const aliasSig = [...sig];
           aliasSig[1] = localName;
-          registerSignatureAlias({ name: mapped, signatureWords: aliasSig });
+          registerSignatureAlias({ name: mapped, signatureWords: aliasSig, source: record.id });
         }
         return { imported: localName };
       }
