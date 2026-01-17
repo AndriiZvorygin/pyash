@@ -1,6 +1,6 @@
 exists su name output be javascript ya
 
-su name program ob text quoted.pyash.
+exists su name program ob text quoted.pyash.
 exists su name doors ob ve num 3 1 0 be vector ya
 ob name doors at ord 2 be read to name picked do
 be write ob name picked do
