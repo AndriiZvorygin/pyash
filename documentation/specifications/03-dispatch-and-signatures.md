@@ -9,7 +9,9 @@ Define how signature words are derived and used for dispatch.
 - ceremony: user-defined verb with a registered signature.
 
 ## 3. Rules (normative)
-- Dispatch is signature-first: derive signature words, then resolve to a handler or ceremony.
+- Dispatch is **signature-based**, not verb-based: each distinct case/type shape is its own dispatch target.
+- Dispatch is signature-first: derive signature words, then resolve to a ceremony (if registered) or a handler.
+- If multiple ceremonies register the same signature, the most recent registration wins and a warning is emitted.
 - Case order is normalized using the official compositional keyword order (`01-sentence-and-grammar.md`).
 - Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored when matching ceremony signatures.
 - Literal `wo` values contribute their literal word to the signature words (e.g., `from wo microphone` derives `from wo microphone`), enabling strict literal dispatch.
