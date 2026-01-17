@@ -4,7 +4,7 @@ from filename "./module/mind_ollama.pya" ob name mind to name ollama command min
 from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
 exists su say be default ob name piper command say ya
-exists su hear be default ob name whisper command hear ya
+exists su hear be default ob name microphone hear ya
 exists su name mind backend be default ob name ollama command mind ya
 exists su name stream stdout ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya

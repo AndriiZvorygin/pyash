@@ -3,6 +3,7 @@ artifacts/
 know/input/
 node_modules/
 newspaper/
+quiz/sandpit/
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
