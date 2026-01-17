@@ -132,7 +132,7 @@ Aspect is part of dispatch and controls the return type (see
 - `await`: wait for a handle, return **Value**.
 - `finish`: flush/close a stream or handle, return **Value** status.
 - `cancel`: cancel a stream or handle, return **Value** status.
-  - `timebox`: timebox synthesis; return **Value** or **Stream** per backend policy. Duration is given by `during num <ms>`.
+  - `timebox`: timebox synthesis; return **Value** or **Stream** per backend policy. Duration is given by `during num <s>`.
 
 ### 4.2 `hear`
 
@@ -142,7 +142,7 @@ Aspect is part of dispatch and controls the return type (see
 - `await`: wait for a handle, return **Value**.
 - `finish`: flush/close a stream or handle, return **Value** status.
 - `cancel`: cancel a stream or handle, return **Value** status.
-  - `timebox`: timebox capture; return **Value** or **Stream** per backend policy. Duration is given by `during num <ms>`.
+  - `timebox`: timebox capture; return **Value** or **Stream** per backend policy. Duration is given by `during num <s>`.
 
 ---
 
@@ -164,7 +164,7 @@ su name <stream>
 atindex num <seq>
 toindex num <last>
 ob <payload>
-during num <tMs>
+during num <tSec>
 be chip ya
 ```
 
@@ -188,7 +188,7 @@ su name <stream>
 atindex num <seq>
 toindex num <last>
 ob text <payload>
-during num <tMs>
+during num <tSec>
 be chip ya
 ```
 
