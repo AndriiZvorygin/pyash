@@ -18,6 +18,7 @@ so Pyash becomes a stable **pivot language** between people and machines.
 1. **Grammar-driven dispatch**
 
    * Verbs act as dispatchers over cases and noun classes.
+   * Dispatch is **signature-based**, not verb-based: distinct case/type shapes are distinct implementations.
    * Cases encode roles like source, destination, instrument, condition, etc.
    * Noun classes represent semantic types like “model”, “file”, “dataset”, “pipeline node”, “hardware resource”.
 

@@ -27,10 +27,11 @@ This document summarizes the current core language model used by the interpreter
 - `then`: conditional consequence stored on a `do` sentence with `tiny`/`giant`/`equally`.
 
 ## Signature Resolution
-- Dispatch is signature-first:
+- Dispatch is signature-first and **signature-based (not verb-based)**:
   - Build signature words from the call sentence (cases are sorted by case name).
-  - If a built-in verb handler matches, invoke it.
-  - Otherwise, if a ceremony signature matches, invoke the ceremony.
+  - If a ceremony definition matches the signature, invoke it.
+  - Otherwise, if a built-in verb handler matches, invoke it.
+- When multiple ceremony definitions register the **same signature**, the most recent definition wins and a warning is emitted.
 - Sequence registers (`fromindex`, `toindex`, `atindex`) are ignored for the purpose of matching ceremony signatures.
 - If no match exists, interpretation fails with an “unknown verb/signature” error that includes the derived signature.
 
