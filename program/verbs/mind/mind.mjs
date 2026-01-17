@@ -66,7 +66,7 @@ function writeStreamChunk(filePath, chunk) {
 }
 
 function writeStreamEnd(filePath) {
-  fsSync.appendFileSync(filePath, "[STREAM_END]\n", "utf8");
+  fsSync.appendFileSync(filePath, "[PYA_STREAM_END]\n", "utf8");
 }
 
 function startStreamFile(filePath) {
@@ -95,7 +95,7 @@ function startStreamTail({ filename, onLine, onEnd }) {
     pending = lines.pop() ?? "";
     for (const line of lines) {
       if (!line.length) continue;
-      if (line.trim() === "[STREAM_END]") {
+      if (line.trim() === "[PYA_STREAM_END]") {
         if (onEnd) onEnd();
         return;
       }
