@@ -133,7 +133,7 @@ Map storage options in Stage 1:
 A sentence stores:
 - `be` (interned verb ID or string)
 - `mood` (enum)
-- `exists` flag (valid only when mood is `YA`)
+- `exists` flag (valid only when mood is `YA`; required on the first `ya` write to a new `su name` so missing names error)
 - flat optional case fields:
   - `su`, `ob`, `to`, `from`, `by`
   - `fromindex`, `toindex`, `atindex`
