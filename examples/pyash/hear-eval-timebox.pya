@@ -1,0 +1,10 @@
+su name prompt ob text "Recording 10 seconds from the microphone, then transcribing the file with hear." be write do
+su name note ob text "Override 'ffmpeg input device' if your OS uses a different device (e.g., pipewire)." be write do
+exists su name cmd ob text "ffmpeg -y -f " be text ya
+ob name ffmpeg input to name cmd be plus do
+ob text " -i " to name cmd be plus do
+ob name ffmpeg input device to name cmd be plus do
+ob text " -t 10 /tmp/pyash-hear-input.wav" to name cmd be plus do
+ob text of cmd be command do
+su name output from filename "/tmp/pyash-hear-input.wav" be hear do
+ob name output be write do
