@@ -29,45 +29,45 @@ function findAdapter(lang) {
 
 export function resolveTranslationSource(lang) {
   const adapter = findAdapter(lang);
-  return adapter?.fromLine ? adapter : null;
+  return adapter?.toPyash ? adapter : null;
 }
 
 export function resolveTranslationTarget(lang) {
   const adapter = findAdapter(lang);
-  return adapter?.toSentence ? adapter : null;
+  return adapter?.fromPyash ? adapter : null;
 }
 
 registerTranslationAdapter({
   name: "english",
   aliases: ["en"],
-  fromLine: englishLineToSentence,
-  toSentence: sentenceToEnglish
+  toPyash: englishLineToSentence,
+  fromPyash: sentenceToEnglish
 });
 
 registerTranslationAdapter({
   name: "whisper-english",
   aliases: ["whisperenglish", "whisper_english"],
-  fromLine: whisperEnglishLineToSentence
+  toPyash: whisperEnglishLineToSentence
 });
 
 registerTranslationAdapter({
   name: "javascript",
   aliases: ["js"],
-  fromLine: javascriptLineToSentence
+  toPyash: javascriptLineToSentence
 });
 
 registerTranslationAdapter({
   name: "russian",
   aliases: ["ru"],
-  fromLine: russianLineToSentence,
-  toSentence: sentenceToRussian
+  toPyash: russianLineToSentence,
+  fromPyash: sentenceToRussian
 });
 
 registerTranslationAdapter({
   name: "french",
   aliases: ["fr"],
-  fromLine: frenchLineToSentence,
-  toSentence: sentenceToFrench
+  toPyash: frenchLineToSentence,
+  fromPyash: sentenceToFrench
 });
 
 export function listTranslationAdapters() {

@@ -27,7 +27,7 @@ export async function translation_from_text_to_name_text(sentence) {
       .split("\n")
       .map(l => l.trim())
       .filter(Boolean)
-      .map(sourceAdapter.fromLine)
+      .map(sourceAdapter.toPyash)
       .filter(Boolean);
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
@@ -36,8 +36,8 @@ export async function translation_from_text_to_name_text(sentence) {
     const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
     sentences = program.sentences;
     const formatter =
-      resolveTranslationTarget(outputLang)?.toSentence ??
-      resolveTranslationTarget("english")?.toSentence;
+      resolveTranslationTarget(outputLang)?.fromPyash ??
+      resolveTranslationTarget("english")?.fromPyash;
     if (!formatter) {
       throw new Error("translation: target adapter missing");
     }
