@@ -1,4 +1,6 @@
 exists su name stream stdout ob bool lie be default ya
+exists su name hear fixture ob text "Hello from stream." be default ya
+exists su name keyboard bin ob text "true" be default ya
 su name prompt ob text "Focus the target app now. Live transcript will type into the focused window." be write do
 su name live be hear vyah stream do
 su name typer from name live to wo keyboard be write vyah stream do
