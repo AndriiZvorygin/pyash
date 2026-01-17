@@ -1,0 +1,4 @@
+exists su name hear fixture ob text "Hello from stream." be default ya
+exists su name stream stdout ob bool truth be default ya
+su name prompt ob text "Fixture stream: should print immediately and exit." be write do
+su name live be hear vyah stream do

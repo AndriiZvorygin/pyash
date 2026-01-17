@@ -47,6 +47,8 @@ if [[ "$include_command" != "true" ]]; then
   skip["examples/pyash/command-espeak.pya"]=1
 fi
 
+skip["examples/pyash/hear-stream.pya"]=1
+
 if [[ "$include_say" == "true" || "$include_command" == "true" ]]; then
   if ! command -v espeak-ng >/dev/null 2>&1; then
     echo "espeak-ng not found; skipping say/command espeak examples." >&2

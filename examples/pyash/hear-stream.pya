@@ -1,3 +1,3 @@
-exists su name hear fixture ob text "Hello from stream." be default ya
-su name prompt ob text "Speak now. Streaming transcript will print as it arrives." be write do
+exists su name stream stdout ob bool truth be default ya
+su name prompt ob text "Speak now. Streaming transcript will print as it arrives. Press Ctrl+D to stop." be write do
 su name live be hear vyah stream do

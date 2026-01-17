@@ -189,6 +189,14 @@ function normalizeStreamPrefix(line) {
   return normalized.replace(/[.]+$/u, "");
 }
 
+function normalizeDedupLine(line) {
+  return String(line ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+}
+
 function isBlankAudioLine(line) {
   const trimmed = String(line ?? "").trim();
   return trimmed.includes("[BLANK_AUDIO]");
@@ -196,13 +204,19 @@ function isBlankAudioLine(line) {
 
 function collapseStreamLines(lines) {
   const output = [];
+  const seen = new Set();
   let lastLine = "";
+  let lastNormalized = "";
   for (const line of lines) {
     const trimmed = String(line ?? "").trim();
     if (!trimmed || isBlankAudioLine(trimmed)) continue;
+    const dedup = normalizeDedupLine(trimmed);
+    if (dedup && seen.has(dedup) && dedup !== lastNormalized) continue;
     if (!lastLine) {
       output.push(trimmed);
       lastLine = trimmed;
+      lastNormalized = dedup;
+      if (dedup) seen.add(dedup);
       continue;
     }
     const normLast = normalizeStreamLine(lastLine);
@@ -210,12 +224,17 @@ function collapseStreamLines(lines) {
     const normLastPrefix = normalizeStreamPrefix(lastLine);
     if (normNext === normLast) continue;
     if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
+      if (lastNormalized) seen.delete(lastNormalized);
       output[output.length - 1] = trimmed;
       lastLine = trimmed;
+      lastNormalized = dedup;
+      if (dedup) seen.add(dedup);
       continue;
     }
     output.push(trimmed);
     lastLine = trimmed;
+    lastNormalized = dedup;
+    if (dedup) seen.add(dedup);
   }
   return output;
 }
@@ -235,14 +254,20 @@ function sanitizeTranscript(text) {
 
 function makeStreamStdoutWriter() {
   let lastLine = "";
+  let lastNormalized = "";
+  const seen = new Set();
   let lineOpen = false;
   return {
     write(line) {
       const trimmed = String(line ?? "").trim();
       if (!trimmed || trimmed === "[BLANK_AUDIO]") return;
+      const dedup = normalizeDedupLine(trimmed);
+      if (dedup && seen.has(dedup) && dedup !== lastNormalized) return;
       if (!lastLine) {
         process.stdout.write(trimmed);
         lastLine = trimmed;
+        lastNormalized = dedup;
+        if (dedup) seen.add(dedup);
         lineOpen = true;
         return;
       }
@@ -255,6 +280,9 @@ function makeStreamStdoutWriter() {
         if (suffix) {
           process.stdout.write(suffix);
           lastLine = trimmed;
+          if (lastNormalized) seen.delete(lastNormalized);
+          lastNormalized = dedup;
+          if (dedup) seen.add(dedup);
           lineOpen = true;
         }
         return;
@@ -262,6 +290,8 @@ function makeStreamStdoutWriter() {
       if (lineOpen) process.stdout.write("\n");
       process.stdout.write(trimmed);
       lastLine = trimmed;
+      lastNormalized = dedup;
+      if (dedup) seen.add(dedup);
       lineOpen = true;
     },
     finish() {
@@ -358,8 +388,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     const hasTarget = Boolean(sentence?.to?.name || sentence?.to?.filename);
     const canForward =
       !hasTarget &&
-      (aspectKey === "stream" ||
-      (aspectKey === "timebox" && Number.isFinite(Number(sentence?.during?.num ?? sentence?.during))) ||
+      ((aspectKey === "timebox" && Number.isFinite(Number(sentence?.during?.num ?? sentence?.during))) ||
       (aspectKey === "eval" && hasInputPath));
     if (canForward) {
       const { interpret } = await import("../bridge/index.mjs");
