@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import { spawnSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -57,6 +57,28 @@ function startFileTail({ filename, onLine }) {
     }
   }, 200);
   return () => clearInterval(interval);
+}
+
+async function runCommandText(cmd, { input } = {}) {
+  return new Promise((resolve, reject) => {
+    let proc;
+    if (canRunDirect(cmd)) {
+      const parts = splitCommand(cmd);
+      proc = spawn(parts[0], parts.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
+    } else {
+      proc = spawn(String(cmd), { shell: true, stdio: ["pipe", "pipe", "pipe"] });
+    }
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
+    proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
+    proc.on("error", reject);
+    proc.on("close", status => resolve({ status, stdout, stderr }));
+    if (input !== null && input !== undefined) {
+      proc.stdin.write(input);
+    }
+    proc.stdin.end();
+  });
 }
 
 export async function command(sentence, { remember: rememberFn = remember } = {}) {
@@ -222,23 +244,8 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: outputText }, be: "command" };
   }
 
-  let res;
-  if (canRunDirect(cmd)) {
-    const parts = splitCommand(cmd);
-    res = spawnSync(parts[0], parts.slice(1), {
-      input: input ?? undefined,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    });
-  } else {
-    res = spawnSync(String(cmd), {
-      shell: true,
-      input: input ?? undefined,
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024
-    });
-  }
-  if (res.error || res.status) {
+  const res = await runCommandText(cmd, { input });
+  if (res.status) {
     throwErrorSentence({
       name: "command defective",
       message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
