@@ -1,0 +1,5 @@
+su name loop be refinery def
+exists su name listen ob la su name transcript during num 10000 be hear vyah timebox do ko be platform ya
+exists su name draft from ve name listen ob la su name lines ob text "Reply in one short sentence." for name mind to name text mind-out be write do ko be platform ya
+exists su name speak from ve name draft ob la su name audio ob name mind-out to filename "artifacts/say/talk-loop-timebox.wav" be say do ko be platform ya
+prah
