@@ -183,12 +183,28 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   // Prompt resolution: config accordingto (discourse) + call prompt/text
   const configPrompt = configSentence?.accordingto?.name ?? null;
 
+  const resolvePromptFromName = (name) => {
+    if (!name) return null;
+    const fact = remember(name);
+    if (!fact?.ob) return null;
+    if (fact.ob.text !== undefined) return String(fact.ob.text);
+    if (fact.ob.num !== undefined) return String(fact.ob.num);
+    if (fact.ob.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
+    if (fact.ob.hollow) return "null";
+    return null;
+  };
+  const obNamePrompt = sentence?.ob?.name && !sentence?.ob?.model
+    ? (resolvePromptFromName(sentence.ob.name) ?? sentence.ob.name)
+    : null;
+  const inlineObNamePrompt = ob?.name && !ob?.model
+    ? (resolvePromptFromName(ob.name) ?? ob.name)
+    : null;
   const callPrompt =
     sentence?.with?.text ??
     sentence?.ob?.text ??
-    (sentence?.ob?.name && !sentence?.ob?.model ? sentence?.ob?.name : null) ??
+    obNamePrompt ??
     ob?.text ??
-    (ob?.name && !ob?.model ? ob?.name : null);
+    inlineObNamePrompt;
 
   const toolMapName = sentence?.with?.name ?? null;
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
