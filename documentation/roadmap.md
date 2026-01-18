@@ -217,61 +217,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 # TODO
 
-## Week 2: Media IO v0.4 + Streaming Talk Loop + Streaming STT Binary
-
-**Jan 5 → Jan 11, 2026**
-
-### Hardening gates
-
-* Golden demos:
-
-  * `talk_loop_smoke.pya`
-  * `talk_loop_cancel.pya`
-* Streaming torture:
-
-  * slow consumer behavior
-  * cancel mid-utterance
-* Parity gate:
-
-  * same surfaced error sentences and stable run records for fixture runs across interpreter/JS/C
-
-### Completed (Week 2)
-
-* **Streaming `say` (usable, interactive)**
-
-  * TTS can begin before the full response is complete (where supported)
-  * buffering flushes on punctuation/word boundaries for intelligible speech
-  * parity-first; feature gates allowed with quizzes
-
-* **Streaming `hear` (usable, interactive)**
-
-  * partial STT is incremental
-  * parity-first; feature gates allowed with quizzes
-
-* **Drop-a-binary streaming STT for text entry**
-
-  * distributable executable that emits incremental text (streaming)
-  * supports cancellation/timeboxing
-  * stable, parseable output suitable for piping into OS/editor workflows
-
-* **Deterministic test mode hooks**
-
-  * fixture-driven speech I/O for repeatable tests
-  * recorded metadata/hashes sufficient for `again` verification when applicable
-  * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
-
-* **Talk loop demos**
-
-  * `talk_loop_smoke.pya`
-  * `talk_loop_cancel.pya`
-  * `talk_loop_timebox.pya`
-  * `talk_loop_stream.pya`
-### Boundary note
-
-Week 2 streaming is **“usable streaming”**. The **formal bounded-queue / overflow backpressure contract** is frozen in Week 5 as part of Concurrency v0.7, and the Week 2 demos are updated to conform exactly at that point.
-
----
-
 ## Week 3: Minimal agent loop v0.45 + Pipeline Workload Pack
 
 **Jan 12 → Jan 16, 2026**
