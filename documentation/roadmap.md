@@ -219,7 +219,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ## Week 3: Minimal agent loop v0.45 + Pipeline Workload Pack
 
-**Jan 12 → Jan 16, 2026**
+**Jan 18 → Jan 24, 2026**
 
 ### Ship
 
@@ -273,7 +273,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 4: Tool bridge (MCP) v0.3
 
-**Jan 17 → Jan 23, 2026**
+**Jan 25 → Jan 31, 2026**
 
 ### Ship
 
@@ -315,7 +315,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 5: Concurrency v0.7 (ready queue, cancellation, backpressure, simulation)
 
-**Jan 24 → Jan 30, 2026**
+**Feb 1 → Feb 7, 2026**
 
 ### Anchor workloads
 
@@ -374,7 +374,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 6: Genetic programming harness v0.5
 
-**Jan 31 → Feb 6, 2026**
+**Feb 8 → Feb 14, 2026**
 
 ### Ship
 
@@ -401,7 +401,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 7: Packaging + human usability v0.8
 
-**Feb 7 → Feb 13, 2026**
+**Feb 15 → Feb 21, 2026**
 
 ### Ship
 
@@ -431,7 +431,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 8: Intent compiler v0.85
 
-**Feb 14 → Feb 20, 2026**
+**Feb 22 → Feb 28, 2026**
 
 ### Ship
 
@@ -456,7 +456,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 9: Knowledge core v0.9 (claim identity, evidence shell, KB layout)
 
-**Feb 21 → Feb 27, 2026**
+**Mar 1 → Mar 7, 2026**
 
 ### Ship
 
@@ -515,7 +515,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 10: Document digestion v0.92 (policy ingest to sentences, segmentation, draft extraction)
 
-**Feb 28 → Mar 6, 2026**
+**Mar 8 → Mar 14, 2026**
 
 ### Ship
 
@@ -568,7 +568,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 11: Conflict cases + adjudication harness v0.95 (proposer, defence, prosecution, judge)
 
-**Mar 7 → Mar 13, 2026**
+**Mar 15 → Mar 21, 2026**
 
 ### Ship
 
@@ -624,7 +624,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 12: Resurrection + encyclopedia seed pack v1.0 (small world KB, revision over time)
 
-**Mar 14 → Mar 20, 2026**
+**Mar 22 → Mar 28, 2026**
 
 ### Ship
 
