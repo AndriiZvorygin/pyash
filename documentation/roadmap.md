@@ -217,63 +217,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 # TODO
 
-## Week 3: Minimal agent loop v0.45 + Pipeline Workload Pack
+## Week 3: Tool bridge (MCP) v0.3
 
 **Jan 18 → Jan 24, 2026**
-
-### Ship
-
-* **Verifier loop**
-
-  * run quizzes and emit a deterministic structured report bundle
-* **Reducer loop**
-
-  * produce minimal repro `.pya` deterministically
-* **Resolution chain for lost signatures**
-
-  * search project modules + stdlib namespaces
-  * policy-driven fallback (including mind, where enabled) with deterministic journaling
-* **Mind call caching via artefacts**
-
-  * content-hash keys
-  * deterministic cache-hit records and stable outputs
-
-### Add: Pipeline Workload Pack (golden scenario)
-
-Introduce and grow a real pipeline pack used to prove verifier/reducer/report determinism:
-
-* downloads recent videos from a source
-* transcribes
-* produces meeting minutes
-* partitions minutes into sections
-* summarizes sections
-* writes an article
-* generates an image
-* posts/publishes
-
-(Week 3 focuses on: **reports, repros, caching, determinism**, not concurrency scheduling pressure.)
-
-### Spec drops (freeze v0.45)
-
-* **Reports spec v0.1** (fields, ordering, paths)
-* **Mind event schema v0.1** (ids, hashes, provenance)
-* **Patch bundle schema v0.1** (diff layout, tests, provenance)
-
-### Hardening gates
-
-* Reports are diff-friendly and deterministic
-* Cache-hit runs produce identical outputs + identical run record entries
-* Pipeline pack has:
-
-  * smoke run
-  * stress run (more items)
-  * replay run (`again` verification)
-
----
-
-## Week 4: Tool bridge (MCP) v0.3
-
-**Jan 25 → Jan 31, 2026**
 
 ### Ship
 
@@ -310,6 +256,60 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 * Replay verifies tool list snapshot + tool call hashes
 * Torture: tool unavailable, tool timeout, server crash/restart rules, schema mismatch mid-run
 * Pipeline pack runs with MCP-backed tools **without changing the pipeline shape**
+
+---
+
+## Week 4: Minimal agent loop v0.45 + Pipeline Workload Pack
+
+**Jan 25 → Jan 31, 2026**
+
+### Ship
+
+* **Verifier loop**
+
+  * run quizzes and emit a deterministic structured report bundle
+* **Reducer loop**
+
+  * produce minimal repro `.pya` deterministically
+* **Resolution chain for lost signatures**
+
+  * search project modules + stdlib namespaces
+  * policy-driven fallback (including mind, where enabled) with deterministic journaling
+* **Mind call caching via artefacts**
+
+  * content-hash keys
+  * deterministic cache-hit records and stable outputs
+
+### Add: Pipeline Workload Pack (golden scenario)
+
+Introduce and grow a real pipeline pack used to prove verifier/reducer/report determinism:
+
+* downloads recent videos from a source
+* transcribes
+* produces meeting minutes
+* partitions minutes into sections
+* summarizes sections
+* writes an article
+* generates an image
+* posts/publishes
+
+(Week 4 focuses on: **reports, repros, caching, determinism**, not concurrency scheduling pressure.)
+
+### Spec drops (freeze v0.45)
+
+* **Reports spec v0.1** (fields, ordering, paths)
+* **Mind event schema v0.1** (ids, hashes, provenance)
+* **Patch bundle schema v0.1** (diff layout, tests, provenance)
+
+### Hardening gates
+
+* Reports are diff-friendly and deterministic
+* Cache-hit runs produce identical outputs + identical run record entries
+* Pipeline pack has:
+
+  * smoke run
+  * stress run (more items)
+  * replay run (`again` verification)
 
 ---
 
