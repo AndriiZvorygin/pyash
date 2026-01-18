@@ -221,25 +221,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 **Jan 5 → Jan 11, 2026**
 
-### Ship (remaining)
-
-* **Minimal “talk to LLM” loop (golden demo surface)**
-
-  * listen (`hear`) → LLM → speak (`say`)
-  * cancellation (`qa`) and timebox (`dweh`) are exercised as first-class controls
-
 ### Hardening gates
 
 * Golden demos:
 
   * `talk_loop_smoke.pya`
   * `talk_loop_cancel.pya`
-  * `talk_loop_timebox.pya`
 * Streaming torture:
 
   * slow consumer behavior
   * cancel mid-utterance
-  * timebox listen and speak
 * Parity gate:
 
   * same surfaced error sentences and stable run records for fixture runs across interpreter/JS/C
@@ -268,6 +259,13 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * fixture-driven speech I/O for repeatable tests
   * recorded metadata/hashes sufficient for `again` verification when applicable
   * mind invocation standardized on `be write ... for name <mind> to name <output>` (legacy `totext` supported)
+
+* **Talk loop demos**
+
+  * `talk_loop_smoke.pya`
+  * `talk_loop_cancel.pya`
+  * `talk_loop_timebox.pya`
+  * `talk_loop_stream.pya`
 ### Boundary note
 
 Week 2 streaming is **“usable streaming”**. The **formal bounded-queue / overflow backpressure contract** is frozen in Week 5 as part of Concurrency v0.7, and the Week 2 demos are updated to conform exactly at that point.
