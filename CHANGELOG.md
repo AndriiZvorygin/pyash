@@ -199,6 +199,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
+
+* Dispatch is explicitly signature-based; ceremony definitions override handlers per signature, with conflict warnings including source context.
+* `hear` timebox durations now use seconds everywhere (core, runner, specs, examples, quizzes).
+* Talk loop examples refreshed: simple timebox loop, new stream loop with “bye” exit, and transcript routed to mind via `ob name`.
+* `mind` now resolves `ob name <fact>` to remembered payloads when building prompts.
+* Whisper stream dedup refined to suppress repeated lines across outputs.
+* Mind/piper runners now write request/input files under `artifacts/` to keep `--newspaper` runs valid.
+* Added hear eval timebox examples (inline + module) and ignored `quiz/sandpit` scratch artifacts.
+
 ### Jan 10, 2026: Literals, modules, and keyboard streaming
 
 * Added `wo` literal words for strict dispatch and documented their signature behavior.
