@@ -1,0 +1,15 @@
+exists su name stream stdout ob bool truth be default ya
+su name talk loop fromindex num 0 toindex num 0 be ceremony def
+  su name prompt ob text "Speak now. Say \"bye\" to stop. Press Ctrl+D when done." be write do
+  su name transcript be hear vyah stream do
+  su name transcript out ob name transcript be write do
+  su name mind be mind accordingto name "Reply in one short sentence." ya
+  su name mind-out ob name transcript for name mind to name text mind-out be write do
+  su name draft out ob name mind-out be write do
+  su name audio ob name mind-out to filename "artifacts/say/talk-loop-stream.wav" be say do
+  ob name transcript be equally from text "bye" then this fromindex num 0 ret
+  ob name transcript be equally from text "bye." then this fromindex num 0 ret
+  ob name transcript be equally from text "bye!" then this fromindex num 0 ret
+  this ret
+prah
+fromindex num 10 toindex num 0 be talk loop do

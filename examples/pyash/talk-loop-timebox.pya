@@ -1,6 +1,6 @@
 su name transcript during num 10 be hear vyah timebox do
 su name transcript out ob name transcript be write do
 su name mind be mind accordingto name "Reply in one short sentence." ya
-su name mind-out ob text of ob of name transcript for name mind to name text mind-out be write do
+su name mind-out ob name text transcript for name mind to name text mind-out be write do
 su name draft out ob name mind-out be write do
 su name audio ob name mind-out to filename "artifacts/say/talk-loop-timebox.wav" be say do
