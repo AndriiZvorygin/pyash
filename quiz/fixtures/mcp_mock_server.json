@@ -19,6 +19,17 @@
         "additionalProperties": false
       },
       "mockResult": { "b": 2, "a": 1 }
+    },
+    {
+      "name": "slow",
+      "description": "slow response",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "mockResult": { "ok": true },
+      "mockDelayMs": 50
     }
   ]
 }

@@ -82,6 +82,10 @@ export function setExchangeStrict(value) {
   exchangeStrict = Boolean(value);
 }
 
+export function getExchangeStrict() {
+  return exchangeStrict;
+}
+
 export function normalizeLocator(locator) {
   const text = String(locator ?? "");
   if (!text) {
