@@ -11,9 +11,9 @@ su name discharge ob text model be ceremony def
   exists su name payload ob text "{\"mode\":\"generate\",\"model\":\"" be text ya
   ob text of ob of this to name payload be plus do
   ob text "\",\"prompt\":\"\",\"keep_alive\":0" to name payload be plus do
-  ob name ollama host be text do
-  ob text "\",\"host\":\"" to name payload be plus do
-  ob name result to name payload be plus do
+  ob name ollama host to name text host be text do
+  ob text ",\"host\":\"" to name payload be plus do
+  ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
   exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
@@ -23,9 +23,9 @@ su name discharge ob text model to name text target be ceremony def
   exists su name payload ob text "{\"mode\":\"generate\",\"model\":\"" be text ya
   ob text of ob of this to name payload be plus do
   ob text "\",\"prompt\":\"\",\"keep_alive\":0" to name payload be plus do
-  ob name ollama host be text do
-  ob text "\",\"host\":\"" to name payload be plus do
-  ob name result to name payload be plus do
+  ob name ollama host to name text host be text do
+  ob text ",\"host\":\"" to name payload be plus do
+  ob name host to name payload be plus do
   ob text "\"}" to name payload be plus do
   exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
   ob text of cmd fromtext text of payload be command do
