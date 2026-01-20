@@ -212,6 +212,13 @@ ob text "qwen3-vl:8b-instruct" be mind discharge do
 
 This sends `keep_alive: 0` to Ollama to unload the model after a run.
 
+The same module exposes `begin` and `restart` so you can warm or cycle the model:
+
+```pyash
+ob text "qwen3-vl:8b-instruct" be mind begin do
+ob text "qwen3-vl:8b-instruct" be mind restart do
+```
+
 ---
 
 ## Reply facts
