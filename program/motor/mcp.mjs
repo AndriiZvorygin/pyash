@@ -159,6 +159,123 @@ class McpClient {
   }
 }
 
+function scheduleMcpRestart(record, { code, signal }) {
+  const policy = record?.restartPolicy;
+  if (!policy || policy.policy !== "on crash") return false;
+  if (!policy.max || !policy.windowMs) {
+    recordRestartDenied({ serverName: record.serverName, policy });
+    return false;
+  }
+  const now = Date.now();
+  const state = record.restartState ?? { attempts: [], pending: false, timer: null };
+  const attempts = state.attempts.filter(ts => now - ts <= policy.windowMs);
+  state.attempts = attempts;
+  if (attempts.length >= policy.max) {
+    record.restartState = state;
+    recordRestartDenied({ serverName: record.serverName, policy });
+    return false;
+  }
+  const attemptNumber = attempts.length + 1;
+  attempts.push(now);
+  const delayMs = restartPolicyDelayMs(policy, attemptNumber);
+  recordRestartEvent({ serverName: record.serverName, policy, delayMs });
+  if (state.pending && state.timer) clearTimeout(state.timer);
+  state.pending = true;
+  state.timer = setTimeout(() => {
+    state.pending = false;
+    state.timer = null;
+    startMcpClient({ record, source: "mcp restart" }).catch(() => {});
+  }, delayMs);
+  record.restartState = state;
+  return true;
+}
+
+async function startMcpClient({ record, source }) {
+  const config = record?.config;
+  if (!config) {
+    throwMcpError({
+      name: "mcp server missing",
+      message: "mcp server missing",
+      from: { name: source }
+    });
+  }
+  const exitHandler = ({ code, signal, serverName: exitName }) => {
+    if (code === 0 && !signal) {
+      emitExchangeSentence({
+        mood: "ya",
+        su: { name: "mcp server exit" },
+        be: "mcp exit",
+        ob: { text: `mcp server exit: ${exitName}` },
+        from: { name: "mcp" }
+      });
+      return;
+    }
+    const errSentence = buildErrorSentence({
+      name: "mcp server crash",
+      message: `mcp server crash: ${exitName}`,
+      from: { name: "mcp" },
+      raw: { code, signal }
+    });
+    emitExchangeSentence(errSentence);
+    if (record) {
+      record.client = null;
+      scheduleMcpRestart(record, { code, signal });
+    }
+  };
+  const client = config.command === "inline"
+    ? await buildInlineClient(config.args)
+    : new McpClient({ command: config.command, args: config.args, serverName: record.serverName, onExit: exitHandler });
+
+  record.client = client;
+
+  try {
+    await client.send("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "pyash", version: "0.1.0" }
+    });
+    if (typeof client.sendNotification === "function") {
+      client.sendNotification("notifications/initialized", {});
+    }
+  } catch (err) {
+    throwMcpError({
+      name: "mcp defective",
+      message: `mcp defective: initialize failed for ${record.serverName}`,
+      from: { name: source },
+      raw: { error: err?.message }
+    });
+  }
+
+  let response;
+  try {
+    response = await client.send("tools/list", {});
+  } catch (err) {
+    throwMcpError({
+      name: "mcp defective",
+      message: `mcp defective: tool discovery failed for ${record.serverName}`,
+      from: { name: source },
+      raw: { error: err?.message }
+    });
+  }
+
+  const toolList = Array.isArray(response?.tools) ? response.tools : Array.isArray(response) ? response : [];
+  const tools = [];
+  const toolByName = new Map();
+  for (const raw of toolList) {
+    const tool = normalizeTool(raw);
+    if (!tool) continue;
+    tool.toolId = buildToolIdentity({ server: record.serverName, tool });
+    tools.push(tool);
+    toolByName.set(tool.name, tool);
+  }
+  tools.sort((a, b) => a.name.localeCompare(b.name, "en"));
+
+  record.tools = tools;
+  record.toolByName = toolByName;
+  recordSnapshot({ serverName: record.serverName, tools });
+  return record;
+}
+
 class InlineMcpClient {
   constructor({ tools }) {
     this.tools = tools;
@@ -189,14 +306,18 @@ class InlineMcpClient {
 }
 
 function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
-  const key = `mcp ${serverName}`;
-  const fact = rememberFn(key);
+  const direct = rememberFn(serverName);
+  const prefixed = rememberFn(`mcp ${serverName}`);
+  const fact = (direct?.be === "mcp" ? direct : null)
+    ?? (prefixed?.be === "mcp" ? prefixed : null)
+    ?? (direct?.ob ? direct : null)
+    ?? prefixed;
   if (!fact?.ob) {
     throwErrorSentence({
       name: "mcp config missing",
       message: `mcp config missing: ${serverName}`,
       from: { name: "mcp" },
-      raw: { name: key }
+      raw: { name: serverName }
     });
   }
   const command = fact.ob.text ?? fact.ob.name ?? fact.ob.filename;
@@ -205,11 +326,13 @@ function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
       name: "mcp config defective",
       message: `mcp config defective: missing command for ${serverName}`,
       from: { name: "mcp" },
-      raw: { name: key }
+      raw: { name: serverName }
     });
   }
   const args = Array.isArray(fact.by?.ve?.values) ? fact.by.ve.values.map(v => String(v ?? "")) : [];
-  return { command: String(command), args };
+  const policyName = fact.with?.name ?? null;
+  const restartPolicy = resolveRestartPolicy(policyName, { rememberFn });
+  return { command: String(command), args, policyName, restartPolicy };
 }
 
 function resolveMcpAllowlist({ rememberFn = remember } = {}) {
@@ -224,6 +347,71 @@ function resolveMcpDenylist({ rememberFn = remember } = {}) {
   if (!fact?.ob?.ve?.values) return null;
   const values = fact.ob.ve.values.map(v => String(v ?? "")).filter(Boolean);
   return values.length ? new Set(values) : null;
+}
+
+function resolveRestartPolicy(policyName, { rememberFn } = {}) {
+  if (!policyName) return null;
+  const fact = rememberFn ? rememberFn(policyName) : null;
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") return null;
+  const raw = {};
+  for (const [key, value] of Object.entries(map)) {
+    raw[key] = valueToJson(value);
+  }
+  const policy = String(raw.policy ?? "never").trim().toLowerCase();
+  const backoff = String(raw.backoff ?? "exponential").trim().toLowerCase();
+  const max = Number(raw.max ?? 0);
+  const windowSec = Number(raw["window sec"] ?? 0);
+  const baseMs = Number(raw["base ms"] ?? 0);
+  const capMs = Number(raw["cap ms"] ?? 0);
+  return {
+    name: policyName,
+    policy,
+    backoff: backoff === "linear" ? "linear" : "exponential",
+    max: Number.isFinite(max) ? Math.max(0, max) : 0,
+    windowMs: Number.isFinite(windowSec) ? Math.max(0, windowSec) * 1000 : 0,
+    baseMs: Number.isFinite(baseMs) ? Math.max(0, baseMs) : 0,
+    capMs: Number.isFinite(capMs) ? Math.max(0, capMs) : 0
+  };
+}
+
+function restartPolicyDelayMs(policy, attempt) {
+  if (!policy || attempt <= 0) return 0;
+  const base = policy.baseMs ?? 0;
+  const cap = policy.capMs ?? 0;
+  const raw = policy.backoff === "linear"
+    ? base * attempt
+    : base * (2 ** (attempt - 1));
+  if (!cap) return raw;
+  return Math.min(cap, raw);
+}
+
+function recordRestartEvent({ serverName, policy, delayMs }) {
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: "mcp server restart" },
+    be: "mcp restart",
+    ob: { name: serverName },
+    by: { num: delayMs },
+    with: policy?.name ? { name: policy.name } : undefined,
+    from: { name: "mcp" }
+  });
+}
+
+function recordRestartDenied({ serverName, policy }) {
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: "mcp server restart denied" },
+    be: "mcp restart denied",
+    ob: { name: serverName },
+    with: policy?.name ? { name: policy.name } : undefined,
+    from: { name: "mcp" }
+  });
+  emitExchangeSentence(buildErrorSentence({
+    name: "mcp server restart denied",
+    message: `mcp server restart denied: ${serverName}`,
+    from: { name: "mcp" }
+  }));
 }
 
 function collectExistingNames({ allRememberFn }) {
@@ -414,9 +602,9 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
     });
   }
   const existing = mcpServers.get(name);
-  if (existing?.tools?.length) return existing;
-
   const strictReplay = getExchangeStrict();
+  if (existing?.tools?.length && (existing.client || strictReplay)) return existing;
+
   if (strictReplay) {
     const locator = `artifacts/mcp/${sanitizeServerName(name)}-tools.json`;
     const runRoot = getExchangeRunRoot() ?? process.cwd();
@@ -470,89 +658,30 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
       serverName: name,
       client: null,
       tools,
-      toolByName
+      toolByName,
+      config: null,
+      restartPolicy: null,
+      restartState: { attempts: [], pending: false, timer: null }
     };
     mcpServers.set(name, record);
     return record;
   }
 
   const config = resolveMcpConfig(name, { rememberFn });
-  const exitHandler = ({ code, signal, serverName: exitName }) => {
-    if (code === 0 && !signal) {
-      emitExchangeSentence({
-        mood: "ya",
-        su: { name: "mcp server exit" },
-        be: "mcp exit",
-        ob: { text: `mcp server exit: ${exitName}` },
-        from: { name: "mcp" }
-      });
-      return;
-    }
-    const errSentence = buildErrorSentence({
-      name: "mcp server crash",
-      message: `mcp server crash: ${exitName}`,
-      from: { name: "mcp" },
-      raw: { code, signal }
-    });
-    emitExchangeSentence(errSentence);
-  };
-  const client = existing?.client ?? (
-    config.command === "inline"
-      ? await buildInlineClient(config.args)
-      : new McpClient({ command: config.command, args: config.args, serverName: name, onExit: exitHandler })
-  );
-
-  try {
-    await client.send("initialize", {
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      clientInfo: { name: "pyash", version: "0.1.0" }
-    });
-    if (typeof client.sendNotification === "function") {
-      client.sendNotification("notifications/initialized", {});
-    }
-  } catch (err) {
-    throwMcpError({
-      name: "mcp defective",
-      message: `mcp defective: initialize failed for ${name}`,
-      from: { name: source },
-      raw: { error: err?.message }
-    });
-  }
-
-  let response;
-  try {
-    response = await client.send("tools/list", {});
-  } catch (err) {
-    throwMcpError({
-      name: "mcp defective",
-      message: `mcp defective: tool discovery failed for ${name}`,
-      from: { name: source },
-      raw: { error: err?.message }
-    });
-  }
-
-  const toolList = Array.isArray(response?.tools) ? response.tools : Array.isArray(response) ? response : [];
-  const tools = [];
-  const toolByName = new Map();
-  for (const raw of toolList) {
-    const tool = normalizeTool(raw);
-    if (!tool) continue;
-    tool.toolId = buildToolIdentity({ server: name, tool });
-    tools.push(tool);
-    toolByName.set(tool.name, tool);
-  }
-  tools.sort((a, b) => a.name.localeCompare(b.name, "en"));
-
-  const record = {
+  const record = existing ?? {
     serverName: name,
-    client,
-    tools,
-    toolByName
+    client: null,
+    tools: [],
+    toolByName: new Map(),
+    config,
+    restartPolicy: config.restartPolicy ?? null,
+    restartState: { attempts: [], pending: false, timer: null }
   };
+  record.config = config;
+  record.restartPolicy = config.restartPolicy ?? null;
+  if (!record.restartState) record.restartState = { attempts: [], pending: false, timer: null };
   mcpServers.set(name, record);
-  recordSnapshot({ serverName: name, tools });
-  return record;
+  return startMcpClient({ record, source });
 }
 
 export function registerMcpToolAlias({ qualifiedName, serverName, toolName }) {
@@ -690,6 +819,9 @@ export function closeMcpServers() {
       record?.client?.proc?.kill();
       closed += 1;
     } catch {}
+    if (record?.restartState?.timer) {
+      clearTimeout(record.restartState.timer);
+    }
   }
   mcpServers.clear();
   mcpToolRegistry.clear();
@@ -704,6 +836,9 @@ export function closeMcpServer(serverName) {
     try {
       record.client.proc.kill();
     } catch {}
+  }
+  if (record?.restartState?.timer) {
+    clearTimeout(record.restartState.timer);
   }
   mcpServers.delete(name);
 }

@@ -15,8 +15,8 @@ test("mcp tool timeout is deterministic", async () => {
   const serverPath = path.resolve("quiz/fixtures/mcp_mock_server.json");
   doRemember({
     mood: "ya",
-    su: { name: "mcp mock" },
-    be: "default",
+    su: { name: "mock" },
+    be: "mcp",
     ob: { text: "inline" },
     by: { ve: { type: "text", values: [serverPath] } }
   });

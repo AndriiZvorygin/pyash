@@ -233,7 +233,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 ### Remaining
 
 * Non-stdio transports.
-* Server restart policies.
 * Tool capability negotiation beyond schema.
 
 ---

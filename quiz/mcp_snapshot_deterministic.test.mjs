@@ -17,8 +17,8 @@ async function runSnapshot(runRoot) {
   setExchangeRecorder({ record: (sentence) => records.push(sentence), runRoot });
   doRemember({
     mood: "ya",
-    su: { name: "mcp mock" },
-    be: "default",
+    su: { name: "mock" },
+    be: "mcp",
     ob: { text: "inline" },
     by: { ve: { type: "text", values: [serverPath] } }
   });

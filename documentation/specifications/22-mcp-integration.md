@@ -34,7 +34,7 @@ Out of scope:
 ### 3.1 Launch
 
 - The runtime launches MCP servers as subprocesses using stdio pipes.
-- Each server is referenced by a logical name (e.g., `mcp:files`).
+- MCP configs are `be mcp` sentences keyed by `su name <handle>` (e.g., `files`).
 - Server start/stop MUST be journaled in the run record.
 
 ### 3.2 Supervision
@@ -190,17 +190,62 @@ Suggested snapshot record shape (Pyash):
 
 ```pyash
 su name tools snapshot be map def
-  su name server ob text "mcp:files" ya
+  su name server ob text "files" ya
   su name tool read_file ob text "..." with name schema ti name "<canonical json>" with name output_schema ti name "<canonical json>" with name tool_id ti name "sha256:..." ya
 prah
 ```
+
+## 12.0 Restart policy (normative)
+
+MCP servers MAY be configured with a restart policy by attaching a json map to the `be mcp` sentence via `with name <policy>`.
+The policy applies to MCP server lifecycle only (not tool calls), and is evaluated on unexpected exit/crash.
+
+Policy map keys (Pyash map fields):
+
+- `policy` (`ob text`): `"on crash"` or `"never"` (default: `"never"`).
+- `max` (`ob num`): maximum restarts within the rolling window (default: `0`).
+- `window sec` (`ob num`): rolling window duration in seconds (default: `0`).
+- `backoff` (`ob text`): `"exponential"` or `"linear"` (default: `"exponential"`).
+- `base ms` (`ob num`): initial delay in milliseconds (default: `0`).
+- `cap ms` (`ob num`): maximum delay in milliseconds (default: `0`).
+
+Semantics:
+
+- A restart policy triggers only on MCP server crash/exit (non-clean exit).
+- The runtime tracks restart attempts per server and enforces `max` within `window sec`.
+- Backoff delay for attempt `n` is:
+
+  - exponential: `min(cap ms, base ms * 2^(n-1))`
+  - linear: `min(cap ms, base ms * n)`
+- If `policy` is `"never"` or `max` is `0`, no restart is attempted.
+- When the policy refuses a restart, the run surfaces a deterministic `be error ya` sentence with `from name mcp`.
+
+Run record notes:
+
+- Each restart attempt MUST be recorded as a tool event with the server handle, policy name, and delay.
+- A refusal (limit reached) MUST be recorded deterministically as a `mcp server restart denied` event.
 
 ## 12.1 Filesystem example (non-normative)
 
 Example config (in `configure/default.pya` or `configure/secret.pya`):
 
 ```pyash
-su name mcp files ob text "npx" by ve text "-y" "@modelcontextprotocol/server-filesystem" "<allowed_path_1>" "<allowed_path_2>" ya
+su name files ob text "npx" by ve text "-y" "@modelcontextprotocol/server-filesystem" "<allowed_path_1>" "<allowed_path_2>" be mcp ya
+```
+
+Optional restart policy attachment uses `with name` to reference a json map definition:
+
+```pyash
+su name policy restart conservative be json map def
+  su name policy ob text "on crash" ya
+  su name max ob num 3 ya
+  su name window sec ob num 60 ya
+  su name backoff ob text "exponential" ya
+  su name base ms ob num 250 ya
+  su name cap ms ob num 8000 ya
+prah
+
+su name files ob text "npx" by ve text "-y" "@modelcontextprotocol/server-filesystem" "<allowed_path_1>" "<allowed_path_2>" with name policy restart conservative be mcp ya
 ```
 
 Example usage:
@@ -220,7 +265,7 @@ Run risky MCP servers in a container or restricted user to avoid filesystem or p
 Example config (in `configure/default.pya` or `configure/secret.pya`):
 
 ```pyash
-su name mcp time ob text "uvx" by ve text "mcp-server-time" ya
+su name time ob text "uvx" by ve text "mcp-server-time" be mcp ya
 ```
 
 Expected tools:

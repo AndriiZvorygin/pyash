@@ -22,8 +22,8 @@ test("mcp time plan uses current date and computes 30 days out", async () => {
   const serverPath = path.resolve("quiz/fixtures/mcp_time_mock_server.json");
   doRemember({
     mood: "ya",
-    su: { name: "mcp time" },
-    be: "default",
+    su: { name: "time" },
+    be: "mcp",
     ob: { text: "inline" },
     by: { ve: { type: "text", values: [serverPath] } }
   });

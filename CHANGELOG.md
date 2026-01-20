@@ -207,6 +207,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Mind tooling now emits full json map tool results to the model.
 * Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
 * Ollama mind module now exposes `begin`/`restart` ceremonies for warmup and cycling.
+* MCP servers now support restart policies via `be mcp` configs and `with name` policy maps.
 
 ### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
 
