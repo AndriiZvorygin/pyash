@@ -201,6 +201,19 @@ and uses `message.content` as the reply text.
 
 ---
 
+## Discharge (module-specific)
+
+Some mind backends expose a module-level discharge ceremony. For Ollama:
+
+```pyash
+from filename "./module/mind_ollama.pya" ob name discharge to name mind discharge be import do
+be mind discharge do
+```
+
+Use this to release backend resources after a run.
+
+---
+
 ## Reply facts
 
 The runtime records each call–reply pair in `memory` so that future calls see a continuous conversation.
