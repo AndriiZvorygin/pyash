@@ -57,6 +57,21 @@ function valueToJson(value) {
   return value;
 }
 
+function resolveMcpTransport(fact) {
+  const raw = fact?.by?.wo ?? fact?.by?.text ?? "";
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (!value) return "stdio";
+  if (value === "http" || value === "sse" || value === "ws") return value;
+  return "stdio";
+}
+
+function resolveMcpEndpoint(fact) {
+  const raw = fact?.from?.name ?? fact?.from?.text ?? fact?.from?.space ?? null;
+  if (!raw) return null;
+  const text = String(raw ?? "").trim();
+  return text || null;
+}
+
 function jsonToOb(value) {
   if (value === null) return { hollow: true };
   if (typeof value === "string") return { text: value };
@@ -222,9 +237,33 @@ async function startMcpClient({ record, source }) {
       scheduleMcpRestart(record, { code, signal });
     }
   };
-  const client = config.command === "inline"
-    ? await buildInlineClient(config.args)
-    : new McpClient({ command: config.command, args: config.args, serverName: record.serverName, onExit: exitHandler });
+  let client;
+  if (config.transport !== "stdio") {
+    if (!config.endpoint) {
+      throwMcpError({
+        name: "mcp config defective",
+        message: `mcp config defective: missing endpoint for ${record.serverName}`,
+        from: { name: source }
+      });
+    }
+    if (config.transport === "ws") {
+      throwMcpError({
+        name: "mcp transport defective",
+        message: `mcp transport defective: ws not supported for ${record.serverName}`,
+        from: { name: source }
+      });
+    }
+    client = new HttpMcpClient({
+      endpoint: config.endpoint,
+      headers: config.headers,
+      protocolVersion: "2025-06-18",
+      transport: config.transport
+    });
+  } else if (config.command === "inline") {
+    client = await buildInlineClient(config.args);
+  } else {
+    client = new McpClient({ command: config.command, args: config.args, serverName: record.serverName, onExit: exitHandler });
+  }
 
   record.client = client;
 
@@ -305,6 +344,185 @@ class InlineMcpClient {
   sendNotification() {}
 }
 
+async function* readStreamChunks(stream) {
+  if (!stream) return;
+  if (typeof stream.getReader === "function") {
+    const reader = stream.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) yield value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return;
+  }
+  if (typeof stream[Symbol.asyncIterator] === "function") {
+    for await (const chunk of stream) yield chunk;
+  }
+}
+
+async function* parseSseStream(stream) {
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let event = null;
+  let id = null;
+  let data = [];
+  const flushEvent = () => {
+    if (!data.length && !event && !id) return null;
+    const payload = { event, id, data: data.join("\n") };
+    event = null;
+    id = null;
+    data = [];
+    return payload;
+  };
+  for await (const chunk of readStreamChunks(stream)) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line === "") {
+        const payload = flushEvent();
+        if (payload) yield payload;
+        continue;
+      }
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim();
+        continue;
+      }
+      if (line.startsWith("id:")) {
+        id = line.slice(3).trim();
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        data.push(line.slice(5).trim());
+        continue;
+      }
+    }
+  }
+  const payload = flushEvent();
+  if (payload) yield payload;
+}
+
+class HttpMcpClient {
+  constructor({ endpoint, headers, protocolVersion = "2025-06-18", transport = "http" }) {
+    this.endpoint = endpoint;
+    this.headers = headers ?? {};
+    this.protocolVersion = protocolVersion;
+    this.transport = transport;
+    this.sessionId = null;
+    this.nextId = 1;
+  }
+
+  async send(method, params) {
+    const id = this.nextId++;
+    const payload = { jsonrpc: "2.0", id, method, params };
+    const response = await this.postJsonRpc(payload, { expectResponse: true });
+    if (response?.json) {
+      if (response.json?.error) throw new Error(response.json.error?.message ?? "mcp response error");
+      return response.json?.result ?? response.json;
+    }
+    return response;
+  }
+
+  async sendNotification(method, params) {
+    const payload = { jsonrpc: "2.0", method, params };
+    await this.postJsonRpc(payload, { expectResponse: false });
+  }
+
+  async postJsonRpc(payload, { expectResponse }) {
+    const headers = new Headers({
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+      "MCP-Protocol-Version": this.protocolVersion,
+      ...this.headers
+    });
+    if (this.sessionId) headers.set("Mcp-Session-Id", this.sessionId);
+
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 202 && !expectResponse) return { status: 202 };
+
+    if (!response.ok) {
+      const isInit = payload?.method === "initialize";
+      const shouldFallback = isInit && response.status >= 400 && response.status < 500;
+      const fallback = shouldFallback ? await this.tryLegacyTransport({ payload }) : null;
+      if (fallback) return fallback;
+      throw new Error(`mcp http error: ${response.status}`);
+    }
+
+    const sessionHeader = response.headers.get("mcp-session-id");
+    if (sessionHeader) this.sessionId = sessionHeader;
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const json = await response.json();
+      return { json, response };
+    }
+    if (contentType.includes("text/event-stream")) {
+      const json = await this.consumeSseResponse({ stream: response.body, id: payload.id });
+      return { json, response };
+    }
+    if (expectResponse) {
+      throw new Error("mcp http error: unsupported response");
+    }
+    return { status: response.status };
+  }
+
+  async consumeSseResponse({ stream, id }) {
+    for await (const event of parseSseStream(stream)) {
+      if (!event?.data) continue;
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        continue;
+      }
+      if (message?.id !== undefined && message.id === id) return message;
+    }
+    throw new Error("mcp http error: missing response");
+  }
+
+  async tryLegacyTransport({ payload }) {
+    const response = await this.getLegacyEndpoint();
+    if (!response) return null;
+    this.endpoint = response;
+    const retry = await this.postJsonRpc(payload, { expectResponse: true });
+    return retry;
+  }
+
+  async getLegacyEndpoint() {
+    const headers = new Headers({
+      Accept: "text/event-stream",
+      "MCP-Protocol-Version": this.protocolVersion,
+      ...this.headers
+    });
+    if (this.sessionId) headers.set("Mcp-Session-Id", this.sessionId);
+
+    const response = await fetch(this.endpoint, { method: "GET", headers });
+    if (!response.ok) return null;
+    if (!response.headers.get("content-type")?.includes("text/event-stream")) return null;
+    for await (const event of parseSseStream(response.body)) {
+      if (event?.event === "endpoint" && event.data) {
+        const endpoint = String(event.data).trim();
+        if (response.body?.cancel) {
+          try {
+            await response.body.cancel();
+          } catch {}
+        }
+        return endpoint;
+      }
+    }
+    return null;
+  }
+}
+
 function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
   const direct = rememberFn(serverName);
   const prefixed = rememberFn(`mcp ${serverName}`);
@@ -312,7 +530,7 @@ function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
     ?? (prefixed?.be === "mcp" ? prefixed : null)
     ?? (direct?.ob ? direct : null)
     ?? prefixed;
-  if (!fact?.ob) {
+  if (!fact?.ob && !fact?.from) {
     throwErrorSentence({
       name: "mcp config missing",
       message: `mcp config missing: ${serverName}`,
@@ -320,19 +538,29 @@ function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
       raw: { name: serverName }
     });
   }
-  const command = fact.ob.text ?? fact.ob.name ?? fact.ob.filename;
-  if (!command) {
+  const command = fact.ob?.text ?? fact.ob?.name ?? fact.ob?.filename;
+  const endpoint = resolveMcpEndpoint(fact);
+  if (!command && !endpoint) {
     throwErrorSentence({
       name: "mcp config defective",
-      message: `mcp config defective: missing command for ${serverName}`,
+      message: `mcp config defective: missing endpoint or command for ${serverName}`,
       from: { name: "mcp" },
       raw: { name: serverName }
     });
   }
   const args = Array.isArray(fact.by?.ve?.values) ? fact.by.ve.values.map(v => String(v ?? "")) : [];
   const policyName = fact.with?.name ?? null;
-  const restartPolicy = resolveRestartPolicy(policyName, { rememberFn });
-  return { command: String(command), args, policyName, restartPolicy };
+  const { policy: restartPolicy, headers } = resolveRestartPolicy(policyName, { rememberFn });
+  const transport = resolveMcpTransport(fact);
+  return {
+    command: command ? String(command) : null,
+    args,
+    policyName,
+    restartPolicy,
+    headers,
+    transport,
+    endpoint
+  };
 }
 
 function resolveMcpAllowlist({ rememberFn = remember } = {}) {
@@ -349,15 +577,26 @@ function resolveMcpDenylist({ rememberFn = remember } = {}) {
   return values.length ? new Set(values) : null;
 }
 
-function resolveRestartPolicy(policyName, { rememberFn } = {}) {
-  if (!policyName) return null;
-  const fact = rememberFn ? rememberFn(policyName) : null;
+const RESTART_POLICY_KEYS = new Set(["policy", "max", "window sec", "backoff", "base ms", "cap ms"]);
+
+function getNamedMap(name, { rememberFn }) {
+  if (!name || !rememberFn) return null;
+  const fact = rememberFn(name);
   const map = fact?.ob?.map;
+  return map && typeof map === "object" ? map : null;
+}
+
+function mapToRaw(map) {
   if (!map || typeof map !== "object") return null;
   const raw = {};
   for (const [key, value] of Object.entries(map)) {
     raw[key] = valueToJson(value);
   }
+  return raw;
+}
+
+function resolveRestartPolicyFromRaw(raw, name) {
+  if (!raw) return null;
   const policy = String(raw.policy ?? "never").trim().toLowerCase();
   const backoff = String(raw.backoff ?? "exponential").trim().toLowerCase();
   const max = Number(raw.max ?? 0);
@@ -365,7 +604,7 @@ function resolveRestartPolicy(policyName, { rememberFn } = {}) {
   const baseMs = Number(raw["base ms"] ?? 0);
   const capMs = Number(raw["cap ms"] ?? 0);
   return {
-    name: policyName,
+    name,
     policy,
     backoff: backoff === "linear" ? "linear" : "exponential",
     max: Number.isFinite(max) ? Math.max(0, max) : 0,
@@ -373,6 +612,35 @@ function resolveRestartPolicy(policyName, { rememberFn } = {}) {
     baseMs: Number.isFinite(baseMs) ? Math.max(0, baseMs) : 0,
     capMs: Number.isFinite(capMs) ? Math.max(0, capMs) : 0
   };
+}
+
+function resolveHeadersFromRaw(raw, { rememberFn }) {
+  if (!raw) return null;
+  const headerSource = typeof raw.headers === "string"
+    ? mapToRaw(getNamedMap(raw.headers, { rememberFn }))
+    : (raw.headers && typeof raw.headers === "object" ? raw.headers : null);
+  const candidate = headerSource ?? raw;
+  if (!candidate || typeof candidate !== "object") return null;
+  const headers = {};
+  for (const [key, value] of Object.entries(candidate)) {
+    if (RESTART_POLICY_KEYS.has(key) || key === "headers") continue;
+    const rawValue = valueToJson(value);
+    if (rawValue !== undefined && rawValue !== null) {
+      headers[String(key)] = String(rawValue);
+    }
+  }
+  return Object.keys(headers).length ? headers : null;
+}
+
+function resolveRestartPolicy(policyName, { rememberFn } = {}) {
+  if (!policyName) return { policy: null, headers: null };
+  const map = getNamedMap(policyName, { rememberFn });
+  const raw = mapToRaw(map);
+  if (!raw) return { policy: null, headers: null };
+  const hasPolicyKeys = Object.keys(raw).some(key => RESTART_POLICY_KEYS.has(key));
+  const policy = hasPolicyKeys ? resolveRestartPolicyFromRaw(raw, policyName) : null;
+  const headers = resolveHeadersFromRaw(raw, { rememberFn });
+  return { policy, headers };
 }
 
 function restartPolicyDelayMs(policy, attempt) {
