@@ -215,6 +215,37 @@ Snapshot artifacts are written under the run root at `artifacts/mcp/<server-name
 Note: stdio is a transport only and does not sandbox the process.
 Run risky MCP servers in a container or restricted user to avoid filesystem or process abuse.
 
+## 12.2 Time server quickstart (non-normative)
+
+Example config (in `configure/default.pya` or `configure/secret.pya`):
+
+```pyash
+su name mcp time ob text "uvx" by ve text "mcp-server-time" ya
+```
+
+Expected tools:
+
+- `get_current_time(timezone)`
+- `convert_time(source_timezone, time, target_timezone)`
+
+Snapshot artifact path:
+
+```
+artifacts/mcp/<server-name>-tools.json
+```
+
+Run once to generate the snapshot:
+
+```pyash
+from name mcp time to name mcp time be import do
+```
+
+Manual smoke example (no assertions):
+
+```pyash
+ob text "America/Toronto" be mcp time get_current_time do
+```
+
 ## 13. Deferred items
 
 - MCP transport beyond stdio
