@@ -241,7 +241,13 @@ export async function handleImperative({
     }
   }
   if (!fn && !defEntry && lookupMcpTool(be)) {
-    fn = (callSentence) => callMcpTool({ verbName: be, sentence: callSentence, rememberFn: memory.remember });
+    fn = (callSentence) => callMcpTool({
+      verbName: be,
+      sentence: callSentence,
+      rememberFn: memory.remember,
+      doRememberFn: memory.doRemember,
+      allRememberFn: memory.allRemember
+    });
   }
 
   // Fallback: allow compile to run even if signature words don't fully match a registered handler

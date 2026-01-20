@@ -150,6 +150,12 @@ be excess ob bool lie ya
 - Denied tool calls MUST surface `be error ya` sentences with `from name tool`.
 - Denials are recorded in the run record (tool event with error result).
 
+Allowlist config (example):
+
+```pyash
+su name mcp allowlist ob ve text "mcp files list_directory" "mcp files read_file" ya
+```
+
 ## 10. Failure policy (normative)
 
 The runtime MUST surface deterministic errors for:
@@ -182,6 +188,24 @@ su name tools snapshot be map def
   su name tool read_file ob text "..." with name schema ti name "<canonical json>" with name output_schema ti name "<canonical json>" with name tool_id ti name "sha256:..." ya
 prah
 ```
+
+## 12.1 Filesystem example (non-normative)
+
+Example config (in `configure/default.pya` or `configure/secret.pya`):
+
+```pyash
+su name mcp files ob text "npx" by ve text "-y" "@modelcontextprotocol/server-filesystem" "<allowed_path_1>" "<allowed_path_2>" ya
+```
+
+Example usage:
+
+```pyash
+from name mcp files to name mcp files be import do
+ob text "<allowed_path_1>" be mcp files list_directory do
+```
+
+Note: stdio is a transport only and does not sandbox the process.
+Run risky MCP servers in a container or restricted user to avoid filesystem or process abuse.
 
 ## 13. Deferred items
 

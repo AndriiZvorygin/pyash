@@ -8,6 +8,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify } from "../verbs/exchange/write_json.mjs";
 import { recordArtifact, emitExchangeSentence } from "../bridge/exchange.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { jsonToMapSentences } from "../verbs/exchange/json_map.mjs";
 
 const mcpServers = new Map();
 const mcpToolRegistry = new Map();
@@ -202,6 +203,111 @@ function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
   return { command: String(command), args };
 }
 
+function resolveMcpAllowlist({ rememberFn = remember } = {}) {
+  const fact = rememberFn("mcp allowlist");
+  if (!fact?.ob?.ve?.values) return null;
+  const values = fact.ob.ve.values.map(v => String(v ?? "")).filter(Boolean);
+  return values.length ? new Set(values) : null;
+}
+
+function collectExistingNames({ allRememberFn }) {
+  const used = new Set();
+  const entries = typeof allRememberFn === "function" ? allRememberFn() : [];
+  for (const entry of entries) {
+    if (entry?.su?.name) used.add(entry.su.name);
+  }
+  return used;
+}
+
+function jsonArrayToVector(values, { rootName, doRememberFn, allRememberFn }) {
+  if (values.length === 0) {
+    return { be: "vector", ob: { ve: { type: "hollow", values: [] } } };
+  }
+  const typeSet = new Set(values.map((v) => (v === null ? "hollow" : Array.isArray(v) ? "array" : typeof v)));
+  if (typeSet.has("object")) {
+    const names = [];
+    const existingNames = collectExistingNames({ allRememberFn });
+    let index = 1;
+    for (const value of values) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const childName = `${rootName} item ${index}`;
+      index += 1;
+      const { rootName: resolvedRoot, sentences } = jsonToMapSentences(value, childName, { existingNames });
+      existingNames.add(resolvedRoot);
+      for (const sentence of sentences) doRememberFn(sentence);
+      names.push(resolvedRoot);
+    }
+    return { be: "vector", ob: { ve: { type: "name", values: names } } };
+  }
+  if (typeSet.has("array") || typeSet.has("hollow") || typeSet.size > 1) {
+    return { be: "text", ob: { text: JSON.stringify(values) } };
+  }
+  if (typeSet.has("boolean")) {
+    return { be: "vector", ob: { ve: { type: "bool", values: values.map(v => (v ? "truth" : "lie")) } } };
+  }
+  if (typeSet.has("number")) {
+    return { be: "vector", ob: { ve: { type: "num", values: values.slice() } } };
+  }
+  return { be: "vector", ob: { ve: { type: "text", values: values.map(v => String(v ?? "")) } } };
+}
+
+function validateSchemaValue(value, schema) {
+  if (!schema || typeof schema !== "object") return true;
+  const type = schema.type;
+  if (!type) return true;
+  if (type === "string") return typeof value === "string";
+  if (type === "boolean") return typeof value === "boolean";
+  if (type === "number") return typeof value === "number" && Number.isFinite(value);
+  if (type === "integer") return typeof value === "number" && Number.isInteger(value);
+  if (type === "array") return Array.isArray(value);
+  if (type === "object") return value && typeof value === "object" && !Array.isArray(value);
+  return true;
+}
+
+function validateSchemaArgs(args, schema, { toolName }) {
+  if (!schema || typeof schema !== "object") return;
+  const type = schema.type;
+  if (type && type !== "object") {
+    throwErrorSentence({
+      name: "mcp tool defective",
+      message: `mcp tool defective: ${toolName} expects ${type}`,
+      from: { name: "mcp" }
+    });
+  }
+  const properties = schema.properties && typeof schema.properties === "object" ? schema.properties : {};
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(args, key)) {
+      throwErrorSentence({
+        name: "mcp tool defective",
+        message: `mcp tool defective: missing required ${key}`,
+        from: { name: "mcp" }
+      });
+    }
+  }
+  const additionalAllowed = schema.additionalProperties !== false;
+  for (const [key, value] of Object.entries(args)) {
+    const propSchema = properties?.[key];
+    if (!propSchema) {
+      if (!additionalAllowed) {
+        throwErrorSentence({
+          name: "mcp tool defective",
+          message: `mcp tool defective: additional properties not allowed (${key})`,
+          from: { name: "mcp" }
+        });
+      }
+      continue;
+    }
+    if (!validateSchemaValue(value, propSchema)) {
+      throwErrorSentence({
+        name: "mcp tool defective",
+        message: `mcp tool defective: ${key} type mismatch`,
+        from: { name: "mcp" }
+      });
+    }
+  }
+}
+
 async function buildInlineClient(args) {
   const [configPath] = Array.isArray(args) ? args : [];
   if (!configPath) {
@@ -321,12 +427,20 @@ export function lookupMcpTool(verbName) {
   return mcpToolRegistry.get(verbName) ?? null;
 }
 
-export async function callMcpTool({ verbName, sentence, rememberFn = remember } = {}) {
+export async function callMcpTool({ verbName, sentence, rememberFn = remember, doRememberFn, allRememberFn } = {}) {
   const entry = lookupMcpTool(verbName);
   if (!entry) {
     throwErrorSentence({
       name: "mcp tool missing",
       message: `mcp tool missing: ${verbName}`,
+      from: { name: "mcp" }
+    });
+  }
+  const allowlist = resolveMcpAllowlist({ rememberFn });
+  if (allowlist && !allowlist.has(verbName)) {
+    throwErrorSentence({
+      name: "mcp tool denied",
+      message: `mcp tool denied: ${verbName}`,
       from: { name: "mcp" }
     });
   }
@@ -362,6 +476,14 @@ export async function callMcpTool({ verbName, sentence, rememberFn = remember } 
     const jsonValue = valueToJson(value);
     if (jsonValue !== undefined) args[key] = jsonValue;
   }
+  if (properties && Object.keys(properties).length === 1) {
+    const onlyKey = Object.keys(properties)[0];
+    if (args[onlyKey] === undefined && sentence?.ob !== undefined) {
+      const jsonValue = valueToJson(sentence.ob);
+      if (jsonValue !== undefined) args[onlyKey] = jsonValue;
+    }
+  }
+  validateSchemaArgs(args, schema, { toolName: entry.toolName });
 
   let result;
   try {
@@ -375,6 +497,20 @@ export async function callMcpTool({ verbName, sentence, rememberFn = remember } 
     });
   }
 
+  if (result && typeof result === "object" && !Array.isArray(result)) {
+    if (typeof doRememberFn === "function") {
+      const existingNames = collectExistingNames({ allRememberFn });
+      const rootName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+      const { rootName: resolvedRoot, sentences } = jsonToMapSentences(result, rootName, { existingNames });
+      for (const s of sentences) doRememberFn(s);
+      return { ob: { name: resolvedRoot }, be: "json map" };
+    }
+    return { ob: jsonToOb(result), be: verbName };
+  }
+  if (Array.isArray(result) && typeof doRememberFn === "function") {
+    const rootName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+    return jsonArrayToVector(result, { rootName, doRememberFn, allRememberFn });
+  }
   const ob = jsonToOb(result);
   return { ob, be: verbName };
 }
