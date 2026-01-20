@@ -1,9 +1,9 @@
 su name tools be map def
-su name time now be mcp time get_current_time ob text "" can
+su name time now be mcp clock get_current_time ob text "" can
 prah
 
 exists su name mcp time ob text "uvx" by ve text "mcp-server-time" ya
-from name mcp time to name mcp time be import do
+from name mcp time to name mcp clock be import do
 
 exists su name helper be mind via state "qwen3-vl:8b-instruct" via discourse "Use the time tool to answer. Reply with only the time." ya
 ob text "What time is it in America/Toronto?" for name helper to name text helper-out with name tools be write do
