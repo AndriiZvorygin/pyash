@@ -215,49 +215,26 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Fixture `hear` backend added with a refinery demo (mind → say → hear) and a matching quiz.
 * Whisper.cpp-backed `hear` flow added for real audio transcripts, plus a full refinery example.
 
+### Jan 5, 2026: MCP tooling + discharge flows
+
+* MCP stdio integration shipped (snapshots, tool hashing, schema validation, allow/deny, replay, timeouts).
+* MCP quickstarts and examples (filesystem + time) added with deterministic quizzes.
+* `discharge` verb added for MCP shutdown, plus run warning when servers linger.
+* Mind tool results now emit full json map definitions in tool messages.
+* Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
+
 # TODO
 
-## Week 3: Tool bridge (MCP) v0.3
+## Week 3: Tool bridge (MCP) v0.3 (complete)
 
 **Jan 18 → Jan 24, 2026**
 
-### Ship
+### Completed
 
-* Non-MCP tool calling (mind/tool schemas + tool events) is already shipped; MCP bridge is still pending.
-
-* MCP client in runtime (stdio first)
-
-  * launch/supervise tool servers
-  * connect/disconnect journaled deterministically
-* Tool discovery pinned per run
-
-  * tool list snapshot stored in artefacts and referenced from run record
-  * tool identity includes stable schema identity
-* Schema mapping to Pyash-callable signatures
-
-  * generated façade modules with stable naming rules
-* Deadline + cancellation propagation
-
-  * deadlines and `qa` behavior propagate to tool calls
-  * best-effort cancel recorded deterministically when transport limitations apply
-* Permission gating
-
-  * allowlist + argument constraints; denials recorded deterministically
-
-### Spec drops (freeze v0.3)
-
-* **Tool ABI spec v0.1**
-
-  * canonical envelopes, hashing/canonicalization, deadlines/cancel, error surfacing
-* **MCP integration spec v0.1**
-
-  * discovery pinning, schema mapping, transport rules, failure policy
-
-### Hardening gates
-
-* Replay verifies tool list snapshot + tool call hashes
-* Torture: tool unavailable, tool timeout, server crash/restart rules, schema mismatch mid-run
-* Pipeline pack runs with MCP-backed tools **without changing the pipeline shape**
+* MCP client (stdio), deterministic discovery snapshots, and tool façade registration.
+* Schema validation, allow/deny gates, deadlines/cancel, and replay enforcement.
+* MCP spec + tool ABI references aligned and documented.
+* Hardening quizzes for timeouts, crashes, replay mismatch, snapshots, and filesystem server.
 
 ---
 
