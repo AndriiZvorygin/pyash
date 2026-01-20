@@ -74,5 +74,6 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "ob", "name", "map"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "num"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "map"], handler: discharge }
 ];
