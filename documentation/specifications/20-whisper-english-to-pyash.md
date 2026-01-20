@@ -1,5 +1,7 @@
 ## Spec: Whisper Surface Form for Pyash Sentences (v0.1 draft)
 
+Reference prompt: `documentation/whisper_initial_prompt.md`.
+
 ### 0. Purpose
 
 Define a speech-friendly surface syntax that roundtrips deterministically into the existing Pyash sentence model: a sentence has a mood, a `be` verb, and keyworded cases. 
