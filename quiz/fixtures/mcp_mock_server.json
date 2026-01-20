@@ -1,0 +1,14 @@
+{
+  "tools": [
+    {
+      "name": "echo",
+      "description": "echo input",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "ob": { "type": "string" } },
+        "required": ["ob"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

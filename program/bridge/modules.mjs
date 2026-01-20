@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { buildProgram } from "../program.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { ensureMcpServer, getMcpServerTools, registerMcpToolAlias } from "../motor/mcp.mjs";
 
 const moduleCache = new Map();
 const moduleAliases = new Map();
@@ -110,6 +111,18 @@ function deriveAliasFromPath(resolvedPath) {
 }
 
 async function resolveModuleSpecifier(spec, { source }) {
+  if (spec.startsWith("mcp ")) {
+    const serverName = spec.slice(4).trim();
+    if (!serverName) {
+      throwErrorSentence({
+        name: "module lost",
+        message: "module import missing: mcp",
+        from: { name: source },
+        raw: { spec }
+      });
+    }
+    return { modulePath: `mcp:${serverName}`, alias: spec, specType: "mcp", serverName };
+  }
   if (isPathSpecifier(spec)) {
     const resolved = path.resolve(currentModuleDir(), spec);
     return { modulePath: resolved, alias: deriveAliasFromPath(resolved), specType: "path" };
@@ -272,6 +285,29 @@ export async function loadModule({ specifier, alias, source }) {
   const moduleAlias = alias || resolved.alias;
 
   let base = moduleCache.get(moduleId);
+  if (!base && resolved.specType === "mcp") {
+    const serverName = resolved.serverName;
+    await ensureMcpServer(serverName, { source });
+    const tools = getMcpServerTools(serverName);
+    const sentences = [];
+    for (const tool of tools) {
+      sentences.push({ mood: "ya", exists: true, su: { name: tool.name }, be: "tool", ob: { text: tool.description ?? "" } });
+      sentences.push({ mood: "ya", su: { name: tool.name }, be: "export" });
+    }
+    base = {
+      id: moduleId,
+      dir: currentModuleDir(),
+      sentences,
+      exportNames: new Set(tools.map(tool => tool.name)),
+      localCeremonies: new Set(),
+      localNames: new Set(tools.map(tool => tool.name)),
+      importAliases: new Set(),
+      loadedAliases: new Set(),
+      tools,
+      loading: false
+    };
+    moduleCache.set(moduleId, base);
+  }
   if (base?.loading) {
     throwErrorSentence({
       name: "module import cycle",
@@ -327,6 +363,13 @@ export async function loadModule({ specifier, alias, source }) {
     exportNames: base.exportNames,
     importAliases: base.importAliases
   });
+
+  if (resolved.specType === "mcp") {
+    for (const tool of base.tools ?? []) {
+      const mapped = nameMap.get(tool.name);
+      registerMcpToolAlias({ qualifiedName: mapped, serverName: resolved.serverName, toolName: tool.name });
+    }
+  }
 
   const qualified = [];
   let mapDepth = 0;

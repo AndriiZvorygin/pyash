@@ -9,6 +9,7 @@ import { loadModule, moduleNamespaceFact, pushModuleDir, popModuleDir, registerM
 import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signature.mjs";
 import { handleLifecycleAspect } from "./runtime.mjs";
 import { resolveVerbAlias } from "../library/verbAliases.mjs";
+import { callMcpTool, lookupMcpTool } from "../motor/mcp.mjs";
 
 function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -238,6 +239,9 @@ export async function handleImperative({
       const handler = lookupSignatureHandler(baseSigKey);
       if (handler) fn = handler;
     }
+  }
+  if (!fn && !defEntry && lookupMcpTool(be)) {
+    fn = (callSentence) => callMcpTool({ verbName: be, sentence: callSentence, rememberFn: memory.remember });
   }
 
   // Fallback: allow compile to run even if signature words don't fully match a registered handler
