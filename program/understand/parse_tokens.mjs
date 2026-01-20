@@ -356,7 +356,6 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
         const isBoundary = (token) =>
           ROLE_KEYS.includes(token) ||
-          CONTEXT_KEYS.includes(token) ||
           token === "be" ||
           token === "then" ||
           token === "ta" ||
