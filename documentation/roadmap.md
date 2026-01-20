@@ -223,6 +223,8 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Ship
 
+* Non-MCP tool calling (mind/tool schemas + tool events) is already shipped; MCP bridge is still pending.
+
 * MCP client in runtime (stdio first)
 
   * launch/supervise tool servers
