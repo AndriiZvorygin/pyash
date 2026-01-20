@@ -149,8 +149,11 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   let input = null;
   if (sentence.from?.filename) {
     input = await fs.readFile(sentence.from.filename, "utf8");
-  } else if (sentence.fromtext?.text) {
-    input = sentence.fromtext.text;
+  } else if (sentence.fromtext) {
+    const resolved = renderSayValue(sentence.fromtext, { rememberFn });
+    if (resolved !== undefined && resolved !== null) {
+      input = String(resolved);
+    }
   }
   if (aspect === "stream") {
     const streamName = sentence?.su?.name;
@@ -277,6 +280,8 @@ export const signatures = [
   { signatureWords: ["be", "command", "ob", "wo", "to", "filename"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "text"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo"], handler: command },
   { signatureWords: ["be", "command", "ob", "text", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "ob", "wo", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "text", "vyah", "stream"], handler: command },

@@ -11,6 +11,7 @@ import { makeStream } from "../../library/runtimePrimitives.mjs";
 import { appendLog, buildHistoryMessages, historyDialogueName, nextAnswerName, resetMindLogs as resetMindHistory } from "./history.mjs";
 import { recordMindJson, resetMindDebugCounters, stripContext } from "./logging.mjs";
 import { buildToolSchemas, buildToolSentence, toolListFromMap } from "./tooling.mjs";
+import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
 import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 
@@ -57,6 +58,32 @@ function resolveStreamOutputPath(sentence, outputName) {
   const base = getExchangeSentenceId() || outputName || sentence?.su?.name || "mind-stream";
   const safeBase = String(base).replace(/[^A-Za-z0-9_.-]+/g, "-");
   return path.join("artifacts", "mind", `${safeBase}.stream.txt`);
+}
+
+function mapDefChainFromName(name, { rememberFn } = {}) {
+  const visited = new Set();
+  const defs = [];
+
+  const visit = (mapName) => {
+    if (!mapName || visited.has(mapName)) return;
+    visited.add(mapName);
+    const fact = rememberFn ? rememberFn(mapName) : null;
+    if (!fact || (fact.be !== "json map" && fact.be !== "map" && fact.be !== "csv map")) return;
+    const entries = fact?.ob?.map ?? {};
+    for (const value of Object.values(entries)) {
+      if (value?.name) visit(value.name);
+      if (value?.ve?.type === "name") {
+        for (const child of value.ve.values || []) {
+          if (typeof child === "string") visit(child);
+        }
+      }
+    }
+    defs.push(fact);
+  };
+
+  visit(name);
+  if (defs.length === 0) return "";
+  return defs.map(mapSentenceToPyash).join("\n\n");
 }
 
 function writeStreamChunk(filePath, chunk) {
@@ -326,7 +353,21 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
           args: call?.function?.arguments ?? call?.arguments
         });
         const toolResult = await interpret(toolSentence);
-        const toolText = toolResult && typeof toolResult === "object" ? sentenceToPyash(toolResult) : String(toolResult ?? "");
+        const surfacedTool = (toolResult && toolResult.mood)
+          ? toolResult
+          : remember("result");
+        let toolText = "";
+        if (surfacedTool && typeof surfacedTool === "object") {
+          const mapName = surfacedTool.ob?.name;
+          const mapFact = mapName ? remember(mapName) : null;
+          if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
+            toolText = mapDefChainFromName(mapName, { rememberFn: remember });
+          } else {
+            toolText = sentenceToPyash(surfacedTool);
+          }
+        } else {
+          toolText = String(surfacedTool ?? "");
+        }
         messages.push({ role: "tool", tool_name: toolName, content: toolText });
         appendLog(dialogue, { role: "tool", content: toolText });
       }
