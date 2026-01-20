@@ -4,6 +4,7 @@ know/input/
 node_modules/
 newspaper/
 quiz/sandpit/
+configure/secret.pya
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/

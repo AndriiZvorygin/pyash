@@ -35,13 +35,13 @@ This writes `newspaper/say-stream.pya`.
 - `OLLAMA_HOST` (default `http://localhost:11434`) — used by the `mind` verb to reach an Ollama HTTP server.
 - All supported environment variables are listed in `configure/env.example`.
   - Env values are imported into memory as defaults (`exists su name ... be default ya`).
-  - `configure/default.pya` (or any in-program sentence) overrides env defaults.
+  - `configure/default.pya` loads first; `configure/secret.pya` (optional, untracked) loads after and overrides defaults.
   - `PYA_KEYBOARD_BIN` overrides the keyboard injection binary for `to wo keyboard` (default: `xdotool`).
   - `PYA_SAY_STREAM_DELAY_MS` controls the debounce delay (ms) for streaming `say`.
   - `PYA_ESPEAK_BIN` overrides the espeak binary used by `espeak say` (default: `espeak-ng`).
 
 ## External tools via modules
-External tools (ffmpeg, xdotool, piper, espeak, whisper.cpp) should be wrapped as Pyash modules and configured in `configure/default.pya`.
+External tools (ffmpeg, xdotool, piper, espeak, whisper.cpp) should be wrapped as Pyash modules and configured in `configure/default.pya` (with host overrides in `configure/secret.pya` when needed).
 - Modules live under `module/` and are imported in defaults so programs don’t repeat setup.
 - Defaults provide the runtime wiring (`exists su say be default ob name piper say ya`, `exists su name ffmpeg input ... be default ya`, etc.).
 

@@ -211,6 +211,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
   const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
+  const ollamaHost = resolveConfigText("ollama host", { rememberFn: remember }) ?? null;
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -269,6 +270,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     while (turns < maxToolTurns) {
       turns += 1;
       const requestPayload = { mode: "chat", model, messages, tools };
+      if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       const mockResponse = nextMockResponse();
       if (mockResponse) {
@@ -352,6 +354,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       startStreamFile(streamOutputPath);
       const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
       const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: true };
+      if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       (async () => {
         let streamedText = "";
@@ -430,10 +433,12 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       });
     } else if (mockResponse) {
       const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       responseText = mockResponse;
     } else {
       const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
       if (!backendName) {
         throwErrorSentence({
