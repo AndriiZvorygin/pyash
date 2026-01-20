@@ -208,6 +208,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
 * Ollama mind module now exposes `begin`/`restart` ceremonies for warmup and cycling.
 * MCP servers now support restart policies via `be mcp` configs and `with name` policy maps.
+* MCP Streamable HTTP transport (2025-06-18) is supported, with legacy HTTP+SSE fallback.
 
 ### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
 

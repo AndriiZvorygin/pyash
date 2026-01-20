@@ -225,7 +225,34 @@ Run record notes:
 - Each restart attempt MUST be recorded as a tool event with the server handle, policy name, and delay.
 - A refusal (limit reached) MUST be recorded deterministically as a `mcp server restart denied` event.
 
-## 12.1 Filesystem example (non-normative)
+## 12.1 Non-stdio transports (draft)
+
+Non-stdio transports are configured on the same `be mcp` sentence using transport metadata
+instead of a command. The transport is explicit so the same handle can target a remote MCP server.
+
+Fields (draft):
+
+- `from space` → endpoint URL (e.g., `http://localhost:3000/mcp`).
+- `by wo <http|ws|sse>` → transport type.
+- `with name headers` → optional json map of headers (e.g., auth), applied to transport requests.
+
+Example:
+
+```pyash
+su name files
+  from space "http://localhost:3000/mcp"
+  by wo http
+  be mcp
+ya
+```
+
+Notes:
+
+- If `ob text` is present, the transport is `stdio` and the command/args are used.
+- Restart policy applies to reconnects for non-stdio transports.
+- Stdio is still the default; `ws` is experimental and may be rejected.
+
+## 12.2 Filesystem example (non-normative)
 
 Example config (in `configure/default.pya` or `configure/secret.pya`):
 
