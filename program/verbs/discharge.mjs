@@ -26,6 +26,7 @@ function resolveMcpServerName(targetName, { rememberFn, explicitMcp }) {
   if (explicitMcp) return trimmed;
   if (rememberFn && rememberFn(`mcp ${trimmed}`)) return trimmed;
   const fact = rememberFn ? rememberFn(trimmed) : null;
+  if (fact?.be === "mcp") return trimmed;
   if (fact?.su?.name && String(fact.su.name).startsWith("mcp ")) {
     return String(fact.su.name).slice(4).trim();
   }

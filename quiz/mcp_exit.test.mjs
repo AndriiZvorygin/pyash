@@ -22,8 +22,8 @@ test("mcp crash vs clean exit recorded", async () => {
 
   doRemember({
     mood: "ya",
-    su: { name: "mcp clean" },
-    be: "default",
+    su: { name: "clean" },
+    be: "mcp",
     ob: { text: "bash" },
     by: { ve: { type: "text", values: ["-lc", "exit 0"] } }
   });
@@ -35,8 +35,8 @@ test("mcp crash vs clean exit recorded", async () => {
 
   doRemember({
     mood: "ya",
-    su: { name: "mcp crash" },
-    be: "default",
+    su: { name: "crash" },
+    be: "mcp",
     ob: { text: "bash" },
     by: { ve: { type: "text", values: ["-lc", "exit 1"] } }
   });

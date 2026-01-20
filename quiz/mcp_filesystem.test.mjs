@@ -26,8 +26,8 @@ test("mcp filesystem server records snapshot and exposes tools", { skip: skipFil
   try {
     doRemember({
       mood: "ya",
-      su: { name: "mcp files" },
-      be: "default",
+      su: { name: "files" },
+      be: "mcp",
       ob: { text: "npx" },
       by: { ve: { type: "text", values: ["-y", "@modelcontextprotocol/server-filesystem", allowedDir, allowedDir2] } }
     });
