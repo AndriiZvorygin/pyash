@@ -2,15 +2,27 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { buildProgram } from "../../../program.mjs";
 
-async function loadDefaultConfigProgram(cwd) {
-  const configPath = path.resolve(cwd, "configure", "default.pya");
+async function loadConfigText(configPath) {
   try {
-    const raw = await fs.readFile(configPath, "utf8");
-    return buildProgram(raw);
+    return await fs.readFile(configPath, "utf8");
   } catch (err) {
     if (err?.code === "ENOENT") return null;
     throw err;
   }
+}
+
+async function loadDefaultConfigProgram(cwd) {
+  const configPaths = [
+    path.resolve(cwd, "configure", "default.pya"),
+    path.resolve(cwd, "configure", "secret.pya")
+  ];
+  const chunks = [];
+  for (const configPath of configPaths) {
+    const raw = await loadConfigText(configPath);
+    if (raw) chunks.push(raw);
+  }
+  if (!chunks.length) return null;
+  return buildProgram(chunks.join("\n"));
 }
 
 function findDefaultSayMapping(sentences) {

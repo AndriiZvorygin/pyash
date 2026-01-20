@@ -11,8 +11,7 @@ import { splitSentences, splitSentencesWithLines } from "./library/sentenceSplit
 import { setEntryModulePath } from "./bridge/modules.mjs";
 import { state } from "./bridge/state.mjs";
 
-async function loadDefaultConfig({ cwd, interpretFn }) {
-  const configPath = path.resolve(cwd, "configure", "default.pya");
+async function loadConfigFile({ configPath, interpretFn }) {
   try {
     const raw = await fs.readFile(configPath, "utf8");
     const lines = splitSentencesWithLines(raw);
@@ -31,6 +30,16 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
   } catch (err) {
     if (err?.code === "ENOENT") return;
     throw err;
+  }
+}
+
+async function loadDefaultConfig({ cwd, interpretFn }) {
+  const configPaths = [
+    path.resolve(cwd, "configure", "default.pya"),
+    path.resolve(cwd, "configure", "secret.pya")
+  ];
+  for (const configPath of configPaths) {
+    await loadConfigFile({ configPath, interpretFn });
   }
 }
 

@@ -16,12 +16,10 @@ import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExcha
 import { runRefinery } from "../bridge/refinery.mjs";
 import { resolveConfigBool } from "../configure/env.mjs";
 
-async function loadDefaultConfig({ cwd, interpretFn }) {
-  const configPath = path.resolve(cwd, "configure", "default.pya");
+async function loadConfigFile({ configPath, interpretFn }) {
   try {
     const raw = await fs.readFile(configPath, "utf8");
     const lines = splitSentencesWithLines(raw);
-    pushModuleDir(cwd);
     for (const entry of lines) {
       const trimmed = entry.text.trim();
       if (!trimmed) continue;
@@ -31,14 +29,27 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
       state.currentSourceSentence = sentence;
       await interpretFn(sentence);
     }
-    popModuleDir();
     state.currentSourceFilename = null;
     state.currentSourceLine = null;
     state.currentSourceSentence = null;
   } catch (err) {
-    popModuleDir();
     if (err?.code === "ENOENT") return;
     throw err;
+  }
+}
+
+async function loadDefaultConfig({ cwd, interpretFn }) {
+  const configPaths = [
+    path.resolve(cwd, "configure", "default.pya"),
+    path.resolve(cwd, "configure", "secret.pya")
+  ];
+  pushModuleDir(cwd);
+  try {
+    for (const configPath of configPaths) {
+      await loadConfigFile({ configPath, interpretFn });
+    }
+  } finally {
+    popModuleDir();
   }
 }
 
