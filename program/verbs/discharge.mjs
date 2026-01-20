@@ -4,7 +4,10 @@ import { renderSayValue } from "./say.mjs";
 import { closeMcpServer } from "../motor/mcp.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
-  const raw = renderSayValue(sentence?.ob ?? {}, { rememberFn });
+  const ob = sentence?.ob ?? {};
+  if (typeof ob.name === "string" && ob.name.trim()) return ob.name.trim();
+  if (typeof ob.text === "string" && ob.text.trim()) return ob.text.trim();
+  const raw = renderSayValue(ob, { rememberFn });
   const text = String(raw ?? "").trim();
   return text || null;
 }
