@@ -225,16 +225,15 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 # TODO
 
-## Week 3: Tool bridge (MCP) v0.3 (complete)
+## Week 3: Tool bridge (MCP) v0.3 (remaining)
 
 **Jan 18 → Jan 24, 2026**
 
-### Completed
+### Remaining
 
-* MCP client (stdio), deterministic discovery snapshots, and tool façade registration.
-* Schema validation, allow/deny gates, deadlines/cancel, and replay enforcement.
-* MCP spec + tool ABI references aligned and documented.
-* Hardening quizzes for timeouts, crashes, replay mismatch, snapshots, and filesystem server.
+* Non-stdio transports.
+* Server restart policies.
+* Tool capability negotiation beyond schema.
 
 ---
 
