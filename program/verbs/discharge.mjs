@@ -13,7 +13,7 @@ function resolveTargetName(sentence, { rememberFn }) {
 }
 
 function resolveDischargeType(sentence) {
-  const raw = sentence?.as?.name ?? sentence?.as?.text ?? "";
+  const raw = sentence?.as?.wo ?? sentence?.as?.name ?? sentence?.as?.text ?? "";
   const text = String(raw ?? "").trim().toLowerCase();
   return text || null;
 }
@@ -78,5 +78,13 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "num"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "text"], handler: discharge },
-  { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "map"], handler: discharge }
+  { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "map"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ob", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ob", "name", "num"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ob", "name", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ob", "name", "map"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "num"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "map"], handler: discharge }
 ];
