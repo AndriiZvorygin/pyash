@@ -693,6 +693,18 @@ export function closeMcpServers() {
   mcpToolRegistry.clear();
 }
 
+export function closeMcpServer(serverName) {
+  const name = normalizeServerName(serverName);
+  if (!name) return;
+  const record = mcpServers.get(name);
+  if (record?.client?.proc) {
+    try {
+      record.client.proc.kill();
+    } catch {}
+  }
+  mcpServers.delete(name);
+}
+
 export function getMcpServerTools(serverName) {
   const record = mcpServers.get(serverName);
   return record?.tools ?? [];
