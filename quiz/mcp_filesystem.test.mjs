@@ -10,7 +10,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { canonicalJsonStringify } from "../program/verbs/exchange/write_json.mjs";
-import { closeMcpServers } from "../program/motor/mcp.mjs";
+import { closeMcpServers, getMcpServerTools } from "../program/motor/mcp.mjs";
 
 const skipFilesystem = process.env.PYA_SKIP_MCP_FILESYSTEM === "1";
 
@@ -37,17 +37,16 @@ test("mcp filesystem server records snapshot and exposes tools", { skip: skipFil
 
     const snapshotSentence = records.find(s => s?.be === "tool snapshot" && s?.su?.name === "mcp files");
     assert.ok(snapshotSentence?.ob?.text, "snapshot sentence should be recorded");
+    assert.ok(snapshotSentence.ob.text.includes("be json map def"), "snapshot should be pyash map text");
 
     const artifactSentence = records.find(s => s?.be === "artifact" && s?.to?.filename === "artifacts/mcp/files-tools.json");
     assert.ok(artifactSentence, "snapshot artifact should be recorded");
 
-    const snapshot = JSON.parse(snapshotSentence.ob.text);
-    assert.equal(snapshot.server, "files");
-    assert.ok(Array.isArray(snapshot.tools) && snapshot.tools.length > 0, "snapshot should include tools");
-
-    const listTool = snapshot.tools.find(tool => tool.name === "list_directory") ?? snapshot.tools[0];
+    const tools = getMcpServerTools("files");
+    assert.ok(Array.isArray(tools) && tools.length > 0, "snapshot should include tools");
+    const listTool = tools.find(tool => tool.name === "list_directory") ?? tools[0];
     const record = {
-      server: snapshot.server,
+      server: "files",
       name: listTool.name,
       description: listTool.description ?? "",
       inputSchema: listTool.inputSchema ?? null,
