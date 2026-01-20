@@ -199,6 +199,14 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 5, 2026: MCP tooling + discharge flows
+
+* MCP stdio integration shipped with snapshots, tool hashing, schema validation, allow/deny, replay, and timeouts.
+* MCP quickstarts and examples (filesystem + time) added with deterministic quizzes.
+* `discharge` verb added for MCP shutdown and run warning when servers linger.
+* Mind tooling now emits full json map tool results to the model.
+* Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
+
 ### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
 
 * Dispatch is explicitly signature-based; ceremony definitions override handlers per signature, with conflict warnings including source context.
