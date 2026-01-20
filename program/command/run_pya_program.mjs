@@ -13,6 +13,7 @@ import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath, pushModuleDir, popModuleDir } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
+import { closeMcpServers } from "../motor/mcp.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
 import { resolveConfigBool } from "../configure/env.mjs";
 
@@ -351,6 +352,7 @@ async function main() {
     await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
   }
   clearExchangeRecorder();
+  closeMcpServers();
   if (runError) throw runError;
 
   if (full) {
