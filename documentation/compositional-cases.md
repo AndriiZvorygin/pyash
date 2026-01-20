@@ -24,6 +24,7 @@ Every case is understood as:
   * **social** – groups, communities
   * **discourse** – text, speech, documents
 * **quantity** – counts, rates, loop registers (`times`/`per`)
+* **limit** – bounds and exact limits (`atleast` / `exactly` / `atmost`)
 * **sequence** – ordered positions / indices (`fromindex` / `atindex` / `toindex`)
 
 The **hex value** of the case (the `hnuc` field) is the official ID.  
@@ -92,7 +93,7 @@ This is the **primary specification** of the compositional system.
 
 It is a table:
 
-* **rows** = contexts (`space`, `interior`, `surface`, `under`, `time`, `state`, `person`, `social`, `discourse`)
+* **rows** = contexts (`space`, `interior`, `surface`, `under`, `time`, `state`, `person`, `social`, `discourse`, `quantity`, `limit`, `sequence`)
 * **columns** = axes (`source`, `way`, `destination`)
 
 Each cell chooses a official `*_case_` word from `pyashWords.json` and ties it to:
@@ -203,6 +204,7 @@ Rows:
 | social     | fromgroup    | among       | intogroup   |
 | discourse  | fromtext     | accordingto | totext      |
 | quantity   | times        | by          | per         |
+| limit      | atleast      | exactly     | atmost      |
 | sequence   | fromindex    | atindex     | toindex     |
 ```
 
@@ -226,6 +228,7 @@ export const axisContextToKeyword = {
   person:    { source: "fromperson",way: "with",        destination: "for" },
   social:    { source: "fromgroup", way: "among",       destination: "intogroup" },
   discourse: { source: "fromtext",  way: "accordingto", destination: "totext" },
+  limit:     { source: "atleast",   way: "exactly",     destination: "atmost" },
   sequence:  { source: "fromindex", way: "atindex",     destination: "toindex" },
 };
 
@@ -240,6 +243,7 @@ export const keywordToAxisContext = {
   fromperson:  { axis: "source", context: "person" },
   fromgroup:   { axis: "source", context: "social" },
   fromtext:    { axis: "source", context: "discourse" },
+  atleast:     { axis: "source", context: "limit" },
   fromindex:   { axis: "source", context: "sequence" },
 
   // way
@@ -252,6 +256,7 @@ export const keywordToAxisContext = {
   with:        { axis: "way",    context: "person" },
   among:       { axis: "way",    context: "social" },
   accordingto: { axis: "way",    context: "discourse" },
+  exactly:     { axis: "way",    context: "limit" },
   atindex:     { axis: "way",    context: "sequence" },
 
   // destination
@@ -264,6 +269,7 @@ export const keywordToAxisContext = {
   for:         { axis: "destination", context: "person" },
   intogroup:   { axis: "destination", context: "social" },
   totext:      { axis: "destination", context: "discourse" },
+  atmost:      { axis: "destination", context: "limit" },
   toindex:     { axis: "destination", context: "sequence" },
 };
 ```

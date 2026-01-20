@@ -203,6 +203,7 @@ The implementation exposes **single-token keywords** for each `(axis, context)` 
 | social     | fromgroup   | among       | intogroup   |
 | discourse  | fromtext    | accordingto | totext      |
 | quantity   | times       | by          | per         |
+| limit      | atleast     | exactly     | atmost      |
 | sequence   | fromindex   | atindex     | toindex     |
 ```
 
@@ -213,6 +214,9 @@ The implementation exposes **single-token keywords** for each `(axis, context)` 
   - `from state` → `fromstate`
   - `to state` → `become`
   - `to text` → `totext`
+  - `from limit` → `atleast`
+  - `via limit` → `exactly`
+  - `to limit` → `atmost`
 - Signature derivation and formatting **use the canonical keywords**.
 
 ## 5. Sentence roles
