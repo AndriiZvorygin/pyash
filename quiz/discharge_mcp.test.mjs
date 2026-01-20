@@ -21,7 +21,7 @@ test("discharge closes mcp server", async () => {
   await interpret(parse("from name mcp mock to name mcp mock be import do"));
   assert.ok(getMcpServerTools("mock").length > 0);
 
-  await interpret(parse("be discharge ob name mcp mock as name mcp do"));
+  await interpret(parse("be discharge ob name mcp mock as wo mcp do"));
   assert.equal(getMcpServerTools("mock").length, 0);
 
   closeMcpServers();

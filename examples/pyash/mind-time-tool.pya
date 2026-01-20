@@ -7,5 +7,5 @@ from name mcp time to name mcp clock be import do
 
 exists su name helper be mind via state "qwen3-vl:8b-instruct" via discourse "You must call the time tool before answering. Use timezone America/Toronto. Reply with the tool datetime only." ya
 ob text "What time is it in America/Toronto?" for name helper to name text helper-out with name tools be write do
-be discharge ob name mcp time as name mcp do
+be discharge ob name mcp time as wo mcp do
 ob name helper-out be text do

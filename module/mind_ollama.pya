@@ -7,4 +7,11 @@ su name mind ob text payload vyah stream be ceremony def
   su name run ob text of cmd fromtext text of ob of this vyah stream be command do
   su name run ret
 prah
+su name discharge be ceremony def
+  ob text "ollama mind discharged" ret
+prah
+su name discharge to name text target be ceremony def
+  ob text "ollama mind discharged" ret
+prah
 exists su name mind be export ya
+exists su name discharge be export ya
