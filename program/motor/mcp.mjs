@@ -684,13 +684,16 @@ export async function callMcpTool({ verbName, sentence, rememberFn = remember, d
 }
 
 export function closeMcpServers() {
+  let closed = 0;
   for (const record of mcpServers.values()) {
     try {
       record?.client?.proc?.kill();
+      closed += 1;
     } catch {}
   }
   mcpServers.clear();
   mcpToolRegistry.clear();
+  return closed;
 }
 
 export function closeMcpServer(serverName) {

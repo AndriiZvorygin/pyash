@@ -352,7 +352,10 @@ async function main() {
     await fs.writeFile(newspaperPath, `${newspaperLines.join("\n")}\n`, "utf8");
   }
   clearExchangeRecorder();
-  closeMcpServers();
+  const closedServers = closeMcpServers();
+  if (closedServers > 0) {
+    console.warn("warning: MCP servers were still running at exit; add `be discharge ob name <server> as name mcp do` to shut them down explicitly.");
+  }
   if (runError) throw runError;
 
   if (full) {
