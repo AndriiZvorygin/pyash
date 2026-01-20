@@ -7,9 +7,10 @@ import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { buildErrorSentence, throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify } from "../verbs/exchange/write_json.mjs";
-import { recordArtifact, emitExchangeSentence, getExchangeRunRoot } from "../bridge/exchange.mjs";
+import { recordArtifact, emitExchangeSentence, getExchangeRunRoot, getExchangeStrict } from "../bridge/exchange.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { jsonToMapSentences, jsonToPyashText } from "../verbs/exchange/json_map.mjs";
+import { jsonObjectFromPyash } from "../verbs/exchange/write_json.mjs";
 
 const mcpServers = new Map();
 const mcpToolRegistry = new Map();
@@ -105,15 +106,17 @@ function normalizeTool(raw) {
 }
 
 class McpClient {
-  constructor({ command, args, serverName }) {
+  constructor({ command, args, serverName, onExit }) {
     this.serverName = serverName;
     this.nextId = 1;
     this.pending = new Map();
     this.buffer = "";
+    this.onExit = typeof onExit === "function" ? onExit : null;
     this.proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc.stdout.on("data", (chunk) => this.onData(chunk));
     this.proc.stderr.on("data", () => {});
     this.proc.on("exit", (code, signal) => {
+      if (this.onExit) this.onExit({ code, signal, serverName });
       const err = new Error(`mcp server exited: ${serverName} status=${code ?? 0} signal=${signal ?? ""}`);
       for (const { reject } of this.pending.values()) reject(err);
       this.pending.clear();
@@ -168,7 +171,12 @@ class InlineMcpClient {
       const toolName = params?.name;
       const tool = this.tools.find(entry => entry?.name === toolName);
       if (tool && Object.prototype.hasOwnProperty.call(tool, "mockResult")) {
-        return tool.mockResult;
+        const result = tool.mockResult;
+        const delay = Number(tool.mockDelayMs ?? 0);
+        if (delay > 0) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        return result;
       }
       const args = params?.arguments ?? {};
       if (args?.ob !== undefined) return args.ob;
@@ -176,6 +184,8 @@ class InlineMcpClient {
     }
     return { ok: true };
   }
+
+  sendNotification() {}
 }
 
 function resolveMcpConfig(serverName, { rememberFn = remember } = {}) {
@@ -406,11 +416,90 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
   const existing = mcpServers.get(name);
   if (existing?.tools?.length) return existing;
 
+  const strictReplay = getExchangeStrict();
+  if (strictReplay) {
+    const locator = `artifacts/mcp/${sanitizeServerName(name)}-tools.json`;
+    const runRoot = getExchangeRunRoot() ?? process.cwd();
+    const absPath = path.resolve(runRoot, locator);
+    let snapshotText = null;
+    try {
+      snapshotText = await fs.readFile(absPath, "utf8");
+    } catch {
+      throwMcpError({
+        name: "mcp snapshot missing",
+        message: `mcp snapshot missing: ${name}`,
+        from: { name: source }
+      });
+    }
+    let snapshot;
+    try {
+      snapshot = jsonObjectFromPyash(snapshotText, { rootName: `mcp ${name} tools snapshot` });
+    } catch (err) {
+      throwMcpError({
+        name: "mcp snapshot defective",
+        message: `mcp snapshot defective: ${name}`,
+        from: { name: source },
+        raw: { error: err?.message }
+      });
+    }
+    const toolEntries = snapshot?.tools && typeof snapshot.tools === "object" ? snapshot.tools : {};
+    const tools = [];
+    const toolByName = new Map();
+    for (const [toolName, info] of Object.entries(toolEntries)) {
+      const tool = {
+        name: toolName,
+        description: info?.description ?? "",
+        inputSchema: info?.inputSchema ?? null,
+        outputSchema: info?.outputSchema ?? null,
+        toolId: info?.toolId ?? ""
+      };
+      const expectedId = buildToolIdentity({ server: name, tool });
+      if (tool.toolId && tool.toolId !== expectedId) {
+        throwMcpError({
+          name: "mcp snapshot mismatch",
+          message: `mcp snapshot mismatch: ${toolName}`,
+          from: { name: source }
+        });
+      }
+      if (!tool.toolId) tool.toolId = expectedId;
+      tools.push(tool);
+      toolByName.set(tool.name, tool);
+    }
+    tools.sort((a, b) => a.name.localeCompare(b.name, "en"));
+    const record = {
+      serverName: name,
+      client: null,
+      tools,
+      toolByName
+    };
+    mcpServers.set(name, record);
+    return record;
+  }
+
   const config = resolveMcpConfig(name, { rememberFn });
+  const exitHandler = ({ code, signal, serverName: exitName }) => {
+    if (code === 0 && !signal) {
+      emitExchangeSentence({
+        mood: "ya",
+        su: { name: "mcp server exit" },
+        be: "mcp exit",
+        ob: { text: `mcp server exit: ${exitName}` },
+        from: { name: "mcp" }
+      });
+      return;
+    }
+    const errSentence = buildErrorSentence({
+      name: "mcp server crash",
+      message: `mcp server crash: ${exitName}`,
+      from: { name: "mcp" },
+      raw: { code, signal }
+    });
+    emitExchangeSentence(errSentence);
+  };
   const client = existing?.client ?? (
     config.command === "inline"
       ? await buildInlineClient(config.args)
-      : new McpClient({ command: config.command, args: config.args, serverName: name })
+      : new McpClient({ command: config.command, args: config.args, serverName: name, onExit: exitHandler })
   );
 
   try {
@@ -423,7 +512,7 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
       client.sendNotification("notifications/initialized", {});
     }
   } catch (err) {
-    throwErrorSentence({
+    throwMcpError({
       name: "mcp defective",
       message: `mcp defective: initialize failed for ${name}`,
       from: { name: source },
@@ -435,7 +524,7 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
   try {
     response = await client.send("tools/list", {});
   } catch (err) {
-    throwErrorSentence({
+    throwMcpError({
       name: "mcp defective",
       message: `mcp defective: tool discovery failed for ${name}`,
       from: { name: source },
@@ -533,10 +622,41 @@ export async function callMcpTool({ verbName, sentence, rememberFn = remember, d
   }
   validateSchemaArgs(args, schema, { toolName: entry.toolName });
 
+  if (!server.client) {
+    throwMcpError({
+      name: "mcp tool unavailable",
+      message: `mcp tool unavailable: ${entry.toolName}`,
+      from: { name: "mcp" }
+    });
+  }
+
+  const timeoutSeconds = sentence?.by?.num ?? sentence?.by?.quantity?.num ?? null;
+  const timeoutMs = timeoutSeconds != null ? Math.max(0, Number(timeoutSeconds) * 1000) : null;
+
   let result;
   try {
-    result = await server.client.send("tools/call", { name: entry.toolName, arguments: args });
+    const callPromise = server.client.send("tools/call", { name: entry.toolName, arguments: args });
+    if (timeoutMs != null) {
+      result = await Promise.race([
+        callPromise,
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("mcp tool timeout")), timeoutMs);
+        })
+      ]);
+    } else {
+      result = await callPromise;
+    }
   } catch (err) {
+    if (err?.message === "mcp tool timeout") {
+      if (typeof server.client.sendNotification === "function") {
+        server.client.sendNotification("notifications/cancelled", { reason: "timeout" });
+      }
+      throwMcpError({
+        name: "mcp tool timeout",
+        message: `mcp tool timeout: ${entry.toolName}`,
+        from: { name: "mcp" }
+      });
+    }
     throwMcpError({
       name: "mcp tool defective",
       message: `mcp tool defective: ${entry.toolName}`,

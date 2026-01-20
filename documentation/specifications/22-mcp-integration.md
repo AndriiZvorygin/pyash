@@ -210,6 +210,8 @@ from name mcp files to name mcp files be import do
 ob text "<allowed_path_1>" be mcp files list_directory do
 ```
 
+Snapshot artifacts are written under the run root at `artifacts/mcp/<server-name>-tools.json`.
+
 Note: stdio is a transport only and does not sandbox the process.
 Run risky MCP servers in a container or restricted user to avoid filesystem or process abuse.
 
