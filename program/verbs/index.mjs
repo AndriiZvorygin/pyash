@@ -28,6 +28,8 @@ import espeakSay, { signatures as espeakSaySignatures } from "./espeak_say.mjs";
 import hear, { signatures as hearSignatures } from "./hear.mjs";
 import command, { signatures as commandSignatures } from "./command.mjs";
 import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
+import begin, { signatures as beginSignatures } from "./begin.mjs";
+import restart, { signatures as restartSignatures } from "./restart.mjs";
 
 export {
   plus,
@@ -59,7 +61,9 @@ export {
   espeakSay,
   hear,
   command,
-  discharge
+  discharge,
+  begin,
+  restart
 };
 
 export const builtInSignatures = [
@@ -93,4 +97,6 @@ export const builtInSignatures = [
   ...hearSignatures,
   ...commandSignatures,
   ...dischargeSignatures,
+  ...beginSignatures,
+  ...restartSignatures,
 ];
