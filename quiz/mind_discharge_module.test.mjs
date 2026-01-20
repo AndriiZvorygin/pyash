@@ -11,8 +11,10 @@ async function run(line) {
 
 test("mind module exposes discharge", async () => {
   forget();
+  process.env.PYA_COMMAND_RESPONSE = "{}";
   await run('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do');
-  await run("to name text out be mind ollama discharge do");
+  await run('ob text "qwen3-vl:8b-instruct" to name text out be mind ollama discharge do');
   const out = remember("out");
   assert.equal(out?.ob?.text, "ollama mind discharged");
+  delete process.env.PYA_COMMAND_RESPONSE;
 });
