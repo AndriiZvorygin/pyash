@@ -108,7 +108,7 @@ class McpClient {
     this.serverName = serverName;
     this.nextId = 1;
     this.pending = new Map();
-    this.buffer = Buffer.alloc(0);
+    this.buffer = "";
     this.proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc.stdout.on("data", (chunk) => this.onData(chunk));
     this.proc.stderr.on("data", () => {});
@@ -121,34 +121,27 @@ class McpClient {
 
   send(method, params) {
     const id = this.nextId++;
-    const payload = JSON.stringify({ jsonrpc: "2.0", id, method, params });
-    const bytes = Buffer.from(payload, "utf8");
-    const header = Buffer.from(`Content-Length: ${bytes.length}\r\n\r\n`, "utf8");
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.proc.stdin.write(Buffer.concat([header, bytes]));
+      this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
     });
   }
 
+  sendNotification(method, params) {
+    this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+  }
+
   onData(chunk) {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+    this.buffer += chunk.toString("utf8");
     while (true) {
-      const headerEnd = this.buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) return;
-      const headerText = this.buffer.slice(0, headerEnd).toString("utf8");
-      const match = headerText.match(/content-length:\s*(\d+)/i);
-      if (!match) {
-        this.buffer = this.buffer.slice(headerEnd + 4);
-        continue;
-      }
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
-      if (this.buffer.length < bodyStart + length) return;
-      const body = this.buffer.slice(bodyStart, bodyStart + length);
-      this.buffer = this.buffer.slice(bodyStart + length);
+      const newline = this.buffer.indexOf("\n");
+      if (newline === -1) return;
+      const line = this.buffer.slice(0, newline).replace(/\r$/, "");
+      this.buffer = this.buffer.slice(newline + 1);
+      if (!line.trim()) continue;
       let message;
       try {
-        message = JSON.parse(body.toString("utf8"));
+        message = JSON.parse(line);
       } catch {
         continue;
       }
@@ -372,7 +365,14 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
   );
 
   try {
-    await client.send("initialize", { protocolVersion: "2024-11-05", capabilities: {} });
+    await client.send("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "pyash", version: "0.1.0" }
+    });
+    if (typeof client.sendNotification === "function") {
+      client.sendNotification("notifications/initialized", {});
+    }
   } catch (err) {
     throwErrorSentence({
       name: "mcp defective",
@@ -463,16 +463,7 @@ export async function callMcpTool({ verbName, sentence, rememberFn = remember, d
   const candidateKeys = properties ? Object.keys(properties) : caseKeys;
   for (const key of candidateKeys) {
     const value = sentence?.[key];
-    if (value === undefined) {
-      if (required.has(key)) {
-        throwErrorSentence({
-          name: "mcp tool defective",
-          message: `mcp tool defective: missing required ${key}`,
-          from: { name: entry.toolName }
-        });
-      }
-      continue;
-    }
+    if (value === undefined) continue;
     const jsonValue = valueToJson(value);
     if (jsonValue !== undefined) args[key] = jsonValue;
   }
