@@ -222,6 +222,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `discharge` verb added for MCP shutdown, plus run warning when servers linger.
 * Mind tool results now emit full json map definitions in tool messages.
 * Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
+* Ollama mind module exposes `begin`/`restart` ceremonies for warmup and cycling.
 
 # TODO
 
