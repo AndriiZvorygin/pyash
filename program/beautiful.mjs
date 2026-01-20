@@ -13,7 +13,8 @@ const COMPOSITIONAL_CONTEXT_ORDER = [
   "person",
   "social",
   "discourse",
-  "quantity"
+  "quantity",
+  "limit"
 ];
 
 const COMPOSITIONAL_PREPS = [];

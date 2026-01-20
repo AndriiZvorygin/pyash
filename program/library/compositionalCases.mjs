@@ -284,6 +284,34 @@ export const compositionalGrid = {
       prep: "per",        // DEST + quantity (per-unit target)
     },
   },
+
+  limit: {
+    context: { name: "limit_context_", hnuc: "0x0000", pya: "limit" },
+
+    source: {
+      axis: "source",
+      case: "limit_source_case_",
+      hnuc: "0x0000",
+      pya: "atleast",
+      prep: "atleast",     // SOURCE + limit (lower bound)
+    },
+
+    way: {
+      axis: "way",
+      case: "limit_way_case_",
+      hnuc: "0x0000",
+      pya: "exactly",
+      prep: "exactly",     // WAY + limit (exact match)
+    },
+
+    destination: {
+      axis: "destination",
+      case: "limit_destination_case_",
+      hnuc: "0x0000",
+      pya: "atmost",
+      prep: "atmost",      // DEST + limit (upper bound)
+    },
+  },
 };
 
 // Canonical context keywords for Pyash compositional cases.
@@ -350,6 +378,12 @@ export const contextKeywords = {
     key: "quantity",
     contextWord: "quantity_context_",
     hints: ["quantity", "count", "per", "by", "rate", "times"],
+  },
+
+  limit: {
+    key: "limit",
+    contextWord: "limit_context_",
+    hints: ["limit", "bound", "range", "atleast", "exactly", "atmost"],
   },
 };
 

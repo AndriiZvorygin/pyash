@@ -52,6 +52,17 @@ test("quantity context maps to times/by/per keywords", () => {
   assert.ok(!s.to, "to should be normalized to per");
 });
 
+test("limit context maps to atleast/exactly/atmost keywords", () => {
+  const s = parse("exists su name fence from limit num 1 via limit num 2 to limit num 3 be topic ya");
+
+  assert.deepEqual(s.atleast, { num: 1 });
+  assert.deepEqual(s.exactly, { num: 2 });
+  assert.deepEqual(s.atmost, { num: 3 });
+  assert.ok(!s.from, "from should be normalized to atleast");
+  assert.ok(!s.via, "via should be normalized to exactly");
+  assert.ok(!s.to, "to should be normalized to atmost");
+});
+
 test("sequence context maps to fromindex/atindex/toindex", () => {
   const s = parse("exists su name item from sequence num 1 via sequence num 2 to sequence num 3 be topic ya");
 
