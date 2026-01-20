@@ -74,6 +74,10 @@ export function getExchangeSentenceId() {
   return exchangeSentenceId;
 }
 
+export function getExchangeRunRoot() {
+  return exchangeRunRoot;
+}
+
 export function setExchangeStrict(value) {
   exchangeStrict = Boolean(value);
 }

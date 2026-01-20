@@ -9,6 +9,16 @@
         "required": ["ob"],
         "additionalProperties": false
       }
+    },
+    {
+      "name": "return_object",
+      "description": "return object",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "mockResult": { "b": 2, "a": 1 }
     }
   ]
 }

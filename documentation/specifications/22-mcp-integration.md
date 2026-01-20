@@ -156,6 +156,12 @@ Allowlist config (example):
 su name mcp allowlist ob ve text "mcp files list_directory" "mcp files read_file" ya
 ```
 
+Denylist config (example):
+
+```pyash
+su name mcp denylist ob ve text "mcp files write_file" ya
+```
+
 ## 10. Failure policy (normative)
 
 The runtime MUST surface deterministic errors for:
