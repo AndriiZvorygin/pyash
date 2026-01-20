@@ -74,6 +74,7 @@ async function runGenerate(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
   const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+  if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
     await requestStream(endpoint, body);
     return null;
@@ -86,6 +87,7 @@ async function runChat(payload) {
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
   const body = { model: payload.model, messages: payload.messages, stream: !!payload.stream };
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
+  if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
     await requestStream(endpoint, body);
     return null;
