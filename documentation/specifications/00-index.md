@@ -49,6 +49,7 @@ Feature specs (optional, when blessed):
 - `11-run-recording-and-artifacts.md` (merged)
 - `14-refinery.md` (v0.1)
 - `16-mind-and-tools.md` (merged)
+- `17-tool-abi.md` (v0.1 consolidation)
 - `18-say-and-hear.md` (v0.1)
 - `19-speech-artifacts.md` (v0.1)
 - `21-vector-at-all.md` (v0.1)
