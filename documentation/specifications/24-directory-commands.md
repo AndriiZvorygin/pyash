@@ -14,7 +14,7 @@ All inputs and outputs MUST be Pyash sentences.
 
 ---
 
-## 2. Verb (official)
+## 2. Verbs (official)
 
 ### 2.1 `list` — directory listing
 
@@ -85,3 +85,26 @@ List only directories under `/var/log` (including hidden):
 Walk the repo recursively:
 
 `from filename "/home/user/project" as wo recursive be list do`
+
+---
+
+### 2.2 `go` — change working directory
+
+#### 2.2.1 Input form
+
+`be go to filename "<dir>" do`
+
+#### 2.2.2 Behavior
+
+* Sets the current working directory for the remainder of the run.
+* Affects relative `from filename`, `to filename`, and module path resolution.
+* MUST NOT change any process-global state outside the current run.
+
+#### 2.2.3 Output form
+
+`ob filename "<dir>" be go ya`
+
+#### 2.2.4 Errors
+
+* missing directory or permission errors MUST emit `be error ya`
+* non-directory targets MUST emit `be error ya`
