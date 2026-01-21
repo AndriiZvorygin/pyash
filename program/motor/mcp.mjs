@@ -364,12 +364,16 @@ async function* readStreamChunks(stream) {
   }
 }
 
-async function* parseSseStream(stream) {
+export async function* parseSseStream(stream) {
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let event = null;
   let id = null;
   let data = [];
+  const normalizeFieldValue = (raw) => {
+    if (!raw) return "";
+    return raw.startsWith(" ") ? raw.slice(1) : raw;
+  };
   const flushEvent = () => {
     if (!data.length && !event && !id) return null;
     const payload = { event, id, data: data.join("\n") };
@@ -389,15 +393,15 @@ async function* parseSseStream(stream) {
         continue;
       }
       if (line.startsWith("event:")) {
-        event = line.slice(6).trim();
+        event = normalizeFieldValue(line.slice(6));
         continue;
       }
       if (line.startsWith("id:")) {
-        id = line.slice(3).trim();
+        id = normalizeFieldValue(line.slice(3));
         continue;
       }
       if (line.startsWith("data:")) {
-        data.push(line.slice(5).trim());
+        data.push(normalizeFieldValue(line.slice(5)));
         continue;
       }
     }
