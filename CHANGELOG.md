@@ -210,23 +210,26 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * MCP servers now support restart policies via `be mcp` configs and `with name` policy maps.
 * MCP Streamable HTTP transport (2025-06-18) is supported, with legacy HTTP+SSE fallback.
 
-### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
+### Jan 6, 2026: Mind invocation form update + refinery alignment
 
-* Dispatch is explicitly signature-based; ceremony definitions override handlers per signature, with conflict warnings including source context.
-* `hear` timebox durations now use seconds everywhere (core, runner, specs, examples, quizzes).
-* Talk loop examples refreshed: simple timebox loop, new stream loop with “bye” exit, and transcript routed to mind via `ob name`.
-* `mind` now resolves `ob name <fact>` to remembered payloads when building prompts.
-* Whisper stream dedup refined to suppress repeated lines across outputs.
-* Mind/piper runners now write request/input files under `artifacts/` to keep `--newspaper` runs valid.
-* Added hear eval timebox examples (inline + module) and ignored `quiz/sandpit` scratch artifacts.
+* Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
+* `be mind do` deprecated (reserved for future use) and removed from interpreter signature support.
+* Compiler/JS/C mind paths updated to resolve `for` targets and store responses under the requested output name.
+* Mind examples, refinery demos, and quizzes updated to use the new invocation form.
 
-### Jan 10, 2026: Literals, modules, and keyboard streaming
+### Jan 7, 2026: Compile refactor + example references
 
-* Added `wo` literal words for strict dispatch and documented their signature behavior.
-* Added `be text` and `be filename` casts with quizzes and default verb registration.
-* Keyboard streaming now uses `to wo keyboard` with updated signatures, tests, and module helper.
-* Added ffmpeg microphone module + examples, and improved hear input path resolution from memory.
-* Documented external tool modules and added the runner contract addendum in the module spec.
+* Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.
+* Centralized early compile branching with base `be` handlers for `compile`, `import`, `read`, and `ret`.
+* Documented canonical example locations and linked streaming/mind/artifact examples from specs.
+* Split C helper exports into focused modules and re-exported them to keep compile imports stable.
+* `be speak` verb removed (use `say` modules instead).
+* Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
+* Documented caterer build layout and added whisper.cpp linux-x64 build script.
+* Piper `say` backend now produces WAV artifacts, records metadata, and can play audio to speakers by default.
+* Default `say` mapping now targets `piper say`, with a new piper golden example and fixture quiz.
+* Fixture `hear` backend added with a refinery demo (mind → say → hear) and a matching quiz.
+* Whisper.cpp-backed `hear` flow added for real audio transcripts, plus a full refinery example.
 
 ### Jan 7, 2026: Hear prompt + keyboard streaming
 
@@ -249,29 +252,26 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added `PYA_SAY_STREAM_DELAY_MS` and `PYA_ESPEAK_BIN` to env guidance for stream tuning.
 * Stream stdout can now be disabled via `su name stream stdout ob bool lie be default ya` (configurable in `configure/default.pya` and examples).
 
+### Jan 10, 2026: Literals, modules, and keyboard streaming
+
+* Added `wo` literal words for strict dispatch and documented their signature behavior.
+* Added `be text` and `be filename` casts with quizzes and default verb registration.
+* Keyboard streaming now uses `to wo keyboard` with updated signatures, tests, and module helper.
+* Added ffmpeg microphone module + examples, and improved hear input path resolution from memory.
+* Documented external tool modules and added the runner contract addendum in the module spec.
+
 ### Jan 10, 2026: Env defaults promoted to memory
 
 * Environment variables are now imported into memory as `be default` facts.
 * `configure/default.pya` (or any in-program sentence) overrides env defaults.
 * Runtime lookups now read config from memory first (stream stdout, mind/command fixtures, say/hear backends).
 
-### Jan 7, 2026: Compile refactor + example references
+### Jan 17, 2026: Signature dispatch + talk loops + timebox seconds
 
-* Split `compile` helpers into focused modules (constants/config/tooling/util/mind/runtime) to reduce churn in `compile.mjs`.
-* Centralized early compile branching with base `be` handlers for `compile`, `import`, `read`, and `ret`.
-* Documented canonical example locations and linked streaming/mind/artifact examples from specs.
-* Split C helper exports into focused modules and re-exported them to keep compile imports stable.
-* `be speak` verb removed (use `say` modules instead).
-* Drafted caterer vendoring spec for `hear`/`say` with pyash map examples.
-* Documented caterer build layout and added whisper.cpp linux-x64 build script.
-* Piper `say` backend now produces WAV artifacts, records metadata, and can play audio to speakers by default.
-* Default `say` mapping now targets `piper say`, with a new piper golden example and fixture quiz.
-* Fixture `hear` backend added with a refinery demo (mind → say → hear) and a matching quiz.
-* Whisper.cpp-backed `hear` flow added for real audio transcripts, plus a full refinery example.
-
-### Jan 6, 2026: Mind invocation form update + refinery alignment
-
-* Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
-* `be mind do` deprecated (reserved for future use) and removed from interpreter signature support.
-* Compiler/JS/C mind paths updated to resolve `for` targets and store responses under the requested output name.
-* Mind examples, refinery demos, and quizzes updated to use the new invocation form.
+* Dispatch is explicitly signature-based; ceremony definitions override handlers per signature, with conflict warnings including source context.
+* `hear` timebox durations now use seconds everywhere (core, runner, specs, examples, quizzes).
+* Talk loop examples refreshed: simple timebox loop, new stream loop with “bye” exit, and transcript routed to mind via `ob name`.
+* `mind` now resolves `ob name <fact>` to remembered payloads when building prompts.
+* Whisper stream dedup refined to suppress repeated lines across outputs.
+* Mind/piper runners now write request/input files under `artifacts/` to keep `--newspaper` runs valid.
+* Added hear eval timebox examples (inline + module) and ignored `quiz/sandpit` scratch artifacts.
