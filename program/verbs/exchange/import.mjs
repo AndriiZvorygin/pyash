@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
-import { doRemember, allRemember } from "../../remember/index.mjs";
+import { remember, doRemember, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToMapSentences } from "./json_map.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
+import { renderSayValue } from "../say.mjs";
 
 function collectExistingNames() {
   const used = new Set();
@@ -65,6 +66,12 @@ async function importFromSentence(sentence) {
   }
 
   let sourceText = sentence?.ob?.text ?? sentence?.from?.text;
+  if (!sourceText && sentence?.ob) {
+    const resolved = renderSayValue(sentence.ob, { rememberFn: remember });
+    if (resolved !== undefined && resolved !== null) {
+      sourceText = String(resolved);
+    }
+  }
   if (!sourceText && sentence?.from?.filename) {
     const buffer = await fs.readFile(sentence.from.filename);
     const artifact = recordArtifact({ locator: sentence.from.filename, producer: "exchange", bytes: buffer });
@@ -144,6 +151,8 @@ export default importFromSentence;
 
 export const signatures = [
   { signatureWords: ["be", "import", "ob", "text", "to", "name", "num"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "ob", "name", "text", "to", "name", "num"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "ob", "name", "text", "to", "name", "text"], handler: importFromSentence },
   { signatureWords: ["be", "import", "from", "filename", "to", "name", "num"], handler: importFromSentence },
   { signatureWords: ["be", "import", "from", "text", "to", "name", "num"], handler: importFromSentence }
 ];
