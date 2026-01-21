@@ -199,22 +199,6 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
-### Jan 20, 2026: MCP tooling + discharge flows
-
-* MCP stdio integration shipped with snapshots, tool hashing, schema validation, allow/deny, replay, and timeouts.
-* MCP quickstarts and examples (filesystem + time) added with deterministic quizzes.
-* `discharge` verb added for MCP shutdown and run warning when servers linger.
-* Mind tooling now emits full json map tool results to the model.
-* Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
-* Ollama mind module now exposes `begin`/`restart` ceremonies for warmup and cycling.
-* MCP servers now support restart policies via `be mcp` configs and `with name` policy maps.
-* MCP Streamable HTTP transport (2025-06-18) is supported, with legacy HTTP+SSE fallback.
-
-### Jan 21, 2026: MCP HTTP fixes
-
-* Streamable HTTP SSE parsing fixes for MCP responses.
-* Changelog order cleanup for January entries.
-
 ### Jan 6, 2026: Mind invocation form update + refinery alignment
 
 * Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
@@ -280,3 +264,19 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Whisper stream dedup refined to suppress repeated lines across outputs.
 * Mind/piper runners now write request/input files under `artifacts/` to keep `--newspaper` runs valid.
 * Added hear eval timebox examples (inline + module) and ignored `quiz/sandpit` scratch artifacts.
+
+### Jan 20, 2026: MCP tooling + discharge flows
+
+* MCP stdio integration shipped with snapshots, tool hashing, schema validation, allow/deny, replay, and timeouts.
+* MCP quickstarts and examples (filesystem + time) added with deterministic quizzes.
+* `discharge` verb added for MCP shutdown and run warning when servers linger.
+* Mind tooling now emits full json map tool results to the model.
+* Ollama discharge unloads models (`keep_alive: 0`) and respects configured `ollama host`.
+* Ollama mind module now exposes `begin`/`restart` ceremonies for warmup and cycling.
+* MCP servers now support restart policies via `be mcp` configs and `with name` policy maps.
+* MCP Streamable HTTP transport (2025-06-18) is supported, with legacy HTTP+SSE fallback.
+
+### Jan 21, 2026: MCP HTTP fixes
+
+* Streamable HTTP SSE parsing fixes for MCP responses.
+* Changelog order cleanup for January entries.
