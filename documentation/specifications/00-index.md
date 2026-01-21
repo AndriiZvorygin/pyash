@@ -56,6 +56,7 @@ Feature specs (optional, when blessed):
 - `20-whisper-english-to-pyash.md` (v0.1 draft)
 - `21-vector-at-all.md` (v0.1)
 - `23-caterer-hear-say-vendoring.md` (v0.1)
+- `24-directory-commands.md` (draft v0.1)
 - `30-data-formats.md` (merged)
 - `08-vyah-and-aspect.md` (merged)
 - `50-modules.md` (v0.1)
