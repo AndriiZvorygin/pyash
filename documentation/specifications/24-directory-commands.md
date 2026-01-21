@@ -43,6 +43,7 @@ All inputs and outputs MUST be Pyash sentences.
 * filter: `all`
 * hidden entries: excluded (names starting with `.`)
 * recursion: disabled
+* `as wo recursive` implies filter `all`
 * order: stable ASCII lexicographic (A-Z, a-z, 0-9, `_`, `-`, `.`)
 * entries are returned as base names only when not recursive
 * recursive entries are returned as paths relative to the root
@@ -51,6 +52,14 @@ All inputs and outputs MUST be Pyash sentences.
 #### 2.1.3 Output form
 
 `ob ve text "<entry0>" "<entry1>" ... be list ya`
+
+Implementations MAY instead return a named vector:
+
+`ob name "<vector-name>" be list ya`
+
+When using a named vector, the referenced sentence MUST be:
+
+`su name "<vector-name>" ob ve text ... be vector ya`
 
 If no entries match, return an empty vector:
 
