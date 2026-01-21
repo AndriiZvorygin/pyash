@@ -1,0 +1,6 @@
+from filename "../../module/list_directory.pya" ob name list to name list be import do
+
+su name prompt ob text "Go into examples/ and list it." be write do
+be go to filename "examples" do
+su name entries be list do
+ob name entries be write do

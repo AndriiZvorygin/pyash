@@ -18,6 +18,12 @@ export function setEntryModulePath(filePath) {
   importMapCache = null;
 }
 
+export function setEntryModuleDir(dirPath) {
+  if (!dirPath) return;
+  entryModuleDir = path.resolve(dirPath);
+  importMapCache = null;
+}
+
 export function clearModuleCache() {
   moduleCache.clear();
   moduleAliases.clear();
