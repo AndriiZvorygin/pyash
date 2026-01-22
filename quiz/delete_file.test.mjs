@@ -35,6 +35,21 @@ test("delete recursive removes directory tree", async () => {
   await assert.rejects(() => fs.stat(dir));
 });
 
+test("delete removes empty directory", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "delete-"));
+  const res = await run(`be delete ob filename "${dir}" do`);
+  assert.equal(res?.value?.filename, dir);
+  await assert.rejects(() => fs.stat(dir));
+});
+
+test("delete non-empty directory without recursive fails", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "delete-"));
+  await fs.writeFile(path.join(dir, "note.txt"), "alpha", "utf8");
+  await assert.rejects(() => run(`be delete ob filename "${dir}" do`));
+});
+
 test("delete file mode rejects directory", async () => {
   forget();
   const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "delete-"));

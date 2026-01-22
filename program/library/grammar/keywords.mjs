@@ -2,6 +2,11 @@ import { compositionalGrid } from "../compositionalCases.mjs";
 
 export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can"];
 
+export const COMPOSITIONAL_ALIASES = {
+  inside: "in",
+  along: "on"
+};
+
 const EXTRA_CONTEXT_KEYWORDS = {
   sequence: { source: "fromindex", way: "atindex", destination: "toindex" }
 };

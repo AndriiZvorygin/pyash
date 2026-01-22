@@ -60,16 +60,12 @@ export async function del(sentence, { remember: rememberFn = remember } = {}) {
       });
     }
     const recursive = mode === "recursive";
-    if (!recursive) {
-      throwErrorSentence({
-        name: "delete target defective",
-        message: `delete target defective: ${resolved}`,
-        from: { name: "delete" },
-        raw: { resolved }
-      });
-    }
     try {
-      await fs.rm(resolved, { recursive: true, force: false });
+      if (recursive) {
+        await fs.rm(resolved, { recursive: true, force: false });
+      } else {
+        await fs.rmdir(resolved);
+      }
     } catch (err) {
       throwErrorSentence({
         name: "delete defective",

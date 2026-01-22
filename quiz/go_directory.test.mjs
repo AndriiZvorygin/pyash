@@ -26,3 +26,16 @@ test("go changes working directory for relative filenames", async () => {
     process.chdir(original);
   }
 });
+
+test("go rejects missing directory", async () => {
+  forget();
+  await assert.rejects(() => run('be go to filename "/no/such/dir" do'));
+});
+
+test("go rejects file path", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "go-"));
+  const target = path.join(dir, "note.txt");
+  await fs.writeFile(target, "alpha", "utf8");
+  await assert.rejects(() => run(`be go to filename "${target}" do`));
+});

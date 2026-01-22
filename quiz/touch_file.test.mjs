@@ -26,3 +26,12 @@ test("touch creates file and updates timestamp", async () => {
   const second = await fs.stat(target);
   assert.ok(second.mtimeMs >= first.mtimeMs);
 });
+
+test("touch creates parent directories", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "touch-"));
+  const target = path.join(dir, "nested", "note.txt");
+  await run(`be touch ob filename "${target}" do`);
+  const stat = await fs.stat(target);
+  assert.ok(stat.isFile());
+});

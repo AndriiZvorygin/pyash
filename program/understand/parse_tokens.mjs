@@ -3,7 +3,8 @@ import {
   TYPE_TOKENS,
   CONTEXT_KEYS,
   AXIS_CONTEXT_TO_KEYWORD,
-  MOODS
+  MOODS,
+  COMPOSITIONAL_ALIASES
 } from "../library/grammar/keywords.mjs";
 import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
@@ -86,7 +87,10 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
   }
 
   for (let i = 0; i < words.length; i++) {
-    const t = words[i];
+    let t = words[i];
+    if (COMPOSITIONAL_ALIASES[t]) {
+      t = COMPOSITIONAL_ALIASES[t];
+    }
 
     if (isQuotedTextToken(t)) {
       const value = decodeQuotedTextToken(t);
