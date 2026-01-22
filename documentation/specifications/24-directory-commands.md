@@ -323,7 +323,9 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 `ob name "<metadata>" be glance ya`
 
-Where `<metadata>` is a `be map def` sentence.
+Where `<metadata>` is a `be map def` sentence. Implementations SHOULD name the
+map as `glance <hash>`, where `<hash>` is the first 8 hex characters of the
+SHA-256 of the resolved absolute path.
 
 #### 2.11.4 Errors
 
