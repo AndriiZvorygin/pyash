@@ -1,130 +1,171 @@
 su name list be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir ." be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir ." to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all" to name cmd be plus do
+  ob text " --filter all" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all --hidden" to name cmd be plus do
+  ob text " --filter all --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo file be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter file" to name cmd be plus do
+  ob text " --filter file" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo dir be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter dir" to name cmd be plus do
+  ob text " --filter dir" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo all be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all" to name cmd be plus do
+  ob text " --filter all" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo recursive be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all --recursive" to name cmd be plus do
+  ob text " --filter all --recursive" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo recursive with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all --recursive --hidden" to name cmd be plus do
+  ob text " --filter all --recursive --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo file with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter file --hidden" to name cmd be plus do
+  ob text " --filter file --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo dir with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter dir --hidden" to name cmd be plus do
+  ob text " --filter dir --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list from filename root as wo all with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir \"" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir " to name cmd be plus do
   ob filename of from of this to name text path be text do
   ob name path to name cmd be plus do
-  ob text "\" --filter all --hidden" to name cmd be plus do
+  ob text " --filter all --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list as wo recursive be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir . --filter all --recursive" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir . --filter all --recursive" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list as wo recursive with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir . --filter all --recursive --hidden" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir . --filter all --recursive --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
   ob name raw to name list_entries be import do
   su name list_entries ret
 prah
 
 su name list with name hidden be ceremony def
-  exists su name cmd ob text "node command/list_directory_runner.mjs --dir . --filter all --hidden" be text ya
+  ob name run root to name text root be text do
+  exists su name cmd ob text "node " be text ya
+  ob name root to name cmd be plus do
+  ob text "/command/list_directory_runner.mjs --dir . --filter all --hidden" to name cmd be plus do
   ob text of cmd to name text raw be command do
-  ob name raw to name list entries be import do
-  su name result ob name list entries be list ya
-  su name result ret
+  ob name raw to name list_entries be import do
+  su name list_entries ret
 prah
 
 exists su name list be export ya
