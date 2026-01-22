@@ -312,7 +312,8 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 * Returns file metadata for `<path>`.
 * MUST include: `magnitude` (bytes), `improve time` (ISO 8601), `sort` (`file` or `directory`).
-* MAY include: `license time`, `license`, `owner`, `flock`, `descriptive` (from file command) if available.
+* MAY include: `license time`, `license`, `owner`, `flock`, `descriptive` (from `file`) if available.
+* `owner` and `flock` SHOULD be human-readable names when available; otherwise numeric IDs.
 * Permissions MAY be expressed as a vector of words using `license`:
   `owner read write interpret flock read hollow hollow all read hollow hollow`
   (example for `rw-r--r--`).

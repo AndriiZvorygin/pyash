@@ -1,6 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import os from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -20,6 +23,42 @@ function resolveFilename(value, { rememberFn } = {}) {
 function toIsoDate(date) {
   if (!date || Number.isNaN(date.getTime())) return "";
   return date.toISOString();
+}
+
+const execFileAsync = promisify(execFile);
+
+async function resolveUserName(uid) {
+  if (typeof uid !== "number") return null;
+  if (os.platform() === "win32") return null;
+  try {
+    const text = await fs.readFile("/etc/passwd", "utf8");
+    const line = text.split("\n").find(row => row && row.split(":")[2] === String(uid));
+    return line ? line.split(":")[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveGroupName(gid) {
+  if (typeof gid !== "number") return null;
+  if (os.platform() === "win32") return null;
+  try {
+    const text = await fs.readFile("/etc/group", "utf8");
+    const line = text.split("\n").find(row => row && row.split(":")[2] === String(gid));
+    return line ? line.split(":")[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveDescriptive(pathname) {
+  try {
+    const { stdout } = await execFileAsync("file", ["-b", pathname], { timeout: 2000 });
+    const text = String(stdout ?? "").trim();
+    return text || null;
+  } catch {
+    return null;
+  }
 }
 
 function modeBitsToWords(mode) {
@@ -77,15 +116,25 @@ export async function glance(sentence, { remember: rememberFn = remember } = {})
   if (permissions) {
     map.license = { ve: { type: "text", values: permissions } };
   }
-  if (typeof stats.uid === "number") {
+  const ownerName = await resolveUserName(stats.uid);
+  if (ownerName) {
+    map.owner = { text: ownerName };
+  } else if (typeof stats.uid === "number") {
     map.owner = { num: stats.uid };
   }
-  if (typeof stats.gid === "number") {
+  const groupName = await resolveGroupName(stats.gid);
+  if (groupName) {
+    map.flock = { text: groupName };
+  } else if (typeof stats.gid === "number") {
     map.flock = { num: stats.gid };
   }
   const ctime = toIsoDate(stats.ctime);
   if (ctime) {
     map["license time"] = { text: ctime };
+  }
+  const descriptive = await resolveDescriptive(resolved);
+  if (descriptive) {
+    map.descriptive = { text: descriptive };
   }
   const mapName = mapNameForPath(resolved);
   doRemember({ mood: "ya", su: { name: mapName }, be: "map", ob: { map } });
