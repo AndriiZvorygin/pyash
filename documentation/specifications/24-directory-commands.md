@@ -310,4 +310,3 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 * `be license ob filename "<path>" to text "<mode>" do`
 * `be license ob filename "<path>" to name "<owner>" among name "<group>" do`
 * `be license ob filename "<path>" as ve read write interpret do`
-* `be here do` (prints current working directory)
