@@ -142,31 +142,54 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 ---
 
-### 2.4 `touch` — create or update file
+### 2.4 `directory` — create directory
 
 #### 2.4.1 Input form
 
-`be touch ob filename "<path>" do`
+`be directory ob filename "<path>" do`
 
 #### 2.4.2 Behavior
+
+* Creates a directory at `<path>`.
+* Intermediate directories MUST be created if missing.
+* If the directory already exists, it MUST remain unchanged.
+
+#### 2.4.3 Output form
+
+`ob filename "<path>" be directory ya`
+
+#### 2.4.4 Errors
+
+* non-directory targets at `<path>` MUST emit `be error ya`
+* permission errors MUST emit `be error ya`
+
+---
+
+### 2.5 `touch` — create or update file
+
+#### 2.5.1 Input form
+
+`be touch ob filename "<path>" do`
+
+#### 2.5.2 Behavior
 
 * If the file does not exist, create an empty file.
 * If the file exists, update its modified time.
 * Intermediate directories MUST be created if missing.
 
-#### 2.4.3 Output form
+#### 2.5.3 Output form
 
 `ob filename "<path>" be touch ya`
 
-#### 2.4.4 Errors
+#### 2.5.4 Errors
 
 * permission errors MUST emit `be error ya`
 
 ---
 
-### 2.5 `delete` — remove file or directory
+### 2.6 `delete` — remove file or directory
 
-#### 2.5.1 Input form
+#### 2.6.1 Input form
 
 `be delete ob filename "<path>" do`
 
@@ -174,7 +197,7 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 `be delete ob filename "<path>" as wo directory do`  
 `be delete ob filename "<path>" as wo recursive do`
 
-#### 2.5.2 Behavior
+#### 2.6.2 Behavior
 
 * Deletes a file at `<path>`.
 * Deletes an empty directory at `<path>`.
@@ -182,13 +205,38 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 * `as wo directory` requires `<path>` to be a directory.
 * For non-empty directories, `as wo recursive` MUST be provided.
 
-#### 2.5.3 Output form
+#### 2.6.3 Output form
 
 `ob filename "<path>" be delete ya`
 
-#### 2.5.4 Errors
+#### 2.6.4 Errors
 
 * missing file or permission errors MUST emit `be error ya`
 * non-empty directory targets MUST emit `be error ya` unless `as wo recursive` is provided
 * `as wo file` on a directory MUST emit `be error ya`
 * `as wo directory` on a file MUST emit `be error ya`
+
+---
+
+### 2.7 `search` — search text in files
+
+#### 2.7.1 Input form
+
+`be search ob text "<pattern>" in filename "<path>" do`
+
+#### 2.7.2 Behavior
+
+* Searches case-insensitively (equivalent to `rg -i`).
+* `<path>` may be a file or directory.
+* When `<path>` is a directory, the search is recursive.
+* Each match MUST emit a line as `<file>:<line>:<text>`.
+* Results MUST be sorted for deterministic output.
+
+#### 2.7.3 Output form
+
+`ob text "<matches>" be search ya`
+
+#### 2.7.4 Errors
+
+* missing pattern or target MUST emit `be error ya`
+* unreadable files or permission errors MUST emit `be error ya`

@@ -49,7 +49,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "inside", // WAY + interior
+      prep: "in", // WAY + interior
     },
 
     destination: {
@@ -77,7 +77,7 @@ export const compositionalGrid = {
       case: "perlative_case_",
       hnuc: "0x495F",
       pya: "lwah",
-      prep: "along", // WAY + surface
+      prep: "on", // WAY + surface
     },
 
     destination: {

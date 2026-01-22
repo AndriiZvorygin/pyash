@@ -1,0 +1,2 @@
+su name note ob text "Search for 'pyash' in the documentation folder." be write do
+be search ob text "pyash" in filename "documentation" do

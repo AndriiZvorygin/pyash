@@ -15,8 +15,8 @@ Every case is understood as:
 * The **context** tells you *in what domain* that relation lives:
 
   * **space** – default physical / path domain
-  * **interior** – inside / in–out of something
-  * **surface** – on / off / along a surface
+* **interior** – in / out of something
+* **surface** – on / off a surface
   * **under** – underneath or below
   * **time** – before / during / until
   * **state** – type, representation, condition
@@ -186,6 +186,7 @@ Columns:
 * `way` keyword (WAY axis)
 * `destination` keyword (DESTINATION axis)
 * `object` slot name (for `ob …` payloads)
+* aliases: `inside` → `in`, `along` → `on`
 
 Rows:
 
@@ -195,8 +196,8 @@ Rows:
 | context     | source       | way          | destination |
 |------------|--------------|-------------|-------------|
 | space      | from         | at          | to          |
-| interior   | outof        | inside      | into        |
-| surface    | offof        | along       | onto        |
+| interior   | outof        | in          | into        |
+| surface    | offof        | on          | onto        |
 | under      | fromunder    | under       | beneath     |
 | time       | since        | during      | until       |
 | state      | fromstate    | as          | become      |
@@ -220,8 +221,8 @@ The object-slot column is not used in the current parser; `ob` is taken as the p
 ```js
 export const axisContextToKeyword = {
   space:     { source: "from",      way: "at",          destination: "to" },
-  interior:  { source: "outof",     way: "inside",      destination: "into" },
-  surface:   { source: "offof",     way: "along",       destination: "onto" },
+  interior:  { source: "outof",     way: "in",          destination: "into" },
+  surface:   { source: "offof",     way: "on",          destination: "onto" },
   under:     { source: "fromunder", way: "under",       destination: "beneath" },
   time:      { source: "since",     way: "during",      destination: "until" },
   state:     { source: "fromstate", way: "as",          destination: "become" },
@@ -248,8 +249,8 @@ export const keywordToAxisContext = {
 
   // way
   at:          { axis: "way",    context: "space" },
-  inside:      { axis: "way",    context: "interior" },
-  along:       { axis: "way",    context: "surface" },
+  in:          { axis: "way",    context: "interior" },
+  on:          { axis: "way",    context: "surface" },
   under:       { axis: "way",    context: "under" },
   during:      { axis: "way",    context: "time" },
   as:          { axis: "way",    context: "state" },
