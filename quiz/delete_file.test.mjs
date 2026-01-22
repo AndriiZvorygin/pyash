@@ -34,3 +34,17 @@ test("delete recursive removes directory tree", async () => {
   assert.equal(res?.value?.filename, dir);
   await assert.rejects(() => fs.stat(dir));
 });
+
+test("delete file mode rejects directory", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "delete-"));
+  await assert.rejects(() => run(`be delete ob filename "${dir}" as wo file do`));
+});
+
+test("delete directory mode rejects file", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "delete-"));
+  const target = path.join(dir, "note.txt");
+  await fs.writeFile(target, "alpha", "utf8");
+  await assert.rejects(() => run(`be delete ob filename "${target}" as wo directory do`));
+});
