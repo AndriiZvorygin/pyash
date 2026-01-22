@@ -333,10 +333,50 @@ SHA-256 of the resolved absolute path.
 
 ---
 
-### 2.12 Reserved stubs (planned)
+### 2.12 `license` — ownership and permissions
+
+#### 2.12.1 Input forms
+
+Ownership:
+
+`be license ob filename "<path>" to name "<owner>" among name "<group>" do`
+
+Permissions (numeric):
+
+`be license ob filename "<path>" as num 755 do`
+
+Permissions (symbolic text):
+
+`be license ob filename "<path>" as text "g+w" do`
+
+Permissions (vector):
+
+`be license ob filename "<path>" as ve owner read write interpret flock read hollow hollow all read hollow hollow do`
+
+Scoped vector:
+
+`be license ob filename "<path>" as ve read write interpret for name owner do`
+
+#### 2.12.2 Behavior
+
+* Ownership form updates both owner and group.
+* Numeric and vector forms update permissions.
+* Symbolic text form MUST forward to `chmod`-style semantics.
+* Vector form with `owner/flock/all` markers applies each group.
+* Scoped vector applies only to the specified group.
+
+#### 2.12.3 Output form
+
+`ob filename "<path>" be license ya`
+
+#### 2.12.4 Errors
+
+* missing target or permission errors MUST emit `be error ya`
+* unknown owner/group names MUST emit `be error ya`
+
+---
+
+### 2.13 Reserved stubs (planned)
 
 * `be ecology ob text "<name>" do` (read env value)
 * `be ecology ob map "<name/value>" do` (set env values)
-* `be license ob filename "<path>" to text "<mode>" do`
-* `be license ob filename "<path>" to name "<owner>" among name "<group>" do`
-* `be license ob filename "<path>" as ve read write interpret do`

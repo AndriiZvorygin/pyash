@@ -36,6 +36,7 @@ import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
 import glance, { signatures as glanceSignatures } from "./glance.mjs";
 import here, { signatures as hereSignatures } from "./here.mjs";
+import license, { signatures as licenseSignatures } from "./license.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
@@ -119,6 +120,7 @@ export const builtInSignatures = [
   ...existsSignatures,
   ...glanceSignatures,
   ...hereSignatures,
+  ...licenseSignatures,
   ...renameSignatures,
   ...searchSignatures,
   ...touchSignatures,
