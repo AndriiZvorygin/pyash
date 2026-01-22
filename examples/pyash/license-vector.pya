@@ -1,2 +1,2 @@
 su name note ob text "Set permissions with vector words (owner rwx, group r--, all r--)." be write do
-be license ob filename "README.md" as ve owner read write interpret flock read hollow hollow all read hollow hollow do
+be license ob filename "README.md" as ve owner read write command flock read hollow hollow all read hollow hollow do

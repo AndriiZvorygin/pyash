@@ -74,7 +74,7 @@ function modeBitsToWords(mode) {
     const mask = (mode >> flag.shift) & 0b111;
     words.push((mask & 0b100) ? "read" : "hollow");
     words.push((mask & 0b010) ? "write" : "hollow");
-    words.push((mask & 0b001) ? "interpret" : "hollow");
+    words.push((mask & 0b001) ? "command" : "hollow");
   }
   return words;
 }
