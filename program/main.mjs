@@ -10,6 +10,7 @@ import { allRemember, forget, remember, doRemember } from "./remember/index.mjs"
 import { splitSentences, splitSentencesWithLines } from "./library/sentenceSplitter.mjs";
 import { setEntryModulePath } from "./bridge/modules.mjs";
 import { state } from "./bridge/state.mjs";
+import { sentenceToPyash } from "./beautiful.mjs";
 
 async function loadConfigFile({ configPath, interpretFn }) {
   try {
@@ -61,6 +62,15 @@ async function repl() {
   console.log("");
   console.log("Type a Pyash sentence to interpret it.\n");
 
+  const toResultSentence = (res, fallbackSentence) => {
+    if (res?.mood && res?.be) return res;
+    if (res?.sentence?.mood && res?.sentence?.be) return res.sentence;
+    const remembered = remember("result");
+    if (remembered?.mood && remembered?.be) return remembered;
+    if (fallbackSentence?.mood) return fallbackSentence;
+    return null;
+  };
+
   const processBlock = async (block) => {
     if (block.trim() === ".") return "end";
     const sentences = splitSentencesWithLines(block);
@@ -90,7 +100,12 @@ async function repl() {
         const sentence = parse(trimmed);
         state.currentSourceSentence = sentence;
         const result = await interpret(sentence);
-        console.log("→", JSON.stringify(result, null, 2));
+        const resultSentence = toResultSentence(result, sentence);
+        if (resultSentence?.mood) {
+          console.log("→", sentenceToPyash(resultSentence));
+        } else {
+          console.log("→ (no result)");
+        }
       } catch (err) {
         console.error("Error:", err.message);
       } finally {
