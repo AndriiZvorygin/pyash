@@ -31,7 +31,7 @@ test("license sets vector mode", { skip: skipWindows }, async () => {
   const file = path.join(dir, "note.txt");
   await fs.writeFile(file, "alpha", "utf8");
 
-  await run(`be license ob filename "${file}" as ve owner read write interpret flock read hollow hollow all read hollow hollow do`);
+  await run(`be license ob filename "${file}" as ve owner read write command flock read hollow hollow all read hollow hollow do`);
   const stats = await fs.stat(file);
   assert.equal(stats.mode & 0o777, 0o744);
 });

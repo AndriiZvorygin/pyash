@@ -69,7 +69,7 @@ function bitsFromTokens(tokens) {
   let bits = 0;
   if (tokens.includes("read")) bits |= 0b100;
   if (tokens.includes("write")) bits |= 0b010;
-  if (tokens.includes("interpret")) bits |= 0b001;
+  if (tokens.includes("command")) bits |= 0b001;
   return bits;
 }
 

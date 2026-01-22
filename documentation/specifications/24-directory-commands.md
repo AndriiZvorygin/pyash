@@ -316,8 +316,9 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 * MAY include: `license time`, `license`, `owner`, `flock`, `descriptive` (from `file`) if available.
 * `owner` and `flock` SHOULD be human-readable names when available; otherwise numeric IDs.
 * Permissions MAY be expressed as a vector of words using `license`:
-  `owner read write interpret flock read hollow hollow all read hollow hollow`
+  `owner read write command flock read hollow hollow all read hollow hollow`
   (example for `rw-r--r--`).
+* The permission word for executable bit is `command`.
 
 #### 2.11.3 Output form
 
@@ -351,11 +352,11 @@ Permissions (symbolic text):
 
 Permissions (vector):
 
-`be license ob filename "<path>" as ve owner read write interpret flock read hollow hollow all read hollow hollow do`
+`be license ob filename "<path>" as ve owner read write command flock read hollow hollow all read hollow hollow do`
 
 Scoped vector:
 
-`be license ob filename "<path>" as ve read write interpret for name owner do`
+`be license ob filename "<path>" as ve read write command for name owner do`
 
 #### 2.12.2 Behavior
 
