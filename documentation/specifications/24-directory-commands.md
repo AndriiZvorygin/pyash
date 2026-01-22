@@ -243,17 +243,55 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 ---
 
-### 2.8 Reserved stubs (planned)
+### 2.8 `exists` — check path existence
 
-These verbs are planned but not yet specified/implemented. They reserve naming
-so we can extend OS coverage without breaking compatibility.
+#### 2.8.1 Input form
 
-* `be rename ob filename "<src>" to filename "<dest>" do`
+`be exists ob filename "<path>" do`
+
+#### 2.8.2 Behavior
+
+* Returns `true` if `<path>` exists, otherwise `false`.
+* Does not require the path to be a file vs directory.
+
+#### 2.8.3 Output form
+
+`ob bool <true|false> be exists ya`
+
+#### 2.8.4 Errors
+
+* permission errors MUST emit `be error ya`
+
+---
+
+### 2.9 `rename` — move or rename path
+
+#### 2.9.1 Input form
+
+`be rename ob filename "<src>" to filename "<dest>" do`
+
+#### 2.9.2 Behavior
+
+* Renames or moves `<src>` to `<dest>`.
+* Intermediate directories for `<dest>` MUST be created if missing.
+* `<dest>` MUST be overwritten if it already exists.
+
+#### 2.9.3 Output form
+
+`ob filename "<dest>" be rename ya`
+
+#### 2.9.4 Errors
+
+* missing source or permission errors MUST emit `be error ya`
+
+---
+
+### 2.10 Reserved stubs (planned)
+
 * `be glance ob filename "<path>" do` (file metadata)
-* `be exists ob filename "<path>" do`
-* `be here do` (prints current working directory)
 * `be ecology ob text "<name>" do` (read env value)
 * `be ecology ob map "<name/value>" do` (set env values)
 * `be license ob filename "<path>" to text "<mode>" do`
 * `be license ob filename "<path>" to name "<owner>" among name "<group>" do`
 * `be license ob filename "<path>" as ve read write interpret do`
+* `be here do` (prints current working directory)
