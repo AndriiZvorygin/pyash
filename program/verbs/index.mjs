@@ -31,6 +31,7 @@ import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
 import begin, { signatures as beginSignatures } from "./begin.mjs";
 import restart, { signatures as restartSignatures } from "./restart.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
+import copy, { signatures as copySignatures } from "./copy.mjs";
 
 export {
   plus,
@@ -65,7 +66,8 @@ export {
   discharge,
   begin,
   restart,
-  go
+  go,
+  copy
 };
 
 export const builtInSignatures = [
@@ -102,4 +104,5 @@ export const builtInSignatures = [
   ...beginSignatures,
   ...restartSignatures,
   ...goSignatures,
+  ...copySignatures,
 ];

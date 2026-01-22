@@ -108,3 +108,27 @@ Walk the repo recursively:
 
 * missing directory or permission errors MUST emit `be error ya`
 * non-directory targets MUST emit `be error ya`
+
+---
+
+### 2.3 `copy` — file copy
+
+#### 2.3.1 Input form
+
+`be copy ob filename "<src>" to filename "<dest>" do`
+
+#### 2.3.2 Behavior
+
+* Copies a file byte-for-byte from `<src>` to `<dest>`.
+* Intermediate directories for `<dest>` MUST be created if missing.
+* Existing destination files MUST be overwritten.
+* Implementations MUST NOT mutate `<src>`.
+
+#### 2.3.3 Output form
+
+`ob filename "<dest>" be copy ya`
+
+#### 2.3.4 Errors
+
+* missing source or permission errors MUST emit `be error ya`
+* directory sources MUST emit `be error ya`
