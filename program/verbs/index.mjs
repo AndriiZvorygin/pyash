@@ -34,6 +34,7 @@ import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
+import here, { signatures as hereSignatures } from "./here.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
@@ -115,6 +116,7 @@ export const builtInSignatures = [
   ...copySignatures,
   ...directorySignatures,
   ...existsSignatures,
+  ...hereSignatures,
   ...renameSignatures,
   ...searchSignatures,
   ...touchSignatures,
