@@ -6,7 +6,7 @@ import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "./understand/index.mjs";
 import { interpret } from "./bridge/index.mjs";
-import { allRemember, forget } from "./remember/index.mjs";
+import { allRemember, forget, remember, doRemember } from "./remember/index.mjs";
 import { splitSentences, splitSentencesWithLines } from "./library/sentenceSplitter.mjs";
 import { setEntryModulePath } from "./bridge/modules.mjs";
 import { state } from "./bridge/state.mjs";
@@ -46,6 +46,10 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
 async function repl() {
   setEntryModulePath(process.cwd());
   await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  const runRoot = path.resolve(process.cwd());
+  if (!remember("run root")) {
+    doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
+  }
   const rl = readline.createInterface({ input, output });
 
   console.log("Pyash REPL");

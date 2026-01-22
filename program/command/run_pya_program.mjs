@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { parse } from "../understand/index.mjs";
 import { interpret } from "../bridge/index.mjs";
-import { forget, remember } from "../remember/index.mjs";
+import { forget, remember, doRemember } from "../remember/index.mjs";
 import { builtInSignatures } from "../verbs/index.mjs";
 import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
@@ -202,12 +202,15 @@ async function main() {
     registerSignatureHandler(sig);
   }
   await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
+  if (!remember("run root")) {
+    doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
+  }
   const sentences = splitSentencesWithLines(text);
   const outputs = [];
   const runId = runIdFlag || `run-${Date.now()}`;
   const timeZone = resolveTimeZone(remember);
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
-  const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   let toolCounter = 0;
   const pushNewspaper = (line) => {

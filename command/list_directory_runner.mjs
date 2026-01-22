@@ -1,4 +1,5 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 
 function parseArgs(argv) {
@@ -54,7 +55,7 @@ async function walkDir(root, options) {
   const includeDirs = options.filter === "dir" || options.filter === "all";
 
   async function visit(current, relBase) {
-    const dirents = await fs.readdir(current, { withFileTypes: true });
+    const dirents = await fsPromises.readdir(current, { withFileTypes: true });
     for (const dirent of dirents) {
       if (!options.hidden && dirent.name.startsWith(".")) continue;
       const fullPath = path.join(current, dirent.name);
@@ -79,7 +80,7 @@ async function main() {
   const options = parseArgs(process.argv);
   const root = options.dir || ".";
   const entries = await walkDir(root, options);
-  process.stdout.write(JSON.stringify(entries));
+  fs.writeFileSync(1, JSON.stringify(entries));
 }
 
 main().catch((err) => {
