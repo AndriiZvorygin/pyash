@@ -323,6 +323,38 @@ export async function interpret(sentence) {
   }
 
   // --- Interrogative ---
+  if (mood === "que" && sentence?.be === "ecology") {
+    const querySentence = { ...sentence, mood: "do" };
+    const result = await handleImperative({
+      sentence: querySentence,
+      state,
+      memory: {
+        remember,
+        doRemember,
+        allRemember,
+        pushMemoryContext,
+        popMemoryContext,
+        getDefinition,
+        getDefinitionEntries,
+        getDefinitionEntryBySignature
+      },
+      recordSandpitTrace,
+      getDefinitionEntry,
+      interpret
+    });
+    if (result?.mood) return sentenceToPyash(result);
+    if (result?.ob !== undefined) {
+      const outSentence = {
+        mood: "ya",
+        su: sentence?.su ?? { name: "result" },
+        ob: result.ob,
+        be: result.be ?? "ecology"
+      };
+      return sentenceToPyash(outSentence);
+    }
+    return null;
+  }
+
   if (mood === "que") {
     const fact = remember(su?.name);
     if (!fact) return null;

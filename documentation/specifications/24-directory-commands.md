@@ -376,7 +376,52 @@ Scoped vector:
 
 ---
 
-### 2.13 Reserved stubs (planned)
+### 2.13 `ecology` — environment variables
 
-* `be ecology ob text "<name>" do` (read env value)
-* `be ecology ob map "<name/value>" do` (set env values)
+#### 2.13.1 Input forms
+
+Read single value:
+
+`su name "<key>" be ecology que`
+
+Set single value:
+
+`su name "<key>" be ecology ob text "<value>" do`
+
+Set numeric or boolean values:
+
+`su name "<key>" be ecology ob num 12 do`  
+`su name "<key>" be ecology ob bool truth do`
+
+Read full environment:
+
+`be ecology do`
+
+#### 2.13.2 Behavior
+
+* `su name "<key>" be ecology que` returns a `be ecology ya` sentence for the current value.
+* Setting forms update the environment variable before returning.
+* `be ecology do` returns a map def of all environment variables.
+
+#### 2.13.3 Output forms
+
+Single value:
+
+`su name "<key>" ob text "<value>" be ecology ya`
+
+Missing values:
+
+`su name "<key>" ob hollow be ecology ya`
+
+Full environment:
+
+`ob name "ecology env" be ecology ya`  
+with `su name ecology env be map def` describing all key/value pairs.
+
+#### 2.13.4 Errors
+
+* missing key or value MUST emit `be error ya`
+
+---
+
+### 2.14 Reserved stubs (planned)

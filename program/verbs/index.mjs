@@ -34,6 +34,7 @@ import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
+import ecology, { signatures as ecologySignatures } from "./ecology.mjs";
 import glance, { signatures as glanceSignatures } from "./glance.mjs";
 import here, { signatures as hereSignatures } from "./here.mjs";
 import license, { signatures as licenseSignatures } from "./license.mjs";
@@ -118,6 +119,7 @@ export const builtInSignatures = [
   ...copySignatures,
   ...directorySignatures,
   ...existsSignatures,
+  ...ecologySignatures,
   ...glanceSignatures,
   ...hereSignatures,
   ...licenseSignatures,
