@@ -240,3 +240,20 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 * missing pattern or target MUST emit `be error ya`
 * unreadable files or permission errors MUST emit `be error ya`
+
+---
+
+### 2.8 Reserved stubs (planned)
+
+These verbs are planned but not yet specified/implemented. They reserve naming
+so we can extend OS coverage without breaking compatibility.
+
+* `be rename ob filename "<src>" to filename "<dest>" do`
+* `be glance ob filename "<path>" do` (file metadata)
+* `be exists ob filename "<path>" do`
+* `be here do` (prints current working directory)
+* `be ecology ob text "<name>" do` (read env value)
+* `be ecology ob map "<name/value>" do` (set env values)
+* `be license ob filename "<path>" to text "<mode>" do`
+* `be license ob filename "<path>" to name "<owner>" among name "<group>" do`
+* `be license ob filename "<path>" as ve read write interpret do`
