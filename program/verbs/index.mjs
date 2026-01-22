@@ -35,9 +35,12 @@ import copy, { signatures as copySignatures } from "./copy.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
 import ecology, { signatures as ecologySignatures } from "./ecology.mjs";
+import andVerb, { signatures as andSignatures } from "./and.mjs";
 import glance, { signatures as glanceSignatures } from "./glance.mjs";
 import here, { signatures as hereSignatures } from "./here.mjs";
 import license, { signatures as licenseSignatures } from "./license.mjs";
+import notVerb, { signatures as notSignatures } from "./not.mjs";
+import orVerb, { signatures as orSignatures } from "./or.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
@@ -120,9 +123,12 @@ export const builtInSignatures = [
   ...directorySignatures,
   ...existsSignatures,
   ...ecologySignatures,
+  ...andSignatures,
   ...glanceSignatures,
   ...hereSignatures,
   ...licenseSignatures,
+  ...notSignatures,
+  ...orSignatures,
   ...renameSignatures,
   ...searchSignatures,
   ...touchSignatures,
