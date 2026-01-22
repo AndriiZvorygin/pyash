@@ -170,12 +170,16 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 `be delete ob filename "<path>" do`
 
+`be delete ob filename "<path>" as wo file do`  
+`be delete ob filename "<path>" as wo directory do`  
 `be delete ob filename "<path>" as wo recursive do`
 
 #### 2.5.2 Behavior
 
 * Deletes a file at `<path>`.
 * Deletes an empty directory at `<path>`.
+* `as wo file` requires `<path>` to be a file.
+* `as wo directory` requires `<path>` to be a directory.
 * For non-empty directories, `as wo recursive` MUST be provided.
 
 #### 2.5.3 Output form
@@ -186,3 +190,5 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 * missing file or permission errors MUST emit `be error ya`
 * non-empty directory targets MUST emit `be error ya` unless `as wo recursive` is provided
+* `as wo file` on a directory MUST emit `be error ya`
+* `as wo directory` on a file MUST emit `be error ya`
