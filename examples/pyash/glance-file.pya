@@ -1,0 +1,3 @@
+su name note ob text "Glance at README.md metadata." be write do
+be glance ob filename "README.md" do
+ob name result be write do

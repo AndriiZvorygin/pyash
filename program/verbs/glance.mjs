@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 
-import { remember } from "../remember/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
@@ -39,6 +40,11 @@ function modeBitsToWords(mode) {
   return words;
 }
 
+function mapNameForPath(resolved) {
+  const hash = crypto.createHash("sha256").update(String(resolved)).digest("hex").slice(0, 8);
+  return `glance ${hash}`;
+}
+
 export async function glance(sentence, { remember: rememberFn = remember } = {}) {
   const target = resolveFilename(sentence?.ob, { rememberFn });
   if (!target) {
@@ -64,24 +70,26 @@ export async function glance(sentence, { remember: rememberFn = remember } = {})
   const kind = stats?.isDirectory?.() ? "directory" : "file";
   const permissions = modeBitsToWords(stats?.mode);
   const map = {
-    magnitude: stats.size,
-    "improve time": toIsoDate(stats.mtime),
-    sort: kind
+    magnitude: { num: stats.size },
+    "improve time": { text: toIsoDate(stats.mtime) },
+    sort: { text: kind }
   };
   if (permissions) {
-    map.license = { ve: { values: permissions } };
+    map.license = { ve: { type: "text", values: permissions } };
   }
   if (typeof stats.uid === "number") {
-    map.owner = stats.uid;
+    map.owner = { num: stats.uid };
   }
   if (typeof stats.gid === "number") {
-    map.flock = stats.gid;
+    map.flock = { num: stats.gid };
   }
   const ctime = toIsoDate(stats.ctime);
   if (ctime) {
-    map["license time"] = ctime;
+    map["license time"] = { text: ctime };
   }
-  return { ob: { map }, be: "glance" };
+  const mapName = mapNameForPath(resolved);
+  doRemember({ mood: "ya", su: { name: mapName }, be: "map", ob: { map } });
+  return { ob: { name: mapName }, be: "glance" };
 }
 
 export default glance;

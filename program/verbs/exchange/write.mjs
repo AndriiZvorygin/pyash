@@ -151,6 +151,19 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
       const chain = mapDefChainFromName(ob.name, { rememberFn });
       return chain || sentenceToPyash(fact);
     }
+    if (fact?.ob?.name && rememberFn) {
+      const refFact = rememberFn(fact.ob.name);
+      if (refFact?.be === "json map" || refFact?.be === "map" || refFact?.be === "csv map") {
+        const chain = mapDefChainFromName(fact.ob.name, { rememberFn });
+        return chain || sentenceToPyash(refFact);
+      }
+      if (refFact?.ob?.la) return sentenceToPyash(refFact);
+      if (refFact?.ob?.ve?.values) return sentenceToPyash(refFact);
+      if (refFact?.ob?.text !== undefined) return refFact.ob.text;
+      if (refFact?.ob?.num !== undefined) return refFact.ob.num;
+      if (refFact?.ob?.boolean !== undefined) return refFact.ob.boolean ? "truth" : "lie";
+      if (refFact?.ob?.hollow) return "null";
+    }
     if (fact?.ob?.la) return sentenceToPyash(fact);
     if (fact?.ob?.ve?.values) return sentenceToPyash(fact);
     if (fact?.ob?.text !== undefined) return fact.ob.text;
