@@ -286,7 +286,23 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 ---
 
-### 2.10 Reserved stubs (planned)
+### 2.10 `here` — current directory
+
+#### 2.10.1 Input form
+
+`be here do`
+
+#### 2.10.2 Behavior
+
+* Returns the current working directory for the run.
+
+#### 2.10.3 Output form
+
+`ob filename "<cwd>" be here ya`
+
+---
+
+### 2.11 Reserved stubs (planned)
 
 * `be glance ob filename "<path>" do` (file metadata)
 * `be ecology ob text "<name>" do` (read env value)
