@@ -1,0 +1,3 @@
+su name note ob text "Set a demo environment variable." be write do
+su name PYA_ECOLOGY_DEMO be ecology ob text "alpha" do
+su name PYA_ECOLOGY_DEMO be ecology que
