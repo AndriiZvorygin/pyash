@@ -1,0 +1,3 @@
+su name note ob text "Check that two paths exist." be write do
+be and ob la be exists ob filename "README.md" do ko with la be exists ob filename "package.json" do ko do
+ob name result be write do
