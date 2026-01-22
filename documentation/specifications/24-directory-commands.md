@@ -139,3 +139,25 @@ Walk the repo recursively:
 
 `as wo recursive` is reserved for future directory copy behavior (e.g. `rsync -av`).
 Current implementations MAY treat it as unsupported and return `be error ya`.
+
+---
+
+### 2.4 `touch` — create or update file
+
+#### 2.4.1 Input form
+
+`be touch ob filename "<path>" do`
+
+#### 2.4.2 Behavior
+
+* If the file does not exist, create an empty file.
+* If the file exists, update its modified time.
+* Intermediate directories MUST be created if missing.
+
+#### 2.4.3 Output form
+
+`ob filename "<path>" be touch ya`
+
+#### 2.4.4 Errors
+
+* permission errors MUST emit `be error ya`
