@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
@@ -11,36 +12,21 @@ async function run(line) {
   return interpret(sentence);
 }
 
-async function withCommandResponse(value, fn) {
-  process.env.PYA_COMMAND_RESPONSE = JSON.stringify(value);
-  try {
-    await fn();
-  } finally {
-    delete process.env.PYA_COMMAND_RESPONSE;
-  }
-}
+test("list supports file/dir/recursive signatures", async () => {
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "list-"));
+  await fs.mkdir(path.join(dir, "docs"));
+  await fs.writeFile(path.join(dir, "a.txt"), "a", "utf8");
+  await fs.writeFile(path.join(dir, "b.txt"), "b", "utf8");
 
-test("list module supports file/dir/recursive signatures", async () => {
-  const modulePath = path.join(process.cwd(), "module", "list_directory.pya");
+  forget();
+  const fileRes = await run(`from filename "${dir}" be list as wo file do`);
+  assert.deepEqual(fileRes?.value?.ve?.values, ["a.txt", "b.txt"]);
 
-  await withCommandResponse(["a.txt"], async () => {
-    forget();
-    await run(`from filename "${modulePath}" ob name list to name list be import do`);
-    const res = await run("be list as wo file do");
-    assert.deepEqual(res?.result?.ve?.values, ["a.txt"]);
-  });
+  forget();
+  const dirRes = await run(`from filename "${dir}" be list as wo dir do`);
+  assert.deepEqual(dirRes?.value?.ve?.values, ["docs"]);
 
-  await withCommandResponse(["docs"], async () => {
-    forget();
-    await run(`from filename "${modulePath}" ob name list to name list be import do`);
-    const res = await run("be list as wo dir do");
-    assert.deepEqual(res?.result?.ve?.values, ["docs"]);
-  });
-
-  await withCommandResponse(["a.txt", "b.txt"], async () => {
-    forget();
-    await run(`from filename "${modulePath}" ob name list to name list be import do`);
-    const res = await run("be list as wo recursive do");
-    assert.deepEqual(res?.result?.ve?.values, ["a.txt", "b.txt"]);
-  });
+  forget();
+  const recRes = await run(`from filename "${dir}" be list as wo recursive do`);
+  assert.deepEqual(recRes?.value?.ve?.values, ["a.txt", "b.txt", "docs"]);
 });

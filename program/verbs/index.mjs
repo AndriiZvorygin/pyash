@@ -38,6 +38,7 @@ import ecology, { signatures as ecologySignatures } from "./ecology.mjs";
 import andVerb, { signatures as andSignatures } from "./and.mjs";
 import glance, { signatures as glanceSignatures } from "./glance.mjs";
 import here, { signatures as hereSignatures } from "./here.mjs";
+import list, { signatures as listSignatures } from "./list.mjs";
 import license, { signatures as licenseSignatures } from "./license.mjs";
 import notVerb, { signatures as notSignatures } from "./not.mjs";
 import orVerb, { signatures as orSignatures } from "./or.mjs";
@@ -126,6 +127,7 @@ export const builtInSignatures = [
   ...andSignatures,
   ...glanceSignatures,
   ...hereSignatures,
+  ...listSignatures,
   ...licenseSignatures,
   ...notSignatures,
   ...orSignatures,
