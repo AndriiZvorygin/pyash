@@ -1,0 +1,2 @@
+su name note ob text "Set permissions to 0644 with numeric mode." be write do
+be license ob filename "README.md" as num 644 do
