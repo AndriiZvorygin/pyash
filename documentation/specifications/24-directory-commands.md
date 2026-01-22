@@ -319,7 +319,7 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 #### 2.11.3 Output form
 
-`ob map "<metadata>" be glance ya`
+`ob name "<metadata>" be glance ya`
 
 Where `<metadata>` is a `be map def` sentence.
 
