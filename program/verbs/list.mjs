@@ -1,0 +1,158 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import { remember } from "../remember/index.mjs";
+import { throwErrorSentence } from "../error.mjs";
+
+function resolveFilename(value, { rememberFn } = {}) {
+  if (!value) return "";
+  if (typeof value.filename === "string") return value.filename;
+  if (typeof value.text === "string") return value.text;
+  if (value.name && rememberFn) {
+    const fact = rememberFn(value.name);
+    if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
+  return "";
+}
+
+function asciiCompare(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+function normalizePath(value) {
+  return value.split(path.sep).join("/");
+}
+
+async function walkDir(root, options) {
+  const entries = [];
+  const includeFiles = options.filter === "file" || options.filter === "all";
+  const includeDirs = options.filter === "dir" || options.filter === "all";
+
+  async function visit(current, relBase) {
+    const dirents = await fs.readdir(current, { withFileTypes: true });
+    for (const dirent of dirents) {
+      if (!options.hidden && dirent.name.startsWith(".")) continue;
+      const fullPath = path.join(current, dirent.name);
+      const relPath = relBase ? path.join(relBase, dirent.name) : dirent.name;
+      const outputPath = options.recursive ? normalizePath(relPath) : dirent.name;
+      if (dirent.isDirectory()) {
+        if (includeDirs) entries.push(outputPath);
+        if (options.recursive) {
+          await visit(fullPath, relPath);
+        }
+        continue;
+      }
+      if (includeFiles) entries.push(outputPath);
+    }
+  }
+
+  await visit(root, "");
+  return entries.sort(asciiCompare);
+}
+
+function normalizeFilter(value) {
+  const raw = String(value ?? "").toLowerCase();
+  if (raw === "file" || raw === "files") return "file";
+  if (raw === "dir" || raw === "dirs" || raw === "directory") return "dir";
+  return "all";
+}
+
+export async function list(sentence, { remember: rememberFn = remember } = {}) {
+  const rootRaw = resolveFilename(sentence?.from, { rememberFn }) || ".";
+  const root = path.resolve(String(rootRaw));
+  const hiddenToken = sentence?.with?.name ?? sentence?.with?.text ?? sentence?.with?.wo;
+  const hidden = hiddenToken === "hidden";
+  const mode = sentence?.as?.wo;
+  const recursive = mode === "recursive";
+  const filter = recursive ? "all" : normalizeFilter(mode);
+
+  let stats;
+  try {
+    stats = await fs.stat(root);
+  } catch (err) {
+    throwErrorSentence({
+      name: "list defective",
+      message: `list defective: ${root}`,
+      from: { name: "list" },
+      raw: { error: err?.message }
+    });
+  }
+  if (!stats?.isDirectory?.()) {
+    throwErrorSentence({
+      name: "list defective",
+      message: `list defective: ${root}`,
+      from: { name: "list" },
+      raw: { root }
+    });
+  }
+
+  let entries;
+  try {
+    entries = await walkDir(root, { filter, hidden, recursive });
+  } catch (err) {
+    throwErrorSentence({
+      name: "list defective",
+      message: `list defective: ${root}`,
+      from: { name: "list" },
+      raw: { error: err?.message }
+    });
+  }
+
+  if (!entries.length) {
+    return { ob: { ve: { type: "hollow", values: [] } }, be: "list" };
+  }
+  return { ob: { ve: { type: "text", values: entries } }, be: "list" };
+}
+
+export default list;
+
+export const signatures = [
+  { signatureWords: ["be", "list"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file", "with", "name", "hidden", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir", "with", "name", "hidden", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all", "with", "name", "hidden", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive", "with", "name", "hidden", "from", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "file", "with", "name", "hidden", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "dir", "with", "name", "hidden", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "all", "with", "name", "hidden", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "as", "wo", "recursive", "with", "name", "hidden", "from", "name", "filename"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "file"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "dir"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "all"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "recursive"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "file", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "dir", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "all", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "filename", "as", "wo", "recursive", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "file"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "dir"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "all"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "recursive"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "file", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "dir", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "all", "with", "name", "hidden"], handler: list },
+  { signatureWords: ["be", "list", "from", "name", "filename", "as", "wo", "recursive", "with", "name", "hidden"], handler: list }
+];
