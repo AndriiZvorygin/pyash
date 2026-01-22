@@ -1,0 +1,3 @@
+su name note ob text "Invert a boolean result." be write do
+be not ob la be exists ob filename "README.md" do ko do
+ob name result be write do

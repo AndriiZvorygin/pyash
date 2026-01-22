@@ -1,0 +1,3 @@
+su name note ob text "Check that at least one path exists." be write do
+be or ob la be exists ob filename "README.md" do ko with la be exists ob filename "missing.txt" do ko do
+ob name result be write do
