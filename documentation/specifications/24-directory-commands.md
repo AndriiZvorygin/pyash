@@ -302,9 +302,32 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 
 ---
 
-### 2.11 Reserved stubs (planned)
+### 2.11 `glance` — file metadata
 
-* `be glance ob filename "<path>" do` (file metadata)
+#### 2.11.1 Input form
+
+`be glance ob filename "<path>" do`
+
+#### 2.11.2 Behavior
+
+* Returns file metadata for `<path>`.
+* MUST include: `magnitude` (bytes), `improve time` (ISO 8601), `sort` (`file` or `directory`).
+* MAY include: `license time`, `license`, `owner`, `flock`, `descriptive` (from file command) if available.
+
+#### 2.11.3 Output form
+
+`ob map "<metadata>" be glance ya`
+
+Where `<metadata>` is a `be map def` sentence.
+
+#### 2.11.4 Errors
+
+* missing path or permission errors MUST emit `be error ya`
+
+---
+
+### 2.12 Reserved stubs (planned)
+
 * `be ecology ob text "<name>" do` (read env value)
 * `be ecology ob map "<name/value>" do` (set env values)
 * `be license ob filename "<path>" to text "<mode>" do`
