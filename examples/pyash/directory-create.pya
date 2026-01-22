@@ -1,0 +1,2 @@
+su name note ob text "Create a nested directory under /tmp." be write do
+be directory ob filename "/tmp/pyash-directory-demo/nested" do
