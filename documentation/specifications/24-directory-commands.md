@@ -123,6 +123,8 @@ Walk the repo recursively:
 * Intermediate directories for `<dest>` MUST be created if missing.
 * Existing destination files MUST be overwritten.
 * Implementations MUST NOT mutate `<src>`.
+* Future backend note: when available, implementations MAY use `rsync` (or equivalent)
+  for large copies or network paths.
 
 #### 2.3.3 Output form
 
@@ -132,3 +134,8 @@ Walk the repo recursively:
 
 * missing source or permission errors MUST emit `be error ya`
 * directory sources MUST emit `be error ya`
+
+#### 2.3.5 Recursive copy (reserved)
+
+`as wo recursive` is reserved for future directory copy behavior (e.g. `rsync -av`).
+Current implementations MAY treat it as unsupported and return `be error ya`.
