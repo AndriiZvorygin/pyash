@@ -33,6 +33,7 @@ import restart, { signatures as restartSignatures } from "./restart.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
+import del, { signatures as deleteSignatures } from "./delete.mjs";
 
 export {
   plus,
@@ -69,7 +70,8 @@ export {
   restart,
   go,
   copy,
-  touch
+  touch,
+  del
 };
 
 export const builtInSignatures = [
@@ -108,4 +110,5 @@ export const builtInSignatures = [
   ...goSignatures,
   ...copySignatures,
   ...touchSignatures,
+  ...deleteSignatures,
 ];

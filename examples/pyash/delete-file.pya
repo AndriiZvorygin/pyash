@@ -1,0 +1,4 @@
+su name prompt ob text "Delete artifacts/delete/example.txt." be write do
+be delete ob filename "artifacts/delete/example.txt" do
+su name note ob text "Delete artifacts/delete/tree recursively." be write do
+be delete ob filename "artifacts/delete" as wo recursive do

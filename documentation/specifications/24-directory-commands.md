@@ -161,3 +161,28 @@ Current implementations MAY treat it as unsupported and return `be error ya`.
 #### 2.4.4 Errors
 
 * permission errors MUST emit `be error ya`
+
+---
+
+### 2.5 `delete` — remove file or directory
+
+#### 2.5.1 Input form
+
+`be delete ob filename "<path>" do`
+
+`be delete ob filename "<path>" as wo recursive do`
+
+#### 2.5.2 Behavior
+
+* Deletes a file at `<path>`.
+* Deletes an empty directory at `<path>`.
+* For non-empty directories, `as wo recursive` MUST be provided.
+
+#### 2.5.3 Output form
+
+`ob filename "<path>" be delete ya`
+
+#### 2.5.4 Errors
+
+* missing file or permission errors MUST emit `be error ya`
+* non-empty directory targets MUST emit `be error ya` unless `as wo recursive` is provided
