@@ -21,7 +21,9 @@ test("glance returns metadata map", async () => {
   const res = await run(`be glance ob filename "${file}" do`);
   const name = res?.value?.name;
   assert.ok(name);
-  const map = remember(name)?.ob?.map ?? {};
+  const fact = remember(name);
+  assert.equal(fact?.ob?.filename, path.resolve(file));
+  const map = fact?.ob?.map ?? {};
   assert.equal(map.magnitude?.num, 5);
   assert.equal(map.sort?.text, "file");
   assert.ok(typeof map["improve time"]?.text === "string");
