@@ -137,7 +137,7 @@ export async function glance(sentence, { remember: rememberFn = remember } = {})
     map.descriptive = { text: descriptive };
   }
   const mapName = mapNameForPath(resolved);
-  doRemember({ mood: "ya", su: { name: mapName }, be: "map", ob: { map } });
+  doRemember({ mood: "ya", su: { name: mapName }, be: "map", ob: { map, filename: resolved } });
   return { ob: { name: mapName }, be: "glance" };
 }
 

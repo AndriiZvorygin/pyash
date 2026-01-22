@@ -139,7 +139,14 @@ export function mapSentenceToPyash(sentence) {
   const kind = sentence?.be === "map"
     ? "map"
     : (sentence?.be === "csv map" ? "csv map" : "json map");
-  const lines = [`su name ${name} be ${kind} def`];
+  const headerParts = [`su name ${name}`];
+  if (sentence?.ob?.filename) {
+    headerParts.push(`ob ${npToPyash({ filename: sentence.ob.filename })}`);
+  } else if (sentence?.ob?.text) {
+    headerParts.push(`ob ${npToPyash({ text: sentence.ob.text })}`);
+  }
+  headerParts.push(`be ${kind} def`);
+  const lines = [headerParts.join(" ")];
   const entries = sentence?.ob?.map ?? {};
   let orderedKeys = Object.keys(entries).sort(compareUtf8);
   if (kind === "csv map") {
