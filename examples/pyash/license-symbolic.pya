@@ -1,0 +1,2 @@
+su name note ob text "Set permissions with symbolic chmod text." be write do
+be license ob filename "README.md" as text "g+w" do
