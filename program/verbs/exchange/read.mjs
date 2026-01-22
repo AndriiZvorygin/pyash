@@ -26,6 +26,10 @@ export async function read_from_filename({ from }) {
   return { ob: result.ob, be: "text" };
 }
 
+export async function read_ob_filename(sentence) {
+  return read_from_filename({ from: sentence?.ob });
+}
+
 function parseAllGenitive(genitive) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
   if (chainArr.length < 2) return null;
@@ -93,6 +97,7 @@ export default async function read({ from }) {
 
 export const signatures = [
   { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "ob", "filename"], handler: read_ob_filename },
   { signatureWords: ["be", "read", "ob", "all"], handler: read_from_json_map_all },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name"], handler: read_fromstate_json },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name", "num"], handler: read_fromstate_json },
