@@ -158,6 +158,7 @@ async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
+  const showResult = args.includes("--result");
   const useNewspaper = args.includes("--newspaper");
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
@@ -167,7 +168,7 @@ async function main() {
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--gross" || arg === "--full" || arg === "--newspaper" || arg === "--again" || arg === "--no-checkpoint") continue;
+    if (arg === "--gross" || arg === "--full" || arg === "--result" || arg === "--newspaper" || arg === "--again" || arg === "--no-checkpoint") continue;
     if (arg === "--run-id" || arg === "--run-time" || arg === "--refinery") {
       i += 1;
       continue;
@@ -179,7 +180,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--newspaper] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -367,6 +368,10 @@ async function main() {
 
   if (gross) {
     console.log(JSON.stringify({ outputs, result }, null, 2));
+    return;
+  }
+
+  if (!showResult && !full) {
     return;
   }
 
