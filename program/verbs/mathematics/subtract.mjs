@@ -1,3 +1,54 @@
+const DURATION_UNITS = {
+  second: 1000,
+  minute: 60 * 1000,
+  hour: 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000
+};
+
+function resolveDateSlot(slot, remember) {
+  if (!slot) return null;
+  if (typeof slot.date === "string") return slot.date;
+  if (typeof slot.name === "string" && remember) {
+    const fact = remember(slot.name);
+    if (typeof fact?.ob?.date === "string") return fact.ob.date;
+    if (typeof fact?.date === "string") return fact.date;
+  }
+  return null;
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value === "now") return new Date();
+  if (value === "today") {
+    const now = new Date();
+    const local = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return local;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new Error("subtract: date defective");
+  return parsed;
+}
+
+function extractDuration(ob) {
+  if (!ob || typeof ob !== "object") return null;
+  for (const unit of Object.keys(DURATION_UNITS)) {
+    if (ob[unit] !== undefined) {
+      const raw = Number(ob[unit]);
+      if (Number.isNaN(raw)) throw new Error("subtract: duration must be numeric");
+      return { unit, value: raw };
+    }
+  }
+  return null;
+}
+
+function addDurationToDate(dateValue, duration, direction = 1) {
+  const base = parseDateValue(dateValue);
+  if (!base) throw new Error("subtract: date target required");
+  const ms = DURATION_UNITS[duration.unit] * duration.value * direction;
+  return new Date(base.getTime() + ms).toISOString();
+}
+
 function detectValue(v, remember) {
   if (v == null) return 0;
   if (typeof v === "number") return v;
@@ -11,6 +62,13 @@ function detectValue(v, remember) {
 }
 
 export async function subtract_by_num_from_name_num_to_name_num(sentence, { remember }) {
+  const duration = extractDuration(sentence.ob);
+  if (duration) {
+    const dateValue = resolveDateSlot(sentence.from, remember);
+    const date = addDurationToDate(dateValue, duration, -1);
+    return { ob: { date }, be: "date" };
+  }
+
   const targetName = sentence?.to?.name || sentence?.from?.name;
   if (!targetName) throw new Error("subtract: target name required (to name ... or from name ...)");
 
@@ -42,6 +100,86 @@ export async function subtract_obj_num_from_name_vec_at_num(sentence, { remember
 export const subtract = subtract_by_num_from_name_num_to_name_num;
 
 export const signatures = [
+  {
+    signatureWords: ["be", "subtract", "ob", "second", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "second"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "minute", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "minute"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "hour", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "hour"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "day", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "day"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "week", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "week"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "second", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "second"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "minute", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "minute"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "hour", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "hour"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "day", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "day"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "week", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "week"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
   {
     signatureWords: ["be", "subtract", "by", "num", "from", "name", "num", "to", "name", "num"],
     handler: subtract_by_num_from_name_num_to_name_num

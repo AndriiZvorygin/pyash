@@ -123,6 +123,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
   }
   if (typeof ob.text === "string") return ob.text;
   if (typeof ob.num === "number") return ob.num;
+  if (typeof ob.date === "string") return ob.date;
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
   if (ob.hollow) return "null";
   if (ob.la) return `la ${sentenceToPyash(ob.la)} ko`;
@@ -161,6 +162,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
       if (refFact?.ob?.ve?.values) return sentenceToPyash(refFact);
       if (refFact?.ob?.text !== undefined) return refFact.ob.text;
       if (refFact?.ob?.num !== undefined) return refFact.ob.num;
+      if (refFact?.ob?.date !== undefined) return refFact.ob.date;
       if (refFact?.ob?.boolean !== undefined) return refFact.ob.boolean ? "truth" : "lie";
       if (refFact?.ob?.hollow) return "null";
     }
@@ -168,6 +170,7 @@ export function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {})
     if (fact?.ob?.ve?.values) return sentenceToPyash(fact);
     if (fact?.ob?.text !== undefined) return fact.ob.text;
     if (fact?.ob?.num !== undefined) return fact.ob.num;
+    if (fact?.ob?.date !== undefined) return fact.ob.date;
     if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
     if (fact?.ob?.hollow) return "null";
   }
@@ -422,10 +425,12 @@ export default async function write(sentence, { remember: rememberFn = remember 
 export const signatures = [
   { signatureWords: ["be", "write", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "num"], handler: write },
+  { signatureWords: ["be", "write", "ob", "date"], handler: write },
   { signatureWords: ["be", "write", "ob", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "hollow"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "text"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "num"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "date"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "hollow"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "map"], handler: write },
@@ -471,10 +476,12 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "text", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "num", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "ob", "date", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "text", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "num", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "ob", "name", "date", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "name", "map", "to", "filename"], handler: write },

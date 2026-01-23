@@ -71,6 +71,12 @@ function caseTypeWords(value) {
     return literal ? ["wo", literal] : ["wo"];
   }
   if (value.num !== undefined) words.push("num");
+  if (value.date !== undefined) words.push("date");
+  if (value.second !== undefined) words.push("second");
+  if (value.minute !== undefined) words.push("minute");
+  if (value.hour !== undefined) words.push("hour");
+  if (value.day !== undefined) words.push("day");
+  if (value.week !== undefined) words.push("week");
   if (value.boolean !== undefined) words.push("bool");
   if (value.hollow) words.push("hollow");
   if (value.text !== undefined) words.push("text");
@@ -96,7 +102,20 @@ function normalizeDefinitionTypeWords(typeWords) {
 
   if (typeWords[0] === "name") {
     // Drop concrete variable names in definitions; keep the type
-    const withoutTail = ["name", ...typeWords.slice(1).filter(t => t === "num" || t === "text" || t === "wo" || t === "vec" || t === "filename" || t === "bool")];
+    const withoutTail = ["name", ...typeWords.slice(1).filter(t =>
+      t === "num" ||
+      t === "text" ||
+      t === "wo" ||
+      t === "vec" ||
+      t === "filename" ||
+      t === "bool" ||
+      t === "date" ||
+      t === "second" ||
+      t === "minute" ||
+      t === "hour" ||
+      t === "day" ||
+      t === "week"
+    )];
     if (withoutTail.length === 1) {
       // default to numeric if no explicit type after name
       return ["name", "num"];
@@ -170,6 +189,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
 
     if (caseKey === "su") {
       if (factObj?.num !== undefined) return ["num"];
+      if (factObj?.date !== undefined) return ["date"];
+      if (factObj?.second !== undefined) return ["second"];
+      if (factObj?.minute !== undefined) return ["minute"];
+      if (factObj?.hour !== undefined) return ["hour"];
+      if (factObj?.day !== undefined) return ["day"];
+      if (factObj?.week !== undefined) return ["week"];
       if (factObj?.boolean !== undefined) return ["bool"];
       if (factObj?.text !== undefined) return ["text"];
       if (factObj?.filename !== undefined) return ["filename"];
@@ -191,6 +216,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
 
     if (factObj?.ve?.values) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
+    if (factObj?.date !== undefined) return ["name", "date"];
+    if (factObj?.second !== undefined) return ["name", "second"];
+    if (factObj?.minute !== undefined) return ["name", "minute"];
+    if (factObj?.hour !== undefined) return ["name", "hour"];
+    if (factObj?.day !== undefined) return ["name", "day"];
+    if (factObj?.week !== undefined) return ["name", "week"];
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.boolean !== undefined) return ["name", "bool"];
     if (factObj?.text !== undefined) return ["name", "text"];
@@ -203,6 +234,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   }
 
   if (value.num !== undefined) return ["num"];
+  if (value.date !== undefined) return ["date"];
+  if (value.second !== undefined) return ["second"];
+  if (value.minute !== undefined) return ["minute"];
+  if (value.hour !== undefined) return ["hour"];
+  if (value.day !== undefined) return ["day"];
+  if (value.week !== undefined) return ["week"];
   if (value.wo !== undefined) {
     if (caseKey === "ob") return ["wo"];
     const literal = normalizeWords(String(value.wo));

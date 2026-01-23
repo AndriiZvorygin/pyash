@@ -8,7 +8,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER } from "./compile/c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "./compile/c/helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -992,6 +992,45 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
   }
 
+  if (ob?.date !== undefined) {
+    const value = JSON.stringify(ob.date);
+    if (sentenceArg) {
+      const baseName = sentence.su?.name ? sanitizeName(sentence.su.name) : null;
+      if (baseName) {
+        const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
+        if (needsDecl) {
+          locals?.add(baseName);
+          if (localsTypes) localsTypes.set(baseName, "date");
+          return `let ${baseName} = { su: { name: "${sentence.su.name}" }, ob: {}, be: "date", mood: "ya" };\n${baseName}.ob.date = ${value};`;
+        }
+        if (localsTypes) localsTypes.set(baseName, "date");
+        return `${baseName}.ob = ${baseName}.ob ?? {};\n${baseName}.ob.date = ${value};`;
+      }
+      const target = valueForRole("su", sentenceArg, "date", sentence.su) ?? name;
+      return `${target} = ${value};`;
+    }
+    const sentenceObject = `{ su: { name: "${name}" }, ob: { date: ${value} }, be: "${effectiveBe}", exists: ${shouldDeclare}, mood: "ya" }`;
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesPrintf = true;
+      }
+      const cName = sanitizeName(name);
+      if (shouldDeclare) {
+        locals?.add(cName);
+        if (localsTypes) localsTypes.set(cName, "date");
+      }
+      if (!shouldDeclare) return `snprintf(${cName}, PYA_TEXT_CAP, "%s", ${value});`;
+      return `char ${cName}[PYA_TEXT_CAP] = ${value};`;
+    }
+    const varName = sanitizeName(name);
+    if (shouldDeclare) {
+      return `let ${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
+    }
+    return `${varName} = ${sentenceObject};\nglobalThis["${name}"] = ${varName};`;
+  }
+
   if (effectiveBe === "number") {
     const rhsExpr = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
     if (sentenceArg && rhsExpr !== null) {
@@ -1128,10 +1167,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   let usesRememberShim = false;
   let usesMapShim = false;
   const rememberFlag = { used: false };
-  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCeremonyValue: false };
+  const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCeremonyValue: false, usesDateMath: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, usesDateMath: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, ceremonyCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
   const mapDefs = new Map();
   const refineryDefs = new Map();
@@ -1350,6 +1389,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       markDeclared(declared, name);
       if (sentence.be === "text" || sentence.ob?.text !== undefined) {
         declaredTypes.set(name, "text");
+      } else if (sentence.be === "date" || sentence.ob?.date !== undefined) {
+        declaredTypes.set(name, "date");
       } else if (sentence.be === "number" || sentence.ob?.num !== undefined) {
         declaredTypes.set(name, "number");
       } else if (sentence.ob?.la) {
@@ -1840,6 +1881,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       const boolHelper = `function pyaBoolFromResult(result) {\n  if (typeof result === \"boolean\") return result;\n  if (typeof result === \"string\") {\n    const norm = result.trim().toLowerCase();\n    if (norm.includes(\"truth\")) return true;\n    if (norm.includes(\"lie\")) return false;\n  }\n  const candidate = result?.ob ?? result?.value ?? result;\n  if (candidate?.boolean !== undefined) return Boolean(candidate.boolean);\n  if (candidate?.bool !== undefined) return Boolean(candidate.bool);\n  if (candidate?.num !== undefined) return Boolean(candidate.num);\n  if (candidate?.text !== undefined) {\n    const norm = String(candidate.text).trim().toLowerCase();\n    if (norm === \"truth\" || norm === \"true\" || norm === \"1\") return true;\n    if (norm === \"lie\" || norm === \"false\" || norm === \"0\") return false;\n  }\n  return null;\n}`;
       prelude.push(boolHelper);
     }
+    if (jsHelpers.usesDateMath) {
+      const dateHelper = `function pyaDateValue(value) {\n  if (!value) return null;\n  if (typeof value === \"object\" && typeof value.date === \"string\") return pyaDateValue(value.date);\n  if (value === \"now\") return new Date();\n  if (value === \"today\") {\n    const now = new Date();\n    return new Date(now.getFullYear(), now.getMonth(), now.getDate());\n  }\n  const parsed = new Date(value);\n  if (Number.isNaN(parsed.getTime())) throw new Error(\"date defective\");\n  return parsed;\n}\nfunction pyaDateAdd(value, unit, amount, direction = 1) {\n  const base = pyaDateValue(value);\n  if (!base) throw new Error(\"date target required\");\n  const unitMs = { second: 1000, minute: 60000, hour: 3600000, day: 86400000, week: 604800000 }[unit];\n  if (!unitMs) throw new Error(\"date unit defective\");\n  return new Date(base.getTime() + unitMs * amount * direction).toISOString();\n}`;
+      prelude.push(dateHelper);
+    }
     if (usesMapShim) {
       const cloneShim = `const structuredClone = globalThis.structuredClone || ((v) => JSON.parse(JSON.stringify(v)));`;
       prelude.push(cloneShim);
@@ -1930,7 +1975,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
     if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
     if (cHelpers.usesExchange) headers.push("#include <errno.h>");
-    if (cHelpers.usesExchange) headers.push("#include <time.h>");
+    if (cHelpers.usesExchange || cHelpers.usesDateMath) headers.push("#include <time.h>");
     if (cHelpers.usesDirent) headers.push("#include <dirent.h>");
     if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
     if (cHelpers.usesErrno) headers.push("#include <errno.h>");
@@ -1977,6 +2022,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
     if (cHelpers.usesListPrinter) cPrelude.push(LIST_PRINT_HELPER);
     if (cHelpers.usesFilesystem) cPrelude.push(FILESYSTEM_HELPER);
+    if (cHelpers.usesDateMath) cPrelude.push(DATE_MATH_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);

@@ -1,6 +1,14 @@
 // Simplified plus: only supports numeric addition for now.
 import { state } from "../../bridge/state.mjs";
 
+const DURATION_UNITS = {
+  second: 1000,
+  minute: 60 * 1000,
+  hour: 60 * 60 * 1000,
+  day: 24 * 60 * 60 * 1000,
+  week: 7 * 24 * 60 * 60 * 1000
+};
+
 function toNumber(v) {
   if (v == null) return 0;
   if (typeof v === "number") return v;
@@ -99,9 +107,60 @@ function resolveScalarValue(v, remember) {
   return undefined;
 }
 
+function resolveDateSlot(slot, remember) {
+  if (!slot) return null;
+  if (typeof slot.date === "string") return slot.date;
+  if (typeof slot.name === "string" && remember) {
+    const fact = remember(slot.name);
+    if (typeof fact?.ob?.date === "string") return fact.ob.date;
+    if (typeof fact?.date === "string") return fact.date;
+  }
+  return null;
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value === "now") return new Date();
+  if (value === "today") {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) throw new Error("plus: date defective");
+  return parsed;
+}
+
+function extractDuration(ob) {
+  if (!ob || typeof ob !== "object") return null;
+  for (const unit of Object.keys(DURATION_UNITS)) {
+    if (ob[unit] !== undefined) {
+      const raw = Number(ob[unit]);
+      if (Number.isNaN(raw)) throw new Error("plus: duration must be numeric");
+      return { unit, value: raw };
+    }
+  }
+  return null;
+}
+
+function addDurationToDate(dateValue, duration, direction = 1) {
+  const base = parseDateValue(dateValue);
+  if (!base) throw new Error("plus: date target required");
+  const ms = DURATION_UNITS[duration.unit] * duration.value * direction;
+  return new Date(base.getTime() + ms).toISOString();
+}
+
 export async function plus_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.ob == null) throw new Error("plus: ob is required");
   if (sentence.to == null) throw new Error("plus: to is required");
+
+  const duration = extractDuration(sentence.ob);
+  if (duration) {
+    const dateValue = resolveDateSlot(sentence.to, remember);
+    const date = addDurationToDate(dateValue, duration, 1);
+    const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
+    const targetFact = targetName && remember ? remember(targetName) : null;
+    return { ob: { date }, be: targetFact?.be ?? "date" };
+  }
 
   const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
   const targetFact = targetName && remember ? remember(targetName) : null;
@@ -259,6 +318,16 @@ export async function plus_obj_num_from_name_vec_at_num(sentence, { remember }) 
 export const plus = plus_obj_num_to_name_num;
 
 export const signatures = [
+  { signatureWords: ["be", "plus", "ob", "second", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "minute", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "hour", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "day", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "week", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "second", "to", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "minute", "to", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "hour", "to", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "day", "to", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "week", "to", "name", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num", "to", "name", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "name", "num", "to", "name", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num", "to", "name", "map"], handler: plus_obj_num_to_name_num },

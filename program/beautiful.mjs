@@ -43,6 +43,11 @@ export function npToPyash(np = {}) {
   }
   if (np.hollow) return "hollow";
   if (np.boolean !== undefined) return `bool ${np.boolean ? "truth" : "lie"}`;
+  if (np.second !== undefined) return `second ${np.second}`;
+  if (np.minute !== undefined) return `minute ${np.minute}`;
+  if (np.hour !== undefined) return `hour ${np.hour}`;
+  if (np.day !== undefined) return `day ${np.day}`;
+  if (np.week !== undefined) return `week ${np.week}`;
   if (np.num !== undefined) return `num ${np.num}`;
   if (np.date !== undefined) return `date ${np.date}`;
   if (np.text !== undefined) {
