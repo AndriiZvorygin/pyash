@@ -295,3 +295,10 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `list` promoted to a builtin verb for REPL use.
 * Added boolean composition verbs (`and`, `or`, `not`) with examples.
 * `copy` now supports `as wo recursive` with a new quiz.
+
+### Jan 22, 2026: Date math + compile parity
+
+* Added date/time duration units (`second`/`minute`/`hour`/`day`/`week`) and date math for `plus`/`subtract`.
+* Added date math compile parity in JS/C with a shared C helper and new quizzes.
+* Added a date math example (`examples/pyash/date-plus-30.pya`) plus write support for date outputs.
+* Added `31-date-and-time.md` spec and indexed it in the spec list.
