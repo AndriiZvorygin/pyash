@@ -20,6 +20,9 @@ function resolveFilename(value, { rememberFn } = {}) {
 export async function copy(sentence, { remember: rememberFn = remember } = {}) {
   const src = resolveFilename(sentence?.ob, { rememberFn });
   const dest = resolveFilename(sentence?.to, { rememberFn });
+  const modeRaw = sentence?.as?.wo;
+  const mode = typeof modeRaw === "string" ? modeRaw.toLowerCase() : null;
+  const recursive = mode === "recursive";
   if (!src || !dest) {
     throwErrorSentence({
       name: "copy target missing",
@@ -41,7 +44,9 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
       raw: { error: err?.message }
     });
   }
-  if (!stats?.isFile?.()) {
+  const isFile = stats?.isFile?.();
+  const isDir = stats?.isDirectory?.();
+  if (!isFile && !(recursive && isDir)) {
     throwErrorSentence({
       name: "copy source defective",
       message: `copy source defective: ${resolvedSrc}`,
@@ -50,14 +55,26 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
     });
   }
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
-  await fs.copyFile(resolvedSrc, resolvedDest);
-  try {
-    const bytes = await fs.readFile(resolvedDest);
-    const artifact = recordArtifact({ locator: resolvedDest, producer: "exchange", bytes });
-    if (artifact?.su?.name) {
-      recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+  if (isDir && recursive) {
+    if (typeof fs.cp !== "function") {
+      throwErrorSentence({
+        name: "copy defective",
+        message: "copy defective: recursive copy unsupported",
+        from: { name: "copy" },
+        raw: { resolvedSrc }
+      });
     }
-  } catch {}
+    await fs.cp(resolvedSrc, resolvedDest, { recursive: true, force: true });
+  } else {
+    await fs.copyFile(resolvedSrc, resolvedDest);
+    try {
+      const bytes = await fs.readFile(resolvedDest);
+      const artifact = recordArtifact({ locator: resolvedDest, producer: "exchange", bytes });
+      if (artifact?.su?.name) {
+        recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+      }
+    } catch {}
+  }
   return { ob: { filename: resolvedDest }, be: "copy" };
 }
 
@@ -69,5 +86,11 @@ export const signatures = [
   { signatureWords: ["be", "copy", "ob", "filename", "to", "name", "filename"], handler: copy },
   { signatureWords: ["be", "copy", "ob", "name", "filename", "to", "name", "filename"], handler: copy },
   { signatureWords: ["be", "copy", "ob", "text", "to", "filename"], handler: copy },
-  { signatureWords: ["be", "copy", "ob", "text", "to", "name", "filename"], handler: copy }
+  { signatureWords: ["be", "copy", "ob", "text", "to", "name", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "filename", "to", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "name", "filename", "to", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "filename", "to", "name", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "name", "filename", "to", "name", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "text", "to", "filename"], handler: copy },
+  { signatureWords: ["be", "copy", "as", "wo", "recursive", "ob", "text", "to", "name", "filename"], handler: copy }
 ];
