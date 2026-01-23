@@ -59,6 +59,7 @@ Feature specs (optional, when blessed):
 - `24-directory-commands.md` (draft v0.1)
 - `30-data-formats.md` (merged)
 - `31-date-and-time.md` (draft v0.1)
+- `32-interpret-script.md` (draft v0.1)
 - `08-vyah-and-aspect.md` (merged)
 - `50-modules.md` (v0.1)
 - `documentation/whisper_initial_prompt.md` (draft)
