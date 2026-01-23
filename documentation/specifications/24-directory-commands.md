@@ -137,8 +137,8 @@ Walk the repo recursively:
 
 #### 2.3.5 Recursive copy (reserved)
 
-`as wo recursive` is reserved for future directory copy behavior (e.g. `rsync -av`).
-Current implementations MAY treat it as unsupported and return `be error ya`.
+`as wo recursive` copies directories and nested files recursively (e.g. `rsync -av`).
+Implementations MUST merge into `<dest>` when it exists and overwrite existing files.
 
 ---
 
@@ -426,3 +426,33 @@ with `su name ecology env be map def` describing all key/value pairs.
 ---
 
 ### 2.14 Reserved stubs (planned)
+
+Non-normative conveniences that may land later. These are listed to keep
+sentence shapes stable when implemented.
+
+* `be list ... with name absolute` — return absolute paths instead of relative.
+* `be list ... as wo time` / `as wo size` — sort by modified time or size.
+* `be list ... with name inode` — include inode IDs (platform-dependent).
+* `be search ... with name case` — case-sensitive search.
+* `be search ... with name whole` — whole-word matches only.
+* `be search ... with name regex` — treat pattern as regex without implicit escaping.
+* `be delete ... as wo force` — ignore missing paths, delete read-only when possible.
+* `be glance ... with name hash` — include `sha256` of file contents.
+* `be go ... with name push` / `be go ... with name pop` — directory stack behavior.
+* `be interpret ob text "<script>" do` — execute sandboxed code (language-dependent runner).
+
+### 2.15 Sysadmin nice-to-haves (tentative)
+
+These are not specified yet; names and cases may evolve.
+
+* `be link ob filename "<src>" to filename "<dest>" do` — create a symlink.
+* `be link ob filename "<src>" to filename "<dest>" as wo hard do` — create a hard link.
+* `be process be list do` — list running processes.
+* `be process ob num <pid> be kill do` — terminate a process by PID.
+* `be service ob name "<svc>" be status do` — get service status.
+* `be service ob name "<svc>" be restart do` — restart a service.
+* `be mount ob filename "<device>" to filename "<mount>" do` — mount a device.
+* `be disk be list do` — list disks/partitions.
+* `be network be list do` — list network interfaces.
+* `be user be list do` — list local users.
+* `be group be list do` — list local groups.
