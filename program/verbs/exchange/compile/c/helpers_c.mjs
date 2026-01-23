@@ -9,3 +9,5 @@ export { YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER } from "./helpers_c/yaml.mjs
 export { SPEAK_HELPER } from "./helpers_c/speak.mjs";
 export { COMMAND_HELPER } from "./helpers_c/command.mjs";
 export { CEREMONY_VALUE_HELPER } from "./helpers_c/ceremony_value.mjs";
+export { FILESYSTEM_HELPER } from "./helpers_c/filesystem.mjs";
+export { LIST_PRINT_HELPER } from "./helpers_c/list.mjs";

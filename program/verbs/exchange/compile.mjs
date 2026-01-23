@@ -8,7 +8,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER } from "./compile/c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER } from "./compile/c/helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -21,6 +21,7 @@ import { handleMindSentence } from "./compile/emit_mind.mjs";
 import { handleMapEnumeration } from "./compile/emit_map.mjs";
 import { handleMapDefinition } from "./compile/emit_map_def.mjs";
 import { handleMathSentence } from "./compile/emit_math.mjs";
+import { handleNativeSentence } from "./compile/emit_native.mjs";
 import { handleReadSentence } from "./compile/emit_read.mjs";
 import { handleSayOrWrite } from "./compile/emit_write.mjs";
 import { handleVectorElementOps } from "./compile/emit_vector.mjs";
@@ -771,6 +772,26 @@ function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, d
     sentenceToPyash
   });
   if (mindResult) return mindResult;
+
+  const nativeResult = handleNativeSentence({
+    sentence,
+    baseBe,
+    ob,
+    lang,
+    sentenceArg,
+    locals,
+    declared,
+    declaredTypes,
+    cHelpers,
+    jsHelpers,
+    cState,
+    rememberFlag
+  }, {
+    sanitizeName,
+    markDeclared,
+    inlineSentenceLiteral
+  });
+  if (nativeResult) return nativeResult;
 
   if (baseBe === "remember" && sentenceArg) {
     const genitiveChain = sentence.ob?.genitive?.chain || [];
@@ -1811,6 +1832,14 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.su?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
     }
+    if (jsHelpers.usesResolveFilename) {
+      const resolveHelper = `function pyaResolveFilename(value) {\n  if (!value) return \"\";\n  const slot = (value && typeof value === \"object\" && value.ob) ? value.ob : value;\n  if (typeof slot?.filename === \"string\") return slot.filename;\n  if (typeof slot?.text === \"string\") return slot.text;\n  if (slot?.name) {\n    const fact = remember(slot.name);\n    if (typeof fact?.ob?.filename === \"string\") return fact.ob.filename;\n    if (typeof fact?.ob?.text === \"string\") return fact.ob.text;\n    if (typeof fact?.filename === \"string\") return fact.filename;\n    if (typeof fact?.text === \"string\") return fact.text;\n  }\n  return \"\";\n}`;
+      prelude.push(resolveHelper);
+    }
+    if (jsHelpers.usesBoolHelper) {
+      const boolHelper = `function pyaBoolFromResult(result) {\n  if (typeof result === \"boolean\") return result;\n  if (typeof result === \"string\") {\n    const norm = result.trim().toLowerCase();\n    if (norm.includes(\"truth\")) return true;\n    if (norm.includes(\"lie\")) return false;\n  }\n  const candidate = result?.ob ?? result?.value ?? result;\n  if (candidate?.boolean !== undefined) return Boolean(candidate.boolean);\n  if (candidate?.bool !== undefined) return Boolean(candidate.bool);\n  if (candidate?.num !== undefined) return Boolean(candidate.num);\n  if (candidate?.text !== undefined) {\n    const norm = String(candidate.text).trim().toLowerCase();\n    if (norm === \"truth\" || norm === \"true\" || norm === \"1\") return true;\n    if (norm === \"lie\" || norm === \"false\" || norm === \"0\") return false;\n  }\n  return null;\n}`;
+      prelude.push(boolHelper);
+    }
     if (usesMapShim) {
       const cloneShim = `const structuredClone = globalThis.structuredClone || ((v) => JSON.parse(JSON.stringify(v)));`;
       prelude.push(cloneShim);
@@ -1848,8 +1877,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       prelude.splice(1, 0, `import child_process from "node:child_process";`);
     }
     if (jsHelpers.usesExchange) {
-      prelude.splice(1, 0, `import path from "node:path";`);
       prelude.splice(1, 0, `import crypto from "node:crypto";`);
+    }
+    if (jsHelpers.usesExchange || jsHelpers.usesPath) {
+      prelude.splice(1, 0, `import path from "node:path";`);
     }
     if (jsHelpers.usesCsvRuntime) {
       prelude.splice(1, 0, `import { parse as parseCsv } from ${JSON.stringify(CSV_PARSE_RUNTIME_URL)};`);
@@ -1900,6 +1931,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
     if (cHelpers.usesExchange) headers.push("#include <errno.h>");
     if (cHelpers.usesExchange) headers.push("#include <time.h>");
+    if (cHelpers.usesDirent) headers.push("#include <dirent.h>");
+    if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
+    if (cHelpers.usesErrno) headers.push("#include <errno.h>");
+    if (cHelpers.usesFilesystem) headers.push("#include <unistd.h>");
     if (needsYamlRuntime) headers.push("#include <strings.h>");
     if (needsYamlRuntime) headers.push("#include <yaml.h>");
     if (needsCsvRuntime) {
@@ -1940,6 +1975,8 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     }
     if (cHelpers.usesVectorType) cPrelude.push(VECTOR_TYPE_DECL);
     if (cHelpers.usesVectorPrinter) cPrelude.push(VECTOR_PRINT_HELPER);
+    if (cHelpers.usesListPrinter) cPrelude.push(LIST_PRINT_HELPER);
+    if (cHelpers.usesFilesystem) cPrelude.push(FILESYSTEM_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);

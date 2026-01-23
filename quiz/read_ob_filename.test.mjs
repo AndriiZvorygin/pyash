@@ -18,5 +18,5 @@ test("read accepts ob filename", async () => {
   await fs.writeFile(filePath, "cpuinfo", "utf8");
 
   const res = await run(`be read ob filename "${filePath}" do`);
-  assert.equal(res?.ob?.text, "cpuinfo");
+  assert.equal(res?.value?.text, "cpuinfo");
 });

@@ -23,7 +23,7 @@ test("copy supports recursive directory copies", async () => {
   await fs.writeFile(path.join(nested, "leaf.txt"), "leaf", "utf8");
 
   const res = await run(`be copy ob filename "${src}" to filename "${dest}" as wo recursive do`);
-  assert.equal(res?.ob?.filename, dest);
+  assert.equal(res?.value?.filename, dest);
 
   const rootOut = await fs.readFile(path.join(dest, "root.txt"), "utf8");
   const leafOut = await fs.readFile(path.join(dest, "nest", "leaf.txt"), "utf8");

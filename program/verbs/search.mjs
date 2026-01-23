@@ -46,7 +46,7 @@ async function listFiles(root) {
 
 export async function search(sentence, { remember: rememberFn = remember } = {}) {
   const pattern = resolveText(sentence?.ob, { rememberFn });
-  const target = resolveFilename(sentence?.in, { rememberFn });
+  const target = resolveFilename(sentence?.in ?? sentence?.inside, { rememberFn });
   if (!pattern) {
     throwErrorSentence({
       name: "search pattern missing",
@@ -107,8 +107,16 @@ export const signatures = [
   { signatureWords: ["be", "search", "ob", "name", "text", "in", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "in", "name", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "name", "text", "in", "name", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "inside", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "inside", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "inside", "name", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "inside", "name", "filename"], handler: search },
   { signatureWords: ["be", "search", "in", "filename", "ob", "text"], handler: search },
   { signatureWords: ["be", "search", "in", "filename", "ob", "name", "text"], handler: search },
   { signatureWords: ["be", "search", "in", "name", "filename", "ob", "text"], handler: search },
-  { signatureWords: ["be", "search", "in", "name", "filename", "ob", "name", "text"], handler: search }
+  { signatureWords: ["be", "search", "in", "name", "filename", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "inside", "filename", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "inside", "filename", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "inside", "name", "filename", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "inside", "name", "filename", "ob", "name", "text"], handler: search }
 ];
