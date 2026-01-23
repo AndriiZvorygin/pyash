@@ -280,3 +280,18 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 * Streamable HTTP SSE parsing fixes for MCP responses.
 * Changelog order cleanup for January entries.
+
+### Jan 21, 2026: OS verbs and metadata utilities
+
+* `glance` now returns path-scoped map headers with deterministic hash naming.
+* Added `license` verb (ownership + permissions) with examples.
+* Added `ecology` verb to read/set environment variables, plus examples.
+* Permissions wording standardized to use `command` instead of `interpret`.
+
+### Jan 22, 2026: REPL output + filesystem utilities
+
+* REPL now prints results and memory in Pyash format (no JSON).
+* `read` accepts `ob filename` in addition to `from filename`.
+* `list` promoted to a builtin verb for REPL use.
+* Added boolean composition verbs (`and`, `or`, `not`) with examples.
+* `copy` now supports `as wo recursive` with a new quiz.
