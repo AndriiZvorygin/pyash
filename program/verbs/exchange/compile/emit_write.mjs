@@ -170,6 +170,18 @@ export function handleSayOrWrite({
   const genChain = sentence.ob?.genitive?.chain || [];
   const wantsVector = genChain.at(-1) === "ve" || declaredTypes?.get(sentence.ob?.name) === "vector";
 
+  if (lang === "c" && ob.name && declaredTypes?.get(ob.name) === "list") {
+    if (cHelpers) {
+      cHelpers.usesPrintf = true;
+      cHelpers.usesVectorType = true;
+      cHelpers.usesVectorPrinter = true;
+      cHelpers.usesListPrinter = true;
+      cHelpers.usesString = true;
+      cHelpers.usesCtype = true;
+    }
+    return `print_list_sentence(${JSON.stringify(ob.name)}, &${sanitizeName(ob.name)});`;
+  }
+
   if (lang === "c" && wantsVector) {
     if (cHelpers) {
       cHelpers.usesPrintf = true;
@@ -319,7 +331,7 @@ export function handleSayOrWrite({
       const isMap = declaredTypes?.get(ob.name) === "map";
       const isJsonMap = declaredTypes?.get(ob.name) === "json map";
       const isCsvMap = declaredTypes?.get(ob.name) === "csv map";
-      const isSentence = declaredTypes?.get(ob.name) === "sentence";
+      const isSentence = declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "list";
       if (isMap) {
         const chain = mapDefs?.has(ob.name)
           ? mapDefChainFromName(ob.name, mapDefs, { formatter: mapSentenceToPyash })

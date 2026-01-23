@@ -88,20 +88,34 @@ test("flat at role parses directly", () => {
   assert.equal(s.ob?.name, "doors");
 });
 
-test("interior context maps outof/inside/into keywords", () => {
+test("interior context maps outof/in/into keywords", () => {
   const s = parse("exists su name item from interior cellar via interior hallway to interior attic be topic ya");
 
   assert.deepEqual(s.outof, { name: "cellar" });
-  assert.deepEqual(s.inside, { name: "hallway" });
+  assert.deepEqual(s.in, { name: "hallway" });
   assert.deepEqual(s.into, { name: "attic" });
 });
 
-test("surface context maps offof/along/onto keywords", () => {
+test("surface context maps offof/on/onto keywords", () => {
   const s = parse("exists su name ball from surface table via surface rail to surface shelf be topic ya");
 
   assert.deepEqual(s.offof, { name: "table" });
-  assert.deepEqual(s.along, { name: "rail" });
+  assert.deepEqual(s.on, { name: "rail" });
   assert.deepEqual(s.onto, { name: "shelf" });
+});
+
+test("inside keyword aliases to in", () => {
+  const s = parse("inside hallway be topic ya");
+
+  assert.deepEqual(s.in, { name: "hallway" });
+  assert.ok(!s.inside, "inside should alias to in");
+});
+
+test("along keyword aliases to on", () => {
+  const s = parse("along rail be topic ya");
+
+  assert.deepEqual(s.on, { name: "rail" });
+  assert.ok(!s.along, "along should alias to on");
 });
 
 test("under context maps fromunder/under/beneath keywords", () => {
