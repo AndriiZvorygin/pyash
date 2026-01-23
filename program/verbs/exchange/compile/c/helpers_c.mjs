@@ -11,3 +11,4 @@ export { COMMAND_HELPER } from "./helpers_c/command.mjs";
 export { CEREMONY_VALUE_HELPER } from "./helpers_c/ceremony_value.mjs";
 export { FILESYSTEM_HELPER } from "./helpers_c/filesystem.mjs";
 export { LIST_PRINT_HELPER } from "./helpers_c/list.mjs";
+export { DATE_MATH_HELPER } from "./helpers_c/date_math.mjs";

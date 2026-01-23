@@ -9,6 +9,14 @@ import {
 import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
 
+const UNIT_TYPE_ALIASES = {
+  seconds: "second",
+  minutes: "minute",
+  hours: "hour",
+  days: "day",
+  weeks: "week"
+};
+
 export function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) {
   if (tokens.length === 0) return null;
   let mood = null;
@@ -353,7 +361,17 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       if (!target) continue;
 
       if (t === "name") {
-        const nameTypeTokens = ["num", "number", "text", "filename", "vec", "ve", "bool", "boolean", "date"];
+        const nameTypeTokens = [
+          "num",
+          "number",
+          "text",
+          "filename",
+          "vec",
+          "ve",
+          "bool",
+          "boolean",
+          "date"
+        ];
         const parts = [];
         let j = i + 1;
         const nameTypeWords = [];
@@ -416,6 +434,13 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         const raw = words[i + 1];
         const value = tokenValue(raw);
         target.date = value;
+        i++;
+      } else if (t === "second" || t === "seconds" || t === "minute" || t === "minutes" || t === "hour" || t === "hours" || t === "day" || t === "days" || t === "week" || t === "weeks") {
+        const raw = words[i + 1];
+        const value = tokenValue(raw);
+        const unit = UNIT_TYPE_ALIASES[t] ?? t;
+        const maybeNum = Number(value);
+        target[unit] = Number.isNaN(maybeNum) ? value : maybeNum;
         i++;
       } else {
         const raw = words[i + 1];

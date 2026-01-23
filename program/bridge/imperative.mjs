@@ -388,7 +388,14 @@ export async function handleImperative({
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
-  const shouldBootstrapNumber = addressedName && ["plus", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
+  const durationFields = ["second", "minute", "hour", "day", "week"];
+  const hasDuration =
+    sentence?.ob &&
+    durationFields.some((field) => sentence.ob?.[field] !== undefined);
+  const shouldBootstrapNumber =
+    addressedName &&
+    !hasDuration &&
+    ["plus", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase());
   if (!target && shouldBootstrapNumber) {
     // create default numeric fact if it doesn't exist for math-like verbs
     target = { su: { name: addressedName }, be: "number", ob: { num: 0 }, mood: "ya" };

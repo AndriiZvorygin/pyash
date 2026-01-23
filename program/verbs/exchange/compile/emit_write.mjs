@@ -470,7 +470,7 @@ export function handleSayOrWrite({
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatSentence(${name})`;
         } else {
-          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
+          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
         }
       } else if (!isJsonMap && !isMap && !isCsvMap && declared?.has(name)) {
         if (declaredTypes?.get(ob.name) === "vector") {
@@ -480,7 +480,7 @@ export function handleSayOrWrite({
           if (jsHelpers) jsHelpers.usesVectorFormat = true;
           expr = `formatSentence(${name})`;
         } else {
-          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num`;
+          expr = `${name}.ob?.ve?.values ?? ${name}.ob?.text ?? ${name}.ob?.num ?? ${name}.ob?.date`;
         }
       } else if (!isJsonMap && !isMap && !isCsvMap && isSentence) {
         if (jsHelpers) jsHelpers.usesVectorFormat = true;
@@ -500,6 +500,9 @@ export function handleSayOrWrite({
       if (fallback) expr = fallback;
     }
   }
+  if (expr === "undefined" && typeof ob.date === "string") {
+    expr = JSON.stringify(ob.date);
+  }
   const writeFilename = sentence?.to?.filename;
   if (writeFilename && lang !== "c") {
     if (jsHelpers) {
@@ -514,10 +517,11 @@ export function handleSayOrWrite({
   if (lang === "c") {
     if (cHelpers) cHelpers.usesPrintf = true;
     const isText = typeof ob.text === "string"
+      || typeof ob.date === "string"
       || wantCsv
       || wantYaml
-      || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
-      || (ob.name && localsTypes?.get(sanitizeName(ob.name)) === "text");
+      || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "date" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
+      || (ob.name && (localsTypes?.get(sanitizeName(ob.name)) === "text" || localsTypes?.get(sanitizeName(ob.name)) === "date"));
     const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
     if (writeFilename) {
       if (cHelpers) {
