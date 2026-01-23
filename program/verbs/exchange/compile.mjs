@@ -1170,7 +1170,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
   const cHelpers = { usesPrintf: false, usesVectorType: false, usesVectorPrinter: false, usesString: false, usesCtype: false, usesStdlib: false, usesTextHelper: false, usesMap: false, usesMapPrinter: false, usesMapGlobals: false, usesJsonRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesCsvRuntime: false, usesExchange: false, usesMindRuntime: false, usesCommand: false, usesCeremonyValue: false, usesDateMath: false };
   const loopShim = { used: false };
   const mindShim = { used: false };
-    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, usesDateMath: false, readCounter: 0 };
+    const jsHelpers = { usesVectorFormat: false, usesJsonMap: false, usesCsvMap: false, usesJsonRuntime: false, usesCsvRuntime: false, usesYamlRuntime: false, usesYamlStringify: false, usesFs: false, usesExchange: false, usesCommand: false, usesDateMath: false, usesInterpret: false, usesOs: false, usesPath: false, readCounter: 0 };
   const cState = { vectorCounter: 0, csvCounter: 0, fileCounter: 0, ceremonyCounter: 0, jsonMapStrings: new Map(), jsonMapPrettyStrings: new Map(), yamlMapStrings: new Map(), csvMapStrings: new Map(), preMain: [] };
   const mapDefs = new Map();
   const refineryDefs = new Map();
@@ -1869,6 +1869,10 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
       const commandHelper = `function pyaCommand(cmd, input) {\n  if (typeof process !== \"undefined\" && process.env?.PYA_COMMAND_RESPONSE !== undefined) {\n    return String(process.env.PYA_COMMAND_RESPONSE ?? \"\");\n  }\n  const res = child_process.spawnSync(String(cmd ?? \"\"), {\n    shell: true,\n    input: input ?? undefined,\n    encoding: \"utf8\",\n    maxBuffer: 1024 * 1024\n  });\n  if (res.error || res.status) {\n    throw new Error(\"command defective\");\n  }\n  return String(res.stdout ?? \"\");\n}`;
       prelude.push(commandHelper);
     }
+    if (jsHelpers.usesInterpret) {
+      const interpretHelper = `function pyaInterpret(scriptText, timeoutMs) {\n  const wasmtimePath = path.resolve(process.cwd(), \"caterer\", \"wasmtime\", \"bin\", \"wasmtime\");\n  const qjsPath = path.resolve(process.cwd(), \"caterer\", \"quickjs-wasi\", \"qjs.wasm\");\n  if (!fs.existsSync(wasmtimePath)) throw new Error(\"interpret defective: wasmtime missing\");\n  if (!fs.existsSync(qjsPath)) throw new Error(\"interpret defective: quickjs missing\");\n  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), \"pyash-interpret-\"));\n  const scriptPath = path.join(tempDir, \"script.js\");\n  fs.writeFileSync(scriptPath, String(scriptText ?? \"\"), \"utf8\");\n  const res = child_process.spawnSync(wasmtimePath, [\"run\", \"--dir\", tempDir, qjsPath, \"--\", scriptPath], {\n    encoding: \"utf8\",\n    timeout: timeoutMs || 500,\n    maxBuffer: 64 * 1024\n  });\n  fs.rmSync(tempDir, { recursive: true, force: true });\n  if (res.error) {\n    if (String(res.error?.message ?? \"\").includes(\"maxBuffer\")) throw new Error(\"interpret defective: output limit exceeded\");\n    if (res.error?.code === \"ETIMEDOUT\") throw new Error(\"excessive_duration\");\n    throw new Error(\"interpret defective: runtime failure\");\n  }\n  if (res.status) {\n    const errText = String(res.stderr ?? \"\").trim();\n    if (errText) throw new Error(\"interpret defective: \" + errText);\n    throw new Error(\"interpret defective: exit \" + res.status);\n  }\n  return String(res.stdout ?? \"\");\n}`;
+      prelude.push(interpretHelper);
+    }
     if (usesRememberShim) {
       const rememberShim = `const remember = (typeof globalThis.remember === "function" ? globalThis.remember : (ref) => {\n  if (ref && typeof ref === "object") {\n    const name = ref.name || ref.su?.name;\n    if (typeof name === \"string\") {\n      if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, name)) return globalThis[name];\n    }\n    return ref;\n  }\n  if (typeof ref === \"string\") {\n    if (globalThis && Object.prototype.hasOwnProperty.call(globalThis, ref)) return globalThis[ref];\n    return undefined;\n  }\n  return ref;\n});`;
       prelude.push(rememberShim);
@@ -1917,6 +1921,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     }
     if (jsHelpers.usesFs) {
       prelude.splice(1, 0, `import fs from "node:fs";`);
+    }
+    if (jsHelpers.usesOs) {
+      prelude.splice(1, 0, `import os from "node:os";`);
     }
     if (jsHelpers.usesCommand) {
       prelude.splice(1, 0, `import child_process from "node:child_process";`);

@@ -369,7 +369,12 @@ export function handleMathSentence(context, helpers) {
       return lines.join("\n");
     }
     if (lang === "c") {
-      const target = sanitizeName(sentence.to.name);
+      const target = sentence.to?.genitive
+        ? (pathFromGenitive(sentence.to.genitive, undefined, { locals, declared, allowCGlobals: true }) ?? "")
+        : sanitizeName(sentence.to?.name);
+      if (!target) {
+        return `// TODO: ${JSON.stringify(sentence)}`;
+      }
       return `${target} = ${target} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     const lines = [];
