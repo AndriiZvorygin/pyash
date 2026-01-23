@@ -58,6 +58,7 @@ Feature specs (optional, when blessed):
 - `23-caterer-hear-say-vendoring.md` (v0.1)
 - `24-directory-commands.md` (draft v0.1)
 - `30-data-formats.md` (merged)
+- `31-date-and-time.md` (draft v0.1)
 - `08-vyah-and-aspect.md` (merged)
 - `50-modules.md` (v0.1)
 - `documentation/whisper_initial_prompt.md` (draft)
