@@ -84,7 +84,8 @@ async function repl() {
       }
 
       if (trimmed === "mem") {
-        console.log("Memory:", JSON.stringify(allRemember(), null, 2));
+        const lines = allRemember().map((sentence) => sentenceToPyash(sentence));
+        console.log(lines.join("\n"));
         continue;
       }
 
