@@ -27,6 +27,7 @@ import piperSay, { signatures as piperSaySignatures } from "./piper_say.mjs";
 import espeakSay, { signatures as espeakSaySignatures } from "./espeak_say.mjs";
 import hear, { signatures as hearSignatures } from "./hear.mjs";
 import command, { signatures as commandSignatures } from "./command.mjs";
+import interpret, { signatures as interpretSignatures } from "./interpret.mjs";
 import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
 import begin, { signatures as beginSignatures } from "./begin.mjs";
 import restart, { signatures as restartSignatures } from "./restart.mjs";
@@ -77,6 +78,7 @@ export {
   espeakSay,
   hear,
   command,
+  interpret,
   discharge,
   begin,
   restart,
@@ -116,6 +118,7 @@ export const builtInSignatures = [
   ...espeakSaySignatures,
   ...hearSignatures,
   ...commandSignatures,
+  ...interpretSignatures,
   ...dischargeSignatures,
   ...beginSignatures,
   ...restartSignatures,
