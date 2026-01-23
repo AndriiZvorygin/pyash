@@ -238,6 +238,8 @@ from state pyash to state json be compile do
 fromindex num 1 toindex num 10 be process do
 fromtext "prompt" totext output be read do
 ob date 2025-05-01 be record ya
+ob date today be record ya
+ob day 3 be record ya
 ```
 
 ## 8. Source of truth
