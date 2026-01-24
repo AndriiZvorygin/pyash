@@ -67,10 +67,10 @@ function toolTypeWordsFromValue(value, caseKey) {
     return ["name"];
   }
   if (value.num !== undefined) return ["num"];
+  if (value.wo !== undefined) return ["wo"];
   if (value.text !== undefined) return ["text"];
   if (value.boolean !== undefined) return ["bool"];
   if (value.filename !== undefined) return ["filename"];
-  if (value.wo !== undefined) return ["wo"];
   return [];
 }
 
@@ -179,6 +179,7 @@ export function buildToolSentence({ capability, args }) {
     const isText = typeWords.includes("text");
     const isFilename = typeWords.includes("filename");
     const isVec = typeWords.includes("vec");
+    const isWo = typeWords.includes("wo");
 
     if (isVec && Array.isArray(argValue)) {
       call[caseKey] = { ve: { values: argValue } };
@@ -203,6 +204,10 @@ export function buildToolSentence({ capability, args }) {
     }
     if (isText) {
       call[caseKey] = { text: String(argValue) };
+      continue;
+    }
+    if (isWo) {
+      call[caseKey] = { wo: String(argValue) };
       continue;
     }
     call[caseKey] = argValue;
