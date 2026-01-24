@@ -252,6 +252,7 @@ export function handleNativeSentence(context, helpers) {
         cHelpers.usesString = true;
         cHelpers.usesStdlib = true;
         cHelpers.usesPrintf = true;
+        cHelpers.usesToolCapture = true;
       }
       const needsDecl = !locals?.has(targetVar) && !declared?.has(targetVar) && !declared?.has(targetName);
       const lines = [];
@@ -273,9 +274,10 @@ export function handleNativeSentence(context, helpers) {
       lines.push("  snprintf(__pyaQuickjs, sizeof(__pyaQuickjs), \"%s/caterer/quickjs-wasi/qjs.wasm\", __pyaCwd);");
       lines.push("  char __pyaScriptPath[PYA_TEXT_CAP];");
       lines.push(`  snprintf(__pyaScriptPath, sizeof(__pyaScriptPath), "%s/script.js", __pyaTempDir);`);
+      lines.push("  const char *__pyaScript = (pya_ob_text && pya_ob_text[0]) ? pya_ob_text : " + JSON.stringify(scriptText) + ";");
       lines.push("  FILE *__pyaScriptFile = fopen(__pyaScriptPath, \"w\");");
       lines.push("  if (!__pyaScriptFile) { fprintf(stderr, \"interpret defective: script write failed\\n\"); exit(1); }");
-      lines.push(`  fputs(${JSON.stringify(scriptText)}, __pyaScriptFile);`);
+      lines.push("  fputs(__pyaScript, __pyaScriptFile);");
       lines.push("  fclose(__pyaScriptFile);");
       lines.push("  char __pyaCmd[PYA_TEXT_CAP];");
       lines.push("  snprintf(__pyaCmd, sizeof(__pyaCmd), \"\\\"%s\\\" run --dir \\\"%s\\\" \\\"%s\\\" -- \\\"%s\\\"\", __pyaWasmtime, __pyaTempDir, __pyaQuickjs, __pyaScriptPath);");
@@ -284,6 +286,9 @@ export function handleNativeSentence(context, helpers) {
       lines.push("  rmdir(__pyaTempDir);");
       lines.push("  if (!__pyaOut) { fprintf(stderr, \"interpret defective\\n\"); exit(1); }");
       lines.push(`  snprintf(${targetVar}, sizeof(${targetVar}), "%s", __pyaOut);`);
+      lines.push("  if (pya_tool_capture) {");
+      lines.push("    snprintf(pya_tool_output, sizeof(pya_tool_output), \"%s\", __pyaOut);");
+      lines.push("  }");
       lines.push("  free(__pyaOut);");
       lines.push("}");
       return lines.join("\n");
