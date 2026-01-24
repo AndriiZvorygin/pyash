@@ -340,6 +340,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
       for (const call of toolCalls) {
         const toolName = call?.function?.name ?? call?.name;
+        const toolCallId = call?.id ?? null;
         if (!toolName || !toolMap.has(toolName)) {
           throwErrorSentence({
             name: "tool defective",
@@ -363,13 +364,20 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
           const mapFact = mapName ? remember(mapName) : null;
           if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
             toolText = mapDefChainFromName(mapName, { rememberFn: remember });
+          } else if (surfacedTool.be === "interpret" && typeof surfacedTool.ob?.text === "string") {
+            const rawText = surfacedTool.ob.text;
+            const match = rawText.match(/^quoted\.([^.]+)\.([\s\S]*?)\.\1\.quoted$/);
+            toolText = match ? match[2] : rawText;
           } else {
             toolText = sentenceToPyash(surfacedTool);
           }
         } else {
           toolText = String(surfacedTool ?? "");
         }
-        messages.push({ role: "tool", tool_name: toolName, content: toolText });
+        const toolMessage = { role: "tool", content: toolText };
+        if (toolCallId) toolMessage.tool_call_id = toolCallId;
+        toolMessage.tool_name = toolName;
+        messages.push(toolMessage);
         appendLog(dialogue, { role: "tool", content: toolText });
         lastToolText = toolText;
       }
