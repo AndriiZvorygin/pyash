@@ -318,8 +318,42 @@ Manual smoke example (no assertions):
 ob text "America/Toronto" be mcp time get_current_time do
 ```
 
-## 13. Deferred items
+## 13. Tool capabilities (beyond schema)
+
+Some MCP servers expose metadata that is **not expressible in JSON Schema** (streaming, side effects, safety class, etc.).
+When present, Pyash records a capability sentence per tool **alongside** the snapped schema, and uses it for
+deterministic gating decisions.
+
+### 13.1 Capability sentence shape
+
+Capability is stored as a `json map` so ordering and hashing remain canonical:
+
+```pyash
+su name mcp capability <tool-id> be json map def
+  su name tool ob text "<tool-name>" ya
+  su name license ob text "read" ya
+  su name stream ob bool lie ya
+  su name idempotent ob bool truth ya
+  su name domain ob ve text filesystem ya
+  su name rhythm boundary per min ob num 60 ya
+prah
+```
+
+Notes:
+
+* `<tool-id>` is the tool identity hash used in snapshot records.
+* All fields are optional. Missing fields mean “unknown”.
+* `license` is one of `read`, `write`, `execute`, `network`, `mixed` (freeform allowed but should be stable).
+* `domain` is a text vector describing required capabilities (for example `filesystem`, `network`, `process`).
+* `rhythm boundary per min` is a numeric hint, not an enforcement contract.
+
+### 13.2 Recording + replay
+
+* If the server provides capability metadata, record it in the snapshot artifact and emit capability sentences.
+* Replay uses the stored capability sentences; any mismatch in capability bytes for the same tool id is a deterministic error.
+* Runtimes may refuse calls when `license` or `domain` conflict with run policies.
+
+## 14. Deferred items
 
 - MCP transport beyond stdio
 - Server restart policies
-- Tool capability negotiation beyond schema

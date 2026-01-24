@@ -3,6 +3,12 @@
     {
       "name": "echo",
       "description": "echo input",
+      "capabilities": {
+        "license": "read",
+        "stream": false,
+        "domain": ["filesystem"],
+        "rhythm boundary per min": 60
+      },
       "inputSchema": {
         "type": "object",
         "properties": { "ob": { "type": "string" } },
