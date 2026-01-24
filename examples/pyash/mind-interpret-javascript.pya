@@ -1,0 +1,5 @@
+exists su name helper be mind via state "qwen3-vl:8b-instruct" ya
+
+su name script ob discourse "Return only JavaScript source that prints 6*7. No fences or extra text." for name helper to name text script be write do
+ob name text script as wo javascript during num 0.5 be interpret do
+ob name result be write do

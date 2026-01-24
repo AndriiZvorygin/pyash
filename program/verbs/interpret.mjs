@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { throwErrorSentence } from "../error.mjs";
+import { remember } from "../remember/index.mjs";
 
 const INTERPRET_TIMEOUT_MS = 500;
 const INTERPRET_OUTPUT_LIMIT = 64 * 1024;
@@ -15,9 +16,14 @@ function resolveLanguage(sentence) {
   return String(raw ?? "").trim().toLowerCase();
 }
 
-function resolveScriptText(sentence) {
+function resolveScriptText(sentence, { rememberFn } = {}) {
   const raw = sentence?.ob?.text;
   if (typeof raw === "string") return raw;
+  const name = sentence?.ob?.name;
+  if (typeof name === "string" && rememberFn) {
+    const fact = rememberFn(name);
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
   return null;
 }
 
@@ -180,7 +186,7 @@ export async function interpretScript(sentence) {
       raw: { sentence }
     });
   }
-  const scriptText = resolveScriptText(sentence);
+  const scriptText = resolveScriptText(sentence, { rememberFn: remember });
   if (scriptText === null) {
     throwErrorSentence({
       name: "interpret defective",
@@ -217,9 +223,15 @@ export default interpretScript;
 
 export const signatures = [
   { signatureWords: ["be", "interpret", "as", "wo", "javascript", "ob", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "javascript", "ob", "name", "text"], handler: interpretScript },
   { signatureWords: ["be", "interpret", "as", "wo", "lua", "ob", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "lua", "ob", "name", "text"], handler: interpretScript },
   { signatureWords: ["be", "interpret", "as", "wo", "python.micro", "ob", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "python.micro", "ob", "name", "text"], handler: interpretScript },
   { signatureWords: ["be", "interpret", "as", "wo", "javascript", "during", "num", "ob", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "javascript", "during", "num", "ob", "name", "text"], handler: interpretScript },
   { signatureWords: ["be", "interpret", "as", "wo", "lua", "during", "num", "ob", "text"], handler: interpretScript },
-  { signatureWords: ["be", "interpret", "as", "wo", "python.micro", "during", "num", "ob", "text"], handler: interpretScript }
+  { signatureWords: ["be", "interpret", "as", "wo", "lua", "during", "num", "ob", "name", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "python.micro", "during", "num", "ob", "text"], handler: interpretScript },
+  { signatureWords: ["be", "interpret", "as", "wo", "python.micro", "during", "num", "ob", "name", "text"], handler: interpretScript }
 ];
