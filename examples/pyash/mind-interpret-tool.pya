@@ -1,0 +1,7 @@
+su name tools be map def
+su name javascript tool be interpret ob text code as wo javascript can
+prah
+
+exists su name helper be mind via state "qwen3-vl:8b-instruct" via discourse "You must call tools. Use the JavaScript tool to compute math. Return the tool result only." ya
+be write ob text "Compute (6 * 7) + 1." for name helper to name text helper-out with name tools do
+ob name helper-out be write do
