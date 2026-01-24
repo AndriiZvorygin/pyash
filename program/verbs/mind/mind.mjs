@@ -293,6 +293,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     const maxToolTurns = 6;
     let turns = 0;
     let lastResponse = null;
+    let lastToolText = "";
 
     while (turns < maxToolTurns) {
       turns += 1;
@@ -370,11 +371,18 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         }
         messages.push({ role: "tool", tool_name: toolName, content: toolText });
         appendLog(dialogue, { role: "tool", content: toolText });
+        lastToolText = toolText;
       }
     }
 
     if (!responseText) {
       responseText = lastResponse?.message?.content ?? "";
+    }
+    if (!responseText && lastToolText) {
+      responseText = lastToolText;
+    }
+    if (responseText === "DID_NOT_RECEIVE_TOOL_RESULT" && lastToolText) {
+      responseText = lastToolText;
     }
   } else {
     const promptParts = [];

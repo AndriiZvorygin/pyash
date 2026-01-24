@@ -1,7 +1,7 @@
 su name tools be map def
-su name javascript tool be interpret ob text code as wo javascript can
+su name javascript tool be interpret ob text source as wo javascript during num 30 can
 prah
 
-exists su name helper be mind via state "qwen3-vl:8b-instruct" via discourse "You must call tools. Use the JavaScript tool to compute math. Return only the tool result." ya
-be write ob text "Write a JavaScript program that computes the 1000th prime number using a loop (no libraries). It must print the result using console.log. Return only JavaScript source, no fences." for name helper to name text helper-out with name tools do
+exists su name helper be mind via state "qwen3-vl:8b-instruct" via discourse "You must call tools. Use the JavaScript tool to compute math. When calling the tool, set ob to the full JavaScript source (not placeholders like code/source). After the tool call, respond with exactly the tool result content. If you did not receive a tool result, respond exactly: DID_NOT_RECEIVE_TOOL_RESULT." ya
+be write ob text "Write a JavaScript program that computes the 5356th prime number using a loop (no libraries). It must print the result using console.log. Return only JavaScript source, no fences." for name helper to name text helper-out with name tools do
 ob name helper-out be write do
