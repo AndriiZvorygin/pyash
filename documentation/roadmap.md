@@ -231,8 +231,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 **Jan 18 → Jan 24, 2026**
 
 ### Remaining
-
-* Tool capability negotiation beyond schema.
+None (Week 3 complete).
 
 ---
 

@@ -302,3 +302,16 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added date math compile parity in JS/C with a shared C helper and new quizzes.
 * Added a date math example (`examples/pyash/date-plus-30.pya`) plus write support for date outputs.
 * Added `31-date-and-time.md` spec and indexed it in the spec list.
+
+### Jan 23, 2026: Interpret verb + C genitive fix
+
+* Added `interpret` verb (QuickJS via Wasmtime sandbox) with timeout/output limits and a quiz.
+* Added `examples/pyash/interpret-javascript.pya` and vendored WASM runtimes under `caterer/`.
+* Fixed C compile for `plus` targeting genitive paths (restoring doors-map C parity).
+
+### Jan 24, 2026: Mind tool bridge hardening
+
+* MCP tool snapshots now record capabilities and emit `json map def` capability sentences.
+* `interpret` can resolve `ob name text` scripts for mind/tool usage.
+* Mind tool calls now propagate `tool_call_id` and pass raw interpret stdout back to the model.
+* Added a mind tool example for JavaScript execution (`examples/pyash/mind-interpret-tool.pya`) with a complex prime task.
