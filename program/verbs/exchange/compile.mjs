@@ -8,7 +8,7 @@ import { doRemember, remember } from "../../remember/index.mjs";
 import { deriveSignatureFromDefinition, joinSignatureWords } from "../../bridge/signature.mjs";
 import { clearModuleCache, loadModule, setEntryModulePath } from "../../bridge/modules.mjs";
 import { vectorFormatHelper } from "./helpers_js.mjs";
-import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "./compile/c/helpers_c.mjs";
+import { TEXT_HELPER, VECTOR_PRINT_HELPER, VECTOR_TYPE_DECL, MAP_TYPE_DECL, MAP_HELPER, JSON_PYASH_HELPER, CSV_RUNTIME_HELPER, YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER, EXCHANGE_HELPER, TOOL_CAPTURE_HELPER, MIND_RUNTIME_HELPER, COMMAND_HELPER, CEREMONY_VALUE_HELPER, FILESYSTEM_HELPER, LIST_PRINT_HELPER, DATE_MATH_HELPER } from "./compile/c/helpers_c.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { jsonToPyashText, mapSentenceToPyash } from "./json_map.mjs";
@@ -2032,6 +2032,7 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     if (cHelpers.usesDateMath) cPrelude.push(DATE_MATH_HELPER);
     if (cHelpers.usesMap) cPrelude.push(MAP_TYPE_DECL);
     if (cHelpers.usesMap || cHelpers.usesMapPrinter) cPrelude.push(MAP_HELPER);
+    if (cHelpers.usesToolCapture) cPrelude.push(TOOL_CAPTURE_HELPER);
     if (cHelpers.usesMindRuntime) cPrelude.push(MIND_RUNTIME_HELPER);
     if (cHelpers.usesCommand) cPrelude.push(COMMAND_HELPER);
     if (needsYamlRuntime) cPrelude.push(YAML_RUNTIME_HELPER);

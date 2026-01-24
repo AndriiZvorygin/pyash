@@ -3,6 +3,7 @@ export { TEXT_HELPER } from "./helpers_c/text.mjs";
 export { EXCHANGE_HELPER } from "./helpers_c/exchange.mjs";
 export { JSON_PYASH_HELPER } from "./helpers_c/json_pyash.mjs";
 export { MAP_TYPE_DECL, MAP_HELPER } from "./helpers_c/map.mjs";
+export { TOOL_CAPTURE_HELPER } from "./helpers_c/tool_capture.mjs";
 export { MIND_RUNTIME_HELPER } from "./helpers_c/mind.mjs";
 export { CSV_RUNTIME_HELPER } from "./helpers_c/csv.mjs";
 export { YAML_STRINGIFY_HELPER, YAML_RUNTIME_HELPER } from "./helpers_c/yaml.mjs";

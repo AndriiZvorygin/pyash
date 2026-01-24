@@ -66,6 +66,20 @@ export function handleSayOrWrite({
       if (sentence.with?.name) {
         if (jsHelpers) jsHelpers.usesVectorFormat = true;
         if (rememberFlag) rememberFlag.used = true;
+        if (jsHelpers && mapDefs?.has(sentence.with.name)) {
+          const mapSentence = mapDefs.get(sentence.with.name);
+          const entries = mapSentence?.ob?.map ?? {};
+          for (const entry of Object.values(entries)) {
+            if (entry?.be === "interpret") {
+              jsHelpers.usesInterpret = true;
+              jsHelpers.usesFs = true;
+              jsHelpers.usesPath = true;
+              jsHelpers.usesOs = true;
+              jsHelpers.usesCommand = true;
+              break;
+            }
+          }
+        }
       }
       lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
       lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
@@ -111,14 +125,41 @@ export function handleSayOrWrite({
       lines.push("  messages.push(assistantMessage);");
       lines.push("  for (const call of toolCalls) {");
       lines.push("    const toolName = call?.function?.name ?? call?.name;");
+      lines.push("    const toolCallId = call?.id ?? null;");
       lines.push("    if (!toolName || !toolMap.has(toolName)) { throw new Error(`tool defective: unknown tool ${toolName}`); }");
       lines.push("    const capability = toolMap.get(toolName);");
       lines.push("    const toolSentence = buildToolSentence({ capability, args: call?.function?.arguments ?? call?.arguments });");
       lines.push("    const toolFn = globalThis?.[toolName];");
-      lines.push("    if (typeof toolFn !== \"function\") { throw new Error(`tool defective: missing function ${toolName}`); }");
-      lines.push("    const toolResult = await Promise.resolve(toolFn(toolSentence));");
-      lines.push("    const toolText = toolResult && typeof toolResult === \"object\" ? formatSentence(toolResult) : String(toolResult ?? \"\");");
-      lines.push("    messages.push({ role: \"tool\", tool_name: toolName, content: toolText });");
+      lines.push("    let toolResult;");
+      lines.push("    if (typeof toolFn === \"function\") {");
+      lines.push("      toolResult = await Promise.resolve(toolFn(toolSentence));");
+      lines.push("    } else if (toolSentence?.be === \"interpret\") {");
+      lines.push("      if (typeof pyaInterpret !== \"function\") { throw new Error(\"tool defective: interpret runtime missing\"); }");
+      lines.push("      const scriptText = toolSentence?.ob?.text ?? toolSentence?.ob?.name ?? \"\";");
+      lines.push("      const timeoutRaw = toolSentence?.during?.num ?? toolSentence?.during?.text ?? toolSentence?.during?.name;");
+      lines.push("      const timeoutValue = typeof timeoutRaw === \"number\" ? timeoutRaw : Number(timeoutRaw);");
+      lines.push("      const timeoutMs = Number.isFinite(timeoutValue) && timeoutValue > 0 ? Math.max(1, Math.trunc(timeoutValue * 1000)) : 500;");
+      lines.push("      const out = pyaInterpret(scriptText, timeoutMs);");
+      lines.push("      toolResult = { su: { name: \"result\" }, ob: { text: String(out ?? \"\") }, be: \"interpret\", mood: \"ya\" };");
+      lines.push("    } else {");
+      lines.push("      throw new Error(`tool defective: missing function ${toolName}`);");
+      lines.push("    }");
+      lines.push("    let toolText = \"\";");
+      lines.push("    if (toolResult && typeof toolResult === \"object\") {");
+      lines.push("      if (toolResult.be === \"interpret\" && typeof toolResult.ob?.text === \"string\") {");
+      lines.push("        const rawText = toolResult.ob.text;");
+      lines.push("        const match = rawText.match(/^quoted\\.([^.]+)\\.([\\s\\S]*?)\\.\\1\\.quoted$/);");
+      lines.push("        toolText = match ? match[2] : rawText;");
+      lines.push("      } else {");
+      lines.push("        toolText = formatSentence(toolResult);");
+      lines.push("      }");
+      lines.push("    } else {");
+      lines.push("      toolText = String(toolResult ?? \"\");");
+      lines.push("    }");
+      lines.push("    const toolMessage = { role: \"tool\", content: toolText };");
+      lines.push("    if (toolCallId) toolMessage.tool_call_id = toolCallId;");
+      lines.push("    toolMessage.tool_name = toolName;");
+      lines.push("    messages.push(toolMessage);");
       lines.push("  }");
       lines.push("}");
       lines.push("if (!reply) reply = lastResponse?.message?.content ?? \"\";");
@@ -521,7 +562,8 @@ export function handleSayOrWrite({
       || wantCsv
       || wantYaml
       || (ob.name && (declaredTypes?.get(ob.name) === "text" || declaredTypes?.get(ob.name) === "date" || declaredTypes?.get(ob.name) === "sentence" || declaredTypes?.get(ob.name) === "json map" || declaredTypes?.get(ob.name) === "map" || declaredTypes?.get(ob.name) === "csv map"))
-      || (ob.name && (localsTypes?.get(sanitizeName(ob.name)) === "text" || localsTypes?.get(sanitizeName(ob.name)) === "date"));
+      || (ob.name && (localsTypes?.get(sanitizeName(ob.name)) === "text" || localsTypes?.get(sanitizeName(ob.name)) === "date"))
+      || (ob.name && !declaredTypes?.has(ob.name) && !(locals?.has(sanitizeName(ob.name)) || declared?.has(sanitizeName(ob.name)) || declared?.has(ob.name)));
     const fmt = (wantCsv || wantYaml) ? "%s" : (isText ? "%s" : "%g");
     if (writeFilename) {
       if (cHelpers) {
