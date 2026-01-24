@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 
-import { remember } from "../remember/index.mjs";
+import { remember, allRemember } from "../remember/index.mjs";
 import { buildErrorSentence, throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify } from "../verbs/exchange/write_json.mjs";
 import { recordArtifact, emitExchangeSentence, getExchangeRunRoot, getExchangeStrict } from "../bridge/exchange.mjs";
@@ -112,11 +112,13 @@ function buildToolIdentity({ server, tool }) {
 function normalizeTool(raw) {
   const name = String(raw?.name ?? raw?.tool?.name ?? "").trim();
   if (!name) return null;
+  const capabilities = raw?.capabilities ?? raw?.tool?.capabilities ?? raw?.metadata?.capabilities ?? null;
   return {
     name,
     description: raw?.description ?? raw?.tool?.description ?? "",
     inputSchema: raw?.inputSchema ?? raw?.input_schema ?? raw?.parameters ?? raw?.tool?.inputSchema ?? raw?.tool?.parameters ?? {},
-    outputSchema: raw?.outputSchema ?? raw?.output_schema ?? raw?.tool?.outputSchema ?? null
+    outputSchema: raw?.outputSchema ?? raw?.output_schema ?? raw?.tool?.outputSchema ?? null,
+    capabilities: capabilities && typeof capabilities === "object" && !Array.isArray(capabilities) ? capabilities : null
   };
 }
 
@@ -828,6 +830,24 @@ async function buildInlineClient(args) {
   return new InlineMcpClient({ tools });
 }
 
+function buildCapabilityRecord({ tool }) {
+  if (!tool?.capabilities || typeof tool.capabilities !== "object") return null;
+  const record = { ...tool.capabilities };
+  if (!record.tool) record.tool = tool.name;
+  return record;
+}
+
+function emitJsonMapDefSentences(mapSentence) {
+  if (!mapSentence?.su?.name || mapSentence?.be !== "json map") return;
+  const mapName = mapSentence.su.name;
+  emitExchangeSentence({ mood: "def", su: { name: mapName }, be: "json map" });
+  const entries = mapSentence?.ob?.map ?? {};
+  for (const [key, value] of Object.entries(entries)) {
+    emitExchangeSentence({ mood: "ya", su: { name: key }, ob: value ?? {} });
+  }
+  emitExchangeSentence({ mood: "prah" });
+}
+
 function recordSnapshot({ serverName, tools }) {
   const toolMap = Object.fromEntries(
     tools.map((tool) => [
@@ -840,7 +860,17 @@ function recordSnapshot({ serverName, tools }) {
       }
     ])
   );
-  const snapshot = { server: serverName, tools: toolMap };
+  const capabilitiesById = {};
+  for (const tool of tools) {
+    const record = buildCapabilityRecord({ tool });
+    if (!record || !tool.toolId) continue;
+    capabilitiesById[tool.toolId] = record;
+  }
+  const snapshot = {
+    server: serverName,
+    tools: toolMap,
+    capabilities: Object.keys(capabilitiesById).length ? capabilitiesById : undefined
+  };
   const { text: snapshotText } = jsonToPyashText(snapshot, `mcp ${serverName} tools snapshot`, { existingNames: [] });
   const snapshotSentence = {
     mood: "ya",
@@ -862,6 +892,17 @@ function recordSnapshot({ serverName, tools }) {
     kind: "mcp snapshot"
   });
   emitExchangeSentence(snapshotSentence);
+
+  const existingNames = collectExistingNames({ allRememberFn: allRemember });
+  for (const tool of tools) {
+    if (!tool.toolId) continue;
+    const record = buildCapabilityRecord({ tool });
+    if (!record) continue;
+    const capabilityName = `mcp capability ${tool.toolId}`;
+    const { sentences } = jsonToMapSentences(record, capabilityName, { existingNames });
+    existingNames.add(capabilityName);
+    for (const sentence of sentences) emitJsonMapDefSentences(sentence);
+  }
 }
 
 export async function ensureMcpServer(serverName, { rememberFn = remember, source = "mcp" } = {}) {
@@ -903,6 +944,7 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
       });
     }
     const toolEntries = snapshot?.tools && typeof snapshot.tools === "object" ? snapshot.tools : {};
+    const capabilityEntries = snapshot?.capabilities && typeof snapshot.capabilities === "object" ? snapshot.capabilities : {};
     const tools = [];
     const toolByName = new Map();
     for (const [toolName, info] of Object.entries(toolEntries)) {
@@ -911,7 +953,8 @@ export async function ensureMcpServer(serverName, { rememberFn = remember, sourc
         description: info?.description ?? "",
         inputSchema: info?.inputSchema ?? null,
         outputSchema: info?.outputSchema ?? null,
-        toolId: info?.toolId ?? ""
+        toolId: info?.toolId ?? "",
+        capabilities: info?.toolId ? capabilityEntries?.[info.toolId] ?? null : null
       };
       const expectedId = buildToolIdentity({ server: name, tool });
       if (tool.toolId && tool.toolId !== expectedId) {

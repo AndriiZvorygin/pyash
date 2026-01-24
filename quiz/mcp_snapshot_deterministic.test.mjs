@@ -9,6 +9,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { closeMcpServers, getMcpServerTools } from "../program/motor/mcp.mjs";
+import { jsonObjectFromPyash } from "../program/verbs/exchange/write_json.mjs";
 
 async function runSnapshot(runRoot) {
   forget();
@@ -29,9 +30,11 @@ async function runSnapshot(runRoot) {
   assert.ok(artifact, "snapshot artifact recorded");
   const snapshotPath = path.join(runRoot, artifact.to.filename);
   const bytes = await fs.readFile(snapshotPath);
+  const snapshotJson = jsonObjectFromPyash(bytes.toString("utf8"), { rootName: "mcp mock tools snapshot" });
+  const capabilitySentence = records.find(s => s?.be === "json map" && s?.mood === "def" && String(s?.su?.name || "").startsWith("mcp capability "));
   closeMcpServers();
   clearExchangeRecorder();
-  return { bytes, records, tools };
+  return { bytes, records, tools, snapshotJson, capabilitySentence };
 }
 
 test("mcp snapshot bytes and tool hashes are deterministic", async () => {
@@ -47,4 +50,6 @@ test("mcp snapshot bytes and tool hashes are deterministic", async () => {
   const snapshotSentence1 = first.records.find(s => s?.be === "tool snapshot");
   const snapshotSentence2 = second.records.find(s => s?.be === "tool snapshot");
   assert.equal(snapshotSentence1?.ob?.text, snapshotSentence2?.ob?.text);
+  assert.ok(first.snapshotJson?.capabilities, "snapshot includes capabilities");
+  assert.ok(first.capabilitySentence, "capability sentence emitted");
 });
