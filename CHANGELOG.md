@@ -199,6 +199,19 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added ISO 8601 `date` payloads to parsing and rendering; run start timestamps honor configured timezone with offsets.
 * New timezone quiz and date/timezone golden example.
 
+### Jan 23, 2026: Interpret verb + MCP tool capability snapshotting
+
+* `interpret` verb shipped with sandboxed QuickJS execution and compile parity fixes for C genitive plus.
+* MCP tool capability snapshots recorded in deterministic form; stray MCP swap removed.
+
+### Jan 24, 2026: Mind tool parity hardening + download MVP
+
+* Mind tool calling parity tightened: tool_call_id propagation, interpret tool output handling, fallback to tool result, and prompt/example updates.
+* Compiled JS/C tool handling aligned, with C tool capture helpers and warning silencing in generated C.
+* Download spec and verb added with URL-scheme normalization, curl-backed http(s) web/file support, and initial quizzes.
+* yt-dlp backend added for video/audio downloads with a runnable example.
+* Docs refreshed to reflect mind interpret tool parity and new download example.
+
 ### Jan 6, 2026: Mind invocation form update + refinery alignment
 
 * Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
