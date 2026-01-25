@@ -421,7 +421,7 @@ export async function handleImperative({
 
   const addressedName = to?.name || (be === "subtract" ? sentence.from?.name : undefined);
   let target = addressedName ? memory.remember(addressedName) : memory.remember(to?.name);
-  const durationFields = ["second", "minute", "hour", "day", "week"];
+  const durationFields = ["second", "minute", "hour", "day", "week", "month"];
   const hasDuration =
     sentence?.ob &&
     durationFields.some((field) => sentence.ob?.[field] !== undefined);

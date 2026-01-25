@@ -32,6 +32,11 @@ function parseDateValue(value) {
 
 function extractDuration(ob) {
   if (!ob || typeof ob !== "object") return null;
+  if (ob.month !== undefined) {
+    const raw = Number(ob.month);
+    if (Number.isNaN(raw)) throw new Error("subtract: duration must be numeric");
+    return { unit: "month", value: raw };
+  }
   for (const unit of Object.keys(DURATION_UNITS)) {
     if (ob[unit] !== undefined) {
       const raw = Number(ob[unit]);
@@ -45,6 +50,14 @@ function extractDuration(ob) {
 function addDurationToDate(dateValue, duration, direction = 1) {
   const base = parseDateValue(dateValue);
   if (!base) throw new Error("subtract: date target required");
+  if (duration.unit === "month") {
+    if (!Number.isInteger(duration.value)) {
+      throw new Error("subtract: month duration must be an integer");
+    }
+    const copy = new Date(base.getTime());
+    copy.setMonth(copy.getMonth() + duration.value * direction);
+    return copy.toISOString();
+  }
   const ms = DURATION_UNITS[duration.unit] * duration.value * direction;
   return new Date(base.getTime() + ms).toISOString();
 }
@@ -105,7 +118,15 @@ export const signatures = [
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
+    signatureWords: ["be", "subtract", "ob", "month", "from", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
     signatureWords: ["be", "subtract", "from", "date", "ob", "second"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "date", "ob", "month"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {
@@ -138,6 +159,14 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "subtract", "from", "date", "ob", "week"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "month", "from", "name", "date"],
+    handler: subtract_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "name", "date", "ob", "month"],
     handler: subtract_by_num_from_name_num_to_name_num
   },
   {

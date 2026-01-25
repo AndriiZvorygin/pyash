@@ -240,6 +240,7 @@ fromtext "prompt" totext output be read do
 ob date 2025-05-01 be record ya
 ob date today be record ya
 ob day 3 be record ya
+ob month 1 be record ya
 ```
 
 ## 8. Source of truth
