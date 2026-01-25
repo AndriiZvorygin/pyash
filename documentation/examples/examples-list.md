@@ -18,6 +18,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Parse/understand | `examples/pyash/understand-to-file.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya` |
+| Download | `examples/pyash/download-ytdlp.pya` |
 | Tool envelope / again | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |
 | Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
