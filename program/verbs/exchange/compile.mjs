@@ -1971,6 +1971,11 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     const needsYamlRuntime = cHelpers.usesYamlRuntime;
     const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
     const headers = [];
+    headers.push("#if defined(__GNUC__)");
+    headers.push("#pragma GCC diagnostic push");
+    headers.push("#pragma GCC diagnostic ignored \"-Wformat-truncation\"");
+    headers.push("#pragma GCC diagnostic ignored \"-Wformat-overflow\"");
+    headers.push("#endif");
     if (cHelpers.usesCommand || cHelpers.usesExchange) {
       headers.push("#define _POSIX_C_SOURCE 200809L");
     }
@@ -2045,6 +2050,9 @@ function transpileProgram(sentences, { lang, sourceLineNumbers, sourceFilename, 
     lines.push(body || "  return 0;");
     lines.push("  return 0;");
     lines.push("}");
+    lines.push("#if defined(__GNUC__)");
+    lines.push("#pragma GCC diagnostic pop");
+    lines.push("#endif");
   }
 
   return lines.join("\n") + "\n";
