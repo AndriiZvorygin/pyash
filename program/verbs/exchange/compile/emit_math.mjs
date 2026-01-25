@@ -131,7 +131,7 @@ export function handleMathSentence(context, helpers) {
     return lines.join("\n");
   }
 
-  const durationUnit = ob && ["second", "minute", "hour", "day", "week"].find((unit) => ob[unit] !== undefined);
+  const durationUnit = ob && ["second", "minute", "hour", "day", "week", "month"].find((unit) => ob[unit] !== undefined);
   if ((baseBe === "plus" || baseBe === "subtract") && durationUnit) {
     const direction = baseBe === "plus" ? 1 : -1;
     const amountValue = Number(ob[durationUnit]);

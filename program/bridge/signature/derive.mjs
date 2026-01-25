@@ -72,6 +72,7 @@ function caseTypeWords(value) {
   }
   if (value.num !== undefined) words.push("num");
   if (value.date !== undefined) words.push("date");
+  if (value.month !== undefined) words.push("month");
   if (value.second !== undefined) words.push("second");
   if (value.minute !== undefined) words.push("minute");
   if (value.hour !== undefined) words.push("hour");
@@ -110,6 +111,7 @@ function normalizeDefinitionTypeWords(typeWords) {
       t === "filename" ||
       t === "bool" ||
       t === "date" ||
+      t === "month" ||
       t === "second" ||
       t === "minute" ||
       t === "hour" ||
@@ -190,6 +192,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (caseKey === "su") {
       if (factObj?.num !== undefined) return ["num"];
       if (factObj?.date !== undefined) return ["date"];
+      if (factObj?.month !== undefined) return ["month"];
       if (factObj?.second !== undefined) return ["second"];
       if (factObj?.minute !== undefined) return ["minute"];
       if (factObj?.hour !== undefined) return ["hour"];
@@ -217,6 +220,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (factObj?.ve?.values) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (vecType) return ["name", "vec", normalizeWords(vecType) || "num"].filter(Boolean);
     if (factObj?.date !== undefined) return ["name", "date"];
+    if (factObj?.month !== undefined) return ["name", "month"];
     if (factObj?.second !== undefined) return ["name", "second"];
     if (factObj?.minute !== undefined) return ["name", "minute"];
     if (factObj?.hour !== undefined) return ["name", "hour"];
@@ -235,11 +239,13 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
 
   if (value.num !== undefined) return ["num"];
   if (value.date !== undefined) return ["date"];
+  if (value.month !== undefined) return ["month"];
   if (value.second !== undefined) return ["second"];
   if (value.minute !== undefined) return ["minute"];
   if (value.hour !== undefined) return ["hour"];
   if (value.day !== undefined) return ["day"];
   if (value.week !== undefined) return ["week"];
+  if (value.month !== undefined) return ["month"];
   if (value.wo !== undefined) {
     if (caseKey === "ob") return ["wo"];
     const literal = normalizeWords(String(value.wo));

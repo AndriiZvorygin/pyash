@@ -6,13 +6,13 @@ It is designed to avoid backend dispatch inside the verb body by encoding transp
 ## 1. Canonical verb shape
 
 ```
-be download fromstate <scheme> from filename <url> [as wo <intent>] to filename <path> do
+be download fromstate <scheme> from filename <url> [as wo <intent>] [to filename <path>] do
 ```
 
 - `fromstate` encodes the transport/scheme (`http`, `https`, `magnet`, `ipfs`).
 - `from filename` carries the URL (text payload; not a local filename).
 - `as wo` encodes the intent (`video`, `audio`, `web`, `file`) and maps to the backend choice.
-- `to filename` is the local output path.
+- `to filename` is the local output path (optional; defaults to current working directory).
 
 ## 2. Scheme and intent vocabulary
 
@@ -31,6 +31,7 @@ be download fromstate <scheme> from filename <url> [as wo <intent>] to filename 
 Notes:
 - `as wo` is optional when the scheme has a single backend (e.g., `magnet`, `ipfs`).
 - `as wo` is required when multiple backends are valid for the scheme (e.g., `http`, `https`).
+- `ob wo all` MAY be used to request a multi-item download (playlists/channels/feeds).
 
 ## 3. Signature-first dispatch (normative)
 
@@ -85,6 +86,22 @@ Suggested backend mapping (non-normative):
 
 Backends live as modules or command helpers. Keep side effects localized.
 
+## 6.1 Optional cases (download-specific)
+
+These cases are interpreted by the download backend and do not change global grammar.
+
+* `ob wo all` — download multiple items when the source is a playlist/channel/feed.
+* `during months <n>` — restrict downloads to the last `<n>` months (backend-specific).
+
+If `to filename` is omitted, the backend MUST write into the current working directory,
+using its default naming template.
+
+Additional backend arguments MAY be supplied via defaults, e.g.:
+
+```
+su name download extra ob ve text "--cookies-from-browser firefox" ya
+```
+
 ## 7. Example sentences
 
 ```
@@ -97,4 +114,9 @@ be download fromstate ipfs from filename "ipfs://bafy..." to filename "out.bin" 
 Sugar example (pre-dispatch normalization):
 ```
 be download from filename "https://example.com/file.zip" as wo file to filename "out/file.zip" do
+```
+
+Playlist/channel example (download all items from last month into CWD):
+```
+be download ob wo all during months 1 from filename "https://www.youtube.com/@AndriiZ/videos" as wo audio do
 ```

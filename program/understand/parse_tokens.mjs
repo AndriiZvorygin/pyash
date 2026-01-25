@@ -10,6 +10,7 @@ import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
 
 const UNIT_TYPE_ALIASES = {
+  months: "month",
   seconds: "second",
   minutes: "minute",
   hours: "hour",
@@ -435,7 +436,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         const value = tokenValue(raw);
         target.date = value;
         i++;
-      } else if (t === "second" || t === "seconds" || t === "minute" || t === "minutes" || t === "hour" || t === "hours" || t === "day" || t === "days" || t === "week" || t === "weeks") {
+      } else if (t === "month" || t === "months" || t === "second" || t === "seconds" || t === "minute" || t === "minutes" || t === "hour" || t === "hours" || t === "day" || t === "days" || t === "week" || t === "weeks") {
         const raw = words[i + 1];
         const value = tokenValue(raw);
         const unit = UNIT_TYPE_ALIASES[t] ?? t;

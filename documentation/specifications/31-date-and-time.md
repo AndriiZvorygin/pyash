@@ -29,13 +29,15 @@ Supported unit types:
 - `hour`
 - `day`
 - `week`
+- `month`
 
-Plural unit words (`seconds`, `minutes`, `hours`, `days`, `weeks`) are aliases.
+Plural unit words (`seconds`, `minutes`, `hours`, `days`, `weeks`, `months`) are aliases.
 
 Examples:
 ```
 ob day 3 be record ya
 ob hours 4 be record ya
+ob month 1 be record ya
 ```
 
 ## 3. Date math with `add` / `subtract`
@@ -47,11 +49,13 @@ Examples:
 be add ob day 3 to date today do
 be add ob hour 4 to date now do
 be add ob weeks 3 to date today do
+be add ob month 1 to date today do
 ```
 
 Subtracting a duration from a date produces a date:
 ```
 be subtract ob day 7 from date today do
+be subtract ob month 1 from date today do
 ```
 
 ### 3.1 Result shape

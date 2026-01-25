@@ -132,6 +132,11 @@ function parseDateValue(value) {
 
 function extractDuration(ob) {
   if (!ob || typeof ob !== "object") return null;
+  if (ob.month !== undefined) {
+    const raw = Number(ob.month);
+    if (Number.isNaN(raw)) throw new Error("plus: duration must be numeric");
+    return { unit: "month", value: raw };
+  }
   for (const unit of Object.keys(DURATION_UNITS)) {
     if (ob[unit] !== undefined) {
       const raw = Number(ob[unit]);
@@ -145,6 +150,14 @@ function extractDuration(ob) {
 function addDurationToDate(dateValue, duration, direction = 1) {
   const base = parseDateValue(dateValue);
   if (!base) throw new Error("plus: date target required");
+  if (duration.unit === "month") {
+    if (!Number.isInteger(duration.value)) {
+      throw new Error("plus: month duration must be an integer");
+    }
+    const copy = new Date(base.getTime());
+    copy.setMonth(copy.getMonth() + duration.value * direction);
+    return copy.toISOString();
+  }
   const ms = DURATION_UNITS[duration.unit] * duration.value * direction;
   return new Date(base.getTime() + ms).toISOString();
 }
@@ -319,11 +332,13 @@ export const plus = plus_obj_num_to_name_num;
 
 export const signatures = [
   { signatureWords: ["be", "plus", "ob", "second", "to", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "month", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "minute", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "hour", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "day", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "week", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "second", "to", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "month", "to", "name", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "minute", "to", "name", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "hour", "to", "name", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "day", "to", "name", "date"], handler: plus_obj_num_to_name_num },

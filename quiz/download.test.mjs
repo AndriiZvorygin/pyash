@@ -53,3 +53,46 @@ test("download video uses ytdlp path with mock response", async () => {
     else process.env.PYA_DOWNLOAD_RESPONSE = original;
   }
 });
+
+test("download without to filename defaults to cwd basename", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-"));
+  const originalCwd = process.cwd();
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = "ok";
+  try {
+    process.chdir(tmpDir);
+    await interpret(parse(
+      'be download from filename "https://example.com/file.txt" as wo web do'
+    ));
+    const outPath = path.join(tmpDir, "file.txt");
+    const content = await fs.readFile(outPath, "utf8");
+    assert.equal(content, "ok");
+  } finally {
+    process.chdir(originalCwd);
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});
+
+test("download supports ob wo all during months for yt-dlp", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-"));
+  const originalCwd = process.cwd();
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = "ok";
+  try {
+    process.chdir(tmpDir);
+    const result = await interpret(parse(
+      'be download ob wo all during months 1 from filename "https://example.com/playlist" as wo audio do'
+    ));
+    const outPath = path.join(tmpDir, "download.mock");
+    const content = await fs.readFile(outPath, "utf8");
+    assert.equal(content, "ok");
+    assert.equal(result?.value?.filename, tmpDir);
+  } finally {
+    process.chdir(originalCwd);
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});

@@ -25,3 +25,11 @@ test("date math subtracts hours from a date", async () => {
   const res = await run("su name base ob what que");
   assert.deepEqual(res, "exists su name base ob date 2025-01-20T08:00:00.000Z be date ya");
 });
+
+test("date math adds months to a date", async () => {
+  forget();
+  await run("exists su name base ob date 2025-01-20T00:00:00Z be record ya");
+  await run("ob month 1 to name base be plus do");
+  const res = await run("su name base ob what que");
+  assert.deepEqual(res, "exists su name base ob date 2025-02-20T00:00:00.000Z be date ya");
+});

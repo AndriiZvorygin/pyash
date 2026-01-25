@@ -43,6 +43,8 @@ export const TYPE_TOKENS = [
   "ord",
   "wo",
   "date",
+  "month",
+  "months",
   "second",
   "seconds",
   "minute",

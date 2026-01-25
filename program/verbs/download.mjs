@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import fsSync from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 
@@ -28,6 +27,39 @@ function resolveOutput(sentence, { rememberFn } = {}) {
   return resolveText(sentence?.to, { rememberFn });
 }
 
+function resolveExtraArgs({ rememberFn } = {}) {
+  if (!rememberFn) return [];
+  const fact = rememberFn("download extra");
+  const values = fact?.ob?.ve?.values;
+  if (!Array.isArray(values)) return [];
+  return values.map(value => String(value)).filter(Boolean);
+}
+
+function parseMonthWindow(sentence) {
+  const direct = sentence?.during?.month;
+  if (direct !== undefined) {
+    const count = Number(direct);
+    if (!Number.isFinite(count) || count <= 0) return null;
+    return count;
+  }
+  const raw = sentence?.during?.name ?? sentence?.during?.text;
+  if (!raw || typeof raw !== "string") return null;
+  const match = raw.trim().match(/^months?\s+([0-9]+(?:\.[0-9]+)?)$/i);
+  if (!match) return null;
+  const count = Number(match[1]);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  return count;
+}
+
+function formatMonthWindow(count) {
+  const unit = count === 1 ? "month" : "months";
+  return `today-${count}${unit}`;
+}
+
+function isMultiDownload(sentence) {
+  return sentence?.ob?.wo === "all";
+}
+
 function missingBackend(sentence, { scheme, intent } = {}) {
   const note = [scheme, intent].filter(Boolean).join(" ");
   throwErrorSentence({
@@ -48,9 +80,9 @@ async function recordDownloadArtifact(filename) {
   } catch {}
 }
 
-async function runCurl({ url, outputPath }) {
+async function runCurl({ url, outputPath, extraArgs = [] }) {
   return new Promise((resolve, reject) => {
-    const proc = spawn("curl", ["-L", "-o", outputPath, url], {
+    const proc = spawn("curl", ["-L", "-o", outputPath, ...extraArgs, url], {
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stderr = "";
@@ -62,11 +94,23 @@ async function runCurl({ url, outputPath }) {
   });
 }
 
-async function runYtDlp({ url, outputPath, intent }) {
+async function runYtDlp({ url, outputPath, intent, extraArgs = [], multi = false, monthWindow = null }) {
   return new Promise((resolve, reject) => {
-    const args = ["-o", outputPath];
+    const args = [];
+    if (outputPath) {
+      args.push("-o", outputPath);
+    }
     if (intent === "audio") {
-      args.unshift("-x", "--audio-format", "mp3");
+      args.push("-x", "--audio-format", "opus", "--audio-quality", "0");
+    }
+    if (multi) {
+      args.push("--lazy-playlist", "--break-on-reject");
+    }
+    if (monthWindow) {
+      args.push("--dateafter", formatMonthWindow(monthWindow));
+    }
+    if (extraArgs.length) {
+      args.push(...extraArgs);
     }
     args.push(url);
     const proc = spawn("yt-dlp", args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -96,15 +140,18 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
       raw: { sentence }
     });
   }
-  if (!dest) {
-    throwErrorSentence({
-      name: "download defective",
-      message: "download defective: missing target filename",
-      from: { name: "download" },
-      raw: { sentence }
-    });
-  }
-  const resolvedDest = path.resolve(dest);
+  const resolvedDest = dest
+    ? path.resolve(dest)
+    : (() => {
+      try {
+        const parsed = new URL(url);
+        const base = path.basename(parsed.pathname || "");
+        const name = base && base !== "/" ? base : "download.bin";
+        return path.resolve(process.cwd(), name);
+      } catch {
+        return path.resolve(process.cwd(), "download.bin");
+      }
+    })();
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
 
   const mock = process.env.PYA_DOWNLOAD_RESPONSE;
@@ -113,7 +160,8 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
     return { ob: { filename: resolvedDest }, be: "download" };
   }
 
-  const { status, stderr } = await runCurl({ url, outputPath: resolvedDest });
+  const extraArgs = resolveExtraArgs({ rememberFn });
+  const { status, stderr } = await runCurl({ url, outputPath: resolvedDest, extraArgs });
   if (status !== 0) {
     throwErrorSentence({
       name: "download defective",
@@ -137,24 +185,49 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       raw: { sentence }
     });
   }
-  if (!dest) {
-    throwErrorSentence({
-      name: "download defective",
-      message: "download defective: missing target filename",
-      from: { name: "download" },
-      raw: { sentence }
-    });
+  const multi = isMultiDownload(sentence);
+  const monthWindow = parseMonthWindow(sentence);
+  const cwd = process.cwd();
+  let resolvedDest = dest ? path.resolve(dest) : "";
+  let outputTemplate = "";
+  let outputDir = "";
+  if (dest) {
+    let isDir = false;
+    try {
+      const stats = await fs.stat(resolvedDest);
+      isDir = stats.isDirectory();
+    } catch {}
+    if (isDir || multi) {
+      outputDir = resolvedDest;
+      outputTemplate = path.join(outputDir, "%(upload_date)s - %(title)s [%(id)s].%(ext)s");
+    } else {
+      outputDir = path.dirname(resolvedDest);
+      outputTemplate = resolvedDest;
+    }
+  } else {
+    outputDir = cwd;
+    outputTemplate = path.join(outputDir, "%(upload_date)s - %(title)s [%(id)s].%(ext)s");
   }
-  const resolvedDest = path.resolve(dest);
-  await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
+  await fs.mkdir(outputDir, { recursive: true });
 
   const mock = process.env.PYA_DOWNLOAD_RESPONSE;
   if (mock !== undefined) {
-    await fs.writeFile(resolvedDest, String(mock ?? ""), "utf8");
-    return { ob: { filename: resolvedDest }, be: "download" };
+    const mockTarget = outputTemplate.includes("%(")
+      ? path.join(outputDir, "download.mock")
+      : outputTemplate;
+    await fs.writeFile(mockTarget, String(mock ?? ""), "utf8");
+    return { ob: { filename: outputTemplate.includes("%(") ? outputDir : mockTarget }, be: "download" };
   }
 
-  const { status, stderr } = await runYtDlp({ url, outputPath: resolvedDest, intent });
+  const extraArgs = resolveExtraArgs({ rememberFn });
+  const { status, stderr } = await runYtDlp({
+    url,
+    outputPath: outputTemplate,
+    intent,
+    extraArgs,
+    multi,
+    monthWindow
+  });
   if (status !== 0) {
     const reason = String(stderr ?? "").trim();
     const msg = reason.includes("yt-dlp missing")
@@ -167,8 +240,10 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       raw: { url, scheme, intent }
     });
   }
-  await recordDownloadArtifact(resolvedDest);
-  return { ob: { filename: resolvedDest }, be: "download" };
+  if (!outputTemplate.includes("%(")) {
+    await recordDownloadArtifact(outputTemplate);
+  }
+  return { ob: { filename: outputTemplate.includes("%(") ? outputDir : outputTemplate }, be: "download" };
 }
 
 export async function download_missing(sentence, { scheme, intent } = {}) {
@@ -220,5 +295,29 @@ export const signatures = [
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
-  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) }
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "web", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "web", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "file", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "file", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "file", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "file", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "during", "month", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "during", "month", "from", "filename", "fromstate", "name", "https", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "during", "month", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "during", "month", "from", "filename", "fromstate", "name", "https", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "during", "month", "from", "filename", "fromstate", "name", "http", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "during", "month", "from", "filename", "fromstate", "name", "https", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "during", "month", "from", "filename", "fromstate", "name", "http", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "during", "month", "from", "filename", "fromstate", "name", "https", "ob", "wo", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) }
 ];
