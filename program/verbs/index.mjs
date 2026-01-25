@@ -41,6 +41,7 @@ import glance, { signatures as glanceSignatures } from "./glance.mjs";
 import here, { signatures as hereSignatures } from "./here.mjs";
 import list, { signatures as listSignatures } from "./list.mjs";
 import license, { signatures as licenseSignatures } from "./license.mjs";
+import download, { signatures as downloadSignatures } from "./download.mjs";
 import notVerb, { signatures as notSignatures } from "./not.mjs";
 import orVerb, { signatures as orSignatures } from "./or.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
@@ -132,6 +133,7 @@ export const builtInSignatures = [
   ...hereSignatures,
   ...listSignatures,
   ...licenseSignatures,
+  ...downloadSignatures,
   ...notSignatures,
   ...orSignatures,
   ...renameSignatures,

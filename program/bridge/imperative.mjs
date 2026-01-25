@@ -32,6 +32,35 @@ function resolveInlineGenitive(genitive, state) {
   return undefined;
 }
 
+function inferDownloadScheme(url) {
+  if (typeof url !== "string") return null;
+  const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith("magnet:")) return "magnet";
+  if (lower.startsWith("ipfs://") || lower.startsWith("ipfs:")) return "ipfs";
+  if (lower.startsWith("https://")) return "https";
+  if (lower.startsWith("http://")) return "http";
+  return null;
+}
+
+function normalizeDownloadSentence(sentence) {
+  if (!sentence || sentence.be !== "download") return;
+  if (sentence.fromstate?.name) return;
+  const url = sentence.from?.filename ?? sentence.from?.text;
+  if (!url) return;
+  const scheme = inferDownloadScheme(url);
+  if (scheme) {
+    sentence.fromstate = { name: scheme };
+    return;
+  }
+  throwErrorSentence({
+    name: "download defective",
+    message: "download defective: missing fromstate",
+    from: { name: "download" },
+    raw: { sentence }
+  });
+}
+
 export async function handleImperative({
   sentence,
   state,
@@ -46,6 +75,10 @@ export async function handleImperative({
       const hasDefinition = typeof getDefinitionEntry === "function" && getDefinitionEntry(sentence.be);
       if (!hasDefinition) sentence.be = resolved;
     }
+  }
+
+  if (sentence?.mood === "do") {
+    normalizeDownloadSentence(sentence);
   }
 
   const { mood, be, ob, to, from, su } = sentence;
