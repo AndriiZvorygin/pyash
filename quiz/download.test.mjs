@@ -35,3 +35,21 @@ test("download magnet backend missing is deterministic", async () => {
       && String(err?.sentence?.ob?.text ?? "").includes("backend missing")
   );
 });
+
+test("download video uses ytdlp path with mock response", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-"));
+  const outPath = path.join(tmpDir, "mock.mp4");
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = "video";
+  try {
+    await interpret(parse(
+      `be download from filename "https://example.com/video" as wo video to filename "${outPath}" do`
+    ));
+    const content = await fs.readFile(outPath, "utf8");
+    assert.equal(content, "video");
+  } finally {
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});
