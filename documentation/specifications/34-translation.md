@@ -171,7 +171,7 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - [x] Parser fallback from gloss → Pyash.
 
 ### Russian
-- [ ] Adapter: `russian.mjs` (currently stubbed).
+- [x] Adapter: `russian.mjs` (to/from Pyash).
 - [x] Exact pairs: `pairs_russian.pya`.
 - [x] Templates: `pairs_russian_templates.pya`.
 - [x] Parser fallback from gloss → Pyash.
