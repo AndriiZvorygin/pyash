@@ -17,6 +17,11 @@ The value is a plain English gloss string. The translation pipeline checks this 
 translating Pyash → English, then falls back to the formatter. `pairs_russian.pya` and
 `pairs_french.pya` follow the same shape.
 
+Template pairs live alongside exact pairs:
+`pairs_english_templates.pya`, `pairs_russian_templates.pya`, `pairs_french_templates.pya`.
+Templates use placeholders like `[name of su]` and `[num of ob]` so a single entry covers many
+sentences. Exact pairs always win; templates are a fallback before the formatter.
+
 To regenerate the English pairs from `examples/pyash/*.pya`:
 
 ```

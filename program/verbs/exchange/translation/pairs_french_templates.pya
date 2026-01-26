@@ -1,0 +1,27 @@
+su name translation_pairs_french_templates be map def
+su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of su] est le nombre [num of ob]." ya
+su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] est le texte \"[text of ob]\"." ya
+su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] est [bool of ob]." ya
+su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] est un vecteur." ya
+su text "ob num [num of ob] to name [name of to] be plus do" ob text "ajoute [num of ob] a [name of to]." ya
+su text "ob num [num of ob] from name [name of from] be subtract do" ob text "soustrais [num of ob] de [name of from]." ya
+su text "ob num [num of ob] with name [name of with] be multiply do" ob text "multiplie [name of with] par [num of ob]." ya
+su text "ob num [num of ob] with name [name of with] be divide do" ob text "divise [name of with] par [num of ob]." ya
+su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "reste de [num of ob] par [num of from] vers [name of to]." ya
+su text "ob text [text of ob] to name [name of to] be write do" ob text "ecris \"[text of ob]\" dans [name of to]." ya
+su text "ob text [text of ob] be say do" ob text "dis \"[text of ob]\"." ya
+su text "from name [name of from] be read do" ob text "lis [name of from]." ya
+su text "from filename [filename of from] be read do" ob text "lis le fichier [filename of from]." ya
+su text "su name [name of su] be map def" ob text "[name of su] est une definition de carte." ya
+su text "su name [name of su] be json map def" ob text "[name of su] est une definition de carte JSON." ya
+su text "su name [name of su] be csv map def" ob text "[name of su] est une definition de carte CSV." ya
+su text "su name [name of su] be ceremony def" ob text "[name of su] est une definition de ceremonie." ya
+su text "su name [name of su] be map prah" ob text "[name of su] est la fin de la definition de carte." ya
+su text "su name [name of su] be json map prah" ob text "[name of su] est la fin de la definition de carte JSON." ya
+su text "su name [name of su] be csv map prah" ob text "[name of su] est la fin de la definition de carte CSV." ya
+su text "su name [name of su] be ceremony prah" ob text "[name of su] est la fin de la ceremonie." ya
+su text "su name [name of su] ob date [date of ob] be date ya" ob text "[name of su] est la date [date of ob]." ya
+su text "ob num [num of ob] be tiny from num [num of from] then [pyash of consequence]" ob text "si [num of ob] est plus petit que [num of from], alors [gloss of consequence]" ya
+su text "ob num [num of ob] be giant from num [num of from] then [pyash of consequence]" ob text "si [num of ob] est plus grand que [num of from], alors [gloss of consequence]" ya
+su text "ob num [num of ob] be equally from num [num of from] then [pyash of consequence]" ob text "si [num of ob] est egal a [num of from], alors [gloss of consequence]" ya
+prah

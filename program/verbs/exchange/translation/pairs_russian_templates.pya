@@ -1,0 +1,27 @@
+su name translation_pairs_russian_templates be map def
+su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of su] — число [num of ob]." ya
+su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] — текст \"[text of ob]\"." ya
+su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] — [bool of ob]." ya
+su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] — вектор." ya
+su text "ob num [num of ob] to name [name of to] be plus do" ob text "прибавь [num of ob] к [name of to]." ya
+su text "ob num [num of ob] from name [name of from] be subtract do" ob text "вычти [num of ob] из [name of from]." ya
+su text "ob num [num of ob] with name [name of with] be multiply do" ob text "умножь [name of with] на [num of ob]." ya
+su text "ob num [num of ob] with name [name of with] be divide do" ob text "раздели [name of with] на [num of ob]." ya
+su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "остаток от [num of ob] по [num of from] в [name of to]." ya
+su text "ob text [text of ob] to name [name of to] be write do" ob text "запиши \"[text of ob]\" в [name of to]." ya
+su text "ob text [text of ob] be say do" ob text "скажи \"[text of ob]\"." ya
+su text "from name [name of from] be read do" ob text "прочитай [name of from]." ya
+su text "from filename [filename of from] be read do" ob text "прочитай файл [filename of from]." ya
+su text "su name [name of su] be map def" ob text "[name of su] — определение карты." ya
+su text "su name [name of su] be json map def" ob text "[name of su] — определение JSON карты." ya
+su text "su name [name of su] be csv map def" ob text "[name of su] — определение CSV карты." ya
+su text "su name [name of su] be ceremony def" ob text "[name of su] — определение церемонии." ya
+su text "su name [name of su] be map prah" ob text "[name of su] — конец определения карты." ya
+su text "su name [name of su] be json map prah" ob text "[name of su] — конец определения JSON карты." ya
+su text "su name [name of su] be csv map prah" ob text "[name of su] — конец определения CSV карты." ya
+su text "su name [name of su] be ceremony prah" ob text "[name of su] — конец церемонии." ya
+su text "su name [name of su] ob date [date of ob] be date ya" ob text "[name of su] — дата [date of ob]." ya
+su text "ob num [num of ob] be tiny from num [num of from] then [pyash of consequence]" ob text "если [num of ob] меньше [num of from], то [gloss of consequence]" ya
+su text "ob num [num of ob] be giant from num [num of from] then [pyash of consequence]" ob text "если [num of ob] больше [num of from], то [gloss of consequence]" ya
+su text "ob num [num of ob] be equally from num [num of from] then [pyash of consequence]" ob text "если [num of ob] равно [num of from], то [gloss of consequence]" ya
+prah
