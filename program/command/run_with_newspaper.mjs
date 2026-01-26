@@ -29,6 +29,46 @@ function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
+function dateStampFromRunTime(runTime) {
+  const match = String(runTime ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}${match[2]}${match[3]}`;
+  const now = new Date();
+  const yyyy = String(now.getFullYear()).padStart(4, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}${mm}${dd}`;
+}
+
+async function nextRunSequence({ dateStamp, cwd }) {
+  const newspaperDir = path.resolve(cwd, "newspaper");
+  let entries = [];
+  try {
+    entries = await fs.readdir(newspaperDir);
+  } catch {
+    return "001";
+  }
+  let max = 0;
+  const prefix = `${dateStamp}-`;
+  for (const entry of entries) {
+    if (!entry.startsWith(prefix)) continue;
+    const match = entry.match(/^(\d{8})-(\d{3})-/);
+    if (!match) continue;
+    const value = Number(match[2]);
+    if (Number.isFinite(value)) max = Math.max(max, value);
+  }
+  return String(max + 1).padStart(3, "0");
+}
+
+async function buildRunId({ runTime, sourcePath, cwd }) {
+  const dateStamp = dateStampFromRunTime(runTime);
+  const seq = await nextRunSequence({ dateStamp, cwd });
+  const base = sourcePath
+    ? path.basename(sourcePath, path.extname(sourcePath))
+    : "run";
+  const safeBase = sanitizeRunId(base);
+  return `${dateStamp}-${seq}-${safeBase}`;
+}
+
 function resultSentenceForLine(line) {
   try {
     const sentence = parse(line);
@@ -59,8 +99,8 @@ async function run() {
   const resolved = path.resolve(sourcePathFlag);
   const text = await fs.readFile(resolved, "utf8");
   const sentences = splitSentences(text);
-  const runId = runIdFlag || `run-${Date.now()}`;
   const runTime = runTimeFlag || new Date().toISOString();
+  const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
   const pushLine = (line) => {
