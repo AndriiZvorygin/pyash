@@ -114,6 +114,7 @@ function roleKey(rolePath) {
 
 function matchTemplateGloss(text, lang, { matchGloss }) {
   const templates = buildTemplateList(lang);
+  let best = null;
   for (const template of templates) {
     const match = template.regex.exec(text);
     if (!match) continue;
@@ -147,6 +148,10 @@ function matchTemplateGloss(text, lang, { matchGloss }) {
         ok = false;
         break;
       }
+      if (placeholder.field === "name" && typeof capture.raw === "string" && capture.raw.includes("\"")) {
+        ok = false;
+        break;
+      }
       const rendered = renderCapturedForKey(placeholder.field, capture.raw, lang);
       if (rendered == null) {
         ok = false;
@@ -155,9 +160,12 @@ function matchTemplateGloss(text, lang, { matchGloss }) {
       pyash = pyash.split(placeholder.raw).join(rendered);
     }
     if (!ok) continue;
-    return pyash;
+    const score = template.value.length;
+    if (!best || score > best.score) {
+      best = { pyash, score };
+    }
   }
-  return null;
+  return best?.pyash ?? null;
 }
 
 export function matchGlossToPyash(text, { language } = {}) {

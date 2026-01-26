@@ -139,6 +139,18 @@ function englishLineToSentence(line) {
     return sentence;
   }
 
+  // Imperative form: "do write \"hi\" to output"
+  const doWriteMatch = trimmed.match(/^do write \"([^\"]*)\" to ([A-Za-z0-9_]+)\.?$/i);
+  if (doWriteMatch) {
+    const [, text, target] = doWriteMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { text },
+      to: { name: target }
+    };
+  }
+
   // Expect format: "<name> is <be> <value>."
   const match = trimmed.match(/^([A-Za-z0-9_]+) is ([A-Za-z0-9_ ]+?)(?: "([^"]*)")?(?: ([0-9.+-]+))?\.?$/);
   if (!match) return null;
