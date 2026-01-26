@@ -3,8 +3,8 @@ su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of
 su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] is text \"[text of ob]\"." ya
 su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] is [bool of ob]." ya
 su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] is vector." ya
-su text "ob num [num of ob] to name [name of to] be plus do" ob text "add [num of ob] to [name of to]." ya
-su text "ob num [num of ob] from name [name of from] be subtract do" ob text "subtract [num of ob] from [name of from]." ya
+su text "ob num [num of ob] to name [name of to] be plus do" ob text "do plus [num of ob] to [name of to]." ya
+su text "ob num [num of ob] from name [name of from] be subtract do" ob text "do subtract [num of ob] from [name of from]." ya
 su text "ob num [num of ob] with name [name of with] be multiply do" ob text "multiply [name of with] by [num of ob]." ya
 su text "ob num [num of ob] with name [name of with] be divide do" ob text "divide [name of with] by [num of ob]." ya
 su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "remainder of [num of ob] by [num of from] to [name of to]." ya
