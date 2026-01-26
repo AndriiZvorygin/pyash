@@ -2,7 +2,14 @@ import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
-import { loadEnglishTranslationPairs, loadRussianTranslationPairs, loadFrenchTranslationPairs } from "./translation/pairs.mjs";
+import {
+  loadEnglishTranslationPairs,
+  loadRussianTranslationPairs,
+  loadFrenchTranslationPairs,
+  loadEnglishTranslationTemplates,
+  loadRussianTranslationTemplates,
+  loadFrenchTranslationTemplates
+} from "./translation/pairs.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -63,11 +70,38 @@ export async function translation_from_text_to_name_text(sentence) {
         pairs = null;
       }
     }
+    let templates = null;
+    if (targetAdapter?.name === "english") {
+      try {
+        templates = await loadEnglishTranslationTemplates();
+      } catch (err) {
+        templates = null;
+      }
+    }
+    if (!templates && targetAdapter?.name === "russian") {
+      try {
+        templates = await loadRussianTranslationTemplates();
+      } catch (err) {
+        templates = null;
+      }
+    }
+    if (!templates && targetAdapter?.name === "french") {
+      try {
+        templates = await loadFrenchTranslationTemplates();
+      } catch (err) {
+        templates = null;
+      }
+    }
     const lines = program.sentences.map((s) => {
       if (pairs) {
         const pyash = sentenceToPyash(s);
         const text = pyash ? pairs.get(pyash) : null;
         if (typeof text === "string") return text;
+      }
+      if (templates) {
+        const pyash = sentenceToPyash(s);
+        const templated = pyash ? applyTemplatePairs(templates, s, pyash, targetAdapter?.name ?? outputLang, formatter) : null;
+        if (typeof templated === "string") return templated;
       }
       return formatter(s);
     });
@@ -88,6 +122,154 @@ export async function translation_from_text_to_name_text(sentence) {
 }
 
 export default translation_from_text_to_name_text;
+
+function resolveRolePath(sentence, tokens) {
+  let current = sentence;
+  for (const token of tokens) {
+    if (!current || typeof current !== "object") return null;
+    if (token === "consequence") {
+      current = current.consequence;
+      continue;
+    }
+    if (token === "su" || token === "ob" || token === "to" || token === "from" || token === "with" || token === "via" || token === "by") {
+      current = current[token];
+      continue;
+    }
+    return null;
+  }
+  return current;
+}
+
+function placeholderValueForCase(sentence, field, rolePath) {
+  const target = resolveRolePath(sentence, rolePath);
+  if (!target) return null;
+  if (field === "pyash") return target;
+  if (field === "gloss") return target;
+  if (field === "name") return target.name ?? null;
+  if (field === "text") return target.text ?? null;
+  if (field === "num") return target.num ?? null;
+  if (field === "bool" || field === "boolean") {
+    if (target.boolean === true || target.boolean === false) return target.boolean;
+    return null;
+  }
+  if (field === "date") return target.date ?? null;
+  if (field === "filename") return target.filename ?? null;
+  if (field === "wo") return target.wo ?? null;
+  if (field === "vec" || field === "ve") return target.ve ?? null;
+  return null;
+}
+
+function renderVectorForKey(vec) {
+  if (!vec || typeof vec !== "object") return null;
+  const type = vec.type || "num";
+  const values = Array.isArray(vec.values) ? vec.values : [];
+  const rendered = values.map((value) => {
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "truth" : "lie";
+    if (typeof value === "string") {
+      if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+      return JSON.stringify(value);
+    }
+    return String(value);
+  });
+  return ["ve", type, ...rendered].join(" ");
+}
+
+function renderPlaceholderValueForKey(field, value) {
+  if (value == null) return null;
+  if (field === "pyash") {
+    if (!value || typeof value !== "object") return null;
+    const pyash = sentenceToPyash(value);
+    return pyash || null;
+  }
+  if (field === "text") {
+    if (typeof value !== "string") return null;
+    if (/[\n\r]/.test(value)) {
+      return `quoted.text.${value}.text.quoted`;
+    }
+    return JSON.stringify(value);
+  }
+  if (field === "bool" || field === "boolean") {
+    return value === true ? "truth" : "lie";
+  }
+  if (field === "vec" || field === "ve") {
+    return renderVectorForKey(value);
+  }
+  return String(value);
+}
+
+function renderPlaceholderValueForOutput(field, value, language, formatter) {
+  if (value == null) return null;
+  if (field === "gloss") {
+    if (!value || typeof value !== "object") return null;
+    if (typeof formatter !== "function") return null;
+    try {
+      return formatter(value);
+    } catch {
+      return null;
+    }
+  }
+  if (field === "pyash") {
+    if (!value || typeof value !== "object") return null;
+    const pyash = sentenceToPyash(value);
+    return pyash || null;
+  }
+  if (field === "text") {
+    if (typeof value !== "string") return null;
+    return value;
+  }
+  if (field === "bool" || field === "boolean") {
+    const truth = value === true;
+    if (language === "russian") return truth ? "истина" : "ложь";
+    if (language === "french") return truth ? "vrai" : "faux";
+    return truth ? "true" : "false";
+  }
+  if (field === "vec" || field === "ve") {
+    return renderVectorForKey(value);
+  }
+  return String(value);
+}
+
+function applyTemplatePairs(templates, sentence, pyash, language, formatter) {
+  for (const template of templates) {
+    const substitution = new Map();
+    const outputSubstitution = new Map();
+    const placeholders = template.key.match(/\[[^\]]+\]/g) ?? [];
+    let ok = true;
+    for (const raw of placeholders) {
+      const token = raw.slice(1, -1).trim();
+      const match = token.match(/^([a-zA-Z]+)\s+of\s+(.+)$/);
+      if (!match) {
+        ok = false;
+        break;
+      }
+      const [, fieldRaw, roleRaw] = match;
+      const field = fieldRaw.toLowerCase();
+      const rolePath = roleRaw.toLowerCase().split(/\s+/).filter(Boolean);
+      const value = placeholderValueForCase(sentence, field, rolePath);
+      const renderedKey = renderPlaceholderValueForKey(field, value);
+      const renderedOutput = renderPlaceholderValueForOutput(field, value, language, formatter);
+      if (renderedKey == null || renderedOutput == null) {
+        ok = false;
+        break;
+      }
+      substitution.set(raw, renderedKey);
+      outputSubstitution.set(raw, renderedOutput);
+    }
+    if (!ok) continue;
+    let candidate = template.key;
+    for (const [placeholder, rendered] of substitution.entries()) {
+      candidate = candidate.split(placeholder).join(rendered);
+    }
+    if (candidate !== pyash) continue;
+    let output = template.value;
+    for (const [placeholder, rendered] of outputSubstitution.entries()) {
+      output = output.split(placeholder).join(rendered);
+    }
+    return output;
+  }
+  return null;
+}
 
 export const signatures = [
   {

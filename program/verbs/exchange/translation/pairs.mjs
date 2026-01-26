@@ -6,6 +6,12 @@ let cachedRussianPairs = null;
 let cachedRussianPairsError = null;
 let cachedFrenchPairs = null;
 let cachedFrenchPairsError = null;
+let cachedEnglishTemplates = null;
+let cachedEnglishTemplatesError = null;
+let cachedRussianTemplates = null;
+let cachedRussianTemplatesError = null;
+let cachedFrenchTemplates = null;
+let cachedFrenchTemplatesError = null;
 
 const ENTRY_REGEX = /^su text (\"(?:\\\\.|[^\"\\\\])*\") ob text (\"(?:\\\\.|[^\"\\\\])*\") ya$/;
 
@@ -38,6 +44,26 @@ function buildPairsMapFromText(text, { label }) {
     throw new Error(`translation pairs missing: ${label ?? "unknown"}`);
   }
   return map;
+}
+
+function buildTemplatePairsFromText(text, { label }) {
+  const list = [];
+  const lines = String(text).split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(ENTRY_REGEX);
+    if (!match) continue;
+    const key = normalizeText(JSON.parse(match[1]));
+    const value = normalizeText(JSON.parse(match[2]));
+    if (!key) {
+      throw new Error("translation template pairs: entry missing su");
+    }
+    if (key.includes("__QUOTED_BLOCK__")) continue;
+    list.push({ key, value: typeof value === "string" ? value : "" });
+  }
+  if (list.length === 0) {
+    throw new Error(`translation template pairs missing: ${label ?? "unknown"}`);
+  }
+  return list;
 }
 
 export async function loadEnglishTranslationPairs() {
@@ -78,6 +104,48 @@ export async function loadFrenchTranslationPairs() {
     return cachedFrenchPairs;
   } catch (err) {
     cachedFrenchPairsError = err;
+    throw err;
+  }
+}
+
+export async function loadEnglishTranslationTemplates() {
+  if (cachedEnglishTemplates) return cachedEnglishTemplates;
+  if (cachedEnglishTemplatesError) throw cachedEnglishTemplatesError;
+  try {
+    const fileUrl = new URL("./pairs_english_templates.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedEnglishTemplates = buildTemplatePairsFromText(text, { label: "translation_pairs_english_templates" });
+    return cachedEnglishTemplates;
+  } catch (err) {
+    cachedEnglishTemplatesError = err;
+    throw err;
+  }
+}
+
+export async function loadRussianTranslationTemplates() {
+  if (cachedRussianTemplates) return cachedRussianTemplates;
+  if (cachedRussianTemplatesError) throw cachedRussianTemplatesError;
+  try {
+    const fileUrl = new URL("./pairs_russian_templates.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedRussianTemplates = buildTemplatePairsFromText(text, { label: "translation_pairs_russian_templates" });
+    return cachedRussianTemplates;
+  } catch (err) {
+    cachedRussianTemplatesError = err;
+    throw err;
+  }
+}
+
+export async function loadFrenchTranslationTemplates() {
+  if (cachedFrenchTemplates) return cachedFrenchTemplates;
+  if (cachedFrenchTemplatesError) throw cachedFrenchTemplatesError;
+  try {
+    const fileUrl = new URL("./pairs_french_templates.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedFrenchTemplates = buildTemplatePairsFromText(text, { label: "translation_pairs_french_templates" });
+    return cachedFrenchTemplates;
+  } catch (err) {
+    cachedFrenchTemplatesError = err;
     throw err;
   }
 }
