@@ -1,0 +1,551 @@
+su name translation_pairs_russian be map def
+su text "be abs bump do" ob text "" ya
+su text "be ecology do" ob text "" ya
+su text "be first bump do" ob text "" ya
+su text "be math bump do" ob text "" ya
+su text "be ping do" ob text "" ya
+su text "be rel bump do" ob text "" ya
+su text "be second bump do" ob text "" ya
+su text "exists su name a ob num 1 be number ya" ob text "a — число 1." ya
+su text "exists su name acc ob be number ya" ob text "" ya
+su text "exists su name alpha ob la ob text \"a\" be write do ko be platform ya" ob text "" ya
+su text "exists su name base ob date today be date ya" ob text "base — дата today." ya
+su text "exists su name beta ob la ob text \"b\" be write do ko be platform ya" ob text "" ya
+su text "exists su name bucket ob num 0 be number ya" ob text "bucket — число 0." ya
+su text "exists su name cmd ob text \"ffmpeg -y -f \" be text ya" ob text "cmd — текст \"ffmpeg -y -f \"." ya
+su text "exists su name collector ob num 1 be number ya" ob text "collector — число 1." ya
+su text "exists su name collector ob num 10 be number ya" ob text "collector — число 10." ya
+su text "exists su name collector ob num 3 be number ya" ob text "collector — число 3." ya
+su text "exists su name collector ob num 7 be number ya" ob text "collector — число 7." ya
+su text "exists su name composite ob ve bool lie by num 10 be vector ya" ob text "composite — вектор." ya
+su text "exists su name composite ob ve bool lie by num 100 be vector ya" ob text "composite — вектор." ya
+su text "exists su name counter ob num 0 be number ya" ob text "counter — число 0." ya
+su text "exists su name crash ob la ob text \"boom\" be unknown do ko be platform ya" ob text "" ya
+su text "exists su name delta ob la ob text \"d\" be write do ko be platform ya" ob text "" ya
+su text "exists su name depend during date 2025-05-01 be reform ya" ob text "" ya
+su text "exists su name door ob be number ya" ob text "" ya
+su text "exists su name doorNum ob be number ya" ob text "" ya
+su text "exists su name doors ob ve bool lie by num 10 be vector ya" ob text "doors — вектор." ya
+su text "exists su name doors ob ve bool lie by num 100 be vector ya" ob text "doors — вектор." ya
+su text "exists su name doors ob ve bool truth lie truth be vector ya" ob text "doors — вектор." ya
+su text "exists su name doors ob ve num 0 0 0 0 0 0 0 0 0 0 be vector ya" ob text "doors — вектор." ya
+su text "exists su name doors ob ve num 0 by num 100 be vector ya" ob text "doors — вектор." ya
+su text "exists su name doors ob ve num 3 1 0 be vector ya" ob text "doors — вектор." ya
+su text "exists su name draft ob la su name lines ob text \"Reply in one short sentence.\" to name text mind-out for name mind be write do ko from ve name listen be platform ya" ob text "" ya
+su text "exists su name draft ob la su name lines ob text \"Write three short sentences about rain.\" to name text mind-out for name mind be write do ko be platform ya" ob text "" ya
+su text "exists su name ffmpeg input device ob text \"anullsrc=r=16000:cl=mono\" be default ya" ob text "" ya
+su text "exists su name ffmpeg input ob text \"lavfi\" be default ya" ob text "" ya
+su text "exists su name generator from name http://localhost:11434 be mind ya" ob text "" ya
+su text "exists su name handled ob num 0 be number ya" ob text "handled — число 0." ya
+su text "exists su name hear fixture ob text \"Hello from stream.\" be default ya" ob text "" ya
+su text "exists su name hear fixture ob text \"Hello from timebox.\" be default ya" ob text "" ya
+su text "exists su name hear ob name hear be default ya" ob text "" ya
+su text "exists su name helper as name qwen3-vl:8b-instruct accordingto name You must call the time tool before answering. Use timezone America/Toronto. Reply with the tool datetime only. be mind ya" ob text "" ya
+su text "exists su name helper as name qwen3-vl:8b-instruct accordingto name You must call tools. Use the JavaScript tool to compute math. When calling the tool, set ob to the full JavaScript source (not placeholders like code/source). After the tool call, respond with exactly the tool result content. If you did not receive a tool result, respond exactly: DID_NOT_RECEIVE_TOOL_RESULT. be mind ya" ob text "" ya
+su text "exists su name helper as name qwen3-vl:8b-instruct be mind ya" ob text "" ya
+su text "exists su name i ob be number ya" ob text "" ya
+su text "exists su name input ob text \"exists su name alpha ob num 2 be number ya\" be text ya" ob text "input — текст \"exists su name alpha ob num 2 be number ya\"." ya
+su text "exists su name j ob be number ya" ob text "" ya
+su text "exists su name keyboard bin ob text \"true\" be default ya" ob text "" ya
+su text "exists su name lhs ob num 2 be number ya" ob text "lhs — число 2." ya
+su text "exists su name lhs ob num 5 be number ya" ob text "lhs — число 5." ya
+su text "exists su name lhs ob num 6 be number ya" ob text "lhs — число 6." ya
+su text "exists su name lhs ob num 8 be number ya" ob text "lhs — число 8." ya
+su text "exists su name line ob text \"\" be text ya" ob text "line — текст \"\"." ya
+su text "exists su name listen ob la su name transcript from filename artifacts/hear/talk-loop-input.wav be hear do ko be platform ya" ob text "" ya
+su text "exists su name listen ob la su name transcript from filename artifacts/say/refinery-fixture.wav be hear do ko from ve name speak be platform ya" ob text "" ya
+su text "exists su name listen ob la su name transcript from filename artifacts/say/refinery.wav be hear do ko from ve name speak be platform ya" ob text "" ya
+su text "exists su name mcp time ob text \"uvx\" by ve text mcp-server-time ya" ob text "" ya
+su text "exists su name mind be mind ya" ob text "" ya
+su text "exists su name nums ob ve num 1 2 3 be vector ya" ob text "nums — вектор." ya
+su text "exists su name output be c ya" ob text "" ya
+su text "exists su name output be english ya" ob text "" ya
+su text "exists su name output be javascript ya" ob text "" ya
+su text "exists su name output be pyash ya" ob text "" ya
+su text "exists su name output be text ya" ob text "output — текст." ya
+su text "exists su name output ob text \"\" be text ya" ob text "output — текст \"\"." ya
+su text "exists su name outside ob num 0 be number ya" ob text "outside — число 0." ya
+su text "exists su name pack during date 2025-05-07T12:00:00-04:00 be established ya" ob text "" ya
+su text "exists su name pass ob be number ya" ob text "" ya
+su text "exists su name prevIndex ob be number ya" ob text "" ya
+su text "exists su name primes ob ve num 0 by num 25 be vector ya" ob text "primes — вектор." ya
+su text "exists su name primes ob ve num 0 by num 4 be vector ya" ob text "primes — вектор." ya
+su text "exists su name primes_index ob num 1 be number ya" ob text "primes_index — число 1." ya
+su text "exists su name program ob text  __QUOTED_BLOCK__  be text ya" ob text "program — текст \"__QUOTED_BLOCK__\"." ya
+su text "exists su name program ob text  __QUOTED_BLOCK__  be text ya" ob text "program — текст \"__QUOTED_BLOCK__\"." ya
+su text "exists su name qwenbot from name http://localhost:11434 as name qwen3-vl:8b-instruct accordingto name You may call tools. be mind ya" ob text "" ya
+su text "exists su name record ob la su name clause ob name example be text ya ko be note ya" ob text "" ya
+su text "exists su name rem3 ob num 0 be number ya" ob text "rem3 — число 0." ya
+su text "exists su name rem5 ob num 0 be number ya" ob text "rem5 — число 0." ya
+su text "exists su name report ob la ob name transcript be write do ko from ve name listen be platform ya" ob text "" ya
+su text "exists su name result ob num 5 be number ya" ob text "result — число 5." ya
+su text "exists su name rhs ob num 5 be number ya" ob text "rhs — число 5." ya
+su text "exists su name say ob name say be default ya" ob text "" ya
+su text "exists su name seen-fromindex ob num 0 be number ya" ob text "seen-fromindex — число 0." ya
+su text "exists su name seen-toindex ob num 0 be number ya" ob text "seen-toindex — число 0." ya
+su text "exists su name source ob text  __QUOTED_BLOCK__  be text ya" ob text "source — текст \"__QUOTED_BLOCK__\"." ya
+su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/refinery-fixture.wav be say do ko from ve name draft be platform ya" ob text "" ya
+su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/refinery.wav be say do ko from ve name draft be platform ya" ob text "" ya
+su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/talk-loop-smoke.wav be say do ko from ve name draft be platform ya" ob text "" ya
+su text "exists su name speak ob la su name voice ob name mind-out vyah stream be say do ko from ve name draft be platform ya" ob text "" ya
+su text "exists su name stop ob la su name voice vyah cancel be say do ko from ve name speak be platform ya" ob text "" ya
+su text "exists su name stream stdout ob bool lie be default ya" ob text "" ya
+su text "exists su name stream stdout ob bool truth be default ya" ob text "" ya
+su text "exists su name switches ob ve bool truth lie truth be vector ya" ob text "switches — вектор." ya
+su text "exists su name switches ob ve text truth lie truth be vector ya" ob text "switches — вектор." ya
+su text "exists su name target ob num 1 be number ya" ob text "target — число 1." ya
+su text "exists su name total one ob num 0 be number ya" ob text "total one — число 0." ya
+su text "exists su name total three ob num 0 be number ya" ob text "total three — число 0." ya
+su text "exists su name total two ob num 0 be number ya" ob text "total two — число 0." ya
+su text "exists su name values ob ve num 10 20 30 be vector ya" ob text "values — вектор." ya
+su text "exists su name values ob ve num 2 2 be vector ya" ob text "values — вектор." ya
+su text "exists su name values ob ve num 5 2 4 6 1 3 be vector ya" ob text "values — вектор." ya
+su text "exists su name words ob ve text hello world be vector ya" ob text "words — вектор." ya
+su text "exists su name words ob ve text one two two be vector ya" ob text "words — вектор." ya
+su text "from filename /tmp/payment-entry.pyash-roundtrip.csv to name second fromstate name csv be read do" ob text "прочитай файл /tmp/payment-entry.pyash-roundtrip.csv." ya
+su text "from filename /tmp/pyash-hear-input.wav to name output be hear do" ob text "" ya
+su text "from filename artifacts/copy/CHANGELOG.md be read do" ob text "прочитай файл artifacts/copy/CHANGELOG.md." ya
+su text "from filename artifacts/touch/example.txt be read do" ob text "прочитай файл artifacts/touch/example.txt." ya
+su text "from filename examples/out/again-newspaper.txt be read do" ob text "прочитай файл examples/out/again-newspaper.txt." ya
+su text "from filename examples/out/pyash-again-demo.txt be read do" ob text "прочитай файл examples/out/pyash-again-demo.txt." ya
+su text "from filename examples/pyash/compile-fizzbuzz.txt to filename examples/out/compile-fizzbuzz-output.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-loop.txt to filename examples/out/compile-loop-output.c fromstate name pyash become name c be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-loop.txt to filename examples/out/compile-loop-output.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-math-write.txt to filename examples/out/compile-math-write-output.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-mind.txt to filename examples/out/compile-mind.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-vector-produce.txt to filename examples/out/compile-vector-produce.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/compile-write.txt to filename examples/out/compile-write-output.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename examples/pyash/vector-read-element.pya to filename examples/out/vector-read.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename https://example.com/video to filename examples/out/video.mp4 as text \"video\" be download do" ob text "" ya
+su text "from filename quiz/fixtures/Bank Transaction.csv to name people fromstate name csv be read do" ob text "прочитай файл quiz/fixtures/Bank." ya
+su text "from filename quiz/fixtures/Payment Entry.csv to name first fromstate name csv be read do" ob text "прочитай файл quiz/fixtures/Payment." ya
+su text "from filename quiz/fixtures/Payment Entry.csv to name payments fromstate name csv be read do" ob text "прочитай файл quiz/fixtures/Payment." ya
+su text "from filename quiz/sandpit/compile.txt to filename quiz/sandpit/compile-output.js fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "from filename quiz/sandpit/compile.txt to filename quiz/sandpit/understand-output.json be understand do" ob text "" ya
+su text "from name ./modules/bump_tools.pya to name rel be import do" ob text "" ya
+su text "from name ./modules/bump_tools.pya to name second be import do" ob text "" ya
+su text "from name ./modules/full_tools.pya to name relative be import do" ob text "" ya
+su text "from name ./modules/plain_say.pya to name plain say be import do" ob text "" ya
+su text "from name /home/htaf/pyac/pyash/examples/pyash/modules/bump_tools_alt.pya to name abs be import do" ob text "" ya
+su text "from name /home/htaf/pyac/pyash/examples/pyash/modules/full_tools.pya to name absolute be import do" ob text "" ya
+su text "from name bump tools to name first be import do" ob text "" ya
+su text "from name bump tools to name math be import do" ob text "" ya
+su text "from name command tools to name command be import do" ob text "" ya
+su text "from name full tools to name logical be import do" ob text "" ya
+su text "from name i to name product by be multiply do" ob text "" ya
+su text "from name mcp time to name mcp clock be import do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name c be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name c be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name c be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name c be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name c be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output become name javascript be compile do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output fromstate name javascript become name pyash be translation do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text  __QUOTED_BLOCK__  to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"collector is number 5.\\\\ndo subtract 2 from collector.\" to name output fromstate name english become name pyash be translation do" ob text "" ya
+su text "from text \"do be plus object number 5 to name result\\\\nsubject name alpha be text ya\" to name output fromstate name whisper-english become name pyash be translation do" ob text "" ya
+su text "from text \"exists su name alpha ob num 1 be number ya\" to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"su name collector ob num 0 be number ya\\\\nobj num 2 to name collector be plus do\" to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"su name collector ob num 10 be number ya\\\\nobj num 3 to name collector be multiply do\\\\nobj num 2 to name collector be divide do\" to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"su name collector ob num 5 be number ya\\\\nobj num 2 from name collector be subtract do\" to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"su name nothing be ceremony def\\\\nsubj name nothing be ceremony prah\" to name num output become name javascript be compile do" ob text "" ya
+su text "from text \"su name total ob num 0 be number ya\\\\nobj num 3 be tiny from num 5 then ob num 1 to name total be plus do\" to name output fromstate name pyash become name english be translation do" ob text "" ya
+su text "from text \"total is number 0.\\\\nif 3 is tiny from 5 then do plus 1 to total.\" to name output fromstate name english become name pyash be translation do" ob text "" ya
+su text "fromindex num 0 toindex num 10 by name pass be toggle door do" ob text "" ya
+su text "fromindex num 0 toindex num 100 by name pass be toggle door do" ob text "" ya
+su text "fromindex num 0 toindex num 3 to name outside be flip index do" ob text "" ya
+su text "fromindex num 1 toindex num 101 be process pass do" ob text "" ya
+su text "fromindex num 1 toindex num 101 to name outside be fizzbuzz step do" ob text "" ya
+su text "fromindex num 1 toindex num 11 be process pass do" ob text "" ya
+su text "fromindex num 1 toindex num 16 be fizzbuzz build do" ob text "" ya
+su text "fromindex num 1 toindex num 16 to name outside be fizzbuzz step do" ob text "" ya
+su text "fromindex num 1 toindex num 16 to name outside be fizzbuzz write do" ob text "" ya
+su text "fromindex num 1 toindex num 3 to name counter be climb do" ob text "" ya
+su text "fromindex num 1 toindex num 6 be insertion outer do" ob text "" ya
+su text "fromindex num 10 toindex num 0 be talk loop do" ob text "" ya
+su text "fromindex num 2 toindex num -1 to name outside be flip index do" ob text "" ya
+su text "fromindex num 2 toindex num 10 be process passes do" ob text "" ya
+su text "fromindex num 2 toindex num 10 by name pass be mark multiples do" ob text "" ya
+su text "fromindex num 2 toindex num 100 be process passes do" ob text "" ya
+su text "fromindex num 2 toindex num 100 by name pass be mark multiples do" ob text "" ya
+su text "fromindex num 2 toindex num 2 to name sink be inspector do" ob text "" ya
+su text "fromindex num 3 to name counter be flip first do" ob text "" ya
+su text "fromindex num 3 to name counter be loop body do" ob text "" ya
+su text "fromindex num 3 toindex num 10 be collect primes do" ob text "" ya
+su text "fromindex num 3 toindex num 100 be collect primes do" ob text "" ya
+su text "fromindex toindex num 0 be insertion inner do" ob text "" ya
+su text "ob be command do" ob text "" ya
+su text "ob be read do" ob text "" ya
+su text "ob be write do" ob text "" ya
+su text "ob day 30 to name base be plus do" ob text "" ya
+su text "ob filename /tmp/pyash-directory-demo/nested be directory do" ob text "" ya
+su text "ob filename CHANGELOG.md to filename artifacts/copy/CHANGELOG.md be copy do" ob text "" ya
+su text "ob filename README.md as num 644 be license do" ob text "" ya
+su text "ob filename README.md as text \"g+w\" be license do" ob text "" ya
+su text "ob filename README.md as ve owner read write command flock read hollow hollow all read hollow hollow be license do" ob text "" ya
+su text "ob filename README.md be glance do" ob text "" ya
+su text "ob filename artifacts/delete as text \"recursive\" be delete do" ob text "" ya
+su text "ob filename artifacts/delete/example.txt as text \"file\" be delete do" ob text "" ya
+su text "ob filename artifacts/touch/example.txt be touch do" ob text "" ya
+su text "ob from num 3 to name rem3 be remains do" ob text "" ya
+su text "ob from num 5 to name rem5 be remains do" ob text "" ya
+su text "ob from to name rem be remains do" ob text "" ya
+su text "ob la ob filename README.md be exists do ko be not do" ob text "" ya
+su text "ob la ob filename README.md be exists do ko with la ob filename missing.txt be exists do ko be or do" ob text "" ya
+su text "ob la ob filename README.md be exists do ko with la ob filename package.json be exists do ko be and do" ob text "" ya
+su text "ob name base be write do" ob text "запиши base." ya
+su text "ob name blend from name full tools to name mix be import do" ob text "" ya
+su text "ob name composite at to name status be read do" ob text "" ya
+su text "ob name counter be write do" ob text "запиши counter." ya
+su text "ob name discharge from filename ../../module/mind_ollama.pya to name mind discharge be import do" ob text "" ya
+su text "ob name doorNum from to name rem be remains do" ob text "" ya
+su text "ob name doors at name all by be toggle pass do" ob text "" ya
+su text "ob name doors at num 0 to name first be read do" ob text "" ya
+su text "ob name doors at num 1 be invert do" ob text "" ya
+su text "ob name doors at num 1 to name second be read do" ob text "" ya
+su text "ob name doors at num 1 to name secondord be read do" ob text "" ya
+su text "ob name doors at num 2 to name third be read do" ob text "" ya
+su text "ob name doors be write do" ob text "запиши doors." ya
+su text "ob name entries be write do" ob text "запиши entries." ya
+su text "ob name ffmpeg input device to name cmd be plus do" ob text "" ya
+su text "ob name ffmpeg input to name cmd be plus do" ob text "" ya
+su text "ob name first be write do" ob text "запиши first." ya
+su text "ob name first counter be write do" ob text "запиши first counter." ya
+su text "ob name first to filename /tmp/payment-entry.pyash-roundtrip.csv become name csv be write do" ob text "запиши first." ya
+su text "ob name handled from num 0 be equally then ob be write do" ob text "" ya
+su text "ob name handled from num 1 be equally then ob text \"Fizz\" be write do" ob text "" ya
+su text "ob name handled from num 2 be equally then ob text \"Buzz\" be write do" ob text "" ya
+su text "ob name handled from num 3 be equally then ob text \"FizzBuzz\" be write do" ob text "" ya
+su text "ob name helper-out be text do" ob text "" ya
+su text "ob name helper-out be write do" ob text "запиши helper-out." ya
+su text "ob name input to filename quiz/sandpit/understand-output.json fromstate name pyash be understand do" ob text "" ya
+su text "ob name input to name output fromstate name pyash become name JSON be understand do" ob text "" ya
+su text "ob name line be write do" ob text "запиши line." ya
+su text "ob name line from text \"\" be equally then ob to name line be plus do" ob text "" ya
+su text "ob name line ret" ob text "" ya
+su text "ob name line to name output be plus do" ob text "" ya
+su text "ob name list from filename ../../module/list_directory.pya to name list be import do" ob text "" ya
+su text "ob name mcp time as text \"mcp\" be discharge do" ob text "" ya
+su text "ob name microphone hear from filename ../../module/ffmpeg_hear.pya to name hear be import do" ob text "" ya
+su text "ob name normalized from text \"bye\" be equally then ret" ob text "" ya
+su text "ob name nums be write do" ob text "запиши nums." ya
+su text "ob name output be write do" ob text "запиши output." ya
+su text "ob name output to filename examples/out/vector-read.english.txt be write do" ob text "запиши output." ya
+su text "ob name outside be write do" ob text "запиши outside." ya
+su text "ob name payments to filename /tmp/payment-entry.roundtrip.csv become name csv be write do" ob text "запиши payments." ya
+su text "ob name people be write do" ob text "запиши people." ya
+su text "ob name people become name csv be write do" ob text "запиши people." ya
+su text "ob name people to filename /tmp/bank-transaction.roundtrip.csv become name csv be write do" ob text "запиши people." ya
+su text "ob name ping from name behavior tools to name ping be import do" ob text "" ya
+su text "ob name prev from name curr be giant then ob at to name values be write do" ob text "" ya
+su text "ob name profile be write do" ob text "запиши profile." ya
+su text "ob name profile become name json be write do" ob text "запиши profile." ya
+su text "ob name program to name output fromstate name pyash become name javascript be compile do" ob text "" ya
+su text "ob name record be write do" ob text "запиши record." ya
+su text "ob name recording to name cmd be plus do" ob text "" ya
+su text "ob name rem from num 0 be equally then ob from num 2 to be remains do" ob text "" ya
+su text "ob name rem from num 0 be equally then ob name doors at be invert do" ob text "" ya
+su text "ob name rem from num 0 be equally then ob num 1 to be plus do" ob text "" ya
+su text "ob name rem3 from num 0 be equally then ob num 1 to name handled be plus do" ob text "" ya
+su text "ob name rem3 from num 0 be equally then ob text \"Fizz\" to name line be plus do" ob text "" ya
+su text "ob name rem5 from num 0 be equally then ob num 2 to name handled be plus do" ob text "" ya
+su text "ob name rem5 from num 0 be equally then ob text \"Buzz\" to name line be plus do" ob text "" ya
+su text "ob name result be write do" ob text "запиши result." ya
+su text "ob name rhs from name lhs be subtract do" ob text "" ya
+su text "ob name round be write do" ob text "запиши round." ya
+su text "ob name sample be write do" ob text "запиши sample." ya
+su text "ob name sample become name json be write do" ob text "запиши sample." ya
+su text "ob name say from filename ../../module/piper_say_command.pya to name piper command say be import do" ob text "" ya
+su text "ob name say from name ./modules/noop_say.pya to name noop say be import do" ob text "" ya
+su text "ob name say from name espeak say to name espeak say be import do" ob text "" ya
+su text "ob name second be write do" ob text "запиши second." ya
+su text "ob name second counter be write do" ob text "запиши second counter." ya
+su text "ob name settings from name complex tools to name settings be import do" ob text "" ya
+su text "ob name settings from name full tools to name settings be import do" ob text "" ya
+su text "ob name source become name json be write do" ob text "запиши source." ya
+su text "ob name source become name yaml be write do" ob text "запиши source." ya
+su text "ob name status from text \"lie\" be equally then ob at to name primes be write do" ob text "" ya
+su text "ob name status from text \"lie\" be equally then ob num 1 to name primes_index be plus do" ob text "" ya
+su text "ob name switches at be invert do" ob text "" ya
+su text "ob name switches at num 1 be invert do" ob text "" ya
+su text "ob name switches at num 1 to name status be read do" ob text "" ya
+su text "ob name switches be write do" ob text "запиши switches." ya
+su text "ob name text script during num 0.5 as text \"javascript\" be interpret do" ob text "" ya
+su text "ob name tool hello from filename ../../module/command_runner_demo.pya to name tool hello be import do" ob text "" ya
+su text "ob name trace from name ./modules/complex_tools.pya to name trace rel be import do" ob text "" ya
+su text "ob name trace from name /home/htaf/pyac/pyash/examples/pyash/modules/complex_tools.pya to name trace abs be import do" ob text "" ya
+su text "ob name transcript to filename artifacts/hear/talk-loop-stream.txt be write do" ob text "запиши transcript." ya
+su text "ob name values at num 0 be invert do" ob text "" ya
+su text "ob name values at to name curr be read do" ob text "" ya
+su text "ob name values at to name prev be read do" ob text "" ya
+su text "ob name values be write do" ob text "запиши values." ya
+su text "ob name wordmap be write do" ob text "запиши wordmap." ya
+su text "ob name words at name all be word frequency do" ob text "" ya
+su text "ob name words be write do" ob text "запиши words." ya
+su text "ob num 1 from name prevIndex be subtract do" ob text "вычти 1 из prevIndex." ya
+su text "ob num 1 from num 6 to name total three by num 9 be absolute blend do" ob text "" ya
+su text "ob num 1 to name counter be plus do" ob text "прибавь 1 к counter." ya
+su text "ob num 1 to name door be plus do" ob text "прибавь 1 к door." ya
+su text "ob num 1 to name doorNum be plus do" ob text "прибавь 1 к doorNum." ya
+su text "ob num 1 to name lhs be plus do" ob text "прибавь 1 к lhs." ya
+su text "ob num 1 to name result be plus do" ob text "прибавь 1 к result." ya
+su text "ob num 10 from num 5 be tiny then" ob text "" ya
+su text "ob num 2 at num 0 to name primes be write do" ob text "" ya
+su text "ob num 2 from num 5 at num 1 by num 7 be trace rel do" ob text "" ya
+su text "ob num 2 from num 5 be giant then" ob text "" ya
+su text "ob num 2 from num 5 to name total by num 7 be mix do" ob text "" ya
+su text "ob num 2 from num 5 to name total one by num 7 be logical blend do" ob text "" ya
+su text "ob num 2 to be plus do" ob text "" ya
+su text "ob num 2 to name a be plus do" ob text "прибавь 2 к a." ya
+su text "ob num 2 to name acc be plus do" ob text "прибавь 2 к acc." ya
+su text "ob num 2 to name collector be plus do" ob text "прибавь 2 к collector." ya
+su text "ob num 2 to name result be plus do" ob text "прибавь 2 к result." ya
+su text "ob num 3 from name collector be subtract do" ob text "вычти 3 из collector." ya
+su text "ob num 3 from num 4 at num 2 by num 6 be trace abs do" ob text "" ya
+su text "ob num 3 from num 4 to name total two by num 8 be relative blend do" ob text "" ya
+su text "ob num 3 from num 5 be tiny then" ob text "" ya
+su text "ob num 4 from num 5 be equally then" ob text "" ya
+su text "ob num 4 to name result be plus do" ob text "прибавь 4 к result." ya
+su text "ob num 4 to name target be plus do" ob text "прибавь 4 к target." ya
+su text "ob num 5 from num 5 be equally then" ob text "" ya
+su text "ob num 5 to name result be plus two do" ob text "" ya
+su text "ob num 7 from num 5 be giant then" ob text "" ya
+su text "ob num 99 at num 1 to name values be write do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  during num 0.2 as text \"javascript\" be interpret do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name output be plus do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name people fromstate name csv be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name people fromstate name csv be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name profile be import do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name profile fromstate name json be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name profile fromstate name json be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name profile fromstate name yaml be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name profile fromstate name yaml be read do" ob text "" ya
+su text "ob text  __QUOTED_BLOCK__  to name round fromstate name csv be read do" ob text "" ya
+su text "ob text \" \" to name cmd be plus do" ob text "" ya
+su text "ob text \" -i \" to name cmd be plus do" ob text "" ya
+su text "ob text \" -t \" to name cmd be plus do" ob text "" ya
+su text "ob text \" -t 10 /tmp/pyash-hear-input.wav\" to name cmd be plus do" ob text "" ya
+su text "ob text \"What time is it in America/Toronto?\" to name text helper-out with name tools for name helper be write do" ob text "запиши \"What time is it in America/Toronto?\" в helper-out." ya
+su text "ob text \"Write a JavaScript program that computes the 5356th prime number using a loop (no libraries). It must print the result using console.log. Return only JavaScript source, no fences.\" to name text helper-out with name tools for name helper be write do" ob text "запиши \"Write a JavaScript program that computes the 5356th prime number using a loop (no libraries). It must print the result using console.log. Return only JavaScript source, no fences.\" в helper-out." ya
+su text "ob text \"again demo\" to filename examples/out/pyash-again-demo.txt be write do" ob text "запиши \"again demo\"." ya
+su text "ob text \"again newspaper\" to filename examples/out/again-newspaper.txt be write do" ob text "запиши \"again newspaper\"." ya
+su text "ob text \"all\" from filename https://www.buzzsprout.com/2320595/episodes to filename /home/htaf/Downloads/ during month 1 as text \"audio\" be download do" ob text "" ya
+su text "ob text \"espeak-ng -x \\\"hello world\\\"\" to name text output be command do" ob text "" ya
+su text "ob text \"hello world\" be say do" ob text "скажи \"hello world\"." ya
+su text "ob text \"hello world\" to name text output be noop say do" ob text "" ya
+su text "ob text \"hello world\" to name text output be plain say say do" ob text "" ya
+su text "ob text \"hello world\" to name text result be espeak say do" ob text "" ya
+su text "ob text \"pyash\" in filename documentation be search do" ob text "" ya
+su text "ob text \"qwen3-vl:8b-instruct\" be mind discharge do" ob text "" ya
+su text "ob text \"say hello world out loud\" to name text qwenbot-out with name tools for name qwenbot be write do" ob text "запиши \"say hello world out loud\" в qwenbot-out." ya
+su text "ob text \"tr '[:upper:]' '[:lower:]' | tr -d '[:punct:]' | tr -d '\\\\n' | tr -s ' ' | sed 's/^ *//;s/ *$//'\" from filename artifacts/hear/talk-loop-stream.txt to name text normalized be command do" ob text "" ya
+su text "ob text \"use the say tool to say hello world\" to name text helper-out with name tools for name helper be write do" ob text "запиши \"use the say tool to say hello world\" в helper-out." ya
+su text "ob to name cmd be plus do" ob text "" ya
+su text "ob to name produce exists be remember do" ob text "" ya
+su text "ob to name text recording be text do" ob text "" ya
+su text "prah" ob text "конец блока." ya
+su text "reset" ob text "" ya
+su text "ret" ob text "" ya
+su text "su name PATH be ecology que" ob text "" ya
+su text "su name PYA_ECOLOGY_DEMO be ecology que" ob text "" ya
+su text "su name PYA_ECOLOGY_DEMO ob text \"alpha\" be ecology do" ob text "" ya
+su text "su name a ob num 1 ya" ob text "" ya
+su text "su name a ob text \"ace\" ya" ob text "" ya
+su text "su name aa ob num 3 ya" ob text "" ya
+su text "su name aa ob text \"double\" ya" ob text "" ya
+su text "su name address be json map def" ob text "address — JSON карта (определение)." ya
+su text "su name address ob name address ya" ob text "" ya
+su text "su name age ob num 36 ya" ob text "" ya
+su text "su name age ob ve text 36 41 ya" ob text "" ya
+su text "su name alive ob bool truth ya" ob text "" ya
+su text "su name alpha ob text \"one\" ya" ob text "" ya
+su text "su name answer ob text \"Hello\" to name text helper-out for name helper be write do" ob text "запиши \"Hello\" в helper-out." ya
+su text "su name audio ob name mind-out to filename artifacts/say/talk-loop-stream.wav be say do" ob text "" ya
+su text "su name audio ob name mind-out to filename artifacts/say/talk-loop-timebox.wav be say do" ob text "" ya
+su text "su name b ob num 2 ya" ob text "" ya
+su text "su name b ob text \"bee\" ya" ob text "" ya
+su text "su name beta ob num 2 ya" ob text "" ya
+su text "su name city ob text \"Springfield\" ya" ob text "" ya
+su text "su name climb be ceremony prah" ob text "climb — конец церемонии." ya
+su text "su name climb fromindex num be to name num target def" ob text "" ya
+su text "su name cmd ob name ffmpeg input device to name cmd be plus do" ob text "" ya
+su text "su name cmd ob name ffmpeg input to name cmd be plus do" ob text "" ya
+su text "su name cmd ob text \" -i \" to name cmd be plus do" ob text "" ya
+su text "su name cmd ob text \" -t 1 /tmp/pyash-hear-input.wav\" to name cmd be plus do" ob text "" ya
+su text "su name cmd ob text \"ffmpeg -y -f \" to name cmd be plus do" ob text "" ya
+su text "su name collect primes be ceremony prah" ob text "collect primes — конец церемонии." ya
+su text "su name collect primes fromindex num 0 be ceremony def" ob text "collect primes — церемония (определение)." ya
+su text "su name collector ob name what que" ob text "" ya
+su text "su name collector ob num 1 be number ya" ob text "collector — число 1." ya
+su text "su name collector ob num 10 be number ya" ob text "collector — число 10." ya
+su text "su name demo ob text \"Hello from the piper command runner.\" be piper command say do" ob text "" ya
+su text "su name done ob bool lie ya" ob text "" ya
+su text "su name done ob bool truth ya" ob text "" ya
+su text "su name draft out ob name mind-out be write do" ob text "запиши mind-out." ya
+su text "su name entries be list do" ob text "" ya
+su text "su name file from filename examples/pyash/compile-loop.txt be read do" ob text "прочитай файл examples/pyash/compile-loop.txt." ya
+su text "su name first be pyash que" ob text "" ya
+su text "su name fizzbuzz build be ceremony prah" ob text "fizzbuzz build — конец церемонии." ya
+su text "su name fizzbuzz build fromindex num 0 toindex num 0 be ceremony def" ob text "fizzbuzz build — церемония (определение)." ya
+su text "su name fizzbuzz line be ceremony prah" ob text "fizzbuzz line — конец церемонии." ya
+su text "su name fizzbuzz line to name text line by num 0 be ceremony def" ob text "fizzbuzz line — церемония (определение)." ya
+su text "su name fizzbuzz step be ceremony prah" ob text "fizzbuzz step — конец церемонии." ya
+su text "su name fizzbuzz step fromindex num 0 toindex num 0 to name num bucket be ceremony def" ob text "fizzbuzz step — церемония (определение)." ya
+su text "su name fizzbuzz write be ceremony prah" ob text "fizzbuzz write — конец церемонии." ya
+su text "su name fizzbuzz write fromindex num 0 toindex num 0 be ceremony def" ob text "fizzbuzz write — церемония (определение)." ya
+su text "su name flip first be ceremony prah" ob text "flip first — конец церемонии." ya
+su text "su name flip first fromindex num 0 to name num ignored be ceremony def" ob text "flip first — церемония (определение)." ya
+su text "su name flip index be ceremony prah" ob text "flip index — конец церемонии." ya
+su text "su name flip index fromindex num 0 to name num bucket be ceremony def" ob text "flip index — церемония (определение)." ya
+su text "su name gamma ob bool truth ya" ob text "" ya
+su text "su name handled ob num 0 be number ya" ob text "handled — число 0." ya
+su text "su name header ob ve text name age ya" ob text "" ya
+su text "su name header raw ob ve text Name Age ya" ob text "" ya
+su text "su name hear audio ob name text fromstate name audio be hear can" ob text "" ya
+su text "su name inner be json map def" ob text "inner — JSON карта (определение)." ya
+su text "su name inner ob name inner ya" ob text "" ya
+su text "su name insertion inner be ceremony prah" ob text "insertion inner — конец церемонии." ya
+su text "su name insertion inner fromindex num 0 be ceremony def" ob text "insertion inner — церемония (определение)." ya
+su text "su name insertion outer be ceremony prah" ob text "insertion outer — конец церемонии." ya
+su text "su name insertion outer fromindex num 0 be ceremony def" ob text "insertion outer — церемония (определение)." ya
+su text "su name inspector be ceremony prah" ob text "inspector — конец церемонии." ya
+su text "su name inspector to name num seen-toindex be ceremony def" ob text "inspector — церемония (определение)." ya
+su text "su name javascript tool ob text \"source\" during num 30 as text \"javascript\" be interpret can" ob text "" ya
+su text "su name lhs from name rhs be equally then" ob text "" ya
+su text "su name lhs from name rhs be giant then" ob text "" ya
+su text "su name lhs from name rhs be tiny then" ob text "" ya
+su text "su name lhs ob name what que" ob text "" ya
+su text "su name line be refinery def" ob text "" ya
+su text "su name live vyah stream be hear do" ob text "" ya
+su text "su name loop be refinery def" ob text "" ya
+su text "su name loop body be ceremony prah" ob text "loop body — конец церемонии." ya
+su text "su name loop body fromindex num be to name num target def" ob text "" ya
+su text "su name mark multiples be ceremony prah" ob text "mark multiples — конец церемонии." ya
+su text "su name mark multiples fromindex num 0 by num 0 be ceremony def" ob text "mark multiples — церемония (определение)." ya
+su text "su name microphone hear from text \"microphone\" to filename output during num 0 be ceremony def" ob text "microphone hear — церемония (определение)." ya
+su text "su name mind accordingto name Reply in one short sentence. be mind ya" ob text "" ya
+su text "su name mind-out ob name text transcript to name text mind-out for name mind be write do" ob text "запиши transcript в mind-out." ya
+su text "su name mind-out ob name transcript to name text mind-out for name mind be write do" ob text "запиши transcript в mind-out." ya
+su text "su name mind-stream ob text \"Write five short sentences about rain. No bullet points.\" vyah stream to name text mind-stream for name mind be write do" ob text "запиши \"Write five short sentences about rain. No bullet points.\" в mind-stream." ya
+su text "su name name ob text \"Ada\" ya" ob text "" ya
+su text "su name name ob ve text Ada Turing ya" ob text "" ya
+su text "su name note ob hollow ya" ob text "" ya
+su text "su name note ob text \"Check that at least one path exists.\" be write do" ob text "запиши \"Check that at least one path exists.\"." ya
+su text "su name note ob text \"Check that two paths exist.\" be write do" ob text "запиши \"Check that two paths exist.\"." ya
+su text "su name note ob text \"Create a nested directory under /tmp.\" be write do" ob text "запиши \"Create a nested directory under /tmp.\"." ya
+su text "su name note ob text \"Delete artifacts/delete/tree recursively.\" be write do" ob text "запиши \"Delete artifacts/delete/tree recursively.\"." ya
+su text "su name note ob text \"Download last month of audio from a YouTube channel (uses defaults + CWD output).\" be write do" ob text "запиши \"Download last month of audio from a YouTube channel (uses defaults + CWD output).\"." ya
+su text "su name note ob text \"Glance at README.md metadata.\" be write do" ob text "запиши \"Glance at README.md metadata.\"." ya
+su text "su name note ob text \"Invert a boolean result.\" be write do" ob text "запиши \"Invert a boolean result.\"." ya
+su text "su name note ob text \"List all environment variables as a map def.\" be write do" ob text "запиши \"List all environment variables as a map def.\"." ya
+su text "su name note ob text \"Override 'ffmpeg input device' if your OS uses a different device (e.g., pipewire).\" be write do" ob text "запиши \"Override 'ffmpeg input device' if your OS uses a different device (e.g., pipewire).\"." ya
+su text "su name note ob text \"Override 'ffmpeg input' and 'ffmpeg input device' if your OS uses a different device (e.g., pipewire).\" be write do" ob text "запиши \"Override 'ffmpeg input' and 'ffmpeg input device' if your OS uses a different device (e.g., pipewire).\"." ya
+su text "su name note ob text \"Override 'ffmpeg input' and 'ffmpeg input device' to use your microphone.\" be write do" ob text "запиши \"Override 'ffmpeg input' and 'ffmpeg input device' to use your microphone.\"." ya
+su text "su name note ob text \"Read PATH from the environment.\" be write do" ob text "запиши \"Read PATH from the environment.\"." ya
+su text "su name note ob text \"Search for 'pyash' in the documentation folder.\" be write do" ob text "запиши \"Search for 'pyash' in the documentation folder.\"." ya
+su text "su name note ob text \"Set a demo environment variable.\" be write do" ob text "запиши \"Set a demo environment variable.\"." ya
+su text "su name note ob text \"Set permissions to 0644 with numeric mode.\" be write do" ob text "запиши \"Set permissions to 0644 with numeric mode.\"." ya
+su text "su name note ob text \"Set permissions with symbolic chmod text.\" be write do" ob text "запиши \"Set permissions with symbolic chmod text.\"." ya
+su text "su name note ob text \"Set permissions with vector words (owner rwx, group r--, all r--).\" be write do" ob text "запиши \"Set permissions with vector words (owner rwx, group r--, all r--).\"." ya
+su text "su name nothing be ceremony def" ob text "nothing — церемония (определение)." ya
+su text "su name nothing be ceremony prah" ob text "nothing — конец церемонии." ya
+su text "su name ok ob text \"done\" be write do" ob text "запиши \"done\"." ya
+su text "su name output be c que" ob text "" ya
+su text "su name output be english que" ob text "" ya
+su text "su name output be javascript que" ob text "" ya
+su text "su name output be pyash que" ob text "" ya
+su text "su name output be tool hello do" ob text "" ya
+su text "su name output from filename /tmp/pyash-hear-input.wav be hear do" ob text "" ya
+su text "su name output from text \"microphone\" to filename /tmp/pyash-hear-input.wav during num 1 be hear do" ob text "" ya
+su text "su name output from text \"microphone\" to filename /tmp/pyash-hear-input.wav during num 10 be hear do" ob text "" ya
+su text "su name people be csv map def" ob text "people — CSV карта (определение)." ya
+su text "su name piper-demo ob text \"Hello from piper.\" to filename artifacts/say/piper-demo.wav be say do" ob text "скажи \"Hello from piper.\"." ya
+su text "su name plus one be ceremony prah" ob text "plus one — конец церемонии." ya
+su text "su name plus one to name num result be ceremony def" ob text "plus one — церемония (определение)." ya
+su text "su name plus two be ceremony prah" ob text "plus two — конец церемонии." ya
+su text "su name plus two ob num 0 to name num acc be ceremony def" ob text "plus two — церемония (определение)." ya
+su text "su name plus two to name num result be ceremony def" ob text "plus two — церемония (определение)." ya
+su text "su name plus two to name num target be ceremony def" ob text "plus two — церемония (определение)." ya
+su text "su name process pass be ceremony prah" ob text "process pass — конец церемонии." ya
+su text "su name process pass fromindex num 0 be ceremony def" ob text "process pass — церемония (определение)." ya
+su text "su name process passes be ceremony prah" ob text "process passes — конец церемонии." ya
+su text "su name process passes fromindex num 0 be ceremony def" ob text "process passes — церемония (определение)." ya
+su text "su name produce ret" ob text "" ya
+su text "su name product from num 10 be tiny then ob text \"truth\" at to name composite be write do" ob text "" ya
+su text "su name product from num 100 be tiny then ob text \"truth\" at to name composite be write do" ob text "" ya
+su text "su name profile be json map def" ob text "profile — JSON карта (определение)." ya
+su text "su name profile ob text  __QUOTED_BLOCK__  to name output fromstate name json become name pyash be compile do" ob text "" ya
+su text "su name project_one be json map def" ob text "project_one — JSON карта (определение)." ya
+su text "su name project_two be json map def" ob text "project_two — JSON карта (определение)." ya
+su text "su name projects ob ve name project_one project_two be vector ya" ob text "projects — вектор." ya
+su text "su name prompt ob text \"Copy CHANGELOG.md into artifacts/copy/CHANGELOG.md.\" be write do" ob text "запиши \"Copy CHANGELOG.md into artifacts/copy/CHANGELOG.md.\"." ya
+su text "su name prompt ob text \"Delete artifacts/delete/example.txt (file mode).\" be write do" ob text "запиши \"Delete artifacts/delete/example.txt (file mode).\"." ya
+su text "su name prompt ob text \"Fixture stream: should print immediately and exit.\" be write do" ob text "запиши \"Fixture stream: should print immediately and exit.\"." ya
+su text "su name prompt ob text \"Focus the target app now. Live transcript will type into the focused window.\" be write do" ob text "запиши \"Focus the target app now. Live transcript will type into the focused window.\"." ya
+su text "su name prompt ob text \"Focus the target app now. Recording 10 seconds from ffmpeg input before typing the transcript.\" be write do" ob text "запиши \"Focus the target app now. Recording 10 seconds from ffmpeg input before typing the transcript.\"." ya
+su text "su name prompt ob text \"Generating /tmp/pyash-hear-input.wav and transcribing it with hear.\" be write do" ob text "запиши \"Generating /tmp/pyash-hear-input.wav and transcribing it with hear.\"." ya
+su text "su name prompt ob text \"Go into examples/ and list it.\" be write do" ob text "запиши \"Go into examples/ and list it.\"." ya
+su text "su name prompt ob text \"Listing this directory.\" be write do" ob text "запиши \"Listing this directory.\"." ya
+su text "su name prompt ob text \"Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav and transcribing it.\" be write do" ob text "запиши \"Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav and transcribing it.\"." ya
+su text "su name prompt ob text \"Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav.\" be write do" ob text "запиши \"Recording 1 second from ffmpeg input into /tmp/pyash-hear-input.wav.\"." ya
+su text "su name prompt ob text \"Recording 10 seconds from the microphone, then transcribing the file with hear.\" be write do" ob text "запиши \"Recording 10 seconds from the microphone, then transcribing the file with hear.\"." ya
+su text "su name prompt ob text \"Recording 10 seconds from the microphone, then transcribing via the module.\" be write do" ob text "запиши \"Recording 10 seconds from the microphone, then transcribing via the module.\"." ya
+su text "su name prompt ob text \"Speak now. Recording for 10 seconds.\" be write do" ob text "запиши \"Speak now. Recording for 10 seconds.\"." ya
+su text "su name prompt ob text \"Speak now. Say \\\"bye\\\" to stop. Press Ctrl+D when done.\" be write do" ob text "запиши \"Speak now. Say \"bye\" to stop. Press Ctrl+D when done.\"." ya
+su text "su name prompt ob text \"Speak now. Streaming transcript will print as it arrives. Press Ctrl+D to stop.\" be write do" ob text "запиши \"Speak now. Streaming transcript will print as it arrives. Press Ctrl+D to stop.\"." ya
+su text "su name prompt ob text \"Touch artifacts/touch/example.txt.\" be write do" ob text "запиши \"Touch artifacts/touch/example.txt.\"." ya
+su text "su name prompt ob text \"Write four short sentences about loving God, with commas and periods.\" vyah stream to name stream-out for name mind be write do" ob text "запиши \"Write four short sentences about loving God, with commas and periods.\" в stream-out." ya
+su text "su name question ob name Hello to name text generator-out for name generator be write do" ob text "запиши Hello в generator-out." ya
+su text "su name record from text \"microphone\" to filename /tmp/pyash-hear-input.wav during num 1 be microphone hear do" ob text "" ya
+su text "su name record vyah timebox during num 10 be hear do" ob text "" ya
+su text "su name result ob name what que" ob text "" ya
+su text "su name run ob be command do" ob text "" ya
+su text "su name sample be json map def" ob text "sample — JSON карта (определение)." ya
+su text "su name sample be map def" ob text "sample — карта (определение)." ya
+su text "su name say ob text \"\" be say can" ob text "" ya
+su text "su name script ob name Return only JavaScript source that prints 6*7. No fences or extra text. to name text script for name helper be write do" ob text "запиши Return only JavaScript source that prints 6*7. No fences or extra text. в script." ya
+su text "su name second be pyash que" ob text "" ya
+su text "su name secondord be pyash que" ob text "" ya
+su text "su name settings output ob name settings be write do" ob text "запиши settings." ya
+su text "su name skip ob ya" ob text "" ya
+su text "su name speak vyah stream from name stream-out be espeak say do" ob text "" ya
+su text "su name speak vyah stream from name stream-out be piper say do" ob text "" ya
+su text "su name status be pyash que" ob text "" ya
+su text "su name street ob text \"123 Main St\" ya" ob text "" ya
+su text "su name talk loop fromindex num 0 toindex num 0 be ceremony def" ob text "talk loop — церемония (определение)." ya
+su text "su name third be pyash que" ob text "" ya
+su text "su name time now ob text \"America/Toronto\" be mcp clock get_current_time can" ob text "" ya
+su text "su name title ob text \"Pyash compiler\" ya" ob text "" ya
+su text "su name title ob text \"Vector polish\" ya" ob text "" ya
+su text "su name toggle door be ceremony prah" ob text "toggle door — конец церемонии." ya
+su text "su name toggle door fromindex num 0 by num 0 be ceremony def" ob text "toggle door — церемония (определение)." ya
+su text "su name toggle pass be ceremony prah" ob text "toggle pass — конец церемонии." ya
+su text "su name toggle pass ob num 0 atindex num 0 by num 0 be ceremony def" ob text "toggle pass — церемония (определение)." ya
+su text "su name tools be map def" ob text "tools — карта (определение)." ya
+su text "su name transcript from name recording be hear do" ob text "" ya
+su text "su name transcript from text \"microphone\" to filename /tmp/pyash-hear-input.wav during num 10 be hear do" ob text "" ya
+su text "su name transcript out ob name transcript be write do" ob text "запиши transcript." ya
+su text "su name transcript ret" ob text "" ya
+su text "su name transcript vyah stream be hear do" ob text "" ya
+su text "su name transcript vyah timebox during num 10 be hear do" ob text "" ya
+su text "su name typed ob name transcript to text \"keyboard\" be write do" ob text "запиши transcript." ya
+su text "su name typer vyah stream from name live to text \"keyboard\" be write do" ob text "" ya
+su text "su name word frequency ob text \"token\" be ceremony def" ob text "word frequency — церемония (определение)." ya
+su text "su name wordmap be map def" ob text "wordmap — карта (определение)." ya
+su text "su name worker be ceremony prah" ob text "worker — конец церемонии." ya
+su text "su name worker to name num target be ceremony def" ob text "worker — церемония (определение)." ya
+su text "su name y ob num 8 ya" ob text "" ya
+su text "su name z ob num 9 ya" ob text "" ya
+su text "su ob num 1 to name wordmap be plus do" ob text "прибавь 1 к wordmap." ya
+su text "to filename examples be go do" ob text "" ya
+su text "to name line by be fizzbuzz line do" ob text "" ya
+su text "to name result be plus one do" ob text "" ya
+su text "to name result be plus two do" ob text "" ya
+su text "to name target be worker do" ob text "" ya
+prah

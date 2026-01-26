@@ -43,8 +43,9 @@ export function handleMapDefinition(context, helpers) {
   const map = {};
   const seen = new Set();
   for (const entry of body) {
+    const key = entry?.su?.name ?? entry?.su?.text;
     if (sentence.be === "map") {
-      if (!entry?.su?.name) {
+      if (!key) {
         throwErrorSentence({
           name: "pyash map sentence lost su",
           message: "pyash map sentence lost su",
@@ -52,18 +53,18 @@ export function handleMapDefinition(context, helpers) {
           raw: entry
         });
       }
-      if (seen.has(entry.su.name)) {
+      if (seen.has(key)) {
         throwErrorSentence({
           name: "pyash map switch excess",
           message: "pyash map switch excess",
           from: { name: "compile" },
-          raw: { name: entry.su.name }
+          raw: { name: key }
         });
       }
-      seen.add(entry.su.name);
+      seen.add(key);
     }
     if (sentence.be === "json map") {
-      if (!entry?.su?.name) {
+      if (!key) {
         throwErrorSentence({
           name: "json map sentence lost su",
           message: "json map sentence lost su",
@@ -80,7 +81,6 @@ export function handleMapDefinition(context, helpers) {
         });
       }
     }
-    const key = entry?.su?.name;
     if (!key) continue;
     map[key] = sentence.be === "map" ? entry : (entry.ob ?? {});
   }
