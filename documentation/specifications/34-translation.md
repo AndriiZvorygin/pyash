@@ -159,3 +159,30 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `examples/pyash/translate-pyash-sentence-to-english.pya`
 - `examples/pyash/translate-pyash-file-to-english.pya`
 - `examples/pyash/translation-fallback-mixed.pya`
+
+---
+
+## 8. Translation parity checklist
+
+### English
+- [x] Adapter: `english.mjs` (to/from Pyash).
+- [x] Exact pairs: `pairs_english.pya`.
+- [x] Templates: `pairs_english_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### Russian
+- [ ] Adapter: `russian.mjs` (currently stubbed).
+- [x] Exact pairs: `pairs_russian.pya`.
+- [x] Templates: `pairs_russian_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### French
+- [ ] Adapter: `french.mjs` (currently stubbed).
+- [x] Exact pairs: `pairs_french.pya`.
+- [x] Templates: `pairs_french_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### Upcoming languages
+- [ ] Chinese (adapter + pairs + templates + fallback coverage).
+- [ ] Spanish (adapter + pairs + templates + fallback coverage).
+- [ ] Portuguese (adapter + pairs + templates + fallback coverage).
