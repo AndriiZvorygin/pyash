@@ -212,6 +212,18 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * yt-dlp backend added for video/audio downloads with a runnable example.
 * Docs refreshed to reflect mind interpret tool parity and new download example.
 
+### Jan 25, 2026: Download windows + month durations
+
+* Added month duration support across parser/signatures, date math, and JS/C compile helpers.
+* `download` now supports `ob wo all` plus `during months <n>` for yt-dlp windowed pulls.
+* Download output defaults to CWD when `to filename` is omitted, with extra args sourced from defaults.
+
+### Jan 26, 2026: Download example + yt-dlp logs
+
+* Added `examples/pyash/download-youtube-month.pya` for last-month audio pulls.
+* yt-dlp stdout/stderr now stream through the runner for live progress logs.
+* Default config now includes yt-dlp cookies args (`download extra`).
+
 ### Jan 6, 2026: Mind invocation form update + refinery alignment
 
 * Mind invocation standardized on `be write ... for name <mind> to name <output>` with legacy `totext` compatibility.
