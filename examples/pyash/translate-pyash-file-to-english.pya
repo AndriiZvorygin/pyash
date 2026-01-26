@@ -1,0 +1,3 @@
+su name input from filename "examples/pyash/translate-pyash-input.pya" be read do
+from name input fromstate name pyash to state english to name output be translation do
+su name output be english que

@@ -9,6 +9,7 @@ su text "ob num [num of ob] with name [name of with] be multiply do" ob text "у
 su text "ob num [num of ob] with name [name of with] be divide do" ob text "раздели [name of with] на [num of ob]." ya
 su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "остаток от [num of ob] по [num of from] в [name of to]." ya
 su text "ob text [text of ob] to name [name of to] be write do" ob text "запиши \"[text of ob]\" в [name of to]." ya
+su text "ob name [name of ob] be write do" ob text "запиши [name of ob]." ya
 su text "ob text [text of ob] be say do" ob text "скажи \"[text of ob]\"." ya
 su text "from name [name of from] be read do" ob text "прочитай [name of from]." ya
 su text "from filename [filename of from] be read do" ob text "прочитай файл [filename of from]." ya

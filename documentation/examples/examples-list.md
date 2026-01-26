@@ -17,6 +17,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Compile JS/C | `examples/pyash/compile-fizzbuzz.txt`, `examples/pyash/compile-text-to-js-text.pya` |
 | Parse/understand | `examples/pyash/understand-to-file.pya` |
 | Translation fallback | `examples/pyash/translation-fallback-mixed.pya` |
+| Translate Pyash to English | `examples/pyash/translate-pyash-sentence-to-english.pya`, `examples/pyash/translate-pyash-file-to-english.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya` |
 | Download | `examples/pyash/download-ytdlp.pya` |
