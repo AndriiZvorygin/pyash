@@ -13,6 +13,7 @@ exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
 exists su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
 exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
+exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name reiterate delay ob num 250 be number ya
 exists su name reiterate backoff ob num 2 be number ya
 exists su name reiterate attempts ob num 5 be number ya

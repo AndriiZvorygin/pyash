@@ -114,9 +114,14 @@ async function runYtDlp({ url, outputPath, intent, extraArgs = [], multi = false
     }
     args.push(url);
     const proc = spawn("yt-dlp", args, { stdio: ["ignore", "pipe", "pipe"] });
+    proc.stdout.on("data", data => {
+      process.stdout.write(data);
+    });
     let stderr = "";
     proc.stderr.on("data", data => {
-      stderr += data.toString("utf8");
+      const chunk = data.toString("utf8");
+      stderr += chunk;
+      process.stderr.write(chunk);
     });
     proc.on("error", err => {
       if (err?.code === "ENOENT") {
