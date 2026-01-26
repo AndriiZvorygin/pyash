@@ -2,6 +2,7 @@ import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
+import { loadEnglishTranslationPairs, loadRussianTranslationPairs, loadFrenchTranslationPairs } from "./translation/pairs.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -35,13 +36,41 @@ export async function translation_from_text_to_name_text(sentence) {
   } else {
     const program = buildProgram(sourceText.replaceAll("\\n", "\n"));
     sentences = program.sentences;
-    const formatter =
-      resolveTranslationTarget(outputLang)?.fromPyash ??
-      resolveTranslationTarget("english")?.fromPyash;
+    const targetAdapter = resolveTranslationTarget(outputLang) ?? resolveTranslationTarget("english");
+    const formatter = targetAdapter?.fromPyash;
     if (!formatter) {
       throw new Error("translation: target adapter missing");
     }
-    const lines = program.sentences.map(formatter);
+    let pairs = null;
+    if (targetAdapter?.name === "english") {
+      try {
+        pairs = await loadEnglishTranslationPairs();
+      } catch (err) {
+        pairs = null;
+      }
+    }
+    if (!pairs && targetAdapter?.name === "russian") {
+      try {
+        pairs = await loadRussianTranslationPairs();
+      } catch (err) {
+        pairs = null;
+      }
+    }
+    if (!pairs && targetAdapter?.name === "french") {
+      try {
+        pairs = await loadFrenchTranslationPairs();
+      } catch (err) {
+        pairs = null;
+      }
+    }
+    const lines = program.sentences.map((s) => {
+      if (pairs) {
+        const pyash = sentenceToPyash(s);
+        const text = pyash ? pairs.get(pyash) : null;
+        if (typeof text === "string") return text;
+      }
+      return formatter(s);
+    });
     translation = lines.join("\n");
   }
 
@@ -67,6 +96,22 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "russian", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "russian", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "french", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "french", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
   {
