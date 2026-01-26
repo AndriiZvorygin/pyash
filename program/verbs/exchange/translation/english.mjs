@@ -70,6 +70,55 @@ function englishLineToSentence(line) {
     };
   }
 
+  // Imperative form (no "do"): "add 2 to collector"
+  const addMatch = trimmed.match(/^(add|subtract)\s+([0-9.+-]+)\s+(to|from)\s+([A-Za-z0-9_]+)\.?$/i);
+  if (addMatch) {
+    const [, verb, numRaw, dir, target] = addMatch;
+    const cleanNum = numRaw.replace(/\.$/, "");
+    const n = Number(cleanNum);
+    const ob = { num: Number.isNaN(n) ? cleanNum : n };
+    const sentence = {
+      mood: "do",
+      be: verb.toLowerCase() === "add" ? "plus" : "subtract",
+      ob,
+    };
+    if (dir.toLowerCase() === "to") {
+      sentence.to = { name: target };
+    } else {
+      sentence.from = { name: target };
+    }
+    return sentence;
+  }
+
+  // Imperative form (no "do"): "multiply total by 2"
+  const multiplyMatch = trimmed.match(/^(multiply|divide)\s+([A-Za-z0-9_]+)\s+by\s+([0-9.+-]+)\.?$/i);
+  if (multiplyMatch) {
+    const [, verb, target, numRaw] = multiplyMatch;
+    const cleanNum = numRaw.replace(/\.$/, "");
+    const n = Number(cleanNum);
+    return {
+      mood: "do",
+      be: verb.toLowerCase(),
+      ob: { num: Number.isNaN(n) ? cleanNum : n },
+      with: { name: target }
+    };
+  }
+
+  // Imperative form (no "do"): "remainder of 10 by 3 to rem"
+  const remainsMatch = trimmed.match(/^remainder\s+of\s+([0-9.+-]+)\s+by\s+([0-9.+-]+)\s+to\s+([A-Za-z0-9_]+)\.?$/i);
+  if (remainsMatch) {
+    const [, numRaw, fromRaw, target] = remainsMatch;
+    const numVal = Number(numRaw);
+    const fromVal = Number(fromRaw);
+    return {
+      mood: "do",
+      be: "remains",
+      ob: { num: Number.isNaN(numVal) ? numRaw : numVal },
+      from: { num: Number.isNaN(fromVal) ? fromRaw : fromVal },
+      to: { name: target }
+    };
+  }
+
   // Imperative form: "do subtract 2 from collector"
   const doMatch = trimmed.match(/^do ([A-Za-z0-9_]+) ([0-9.+-]+) (to|from) ([A-Za-z0-9_]+)\.?$/i);
   if (doMatch) {

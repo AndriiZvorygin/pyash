@@ -61,6 +61,10 @@ export function splitSentences(text) {
     if (/\s/.test(ch)) {
       pushToken(current);
       current = "";
+      if (ch === "\n" && clauseDepth === 0 && sentenceTokens.length > 0) {
+        sentences.push(sentenceTokens.join(" "));
+        sentenceTokens = [];
+      }
       continue;
     }
 
@@ -151,6 +155,11 @@ export function splitSentencesWithLines(text) {
     if (/\s/.test(ch)) {
       pushToken(current);
       current = "";
+      if (ch === "\n" && clauseDepth === 0 && sentenceTokens.length > 0) {
+        sentences.push({ text: sentenceTokens.join(" "), line: sentenceLine ?? line });
+        sentenceTokens = [];
+        sentenceLine = null;
+      }
       continue;
     }
 

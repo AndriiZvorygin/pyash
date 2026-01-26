@@ -1,0 +1,7 @@
+exists su name collector ob num 5 be number ya
+add 1 to collector.
+ajoute 2 a collector.
+прибавь 3 к collector.
+ob num 4 to name collector be plus do
+su name collector be number que
+ob name collector be write do
