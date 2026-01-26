@@ -2,6 +2,7 @@ import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
+import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
@@ -35,8 +36,15 @@ export async function translation_from_text_to_name_text(sentence) {
       .split("\n")
       .map(l => l.trim())
       .filter(Boolean)
-      .map(sourceAdapter.toPyash)
-      .filter(Boolean);
+      .flatMap((line) => {
+        const matched = matchGlossToPyash(line, { language: sourceAdapter.name });
+        if (matched) {
+          const program = buildProgram(matched);
+          return program.sentences;
+        }
+        const parsed = sourceAdapter.toPyash(line);
+        return parsed ? [parsed] : [];
+      });
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
       .join("\n");

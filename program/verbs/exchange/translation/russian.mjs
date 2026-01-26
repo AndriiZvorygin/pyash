@@ -65,30 +65,30 @@ function sentenceToRussian(sentence) {
 
   if (ob.boolean !== undefined || ob.bool !== undefined) {
     const value = ob.boolean ?? ob.bool;
-    return `${su} — ${value ? "истина" : "ложь"}.`;
+    return `${su} есть ${value ? "истина" : "ложь"}.`;
   }
 
   if (ob.num !== undefined) {
-    if (beLabel === "number") return `${su} — число ${ob.num}.`;
-    return `${su} — ${beLabel} ${ob.num}.`;
+    if (beLabel === "number") return `${su} есть число ${ob.num}.`;
+    return `${su} есть ${beLabel} ${ob.num}.`;
   }
 
   if (ob.text !== undefined) {
-    if (beLabel === "text") return `${su} — текст "${ob.text}".`;
-    return `${su} — ${beLabel} "${ob.text}".`;
+    if (beLabel === "text") return `${su} есть текст "${ob.text}".`;
+    return `${su} есть ${beLabel} "${ob.text}".`;
   }
 
   if (ob.date !== undefined) {
-    if (beLabel === "date") return `${su} — дата ${ob.date}.`;
-    return `${su} — ${beLabel} ${ob.date}.`;
+    if (beLabel === "date") return `${su} есть дата ${ob.date}.`;
+    return `${su} есть ${beLabel} ${ob.date}.`;
   }
 
   if (ob.ve !== undefined) {
-    if (beLabel === "vector") return `${su} — вектор.`;
-    return `${su} — ${beLabel}.`;
+    if (beLabel === "vector") return `${su} есть вектор.`;
+    return `${su} есть ${beLabel}.`;
   }
 
-  return `${su} — ${beLabel}`;
+  return `${su} есть ${beLabel}`;
 }
 
 function russianLineToSentence(line) {
@@ -231,7 +231,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const numberMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+число\s+([0-9.+-]+)\.?$/i);
+  const numberMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+число\s+([0-9.+-]+)\.?$/i);
   if (numberMatch) {
     const [, name, numRaw] = numberMatch;
     const n = Number(numRaw);
@@ -243,7 +243,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const textMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+текст\s+\"([^\"]*)\"\.?$/i);
+  const textMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+текст\s+\"([^\"]*)\"\.?$/i);
   if (textMatch) {
     const [, name, text] = textMatch;
     return {
@@ -254,7 +254,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const dateMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+дата\s+([A-Za-z0-9:+-]+)\.?$/i);
+  const dateMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+дата\s+([A-Za-z0-9:+-]+)\.?$/i);
   if (dateMatch) {
     const [, name, date] = dateMatch;
     return {
@@ -265,7 +265,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+вектор\.?$/i);
+  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+вектор\.?$/i);
   if (vectorMatch) {
     const [, name] = vectorMatch;
     return {
@@ -276,7 +276,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const boolMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+(истина|ложь)\.?$/i);
+  const boolMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+(истина|ложь)\.?$/i);
   if (boolMatch) {
     const [, name, valueRaw] = boolMatch;
     return {
@@ -286,7 +286,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const genericMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+[—-]\s+(.+)\.?$/i);
+  const genericMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+(.+)\.?$/i);
   if (!genericMatch) return null;
   const [, name, bePart] = genericMatch;
   return {
