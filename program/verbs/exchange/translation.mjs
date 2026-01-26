@@ -321,11 +321,19 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "french", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper-english", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper-english", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "french", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
   {
