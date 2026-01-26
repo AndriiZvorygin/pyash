@@ -138,6 +138,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `be map def` now locked as the configuration format baseline.
 * Maps/JSON/YAML/CSV parity + determinism now considered done.
 
+---
 
 ### Dec 29, 2025: Pre-week hygiene gates complete
 
