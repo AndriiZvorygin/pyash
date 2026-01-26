@@ -1,0 +1,3 @@
+exists su name collector ob num 5 be number ya
+ob num 13 to name collector be plus do
+ob name collector be write do
