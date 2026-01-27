@@ -3,6 +3,16 @@
 
 const fs = require('fs');
 const input = process.argv[2];
+const grammarWords = new Set();
+try {
+  const grammar = fs.readFileSync("program/pyashWords.h", "utf8");
+  grammar.split("\n").forEach((line) => {
+    const match = line.match(/_GRAMMAR\s+0x[0-9A-Fa-f]+\s+\/\/\s+(\S+)/);
+    if (match) grammarWords.add(match[1]);
+  });
+} catch (err) {
+  // ignore missing grammar list
+}
 fs.readFile("kwon_ia.json", "utf8", function(err, ia) {
   if (err) return Error(err);
   let hra7nkwon = JSON.parse(ia);
@@ -30,13 +40,16 @@ fs.readFile("kwon_en.json", "utf8", function(err, en_f) {
 fs.readFile("pyashWords.json", "utf8", function(err, pya) {
   if (err) return Error(err);
   let pyackwon = JSON.parse(pya);
+fs.readFile("pyackwon.json", "utf8", function(err, pyaExtra) {
+  if (err) return Error(err);
+  let pyackwonExtra = JSON.parse(pyaExtra);
 fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
   if (err) return Error(err);
   let dictionary = JSON.parse(contents);
   //console.log(dictionary);
   const bli2spsas = dictionary.en.blacklist['X' + input];
   if (bli2spsas == undefined || bli2spsas.length == 0) {
-   const kwonlwat = [pyackwon, qrisfyekkwon, cyi7nkwon, nr6tkwon, hra7nkwon, sla7fkwon, tru2kkwon, xrupkwon, fl6nkwon];
+   const kwonlwat = [pyackwonExtra, pyackwon, qrisfyekkwon, cyi7nkwon, nr6tkwon, hra7nkwon, sla7fkwon, tru2kkwon, xrupkwon, fl6nkwon];
    kwonlwat.forEach((kwon) => {
 	let hkom = kwon[0].isv? "isv": 
 		   kwon[0].ia? "ia" : 
@@ -53,6 +66,7 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
 		}
 		if (kwon[i].pya.indexOf(input) == 0 || kwon[i][hkom].indexOf(input) == 0 || kwon[i].en.indexOf(input) == 0) {
 			let hwus = `${kwon[i].pya} ${hkom} ${kwon[i][hkom]}`;
+			if (grammarWords.has(kwon[i].pya)) hwus += " grammar";
 			if (kwon[i][`${hkom}_fyek`]) hwus += " /" + kwon[i][`${hkom}_fyek`].trim() + "/";
 			console.log(hwus);
 		}
@@ -80,4 +94,4 @@ fs.readFile("dictionary_en.json", "utf8", function(err, contents) {
 });
 });
 });
-
+});
