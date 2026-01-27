@@ -11,7 +11,7 @@ test("translation templates cover vector and remains", async () => {
     "from text quoted.pyash.su name flags ob ve bool truth lie be vector ya.pyash.quoted from state pyash to state english to name output be translation do"
   );
   const vectorResult = await interpret(vectorSentence);
-  assert.equal(vectorResult?.value?.text?.trim(), "flags is vector.");
+  assert.equal(vectorResult?.value?.text?.trim(), "flags is vector ve bool truth lie.");
 
   const remainsSentence = parse(
     "from text quoted.pyash.ob num 10 from num 3 to name rem be remains do.pyash.quoted from state pyash to state english to name output be translation do"

@@ -251,6 +251,90 @@ function russianLineToSentence(line) {
     };
   }
 
+  const mapDefMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+определение\\s+карты\\.?$`, "iu"));
+  if (mapDefMatch) {
+    const [, name] = mapDefMatch;
+    return {
+      mood: "def",
+      be: "map",
+      exists: true,
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const jsonMapDefMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+определение\\s+json\\s+карты\\.?$`, "iu"));
+  if (jsonMapDefMatch) {
+    const [, name] = jsonMapDefMatch;
+    return {
+      mood: "def",
+      be: "json map",
+      exists: true,
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const csvMapDefMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+определение\\s+csv\\s+карты\\.?$`, "iu"));
+  if (csvMapDefMatch) {
+    const [, name] = csvMapDefMatch;
+    return {
+      mood: "def",
+      be: "csv map",
+      exists: true,
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const ceremonyDefMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+определение\\s+церемонии\\.?$`, "iu"));
+  if (ceremonyDefMatch) {
+    const [, name] = ceremonyDefMatch;
+    return {
+      mood: "def",
+      be: "ceremony",
+      exists: true,
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const mapPrahMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+конец\\s+карты\\.?$`, "iu"));
+  if (mapPrahMatch) {
+    const [, name] = mapPrahMatch;
+    return {
+      mood: "prah",
+      be: "map",
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const jsonMapPrahMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+конец\\s+json\\s+карты\\.?$`, "iu"));
+  if (jsonMapPrahMatch) {
+    const [, name] = jsonMapPrahMatch;
+    return {
+      mood: "prah",
+      be: "json map",
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const csvMapPrahMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+конец\\s+csv\\s+карты\\.?$`, "iu"));
+  if (csvMapPrahMatch) {
+    const [, name] = csvMapPrahMatch;
+    return {
+      mood: "prah",
+      be: "csv map",
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
+  const ceremonyPrahMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+конец\\s+церемонии\\.?$`, "iu"));
+  if (ceremonyPrahMatch) {
+    const [, name] = ceremonyPrahMatch;
+    return {
+      mood: "prah",
+      be: "ceremony",
+      su: { name: translateNameFromRussian(name) }
+    };
+  }
+
   const numberMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+число\\s+([0-9.+-]+)\\.?$`, "iu"));
   if (numberMatch) {
     const [, name, numRaw] = numberMatch;
@@ -285,10 +369,21 @@ function russianLineToSentence(line) {
     };
   }
 
-  const vectorMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+вектор(?:\\s+(ve\\s+.+))?\\.?$`, "iu"));
+  const vectorMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+вектор(?:\\s+((?:ve|ве)\\s+.+))?\\.?$`, "iu"));
   if (vectorMatch) {
-    const [, name, vecRaw] = vectorMatch;
-    const vec = parseVectorGloss(vecRaw);
+    const [, name] = vectorMatch;
+    const vecText = trimmed.replace(new RegExp(`^(${namePattern})\\s+есть\\s+вектор\\s*`, "iu"), "").replace(/\.$/, "");
+    let vec = null;
+    const tokens = vecText.trim().split(/\s+/).filter(Boolean);
+    if (tokens && tokens.length > 0) {
+      let idx = 0;
+      const head = tokens[0].toLowerCase();
+      if (head === "ve" || head === "ве") idx = 1;
+      const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "число";
+      const type = typeToken === "текст" ? "text" : typeToken === "булево" ? "bool" : "num";
+      const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
+      vec = { type, values };
+    }
     return {
       mood: "ya",
       su: { name: translateNameFromRussian(name) },
@@ -337,10 +432,13 @@ function renderVectorGloss(vec) {
 function parseVectorGloss(raw) {
   if (!raw || typeof raw !== "string") return null;
   const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
-  if (!tokens || (tokens[0] !== "ve" && tokens[0] !== "ве")) return null;
-  const typeToken = tokens[1] || "число";
+  if (!tokens || tokens.length === 0) return null;
+  let idx = 0;
+  const head = tokens[0].toLowerCase();
+  if (head === "ve" || head === "ве") idx = 1;
+  const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "число";
   const type = typeToken === "текст" ? "text" : typeToken === "булево" ? "bool" : "num";
-  const values = tokens.slice(2).map((token) => parseVectorToken(type, token));
+  const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
   return { type, values };
 }
 
@@ -419,7 +517,10 @@ function loadEnglishByIsv() {
     englishByIsv = new Map();
     for (const entry of data) {
       if (!entry?.en || !entry?.isv) continue;
-      englishByIsv.set(String(entry.isv), String(entry.en));
+      const key = String(entry.isv).trim();
+      if (!key) continue;
+      if (englishByIsv.has(key)) continue;
+      englishByIsv.set(key, String(entry.en).trim());
     }
   } catch {
     englishByIsv = new Map();

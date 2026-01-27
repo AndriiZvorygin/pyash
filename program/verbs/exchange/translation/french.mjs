@@ -281,8 +281,18 @@ function frenchLineToSentence(line) {
 
   const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+(?:un\s+)?vecteur(?:\s+(ve\s+.+))?\.?$/i);
   if (vectorMatch) {
-    const [, name, vecRaw] = vectorMatch;
-    const vec = parseVectorGloss(vecRaw);
+    const [, name] = vectorMatch;
+    const vecText = trimmed.replace(/^([A-Za-z0-9_]+)\s+est\s+(?:un\s+)?vecteur\s*/i, "").replace(/\.$/, "");
+    let vec = null;
+    const tokens = vecText.trim().split(/\s+/).filter(Boolean);
+    if (tokens && tokens.length > 0) {
+      let idx = 0;
+      if (tokens[0].toLowerCase() === "ve") idx = 1;
+      const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "nombre";
+      const type = typeToken === "texte" ? "text" : typeToken === "booleen" ? "bool" : "num";
+      const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
+      vec = { type, values };
+    }
     return {
       mood: "ya",
       su: { name },
@@ -331,10 +341,13 @@ function renderVectorGloss(vec) {
 function parseVectorGloss(raw) {
   if (!raw || typeof raw !== "string") return null;
   const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
-  if (!tokens || tokens[0] !== "ve") return null;
-  const typeToken = tokens[1] || "nombre";
+  if (!tokens || tokens.length === 0) return null;
+  let idx = 0;
+  const head = tokens[0].toLowerCase();
+  if (head === "ve") idx = 1;
+  const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "nombre";
   const type = typeToken === "texte" ? "text" : typeToken === "booleen" ? "bool" : "num";
-  const values = tokens.slice(2).map((token) => parseVectorToken(type, token));
+  const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
   return { type, values };
 }
 
