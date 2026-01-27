@@ -1,5 +1,5 @@
 // Sandpit helpers for bridge
-function resolveGenitiveValue(genitive, { state, memory } = {}) {
+export function resolveGenitiveValue(genitive, { state, memory } = {}) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
   if (chainArr.length === 0) return null;
   const [root, ...rest] = chainArr;

@@ -9,6 +9,9 @@ Define official conditionals and loop semantics.
 
 ## 3. Rules (normative)
 - Conditional form is `ob … be tiny/giant/equally from … then <sentence>` and executes the inline consequence immediately when true.
+- If the consequence needs to be a `ret`, both inline and two-line forms are valid:
+  - inline: `ob … be tiny/giant/equally from … then <ret sentence>`
+  - two-line: `ob … be tiny/giant/equally from … then` followed by `<ret sentence>`
 - Loop semantics:
   - `fromindex <start> [toindex <bound>] be <ceremony> do` runs the body and stops when `fromindex === toindex` (or `fromindex === 0` if `toindex` is absent).
   - When `toindex` is present, the supervisor steps `fromindex` toward `toindex` by +/- 1 each iteration.
