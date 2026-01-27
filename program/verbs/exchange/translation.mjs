@@ -57,7 +57,9 @@ export async function translation_from_text_to_name_text(sentence) {
         const useReverse = sourceAdapter.name !== "russian"
           && sourceAdapter.name !== "chinese"
           && sourceAdapter.name !== "interlingua"
-          && sourceAdapter.name !== "hindi";
+          && sourceAdapter.name !== "hindi"
+          && sourceAdapter.name !== "javascript"
+          && sourceAdapter.name !== "whisper-english";
         const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
         if (matched) {
           const program = buildProgram(matched);

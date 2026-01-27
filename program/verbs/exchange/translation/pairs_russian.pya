@@ -409,7 +409,6 @@ su text "ob text \"use the say tool to say hello world\" to name text helper-out
 su text "ob to name cmd be plus do" ob text "" ya
 su text "ob to name produce exists be remember do" ob text "" ya
 su text "ob to name text recording be text do" ob text "" ya
-su text "prah" ob text "конец блока." ya
 su text "reset" ob text "" ya
 su text "ret" ob text "" ya
 su text "su name PATH be ecology que" ob text "" ya

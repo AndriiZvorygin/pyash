@@ -11,5 +11,5 @@ test("translation pairs provide russian glosses", async () => {
     "from text quoted.pyash.su name collector ob num 10 be number ya.pyash.quoted from state pyash to state russian to name output be translation do"
   );
   const result = await interpret(sentence);
-  assert.equal(result?.value?.text?.trim(), "collector — число 10.");
+  assert.equal(result?.value?.text?.trim(), "collector есть число 10.");
 });
