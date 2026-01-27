@@ -8,6 +8,8 @@ let cachedFrenchPairs = null;
 let cachedFrenchPairsError = null;
 let cachedChinesePairs = null;
 let cachedChinesePairsError = null;
+let cachedInterlinguaPairs = null;
+let cachedInterlinguaPairsError = null;
 let cachedEnglishTemplates = null;
 let cachedEnglishTemplatesError = null;
 let cachedRussianTemplates = null;
@@ -16,6 +18,8 @@ let cachedFrenchTemplates = null;
 let cachedFrenchTemplatesError = null;
 let cachedChineseTemplates = null;
 let cachedChineseTemplatesError = null;
+let cachedInterlinguaTemplates = null;
+let cachedInterlinguaTemplatesError = null;
 
 const ENTRY_REGEX = /^su text (\"(?:\\\\.|[^\"\\\\])*\") ob text (\"(?:\\\\.|[^\"\\\\])*\") ya$/;
 
@@ -126,6 +130,20 @@ export async function loadChineseTranslationPairs() {
   }
 }
 
+export async function loadInterlinguaTranslationPairs() {
+  if (cachedInterlinguaPairs) return cachedInterlinguaPairs;
+  if (cachedInterlinguaPairsError) throw cachedInterlinguaPairsError;
+  try {
+    const fileUrl = new URL("./pairs_interlingua.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedInterlinguaPairs = buildPairsMapFromText(text, { label: "translation_pairs_interlingua" });
+    return cachedInterlinguaPairs;
+  } catch (err) {
+    cachedInterlinguaPairsError = err;
+    throw err;
+  }
+}
+
 export async function loadEnglishTranslationTemplates() {
   if (cachedEnglishTemplates) return cachedEnglishTemplates;
   if (cachedEnglishTemplatesError) throw cachedEnglishTemplatesError;
@@ -178,6 +196,20 @@ export async function loadChineseTranslationTemplates() {
     return cachedChineseTemplates;
   } catch (err) {
     cachedChineseTemplatesError = err;
+    throw err;
+  }
+}
+
+export async function loadInterlinguaTranslationTemplates() {
+  if (cachedInterlinguaTemplates) return cachedInterlinguaTemplates;
+  if (cachedInterlinguaTemplatesError) throw cachedInterlinguaTemplatesError;
+  try {
+    const fileUrl = new URL("./pairs_interlingua_templates.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedInterlinguaTemplates = buildTemplatePairsFromText(text, { label: "translation_pairs_interlingua_templates" });
+    return cachedInterlinguaTemplates;
+  } catch (err) {
+    cachedInterlinguaTemplatesError = err;
     throw err;
   }
 }

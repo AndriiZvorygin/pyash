@@ -21,6 +21,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Translate Pyash to French | `examples/pyash/translate-pyash-map-ceremony-to-french.pya` |
 | Translate Pyash to Russian | `examples/pyash/translate-pyash-map-ceremony-to-russian.pya` |
 | Translate Pyash to Chinese | `examples/pyash/translate-pyash-map-ceremony-to-chinese.pya` |
+| Translate Pyash to Interlingua | `examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya` |
 | Map + Ceremony Demo | `examples/pyash/map-ceremony-demo.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya` |

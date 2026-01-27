@@ -56,6 +56,7 @@ Files:
 - `program/verbs/exchange/translation/pairs_russian.pya`
 - `program/verbs/exchange/translation/pairs_french.pya`
 - `program/verbs/exchange/translation/pairs_chinese.pya`
+- `program/verbs/exchange/translation/pairs_interlingua.pya`
 
 Shape:
 ```
@@ -77,6 +78,7 @@ Files:
 - `program/verbs/exchange/translation/pairs_russian_templates.pya`
 - `program/verbs/exchange/translation/pairs_french_templates.pya`
 - `program/verbs/exchange/translation/pairs_chinese_templates.pya`
+- `program/verbs/exchange/translation/pairs_interlingua_templates.pya`
 
 Shape:
 ```
@@ -122,6 +124,7 @@ Output substitution is language-aware for booleans:
 - Russian: `истина` / `ложь`
 - French: `vrai` / `faux`
 - Chinese: `真相` / `谎言`
+- Interlingua: `veritate` / `false`
 
 ---
 
@@ -152,12 +155,15 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `quiz/translation_pairs_russian.test.mjs`
 - `quiz/translation_pairs_french.test.mjs`
 - `quiz/translation_pairs_chinese.test.mjs`
+- `quiz/translation_pairs_interlingua.test.mjs`
 - `quiz/translation_pairs_templates.test.mjs`
 - `quiz/translation_pairs_conditionals_templates.test.mjs`
 - `quiz/translation_pairs_vector_remains_templates.test.mjs`
 - `quiz/translation_parse_fallback.test.mjs`
 - `quiz/translation_chinese_adapter.test.mjs`
 - `quiz/translation_chinese_roundtrip.test.mjs`
+- `quiz/translation_interlingua_adapter.test.mjs`
+- `quiz/translation_interlingua_roundtrip.test.mjs`
 
 ---
 
@@ -167,6 +173,7 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `examples/pyash/translate-pyash-file-to-english.pya`
 - `examples/pyash/translation-fallback-mixed.pya`
 - `examples/pyash/translate-pyash-map-ceremony-to-chinese.pya`
+- `examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya`
 
 ---
 
@@ -194,6 +201,12 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - [x] Adapter: `chinese.mjs` (to/from Pyash).
 - [x] Exact pairs: `pairs_chinese.pya`.
 - [x] Templates: `pairs_chinese_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### Interlingua
+- [x] Adapter: `interlingua.mjs` (to/from Pyash).
+- [x] Exact pairs: `pairs_interlingua.pya`.
+- [x] Templates: `pairs_interlingua_templates.pya`.
 - [x] Parser fallback from gloss → Pyash.
 
 ### Upcoming languages

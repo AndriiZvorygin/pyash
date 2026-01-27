@@ -1,0 +1,62 @@
+su name translation_pairs_interlingua be map def
+su text "su" ob text "subjecto" ya
+su text "ob" ob text "objecto" ya
+su text "be" ob text "es" ya
+su text "do" ob text "face" ya
+su text "ya" ob text "es" ya
+su text "to" ob text "a" ya
+su text "from" ob text "de" ya
+su text "with" ob text "con" ya
+su text "by" ob text "per" ya
+su text "as" ob text "como" ya
+su text "for" ob text "pro" ya
+su text "via" ob text "via" ya
+su text "in" ob text "in" ya
+su text "on" ob text "sur" ya
+su text "at" ob text "apud" ya
+su text "under" ob text "sub" ya
+su text "into" ob text "intra" ya
+su text "onto" ob text "sur" ya
+su text "outof" ob text "fora" ya
+su text "of" ob text "de" ya
+su text "offof" ob text "de sur" ya
+su text "fromunder" ob text "de sub" ya
+su text "beneath" ob text "infra" ya
+su text "during" ob text "durante" ya
+su text "since" ob text "desde" ya
+su text "until" ob text "usque" ya
+su text "then" ob text "alora" ya
+su text "fromstate" ob text "de stato" ya
+su text "fromperson" ob text "de persona" ya
+su text "fromgroup" ob text "de gruppo" ya
+su text "among" ob text "inter" ya
+su text "intogroup" ob text "in gruppo" ya
+su text "fromtext" ob text "de texto" ya
+su text "accordingto" ob text "secundo" ya
+su text "totext" ob text "a texto" ya
+su text "times" ob text "vices" ya
+su text "per" ob text "per" ya
+su text "atleast" ob text "al minus" ya
+su text "exactly" ob text "exacte" ya
+su text "atmost" ob text "al plus" ya
+su text "fromindex" ob text "de indice" ya
+su text "atindex" ob text "in indice" ya
+su text "toindex" ob text "a indice" ya
+su text "become" ob text "devenir" ya
+su text "exists" ob text "exister" ya
+su text "text" ob text "texto" ya
+su text "num" ob text "numero" ya
+su text "ve" ob text "vector" ya
+su text "bool" ob text "booleano" ya
+su text "date" ob text "dactylo" ya
+su text "vector" ob text "vector" ya
+su text "name" ob text "nomine" ya
+su text "map" ob text "mappa" ya
+su text "json" ob text "json" ya
+su text "csv" ob text "csv" ya
+su text "ceremony" ob text "ceremonia" ya
+su text "def" ob text "definition" ya
+su text "prah" ob text "fin" ya
+su text "la" ob text "la" ya
+su text "ko" ob text "ko" ya
+prah
