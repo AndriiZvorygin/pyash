@@ -10,6 +10,8 @@ if (files.length === 0) {
 }
 
 const checked = new Map();
+const PYASH_QUOTED_START = "quoted.pyash.";
+const PYASH_QUOTED_END = ".pyash.quoted";
 
 function tokenizeName(name) {
   return String(name)
@@ -43,6 +45,26 @@ function queryRyan(token) {
   return lines;
 }
 
+function isFileMarker(line) {
+  return /^"?file"?$/i.test(line);
+}
+
+function extractQuotedPyashBlocks(text) {
+  const blocks = [];
+  let index = 0;
+  while (index < text.length) {
+    const start = text.indexOf(PYASH_QUOTED_START, index);
+    if (start === -1) break;
+    const contentStart = start + PYASH_QUOTED_START.length;
+    const end = text.indexOf(PYASH_QUOTED_END, contentStart);
+    if (end === -1) break;
+    const raw = text.slice(contentStart, end);
+    blocks.push(raw.replaceAll("\\n", "\n"));
+    index = end + PYASH_QUOTED_END.length;
+  }
+  return blocks;
+}
+
 let missing = 0;
 for (const file of files) {
   const text = await fs.readFile(file, "utf8");
@@ -51,6 +73,12 @@ for (const file of files) {
   for (const sentence of program.sentences) {
     collectNames(sentence, names);
   }
+  for (const block of extractQuotedPyashBlocks(text)) {
+    const blockProgram = buildProgram(block);
+    for (const sentence of blockProgram.sentences) {
+      collectNames(sentence, names);
+    }
+  }
   for (const token of names) {
     const lines = queryRyan(token);
     if (lines.length === 0) {
@@ -58,7 +86,7 @@ for (const file of files) {
       console.log(`${file}: ${token} (no suggestions)`);
       continue;
     }
-    if (lines.length === 1 && lines[0] === "file") {
+    if (lines.length === 1 && isFileMarker(lines[0])) {
       missing += 1;
       console.log(`${file}: ${token} (no dictionary match)`);
       continue;

@@ -1,12 +1,12 @@
-from text quoted.pyash.exists su name profile be map def
+from text quoted.pyash.exists su name atlas be map def
 su name name ob text "Ada" be text ya
 su name age ob num 36 be number ya
-su name active ob bool truth ya
-su name start ob date 2025-05-01 be date ya
-su name nums ob ve num 1 2 3 be vector ya
-su name profile be map prah
-exists su name greet be ceremony def
+su name truth ob bool truth ya
+su name begin ob date 2025-05-01 be date ya
+su name count ob ve num 1 2 3 be vector ya
+su name atlas be map prah
+exists su name hello be ceremony def
 ob text "hi" be write do
-su name greet be ceremony prah
-be greet do.pyash.quoted from state pyash to state russian to name output be translation do
+su name hello be ceremony prah
+be hello do.pyash.quoted from state pyash to state russian to name output be translation do
 ob name output be write do
