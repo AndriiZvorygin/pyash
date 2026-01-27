@@ -147,6 +147,7 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 ## 6. Tests that define truth
 
 - `quiz/translation.test.mjs`
+- `quiz/translation_anchor_words.test.mjs`
 - `quiz/translation_pairs_english.test.mjs`
 - `quiz/translation_pairs_russian.test.mjs`
 - `quiz/translation_pairs_french.test.mjs`
@@ -206,3 +207,24 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 Translation examples should prefer **root dictionary words** instead of conjugated English variants
 (`actively` vs `active`, etc.). The tooling for automatic normalization and replacement is not yet
 implemented; for now, prefer dictionary-root tokens when authoring examples and pairs.
+
+---
+
+## 10. Anchor word forms (draft)
+
+Some vocabulary entries need explicit surface forms (noun/adverb/etc.) while keeping a single
+**anchor word** for Pyash. This is expressed as a small Pyash map:
+
+```
+su name translation_anchor_words be map def
+su name actively ob text "active" as wo noun ya
+su name actively ob text "actively" as wo adverb ya
+prah
+```
+
+Interpretation:
+- `su name <anchor>` is the canonical Pyash word.
+- `ob text "<form>"` is a surface form.
+- `as wo <role>` tags the form (noun/adverb/etc.).
+
+Implementations MAY normalize incoming text by mapping known forms back to the anchor word.
