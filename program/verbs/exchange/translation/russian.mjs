@@ -1,5 +1,9 @@
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
 function sentenceToRussian(sentence) {
-  const su = sentence.su?.name;
+  const su = translateNameToRussian(sentence.su?.name);
   const ob = sentence.ob ?? {};
   const mood = sentence.mood;
   const beWords = (sentence.be || "").split(" ").filter(Boolean);
@@ -7,8 +11,8 @@ function sentenceToRussian(sentence) {
 
   const isComparator = ["tiny", "giant", "equally"].includes(beLabel);
   if (sentence.consequence && isComparator) {
-    const lhs = ob.num !== undefined ? ob.num : ob.name ?? "lhs";
-    const rhs = sentence.from?.num !== undefined ? sentence.from.num : sentence.from?.name ?? "rhs";
+    const lhs = ob.num !== undefined ? ob.num : translateNameToRussian(ob.name ?? "lhs");
+    const rhs = sentence.from?.num !== undefined ? sentence.from.num : translateNameToRussian(sentence.from?.name ?? "rhs");
     const consequence = sentenceToRussian(sentence.consequence);
     const cmpLabel = beLabel === "tiny"
       ? "меньше"
@@ -23,10 +27,11 @@ function sentenceToRussian(sentence) {
   if (mood === "do") {
     const numVal = ob.num !== undefined ? ob.num : undefined;
     const textVal = ob.text !== undefined ? ob.text : undefined;
-    const targetTo = sentence.to?.name;
-    const targetFrom = sentence.from?.name;
-    const targetWith = sentence.with?.name;
+    const targetTo = translateNameToRussian(sentence.to?.name);
+    const targetFrom = translateNameToRussian(sentence.from?.name);
+    const targetWith = translateNameToRussian(sentence.with?.name);
     const verb = beLabel;
+    const translatedVerb = translateTokenToRussian(beLabel);
 
     if (verb === "plus" && numVal !== undefined && targetTo) {
       return `прибавь ${numVal} к ${targetTo}.`;
@@ -50,7 +55,7 @@ function sentenceToRussian(sentence) {
       return `запиши "${textVal}".`;
     }
     if (verb === "write" && sentence.ob?.name) {
-      return `запиши ${sentence.ob.name}.`;
+      return `запиши ${translateNameToRussian(sentence.ob.name)}.`;
     }
     if (verb === "say" && textVal !== undefined) {
       return `скажи "${textVal}".`;
@@ -61,7 +66,7 @@ function sentenceToRussian(sentence) {
     if (verb === "read" && targetFrom) {
       return `прочитай ${targetFrom}.`;
     }
-    return `сделай ${verb}.`;
+    return `сделай ${translatedVerb}.`;
   }
 
   if (mood !== "ya") return JSON.stringify(sentence);
@@ -362,4 +367,44 @@ function parseVectorToken(type, token) {
   return token;
 }
 
-export { sentenceToRussian, russianLineToSentence };
+let isvByEnglish = null;
+
+function loadIsvByEnglish() {
+  if (isvByEnglish) return isvByEnglish;
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const repoRoot = resolve(here, "../../../..");
+    const path = resolve(repoRoot, "caterer/pyac/lyac/kwon_isv.json");
+    const data = JSON.parse(fs.readFileSync(path, "utf8"));
+    isvByEnglish = new Map();
+    for (const entry of data) {
+      if (!entry?.en || !entry?.isv) continue;
+      isvByEnglish.set(String(entry.en).toLowerCase(), entry.isv);
+    }
+  } catch {
+    isvByEnglish = new Map();
+  }
+  return isvByEnglish;
+}
+
+function translateTokenToRussian(token) {
+  if (!token) return token;
+  const map = loadIsvByEnglish();
+  const lower = token.toLowerCase();
+  const translated = map.get(lower);
+  if (!translated) return token;
+  if (token[0] && token[0] === token[0].toUpperCase()) {
+    return translated[0].toUpperCase() + translated.slice(1);
+  }
+  return translated;
+}
+
+function translateNameToRussian(name) {
+  if (!name) return name;
+  return String(name)
+    .split(/\s+/)
+    .map((token) => translateTokenToRussian(token))
+    .join(" ");
+}
+
+export { sentenceToRussian, russianLineToSentence, translateNameToRussian };
