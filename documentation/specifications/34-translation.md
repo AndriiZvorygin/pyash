@@ -186,3 +186,11 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - [ ] Chinese (adapter + pairs + templates + fallback coverage).
 - [ ] Spanish (adapter + pairs + templates + fallback coverage).
 - [ ] Portuguese (adapter + pairs + templates + fallback coverage).
+
+---
+
+## 9. Vocabulary normalization (pending)
+
+Translation examples should prefer **root dictionary words** instead of conjugated English variants
+(`actively` vs `active`, etc.). The tooling for automatic normalization and replacement is not yet
+implemented; for now, prefer dictionary-root tokens when authoring examples and pairs.

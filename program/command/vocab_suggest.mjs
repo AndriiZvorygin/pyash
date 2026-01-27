@@ -71,8 +71,14 @@ function queryRyan(token) {
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean);
-  checked.set(token, lines);
-  return lines;
+  const sorted = lines.sort((a, b) => {
+    const aIsv = /\bisv\b/.test(a);
+    const bIsv = /\bisv\b/.test(b);
+    if (aIsv === bIsv) return 0;
+    return aIsv ? -1 : 1;
+  });
+  checked.set(token, sorted);
+  return sorted;
 }
 
 function isFileMarker(line) {

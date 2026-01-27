@@ -3,6 +3,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
+import { translateNameToRussian } from "./translation/russian.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
@@ -201,7 +202,7 @@ function renderPlaceholderValueForKey(field, value, language) {
     return value === true ? "truth" : "lie";
   }
   if (field === "vec" || field === "ve") {
-    return renderVectorGlossForLanguage(value, language);
+    return renderVectorForKey(value);
   }
   return String(value);
 }
@@ -225,6 +226,11 @@ function renderPlaceholderValueForOutput(field, value, language, formatter) {
   if (field === "text") {
     if (typeof value !== "string") return null;
     return value;
+  }
+  if (field === "name") {
+    const name = String(value);
+    if (language === "russian") return translateNameToRussian(name);
+    return name;
   }
   if (field === "bool" || field === "boolean") {
     const truth = value === true;
