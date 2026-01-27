@@ -1,7 +1,5 @@
-#!/usr/bin/env  node
-'use strict';
-
-const fs = require('fs');
+#!/usr/bin/env node
+import fs from "node:fs";
 const input = process.argv[2];
 const grammarWords = new Set();
 try {
