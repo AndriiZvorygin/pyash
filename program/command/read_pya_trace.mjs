@@ -21,7 +21,7 @@ async function main() {
   const text = await fs.readFile(resolved, "utf8");
 
   forget();
-  const sentences = splitSentences(text);
+  const sentences = splitSentences(text, { includeThen: true });
 
   for (const raw of sentences) {
     const line = raw.trim();

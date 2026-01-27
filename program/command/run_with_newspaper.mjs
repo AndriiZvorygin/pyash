@@ -98,7 +98,7 @@ async function run() {
 
   const resolved = path.resolve(sourcePathFlag);
   const text = await fs.readFile(resolved, "utf8");
-  const sentences = splitSentences(text);
+  const sentences = splitSentences(text, { includeThen: true });
   const runTime = runTimeFlag || new Date().toISOString();
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
@@ -168,7 +168,7 @@ async function run() {
       return "";
     }
     const entries = [];
-    for (const raw of splitSentences(existing)) {
+    for (const raw of splitSentences(existing, { includeThen: true })) {
       const line = raw.trim();
       if (!line) continue;
       let sentence;
