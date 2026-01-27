@@ -2,7 +2,7 @@ su name translation_pairs_french_templates be map def
 su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of su] est le nombre [num of ob]." ya
 su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] est le texte \"[text of ob]\"." ya
 su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] est [bool of ob]." ya
-su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] est un vecteur." ya
+su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] est un vecteur [vec of ob]." ya
 su text "ob num [num of ob] to name [name of to] be plus do" ob text "ajoute [num of ob] a [name of to]." ya
 su text "ob num [num of ob] from name [name of from] be subtract do" ob text "soustrais [num of ob] de [name of from]." ya
 su text "ob num [num of ob] with name [name of with] be multiply do" ob text "multiplie [name of with] par [num of ob]." ya
