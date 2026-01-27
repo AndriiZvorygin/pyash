@@ -186,6 +186,33 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 
 ## 8. Translation parity checklist
 
+## 8a. Current coverage and gaps
+
+The translation adapters and pairs are usable for core REPL-style sentences and the
+example set, but they do not yet cover the full Pyash language surface. The items
+below apply across all languages unless noted.
+
+### Covered today
+- Core imperative verbs in examples (write/read/plus/subtract/multiply/divide/remains).
+- Simple declarative assignments for `text`, `number`, `bool`, `date`, `vector`.
+- Basic map and ceremony open and close markers in the translation examples.
+- Parser fallback to pairs/templates for Pyash glosses.
+
+### Common gaps to close
+- Nested maps and nested ceremonies.
+- Rich ceremony bodies that use multiple arguments and outputs.
+- Full compositional case coverage beyond the current templates.
+- Conditional and comparative sentences beyond the current templates.
+- Broader verb coverage for the standard library.
+- More robust name handling and quoting for multiword identifiers.
+
+### Language specific notes
+- English, French, Russian, Chinese, Interlingua, Hindi: templates exist and roundtrip
+  for the current example coverage only. Expand pairs and templates to match new
+  verbs and data structures as they land.
+- Chinese: vector uses the single character alias `量`, but `向量` is also accepted.
+- Interlingua: Spanish is currently an alias to Interlingua forms.
+
 ### English
 - [x] Adapter: `english.mjs` (to/from Pyash).
 - [x] Exact pairs: `pairs_english.pya`.
