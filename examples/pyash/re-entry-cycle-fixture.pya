@@ -1,0 +1,6 @@
+from filename "../../module/re_entry_cycle.pya" ob name re-entry cycle to name re-entry cycle be import do
+exists su name author be mind ya
+exists su name critic be mind ya
+exists su name task ob text "Write a short greeting." be text ya
+to name text result fromindex num 0 toindex num 2 be re-entry cycle do
+ob name result be write do

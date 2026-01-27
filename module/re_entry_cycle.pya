@@ -1,0 +1,14 @@
+su name re-entry attempt be ceremony def
+  su name draft out ob name task for name author to name text draft out be write do
+  su name critique out ob name draft out for name critic to name text critique out be write do
+  su name revised out ob name critique out for name author to name text revised out be write do
+  su name revised out ret
+prah
+
+su name re-entry cycle fromindex num 0 toindex num 0 to name text output be ceremony def
+  to name text latest fromindex num 0 toindex num of toindex of this be re-entry attempt do
+  su name latest ret
+prah
+
+exists su name re-entry attempt be export ya
+exists su name re-entry cycle be export ya
