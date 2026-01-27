@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 const ENTRY_REGEX = /^su text (\"(?:\\\\.|[^\"\\\\])*\") ob text (\"(?:\\\\.|[^\"\\\\])*\") ya$/;
 const PLACEHOLDER_REGEX = /\[([^\]]+)\]/g;
-const LANGUAGES = ["english", "russian", "french", "chinese", "interlingua"];
+const LANGUAGES = ["english", "russian", "french", "chinese", "interlingua", "hindi"];
 
 const reverseCache = new Map();
 const templatesCache = new Map();
