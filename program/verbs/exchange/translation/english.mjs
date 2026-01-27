@@ -223,6 +223,28 @@ function englishLineToSentence(line) {
     };
   }
 
+  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+is\s+vector(?:\s+(.+))?\.?$/i);
+  if (vectorMatch) {
+    const [, name] = vectorMatch;
+    const vecText = trimmed.replace(/^([A-Za-z0-9_]+)\s+is\s+vector\s*/i, "").replace(/\.$/, "");
+    let vec = null;
+    const tokens = vecText.trim().split(/\s+/).filter(Boolean);
+    if (tokens && tokens.length > 0) {
+      let idx = 0;
+      if (tokens[0].toLowerCase() === "ve") idx = 1;
+      const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "num";
+      const type = typeToken === "text" ? "text" : (typeToken === "bool" || typeToken === "boolean") ? "bool" : "num";
+      const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
+      vec = { type, values };
+    }
+    return {
+      mood: "ya",
+      su: { name },
+      be: "vector",
+      ob: { ve: vec ?? {} }
+    };
+  }
+
   // Imperative form: "do subtract 2 from collector"
   const doMatch = trimmed.match(/^do ([A-Za-z0-9_]+) ([0-9.+-]+) (to|from) ([A-Za-z0-9_]+)\.?$/i);
   if (doMatch) {
@@ -272,6 +294,42 @@ function englishLineToSentence(line) {
   }
 
   return sentence;
+}
+
+function parseVectorGloss(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
+  if (!tokens || tokens.length === 0) return null;
+  let idx = 0;
+  if (tokens[0].toLowerCase() === "ve") idx = 1;
+  const typeToken = tokens[idx] ? tokens[idx].toLowerCase() : "num";
+  const type = typeToken === "text" ? "text" : (typeToken === "bool" || typeToken === "boolean") ? "bool" : "num";
+  const values = tokens.slice(idx + 1).map((token) => parseVectorToken(type, token));
+  return { type, values };
+}
+
+function parseVectorToken(type, token) {
+  if (type === "bool") {
+    const lower = token.toLowerCase();
+    if (lower === "truth" || lower === "true") return true;
+    if (lower === "lie" || lower === "false") return false;
+    return token;
+  }
+  if (type === "num") {
+    const n = Number(token);
+    return Number.isNaN(n) ? token : n;
+  }
+  if (type === "text") {
+    if (token.startsWith("\"")) {
+      try {
+        return JSON.parse(token);
+      } catch {
+        return token;
+      }
+    }
+    return token;
+  }
+  return token;
 }
 
 export { sentenceToEnglish, englishLineToSentence };

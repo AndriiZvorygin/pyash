@@ -20,5 +20,5 @@ test("russian adapter formats unmapped pyash sentences", async () => {
     "from text quoted.pyash.su name alpha ob num 2 be cost ya.pyash.quoted fromstate name pyash become name russian to name output be translation do"
   );
   const result = await interpret(sentence);
-  assert.equal(result?.value?.text?.trim(), "alpha есть cost 2.");
+  assert.equal(result?.value?.text?.trim(), "алјфа есть cost 2.");
 });

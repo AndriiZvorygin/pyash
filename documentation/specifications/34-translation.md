@@ -56,6 +56,8 @@ Files:
 - `program/verbs/exchange/translation/pairs_russian.pya`
 - `program/verbs/exchange/translation/pairs_french.pya`
 - `program/verbs/exchange/translation/pairs_chinese.pya`
+- `program/verbs/exchange/translation/pairs_interlingua.pya`
+- `program/verbs/exchange/translation/pairs_hindi.pya`
 
 Shape:
 ```
@@ -77,6 +79,8 @@ Files:
 - `program/verbs/exchange/translation/pairs_russian_templates.pya`
 - `program/verbs/exchange/translation/pairs_french_templates.pya`
 - `program/verbs/exchange/translation/pairs_chinese_templates.pya`
+- `program/verbs/exchange/translation/pairs_interlingua_templates.pya`
+- `program/verbs/exchange/translation/pairs_hindi_templates.pya`
 
 Shape:
 ```
@@ -122,6 +126,8 @@ Output substitution is language-aware for booleans:
 - Russian: `истина` / `ложь`
 - French: `vrai` / `faux`
 - Chinese: `真相` / `谎言`
+- Interlingua: `veritate` / `false`
+- Hindi: `सच` / `झूठ`
 
 ---
 
@@ -152,12 +158,18 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `quiz/translation_pairs_russian.test.mjs`
 - `quiz/translation_pairs_french.test.mjs`
 - `quiz/translation_pairs_chinese.test.mjs`
+- `quiz/translation_pairs_interlingua.test.mjs`
+- `quiz/translation_pairs_hindi.test.mjs`
 - `quiz/translation_pairs_templates.test.mjs`
 - `quiz/translation_pairs_conditionals_templates.test.mjs`
 - `quiz/translation_pairs_vector_remains_templates.test.mjs`
 - `quiz/translation_parse_fallback.test.mjs`
 - `quiz/translation_chinese_adapter.test.mjs`
 - `quiz/translation_chinese_roundtrip.test.mjs`
+- `quiz/translation_interlingua_adapter.test.mjs`
+- `quiz/translation_interlingua_roundtrip.test.mjs`
+- `quiz/translation_hindi_adapter.test.mjs`
+- `quiz/translation_hindi_roundtrip.test.mjs`
 
 ---
 
@@ -167,10 +179,39 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `examples/pyash/translate-pyash-file-to-english.pya`
 - `examples/pyash/translation-fallback-mixed.pya`
 - `examples/pyash/translate-pyash-map-ceremony-to-chinese.pya`
+- `examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya`
+- `examples/pyash/translate-pyash-map-ceremony-to-hindi.pya`
 
 ---
 
 ## 8. Translation parity checklist
+
+## 8a. Current coverage and gaps
+
+The translation adapters and pairs are usable for core REPL-style sentences and the
+example set, but they do not yet cover the full Pyash language surface. The items
+below apply across all languages unless noted.
+
+### Covered today
+- Core imperative verbs in examples (write/read/plus/subtract/multiply/divide/remains).
+- Simple declarative assignments for `text`, `number`, `bool`, `date`, `vector`.
+- Basic map and ceremony open and close markers in the translation examples.
+- Parser fallback to pairs/templates for Pyash glosses.
+
+### Common gaps to close
+- Nested maps and nested ceremonies.
+- Rich ceremony bodies that use multiple arguments and outputs.
+- Full compositional case coverage beyond the current templates.
+- Conditional and comparative sentences beyond the current templates.
+- Broader verb coverage for the standard library.
+- More robust name handling and quoting for multiword identifiers.
+
+### Language specific notes
+- English, French, Russian, Chinese, Interlingua, Hindi: templates exist and roundtrip
+  for the current example coverage only. Expand pairs and templates to match new
+  verbs and data structures as they land.
+- Chinese: vector uses the single character alias `量`, but `向量` is also accepted.
+- Interlingua: Spanish is currently an alias to Interlingua forms.
 
 ### English
 - [x] Adapter: `english.mjs` (to/from Pyash).
@@ -194,6 +235,18 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - [x] Adapter: `chinese.mjs` (to/from Pyash).
 - [x] Exact pairs: `pairs_chinese.pya`.
 - [x] Templates: `pairs_chinese_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### Interlingua
+- [x] Adapter: `interlingua.mjs` (to/from Pyash).
+- [x] Exact pairs: `pairs_interlingua.pya`.
+- [x] Templates: `pairs_interlingua_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
+### Hindi
+- [x] Adapter: `hindi.mjs` (to/from Pyash).
+- [x] Exact pairs: `pairs_hindi.pya`.
+- [x] Templates: `pairs_hindi_templates.pya`.
 - [x] Parser fallback from gloss → Pyash.
 
 ### Upcoming languages
