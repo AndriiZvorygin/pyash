@@ -5,6 +5,7 @@ import { resolveTranslationSource, resolveTranslationTarget } from "./translatio
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
 import { translateNameToChinese } from "./translation/chinese.mjs";
 import { translateNameToRussian } from "./translation/russian.mjs";
+import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
@@ -35,6 +36,12 @@ export async function translation_from_text_to_name_text(sentence) {
   let sentences = [];
 
   if (sourceAdapter) {
+    let anchorForms = null;
+    try {
+      anchorForms = await loadAnchorWordForms();
+    } catch {
+      anchorForms = null;
+    }
     sentences = sourceText
       .replaceAll("\\n", "\n")
       .split("\n")
@@ -45,10 +52,10 @@ export async function translation_from_text_to_name_text(sentence) {
         const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
         if (matched) {
           const program = buildProgram(matched);
-          return program.sentences;
+          return program.sentences.map((sentence) => normalizeAnchorSentence(sentence, anchorForms));
         }
         const parsed = sourceAdapter.toPyash(line);
-        return parsed ? [parsed] : [];
+        return parsed ? [normalizeAnchorSentence(parsed, anchorForms)] : [];
       });
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
@@ -290,6 +297,35 @@ function renderVectorGlossForLanguage(vec, language) {
     return ["量", typeGloss, ...rendered].join(" ");
   }
   return ["ve", type, ...rendered].join(" ");
+}
+
+function normalizeAnchorSentence(sentence, anchorForms) {
+  if (!anchorForms?.formsToAnchor || !sentence || typeof sentence !== "object") return sentence;
+  const formsToAnchor = anchorForms.formsToAnchor;
+  const stack = [sentence];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object") continue;
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item);
+      continue;
+    }
+    if (typeof node.name === "string") {
+      node.name = normalizeAnchorName(node.name, formsToAnchor);
+    }
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") stack.push(value);
+    }
+  }
+  return sentence;
+}
+
+function normalizeAnchorName(name, formsToAnchor) {
+  if (!name) return name;
+  return String(name)
+    .split(/\s+/)
+    .map((token) => formsToAnchor.get(token) ?? token)
+    .join(" ");
 }
 
 function applyTemplatePairs(templates, sentence, pyash, language, formatter) {
