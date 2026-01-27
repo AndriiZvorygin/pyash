@@ -22,6 +22,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
   if (tokens.length === 0) return null;
   let mood = null;
   let words = tokens;
+  let appendMoodToThen = true;
   if (allowMoodless) {
     const maybeMood = tokens.at(-1);
     if (MOODS.includes(maybeMood)) {
@@ -29,8 +30,16 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       words = tokens.slice(0, -1);
     }
   } else {
-    mood = tokens.at(-1);
-    words = tokens.slice(0, -1);
+    const last = tokens.at(-1);
+    const hasThen = tokens.includes("then");
+    if (last === "ret" && hasThen) {
+      mood = "do";
+      words = tokens;
+      appendMoodToThen = false;
+    } else {
+      mood = last;
+      words = tokens.slice(0, -1);
+    }
   }
   const s = {};
   if (mood) s.mood = mood;
@@ -130,7 +139,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       //  but we can keep this for future nested clauses)
       const subTokens = words.slice(i + 1);
       // Re-attach the mood token so nested clauses retain their own mood word
-      if (mood) subTokens.push(mood);
+      if (mood && appendMoodToThen) subTokens.push(mood);
       const subline = subTokens.join(" ");
       s.consequence = parse(subline);
       break;
