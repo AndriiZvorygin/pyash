@@ -3,14 +3,17 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
+import { translateNameToChinese } from "./translation/chinese.mjs";
 import { translateNameToRussian } from "./translation/russian.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
   loadFrenchTranslationPairs,
+  loadChineseTranslationPairs,
   loadEnglishTranslationTemplates,
   loadRussianTranslationTemplates,
-  loadFrenchTranslationTemplates
+  loadFrenchTranslationTemplates,
+  loadChineseTranslationTemplates
 } from "./translation/pairs.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
@@ -38,7 +41,8 @@ export async function translation_from_text_to_name_text(sentence) {
       .map(l => l.trim())
       .filter(Boolean)
       .flatMap((line) => {
-        const matched = matchGlossToPyash(line, { language: sourceAdapter.name });
+        const useReverse = sourceAdapter.name !== "russian" && sourceAdapter.name !== "chinese";
+        const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
         if (matched) {
           const program = buildProgram(matched);
           return program.sentences;
@@ -79,6 +83,13 @@ export async function translation_from_text_to_name_text(sentence) {
         pairs = null;
       }
     }
+    if (!pairs && targetAdapter?.name === "chinese") {
+      try {
+        pairs = await loadChineseTranslationPairs();
+      } catch (err) {
+        pairs = null;
+      }
+    }
     let templates = null;
     if (targetAdapter?.name === "english") {
       try {
@@ -97,6 +108,13 @@ export async function translation_from_text_to_name_text(sentence) {
     if (!templates && targetAdapter?.name === "french") {
       try {
         templates = await loadFrenchTranslationTemplates();
+      } catch (err) {
+        templates = null;
+      }
+    }
+    if (!templates && targetAdapter?.name === "chinese") {
+      try {
+        templates = await loadChineseTranslationTemplates();
       } catch (err) {
         templates = null;
       }
@@ -230,12 +248,14 @@ function renderPlaceholderValueForOutput(field, value, language, formatter) {
   if (field === "name") {
     const name = String(value);
     if (language === "russian") return translateNameToRussian(name);
+    if (language === "chinese") return translateNameToChinese(name);
     return name;
   }
   if (field === "bool" || field === "boolean") {
     const truth = value === true;
     if (language === "russian") return truth ? "истина" : "ложь";
     if (language === "french") return truth ? "vrai" : "faux";
+    if (language === "chinese") return truth ? "真相" : "谎言";
     return truth ? "true" : "false";
   }
   if (field === "vec" || field === "ve") {
@@ -263,6 +283,10 @@ function renderVectorGlossForLanguage(vec, language) {
   }
   if (language === "french") {
     const typeGloss = type === "text" ? "texte" : type === "bool" ? "booleen" : "nombre";
+    return ["ve", typeGloss, ...rendered].join(" ");
+  }
+  if (language === "chinese") {
+    const typeGloss = type === "text" ? "文本" : type === "bool" ? "布尔" : "数";
     return ["ve", typeGloss, ...rendered].join(" ");
   }
   return ["ve", type, ...rendered].join(" ");
@@ -347,6 +371,14 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
+    signatureWords: ["be", "translation", "become", "name", "chinese", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "chinese", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
     signatureWords: ["be", "translation", "become", "name", "french", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },
@@ -367,6 +399,10 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "chinese", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "whisper-english", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },
@@ -380,6 +416,10 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "french", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "chinese", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
   {

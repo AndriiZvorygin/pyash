@@ -102,6 +102,7 @@ function sentenceToRussian(sentence) {
 
 function russianLineToSentence(line) {
   const trimmed = line.trim();
+  const namePattern = "[\\p{L}\\p{N}_]+";
 
   const condMatch = trimmed.match(/^если\s+(.+?)\s+(меньше|больше|равно)\s+(.+?),\s*то\s+(.+?)\.?$/i);
   if (condMatch) {
@@ -127,7 +128,7 @@ function russianLineToSentence(line) {
     };
   }
 
-  const addMatch = trimmed.match(/^прибавь\s+([0-9.+-]+)\s+к\s+([A-Za-z0-9_]+)\.?$/i);
+  const addMatch = trimmed.match(new RegExp(`^прибавь\\s+([0-9.+-]+)\\s+к\\s+(${namePattern})\\.?$`, "iu"));
   if (addMatch) {
     const [, numRaw, target] = addMatch;
     const n = Number(numRaw);
@@ -135,11 +136,11 @@ function russianLineToSentence(line) {
       mood: "do",
       be: "plus",
       ob: { num: Number.isNaN(n) ? numRaw : n },
-      to: { name: target }
+      to: { name: translateNameFromRussian(target) }
     };
   }
 
-  const subtractMatch = trimmed.match(/^вычти\s+([0-9.+-]+)\s+из\s+([A-Za-z0-9_]+)\.?$/i);
+  const subtractMatch = trimmed.match(new RegExp(`^вычти\\s+([0-9.+-]+)\\s+из\\s+(${namePattern})\\.?$`, "iu"));
   if (subtractMatch) {
     const [, numRaw, target] = subtractMatch;
     const n = Number(numRaw);
@@ -147,11 +148,11 @@ function russianLineToSentence(line) {
       mood: "do",
       be: "subtract",
       ob: { num: Number.isNaN(n) ? numRaw : n },
-      from: { name: target }
+      from: { name: translateNameFromRussian(target) }
     };
   }
 
-  const multiplyMatch = trimmed.match(/^умножь\s+([A-Za-z0-9_]+)\s+на\s+([0-9.+-]+)\.?$/i);
+  const multiplyMatch = trimmed.match(new RegExp(`^умножь\\s+(${namePattern})\\s+на\\s+([0-9.+-]+)\\.?$`, "iu"));
   if (multiplyMatch) {
     const [, target, numRaw] = multiplyMatch;
     const n = Number(numRaw);
@@ -159,11 +160,11 @@ function russianLineToSentence(line) {
       mood: "do",
       be: "multiply",
       ob: { num: Number.isNaN(n) ? numRaw : n },
-      with: { name: target }
+      with: { name: translateNameFromRussian(target) }
     };
   }
 
-  const divideMatch = trimmed.match(/^раздели\s+([A-Za-z0-9_]+)\s+на\s+([0-9.+-]+)\.?$/i);
+  const divideMatch = trimmed.match(new RegExp(`^раздели\\s+(${namePattern})\\s+на\\s+([0-9.+-]+)\\.?$`, "iu"));
   if (divideMatch) {
     const [, target, numRaw] = divideMatch;
     const n = Number(numRaw);
@@ -171,11 +172,11 @@ function russianLineToSentence(line) {
       mood: "do",
       be: "divide",
       ob: { num: Number.isNaN(n) ? numRaw : n },
-      with: { name: target }
+      with: { name: translateNameFromRussian(target) }
     };
   }
 
-  const remainsMatch = trimmed.match(/^остаток\s+от\s+([0-9.+-]+)\s+по\s+([0-9.+-]+)\s+в\s+([A-Za-z0-9_]+)\.?$/i);
+  const remainsMatch = trimmed.match(new RegExp(`^остаток\\s+от\\s+([0-9.+-]+)\\s+по\\s+([0-9.+-]+)\\s+в\\s+(${namePattern})\\.?$`, "iu"));
   if (remainsMatch) {
     const [, numRaw, fromRaw, target] = remainsMatch;
     const numVal = Number(numRaw);
@@ -185,18 +186,18 @@ function russianLineToSentence(line) {
       be: "remains",
       ob: { num: Number.isNaN(numVal) ? numRaw : numVal },
       from: { num: Number.isNaN(fromVal) ? fromRaw : fromVal },
-      to: { name: target }
+      to: { name: translateNameFromRussian(target) }
     };
   }
 
-  const writeTextMatch = trimmed.match(/^запиши\s+\"([^\"]*)\"\s+в\s+([A-Za-z0-9_]+)\.?$/i);
+  const writeTextMatch = trimmed.match(new RegExp(`^запиши\\s+\"([^\"]*)\"\\s+в\\s+(${namePattern})\\.?$`, "iu"));
   if (writeTextMatch) {
     const [, text, target] = writeTextMatch;
     return {
       mood: "do",
       be: "write",
       ob: { text },
-      to: { name: target }
+      to: { name: translateNameFromRussian(target) }
     };
   }
 
@@ -210,13 +211,13 @@ function russianLineToSentence(line) {
     };
   }
 
-  const writeNameMatch = trimmed.match(/^запиши\s+([A-Za-z0-9_]+)\.?$/i);
+  const writeNameMatch = trimmed.match(new RegExp(`^запиши\\s+(${namePattern})\\.?$`, "iu"));
   if (writeNameMatch) {
     const [, name] = writeNameMatch;
     return {
       mood: "do",
       be: "write",
-      ob: { name }
+      ob: { name: translateNameFromRussian(name) }
     };
   }
 
@@ -240,78 +241,78 @@ function russianLineToSentence(line) {
     };
   }
 
-  const readMatch = trimmed.match(/^прочитай\s+([A-Za-z0-9_]+)\.?$/i);
+  const readMatch = trimmed.match(new RegExp(`^прочитай\\s+(${namePattern})\\.?$`, "iu"));
   if (readMatch) {
     const [, name] = readMatch;
     return {
       mood: "do",
       be: "read",
-      from: { name }
+      from: { name: translateNameFromRussian(name) }
     };
   }
 
-  const numberMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+число\s+([0-9.+-]+)\.?$/i);
+  const numberMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+число\\s+([0-9.+-]+)\\.?$`, "iu"));
   if (numberMatch) {
     const [, name, numRaw] = numberMatch;
     const n = Number(numRaw);
     return {
       mood: "ya",
-      su: { name },
+      su: { name: translateNameFromRussian(name) },
       be: "number",
       ob: { num: Number.isNaN(n) ? numRaw : n }
     };
   }
 
-  const textMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+текст\s+\"([^\"]*)\"\.?$/i);
+  const textMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+текст\\s+\"([^\"]*)\"\\.?$`, "iu"));
   if (textMatch) {
     const [, name, text] = textMatch;
     return {
       mood: "ya",
-      su: { name },
+      su: { name: translateNameFromRussian(name) },
       be: "text",
       ob: { text }
     };
   }
 
-  const dateMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+дата\s+([A-Za-z0-9:+-]+)\.?$/i);
+  const dateMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+дата\\s+([A-Za-z0-9:+-]+)\\.?$`, "iu"));
   if (dateMatch) {
     const [, name, date] = dateMatch;
     return {
       mood: "ya",
-      su: { name },
+      su: { name: translateNameFromRussian(name) },
       be: "date",
       ob: { date }
     };
   }
 
-  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+вектор(?:\s+(ve\s+.+))?\.?$/i);
+  const vectorMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+вектор(?:\\s+(ve\\s+.+))?\\.?$`, "iu"));
   if (vectorMatch) {
     const [, name, vecRaw] = vectorMatch;
     const vec = parseVectorGloss(vecRaw);
     return {
       mood: "ya",
-      su: { name },
+      su: { name: translateNameFromRussian(name) },
       be: "vector",
       ob: { ve: vec ?? {} }
     };
   }
 
-  const boolMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+(истина|ложь)\.?$/i);
+  const boolMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+(истина|ложь)\\.?$`, "iu"));
   if (boolMatch) {
     const [, name, valueRaw] = boolMatch;
     return {
       mood: "ya",
-      su: { name },
+      su: { name: translateNameFromRussian(name) },
       ob: { boolean: valueRaw.toLowerCase() === "истина" }
     };
   }
 
-  const genericMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+(.+)\.?$/i);
+  const genericMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+есть\\s+(.+)\\.?$`, "iu"));
   if (!genericMatch) return null;
   const [, name, bePart] = genericMatch;
   return {
     mood: "ya",
-    su: { name },
+    su: { name: translateNameFromRussian(name) },
     be: bePart.trim()
   };
 }
@@ -368,6 +369,7 @@ function parseVectorToken(type, token) {
 }
 
 let isvByEnglish = null;
+let englishByIsv = null;
 
 function loadIsvByEnglish() {
   if (isvByEnglish) return isvByEnglish;
@@ -404,6 +406,38 @@ function translateNameToRussian(name) {
   return String(name)
     .split(/\s+/)
     .map((token) => translateTokenToRussian(token))
+    .join(" ");
+}
+
+function loadEnglishByIsv() {
+  if (englishByIsv) return englishByIsv;
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const repoRoot = resolve(here, "../../../..");
+    const path = resolve(repoRoot, "caterer/pyac/lyac/kwon_isv.json");
+    const data = JSON.parse(fs.readFileSync(path, "utf8"));
+    englishByIsv = new Map();
+    for (const entry of data) {
+      if (!entry?.en || !entry?.isv) continue;
+      englishByIsv.set(String(entry.isv), String(entry.en));
+    }
+  } catch {
+    englishByIsv = new Map();
+  }
+  return englishByIsv;
+}
+
+function translateTokenFromRussian(token) {
+  if (!token) return token;
+  const map = loadEnglishByIsv();
+  return map.get(token) ?? token;
+}
+
+function translateNameFromRussian(name) {
+  if (!name) return name;
+  return String(name)
+    .split(/\s+/)
+    .map((token) => translateTokenFromRussian(token))
     .join(" ");
 }
 

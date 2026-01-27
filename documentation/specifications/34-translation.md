@@ -55,6 +55,7 @@ Files:
 - `program/verbs/exchange/translation/pairs_english.pya`
 - `program/verbs/exchange/translation/pairs_russian.pya`
 - `program/verbs/exchange/translation/pairs_french.pya`
+- `program/verbs/exchange/translation/pairs_chinese.pya`
 
 Shape:
 ```
@@ -75,6 +76,7 @@ Files:
 - `program/verbs/exchange/translation/pairs_english_templates.pya`
 - `program/verbs/exchange/translation/pairs_russian_templates.pya`
 - `program/verbs/exchange/translation/pairs_french_templates.pya`
+- `program/verbs/exchange/translation/pairs_chinese_templates.pya`
 
 Shape:
 ```
@@ -119,6 +121,7 @@ Output substitution is language-aware for booleans:
 - English: `true` / `false`
 - Russian: `истина` / `ложь`
 - French: `vrai` / `faux`
+- Chinese: `真相` / `谎言`
 
 ---
 
@@ -147,10 +150,13 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `quiz/translation_pairs_english.test.mjs`
 - `quiz/translation_pairs_russian.test.mjs`
 - `quiz/translation_pairs_french.test.mjs`
+- `quiz/translation_pairs_chinese.test.mjs`
 - `quiz/translation_pairs_templates.test.mjs`
 - `quiz/translation_pairs_conditionals_templates.test.mjs`
 - `quiz/translation_pairs_vector_remains_templates.test.mjs`
 - `quiz/translation_parse_fallback.test.mjs`
+- `quiz/translation_chinese_adapter.test.mjs`
+- `quiz/translation_chinese_roundtrip.test.mjs`
 
 ---
 
@@ -159,6 +165,7 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - `examples/pyash/translate-pyash-sentence-to-english.pya`
 - `examples/pyash/translate-pyash-file-to-english.pya`
 - `examples/pyash/translation-fallback-mixed.pya`
+- `examples/pyash/translate-pyash-map-ceremony-to-chinese.pya`
 
 ---
 
@@ -182,8 +189,13 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 - [x] Templates: `pairs_french_templates.pya`.
 - [x] Parser fallback from gloss → Pyash.
 
+### Chinese
+- [x] Adapter: `chinese.mjs` (to/from Pyash).
+- [x] Exact pairs: `pairs_chinese.pya`.
+- [x] Templates: `pairs_chinese_templates.pya`.
+- [x] Parser fallback from gloss → Pyash.
+
 ### Upcoming languages
-- [ ] Chinese (adapter + pairs + templates + fallback coverage).
 - [ ] Spanish (adapter + pairs + templates + fallback coverage).
 - [ ] Portuguese (adapter + pairs + templates + fallback coverage).
 
