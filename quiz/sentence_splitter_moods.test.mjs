@@ -26,3 +26,19 @@ test("splitSentences splits on all moods when configured", () => {
     "ob num 1 be equally from num 1 then"
   ]);
 });
+
+test("splitSentences respects la/ko and quoted blocks", () => {
+  const text = [
+    "su name block ob text quoted.text.hello then ya.text.quoted be topic ya",
+    "ob la su name inner ob text \"still one\" be topic ya ko be evoke ya",
+    "ob num 1 be equally from num 1 then",
+    "su name after be topic ya"
+  ].join(" ");
+  const out = splitSentences(text, { includeThen: true });
+  assert.deepEqual(out, [
+    "su name block ob text quoted.text.hello then ya.text.quoted be topic ya",
+    "ob la su name inner ob text \"still one\" be topic ya ko be evoke ya",
+    "ob num 1 be equally from num 1 then",
+    "su name after be topic ya"
+  ]);
+});
