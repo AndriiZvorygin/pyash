@@ -87,8 +87,9 @@ function sentenceToRussian(sentence) {
   }
 
   if (ob.ve !== undefined) {
-    if (beLabel === "vector") return `${su} есть вектор.`;
-    return `${su} есть ${beLabel}.`;
+  const vecText = renderVectorGloss(ob.ve);
+    if (beLabel === "vector") return vecText ? `${su} есть вектор ${vecText}.` : `${su} есть вектор.`;
+    return vecText ? `${su} есть ${beLabel} ${vecText}.` : `${su} есть ${beLabel}.`;
   }
 
   return `${su} есть ${beLabel}`;
@@ -278,14 +279,15 @@ function russianLineToSentence(line) {
     };
   }
 
-  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+вектор\.?$/i);
+  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+есть\s+вектор(?:\s+(ve\s+.+))?\.?$/i);
   if (vectorMatch) {
-    const [, name] = vectorMatch;
+    const [, name, vecRaw] = vectorMatch;
+    const vec = parseVectorGloss(vecRaw);
     return {
       mood: "ya",
       su: { name },
       be: "vector",
-      ob: { ve: {} }
+      ob: { ve: vec ?? {} }
     };
   }
 
@@ -307,6 +309,57 @@ function russianLineToSentence(line) {
     su: { name },
     be: bePart.trim()
   };
+}
+
+function renderVectorGloss(vec) {
+  if (!vec || typeof vec !== "object") return null;
+  const type = vec.type || "num";
+  const typeGloss = type === "text" ? "текст" : type === "bool" ? "булево" : "число";
+  const values = Array.isArray(vec.values) ? vec.values : [];
+  const rendered = values.map((value) => {
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "truth" : "lie";
+    if (typeof value === "string") {
+      if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+      return JSON.stringify(value);
+    }
+    return String(value);
+  });
+  return ["ве", typeGloss, ...rendered].join(" ");
+}
+
+function parseVectorGloss(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
+  if (!tokens || (tokens[0] !== "ve" && tokens[0] !== "ве")) return null;
+  const typeToken = tokens[1] || "число";
+  const type = typeToken === "текст" ? "text" : typeToken === "булево" ? "bool" : "num";
+  const values = tokens.slice(2).map((token) => parseVectorToken(type, token));
+  return { type, values };
+}
+
+function parseVectorToken(type, token) {
+  if (type === "bool") {
+    const lower = token.toLowerCase();
+    if (lower === "truth" || lower === "true" || lower === "истина") return true;
+    if (lower === "lie" || lower === "false" || lower === "ложь") return false;
+    return token;
+  }
+  if (type === "num") {
+    const n = Number(token);
+    return Number.isNaN(n) ? token : n;
+  }
+  if (type === "text") {
+    if (token.startsWith("\"")) {
+      try {
+        return JSON.parse(token);
+      } catch {
+        return token;
+      }
+    }
+    return token;
+  }
+  return token;
 }
 
 export { sentenceToRussian, russianLineToSentence };

@@ -11,11 +11,9 @@ if (!query) {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../..");
 const lyacDir = resolve(repoRoot, "caterer/pyac/lyac");
-const runner = "process.argv[2]=process.argv[3]; require('./ryan.js')";
-
 const output = execFileSync(
   "node",
-  ["--input-type=commonjs", "-e", runner, "--", query],
+  ["ryan.js", query],
   { cwd: lyacDir, encoding: "utf8" }
 );
 

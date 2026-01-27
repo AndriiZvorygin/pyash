@@ -72,23 +72,24 @@ function sentenceToFrench(sentence) {
   }
 
   if (ob.num !== undefined) {
-    if (beLabel === "number") return `${su} est le nombre ${ob.num}.`;
+    if (beLabel === "number") return `${su} est nombre ${ob.num}.`;
     return `${su} est ${beLabel} ${ob.num}.`;
   }
 
   if (ob.text !== undefined) {
-    if (beLabel === "text") return `${su} est le texte "${ob.text}".`;
+    if (beLabel === "text") return `${su} est texte "${ob.text}".`;
     return `${su} est ${beLabel} "${ob.text}".`;
   }
 
   if (ob.date !== undefined) {
-    if (beLabel === "date") return `${su} est la date ${ob.date}.`;
+    if (beLabel === "date") return `${su} est date ${ob.date}.`;
     return `${su} est ${beLabel} ${ob.date}.`;
   }
 
   if (ob.ve !== undefined) {
-    if (beLabel === "vector") return `${su} est un vecteur.`;
-    return `${su} est ${beLabel}.`;
+  const vecText = renderVectorGloss(ob.ve);
+    if (beLabel === "vector") return vecText ? `${su} est vecteur ${vecText}.` : `${su} est vecteur.`;
+    return vecText ? `${su} est ${beLabel} ${vecText}.` : `${su} est ${beLabel}.`;
   }
 
   return `${su} est ${beLabel}`;
@@ -244,7 +245,7 @@ function frenchLineToSentence(line) {
     };
   }
 
-  const numberMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+le\s+nombre\s+([0-9.+-]+)\.?$/i);
+  const numberMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+(?:le\s+)?nombre\s+([0-9.+-]+)\.?$/i);
   if (numberMatch) {
     const [, name, numRaw] = numberMatch;
     const n = Number(numRaw);
@@ -256,7 +257,7 @@ function frenchLineToSentence(line) {
     };
   }
 
-  const textMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+le\s+texte\s+\"([^\"]*)\"\.?$/i);
+  const textMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+(?:le\s+)?texte\s+\"([^\"]*)\"\.?$/i);
   if (textMatch) {
     const [, name, text] = textMatch;
     return {
@@ -267,7 +268,7 @@ function frenchLineToSentence(line) {
     };
   }
 
-  const dateMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+la\s+date\s+([A-Za-z0-9:+-]+)\.?$/i);
+  const dateMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+(?:la\s+)?date\s+([A-Za-z0-9:+-]+)\.?$/i);
   if (dateMatch) {
     const [, name, date] = dateMatch;
     return {
@@ -278,14 +279,15 @@ function frenchLineToSentence(line) {
     };
   }
 
-  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+un\s+vecteur\.?$/i);
+  const vectorMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+est\s+(?:un\s+)?vecteur(?:\s+(ve\s+.+))?\.?$/i);
   if (vectorMatch) {
-    const [, name] = vectorMatch;
+    const [, name, vecRaw] = vectorMatch;
+    const vec = parseVectorGloss(vecRaw);
     return {
       mood: "ya",
       su: { name },
       be: "vector",
-      ob: { ve: {} }
+      ob: { ve: vec ?? {} }
     };
   }
 
@@ -307,6 +309,57 @@ function frenchLineToSentence(line) {
     su: { name },
     be: bePart.trim()
   };
+}
+
+function renderVectorGloss(vec) {
+  if (!vec || typeof vec !== "object") return null;
+  const type = vec.type || "num";
+  const typeGloss = type === "text" ? "texte" : type === "bool" ? "booleen" : "nombre";
+  const values = Array.isArray(vec.values) ? vec.values : [];
+  const rendered = values.map((value) => {
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "truth" : "lie";
+    if (typeof value === "string") {
+      if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+      return JSON.stringify(value);
+    }
+    return String(value);
+  });
+  return ["ve", typeGloss, ...rendered].join(" ");
+}
+
+function parseVectorGloss(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
+  if (!tokens || tokens[0] !== "ve") return null;
+  const typeToken = tokens[1] || "nombre";
+  const type = typeToken === "texte" ? "text" : typeToken === "booleen" ? "bool" : "num";
+  const values = tokens.slice(2).map((token) => parseVectorToken(type, token));
+  return { type, values };
+}
+
+function parseVectorToken(type, token) {
+  if (type === "bool") {
+    const lower = token.toLowerCase();
+    if (lower === "truth" || lower === "true" || lower === "vrai") return true;
+    if (lower === "lie" || lower === "false" || lower === "faux") return false;
+    return token;
+  }
+  if (type === "num") {
+    const n = Number(token);
+    return Number.isNaN(n) ? token : n;
+  }
+  if (type === "text") {
+    if (token.startsWith("\"")) {
+      try {
+        return JSON.parse(token);
+      } catch {
+        return token;
+      }
+    }
+    return token;
+  }
+  return token;
 }
 
 export { sentenceToFrench, frenchLineToSentence };
