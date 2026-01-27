@@ -46,10 +46,10 @@ su text "become" ob text "变为" ya
 su text "exists" ob text "存在" ya
 su text "text" ob text "文本" ya
 su text "num" ob text "数" ya
-su text "ve" ob text "ve" ya
+su text "ve" ob text "量" ya
 su text "bool" ob text "布尔" ya
 su text "date" ob text "日期" ya
-su text "vector" ob text "向量" ya
+su text "vector" ob text "量" ya
 su text "name" ob text "名" ya
 su text "map" ob text "地图" ya
 su text "json" ob text "json" ya
