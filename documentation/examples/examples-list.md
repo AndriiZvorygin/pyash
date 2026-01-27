@@ -20,6 +20,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Translate Pyash to English | `examples/pyash/translate-pyash-sentence-to-english.pya`, `examples/pyash/translate-pyash-file-to-english.pya`, `examples/pyash/translate-pyash-map-ceremony-to-english.pya` |
 | Translate Pyash to French | `examples/pyash/translate-pyash-map-ceremony-to-french.pya` |
 | Translate Pyash to Russian | `examples/pyash/translate-pyash-map-ceremony-to-russian.pya` |
+| Map + Ceremony Demo | `examples/pyash/map-ceremony-demo.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya` |
 | Download | `examples/pyash/download-ytdlp.pya` |

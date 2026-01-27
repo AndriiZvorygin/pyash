@@ -46,6 +46,9 @@ function sentenceToFrench(sentence) {
     if (verb === "write" && textVal !== undefined && targetTo) {
       return `ecris "${textVal}" dans ${targetTo}.`;
     }
+    if (verb === "write" && textVal !== undefined) {
+      return `ecris "${textVal}".`;
+    }
     if (verb === "write" && sentence.ob?.name) {
       return `ecris ${sentence.ob.name}.`;
     }
@@ -188,6 +191,16 @@ function frenchLineToSentence(line) {
       be: "write",
       ob: { text },
       to: { name: target }
+    };
+  }
+
+  const writeTextSoloMatch = trimmed.match(/^ecris\s+\"([^\"]*)\"\.?$/i);
+  if (writeTextSoloMatch) {
+    const [, text] = writeTextSoloMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { text }
     };
   }
 

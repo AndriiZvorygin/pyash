@@ -7,11 +7,11 @@ import { forget } from "../program/remember/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 
 const program = [
-  "su name profile be map def",
+  "exists su name profile be map def",
   "su name name ob text \"Ada\" be text ya",
   "su name profile be map prah",
-  "su name greet be ceremony def",
-  "ob text \"hi\" to name output be write do",
+  "exists su name greet be ceremony def",
+  "ob text \"hi\" be write do",
   "su name greet be ceremony prah"
 ].join("\\n");
 

@@ -9,17 +9,22 @@ su text "ob num [num of ob] with name [name of with] be multiply do" ob text "mu
 su text "ob num [num of ob] with name [name of with] be divide do" ob text "divide [name of with] by [num of ob]." ya
 su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "remainder of [num of ob] by [num of from] to [name of to]." ya
 su text "ob text [text of ob] to name [name of to] be write do" ob text "write \"[text of ob]\" to [name of to]." ya
+su text "ob text [text of ob] be write do" ob text "write \"[text of ob]\"." ya
 su text "ob name [name of ob] be write do" ob text "write [name of ob]." ya
 su text "ob text [text of ob] be say do" ob text "say \"[text of ob]\"." ya
 su text "from name [name of from] be read do" ob text "read [name of from]." ya
 su text "from filename [filename of from] be read do" ob text "read file [filename of from]." ya
+su text "exists su name [name of su] be map def" ob text "[name of su] is map definition." ya
+su text "exists su name [name of su] be json map def" ob text "[name of su] is JSON map definition." ya
+su text "exists su name [name of su] be csv map def" ob text "[name of su] is CSV map definition." ya
+su text "exists su name [name of su] be ceremony def" ob text "[name of su] is ceremony definition." ya
 su text "su name [name of su] be map def" ob text "[name of su] is map definition." ya
 su text "su name [name of su] be json map def" ob text "[name of su] is JSON map definition." ya
 su text "su name [name of su] be csv map def" ob text "[name of su] is CSV map definition." ya
 su text "su name [name of su] be ceremony def" ob text "[name of su] is ceremony definition." ya
-su text "su name [name of su] be map prah" ob text "[name of su] ends map definition." ya
-su text "su name [name of su] be json map prah" ob text "[name of su] ends JSON map definition." ya
-su text "su name [name of su] be csv map prah" ob text "[name of su] ends CSV map definition." ya
+su text "su name [name of su] be map prah" ob text "[name of su] ends map." ya
+su text "su name [name of su] be json map prah" ob text "[name of su] ends JSON map." ya
+su text "su name [name of su] be csv map prah" ob text "[name of su] ends CSV map." ya
 su text "su name [name of su] be ceremony prah" ob text "[name of su] ends ceremony." ya
 su text "su name [name of su] ob date [date of ob] be date ya" ob text "[name of su] is date [date of ob]." ya
 su text "ob num [num of ob] be tiny from num [num of from] then [pyash of consequence]" ob text "if [num of ob] is tiny from [num of from] then [gloss of consequence]" ya
