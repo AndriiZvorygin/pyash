@@ -1,0 +1,29 @@
+su name translation_pairs_chinese_templates be map def
+su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of su] 是 数 [num of ob]." ya
+su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] 是 文本 \"[text of ob]\"." ya
+su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] 是 [bool of ob]." ya
+su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] 是 向量 [vec of ob]." ya
+su text "ob num [num of ob] to name [name of to] be plus do" ob text "加 [num of ob] 到 [name of to]." ya
+su text "ob num [num of ob] from name [name of from] be subtract do" ob text "减 [num of ob] 从 [name of from]." ya
+su text "ob num [num of ob] with name [name of with] be multiply do" ob text "乘 [name of with] 以 [num of ob]." ya
+su text "ob num [num of ob] with name [name of with] be divide do" ob text "除 [name of with] 以 [num of ob]." ya
+su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "余数 [num of ob] 以 [num of from] 到 [name of to]." ya
+su text "ob text [text of ob] to name [name of to] be write do" ob text "写 \"[text of ob]\" 到 [name of to]." ya
+su text "ob text [text of ob] be write do" ob text "写 \"[text of ob]\"." ya
+su text "ob name [name of ob] be write do" ob text "写 [name of ob]." ya
+su text "ob text [text of ob] be say do" ob text "说 \"[text of ob]\"." ya
+su text "from name [name of from] be read do" ob text "读 [name of from]." ya
+su text "from filename [filename of from] be read do" ob text "读 文件 [filename of from]." ya
+su text "exists su name [name of su] be map def" ob text "[name of su] 是 地图 定义." ya
+su text "exists su name [name of su] be json map def" ob text "[name of su] 是 json 地图 定义." ya
+su text "exists su name [name of su] be csv map def" ob text "[name of su] 是 csv 地图 定义." ya
+su text "exists su name [name of su] be ceremony def" ob text "[name of su] 是 仪式 定义." ya
+su text "su name [name of su] be map prah" ob text "[name of su] 是 地图 终." ya
+su text "su name [name of su] be json map prah" ob text "[name of su] 是 json 地图 终." ya
+su text "su name [name of su] be csv map prah" ob text "[name of su] 是 csv 地图 终." ya
+su text "su name [name of su] be ceremony prah" ob text "[name of su] 是 仪式 终." ya
+su text "su name [name of su] ob date [date of ob] be date ya" ob text "[name of su] 是 日期 [date of ob]." ya
+su text "ob num [num of ob] be tiny from num [num of from] then [pyash of consequence]" ob text "如果 [num of ob] 小于 [num of from], 则 [gloss of consequence]" ya
+su text "ob num [num of ob] be giant from num [num of from] then [pyash of consequence]" ob text "如果 [num of ob] 大于 [num of from], 则 [gloss of consequence]" ya
+su text "ob num [num of ob] be equally from num [num of from] then [pyash of consequence]" ob text "如果 [num of ob] 等于 [num of from], 则 [gloss of consequence]" ya
+prah

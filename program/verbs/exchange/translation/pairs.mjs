@@ -6,12 +6,16 @@ let cachedRussianPairs = null;
 let cachedRussianPairsError = null;
 let cachedFrenchPairs = null;
 let cachedFrenchPairsError = null;
+let cachedChinesePairs = null;
+let cachedChinesePairsError = null;
 let cachedEnglishTemplates = null;
 let cachedEnglishTemplatesError = null;
 let cachedRussianTemplates = null;
 let cachedRussianTemplatesError = null;
 let cachedFrenchTemplates = null;
 let cachedFrenchTemplatesError = null;
+let cachedChineseTemplates = null;
+let cachedChineseTemplatesError = null;
 
 const ENTRY_REGEX = /^su text (\"(?:\\\\.|[^\"\\\\])*\") ob text (\"(?:\\\\.|[^\"\\\\])*\") ya$/;
 
@@ -108,6 +112,20 @@ export async function loadFrenchTranslationPairs() {
   }
 }
 
+export async function loadChineseTranslationPairs() {
+  if (cachedChinesePairs) return cachedChinesePairs;
+  if (cachedChinesePairsError) throw cachedChinesePairsError;
+  try {
+    const fileUrl = new URL("./pairs_chinese.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedChinesePairs = buildPairsMapFromText(text, { label: "translation_pairs_chinese" });
+    return cachedChinesePairs;
+  } catch (err) {
+    cachedChinesePairsError = err;
+    throw err;
+  }
+}
+
 export async function loadEnglishTranslationTemplates() {
   if (cachedEnglishTemplates) return cachedEnglishTemplates;
   if (cachedEnglishTemplatesError) throw cachedEnglishTemplatesError;
@@ -146,6 +164,20 @@ export async function loadFrenchTranslationTemplates() {
     return cachedFrenchTemplates;
   } catch (err) {
     cachedFrenchTemplatesError = err;
+    throw err;
+  }
+}
+
+export async function loadChineseTranslationTemplates() {
+  if (cachedChineseTemplates) return cachedChineseTemplates;
+  if (cachedChineseTemplatesError) throw cachedChineseTemplatesError;
+  try {
+    const fileUrl = new URL("./pairs_chinese_templates.pya", import.meta.url);
+    const text = await fs.readFile(fileUrl, "utf8");
+    cachedChineseTemplates = buildTemplatePairsFromText(text, { label: "translation_pairs_chinese_templates" });
+    return cachedChineseTemplates;
+  } catch (err) {
+    cachedChineseTemplatesError = err;
     throw err;
   }
 }

@@ -1,4 +1,5 @@
 import { englishLineToSentence, sentenceToEnglish } from "./english.mjs";
+import { chineseLineToSentence, sentenceToChinese } from "./chinese.mjs";
 import { frenchLineToSentence, sentenceToFrench } from "./french.mjs";
 import { javascriptLineToSentence } from "./javascript.mjs";
 import { russianLineToSentence, sentenceToRussian } from "./russian.mjs";
@@ -68,6 +69,13 @@ registerTranslationAdapter({
   aliases: ["fr"],
   toPyash: frenchLineToSentence,
   fromPyash: sentenceToFrench
+});
+
+registerTranslationAdapter({
+  name: "chinese",
+  aliases: ["zh"],
+  toPyash: chineseLineToSentence,
+  fromPyash: sentenceToChinese
 });
 
 export function listTranslationAdapters() {
