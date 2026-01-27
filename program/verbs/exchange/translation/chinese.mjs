@@ -93,7 +93,7 @@ function sentenceToChinese(sentence) {
 
   if (ob.ve !== undefined) {
     const vecText = renderVectorGloss(ob.ve);
-    if (beLabel === "vector") return vecText ? `${su} 是 向量 ${vecText}.` : `${su} 是 向量.`;
+    if (beLabel === "vector") return vecText ? `${su} 是 ${vecText}.` : `${su} 是 量.`;
     return vecText ? `${su} 是 ${translatedVerb} ${vecText}.` : `${su} 是 ${translatedVerb}.`;
   }
 
@@ -281,7 +281,7 @@ function chineseLineToSentence(line) {
     };
   }
 
-  const vectorMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+是\\s+向量(?:\\s+(ve\\s+.+))?\\.?$`, "iu"));
+  const vectorMatch = trimmed.match(new RegExp(`^(${namePattern})\\s+是\\s+(?:向量|量)(?:\\s+(.+))?\\.?$`, "iu"));
   if (vectorMatch) {
     const [, name, vecRaw] = vectorMatch;
     const vec = parseVectorGloss(vecRaw);
@@ -327,16 +327,19 @@ function renderVectorGloss(vec) {
     }
     return String(value);
   });
-  return ["ve", typeGloss, ...rendered].join(" ");
+  return ["量", typeGloss, ...rendered].join(" ");
 }
 
 function parseVectorGloss(raw) {
   if (!raw || typeof raw !== "string") return null;
   const tokens = raw.match(/"([^"\\]|\\.)*"|\\S+/g);
-  if (!tokens || tokens[0] !== "ve") return null;
-  const typeToken = tokens[1] || "数";
+  if (!tokens) return null;
+  if (tokens[0] === "向量" || tokens[0] === "量" || tokens[0] === "ve") {
+    tokens.shift();
+  }
+  const typeToken = tokens[0] || "数";
   const type = typeToken === "文本" ? "text" : typeToken === "布尔" ? "bool" : "num";
-  const values = tokens.slice(2).map((token) => parseVectorToken(type, token));
+  const values = tokens.slice(1).map((token) => parseVectorToken(type, token));
   return { type, values };
 }
 

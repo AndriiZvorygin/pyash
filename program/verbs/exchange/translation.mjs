@@ -287,7 +287,7 @@ function renderVectorGlossForLanguage(vec, language) {
   }
   if (language === "chinese") {
     const typeGloss = type === "text" ? "文本" : type === "bool" ? "布尔" : "数";
-    return ["ve", typeGloss, ...rendered].join(" ");
+    return ["量", typeGloss, ...rendered].join(" ");
   }
   return ["ve", type, ...rendered].join(" ");
 }
