@@ -20,7 +20,7 @@ import { resolveConfigBool } from "../configure/env.mjs";
 async function loadConfigFile({ configPath, interpretFn }) {
   try {
     const raw = await fs.readFile(configPath, "utf8");
-    const lines = splitSentencesWithLines(raw);
+    const lines = splitSentencesWithLines(raw, { includeThen: true });
     for (const entry of lines) {
       const trimmed = entry.text.trim();
       if (!trimmed) continue;
@@ -171,7 +171,7 @@ async function loadCheckpointIndex({ runId, cwd }) {
     if (err?.code === "ENOENT") return checkpoints;
     throw err;
   }
-  const lines = splitSentences(text);
+  const lines = splitSentences(text, { includeThen: true });
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -247,7 +247,7 @@ async function main() {
   if (!remember("run root")) {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
-  const sentences = splitSentencesWithLines(text);
+  const sentences = splitSentencesWithLines(text, { includeThen: true });
   const outputs = [];
   const timeZone = resolveTimeZone(remember);
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
