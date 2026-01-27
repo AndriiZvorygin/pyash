@@ -1,0 +1,10 @@
+exists su name profile be map def
+su name name ob text "Ada" be text ya
+su name age ob num 36 be number ya
+su name profile be map prah
+ob name profile be write do
+
+exists su name greet be ceremony def
+ob text "Hello from ceremony." be write do
+su name greet be ceremony prah
+be greet do

@@ -29,6 +29,9 @@ function sentenceToEnglish(sentence) {
     if (verb === "write" && textVal !== undefined && targetTo) {
       return `write "${textVal}" to ${targetTo}.`;
     }
+    if (verb === "write" && textVal !== undefined) {
+      return `write "${textVal}".`;
+    }
     if (verb === "write" && nameVal) {
       return `write ${nameVal}.`;
     }
@@ -162,6 +165,17 @@ function englishLineToSentence(line) {
       be: "write",
       ob: { text },
       to: { name: target }
+    };
+  }
+
+  // Imperative form (no "do"): "write \"hi\""
+  const writeTextSoloMatch = trimmed.match(/^write\s+\"([^\"]*)\"\.?$/i);
+  if (writeTextSoloMatch) {
+    const [, text] = writeTextSoloMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { text }
     };
   }
 

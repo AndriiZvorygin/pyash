@@ -46,6 +46,9 @@ function sentenceToRussian(sentence) {
     if (verb === "write" && textVal !== undefined && targetTo) {
       return `запиши "${textVal}" в ${targetTo}.`;
     }
+    if (verb === "write" && textVal !== undefined) {
+      return `запиши "${textVal}".`;
+    }
     if (verb === "write" && sentence.ob?.name) {
       return `запиши ${sentence.ob.name}.`;
     }
@@ -188,6 +191,16 @@ function russianLineToSentence(line) {
       be: "write",
       ob: { text },
       to: { name: target }
+    };
+  }
+
+  const writeTextSoloMatch = trimmed.match(/^запиши\s+\"([^\"]*)\"\.?$/i);
+  if (writeTextSoloMatch) {
+    const [, text] = writeTextSoloMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { text }
     };
   }
 
