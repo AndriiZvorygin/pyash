@@ -4,6 +4,7 @@ import { remember, doRemember } from "../../remember/index.mjs";
 import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
 import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
 import { translateNameToChinese } from "./translation/chinese.mjs";
+import { translateNameToInterlingua } from "./translation/interlingua.mjs";
 import { translateNameToRussian } from "./translation/russian.mjs";
 import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
 import {
@@ -11,10 +12,12 @@ import {
   loadRussianTranslationPairs,
   loadFrenchTranslationPairs,
   loadChineseTranslationPairs,
+  loadInterlinguaTranslationPairs,
   loadEnglishTranslationTemplates,
   loadRussianTranslationTemplates,
   loadFrenchTranslationTemplates,
-  loadChineseTranslationTemplates
+  loadChineseTranslationTemplates,
+  loadInterlinguaTranslationTemplates
 } from "./translation/pairs.mjs";
 
 export async function translation_from_text_to_name_text(sentence) {
@@ -48,7 +51,7 @@ export async function translation_from_text_to_name_text(sentence) {
       .map(l => l.trim())
       .filter(Boolean)
       .flatMap((line) => {
-        const useReverse = sourceAdapter.name !== "russian" && sourceAdapter.name !== "chinese";
+        const useReverse = sourceAdapter.name !== "russian" && sourceAdapter.name !== "chinese" && sourceAdapter.name !== "interlingua";
         const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
         if (matched) {
           const program = buildProgram(matched);
@@ -97,6 +100,13 @@ export async function translation_from_text_to_name_text(sentence) {
         pairs = null;
       }
     }
+    if (!pairs && targetAdapter?.name === "interlingua") {
+      try {
+        pairs = await loadInterlinguaTranslationPairs();
+      } catch (err) {
+        pairs = null;
+      }
+    }
     let templates = null;
     if (targetAdapter?.name === "english") {
       try {
@@ -122,6 +132,13 @@ export async function translation_from_text_to_name_text(sentence) {
     if (!templates && targetAdapter?.name === "chinese") {
       try {
         templates = await loadChineseTranslationTemplates();
+      } catch (err) {
+        templates = null;
+      }
+    }
+    if (!templates && targetAdapter?.name === "interlingua") {
+      try {
+        templates = await loadInterlinguaTranslationTemplates();
       } catch (err) {
         templates = null;
       }
@@ -256,6 +273,7 @@ function renderPlaceholderValueForOutput(field, value, language, formatter) {
     const name = String(value);
     if (language === "russian") return translateNameToRussian(name);
     if (language === "chinese") return translateNameToChinese(name);
+    if (language === "interlingua") return translateNameToInterlingua(name);
     return name;
   }
   if (field === "bool" || field === "boolean") {
@@ -263,6 +281,7 @@ function renderPlaceholderValueForOutput(field, value, language, formatter) {
     if (language === "russian") return truth ? "истина" : "ложь";
     if (language === "french") return truth ? "vrai" : "faux";
     if (language === "chinese") return truth ? "真相" : "谎言";
+    if (language === "interlingua") return truth ? "veritate" : "false";
     return truth ? "true" : "false";
   }
   if (field === "vec" || field === "ve") {
@@ -295,6 +314,10 @@ function renderVectorGlossForLanguage(vec, language) {
   if (language === "chinese") {
     const typeGloss = type === "text" ? "文本" : type === "bool" ? "布尔" : "数";
     return ["量", typeGloss, ...rendered].join(" ");
+  }
+  if (language === "interlingua") {
+    const typeGloss = type === "text" ? "texto" : type === "bool" ? "booleano" : "numero";
+    return ["vector", typeGloss, ...rendered].join(" ");
   }
   return ["ve", type, ...rendered].join(" ");
 }
@@ -419,6 +442,22 @@ export const signatures = [
     handler: translation_from_text_to_name_text
   },
   {
+    signatureWords: ["be", "translation", "become", "name", "interlingua", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "interlingua", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "spanish", "from", "text", "fromstate", "name", "pyash", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "spanish", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
     signatureWords: ["be", "translation", "become", "name", "french", "from", "text", "fromstate", "name", "pyash", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
@@ -432,6 +471,14 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "french", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "interlingua", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "spanish", "to", "name", "num"],
     handler: translation_from_text_to_name_text
   },
   {
@@ -452,6 +499,14 @@ export const signatures = [
   },
   {
     signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "french", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "interlingua", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "spanish", "to", "name", "text"],
     handler: translation_from_text_to_name_text
   },
   {
