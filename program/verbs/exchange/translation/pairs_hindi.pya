@@ -1,0 +1,62 @@
+su name translation_pairs_hindi be map def
+su text "su" ob text "विषय" ya
+su text "ob" ob text "वस्तु" ya
+su text "be" ob text "है" ya
+su text "do" ob text "करो" ya
+su text "ya" ob text "है" ya
+su text "to" ob text "में" ya
+su text "from" ob text "से" ya
+su text "with" ob text "साथ" ya
+su text "by" ob text "द्वारा" ya
+su text "as" ob text "रूप" ya
+su text "for" ob text "के लिए" ya
+su text "via" ob text "से होकर" ya
+su text "in" ob text "में" ya
+su text "on" ob text "पर" ya
+su text "at" ob text "पर" ya
+su text "under" ob text "नीचे" ya
+su text "into" ob text "अंदर" ya
+su text "onto" ob text "पर" ya
+su text "outof" ob text "बाहर" ya
+su text "of" ob text "का" ya
+su text "offof" ob text "से बाहर" ya
+su text "fromunder" ob text "नीचे से" ya
+su text "beneath" ob text "तले" ya
+su text "during" ob text "दौरान" ya
+su text "since" ob text "से" ya
+su text "until" ob text "तक" ya
+su text "then" ob text "तब" ya
+su text "fromstate" ob text "स्थिति से" ya
+su text "fromperson" ob text "व्यक्ति से" ya
+su text "fromgroup" ob text "समूह से" ya
+su text "among" ob text "बीच" ya
+su text "intogroup" ob text "समूह में" ya
+su text "fromtext" ob text "पाठ से" ya
+su text "accordingto" ob text "अनुसार" ya
+su text "totext" ob text "पाठ में" ya
+su text "times" ob text "बार" ya
+su text "per" ob text "प्रति" ya
+su text "atleast" ob text "कम से कम" ya
+su text "exactly" ob text "ठीक" ya
+su text "atmost" ob text "अधिकतम" ya
+su text "fromindex" ob text "सूचक से" ya
+su text "atindex" ob text "सूचक पर" ya
+su text "toindex" ob text "सूचक तक" ya
+su text "become" ob text "बनना" ya
+su text "exists" ob text "अस्तित्व" ya
+su text "text" ob text "टेक्स्ट" ya
+su text "num" ob text "संख्या" ya
+su text "ve" ob text "वेक्टर" ya
+su text "bool" ob text "बूलियन" ya
+su text "date" ob text "तारीख" ya
+su text "vector" ob text "वेक्टर" ya
+su text "name" ob text "नाम" ya
+su text "map" ob text "नक्शा" ya
+su text "json" ob text "json" ya
+su text "csv" ob text "csv" ya
+su text "ceremony" ob text "समारोह" ya
+su text "def" ob text "परिभाषा" ya
+su text "prah" ob text "अंत" ya
+su text "la" ob text "la" ya
+su text "ko" ob text "ko" ya
+prah

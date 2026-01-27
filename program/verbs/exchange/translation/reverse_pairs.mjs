@@ -2,7 +2,7 @@ import fs from "node:fs";
 
 const ENTRY_REGEX = /^su text (\"(?:\\\\.|[^\"\\\\])*\") ob text (\"(?:\\\\.|[^\"\\\\])*\") ya$/;
 const PLACEHOLDER_REGEX = /\[([^\]]+)\]/g;
-const LANGUAGES = ["english", "russian", "french", "chinese"];
+const LANGUAGES = ["english", "russian", "french", "chinese", "interlingua", "hindi"];
 
 const reverseCache = new Map();
 const templatesCache = new Map();
@@ -105,6 +105,9 @@ function renderCapturedForKey(field, raw, language) {
     if (bool == null) return null;
     return bool ? "truth" : "lie";
   }
+  if (field === "vec" || field === "ve") {
+    return normalizeVectorGloss(value, language);
+  }
   return value ?? null;
 }
 
@@ -166,6 +169,37 @@ function matchTemplateGloss(text, lang, { matchGloss }) {
     }
   }
   return best?.pyash ?? null;
+}
+
+function normalizeVectorGloss(value, language) {
+  if (!value) return null;
+  const tokens = String(value).match(/"([^"\\]|\\.)*"|\\S+/g);
+  if (!tokens || tokens.length === 0) return null;
+  const head = tokens[0];
+  const headMap = {
+    english: ["ve"],
+    french: ["ve"],
+    russian: ["ve", "ве"],
+    chinese: ["量", "向量", "ve"],
+    interlingua: ["vector"],
+    hindi: ["वेक्टर"]
+  };
+  const allowed = headMap[language] ?? ["ve"];
+  if (!allowed.includes(head)) return null;
+  const typeToken = tokens[1];
+  const typeMap = {
+    english: { num: "num", number: "num", text: "text", bool: "bool", boolean: "bool" },
+    french: { nombre: "num", texte: "text", booleen: "bool" },
+    russian: { "число": "num", "текст": "text", "булево": "bool" },
+    chinese: { "数": "num", "文本": "text", "布尔": "bool" },
+    interlingua: { numero: "num", texto: "text", booleano: "bool" },
+    hindi: { "संख्या": "num", "टेक्स्ट": "text", "बूलियन": "bool" }
+  };
+  const normalizedType = typeMap[language]?.[String(typeToken ?? "").toLowerCase()] || "num";
+  const values = tokens.slice(2);
+  return values.length > 0
+    ? ["ve", normalizedType, ...values].join(" ")
+    : ["ve", normalizedType].join(" ");
 }
 
 export function matchGlossToPyash(text, { language } = {}) {

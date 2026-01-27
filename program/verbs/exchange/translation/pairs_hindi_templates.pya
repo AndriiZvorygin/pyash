@@ -1,0 +1,29 @@
+su name translation_pairs_hindi_templates be map def
+su text "su name [name of su] ob num [num of ob] be number ya" ob text "[name of su] संख्या [num of ob] है." ya
+su text "su name [name of su] ob text [text of ob] be text ya" ob text "[name of su] टेक्स्ट \"[text of ob]\" है." ya
+su text "su name [name of su] ob bool [bool of ob] ya" ob text "[name of su] [bool of ob] है." ya
+su text "su name [name of su] ob [vec of ob] be vector ya" ob text "[name of su] [vec of ob] है." ya
+su text "ob num [num of ob] to name [name of to] be plus do" ob text "[name of to] में [num of ob] जोड़ो." ya
+su text "ob num [num of ob] from name [name of from] be subtract do" ob text "[name of from] से [num of ob] घटाओ." ya
+su text "ob num [num of ob] with name [name of with] be multiply do" ob text "[name of with] को [num of ob] से गुणा करो." ya
+su text "ob num [num of ob] with name [name of with] be divide do" ob text "[name of with] को [num of ob] से भाग दो." ya
+su text "ob num [num of ob] from num [num of from] to name [name of to] be remains do" ob text "[num of ob] को [num of from] से भाग देने पर शेष [name of to] को दो." ya
+su text "ob text [text of ob] to name [name of to] be write do" ob text "[name of to] में \"[text of ob]\" लिखो." ya
+su text "ob text [text of ob] be write do" ob text "\"[text of ob]\" लिखो." ya
+su text "ob name [name of ob] be write do" ob text "[name of ob] लिखो." ya
+su text "ob text [text of ob] be say do" ob text "\"[text of ob]\" कहो." ya
+su text "from name [name of from] be read do" ob text "[name of from] पढ़ो." ya
+su text "from filename [filename of from] be read do" ob text "फाइल [filename of from] पढ़ो." ya
+su text "exists su name [name of su] be map def" ob text "[name of su] नक्शा परिभाषा है." ya
+su text "exists su name [name of su] be json map def" ob text "[name of su] json नक्शा परिभाषा है." ya
+su text "exists su name [name of su] be csv map def" ob text "[name of su] csv नक्शा परिभाषा है." ya
+su text "exists su name [name of su] be ceremony def" ob text "[name of su] समारोह परिभाषा है." ya
+su text "su name [name of su] be map prah" ob text "[name of su] नक्शा अंत है." ya
+su text "su name [name of su] be json map prah" ob text "[name of su] json नक्शा अंत है." ya
+su text "su name [name of su] be csv map prah" ob text "[name of su] csv नक्शा अंत है." ya
+su text "su name [name of su] be ceremony prah" ob text "[name of su] समारोह अंत है." ya
+su text "su name [name of su] ob date [date of ob] be date ya" ob text "[name of su] तारीख [date of ob] है." ya
+su text "ob num [num of ob] be tiny from num [num of from] then [pyash of consequence]" ob text "यदि [num of ob] कम [num of from] है, तो [gloss of consequence]" ya
+su text "ob num [num of ob] be giant from num [num of from] then [pyash of consequence]" ob text "यदि [num of ob] अधिक [num of from] है, तो [gloss of consequence]" ya
+su text "ob num [num of ob] be equally from num [num of from] then [pyash of consequence]" ob text "यदि [num of ob] बराबर [num of from] है, तो [gloss of consequence]" ya
+prah

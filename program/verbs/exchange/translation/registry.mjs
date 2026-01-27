@@ -1,6 +1,8 @@
 import { englishLineToSentence, sentenceToEnglish } from "./english.mjs";
 import { chineseLineToSentence, sentenceToChinese } from "./chinese.mjs";
 import { frenchLineToSentence, sentenceToFrench } from "./french.mjs";
+import { hindiLineToSentence, sentenceToHindi } from "./hindi.mjs";
+import { interlinguaLineToSentence, sentenceToInterlingua } from "./interlingua.mjs";
 import { javascriptLineToSentence } from "./javascript.mjs";
 import { russianLineToSentence, sentenceToRussian } from "./russian.mjs";
 import { whisperEnglishLineToSentence } from "./whisper_english.mjs";
@@ -76,6 +78,20 @@ registerTranslationAdapter({
   aliases: ["zh"],
   toPyash: chineseLineToSentence,
   fromPyash: sentenceToChinese
+});
+
+registerTranslationAdapter({
+  name: "interlingua",
+  aliases: ["ia", "spanish", "es"],
+  toPyash: interlinguaLineToSentence,
+  fromPyash: sentenceToInterlingua
+});
+
+registerTranslationAdapter({
+  name: "hindi",
+  aliases: ["hi"],
+  toPyash: hindiLineToSentence,
+  fromPyash: sentenceToHindi
 });
 
 export function listTranslationAdapters() {
