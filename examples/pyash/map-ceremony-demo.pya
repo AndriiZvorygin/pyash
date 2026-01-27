@@ -1,6 +1,9 @@
 exists su name profile be map def
 su name name ob text "Ada" be text ya
 su name age ob num 36 be number ya
+su name active ob bool truth ya
+su name start ob date 2025-05-01 be date ya
+su name nums ob ve num 1 2 3 be vector ya
 su name profile be map prah
 ob name profile be write do
 
