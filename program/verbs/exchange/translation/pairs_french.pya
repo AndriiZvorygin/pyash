@@ -1,4 +1,64 @@
 su name translation_pairs_french be map def
+su text "su" ob text "sujet" ya
+su text "ob" ob text "objet" ya
+su text "be" ob text "etre" ya
+su text "do" ob text "fais" ya
+su text "ya" ob text "reel" ya
+su text "to" ob text "a" ya
+su text "from" ob text "depuis" ya
+su text "with" ob text "avec" ya
+su text "by" ob text "par" ya
+su text "as" ob text "comme" ya
+su text "for" ob text "pour" ya
+su text "via" ob text "via" ya
+su text "in" ob text "dans" ya
+su text "on" ob text "sur" ya
+su text "at" ob text "chez" ya
+su text "under" ob text "sous" ya
+su text "into" ob text "dedans" ya
+su text "onto" ob text "survers" ya
+su text "outof" ob text "hors" ya
+su text "of" ob text "de" ya
+su text "offof" ob text "hors de" ya
+su text "fromunder" ob text "sous de" ya
+su text "beneath" ob text "dessous" ya
+su text "during" ob text "durant" ya
+su text "since" ob text "depuisque" ya
+su text "until" ob text "jusque" ya
+su text "then" ob text "alors" ya
+su text "fromstate" ob text "depuis etat" ya
+su text "fromperson" ob text "depuis personne" ya
+su text "fromgroup" ob text "depuis groupe" ya
+su text "among" ob text "parmi" ya
+su text "intogroup" ob text "dans groupe" ya
+su text "fromtext" ob text "depuis texte" ya
+su text "accordingto" ob text "selon" ya
+su text "totext" ob text "vers texte" ya
+su text "times" ob text "fois" ya
+su text "per" ob text "par chaque" ya
+su text "atleast" ob text "au moins" ya
+su text "exactly" ob text "exact" ya
+su text "atmost" ob text "au plus" ya
+su text "fromindex" ob text "depuis index" ya
+su text "atindex" ob text "a index" ya
+su text "toindex" ob text "vers index" ya
+su text "become" ob text "devenir" ya
+su text "exists" ob text "existe" ya
+su text "text" ob text "texte" ya
+su text "num" ob text "nombre" ya
+su text "ve" ob text "ve" ya
+su text "bool" ob text "booleen" ya
+su text "date" ob text "date" ya
+su text "vector" ob text "vecteur" ya
+su text "name" ob text "nom" ya
+su text "map" ob text "carte" ya
+su text "json" ob text "json" ya
+su text "csv" ob text "csv" ya
+su text "ceremony" ob text "ceremonie" ya
+su text "def" ob text "definir" ya
+su text "prah" ob text "fin" ya
+su text "la" ob text "la" ya
+su text "ko" ob text "ko" ya
 su text "be abs bump do" ob text "" ya
 su text "be ecology do" ob text "" ya
 su text "be first bump do" ob text "" ya

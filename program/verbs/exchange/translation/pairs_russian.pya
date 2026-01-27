@@ -1,4 +1,64 @@
 su name translation_pairs_russian be map def
+su text "su" ob text "субъект" ya
+su text "ob" ob text "объект" ya
+su text "be" ob text "быть" ya
+su text "do" ob text "делай" ya
+su text "ya" ob text "реал" ya
+su text "to" ob text "к" ya
+su text "from" ob text "из" ya
+su text "with" ob text "с" ya
+su text "by" ob text "по" ya
+su text "as" ob text "как" ya
+su text "for" ob text "для" ya
+su text "via" ob text "через" ya
+su text "in" ob text "в" ya
+su text "on" ob text "на" ya
+su text "at" ob text "у" ya
+su text "under" ob text "под" ya
+su text "into" ob text "внутрь" ya
+su text "onto" ob text "наверх" ya
+su text "outof" ob text "наружу" ya
+su text "of" ob text "от" ya
+su text "offof" ob text "сверху" ya
+su text "fromunder" ob text "изпод" ya
+su text "beneath" ob text "ниже" ya
+su text "during" ob text "во" ya
+su text "since" ob text "после" ya
+su text "until" ob text "до" ya
+su text "then" ob text "тогда" ya
+su text "fromstate" ob text "из состояния" ya
+su text "fromperson" ob text "от лица" ya
+su text "fromgroup" ob text "из группы" ya
+su text "among" ob text "среди" ya
+su text "intogroup" ob text "в группу" ya
+su text "fromtext" ob text "из текста" ya
+su text "accordingto" ob text "согласно" ya
+su text "totext" ob text "в текст" ya
+su text "times" ob text "раз" ya
+su text "per" ob text "на каждый" ya
+su text "atleast" ob text "не менее" ya
+su text "exactly" ob text "ровно" ya
+su text "atmost" ob text "не более" ya
+su text "fromindex" ob text "из индекса" ya
+su text "atindex" ob text "на индексе" ya
+su text "toindex" ob text "в индекс" ya
+su text "become" ob text "стать" ya
+su text "exists" ob text "есть" ya
+su text "text" ob text "текст" ya
+su text "num" ob text "число" ya
+su text "ve" ob text "ве" ya
+su text "bool" ob text "булево" ya
+su text "date" ob text "дата" ya
+su text "vector" ob text "вектор" ya
+su text "name" ob text "имя" ya
+su text "map" ob text "карта" ya
+su text "json" ob text "json" ya
+su text "csv" ob text "csv" ya
+su text "ceremony" ob text "церемония" ya
+su text "def" ob text "определи" ya
+su text "prah" ob text "конец" ya
+su text "la" ob text "ла" ya
+su text "ko" ob text "ко" ya
 su text "be abs bump do" ob text "" ya
 su text "be ecology do" ob text "" ya
 su text "be first bump do" ob text "" ya

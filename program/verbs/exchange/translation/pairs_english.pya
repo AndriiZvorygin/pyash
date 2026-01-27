@@ -1,4 +1,64 @@
 su name translation_pairs_english be map def
+su text "su" ob text "subject" ya
+su text "ob" ob text "object" ya
+su text "be" ob text "be" ya
+su text "do" ob text "do" ya
+su text "ya" ob text "ya" ya
+su text "to" ob text "to" ya
+su text "from" ob text "from" ya
+su text "with" ob text "with" ya
+su text "by" ob text "by" ya
+su text "as" ob text "as" ya
+su text "for" ob text "for" ya
+su text "via" ob text "via" ya
+su text "in" ob text "in" ya
+su text "on" ob text "on" ya
+su text "at" ob text "at" ya
+su text "under" ob text "under" ya
+su text "into" ob text "into" ya
+su text "onto" ob text "onto" ya
+su text "outof" ob text "out of" ya
+su text "of" ob text "of" ya
+su text "offof" ob text "off of" ya
+su text "fromunder" ob text "from under" ya
+su text "beneath" ob text "beneath" ya
+su text "during" ob text "during" ya
+su text "since" ob text "since" ya
+su text "until" ob text "until" ya
+su text "then" ob text "then" ya
+su text "fromstate" ob text "from state" ya
+su text "fromperson" ob text "from person" ya
+su text "fromgroup" ob text "from group" ya
+su text "among" ob text "among" ya
+su text "intogroup" ob text "into group" ya
+su text "fromtext" ob text "from text" ya
+su text "accordingto" ob text "according to" ya
+su text "totext" ob text "to text" ya
+su text "times" ob text "times" ya
+su text "per" ob text "per" ya
+su text "atleast" ob text "at least" ya
+su text "exactly" ob text "exactly" ya
+su text "atmost" ob text "at most" ya
+su text "fromindex" ob text "from index" ya
+su text "atindex" ob text "at index" ya
+su text "toindex" ob text "to index" ya
+su text "become" ob text "become" ya
+su text "exists" ob text "exists" ya
+su text "text" ob text "text" ya
+su text "num" ob text "number" ya
+su text "ve" ob text "ve" ya
+su text "bool" ob text "boolean" ya
+su text "date" ob text "date" ya
+su text "vector" ob text "vector" ya
+su text "name" ob text "name" ya
+su text "map" ob text "map" ya
+su text "json" ob text "json" ya
+su text "csv" ob text "csv" ya
+su text "ceremony" ob text "ceremony" ya
+su text "def" ob text "define" ya
+su text "prah" ob text "end" ya
+su text "la" ob text "la" ya
+su text "ko" ob text "ko" ya
 su text "be abs bump do" ob text "do abs bump." ya
 su text "be ecology do" ob text "do ecology." ya
 su text "be first bump do" ob text "do first bump." ya

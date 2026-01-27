@@ -183,7 +183,7 @@ function renderVectorForKey(vec) {
   return ["ve", type, ...rendered].join(" ");
 }
 
-function renderPlaceholderValueForKey(field, value) {
+function renderPlaceholderValueForKey(field, value, language) {
   if (value == null) return null;
   if (field === "pyash") {
     if (!value || typeof value !== "object") return null;
@@ -201,7 +201,7 @@ function renderPlaceholderValueForKey(field, value) {
     return value === true ? "truth" : "lie";
   }
   if (field === "vec" || field === "ve") {
-    return renderVectorForKey(value);
+    return renderVectorGlossForLanguage(value, language);
   }
   return String(value);
 }
@@ -233,9 +233,33 @@ function renderPlaceholderValueForOutput(field, value, language, formatter) {
     return truth ? "true" : "false";
   }
   if (field === "vec" || field === "ve") {
-    return renderVectorForKey(value);
+    return renderVectorGlossForLanguage(value, language);
   }
   return String(value);
+}
+
+function renderVectorGlossForLanguage(vec, language) {
+  if (!vec || typeof vec !== "object") return null;
+  const type = vec.type || "num";
+  const values = Array.isArray(vec.values) ? vec.values : [];
+  const rendered = values.map((value) => {
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "truth" : "lie";
+    if (typeof value === "string") {
+      if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+      return JSON.stringify(value);
+    }
+    return String(value);
+  });
+  if (language === "russian") {
+    const typeGloss = type === "text" ? "текст" : type === "bool" ? "булево" : "число";
+    return ["ве", typeGloss, ...rendered].join(" ");
+  }
+  if (language === "french") {
+    const typeGloss = type === "text" ? "texte" : type === "bool" ? "booleen" : "nombre";
+    return ["ve", typeGloss, ...rendered].join(" ");
+  }
+  return ["ve", type, ...rendered].join(" ");
 }
 
 function applyTemplatePairs(templates, sentence, pyash, language, formatter) {
@@ -255,7 +279,7 @@ function applyTemplatePairs(templates, sentence, pyash, language, formatter) {
       const field = fieldRaw.toLowerCase();
       const rolePath = roleRaw.toLowerCase().split(/\s+/).filter(Boolean);
       const value = placeholderValueForCase(sentence, field, rolePath);
-      const renderedKey = renderPlaceholderValueForKey(field, value);
+      const renderedKey = renderPlaceholderValueForKey(field, value, language);
       const renderedOutput = renderPlaceholderValueForOutput(field, value, language, formatter);
       if (renderedKey == null || renderedOutput == null) {
         ok = false;
