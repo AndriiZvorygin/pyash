@@ -22,6 +22,25 @@ function sentenceToEnglish(sentence) {
     const verb = beLabel;
     const targetTo = sentence.to?.name;
     const targetFrom = sentence.from?.name;
+    const targetWith = sentence.with?.name;
+    const targetFilename = sentence.from?.filename;
+    const targetRead = sentence.from?.name;
+    const nameVal = sentence.ob?.name;
+    if (verb === "write" && textVal !== undefined && targetTo) {
+      return `write "${textVal}" to ${targetTo}.`;
+    }
+    if (verb === "write" && nameVal) {
+      return `write ${nameVal}.`;
+    }
+    if (verb === "say" && textVal !== undefined) {
+      return `say "${textVal}".`;
+    }
+    if (verb === "read" && targetFilename) {
+      return `read file ${targetFilename}.`;
+    }
+    if (verb === "read" && targetRead) {
+      return `read ${targetRead}.`;
+    }
     if (numVal !== undefined && targetTo) {
       return `do ${verb} ${numVal} to ${targetTo}.`;
     }
@@ -42,6 +61,21 @@ function sentenceToEnglish(sentence) {
 
   if (ob.text !== undefined) {
     return `${su} is ${beLabel} "${ob.text}".`;
+  }
+
+  if (ob.ve !== undefined) {
+    const values = Array.isArray(ob.ve.values) ? ob.ve.values : [];
+    const type = ob.ve.type || "num";
+    const rendered = values.map((value) => {
+      if (typeof value === "number") return String(value);
+      if (typeof value === "boolean") return value ? "truth" : "lie";
+      if (typeof value === "string") {
+        if (/^[A-Za-z0-9_.-]+$/.test(value)) return value;
+        return JSON.stringify(value);
+      }
+      return String(value);
+    });
+    return `${su} is vector ${["ve", type, ...rendered].join(" ")}.`;
   }
 
   return `${su} is ${beLabel}`;
@@ -116,6 +150,62 @@ function englishLineToSentence(line) {
       ob: { num: Number.isNaN(numVal) ? numRaw : numVal },
       from: { num: Number.isNaN(fromVal) ? fromRaw : fromVal },
       to: { name: target }
+    };
+  }
+
+  // Imperative form (no "do"): "write \"hi\" to output"
+  const writeTextMatch = trimmed.match(/^write\s+\"([^\"]*)\"\s+to\s+([A-Za-z0-9_]+)\.?$/i);
+  if (writeTextMatch) {
+    const [, text, target] = writeTextMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { text },
+      to: { name: target }
+    };
+  }
+
+  // Imperative form (no "do"): "write output"
+  const writeNameMatch = trimmed.match(/^write\s+([A-Za-z0-9_]+)\.?$/i);
+  if (writeNameMatch) {
+    const [, name] = writeNameMatch;
+    return {
+      mood: "do",
+      be: "write",
+      ob: { name }
+    };
+  }
+
+  // Imperative form (no "do"): "say \"hi\""
+  const sayMatch = trimmed.match(/^say\s+\"([^\"]*)\"\.?$/i);
+  if (sayMatch) {
+    const [, text] = sayMatch;
+    return {
+      mood: "do",
+      be: "say",
+      ob: { text }
+    };
+  }
+
+  // Imperative form (no "do"): "read file path"
+  const readFileMatch = trimmed.match(/^read\s+file\s+(.+?)\.?$/i);
+  if (readFileMatch) {
+    const [, filename] = readFileMatch;
+    return {
+      mood: "do",
+      be: "read",
+      from: { filename: filename.trim() }
+    };
+  }
+
+  // Imperative form (no "do"): "read input"
+  const readMatch = trimmed.match(/^read\s+([A-Za-z0-9_]+)\.?$/i);
+  if (readMatch) {
+    const [, name] = readMatch;
+    return {
+      mood: "do",
+      be: "read",
+      from: { name }
     };
   }
 
