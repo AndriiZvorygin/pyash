@@ -8,6 +8,7 @@ let memory = [];
 let history = []; // optional, for debugging / REPL
 const definitionIndex = new Map(); // name -> [{ name, index, end, signatureKey }]
 const contextStack = [];
+const defaults = new Map();
 
 let sandpits = [];
 
@@ -104,7 +105,7 @@ export function remember(name) {
     if (s.mood === "do") continue;
     if (s.su?.name === name) return s;
   }
-  return undefined;
+  return defaults.get(name);
 }
 
 export function allRemember() {
@@ -172,6 +173,7 @@ export function forget() {
   definitionIndex.clear();
   contextStack.length = 0;
   sandpits = [];
+  defaults.clear();
   clearSignatureDefinitions();
   clearModuleCache();
   clearRefineries();
@@ -181,6 +183,15 @@ export function forget() {
   state.currentEvoke = null;
   state.currentEvokeRef = null;
   state.executingBody = false;
+}
+
+export function setDefault(name, sentence) {
+  if (!name || !sentence) return;
+  defaults.set(name, sentence);
+}
+
+export function clearDefaults() {
+  defaults.clear();
 }
 
 export function pushMemoryContext({ seedFromCurrent = false } = {}) {

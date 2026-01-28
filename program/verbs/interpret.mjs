@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { throwErrorSentence } from "../error.mjs";
 import { remember } from "../remember/index.mjs";
 
-const INTERPRET_TIMEOUT_MS = 500;
+const INTERPRET_TIMEOUT_MS = 1500;
 const INTERPRET_OUTPUT_LIMIT = 64 * 1024;
 
 function resolveLanguage(sentence) {
@@ -28,6 +28,10 @@ function resolveScriptText(sentence, { rememberFn } = {}) {
 }
 
 function resolveTimeoutMs(sentence) {
+  const envOverride = Number(process.env.PYA_INTERPRET_TIMEOUT_MS);
+  if (Number.isFinite(envOverride) && envOverride > 0) {
+    return Math.max(1, Math.trunc(envOverride));
+  }
   const during = sentence?.during;
   const raw = during?.num ?? during?.text ?? during?.name;
   const value = typeof raw === "number" ? raw : Number(raw);
@@ -37,6 +41,23 @@ function resolveTimeoutMs(sentence) {
 
 function resolveVendoredPath(relativePath) {
   return fileURLToPath(new URL(`../../${relativePath}`, import.meta.url));
+}
+
+function resolveWasmtimePath() {
+  const envPath = process.env.PYA_WASMTIME_BIN;
+  if (envPath) return envPath;
+  const vendored = resolveVendoredPath("caterer/wasmtime/bin/wasmtime");
+  if (fsSync.existsSync(vendored)) return vendored;
+  const fallback = "/usr/local/bin/wasmtime";
+  return fallback;
+}
+
+function resolveQuickJsPath() {
+  const envPath = process.env.PYA_QUICKJS_WASM;
+  if (envPath) return envPath;
+  const vendored = resolveVendoredPath("caterer/quickjs-wasi/qjs.wasm");
+  if (fsSync.existsSync(vendored)) return vendored;
+  return "/usr/local/share/pyash/qjs.wasm";
 }
 
 function ensureExecutable(filepath, label) {
@@ -70,8 +91,8 @@ function sanitizeErrorText(text, replacements) {
 }
 
 async function runQuickJs({ scriptText, timeoutMs }) {
-  const wasmtimePath = resolveVendoredPath("caterer/wasmtime/bin/wasmtime");
-  const qjsPath = resolveVendoredPath("caterer/quickjs-wasi/qjs.wasm");
+  const wasmtimePath = resolveWasmtimePath();
+  const qjsPath = resolveQuickJsPath();
   ensureExecutable(wasmtimePath, "wasmtime");
   if (!fsSync.existsSync(qjsPath)) {
     throwErrorSentence({

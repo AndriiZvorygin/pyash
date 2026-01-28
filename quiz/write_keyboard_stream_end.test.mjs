@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -12,7 +13,9 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("write stream stops at blank audio and preserves spacing", async () => {
+const hasX11 = Boolean(process.env.DISPLAY) || fsSync.existsSync("/tmp/.X11-unix");
+
+test("write stream stops at blank audio and preserves spacing", { skip: !hasX11 }, async () => {
   forget();
   const fixturePath = path.join("quiz", "sandpit", "hear-stream-end.txt");
   await fs.mkdir(path.dirname(fixturePath), { recursive: true });

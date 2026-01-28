@@ -1,4 +1,4 @@
-import { doRemember, remember } from "../remember/index.mjs";
+import { doRemember, remember, setDefault } from "../remember/index.mjs";
 
 const ENV_BINDINGS = [
   { env: "PYA_MIND_RESPONSE", name: "mind response", type: "text" },
@@ -61,7 +61,7 @@ export function applyEnvDefaults({ rememberFn = remember, doRememberFn = doRemem
     if (raw === undefined || raw === "") continue;
     if (rememberFn?.(binding.name)) continue;
     const ob = buildObValue(raw, binding.type);
-    doRememberFn({
+    setDefault(binding.name, {
       mood: "ya",
       su: { name: binding.name },
       be: "default",
