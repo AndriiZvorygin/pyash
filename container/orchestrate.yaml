@@ -10,6 +10,7 @@ services:
     volumes:
       - ..:/workplace
       - ../minds:/minds
+      - ${HOME}/.codex:/workplace/.codex
     stdin_open: true
     tty: true
     environment:
