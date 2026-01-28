@@ -8,6 +8,7 @@ exists su name mind backend be default ob name ollama command mind ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya
+exists su name keyboard enabled ob bool truth be default ya
 exists su name ffmpeg input ob text "pulse" be default ya
 exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
