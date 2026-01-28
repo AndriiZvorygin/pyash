@@ -82,12 +82,24 @@ prompt_yes_no_dialog() {
 prompt_yes_no() {
   local prompt="$1"
   local default="$2"
+  local answer
   local suffix="[y/N]"
   if [[ "$default" == "yes" ]]; then
     suffix="[Y/n]"
   fi
-  printf "\n%s %s " "$prompt" "$suffix"
-  echo "$default"
+  while true; do
+    printf "\n%s %s " "$prompt" "$suffix"
+    read -r answer || true
+    answer="${answer:-}"
+    if [[ -z "$answer" ]]; then
+      echo "$default"
+      return
+    fi
+    case "$answer" in
+      [Yy]|[Yy][Ee][Ss]) echo "yes"; return ;;
+      [Nn]|[Nn][Oo]) echo "no"; return ;;
+    esac
+  done
 }
 
 if ! command -v docker >/dev/null 2>&1; then
