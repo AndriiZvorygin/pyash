@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { buildProgram } from "../program.mjs";
+import { queryRyanLines } from "./ryan.mjs";
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
@@ -33,14 +33,10 @@ function collectNames(sentence, out) {
   }
 }
 
-function queryRyan(token) {
+async function queryRyan(token) {
   if (checked.has(token)) return checked.get(token);
-  const output = execFileSync(
-    "node",
-    ["program/command/ryan.mjs", token],
-    { encoding: "utf8" }
-  );
-  const lines = output.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const output = await queryRyanLines(token);
+  const lines = output.map(line => line.trim()).filter(Boolean);
   checked.set(token, lines);
   return lines;
 }
@@ -80,7 +76,7 @@ for (const file of files) {
     }
   }
   for (const token of names) {
-    const lines = queryRyan(token);
+    const lines = await queryRyan(token);
     if (lines.length === 0) {
       missing += 1;
       console.log(`${file}: ${token} (no suggestions)`);
