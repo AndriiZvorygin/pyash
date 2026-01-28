@@ -69,7 +69,7 @@ export async function queryVocabLines(prefix) {
     if (lines.length > 0) return lines;
   }
 
-  const blocked = blacklist[`X${input}`];
+  const blocked = blacklist[`X${normalized}`] ?? blacklist[`X${input}`];
   if ((typeof blocked === "string" && blocked.length > 0) || (Array.isArray(blocked) && blocked.length > 0)) {
     return [JSON.stringify(blocked)];
   }

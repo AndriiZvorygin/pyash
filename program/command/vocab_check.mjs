@@ -83,15 +83,15 @@ function getPyashFromLine(line) {
 function isExactTokenMatch(token, lines) {
   const lower = String(token ?? "").toLowerCase();
   if (!lower) return false;
-  if (resolveEnglishAlias(lower) !== lower) return true;
+  const target = resolveEnglishAlias(lower) || lower;
   for (const line of lines) {
     if (!line) continue;
     if (isFileMarker(line)) continue;
     if (parseBlacklist(line) !== null) continue;
     const pyash = getPyashFromLine(line);
-    if (pyash && pyash.toLowerCase() === lower) return true;
+    if (pyash && (pyash.toLowerCase() === lower || pyash.toLowerCase() === target)) return true;
     const gloss = getGlossFromLine(line);
-    if (gloss && gloss.toLowerCase() === lower) return true;
+    if (gloss && (gloss.toLowerCase() === lower || gloss.toLowerCase() === target)) return true;
   }
   return false;
 }

@@ -42,8 +42,10 @@ dialog_msg() {
 
 prompt_yes_no_dialog() {
   local prompt="$1"
-  local result="no"
-  dialog --title "$TITLE" --yesno "$prompt" 8 60 && result="yes" || result="no"
+  local default="$2"
+  local result="$default"
+  dialog --title "$TITLE" --yesno "$prompt" 8 60 --default-button "$default" \
+    && result="yes" || result="no"
   echo "$result"
 }
 
@@ -87,6 +89,7 @@ fi
 
 AUDIO_DEFAULT="off"
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
+PULSE_COOKIE="$HOME/.config/pulse/cookie"
 if [[ -S "$PULSE_SOCKET" ]]; then
   AUDIO_DEFAULT="on"
 fi
@@ -96,9 +99,9 @@ VNC_DEFAULT="on"
 WORKPLACE="$ROOT_DIR"
 
 if [[ "$has_dialog" == "yes" ]]; then
-  GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)")
-  AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)")
-  VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)")
+  GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
+  AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
+  VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
 else
   echo "$TITLE"
   echo "$INTRO"
@@ -120,14 +123,19 @@ if [[ "$GPU_CHOICE" == "yes" ]]; then
 fi
 
 if [[ "$AUDIO_CHOICE" == "yes" ]]; then
-  RUN_CMD+=("--device" "/dev/snd")
-  RUN_CMD+=("-e" "PULSE_SERVER=unix:${PULSE_SOCKET}")
-  RUN_CMD+=("-v" "/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
-  RUN_CMD+=("-v" "$HOME/.config/pulse/cookie:/root/.config/pulse/cookie")
+  if [[ ! -S "$PULSE_SOCKET" || ! -f "$PULSE_COOKIE" ]]; then
+    dialog_msg "$(get_text audio_missing)"
+  else
+    RUN_CMD+=("--device" "/dev/snd")
+    RUN_CMD+=("-e" "PULSE_SERVER=unix:${PULSE_SOCKET}")
+    RUN_CMD+=("-v" "/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
+    RUN_CMD+=("-v" "$PULSE_COOKIE:/root/.config/pulse/cookie")
+  fi
 fi
 
 if [[ "$VNC_CHOICE" == "yes" ]]; then
   RUN_CMD+=("-p" "5900:5900" "-p" "6080:6080")
+  RUN_CMD+=("--entrypoint" "/workplace/container/run_vnc_novnc.sh")
 fi
 
 RUN_CMD+=("pyash-dev")
