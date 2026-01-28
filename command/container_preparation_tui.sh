@@ -68,7 +68,7 @@ prompt_yes_no_dialog() {
     dialog --title "$TITLE" --yesno "$prompt" 8 60 \
       && result="yes" || result="no"
   else
-    dialog --title "$TITLE" --yesno "$prompt" 8 60 --defaultno \
+    dialog --title "$TITLE" --defaultno --yesno "$prompt" 8 60 \
       && result="yes" || result="no"
   fi
   echo "$result"
