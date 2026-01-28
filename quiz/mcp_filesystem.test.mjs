@@ -12,7 +12,15 @@ import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/ex
 import { canonicalJsonStringify } from "../program/verbs/exchange/write_json.mjs";
 import { closeMcpServers, getMcpServerTools } from "../program/motor/mcp.mjs";
 
-const skipFilesystem = process.env.PYA_SKIP_MCP_FILESYSTEM === "1";
+let hasFilesystemServer = false;
+try {
+  const { createRequire } = await import("node:module");
+  const req = createRequire(import.meta.url);
+  req.resolve("@modelcontextprotocol/server-filesystem");
+  hasFilesystemServer = true;
+} catch {}
+
+const skipFilesystem = process.env.PYA_SKIP_MCP_FILESYSTEM === "1" || !hasFilesystemServer;
 
 test("mcp filesystem server records snapshot and exposes tools", { skip: skipFilesystem, timeout: 120000 }, async () => {
   forget();
