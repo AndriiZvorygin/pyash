@@ -44,7 +44,10 @@ OPENAI_CHOICE_HOST=$(get_text openai_choice_host)
 OPENAI_CHOICE_LOCAL=$(get_text openai_choice_local)
 OPENAI_CHOICE_VLLM=$(get_text openai_choice_vllm)
 OPENAI_CHOICE_CUSTOM=$(get_text openai_choice_custom)
-OPENAI_AUTODETECT=$(get_text openai_autodetect)
+OPENAI_CHOICE_DETECT=$(get_text openai_choice_detect)
+OPENAI_DETECTING=$(get_text openai_detecting)
+OPENAI_DETECTED=$(get_text openai_detected)
+OPENAI_DETECTED_NONE=$(get_text openai_detected_none)
 
 has_dialog="no"
 if command -v dialog >/dev/null 2>&1; then
@@ -186,18 +189,12 @@ if [[ "$has_dialog" == "yes" ]]; then
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
 
   OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
-  AUTODETECT_CHOICE=$(prompt_yes_no_dialog "$OPENAI_AUTODETECT" "yes")
-  if [[ "$AUTODETECT_CHOICE" == "yes" ]]; then
-    autodetected=$(autodetect_openai_base || true)
-    if [[ -n "${autodetected:-}" ]]; then
-      OPENAI_BASE_URL_VALUE="$autodetected"
-    fi
-  fi
-  OPENAI_CHOICE=$(dialog --stdout --title "$OPENAI_TITLE" --menu "$OPENAI_INTRO" 12 70 4 \
+  OPENAI_CHOICE=$(dialog --stdout --title "$OPENAI_TITLE" --menu "$OPENAI_INTRO" 13 72 5 \
     1 "$OPENAI_CHOICE_HOST" \
     2 "$OPENAI_CHOICE_LOCAL" \
     3 "$OPENAI_CHOICE_VLLM" \
-    4 "$OPENAI_CHOICE_CUSTOM")
+    4 "$OPENAI_CHOICE_CUSTOM" \
+    5 "$OPENAI_CHOICE_DETECT")
   case "$OPENAI_CHOICE" in
     1) OPENAI_BASE_URL_VALUE="http://host.docker.internal:11434" ;;
     2) OPENAI_BASE_URL_VALUE="http://127.0.0.1:11434" ;;
@@ -205,6 +202,17 @@ if [[ "$has_dialog" == "yes" ]]; then
     4)
       OPENAI_BASE_URL_VALUE=$(dialog --stdout --title "$OPENAI_TITLE" --inputbox "$OPENAI_HOST_PROMPT\n[$OPENAI_DEFAULT]" 8 70) || true
       OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}"
+      ;;
+    5)
+      dialog --title "$OPENAI_TITLE" --infobox "$OPENAI_DETECTING" 6 60
+      autodetected=$(autodetect_openai_base || true)
+      if [[ -n "${autodetected:-}" ]]; then
+        dialog --title "$OPENAI_TITLE" --msgbox "$OPENAI_DETECTED: $autodetected" 7 70
+        OPENAI_BASE_URL_VALUE="$autodetected"
+      else
+        dialog --title "$OPENAI_TITLE" --msgbox "$OPENAI_DETECTED_NONE" 6 60
+        OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT"
+      fi
       ;;
     *) OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}" ;;
   esac
@@ -230,19 +238,13 @@ else
   VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
 
   OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
-  AUTODETECT_CHOICE=$(prompt_yes_no "$OPENAI_AUTODETECT" "yes")
-  if [[ "$AUTODETECT_CHOICE" == "yes" ]]; then
-    autodetected=$(autodetect_openai_base || true)
-    if [[ -n "${autodetected:-}" ]]; then
-      OPENAI_BASE_URL_VALUE="$autodetected"
-    fi
-  fi
   echo "$OPENAI_INTRO"
   echo "1) $OPENAI_CHOICE_HOST"
   echo "2) $OPENAI_CHOICE_LOCAL"
   echo "3) $OPENAI_CHOICE_VLLM"
   echo "4) $OPENAI_CHOICE_CUSTOM"
-  printf "Choice [1-4] (default 1): "
+  echo "5) $OPENAI_CHOICE_DETECT"
+  printf "Choice [1-5] (default 1): "
   read -r openai_choice || true
   case "${openai_choice:-1}" in
     1) OPENAI_BASE_URL_VALUE="http://host.docker.internal:11434" ;;
@@ -252,6 +254,17 @@ else
       printf "%s [%s] " "$OPENAI_HOST_PROMPT" "$OPENAI_DEFAULT"
       read -r openai_custom || true
       OPENAI_BASE_URL_VALUE="${openai_custom:-$OPENAI_DEFAULT}"
+      ;;
+    5)
+      echo "$OPENAI_DETECTING"
+      autodetected=$(autodetect_openai_base || true)
+      if [[ -n "${autodetected:-}" ]]; then
+        echo "$OPENAI_DETECTED: $autodetected"
+        OPENAI_BASE_URL_VALUE="$autodetected"
+      else
+        echo "$OPENAI_DETECTED_NONE"
+        OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT"
+      fi
       ;;
     *) OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}" ;;
   esac
