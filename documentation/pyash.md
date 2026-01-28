@@ -101,6 +101,18 @@ The goal is to make the codebase read like controlled natural language, reducing
 
 ---
 
+### Vocabulary helpers
+
+Use the vocab helpers before introducing new verbs, files, directory names, or example words.
+
+- `node program/command/vocab_suggest.mjs examples/pyash` scans `.pya` files for non-Pyash tokens and suggests replacements.
+- `node program/command/vocab_suggest.mjs --text "new verb name"` checks a proposed token or phrase without touching files.
+- `node program/command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
+
+These helpers use the `caterer/pyac/lyac` dictionaries via `program/command/ryan.mjs`.
+
+---
+
 ### Declarations vs. assignments
 
 Pyash keeps declarations explicit when compiling to code targets:
