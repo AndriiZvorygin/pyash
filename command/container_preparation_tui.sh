@@ -389,9 +389,8 @@ fi
   fi
 } > "$OVERRIDE_FILE"
 
-COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "-f" "$OVERRIDE_FILE" "up" "--build")
-RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE} AI_HOST=${OPENAI_BASE_URL_VALUE} OLLAMA_HOST=${OPENAI_BASE_URL_VALUE}"
-SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}"
+COMPOSE_CMD=("$ROOT_DIR/container/run.sh")
+SUMMARY="$(get_text build_cmd)\n${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${COMPOSE_CMD[*]}"
 
 gpu_enabled_value="lie"
 if [[ "$GPU_CHOICE" == "yes" ]]; then
@@ -422,7 +421,7 @@ fi
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
   if [[ $? -eq 0 ]]; then
-    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" AI_HOST="$OPENAI_BASE_URL_VALUE" OLLAMA_HOST="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
+    "${COMPOSE_CMD[@]}"
   fi
 else
   echo -e "$SUMMARY"
@@ -433,7 +432,7 @@ else
     *) RUN_NOW="no" ;;
   esac
   if [[ "$RUN_NOW" == "yes" ]]; then
-    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" AI_HOST="$OPENAI_BASE_URL_VALUE" OLLAMA_HOST="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
+    "${COMPOSE_CMD[@]}"
   fi
 fi
 detect_reachable_base() {
