@@ -43,4 +43,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && npm install -g @openai/codex \
   && rm -rf /var/lib/apt/lists/*
 
+COPY caterer/wasmtime/bin/wasmtime /usr/local/bin/wasmtime
+COPY caterer/quickjs-wasi/qjs.wasm /usr/local/share/pyash/qjs.wasm
+RUN chmod +x /usr/local/bin/wasmtime
+
 WORKDIR /workplace

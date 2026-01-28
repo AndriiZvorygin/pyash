@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -10,7 +11,9 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("write to keyboard sends text", async () => {
+const hasX11 = Boolean(process.env.DISPLAY) || fs.existsSync("/tmp/.X11-unix");
+
+test("write to keyboard sends text", { skip: !hasX11 }, async () => {
   forget();
   process.env.PYA_KEYBOARD_BIN = "true";
   try {
@@ -21,7 +24,7 @@ test("write to keyboard sends text", async () => {
   }
 });
 
-test("write stream to keyboard consumes hear stream", async () => {
+test("write stream to keyboard consumes hear stream", { skip: !hasX11 }, async () => {
   forget();
   process.env.PYA_KEYBOARD_BIN = "true";
   process.env.PYA_HEAR_FIXTURE = "first line\nsecond line";
