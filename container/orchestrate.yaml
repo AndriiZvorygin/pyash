@@ -1,6 +1,7 @@
 version: "3.8"
 services:
   pyash:
+    container_name: pyash
     build:
       context: ..
       dockerfile: container/Dockerfile
