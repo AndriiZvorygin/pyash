@@ -79,6 +79,37 @@ prompt_yes_no_dialog() {
   echo "$result"
 }
 
+detect_reachable_base() {
+  local base="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 1 "${base}/v1/models" >/dev/null 2>&1 && echo "$base" && return
+    curl -fsS --max-time 1 "${base}/api/tags" >/dev/null 2>&1 && echo "$base" && return
+  fi
+}
+
+autodetect_openai_base() {
+  local candidates=(
+    "http://host.docker.internal:11434"
+    "http://127.0.0.1:11434"
+    "http://localhost:11434"
+    "http://127.0.0.1:8000"
+    "http://localhost:8000"
+  )
+  local gw
+  gw=$(ip route 2>/dev/null | awk '/default/ {print $3}' | head -n1)
+  if [[ -n "${gw:-}" ]]; then
+    candidates+=("http://${gw}:11434" "http://${gw}:8000")
+  fi
+  for base in "${candidates[@]}"; do
+    local hit
+    hit=$(detect_reachable_base "$base" || true)
+    if [[ -n "${hit:-}" ]]; then
+      echo "$hit"
+      return
+    fi
+  done
+}
+
 prompt_yes_no() {
   local prompt="$1"
   local default="$2"
@@ -406,27 +437,4 @@ detect_reachable_base() {
     curl -fsS --max-time 1 "${base}/v1/models" >/dev/null 2>&1 && echo "$base" && return
     curl -fsS --max-time 1 "${base}/api/tags" >/dev/null 2>&1 && echo "$base" && return
   fi
-}
-
-autodetect_openai_base() {
-  local candidates=(
-    "http://host.docker.internal:11434"
-    "http://127.0.0.1:11434"
-    "http://localhost:11434"
-    "http://127.0.0.1:8000"
-    "http://localhost:8000"
-  )
-  local gw
-  gw=$(ip route 2>/dev/null | awk '/default/ {print $3}' | head -n1)
-  if [[ -n "${gw:-}" ]]; then
-    candidates+=("http://${gw}:11434" "http://${gw}:8000")
-  fi
-  for base in "${candidates[@]}"; do
-    local hit
-    hit=$(detect_reachable_base "$base" || true)
-    if [[ -n "${hit:-}" ]]; then
-      echo "$hit"
-      return
-    fi
-  done
 }
