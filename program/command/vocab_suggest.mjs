@@ -5,6 +5,7 @@ import { buildProgram } from "../program.mjs";
 
 const args = process.argv.slice(2);
 const inputs = [];
+const textInputs = [];
 let mapPath = null;
 
 for (let i = 0; i < args.length; i += 1) {
@@ -14,10 +15,15 @@ for (let i = 0; i < args.length; i += 1) {
     i += 1;
     continue;
   }
+  if (arg === "--text") {
+    textInputs.push(args[i + 1] ?? "");
+    i += 1;
+    continue;
+  }
   inputs.push(arg);
 }
 
-const roots = inputs.length > 0 ? inputs : ["examples/pyash"];
+const roots = inputs.length > 0 ? inputs : (textInputs.length > 0 ? [] : ["examples/pyash"]);
 
 const checked = new Map();
 const occurrences = new Map();
@@ -125,6 +131,10 @@ for (const root of roots) {
 }
 
 let missing = 0;
+const textTokens = new Set();
+for (const input of textInputs) {
+  for (const token of tokenizeName(input)) textTokens.add(token);
+}
 for (const file of files) {
   const text = await fs.readFile(file, "utf8");
   const tokens = new Set();
@@ -146,6 +156,14 @@ for (const file of files) {
       occurrences.get(token).add(file);
       continue;
     }
+  }
+}
+for (const token of textTokens) {
+  const lines = queryRyan(token);
+  if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
+    missing += 1;
+    if (!occurrences.has(token)) occurrences.set(token, new Set());
+    occurrences.get(token).add("input");
   }
 }
 
