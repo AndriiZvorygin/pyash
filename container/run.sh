@@ -68,6 +68,7 @@ fi
 if [[ -d "$HOME/.codex" ]]; then
   volumes+=("${HOME}/.codex:/root/.codex")
   volumes+=("${HOME}/.codex:/workplace/.codex")
+  envs+=("CODEX_HOME=/workplace/.codex")
 fi
 
 {

@@ -44,10 +44,7 @@ fi
 
 case "$CHOICE" in
   1)
-    if [[ "$container_running" == "yes" ]]; then
-      exec docker exec -it pyash bash
-    fi
-    exec "$ROOT_DIR/command/container_preparation_tui.sh"
+    exec "$ROOT_DIR/container/run.sh"
     ;;
   2)
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
