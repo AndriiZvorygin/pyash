@@ -111,4 +111,4 @@ OPENAI_BASE_URL="$ai_host" AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
   docker compose -f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE" up --build -d
 
 echo "Container started. Enter with:"
-echo "  docker exec -it pyash-1 bash"
+echo "  docker exec -it pyash bash"
