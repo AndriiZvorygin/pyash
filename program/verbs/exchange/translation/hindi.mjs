@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { applyEnglishAliases } from "./english_aliases.mjs";
 
 function sentenceToHindi(sentence) {
   const su = translateNameToHindi(sentence.su?.name);
@@ -385,6 +386,7 @@ function loadHiByEnglish() {
       if (!entry?.en || !entry?.hi) continue;
       hiByEnglish.set(String(entry.en).toLowerCase(), entry.hi);
     }
+    applyEnglishAliases(hiByEnglish);
   } catch {
     hiByEnglish = new Map();
   }

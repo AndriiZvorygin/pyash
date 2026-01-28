@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildProgram } from "../program.mjs";
 import { queryRyanLines } from "./ryan.mjs";
+import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
@@ -55,6 +56,46 @@ function parseBlacklist(line) {
   }
 }
 
+function normalizeGloss(text) {
+  let value = text.trim();
+  value = value.replace(/\s+grammar$/, "");
+  const phoneticIndex = value.indexOf(" /");
+  if (phoneticIndex !== -1 && value.endsWith("/")) {
+    value = value.slice(0, phoneticIndex).trim();
+  }
+  return value;
+}
+
+function getGlossFromLine(line) {
+  if (!line || line.startsWith("#define")) return null;
+  const match = line.match(/^(\S+)\s+(\S+)\s+(.+)$/);
+  if (!match) return null;
+  return normalizeGloss(match[3]);
+}
+
+function getPyashFromLine(line) {
+  if (!line || line.startsWith("#define")) return null;
+  const match = line.match(/^(\S+)\s+(\S+)\s+(.+)$/);
+  if (!match) return null;
+  return match[1];
+}
+
+function isExactTokenMatch(token, lines) {
+  const lower = String(token ?? "").toLowerCase();
+  if (!lower) return false;
+  if (resolveEnglishAlias(lower) !== lower) return true;
+  for (const line of lines) {
+    if (!line) continue;
+    if (isFileMarker(line)) continue;
+    if (parseBlacklist(line) !== null) continue;
+    const pyash = getPyashFromLine(line);
+    if (pyash && pyash.toLowerCase() === lower) return true;
+    const gloss = getGlossFromLine(line);
+    if (gloss && gloss.toLowerCase() === lower) return true;
+  }
+  return false;
+}
+
 function extractQuotedPyashBlocks(text) {
   const blocks = [];
   let index = 0;
@@ -88,7 +129,7 @@ for (const file of files) {
   for (const token of names) {
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-    if (lines.length === 0 || blacklistValue !== null) {
+    if (lines.length === 0 || blacklistValue !== null || !isExactTokenMatch(token, lines)) {
       missing += 1;
       console.log(`${file}: ${token} (no suggestions)`);
       continue;

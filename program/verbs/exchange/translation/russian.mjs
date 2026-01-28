@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { applyEnglishAliases } from "./english_aliases.mjs";
 
 function sentenceToRussian(sentence) {
   const su = translateNameToRussian(sentence.su?.name);
@@ -481,6 +482,7 @@ function loadIsvByEnglish() {
       if (!entry?.en || !entry?.isv) continue;
       isvByEnglish.set(String(entry.en).toLowerCase(), entry.isv);
     }
+    applyEnglishAliases(isvByEnglish);
   } catch {
     isvByEnglish = new Map();
   }

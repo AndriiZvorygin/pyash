@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import { buildProgram } from "../../../program.mjs";
 
 let cachedAnchorForms = null;
@@ -44,6 +45,21 @@ export async function loadAnchorWordForms() {
   try {
     const fileUrl = new URL("./anchor_words.pya", import.meta.url);
     const text = await fs.readFile(fileUrl, "utf8");
+    const program = buildProgram(text);
+    cachedAnchorForms = buildAnchorFormsFromProgram(program);
+    return cachedAnchorForms;
+  } catch (err) {
+    cachedAnchorError = err;
+    throw err;
+  }
+}
+
+export function loadAnchorWordFormsSync() {
+  if (cachedAnchorForms) return cachedAnchorForms;
+  if (cachedAnchorError) throw cachedAnchorError;
+  try {
+    const fileUrl = new URL("./anchor_words.pya", import.meta.url);
+    const text = fsSync.readFileSync(fileUrl, "utf8");
     const program = buildProgram(text);
     cachedAnchorForms = buildAnchorFormsFromProgram(program);
     return cachedAnchorForms;

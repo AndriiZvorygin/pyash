@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { applyEnglishAliases } from "./english_aliases.mjs";
 
 function sentenceToChinese(sentence) {
   const su = translateNameToChinese(sentence.su?.name);
@@ -381,6 +382,7 @@ function loadZhByEnglish() {
       if (!entry?.en || !entry?.zh) continue;
       zhByEnglish.set(String(entry.en).toLowerCase(), entry.zh);
     }
+    applyEnglishAliases(zhByEnglish);
   } catch {
     zhByEnglish = new Map();
   }
