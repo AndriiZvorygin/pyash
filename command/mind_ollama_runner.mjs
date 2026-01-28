@@ -1,7 +1,13 @@
 import fs from "node:fs";
 
 function parseArgs(argv) {
-  return { stream: argv.slice(2).includes("--stream") };
+  const args = argv.slice(2);
+  const stream = args.includes("--stream");
+  const payloadIndex = args.indexOf("--payload");
+  const payloadFileIndex = args.indexOf("--payload-file");
+  const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
+  const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
+  return { stream, payload, payloadFile };
 }
 
 function readStdin() {
@@ -97,8 +103,14 @@ async function runChat(payload) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const stdin = await readStdin();
-  if (!stdin.trim()) {
+  let stdin = await readStdin();
+  if ((!stdin || !stdin.trim()) && args.payloadFile) {
+    stdin = fs.readFileSync(args.payloadFile, "utf8");
+  }
+  if ((!stdin || !stdin.trim()) && args.payload) {
+    stdin = args.payload;
+  }
+  if (!stdin || !stdin.trim()) {
     throw new Error("mind_ollama_runner: missing request payload");
   }
   let payload = null;

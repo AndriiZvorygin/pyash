@@ -75,9 +75,10 @@ async function runCommandText(cmd, { input } = {}) {
     proc.on("error", reject);
     proc.on("close", status => resolve({ status, stdout, stderr }));
     if (input !== null && input !== undefined) {
-      proc.stdin.write(input);
+      proc.stdin.end(Buffer.from(String(input), "utf8"));
+    } else {
+      proc.stdin.end();
     }
-    proc.stdin.end();
   });
 }
 
@@ -282,6 +283,10 @@ export const signatures = [
   { signatureWords: ["be", "command", "from", "filename", "ob", "wo"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "text"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "text", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "text", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo", "to", "filename"], handler: command },
   { signatureWords: ["be", "command", "ob", "text", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "ob", "wo", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "text", "vyah", "stream"], handler: command },

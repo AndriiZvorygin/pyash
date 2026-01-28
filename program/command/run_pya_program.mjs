@@ -198,6 +198,7 @@ async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
   const full = args.includes("--full");
+  const verbose = args.includes("--verbose");
   const showResult = args.includes("--result");
   const useNewspaper = args.includes("--newspaper");
   const useAgain = args.includes("--again");
@@ -220,7 +221,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -255,7 +256,12 @@ async function main() {
   const newspaperLines = [];
   let toolCounter = 0;
   const pushNewspaper = (line) => {
-    if ((useNewspaper || useAgain) && line) newspaperLines.push(line);
+    if (!line) return;
+    if ((useNewspaper || useAgain)) newspaperLines.push(line);
+    if (verbose) {
+      // eslint-disable-next-line no-console
+      console.log(line);
+    }
   };
   const nextToolCounter = () => String(++toolCounter).padStart(6, "0");
   const emitToolEvent = (evokedSentence, resultSentence) => {

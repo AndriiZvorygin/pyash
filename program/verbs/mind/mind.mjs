@@ -208,7 +208,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
 
   // Prompt resolution: config accordingto (discourse) + call prompt/text
-  const configPrompt = configSentence?.accordingto?.name ?? null;
+  const configPromptName = configSentence?.accordingto?.name ?? null;
 
   const resolvePromptFromName = (name) => {
     if (!name) return null;
@@ -218,6 +218,36 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     if (fact.ob.num !== undefined) return String(fact.ob.num);
     if (fact.ob.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
     if (fact.ob.hollow) return "null";
+    if (fact.ob.genitive?.chain?.length) {
+      let curr =
+        typeof fact.ob.genitive.chain[0] === "string"
+          ? remember(fact.ob.genitive.chain[0])
+          : null;
+      for (const part of fact.ob.genitive.chain.slice(1)) {
+        if (curr && typeof curr === "object" && curr.name) {
+          const nextFact = remember(curr.name);
+          if (nextFact) curr = nextFact.ob ?? nextFact;
+        }
+        if (curr && typeof curr === "object") {
+          if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+            curr = curr.ob.map[part];
+          } else if (curr.ob && curr.ob[part] !== undefined) {
+            curr = curr.ob[part];
+          } else {
+            curr = curr?.[part];
+          }
+        } else {
+          curr = curr?.[part];
+        }
+      }
+      if (typeof curr === "string") return curr;
+      if (typeof curr === "number") return String(curr);
+      if (curr && typeof curr === "object") {
+        if (curr.text !== undefined) return String(curr.text);
+        if (curr.num !== undefined) return String(curr.num);
+        if (curr.boolean !== undefined) return curr.boolean ? "truth" : "lie";
+      }
+    }
     return null;
   };
   const obNamePrompt = sentence?.ob?.name && !sentence?.ob?.model
@@ -232,6 +262,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     obNamePrompt ??
     ob?.text ??
     inlineObNamePrompt;
+  const resolvedConfigPrompt = configPromptName ? (resolvePromptFromName(configPromptName) ?? configPromptName) : null;
 
   const toolMapName = sentence?.with?.name ?? null;
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
@@ -394,7 +425,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     }
   } else {
     const promptParts = [];
-    if (configPrompt) promptParts.push(configPrompt);
+    if (resolvedConfigPrompt) promptParts.push(resolvedConfigPrompt);
     const toolList = toolListFromMap(toolMapName);
     if (toolList) promptParts.push(toolList);
     if (historyMessages.length) {
@@ -539,6 +570,10 @@ export const signatures = [
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "by", "num", "for", "name", "mind", "ob", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "by", "num", "for", "name", "mind", "ob", "name", "text", "to", "name", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "by", "num", "for", "name", "mind", "ob", "text", "to", "text"], handler: mind_to_name_text },
+  { signatureWords: ["be", "write", "by", "num", "for", "name", "mind", "ob", "name", "text", "to", "text"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "name", "text", "to", "name", "text", "with", "name", "map"], handler: mind_to_name_text },
   { signatureWords: ["be", "write", "for", "name", "mind", "ob", "text", "to", "text", "with", "name", "map"], handler: mind_to_name_text },
