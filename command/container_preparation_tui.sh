@@ -271,6 +271,7 @@ else
     GPU_CHOICE="$GPU_DEFAULT"
     AUDIO_CHOICE="$AUDIO_DEFAULT"
     VNC_CHOICE="$VNC_DEFAULT"
+    echo "Using defaults: GPU=${GPU_CHOICE}, audio=${AUDIO_CHOICE}, vnc=${VNC_CHOICE}"
   else
     echo "Configure options (press Enter for defaults):"
     GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
@@ -426,7 +427,11 @@ if [[ "$has_dialog" == "yes" ]]; then
 else
   echo -e "$SUMMARY"
   echo
-  RUN_NOW=$(prompt_yes_no "$(get_text run_now)" "no")
+  read -r -p "$(get_text run_now) [y/N]: " run_now_input || true
+  case "${run_now_input:-}" in
+    [Yy]|[Yy][Ee][Ss]) RUN_NOW="yes" ;;
+    *) RUN_NOW="no" ;;
+  esac
   if [[ "$RUN_NOW" == "yes" ]]; then
     env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" AI_HOST="$OPENAI_BASE_URL_VALUE" OLLAMA_HOST="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
   fi
