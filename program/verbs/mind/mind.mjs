@@ -314,7 +314,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       return mockResponseRaw;
     };
     const messages = [];
-    if (configPrompt) messages.push({ role: "system", content: configPrompt });
+    if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
     if (toolBlock) messages.push({ role: "system", content: toolBlock });
     if (historyMessages.length) messages.push(...historyMessages);
     const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");

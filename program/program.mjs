@@ -3,7 +3,7 @@ import { parse } from "./understand/index.mjs";
 import { splitSentencesWithLines } from "./library/sentenceSplitter.mjs";
 
 export function buildProgram(source) {
-  const entries = splitSentencesWithLines(source, { includeThen: true });
+  const entries = splitSentencesWithLines(source);
   const sentences = entries
     .map(entry => entry.text.trim())
     .filter(line => line && !line.startsWith("#"))

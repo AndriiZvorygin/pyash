@@ -269,12 +269,28 @@ async function startMcpClient({ record, source }) {
 
   record.client = client;
 
+  const startTimeoutMs = Number(process.env.PYA_MCP_START_TIMEOUT_MS ?? 15000);
+  const sendWithTimeout = async (method, params, label) => {
+    if (!Number.isFinite(startTimeoutMs) || startTimeoutMs <= 0) {
+      return client.send(method, params);
+    }
+    return await Promise.race([
+      client.send(method, params),
+      new Promise((_, reject) => {
+        const timer = setTimeout(() => {
+          clearTimeout(timer);
+          reject(new Error(`mcp ${label} timeout`));
+        }, startTimeoutMs);
+      })
+    ]);
+  };
+
   try {
-    await client.send("initialize", {
+    await sendWithTimeout("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: { name: "pyash", version: "0.1.0" }
-    });
+    }, "initialize");
     if (typeof client.sendNotification === "function") {
       client.sendNotification("notifications/initialized", {});
     }
@@ -289,7 +305,7 @@ async function startMcpClient({ record, source }) {
 
   let response;
   try {
-    response = await client.send("tools/list", {});
+    response = await sendWithTimeout("tools/list", {}, "tools/list");
   } catch (err) {
     throwMcpError({
       name: "mcp defective",
