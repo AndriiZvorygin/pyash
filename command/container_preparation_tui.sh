@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STRINGS_FILE="$ROOT_DIR/command/container_preparation_text.pya"
+WORKPLACE_CONFIG="$ROOT_DIR/configure/workplace.pya"
 
 if [[ ! -f "$STRINGS_FILE" ]]; then
   echo "missing strings file: $STRINGS_FILE" >&2
@@ -172,6 +173,7 @@ VNC_DEFAULT="on"
 WORKPLACE="$ROOT_DIR"
 MINDS_DIR="$ROOT_DIR/minds"
 mkdir -p "$MINDS_DIR"
+mkdir -p "$ROOT_DIR/configure"
 
 if [[ "$has_dialog" == "yes" ]]; then
   preflight_gpu_text="$PREFLIGHT_GPU_MISSING"
@@ -335,6 +337,10 @@ fi
 COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "-f" "$OVERRIDE_FILE" "up" "--build")
 RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE} AI_HOST=${OPENAI_BASE_URL_VALUE} OLLAMA_HOST=${OPENAI_BASE_URL_VALUE}"
 SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}"
+
+{
+  echo "exists su name ai host ob text \"${OPENAI_BASE_URL_VALUE}\" be default ya"
+} > "$WORKPLACE_CONFIG"
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
   if [[ $? -eq 0 ]]; then
