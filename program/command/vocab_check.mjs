@@ -45,6 +45,16 @@ function isFileMarker(line) {
   return /^"?file"?$/i.test(line);
 }
 
+function parseBlacklist(line) {
+  const trimmed = line.trim();
+  if (!(trimmed.startsWith("[") || trimmed.startsWith("\""))) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 function extractQuotedPyashBlocks(text) {
   const blocks = [];
   let index = 0;
@@ -77,7 +87,8 @@ for (const file of files) {
   }
   for (const token of names) {
     const lines = await queryRyan(token);
-    if (lines.length === 0) {
+    const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
+    if (lines.length === 0 || blacklistValue !== null) {
       missing += 1;
       console.log(`${file}: ${token} (no suggestions)`);
       continue;

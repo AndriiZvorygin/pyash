@@ -89,6 +89,16 @@ function isFileMarker(line) {
   return /^"?file"?$/i.test(line);
 }
 
+function parseBlacklist(line) {
+  const trimmed = line.trim();
+  if (!(trimmed.startsWith("[") || trimmed.startsWith("\""))) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
 async function collectFiles(input, out) {
   const resolved = resolve(input);
   const stats = await fs.stat(resolved);
@@ -158,7 +168,12 @@ for (const file of files) {
 }
 for (const token of textTokens) {
   const lines = await queryRyan(token);
-  if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
+  const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
+  if (
+    lines.length === 0 ||
+    (lines.length === 1 && isFileMarker(lines[0])) ||
+    blacklistValue !== null
+  ) {
     missing += 1;
     if (!occurrences.has(token)) occurrences.set(token, new Set());
     occurrences.get(token).add("input");
@@ -170,10 +185,18 @@ for (const token of textTokens) {
 if (occurrences.size > 0) {
   for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const lines = await queryRyan(token);
-    const suggestionList = lines.filter(line => !isFileMarker(line));
+    const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
+    const suggestionList = lines.filter(line => !isFileMarker(line) && parseBlacklist(line) === null);
     const preview = suggestionList.slice(0, 4).join(" | ");
-    const fileList = [...filesForToken].map(name => name.replace(`${process.cwd()}/`, ""));
-    console.log(`${token}: ${preview || "no suggestions"} (${fileList.join(", ")})`);
+    const fileList = [...filesForToken]
+      .map(name => name.replace(`${process.cwd()}/`, ""))
+      .filter(name => name && name !== "input");
+    const locationSuffix = fileList.length > 0 ? ` (${fileList.join(", ")})` : "";
+    if (blacklistValue !== null) {
+      console.log(`${token} blocked, instead: ${blacklistValue}.${locationSuffix}`);
+    } else {
+      console.log(`${token}: ${preview || "no suggestions"}${locationSuffix}`);
+    }
   }
 }
 
