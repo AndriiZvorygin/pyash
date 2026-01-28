@@ -13,6 +13,7 @@ services:
     ports:
       - "5900:5900"
       - "6080:6080"
+    command: ["/workplace/container/run_vnc_novnc.sh"]
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
     extra_hosts:
