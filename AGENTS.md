@@ -17,6 +17,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node --test quiz/core.test.mjs` runs a targeted file while iterating.
 - `node program/main.mjs` starts the REPL to exercise new verbs interactively.
 - `node program/command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
+- `node program/command/vocab_suggest.mjs examples/pyash` checks files for non-Pyash vocabulary and suggests replacements; use `--text "word"` before naming new verbs, files, or directories.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions
