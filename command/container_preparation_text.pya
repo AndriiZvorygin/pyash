@@ -1,0 +1,12 @@
+su name container preparation text be map def
+  su name title ob text "Pyash container preparation" be text ya
+  su name intro ob text "This wizard prepares a Docker environment for Pyash." be text ya
+  su name docker_missing ob text "Docker is not installed. Please install Docker and re-run this preparation." be text ya
+  su name docker_not_running ob text "Docker is installed but not running. Start the Docker service and re-run this preparation." be text ya
+  su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
+  su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
+  su name enable_vnc ob text "Expose VNC/noVNC ports (5900/6080)?" be text ya
+  su name build_cmd ob text "Build command:" be text ya
+  su name run_cmd ob text "Run command:" be text ya
+  su name run_now ob text "Run build + container now?" be text ya
+prah

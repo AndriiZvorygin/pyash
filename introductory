@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if command -v dialog >/dev/null 2>&1; then
+  CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 4 \
+    1 "Container preparation (Docker)" \
+    2 "Local quick start (run a demo)" \
+    3 "Show commands only") || exit 1
+else
+  CHOICE=3
+fi
+
+case "$CHOICE" in
+  1)
+    exec "$ROOT_DIR/command/container_preparation_tui.sh"
+    ;;
+  2)
+    echo "Running demo: ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo"
+    exec "$ROOT_DIR/run" examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
+    ;;
+  *)
+    cat <<'TEXT'
+Container prep:
+  ./command/container_preparation_tui.sh
+
+Docker compose:
+  docker compose -f container/orchestrate.yaml up --build
+
+Local demo:
+  ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
+TEXT
+    ;;
+esac

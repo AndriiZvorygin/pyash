@@ -7,7 +7,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
-import { resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 import { mapSentenceToPyash } from "./json_map.mjs";
 import { jsonObjectFromMapSentence } from "./json_map_export.mjs";
 import { csvTextFromMapName } from "./write_csv.mjs";
@@ -296,6 +296,27 @@ export default async function write(sentence, { remember: rememberFn = remember 
   const target = sentence?.to?.filename;
   const targetName = sentence?.to?.name ?? sentence?.to?.wo ?? sentence?.to?.text;
   const isKeyboard = targetName === "keyboard";
+  if (isKeyboard) {
+    const enabled = resolveConfigBool("keyboard enabled", { rememberFn });
+    if (enabled === false) {
+      throwErrorSentence({
+        name: "write keyboard disabled",
+        message: "write keyboard disabled (set keyboard enabled to truth to allow)",
+        from: { name: "write" },
+        raw: { sentence }
+      });
+    }
+    const hasDisplay = Boolean(process.env.DISPLAY);
+    const hasX11 = fsSync.existsSync("/tmp/.X11-unix");
+    if (!hasDisplay && !hasX11) {
+      throwErrorSentence({
+        name: "write keyboard headless",
+        message: "write keyboard unavailable (headless: DISPLAY not set and /tmp/.X11-unix missing)",
+        from: { name: "write" },
+        raw: { sentence }
+      });
+    }
+  }
   if (targetName && !isKeyboard && aspectKey !== "stream") {
     throwErrorSentence({
       name: "write target invalid",

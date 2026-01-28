@@ -1,0 +1,19 @@
+version: "3.8"
+services:
+  pyash:
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    image: pyash-dev
+    working_dir: /workplace
+    volumes:
+      - ..:/workplace
+    stdin_open: true
+    tty: true
+    ports:
+      - "5900:5900"
+      - "6080:6080"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - host.docker.internal:host-gateway

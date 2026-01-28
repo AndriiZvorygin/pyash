@@ -11,6 +11,11 @@ Commands:
 ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
 ```
 
+Optional guided intro (Docker + local):
+```bash
+./introductory
+```
+
 Outputs:
 - Run newspaper: `newspaper/mind-tool-demo.pya`
 - Artifacts root: `artifacts/sha256/`
