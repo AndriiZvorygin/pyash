@@ -98,7 +98,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       const updatedTloh = registerValue(state.currentEvokeRef.fromindex, { state, memory });
       const updatedUntil = registerValue(state.currentEvokeRef.toindex ?? currentUntil, { state, memory });
 
-      const effectiveTloh = updatedTloh ?? currentTloh;
+      const effectiveTloh = updatedTloh ?? currentIndex;
       const effectiveUntil = updatedUntil ?? currentUntil;
 
       const shouldStop = effectiveUntil != null ? effectiveTloh === effectiveUntil : effectiveTloh === 0;
