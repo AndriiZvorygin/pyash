@@ -340,6 +340,10 @@ SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_c
 
 {
   echo "exists su name ai host ob text \"${OPENAI_BASE_URL_VALUE}\" be default ya"
+  echo "exists su name stream stdout ob bool lie be default ya"
+  echo "exists su name keyboard enabled ob bool truth be default ya"
+  echo "exists su name ffmpeg input ob text \"pulse\" be default ya"
+  echo "exists su name ffmpeg input device ob text \"default\" be default ya"
 } > "$WORKPLACE_CONFIG"
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
