@@ -12,7 +12,8 @@ export function handleThisBinding(sentence, state) {
   const targetName = su?.name === "this" ? ob?.name : su?.name;
   if (!targetName) throw new Error("this binding requires a target name");
 
-  return { ...sentence, su: { name: targetName }, ob: resolved, mood: "ya" };
+  const normalized = typeof resolved === "number" ? { num: resolved } : resolved;
+  return { ...sentence, su: { name: targetName }, ob: normalized, mood: "ya" };
 }
 
 export function handleReturn(sentence, state, remember) {
