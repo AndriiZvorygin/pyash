@@ -7,6 +7,9 @@ quiz/sandpit/
 configure/secret.pya
 configure/workplace.pya
 container/compose.override.yaml
+.bash_history
+.cache/
+.npm/
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
