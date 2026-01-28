@@ -59,6 +59,10 @@ export function renderSayValue(ob = {}, { rememberFn } = {}) {
     if (fact?.ob?.num !== undefined) return fact.ob.num;
     if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
     if (fact?.ob?.hollow) return "null";
+    if (fact?.ob?.genitive) {
+      const v = resolveGenitive(fact.ob.genitive, { rememberFn });
+      if (v !== undefined) return v;
+    }
   }
   if (ob.name) return ob.name;
   return "";

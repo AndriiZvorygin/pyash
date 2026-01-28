@@ -33,7 +33,8 @@ One mind or multiple minds may be used; both qualify as RPT-1 because the task i
 
 A **Re-entry Cycle** is a bounded, deterministic outer cycle implemented as a ceremony (or refinery)
 that repeats a fixed attempt ceremony. Each attempt follows the same stages and then loops back to the
-supervisor, which advances the index and invokes the next attempt.
+supervisor, which advances the index and invokes the next attempt. The **revised output of each attempt**
+becomes the **next task input**, so the cycle is a pipeline rather than parallel drafts.
 
 ---
 
@@ -89,13 +90,38 @@ Revised candidate:
 su name re-entry cycle be ceremony def
   ; evoker provides ob text <task>, fromindex <start>, toindex <limit>
 
-  fromindex 0 toindex toindex of this
+  to name text latest
   be re-entry attempt do
+  su name task ob text of latest be text ya
 prah
 ```
 
 After each `re-entry attempt` completes, control returns to the supervisor, `fromindex` advances, and
 the attempt ceremony is invoked again. The cycle ends when the bound is reached (or earlier by runner policy).
+
+---
+
+## Mind configuration (author/critic/judge)
+
+The author, critic, and judge are **mind configurations**. Define them with `be mind` sentences and
+set their model + system prompt via `as` and `accordingto`:
+
+```pyash
+exists su name author prompt ob text "Draft: be concise and follow the task." be text ya
+exists su name critic prompt ob text "Critique: list issues + patch plan." be text ya
+exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
+
+exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompt ya
+exists su name critic be mind as name "qwen3-vl:8b-instruct" accordingto name critic prompt ya
+exists su name judge be mind as name "qwen3-vl:8b-instruct" accordingto name judge prompt ya
+```
+
+These can live in `configure/default.pya` for global defaults or inline in a specific program.
+
+To keep each stage strictly pipeline-based (no dialogue carryover), set a history window of zero
+via `by num 0` on the mind calls (see the attempt example below).
+
+---
 
 ---
 
@@ -135,29 +161,32 @@ prah
 ## Single attempt (one pass)
 
 ```pyash
-su name re-entry attempt be ceremony def
+su name re-entry attempt to name text output be ceremony def
 
   su name task ob text ob of this ya
 
-  ; draft
+  ; draft (task -> author -> draft)
   su name draft out
   ob text task
   for name author
   to name draft out
+  by num 0
   be write do
 
-  ; critique
+  ; critique (draft -> critic -> critique)
   su name critique out
   ob text draft out
   for name critic
   to name critique out
+  by num 0
   be write do
 
-  ; revise
+  ; revise (critique -> author -> revised)
   su name revised out
   ob text critique out
   for name author
   to name revised out
+  by num 0
   be write do
 
   ; judge (optional)

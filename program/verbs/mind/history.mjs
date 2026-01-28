@@ -21,6 +21,7 @@ export function appendLog(dialogue, entry) {
 
 export function buildHistoryMessages(dialogue, { window = 8 } = {}) {
   if (!dialogue) return [];
+  if (window <= 0) return [];
   const log = mindLogs.get(dialogue) || [];
   const max = window * 2;
   return log.slice(-max);
