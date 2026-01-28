@@ -9,7 +9,11 @@ su name container preparation text be map def
   su name preflight_gpu_missing ob text "GPU not detected" be text ya
   su name preflight_ram ob text "RAM (GiB)" be text ya
   su name preflight_disk ob text "Free disk (GiB)" be text ya
+  su name preflight_vram ob text "VRAM (GiB)" be text ya
+  su name preflight_cores ob text "CPU cores" be text ya
+  su name preflight_bogomips ob text "Bogomips" be text ya
   su name preflight_note ob text "If these are low, expect slower builds and model runs." be text ya
+  su name preflight_guidance ob text "Guidance: ~4–8 GB VRAM runs 7B class; ~12–16 GB for 13B; >=24 GB for 34B+. CPU-only runs are much slower; whisper base/medium are OK, large may be slow." be text ya
   su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
   su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
   su name enable_vnc ob text "Expose VNC/noVNC ports (5900/6080)?" be text ya

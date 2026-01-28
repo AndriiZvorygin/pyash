@@ -31,7 +31,11 @@ PREFLIGHT_GPU=$(get_text preflight_gpu)
 PREFLIGHT_GPU_MISSING=$(get_text preflight_gpu_missing)
 PREFLIGHT_RAM=$(get_text preflight_ram)
 PREFLIGHT_DISK=$(get_text preflight_disk)
+PREFLIGHT_VRAM=$(get_text preflight_vram)
+PREFLIGHT_CORES=$(get_text preflight_cores)
+PREFLIGHT_BOGOMIPS=$(get_text preflight_bogomips)
 PREFLIGHT_NOTE=$(get_text preflight_note)
+PREFLIGHT_GUIDANCE=$(get_text preflight_guidance)
 
 has_dialog="no"
 if command -v dialog >/dev/null 2>&1; then
@@ -108,6 +112,24 @@ if [[ -n "${disk_kb:-}" ]]; then
   disk_gib=$((disk_kb / 1024 / 1024))
 fi
 
+cpu_cores="unknown"
+if command -v nproc >/dev/null 2>&1; then
+  cpu_cores=$(nproc)
+fi
+
+bogomips="unknown"
+if [[ -r /proc/cpuinfo ]]; then
+  bogomips=$(awk -F: '/bogomips/ {sum+=$2} END {if (sum>0) printf "%.0f", sum}' /proc/cpuinfo)
+fi
+
+vram_gib="unknown"
+if command -v nvidia-smi >/dev/null 2>&1; then
+  vram_mib=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | tr -d ' ')
+  if [[ -n "${vram_mib:-}" ]]; then
+    vram_gib=$((vram_mib / 1024))
+  fi
+fi
+
 GPU_DEFAULT="off"
 if command -v nvidia-smi >/dev/null 2>&1; then
   GPU_DEFAULT="on"
@@ -129,7 +151,7 @@ if [[ "$has_dialog" == "yes" ]]; then
   if [[ "$GPU_DEFAULT" == "on" ]]; then
     preflight_gpu_text="$PREFLIGHT_GPU"
   fi
-  dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_RAM: $mem_gib\n$PREFLIGHT_DISK: $disk_gib\n\n$PREFLIGHT_NOTE" 12 70
+  dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_VRAM: $vram_gib\n$PREFLIGHT_RAM: $mem_gib\n$PREFLIGHT_DISK: $disk_gib\n$PREFLIGHT_CORES: $cpu_cores\n$PREFLIGHT_BOGOMIPS: $bogomips\n\n$PREFLIGHT_GUIDANCE\n$PREFLIGHT_NOTE" 16 74
   GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
@@ -142,8 +164,12 @@ else
   else
     echo "$PREFLIGHT_GPU_MISSING"
   fi
+  echo "$PREFLIGHT_VRAM: $vram_gib"
   echo "$PREFLIGHT_RAM: $mem_gib"
   echo "$PREFLIGHT_DISK: $disk_gib"
+  echo "$PREFLIGHT_CORES: $cpu_cores"
+  echo "$PREFLIGHT_BOGOMIPS: $bogomips"
+  echo "$PREFLIGHT_GUIDANCE"
   echo "$PREFLIGHT_NOTE"
   echo
   GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
