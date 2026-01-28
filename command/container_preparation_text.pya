@@ -6,6 +6,7 @@ su name container preparation text be map def
   su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
   su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
   su name enable_vnc ob text "Expose VNC/noVNC ports (5900/6080)?" be text ya
+  su name audio_missing ob text "Audio was requested but PulseAudio files were not found. Ensure /run/user/<uid>/pulse/native and ~/.config/pulse/cookie exist." be text ya
   su name build_cmd ob text "Build command:" be text ya
   su name run_cmd ob text "Run command:" be text ya
   su name run_now ob text "Run build + container now?" be text ya
