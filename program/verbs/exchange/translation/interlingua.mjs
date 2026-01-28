@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { applyEnglishAliases } from "./english_aliases.mjs";
 
 function sentenceToInterlingua(sentence) {
   const su = translateNameToInterlingua(sentence.su?.name);
@@ -386,6 +387,7 @@ function loadIaByEnglish() {
       if (!entry?.en || !entry?.ia) continue;
       iaByEnglish.set(String(entry.en).toLowerCase(), entry.ia);
     }
+    applyEnglishAliases(iaByEnglish);
   } catch {
     iaByEnglish = new Map();
   }

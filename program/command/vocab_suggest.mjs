@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildProgram } from "../program.mjs";
 import { queryRyanLines } from "./ryan.mjs";
+import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
 
 const args = process.argv.slice(2);
 const inputs = [];
@@ -99,6 +100,46 @@ function parseBlacklist(line) {
   }
 }
 
+function normalizeGloss(text) {
+  let value = text.trim();
+  value = value.replace(/\s+grammar$/, "");
+  const phoneticIndex = value.indexOf(" /");
+  if (phoneticIndex !== -1 && value.endsWith("/")) {
+    value = value.slice(0, phoneticIndex).trim();
+  }
+  return value;
+}
+
+function getGlossFromLine(line) {
+  if (!line || line.startsWith("#define")) return null;
+  const match = line.match(/^(\S+)\s+(\S+)\s+(.+)$/);
+  if (!match) return null;
+  return normalizeGloss(match[3]);
+}
+
+function getPyashFromLine(line) {
+  if (!line || line.startsWith("#define")) return null;
+  const match = line.match(/^(\S+)\s+(\S+)\s+(.+)$/);
+  if (!match) return null;
+  return match[1];
+}
+
+function isExactTokenMatch(token, lines) {
+  const lower = String(token ?? "").toLowerCase();
+  if (!lower) return false;
+  if (resolveEnglishAlias(lower) !== lower) return true;
+  for (const line of lines) {
+    if (!line) continue;
+    if (isFileMarker(line)) continue;
+    if (parseBlacklist(line) !== null) continue;
+    const pyash = getPyashFromLine(line);
+    if (pyash && pyash.toLowerCase() === lower) return true;
+    const gloss = getGlossFromLine(line);
+    if (gloss && gloss.toLowerCase() === lower) return true;
+  }
+  return false;
+}
+
 async function collectFiles(input, out) {
   const resolved = resolve(input);
   const stats = await fs.stat(resolved);
@@ -164,6 +205,11 @@ for (const file of files) {
       occurrences.get(token).add(file);
       continue;
     }
+    if (!isExactTokenMatch(token, lines)) {
+      missing += 1;
+      if (!occurrences.has(token)) occurrences.set(token, new Set());
+      occurrences.get(token).add(file);
+    }
   }
 }
 for (const token of textTokens) {
@@ -172,7 +218,8 @@ for (const token of textTokens) {
   if (
     lines.length === 0 ||
     (lines.length === 1 && isFileMarker(lines[0])) ||
-    blacklistValue !== null
+    blacklistValue !== null ||
+    !isExactTokenMatch(token, lines)
   ) {
     missing += 1;
     if (!occurrences.has(token)) occurrences.set(token, new Set());
@@ -186,7 +233,9 @@ if (occurrences.size > 0) {
   for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-    const suggestionList = lines.filter(line => !isFileMarker(line) && parseBlacklist(line) === null);
+    const suggestionList = lines.filter(
+      line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
+    );
     const preview = suggestionList.slice(0, 4).join(" | ");
     const fileList = [...filesForToken]
       .map(name => name.replace(`${process.cwd()}/`, ""))
