@@ -39,6 +39,9 @@ ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
 
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
 PULSE_COOKIE="$HOME/.config/pulse/cookie"
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+HOST_HOME="/workplace"
 
 ports=()
 devices=()
@@ -61,15 +64,16 @@ if [[ "${audio_enabled:-lie}" == "truth" ]]; then
   if [[ -S "$PULSE_SOCKET" && -f "$PULSE_COOKIE" ]]; then
     devices+=("/dev/snd:/dev/snd")
     envs+=("PULSE_SERVER=unix:${PULSE_SOCKET}")
+    envs+=("XDG_CONFIG_HOME=${HOST_HOME}/.config")
     volumes+=("/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
-    volumes+=("${PULSE_COOKIE}:/root/.config/pulse/cookie")
+    volumes+=("${PULSE_COOKIE}:${HOST_HOME}/.config/pulse/cookie")
   else
     echo "Audio enabled, but PulseAudio files missing. Skipping audio mounts." >&2
   fi
 fi
 
 if [[ -d "$HOME/.codex" ]]; then
-  volumes+=("${HOME}/.codex:/root/.codex")
+  volumes+=("${HOME}/.codex:${HOST_HOME}/.codex")
   volumes+=("${HOME}/.codex:/workplace/.codex")
   envs+=("CODEX_HOME=/workplace/.codex")
 fi
@@ -77,6 +81,7 @@ fi
 {
   echo "services:"
   echo "  pyash:"
+  echo "    user: \"${HOST_UID}:${HOST_GID}\""
   if [[ ${#ports[@]} -gt 0 ]]; then
     echo "    ports:"
     for port in "${ports[@]}"; do
@@ -100,6 +105,7 @@ fi
   fi
   if [[ ${#envs[@]} -gt 0 ]]; then
     echo "    environment:"
+    echo "      - HOME=${HOST_HOME}"
     for env in "${envs[@]}"; do
       echo "      - ${env}"
     done
