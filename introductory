@@ -18,8 +18,8 @@ fi
 if [[ "$has_dialog" == "yes" ]]; then
   if [[ "$container_running" == "yes" ]]; then
     CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 5 \
-      1 "Container preparation (Docker)" \
-      2 "Enter running container (pyash)" \
+      1 "Enter running container (pyash)" \
+      2 "Container preparation (Docker)" \
       3 "Local quick start (run a demo)" \
       4 "Show commands only") || exit 1
   else
@@ -30,9 +30,11 @@ if [[ "$has_dialog" == "yes" ]]; then
   fi
 else
   echo "Pyash introduction"
-  echo "1) Container preparation (Docker)"
   if [[ "$container_running" == "yes" ]]; then
-    echo "2) Enter running container (pyash)"
+    echo "1) Enter running container (pyash)"
+    echo "2) Container preparation (Docker)"
+  else
+    echo "1) Container preparation (Docker)"
   fi
   echo "3) Local quick start (run a demo)"
   echo "4) Show commands only"
@@ -45,7 +47,7 @@ case "$CHOICE" in
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
   2)
-    exec docker exec -it pyash bash
+    exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
   3)
     echo "Running demo: ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo"
@@ -64,6 +66,6 @@ Local demo:
 TEXT
     ;;
   *)
-    exec "$ROOT_DIR/command/container_preparation_tui.sh"
+    exec docker exec -it pyash bash
     ;;
 esac
