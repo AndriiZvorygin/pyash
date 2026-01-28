@@ -13,6 +13,6 @@ services:
     stdin_open: true
     tty: true
     environment:
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://host.docker.internal:11434}
+      - AI_HOST=${AI_HOST:-http://host.docker.internal:11434}
     extra_hosts:
       - host.docker.internal:host-gateway
