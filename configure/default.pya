@@ -5,6 +5,7 @@ from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
+exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya

@@ -43,6 +43,7 @@ OPENAI_CHOICE_HOST=$(get_text openai_choice_host)
 OPENAI_CHOICE_LOCAL=$(get_text openai_choice_local)
 OPENAI_CHOICE_VLLM=$(get_text openai_choice_vllm)
 OPENAI_CHOICE_CUSTOM=$(get_text openai_choice_custom)
+OPENAI_AUTODETECT=$(get_text openai_autodetect)
 
 has_dialog="no"
 if command -v dialog >/dev/null 2>&1; then
@@ -183,6 +184,13 @@ if [[ "$has_dialog" == "yes" ]]; then
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
 
   OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
+  AUTODETECT_CHOICE=$(prompt_yes_no_dialog "$OPENAI_AUTODETECT" "yes")
+  if [[ "$AUTODETECT_CHOICE" == "yes" ]]; then
+    autodetected=$(autodetect_openai_base || true)
+    if [[ -n "${autodetected:-}" ]]; then
+      OPENAI_BASE_URL_VALUE="$autodetected"
+    fi
+  fi
   OPENAI_CHOICE=$(dialog --stdout --title "$OPENAI_TITLE" --menu "$OPENAI_INTRO" 12 70 4 \
     1 "$OPENAI_CHOICE_HOST" \
     2 "$OPENAI_CHOICE_LOCAL" \
@@ -196,7 +204,7 @@ if [[ "$has_dialog" == "yes" ]]; then
       OPENAI_BASE_URL_VALUE=$(dialog --stdout --title "$OPENAI_TITLE" --inputbox "$OPENAI_HOST_PROMPT\n[$OPENAI_DEFAULT]" 8 70) || true
       OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}"
       ;;
-    *) OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT" ;;
+    *) OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}" ;;
   esac
 else
   echo "$TITLE"
@@ -220,6 +228,13 @@ else
   VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
 
   OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
+  AUTODETECT_CHOICE=$(prompt_yes_no "$OPENAI_AUTODETECT" "yes")
+  if [[ "$AUTODETECT_CHOICE" == "yes" ]]; then
+    autodetected=$(autodetect_openai_base || true)
+    if [[ -n "${autodetected:-}" ]]; then
+      OPENAI_BASE_URL_VALUE="$autodetected"
+    fi
+  fi
   echo "$OPENAI_INTRO"
   echo "1) $OPENAI_CHOICE_HOST"
   echo "2) $OPENAI_CHOICE_LOCAL"
@@ -236,7 +251,7 @@ else
       read -r openai_custom || true
       OPENAI_BASE_URL_VALUE="${openai_custom:-$OPENAI_DEFAULT}"
       ;;
-    *) OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT" ;;
+    *) OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}" ;;
   esac
 fi
 
@@ -318,17 +333,48 @@ fi
 } > "$OVERRIDE_FILE"
 
 COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "-f" "$OVERRIDE_FILE" "up" "--build")
+RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE} AI_HOST=${OPENAI_BASE_URL_VALUE} OLLAMA_HOST=${OPENAI_BASE_URL_VALUE}"
 SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}"
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
   if [[ $? -eq 0 ]]; then
-    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
+    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" AI_HOST="$OPENAI_BASE_URL_VALUE" OLLAMA_HOST="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
   fi
 else
   echo -e "$SUMMARY"
   echo
   RUN_NOW=$(prompt_yes_no "$(get_text run_now)" "no")
   if [[ "$RUN_NOW" == "yes" ]]; then
-    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
+    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" AI_HOST="$OPENAI_BASE_URL_VALUE" OLLAMA_HOST="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
   fi
 fi
+detect_reachable_base() {
+  local base="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 1 "${base}/v1/models" >/dev/null 2>&1 && echo "$base" && return
+    curl -fsS --max-time 1 "${base}/api/tags" >/dev/null 2>&1 && echo "$base" && return
+  fi
+}
+
+autodetect_openai_base() {
+  local candidates=(
+    "http://host.docker.internal:11434"
+    "http://127.0.0.1:11434"
+    "http://localhost:11434"
+    "http://127.0.0.1:8000"
+    "http://localhost:8000"
+  )
+  local gw
+  gw=$(ip route 2>/dev/null | awk '/default/ {print $3}' | head -n1)
+  if [[ -n "${gw:-}" ]]; then
+    candidates+=("http://${gw}:11434" "http://${gw}:8000")
+  fi
+  for base in "${candidates[@]}"; do
+    local hit
+    hit=$(detect_reachable_base "$base" || true)
+    if [[ -n "${hit:-}" ]]; then
+      echo "$hit"
+      return
+    fi
+  done
+}
