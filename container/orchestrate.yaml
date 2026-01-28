@@ -15,5 +15,6 @@ services:
     environment:
       - AI_HOST=${AI_HOST:-http://host.docker.internal:11434}
       - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     extra_hosts:
       - host.docker.internal:host-gateway
