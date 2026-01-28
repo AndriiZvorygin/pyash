@@ -235,8 +235,7 @@ else
   echo "$PREFLIGHT_GUIDANCE $guidance_text"
   echo "$PREFLIGHT_NOTE"
   echo
-  echo "Press Enter to accept defaults for GPU/audio/VNC, or type 'custom' to edit."
-  read -r quick_choice || true
+  read -r -p "Press Enter to accept defaults for GPU/audio/VNC, or type 'custom' to edit: " quick_choice || true
   if [[ -z "${quick_choice:-}" ]]; then
     GPU_CHOICE="$GPU_DEFAULT"
     AUDIO_CHOICE="$AUDIO_DEFAULT"
