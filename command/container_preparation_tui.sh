@@ -50,7 +50,9 @@ OPENAI_DETECTED=$(get_text openai_detected)
 OPENAI_DETECTED_NONE=$(get_text openai_detected_none)
 
 has_dialog="no"
-if command -v dialog >/dev/null 2>&1; then
+if [[ "${PYA_NO_DIALOG:-}" == "1" ]]; then
+  has_dialog="no"
+elif command -v dialog >/dev/null 2>&1; then
   has_dialog="yes"
 fi
 
