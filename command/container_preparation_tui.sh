@@ -217,7 +217,8 @@ if [[ "$has_dialog" == "yes" ]]; then
     preflight_gpu_text="$PREFLIGHT_GPU"
   fi
   dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_VRAM: $vram_gib; $PREFLIGHT_RAM: $mem_gib; $PREFLIGHT_DISK: $disk_gib; $PREFLIGHT_CORES: $cpu_cores; $PREFLIGHT_BOGOMIPS: $bogomips\n\n$PREFLIGHT_GUIDANCE $guidance_text\n$PREFLIGHT_NOTE" 14 74
-  dialog --clear
+  dialog --title "$TITLE" --infobox "Loading options..." 3 40
+  sleep 0.2
   GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
