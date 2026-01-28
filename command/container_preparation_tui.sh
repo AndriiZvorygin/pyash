@@ -338,12 +338,31 @@ COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "-f"
 RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE} AI_HOST=${OPENAI_BASE_URL_VALUE} OLLAMA_HOST=${OPENAI_BASE_URL_VALUE}"
 SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}"
 
+gpu_enabled_value="lie"
+if [[ "$GPU_CHOICE" == "yes" ]]; then
+  gpu_enabled_value="truth"
+fi
+audio_enabled_value="lie"
+if [[ "$AUDIO_CHOICE" == "yes" ]]; then
+  audio_enabled_value="truth"
+fi
+vnc_enabled_value="lie"
+if [[ "$VNC_CHOICE" == "yes" ]]; then
+  vnc_enabled_value="truth"
+fi
+
 {
-  echo "exists su name ai host ob text \"${OPENAI_BASE_URL_VALUE}\" be default ya"
-  echo "exists su name stream stdout ob bool lie be default ya"
-  echo "exists su name keyboard enabled ob bool truth be default ya"
-  echo "exists su name ffmpeg input ob text \"pulse\" be default ya"
-  echo "exists su name ffmpeg input device ob text \"default\" be default ya"
+  echo "su name workplace config be map def"
+  echo "  su name ai host ob text \"${OPENAI_BASE_URL_VALUE}\" ya"
+  echo "  su name stream stdout ob bool lie ya"
+  echo "  su name keyboard enabled ob bool truth ya"
+  echo "  su name ffmpeg input ob text \"pulse\" ya"
+  echo "  su name ffmpeg input device ob text \"default\" ya"
+  echo "  su name gpu enabled ob bool ${gpu_enabled_value} ya"
+  echo "  su name audio enabled ob bool ${audio_enabled_value} ya"
+  echo "  su name vnc enabled ob bool ${vnc_enabled_value} ya"
+  echo "  su name minds directory ob text \"/minds\" ya"
+  echo "prah"
 } > "$WORKPLACE_CONFIG"
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
