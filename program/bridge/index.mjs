@@ -98,6 +98,14 @@ function validateCeremonySequenceDeps(name) {
 
 export async function interpret(sentence) {
   if (!sentence) return;
+  if (state.pendingCondition != null && sentence.mood !== "then") {
+    const allowed = state.pendingCondition === true;
+    state.pendingCondition = null;
+    if (!allowed) {
+      state.lastCondition = true;
+      return { skipped: true };
+    }
+  }
   applyEnvDefaults({ rememberFn: remember, doRememberFn: doRemember });
   if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
   if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;

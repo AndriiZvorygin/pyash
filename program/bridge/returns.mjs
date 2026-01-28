@@ -1,4 +1,5 @@
 import { resolveThisValue } from "../library/thisBinding.mjs";
+import { resolveGenitiveValue } from "./sandpit.mjs";
 
 export function handleThisBinding(sentence, state) {
   const { su, ob } = sentence;
@@ -19,6 +20,7 @@ export function handleReturn(sentence, state, remember) {
 
   const sourceName = sentence?.ret?.name || sentence?.ob?.name || sentence?.su?.name;
   let merged = { ...state.currentEvokeRef };
+  const retRole = sentence?.ret?.role;
 
   if (sourceName) {
     const fact = remember(sourceName);
@@ -34,6 +36,16 @@ export function handleReturn(sentence, state, remember) {
     };
   } else if (sentence.ob !== undefined) {
     merged = { ...merged, ob: sentence.ob };
+  }
+
+  if (retRole) {
+    let roleValue = sentence.ret?.num;
+    if (roleValue == null && sentence.ret?.genitive) {
+      roleValue = resolveGenitiveValue(sentence.ret.genitive, { state, memory: { remember } });
+    }
+    if (roleValue != null) {
+      merged[retRole] = typeof roleValue === "number" ? { num: roleValue } : roleValue;
+    }
   }
 
   if (sentence.to) merged.to = sentence.to;

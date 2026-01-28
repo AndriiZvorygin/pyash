@@ -37,7 +37,7 @@ When an evoker includes `fromindex`:
 ## 3) How ceremonies interact
 
 * To steer the loop, body sentences update the evoker via `this`:
-  * `this fromindex num 0 ret` stops immediately.
+  * `this fromindex num of toindex of this ret` stops immediately (role return updates the evoker).
   * `this fromindex num 1 ya` cancels the default decrement (net no change if
     the supervisor would subtract 1).
   * `this toindex num 10 ya` reshapes the goal mid-loop.

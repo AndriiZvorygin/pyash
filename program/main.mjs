@@ -15,7 +15,7 @@ import { sentenceToPyash } from "./beautiful.mjs";
 async function loadConfigFile({ configPath, interpretFn }) {
   try {
     const raw = await fs.readFile(configPath, "utf8");
-    const lines = splitSentencesWithLines(raw);
+    const lines = splitSentencesWithLines(raw, { includeThen: true });
     for (const entry of lines) {
       const trimmed = entry.text.trim();
       if (!trimmed) continue;
@@ -73,7 +73,7 @@ async function repl() {
 
   const processBlock = async (block) => {
     if (block.trim() === ".") return "end";
-    const sentences = splitSentencesWithLines(block);
+    const sentences = splitSentencesWithLines(block, { includeThen: true });
 
     for (const entry of sentences) {
       const trimmed = entry.text.trim();

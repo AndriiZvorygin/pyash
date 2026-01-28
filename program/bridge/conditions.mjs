@@ -30,5 +30,8 @@ export async function handleCondition(sentence, { state, remember }) {
 
   const truth = await fn({ su: subjValue ?? ob, from: fromValue });
   state.lastCondition = truth;
+  if (!sentence.consequence && !state.executingBody) {
+    state.pendingCondition = truth;
+  }
   return { condition: truth };
 }
