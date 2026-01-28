@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WORKPLACE_CONFIG="$ROOT_DIR/configure/workplace.pya"
-OVERRIDE_FILE="/tmp/pyash-compose.override.yaml"
+OVERRIDE_FILE="$ROOT_DIR/container/compose.override.yaml"
 
 get_map_value() {
   local key="$1"
@@ -26,9 +26,6 @@ get_map_value() {
 }
 
 ai_host="$(get_map_value "ai host")"
-gpu_enabled="$(get_map_value "gpu enabled")"
-audio_enabled="$(get_map_value "audio enabled")"
-vnc_enabled="$(get_map_value "vnc enabled")"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -37,86 +34,13 @@ fi
 ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"
 ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
 
-PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
-PULSE_COOKIE="$HOME/.config/pulse/cookie"
-HOST_UID="$(id -u)"
-HOST_GID="$(id -g)"
-HOST_HOME="/workplace"
+export PYASH_UID="$(id -u)"
+export PYASH_GID="$(id -g)"
+export PYASH_PULSE_DIR="/run/user/${PYASH_UID}/pulse"
+export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
+export PYASH_CODEX_DIR="$HOME/.codex"
 
-ports=()
-devices=()
-volumes=()
-envs=()
-command_line=""
-device_requests_enabled="no"
-
-if [[ "${vnc_enabled:-lie}" == "truth" ]]; then
-  ports+=("\"5900:5900\"")
-  ports+=("\"6080:6080\"")
-  command_line='["/workplace/container/run_vnc_novnc.sh"]'
-fi
-
-if [[ "${gpu_enabled:-lie}" == "truth" ]]; then
-  device_requests_enabled="yes"
-fi
-
-if [[ "${audio_enabled:-lie}" == "truth" ]]; then
-  if [[ -S "$PULSE_SOCKET" && -f "$PULSE_COOKIE" ]]; then
-    devices+=("/dev/snd:/dev/snd")
-    envs+=("PULSE_SERVER=unix:${PULSE_SOCKET}")
-    envs+=("XDG_CONFIG_HOME=${HOST_HOME}/.config")
-    volumes+=("/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
-    volumes+=("${PULSE_COOKIE}:${HOST_HOME}/.config/pulse/cookie")
-  else
-    echo "Audio enabled, but PulseAudio files missing. Skipping audio mounts." >&2
-  fi
-fi
-
-if [[ -d "$HOME/.codex" ]]; then
-  volumes+=("${HOME}/.codex:${HOST_HOME}/.codex")
-  volumes+=("${HOME}/.codex:/workplace/.codex")
-  envs+=("CODEX_HOME=/workplace/.codex")
-fi
-
-{
-  echo "services:"
-  echo "  pyash:"
-  echo "    user: \"${HOST_UID}:${HOST_GID}\""
-  if [[ ${#ports[@]} -gt 0 ]]; then
-    echo "    ports:"
-    for port in "${ports[@]}"; do
-      echo "      - ${port}"
-    done
-  fi
-  if [[ -n "$command_line" ]]; then
-    echo "    command: ${command_line}"
-  fi
-  if [[ "$device_requests_enabled" == "yes" ]]; then
-    echo "    device_requests:"
-    echo "      - driver: nvidia"
-    echo "        count: all"
-    echo "        capabilities: [gpu]"
-  fi
-  if [[ ${#devices[@]} -gt 0 ]]; then
-    echo "    devices:"
-    for dev in "${devices[@]}"; do
-      echo "      - ${dev}"
-    done
-  fi
-  if [[ ${#envs[@]} -gt 0 ]]; then
-    echo "    environment:"
-    echo "      - HOME=${HOST_HOME}"
-    for env in "${envs[@]}"; do
-      echo "      - ${env}"
-    done
-  fi
-  if [[ ${#volumes[@]} -gt 0 ]]; then
-    echo "    volumes:"
-    for vol in "${volumes[@]}"; do
-      echo "      - ${vol}"
-    done
-  fi
-} > "$OVERRIDE_FILE"
+node "$ROOT_DIR/container/update_compose.mjs"
 
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
   echo "Container already running."
