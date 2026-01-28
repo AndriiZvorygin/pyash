@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import { buildProgram } from "../program.mjs";
-import { queryRyanLines } from "./ryan.mjs";
+import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
 
 const files = process.argv.slice(2);
@@ -36,7 +36,7 @@ function collectNames(sentence, out) {
 
 async function queryRyan(token) {
   if (checked.has(token)) return checked.get(token);
-  const output = await queryRyanLines(token);
+  const output = await queryVocabLines(token);
   const lines = output.map(line => line.trim()).filter(Boolean);
   checked.set(token, lines);
   return lines;
