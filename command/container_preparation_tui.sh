@@ -25,6 +25,13 @@ get_text() {
 
 TITLE=$(get_text title)
 INTRO=$(get_text intro)
+PREFLIGHT_TITLE=$(get_text preflight_title)
+PREFLIGHT_INTRO=$(get_text preflight_intro)
+PREFLIGHT_GPU=$(get_text preflight_gpu)
+PREFLIGHT_GPU_MISSING=$(get_text preflight_gpu_missing)
+PREFLIGHT_RAM=$(get_text preflight_ram)
+PREFLIGHT_DISK=$(get_text preflight_disk)
+PREFLIGHT_NOTE=$(get_text preflight_note)
 
 has_dialog="no"
 if command -v dialog >/dev/null 2>&1; then
@@ -44,8 +51,13 @@ prompt_yes_no_dialog() {
   local prompt="$1"
   local default="$2"
   local result="$default"
-  dialog --title "$TITLE" --yesno "$prompt" 8 60 --default-button "$default" \
-    && result="yes" || result="no"
+  if [[ "$default" == "yes" ]]; then
+    dialog --title "$TITLE" --yesno "$prompt" 8 60 \
+      && result="yes" || result="no"
+  else
+    dialog --title "$TITLE" --yesno "$prompt" 8 60 --defaultno \
+      && result="yes" || result="no"
+  fi
   echo "$result"
 }
 
@@ -82,6 +94,20 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+mem_gib="unknown"
+if [[ -r /proc/meminfo ]]; then
+  mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+  if [[ -n "${mem_kb:-}" ]]; then
+    mem_gib=$((mem_kb / 1024 / 1024))
+  fi
+fi
+
+disk_gib="unknown"
+disk_kb=$(df -k "$ROOT_DIR" 2>/dev/null | awk 'NR==2 {print $4}')
+if [[ -n "${disk_kb:-}" ]]; then
+  disk_gib=$((disk_kb / 1024 / 1024))
+fi
+
 GPU_DEFAULT="off"
 if command -v nvidia-smi >/dev/null 2>&1; then
   GPU_DEFAULT="on"
@@ -99,12 +125,26 @@ VNC_DEFAULT="on"
 WORKPLACE="$ROOT_DIR"
 
 if [[ "$has_dialog" == "yes" ]]; then
+  preflight_gpu_text="$PREFLIGHT_GPU_MISSING"
+  if [[ "$GPU_DEFAULT" == "on" ]]; then
+    preflight_gpu_text="$PREFLIGHT_GPU"
+  fi
+  dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_RAM: $mem_gib\n$PREFLIGHT_DISK: $disk_gib\n\n$PREFLIGHT_NOTE" 12 70
   GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
 else
   echo "$TITLE"
   echo "$INTRO"
+  echo "$PREFLIGHT_INTRO"
+  if [[ "$GPU_DEFAULT" == "on" ]]; then
+    echo "$PREFLIGHT_GPU"
+  else
+    echo "$PREFLIGHT_GPU_MISSING"
+  fi
+  echo "$PREFLIGHT_RAM: $mem_gib"
+  echo "$PREFLIGHT_DISK: $disk_gib"
+  echo "$PREFLIGHT_NOTE"
   echo
   GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no "$(get_text enable_audio)" "$AUDIO_DEFAULT")
@@ -119,6 +159,9 @@ if [[ -d "$HOME/.codex" ]]; then
 fi
 
 if [[ "$GPU_CHOICE" == "yes" ]]; then
+  if [[ "$GPU_DEFAULT" != "on" ]]; then
+    dialog_msg "$(get_text gpu_missing)"
+  fi
   RUN_CMD+=("--gpus" "all")
 fi
 
