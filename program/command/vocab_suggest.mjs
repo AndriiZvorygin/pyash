@@ -27,6 +27,7 @@ const roots = inputs.length > 0 ? inputs : (textInputs.length > 0 ? [] : ["examp
 
 const checked = new Map();
 const occurrences = new Map();
+const okTextTokens = new Set();
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -161,6 +162,8 @@ for (const token of textTokens) {
     missing += 1;
     if (!occurrences.has(token)) occurrences.set(token, new Set());
     occurrences.get(token).add("input");
+  } else {
+    okTextTokens.add(token);
   }
 }
 
@@ -171,6 +174,12 @@ if (occurrences.size > 0) {
     const preview = suggestionList.slice(0, 4).join(" | ");
     const fileList = [...filesForToken].map(name => name.replace(`${process.cwd()}/`, ""));
     console.log(`${token}: ${preview || "no suggestions"} (${fileList.join(", ")})`);
+  }
+}
+
+if (okTextTokens.size > 0) {
+  for (const token of [...okTextTokens].sort((a, b) => a.localeCompare(b))) {
+    console.log(`${token}: ok`);
   }
 }
 
