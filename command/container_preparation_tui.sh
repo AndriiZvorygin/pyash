@@ -130,6 +130,23 @@ if command -v nvidia-smi >/dev/null 2>&1; then
   fi
 fi
 
+guidance_text="CPU-only: whisper base/medium OK; large is slow. For LLMs, expect slow responses."
+if [[ "$vram_gib" != "unknown" ]]; then
+  if [[ "$vram_gib" -ge 24 ]]; then
+    guidance_text="VRAM ${vram_gib}GiB: 34B+ class possible; 13B+ comfortable; large whisper OK."
+  elif [[ "$vram_gib" -ge 16 ]]; then
+    guidance_text="VRAM ${vram_gib}GiB: 13B class OK; 7B comfortable; large whisper OK."
+  elif [[ "$vram_gib" -ge 8 ]]; then
+    guidance_text="VRAM ${vram_gib}GiB: 7B class OK; 13B may be tight; whisper medium OK."
+  elif [[ "$vram_gib" -ge 4 ]]; then
+    guidance_text="VRAM ${vram_gib}GiB: 7B with quantization; whisper base OK; medium may be slow."
+  else
+    guidance_text="VRAM ${vram_gib}GiB: stick to small/quantized models; whisper base likely only."
+  fi
+elif [[ "$mem_gib" != "unknown" && "$mem_gib" -ge 32 ]]; then
+  guidance_text="RAM ${mem_gib}GiB CPU-only: 7B quantized possible; whisper base/medium OK; large is slow."
+fi
+
 GPU_DEFAULT="off"
 if command -v nvidia-smi >/dev/null 2>&1; then
   GPU_DEFAULT="on"
@@ -151,7 +168,7 @@ if [[ "$has_dialog" == "yes" ]]; then
   if [[ "$GPU_DEFAULT" == "on" ]]; then
     preflight_gpu_text="$PREFLIGHT_GPU"
   fi
-  dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_VRAM: $vram_gib\n$PREFLIGHT_RAM: $mem_gib\n$PREFLIGHT_DISK: $disk_gib\n$PREFLIGHT_CORES: $cpu_cores\n$PREFLIGHT_BOGOMIPS: $bogomips\n\n$PREFLIGHT_GUIDANCE\n$PREFLIGHT_NOTE" 16 74
+  dialog --title "$PREFLIGHT_TITLE" --msgbox "$PREFLIGHT_INTRO\n\n$preflight_gpu_text\n$PREFLIGHT_VRAM: $vram_gib\n$PREFLIGHT_RAM: $mem_gib\n$PREFLIGHT_DISK: $disk_gib\n$PREFLIGHT_CORES: $cpu_cores\n$PREFLIGHT_BOGOMIPS: $bogomips\n\n$PREFLIGHT_GUIDANCE $guidance_text\n$PREFLIGHT_NOTE" 16 74
   GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
@@ -169,7 +186,7 @@ else
   echo "$PREFLIGHT_DISK: $disk_gib"
   echo "$PREFLIGHT_CORES: $cpu_cores"
   echo "$PREFLIGHT_BOGOMIPS: $bogomips"
-  echo "$PREFLIGHT_GUIDANCE"
+  echo "$PREFLIGHT_GUIDANCE $guidance_text"
   echo "$PREFLIGHT_NOTE"
   echo
   GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
