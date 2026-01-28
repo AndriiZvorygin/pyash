@@ -8,10 +8,13 @@ RUN apt-get update \
     curl \
     git \
     gnupg \
+    dialog \
     jq \
     python3 \
     python3-pip \
     python3-venv \
+    tmux \
+    vim \
     build-essential \
     cmake \
     pkg-config \
@@ -37,6 +40,7 @@ RUN apt-get update \
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get update \
   && apt-get install -y --no-install-recommends nodejs \
+  && npm install -g @openai/codex \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workplace
