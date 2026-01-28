@@ -44,6 +44,9 @@ fi
 
 case "$CHOICE" in
   1)
+    if [[ "$container_running" == "yes" ]]; then
+      exec docker exec -it pyash bash
+    fi
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
   2)
@@ -66,6 +69,6 @@ Local demo:
 TEXT
     ;;
   *)
-    exec docker exec -it pyash bash
+    exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
 esac
