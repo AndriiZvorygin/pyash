@@ -109,9 +109,13 @@ fi
   fi
 } > "$OVERRIDE_FILE"
 
-OPENAI_BASE_URL="$ai_host" AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
-  docker compose -f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE" up --build -d
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
+  echo "Container already running."
+  exec docker exec -it pyash bash
+fi
 
-echo "Container started. Enter with:"
-echo "  docker exec -it pyash bash"
+OPENAI_BASE_URL="$ai_host" AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
+  docker compose -f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE" up -d
+
+echo "Container started. Entering..."
 exec docker exec -it pyash bash
