@@ -26,7 +26,9 @@ const ENV_BINDINGS = [
   { env: "PYA_NEWSPAPER", name: "newspaper enabled", type: "bool" },
   { env: "PYA_RUN_ID", name: "run id", type: "text" },
   { env: "PYA_REFINERY", name: "refinery name", type: "text" },
-  { env: "OLLAMA_HOST", name: "ollama host", type: "text" }
+  { env: "OLLAMA_HOST", name: "ollama host", type: "text" },
+  { env: "OPENAI_BASE_URL", name: "ai host", type: "text" },
+  { env: "AI_HOST", name: "ai host", type: "text" }
 ];
 
 function parseBoolean(raw) {

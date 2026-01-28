@@ -21,6 +21,7 @@ su name container preparation text be map def
   su name openai_choice_local ob text "Localhost (127.0.0.1:11434)" be text ya
   su name openai_choice_vllm ob text "vLLM default (127.0.0.1:8000)" be text ya
   su name openai_choice_custom ob text "Custom URL" be text ya
+  su name openai_autodetect ob text "Autodetect reachable endpoints on this host?" be text ya
   su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
   su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
   su name enable_vnc ob text "Expose VNC/noVNC ports (5900/6080)?" be text ya
