@@ -8,13 +8,10 @@ services:
     working_dir: /workplace
     volumes:
       - ..:/workplace
+      - ../minds:/minds
     stdin_open: true
     tty: true
-    ports:
-      - "5900:5900"
-      - "6080:6080"
-    command: ["/workplace/container/run_vnc_novnc.sh"]
     environment:
-      - OLLAMA_HOST=http://host.docker.internal:11434
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://host.docker.internal:11434}
     extra_hosts:
       - host.docker.internal:host-gateway

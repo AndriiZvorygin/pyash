@@ -36,6 +36,13 @@ PREFLIGHT_CORES=$(get_text preflight_cores)
 PREFLIGHT_BOGOMIPS=$(get_text preflight_bogomips)
 PREFLIGHT_NOTE=$(get_text preflight_note)
 PREFLIGHT_GUIDANCE=$(get_text preflight_guidance)
+OPENAI_TITLE=$(get_text openai_title)
+OPENAI_INTRO=$(get_text openai_intro)
+OPENAI_HOST_PROMPT=$(get_text openai_host_prompt)
+OPENAI_CHOICE_HOST=$(get_text openai_choice_host)
+OPENAI_CHOICE_LOCAL=$(get_text openai_choice_local)
+OPENAI_CHOICE_VLLM=$(get_text openai_choice_vllm)
+OPENAI_CHOICE_CUSTOM=$(get_text openai_choice_custom)
 
 has_dialog="no"
 if command -v dialog >/dev/null 2>&1; then
@@ -162,6 +169,8 @@ fi
 VNC_DEFAULT="on"
 
 WORKPLACE="$ROOT_DIR"
+MINDS_DIR="$ROOT_DIR/minds"
+mkdir -p "$MINDS_DIR"
 
 if [[ "$has_dialog" == "yes" ]]; then
   preflight_gpu_text="$PREFLIGHT_GPU_MISSING"
@@ -172,6 +181,23 @@ if [[ "$has_dialog" == "yes" ]]; then
   GPU_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no_dialog "$(get_text enable_vnc)" "$VNC_DEFAULT")
+
+  OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
+  OPENAI_CHOICE=$(dialog --stdout --title "$OPENAI_TITLE" --menu "$OPENAI_INTRO" 12 70 4 \
+    1 "$OPENAI_CHOICE_HOST" \
+    2 "$OPENAI_CHOICE_LOCAL" \
+    3 "$OPENAI_CHOICE_VLLM" \
+    4 "$OPENAI_CHOICE_CUSTOM")
+  case "$OPENAI_CHOICE" in
+    1) OPENAI_BASE_URL_VALUE="http://host.docker.internal:11434" ;;
+    2) OPENAI_BASE_URL_VALUE="http://127.0.0.1:11434" ;;
+    3) OPENAI_BASE_URL_VALUE="http://127.0.0.1:8000" ;;
+    4)
+      OPENAI_BASE_URL_VALUE=$(dialog --stdout --title "$OPENAI_TITLE" --inputbox "$OPENAI_HOST_PROMPT\n[$OPENAI_DEFAULT]" 8 70) || true
+      OPENAI_BASE_URL_VALUE="${OPENAI_BASE_URL_VALUE:-$OPENAI_DEFAULT}"
+      ;;
+    *) OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT" ;;
+  esac
 else
   echo "$TITLE"
   echo "$INTRO"
@@ -192,55 +218,117 @@ else
   GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
+
+  OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
+  echo "$OPENAI_INTRO"
+  echo "1) $OPENAI_CHOICE_HOST"
+  echo "2) $OPENAI_CHOICE_LOCAL"
+  echo "3) $OPENAI_CHOICE_VLLM"
+  echo "4) $OPENAI_CHOICE_CUSTOM"
+  printf "Choice [1-4] (default 1): "
+  read -r openai_choice || true
+  case "${openai_choice:-1}" in
+    1) OPENAI_BASE_URL_VALUE="http://host.docker.internal:11434" ;;
+    2) OPENAI_BASE_URL_VALUE="http://127.0.0.1:11434" ;;
+    3) OPENAI_BASE_URL_VALUE="http://127.0.0.1:8000" ;;
+    4)
+      printf "%s [%s] " "$OPENAI_HOST_PROMPT" "$OPENAI_DEFAULT"
+      read -r openai_custom || true
+      OPENAI_BASE_URL_VALUE="${openai_custom:-$OPENAI_DEFAULT}"
+      ;;
+    *) OPENAI_BASE_URL_VALUE="$OPENAI_DEFAULT" ;;
+  esac
 fi
 
-RUN_CMD=("docker" "run" "--rm" "-it")
-RUN_CMD+=("-v" "${WORKPLACE}:/workplace" "-w" "/workplace")
+COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "up" "--build")
+RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE}"
 
-if [[ -d "$HOME/.codex" ]]; then
-  RUN_CMD+=("-v" "$HOME/.codex:/root/.codex")
+OVERRIDE_FILE="/tmp/pyash-compose.override.yaml"
+ports=()
+devices=()
+volumes=()
+envs=()
+command_line=""
+device_requests_enabled="no"
+
+if [[ "$VNC_CHOICE" == "yes" ]]; then
+  ports+=("\"5900:5900\"")
+  ports+=("\"6080:6080\"")
+  command_line='["/workplace/container/run_vnc_novnc.sh"]'
 fi
 
 if [[ "$GPU_CHOICE" == "yes" ]]; then
   if [[ "$GPU_DEFAULT" != "on" ]]; then
     dialog_msg "$(get_text gpu_missing)"
   fi
-  RUN_CMD+=("--gpus" "all")
+  device_requests_enabled="yes"
 fi
 
 if [[ "$AUDIO_CHOICE" == "yes" ]]; then
   if [[ ! -S "$PULSE_SOCKET" || ! -f "$PULSE_COOKIE" ]]; then
     dialog_msg "$(get_text audio_missing)"
   else
-    RUN_CMD+=("--device" "/dev/snd")
-    RUN_CMD+=("-e" "PULSE_SERVER=unix:${PULSE_SOCKET}")
-    RUN_CMD+=("-v" "/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
-    RUN_CMD+=("-v" "$PULSE_COOKIE:/root/.config/pulse/cookie")
+    devices+=("/dev/snd:/dev/snd")
+    envs+=("PULSE_SERVER=unix:${PULSE_SOCKET}")
+    volumes+=("/run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse")
+    volumes+=("${PULSE_COOKIE}:/root/.config/pulse/cookie")
   fi
 fi
 
-if [[ "$VNC_CHOICE" == "yes" ]]; then
-  RUN_CMD+=("-p" "5900:5900" "-p" "6080:6080")
-  RUN_CMD+=("--entrypoint" "/workplace/container/run_vnc_novnc.sh")
+if [[ -d "$HOME/.codex" ]]; then
+  volumes+=("${HOME}/.codex:/root/.codex")
 fi
 
-RUN_CMD+=("pyash-dev")
+{
+  echo "services:"
+  echo "  pyash:"
+  if [[ ${#ports[@]} -gt 0 ]]; then
+    echo "    ports:"
+    for port in "${ports[@]}"; do
+      echo "      - ${port}"
+    done
+  fi
+  if [[ -n "$command_line" ]]; then
+    echo "    command: ${command_line}"
+  fi
+  if [[ "$device_requests_enabled" == "yes" ]]; then
+    echo "    device_requests:"
+    echo "      - driver: nvidia"
+    echo "        count: all"
+    echo "        capabilities: [gpu]"
+  fi
+  if [[ ${#devices[@]} -gt 0 ]]; then
+    echo "    devices:"
+    for dev in "${devices[@]}"; do
+      echo "      - ${dev}"
+    done
+  fi
+  if [[ ${#envs[@]} -gt 0 ]]; then
+    echo "    environment:"
+    for env in "${envs[@]}"; do
+      echo "      - ${env}"
+    done
+  fi
+  if [[ ${#volumes[@]} -gt 0 ]]; then
+    echo "    volumes:"
+    for vol in "${volumes[@]}"; do
+      echo "      - ${vol}"
+    done
+  fi
+} > "$OVERRIDE_FILE"
 
-BUILD_CMD=("docker" "build" "-t" "pyash-dev" "-f" "$ROOT_DIR/container/Dockerfile" "$ROOT_DIR")
-
-SUMMARY="$(get_text build_cmd)\n${BUILD_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_CMD[*]}"
+COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "-f" "$OVERRIDE_FILE" "up" "--build")
+SUMMARY="$(get_text build_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${RUN_ENV} ${COMPOSE_CMD[*]}"
 if [[ "$has_dialog" == "yes" ]]; then
   dialog --title "$TITLE" --yesno "$SUMMARY\n\n$(get_text run_now)" 20 78
   if [[ $? -eq 0 ]]; then
-    "${BUILD_CMD[@]}"
-    "${RUN_CMD[@]}"
+    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
   fi
 else
   echo -e "$SUMMARY"
   echo
   RUN_NOW=$(prompt_yes_no "$(get_text run_now)" "no")
   if [[ "$RUN_NOW" == "yes" ]]; then
-    "${BUILD_CMD[@]}"
-    "${RUN_CMD[@]}"
+    env OPENAI_BASE_URL="$OPENAI_BASE_URL_VALUE" "${COMPOSE_CMD[@]}"
   fi
 fi
