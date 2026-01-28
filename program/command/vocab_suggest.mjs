@@ -4,31 +4,29 @@ import { buildProgram } from "../program.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
 
-const args = process.argv.slice(2);
-const inputs = [];
-const textInputs = [];
-let mapPath = null;
-
-for (let i = 0; i < args.length; i += 1) {
-  const arg = args[i];
-  if (arg === "--map") {
-    mapPath = args[i + 1];
-    i += 1;
-    continue;
+function parseArgs(args) {
+  const inputs = [];
+  const textInputs = [];
+  let mapPath = null;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === "--map") {
+      mapPath = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === "--text") {
+      textInputs.push(args[i + 1] ?? "");
+      i += 1;
+      continue;
+    }
+    inputs.push(arg);
   }
-  if (arg === "--text") {
-    textInputs.push(args[i + 1] ?? "");
-    i += 1;
-    continue;
-  }
-  inputs.push(arg);
+  const roots = inputs.length > 0 ? inputs : (textInputs.length > 0 ? [] : ["examples/pyash"]);
+  return { inputs, textInputs, mapPath, roots };
 }
 
-const roots = inputs.length > 0 ? inputs : (textInputs.length > 0 ? [] : ["examples/pyash"]);
-
 const checked = new Map();
-const occurrences = new Map();
-const okTextTokens = new Set();
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -174,99 +172,108 @@ function extractQuotedPyashBlocks(text) {
   return blocks;
 }
 
-const files = [];
-for (const root of roots) {
-  await collectFiles(root, files);
-}
-
-let missing = 0;
-const textTokens = new Set();
-for (const input of textInputs) {
-  for (const token of tokenizeName(input)) textTokens.add(token);
-}
-for (const file of files) {
-  const text = await fs.readFile(file, "utf8");
-  const tokens = new Set();
-  const program = buildProgram(text);
-  for (const sentence of program.sentences) {
-    collectTokensFromSentence(sentence, tokens);
+export async function runVocabSuggest(args = process.argv.slice(2), { report = console.log } = {}) {
+  const { textInputs, mapPath, roots } = parseArgs(args);
+  const occurrences = new Map();
+  const okTextTokens = new Set();
+  const files = [];
+  for (const root of roots) {
+    await collectFiles(root, files);
   }
-  for (const block of extractQuotedPyashBlocks(text)) {
-    const blockProgram = buildProgram(block);
-    for (const sentence of blockProgram.sentences) {
+
+  let missing = 0;
+  const textTokens = new Set();
+  for (const input of textInputs) {
+    for (const token of tokenizeName(input)) textTokens.add(token);
+  }
+  for (const file of files) {
+    const text = await fs.readFile(file, "utf8");
+    const tokens = new Set();
+    const program = buildProgram(text);
+    for (const sentence of program.sentences) {
       collectTokensFromSentence(sentence, tokens);
     }
-  }
-  for (const token of tokens) {
-    const lines = await queryRyan(token);
-    if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
-      missing += 1;
-      if (!occurrences.has(token)) occurrences.set(token, new Set());
-      occurrences.get(token).add(file);
-      continue;
+    for (const block of extractQuotedPyashBlocks(text)) {
+      const blockProgram = buildProgram(block);
+      for (const sentence of blockProgram.sentences) {
+        collectTokensFromSentence(sentence, tokens);
+      }
     }
-    if (!isExactTokenMatch(token, lines)) {
-      missing += 1;
-      if (!occurrences.has(token)) occurrences.set(token, new Set());
-      occurrences.get(token).add(file);
+    for (const token of tokens) {
+      const lines = await queryRyan(token);
+      if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
+        missing += 1;
+        if (!occurrences.has(token)) occurrences.set(token, new Set());
+        occurrences.get(token).add(file);
+        continue;
+      }
+      if (!isExactTokenMatch(token, lines)) {
+        missing += 1;
+        if (!occurrences.has(token)) occurrences.set(token, new Set());
+        occurrences.get(token).add(file);
+      }
     }
   }
-}
-for (const token of textTokens) {
-  const lines = await queryRyan(token);
-  const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-  if (
-    lines.length === 0 ||
-    (lines.length === 1 && isFileMarker(lines[0])) ||
-    blacklistValue !== null ||
-    !isExactTokenMatch(token, lines)
-  ) {
-    missing += 1;
-    if (!occurrences.has(token)) occurrences.set(token, new Set());
-    occurrences.get(token).add("input");
-  } else {
-    okTextTokens.add(token);
-  }
-}
-
-if (occurrences.size > 0) {
-  for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const token of textTokens) {
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-    const suggestionList = lines.filter(
-      line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
-    );
-    const preview = suggestionList.slice(0, 4).join(" | ");
-    const fileList = [...filesForToken]
-      .map(name => name.replace(`${process.cwd()}/`, ""))
-      .filter(name => name && name !== "input");
-    const locationSuffix = fileList.length > 0 ? ` (${fileList.join(", ")})` : "";
-    if (blacklistValue !== null) {
-      console.log(`${token} blocked, instead: ${blacklistValue}.${locationSuffix}`);
+    if (
+      lines.length === 0 ||
+      (lines.length === 1 && isFileMarker(lines[0])) ||
+      blacklistValue !== null ||
+      !isExactTokenMatch(token, lines)
+    ) {
+      missing += 1;
+      if (!occurrences.has(token)) occurrences.set(token, new Set());
+      occurrences.get(token).add("input");
     } else {
-      console.log(`${token}: ${preview || "no suggestions"}${locationSuffix}`);
+      okTextTokens.add(token);
     }
   }
-}
 
-if (okTextTokens.size > 0) {
-  for (const token of [...okTextTokens].sort((a, b) => a.localeCompare(b))) {
-    console.log(`${token}: ok`);
+  if (occurrences.size > 0) {
+    for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const lines = await queryRyan(token);
+      const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
+      const suggestionList = lines.filter(
+        line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
+      );
+      const preview = suggestionList.slice(0, 4).join(" | ");
+      const fileList = [...filesForToken]
+        .map(name => name.replace(`${process.cwd()}/`, ""))
+        .filter(name => name && name !== "input");
+      const locationSuffix = fileList.length > 0 ? ` (${fileList.join(", ")})` : "";
+      if (blacklistValue !== null) {
+        report(`${token} blocked, instead: ${blacklistValue}.${locationSuffix}`);
+      } else {
+        report(`${token}: ${preview || "no suggestions"}${locationSuffix}`);
+      }
+    }
   }
-}
 
-if (mapPath) {
-  const map = {};
-  for (const [token, filesForToken] of occurrences.entries()) {
-    const lines = await queryRyan(token);
-    map[token] = {
-      suggestions: lines.filter(line => !isFileMarker(line)),
-      files: [...filesForToken]
-    };
+  if (okTextTokens.size > 0) {
+    for (const token of [...okTextTokens].sort((a, b) => a.localeCompare(b))) {
+      report(`${token}: ok`);
+    }
   }
-  await fs.writeFile(mapPath, JSON.stringify(map, null, 2));
+
+  if (mapPath) {
+    const map = {};
+    for (const [token, filesForToken] of occurrences.entries()) {
+      const lines = await queryRyan(token);
+      map[token] = {
+        suggestions: lines.filter(line => !isFileMarker(line)),
+        files: [...filesForToken]
+      };
+    }
+    await fs.writeFile(mapPath, JSON.stringify(map, null, 2));
+  }
+
+  const exitCode = missing > 0 ? 1 : 0;
+  return { exitCode, missing };
 }
 
-if (missing > 0) {
-  process.exitCode = 1;
+if (import.meta.url === new URL(process.argv[1], "file://").href) {
+  const { exitCode } = await runVocabSuggest(process.argv.slice(2));
+  if (exitCode > 0) process.exitCode = exitCode;
 }
