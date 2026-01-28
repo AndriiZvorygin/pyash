@@ -14,6 +14,13 @@ su name container preparation text be map def
   su name preflight_bogomips ob text "Bogomips" be text ya
   su name preflight_note ob text "Use these numbers to pick appropriate model sizes if performance is slow." be text ya
   su name preflight_guidance ob text "Guidance:" be text ya
+  su name openai_title ob text "Model server" be text ya
+  su name openai_intro ob text "Select an OpenAI-compatible server endpoint." be text ya
+  su name openai_host_prompt ob text "OpenAI base URL (default shown in brackets):" be text ya
+  su name openai_choice_host ob text "Host Ollama (host.docker.internal:11434)" be text ya
+  su name openai_choice_local ob text "Localhost (127.0.0.1:11434)" be text ya
+  su name openai_choice_vllm ob text "vLLM default (127.0.0.1:8000)" be text ya
+  su name openai_choice_custom ob text "Custom URL" be text ya
   su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
   su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
   su name enable_vnc ob text "Expose VNC/noVNC ports (5900/6080)?" be text ya

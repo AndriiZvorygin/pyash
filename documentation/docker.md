@@ -24,6 +24,7 @@ The wizard checks Docker status, asks about GPU/audio/VNC, and prints the exact 
 ```bash
 docker run --rm -it \
   -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
   -w /workplace \
   pyash-dev
 ```
@@ -40,6 +41,7 @@ Run:
 docker run --rm -it \
   --gpus all \
   -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
   -w /workplace \
   pyash-dev
 ```
@@ -55,6 +57,7 @@ docker run --rm -it \
   -v /run/user/$(id -u)/pulse:/run/user/$(id -u)/pulse \
   -v ~/.config/pulse/cookie:/root/.config/pulse/cookie \
   -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
   -w /workplace \
   pyash-dev
 ```
@@ -108,6 +111,7 @@ docker run --rm -it \
   -e DISPLAY=$DISPLAY \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
   -w /workplace \
   pyash-dev
 ```
@@ -119,8 +123,9 @@ To connect to Ollama running on the host:
 ```bash
 docker run --rm -it \
   --add-host=host.docker.internal:host-gateway \
-  -e OLLAMA_HOST=http://host.docker.internal:11434 \
+  -e OPENAI_BASE_URL=http://host.docker.internal:11434 \
   -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
   -w /workplace \
   pyash-dev
 ```
@@ -128,7 +133,7 @@ docker run --rm -it \
 Then ensure Pyash uses it via `configure/default.pya` or:
 
 ```
-exists su name ollama host ob text "http://host.docker.internal:11434" be default ya
+exists su name openai base url ob text "http://host.docker.internal:11434" be default ya
 ```
 
 ## Docker compose (orchestrate)
