@@ -3,15 +3,41 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if [[ "${PYA_NO_DIALOG:-}" == "1" || "${PYA_USE_DIALOG:-}" != "1" ]]; then
-  CHOICE=1
-elif command -v dialog >/dev/null 2>&1; then
-  CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 4 \
-    1 "Container preparation (Docker)" \
-    2 "Local quick start (run a demo)" \
-    3 "Show commands only") || exit 1
+has_dialog="no"
+if [[ "${PYA_USE_DIALOG:-}" == "1" && "${PYA_NO_DIALOG:-}" != "1" ]] && command -v dialog >/dev/null 2>&1; then
+  has_dialog="yes"
+fi
+
+container_running="no"
+if command -v docker >/dev/null 2>&1; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
+    container_running="yes"
+  fi
+fi
+
+if [[ "$has_dialog" == "yes" ]]; then
+  if [[ "$container_running" == "yes" ]]; then
+    CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 5 \
+      1 "Container preparation (Docker)" \
+      2 "Enter running container (pyash)" \
+      3 "Local quick start (run a demo)" \
+      4 "Show commands only") || exit 1
+  else
+    CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 4 \
+      1 "Container preparation (Docker)" \
+      3 "Local quick start (run a demo)" \
+      4 "Show commands only") || exit 1
+  fi
 else
-  CHOICE=3
+  echo "Pyash introduction"
+  echo "1) Container preparation (Docker)"
+  if [[ "$container_running" == "yes" ]]; then
+    echo "2) Enter running container (pyash)"
+  fi
+  echo "3) Local quick start (run a demo)"
+  echo "4) Show commands only"
+  read -r -p "Choice [1-4] (default 1): " CHOICE || true
+  CHOICE="${CHOICE:-1}"
 fi
 
 case "$CHOICE" in
@@ -19,19 +45,25 @@ case "$CHOICE" in
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
   2)
+    exec docker exec -it pyash bash
+    ;;
+  3)
     echo "Running demo: ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo"
     exec "$ROOT_DIR/run" examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
     ;;
-  *)
+  4)
     cat <<'TEXT'
 Container prep:
   ./command/container_preparation_tui.sh
 
 Docker compose:
-  docker compose -f container/orchestrate.yaml up --build
+  ./container/run.sh
 
 Local demo:
   ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
 TEXT
+    ;;
+  *)
+    exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
 esac
