@@ -34,6 +34,9 @@ if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
 fi
 
+ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"
+ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
+
 PULSE_SOCKET="/run/user/$(id -u)/pulse/native"
 PULSE_COOKIE="$HOME/.config/pulse/cookie"
 
@@ -114,7 +117,7 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
   exec docker exec -it pyash bash
 fi
 
-OPENAI_BASE_URL="$ai_host" AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
+AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
   docker compose -f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE" up -d
 
 echo "Container started. Entering..."
