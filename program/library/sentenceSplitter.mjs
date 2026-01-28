@@ -1,6 +1,7 @@
-const MOODS = new Set(["ya", "def", "do", "que", "prah", "ret", "can"]);
+const BASE_MOODS = new Set(["ya", "def", "do", "que", "prah", "ret", "can"]);
 
-export function splitSentences(text) {
+export function splitSentences(text, { includeThen = false } = {}) {
+  const moods = includeThen ? new Set([...BASE_MOODS, "then"]) : BASE_MOODS;
   const replacements = [];
   const blockRegex = /quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/g;
   let working = text;
@@ -24,7 +25,7 @@ export function splitSentences(text) {
     if (token === "la") clauseDepth += 1;
     if (token === "ko") clauseDepth = Math.max(0, clauseDepth - 1);
     sentenceTokens.push(token);
-    if (clauseDepth === 0 && MOODS.has(token)) {
+    if (clauseDepth === 0 && moods.has(token)) {
       sentences.push(sentenceTokens.join(" "));
       sentenceTokens = [];
     }
@@ -88,7 +89,8 @@ export function splitSentences(text) {
   });
 }
 
-export function splitSentencesWithLines(text) {
+export function splitSentencesWithLines(text, { includeThen = false } = {}) {
+  const moods = includeThen ? new Set([...BASE_MOODS, "then"]) : BASE_MOODS;
   const replacements = [];
   const blockRegex = /quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/g;
   let working = text;
@@ -115,7 +117,7 @@ export function splitSentencesWithLines(text) {
     if (token === "la") clauseDepth += 1;
     if (token === "ko") clauseDepth = Math.max(0, clauseDepth - 1);
     sentenceTokens.push(token);
-    if (clauseDepth === 0 && MOODS.has(token)) {
+    if (clauseDepth === 0 && moods.has(token)) {
       sentences.push({ text: sentenceTokens.join(" "), line: sentenceLine ?? line });
       sentenceTokens = [];
       sentenceLine = null;
