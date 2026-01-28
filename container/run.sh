@@ -113,3 +113,4 @@ OPENAI_BASE_URL="$ai_host" AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
 
 echo "Container started. Enter with:"
 echo "  docker exec -it pyash bash"
+exec docker exec -it pyash bash
