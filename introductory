@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if [[ "${PYA_NO_DIALOG:-}" == "1" ]]; then
+if [[ "${PYA_NO_DIALOG:-}" == "1" || "${PYA_USE_DIALOG:-}" != "1" ]]; then
   CHOICE=3
 elif command -v dialog >/dev/null 2>&1; then
   CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 4 \
