@@ -88,7 +88,7 @@ prompt_yes_no() {
     suffix="[Y/n]"
   fi
   while true; do
-    printf "%s %s " "$prompt" "$suffix"
+    printf "\n%s %s " "$prompt" "$suffix"
     read -r answer || true
     answer="${answer:-}"
     if [[ -z "$answer" ]]; then
@@ -235,6 +235,7 @@ else
   echo "$PREFLIGHT_GUIDANCE $guidance_text"
   echo "$PREFLIGHT_NOTE"
   echo
+  echo "Configure options (press Enter for defaults):"
   GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
   AUDIO_CHOICE=$(prompt_yes_no "$(get_text enable_audio)" "$AUDIO_DEFAULT")
   VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
