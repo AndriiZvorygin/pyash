@@ -235,10 +235,18 @@ else
   echo "$PREFLIGHT_GUIDANCE $guidance_text"
   echo "$PREFLIGHT_NOTE"
   echo
-  echo "Configure options (press Enter for defaults):"
-  GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
-  AUDIO_CHOICE=$(prompt_yes_no "$(get_text enable_audio)" "$AUDIO_DEFAULT")
-  VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
+  echo "Press Enter to accept defaults for GPU/audio/VNC, or type 'custom' to edit."
+  read -r quick_choice || true
+  if [[ -z "${quick_choice:-}" ]]; then
+    GPU_CHOICE="$GPU_DEFAULT"
+    AUDIO_CHOICE="$AUDIO_DEFAULT"
+    VNC_CHOICE="$VNC_DEFAULT"
+  else
+    echo "Configure options (press Enter for defaults):"
+    GPU_CHOICE=$(prompt_yes_no "$(get_text enable_gpu)" "$GPU_DEFAULT")
+    AUDIO_CHOICE=$(prompt_yes_no "$(get_text enable_audio)" "$AUDIO_DEFAULT")
+    VNC_CHOICE=$(prompt_yes_no "$(get_text enable_vnc)" "$VNC_DEFAULT")
+  fi
 
   OPENAI_DEFAULT="${OPENAI_BASE_URL:-${OLLAMA_HOST:-http://host.docker.internal:11434}}"
   echo "$OPENAI_INTRO"
