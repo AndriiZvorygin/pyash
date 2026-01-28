@@ -12,7 +12,7 @@ su name container preparation text be map def
   su name preflight_vram ob text "VRAM (GiB)" be text ya
   su name preflight_cores ob text "CPU cores" be text ya
   su name preflight_bogomips ob text "Bogomips" be text ya
-  su name preflight_note ob text "If these are low, expect slower builds and model runs." be text ya
+  su name preflight_note ob text "Use these numbers to pick smaller models if performance is slow." be text ya
   su name preflight_guidance ob text "Guidance:" be text ya
   su name enable_gpu ob text "Enable GPU support (NVIDIA)?" be text ya
   su name enable_audio ob text "Enable PulseAudio passthrough?" be text ya
