@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { buildProgram } from "../program.mjs";
+import { queryRyanLines } from "./ryan.mjs";
 
 const args = process.argv.slice(2);
 const inputs = [];
@@ -66,17 +66,14 @@ function collectTokensFromSentence(sentence, out) {
   }
 }
 
-function queryRyan(token) {
+async function queryRyan(token) {
   if (checked.has(token)) return checked.get(token);
-  const output = execFileSync(
-    "node",
-    ["program/command/ryan.mjs", token],
-    { encoding: "utf8" }
-  );
-  const lines = output
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean);
+  const lines = [];
+  const output = await queryRyanLines(token);
+  for (const line of output) {
+    const trimmed = line.trim();
+    if (trimmed) lines.push(trimmed);
+  }
   const sorted = lines.sort((a, b) => {
     const aIsv = /\bisv\b/.test(a);
     const bIsv = /\bisv\b/.test(b);
@@ -149,7 +146,7 @@ for (const file of files) {
     }
   }
   for (const token of tokens) {
-    const lines = queryRyan(token);
+    const lines = await queryRyan(token);
     if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
       missing += 1;
       if (!occurrences.has(token)) occurrences.set(token, new Set());
@@ -159,7 +156,7 @@ for (const file of files) {
   }
 }
 for (const token of textTokens) {
-  const lines = queryRyan(token);
+  const lines = await queryRyan(token);
   if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
     missing += 1;
     if (!occurrences.has(token)) occurrences.set(token, new Set());
@@ -169,7 +166,7 @@ for (const token of textTokens) {
 
 if (occurrences.size > 0) {
   for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const lines = queryRyan(token);
+    const lines = await queryRyan(token);
     const suggestionList = lines.filter(line => !isFileMarker(line));
     const preview = suggestionList.slice(0, 4).join(" | ");
     const fileList = [...filesForToken].map(name => name.replace(`${process.cwd()}/`, ""));
@@ -180,7 +177,7 @@ if (occurrences.size > 0) {
 if (mapPath) {
   const map = {};
   for (const [token, filesForToken] of occurrences.entries()) {
-    const lines = queryRyan(token);
+    const lines = await queryRyan(token);
     map[token] = {
       suggestions: lines.filter(line => !isFileMarker(line)),
       files: [...filesForToken]
