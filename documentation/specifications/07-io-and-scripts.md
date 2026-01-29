@@ -8,6 +8,14 @@ Merged specification sources (legacy IDs):
 
 ---
 
+# Chapter map
+
+This chapter is four sections in order:
+1. Directory commands (filesystem verbs).
+2. Date and time (literals and date math).
+3. Interpret script (execute `.pya` text files).
+4. Download (URL fetch into files).
+
 # Directory commands (draft v0.1)
 
 **Status:** draft (semantics locked, wording polish pending)
