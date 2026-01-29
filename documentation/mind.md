@@ -22,7 +22,8 @@ Example:
 su generator be mind
   from space "http://localhost:11434"
   via  state "qwen3-vl:8b-instruct"
-  via  discourse "pyash_orchestrator"
+  from discourse "pyash_orchestrator"
+  accordingto name session
   by   num 6
 ya
 ````
@@ -33,7 +34,8 @@ Fields:
 * `via state` (`as`) → model
 
   * interpreter default: `qwen3-vl:8b-instruct` if missing.
-* `via discourse` (`accordingto`) → system prompt string for the mind.
+* `from discourse` (`fromtext`) → system prompt string for the mind.
+* `accordingto name <session>` → series-backed session history (optional).
 * `by num N` (quantity/way case) → history window for that mind (keeps ~N user+assistant pairs). Using the existing quantity axis avoids adding a new case; defaults to ~8 if omitted. Per-call override via `by num` is accepted too.
 
 Internally, the runtime stores at least:
@@ -43,7 +45,8 @@ Internally, the runtime stores at least:
   "name": "generator",
   "host": "http://localhost:11434",
   "model": "qwen3-vl:8b-instruct",
-  "system": "pyash_orchestrator"
+  "system": "pyash_orchestrator",
+  "session": "session"
 }
 ```
 
@@ -79,7 +82,7 @@ Relevant compositional cases at call time:
 2. Collect conversation history from `memory` for this mind. (Implemented: bounded last N turns; window is per mind via `by num N` on the config sentence, default ~8.)
 3. Build `messages[]` for Ollama:
 
-   * optional `system` message from `via discourse`.
+   * optional `system` message from `from discourse`.
    * interleaved `user` / `assistant` messages from history.
    * current `user` message from `ob` text.
 4. Send a `POST /api/chat` to Ollama with `stream: false`.
@@ -92,7 +95,16 @@ Relevant compositional cases at call time:
 
 ### Source of history
 
-The runtime derives context from `memory`. For each mind `<M>`:
+The runtime supports two history sources:
+
+1. **Series history**: `accordingto name <session>` points to a `be series` value.
+2. **Internal history**: per-mind log stored under `<M> story`.
+
+If a series is attached, it is used (and appended) instead of the internal log.
+
+#### Internal history facts
+
+For internal history, the runtime derives context from `memory`. For each mind `<M>`:
 
 * **User messages** for `<M>`:
 
@@ -129,7 +141,7 @@ The runtime derives context from `memory`. For each mind `<M>`:
 
 Before each mind call, the runtime:
 
-1. Scans `memory` in order for facts belonging to that mind.
+1. Uses series entries (if attached) or scans `memory` for facts belonging to that mind.
 
 2. Projects them into a chat-style sequence:
 
@@ -149,6 +161,17 @@ Before each mind call, the runtime:
    * mind configs may override this with a `historyWindow` field.
 
 When implemented, this `historyMessages[]` array feeds directly into `messages[]` for Ollama.
+
+### Series entry shape
+
+Series history expects entries shaped like:
+
+```pyash
+su name user ob text "Hello" be text ya
+su name assistant ob text "Hi!" be text ya
+```
+
+`su` is the role, `ob text` is the content. Other fields are ignored.
 
 ### Caller-provided context
 

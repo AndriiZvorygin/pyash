@@ -171,6 +171,43 @@ Notes:
   * `quiz/compile_json_to_pyash.test.mjs`
   * `quiz/json_map_enumeration.test.mjs`
 
+---
+
+## Series (ordered lists)
+
+**Status:** v0.1 (draft)
+
+Pyash **series** values are ordered lists of full sentences. They are used when
+order matters and keys are optional, for example to carry a session history.
+
+### Syntax
+
+```
+su name <S> be series def
+  <entry>...
+prah
+```
+
+### Entry form
+
+Each entry is a full `ya` sentence. Series entries:
+
+* preserve order
+* MAY repeat or omit `su`
+* MAY omit `ob`
+
+Unlike maps, series entries are not keyed; order is the only index.
+
+### Semantics (normative)
+
+`be series def … prah` produces a **series value** stored under `<S>`:
+
+* `be: "series"`
+* `ob.series`: array of the entry sentence objects, in order
+
+Series are opaque containers; verbs that consume them (for example mind history
+in `08-tools-and-mcp.md`) define how to interpret their entries.
+
 
 ---
 

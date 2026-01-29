@@ -39,14 +39,14 @@ Canonical examples live in `documentation/examples/examples-list.md` (see `examp
 
 ## 2. Registration (config) sentence
 
-A mind is configured by storing a fact (surface `via` is stored as `as` and
-`accordingto`):
+A mind is configured by storing a fact (surface `via` is stored as `as`):
 
 ```pyash
 su name <mind> be mind
 from space <host>
 via state <model>
-via discourse <prompt>
+from discourse <prompt>
+accordingto name <session>
 ya
 ```
 
@@ -54,7 +54,8 @@ Current interpreter behavior:
 
 * `from space` is stored; HTTP host comes from `OLLAMA_HOST`.
 * `via state` stores the default model as `as name <model>`.
-* `via discourse` stores the system prompt as `accordingto name <prompt>`.
+* `from discourse` stores the system prompt as `fromtext name <prompt>`.
+* `accordingto name <session>` (optional) attaches a **series** used as history.
 * `by num` or `ob window num` sets the history window size.
 
 Registration updates memory for `<mind>`.
@@ -83,19 +84,32 @@ totext name <output>
 be write do
 ```
 
-### 3.1 Model resolution
+### 3.1 Invocation cases (normative)
+
+The mind call understands these cases:
+
+* `ob text <prompt>` / `ob name text <prompt>` — user prompt content.
+* `for name <mind>` — target mind configuration.
+* `to name text <output>` — output variable for the response text.
+* `by num <N>` — history window override (pairs, user+assistant).
+* `from discourse <prompt>` — **system prompt override** for this call.
+* `accordingto name <session>` — **series-backed history** override for this call.
+* `with name <map>` — tool schema map (enables tool calling).
+* `vyah stream` — stream output (where supported).
+
+### 3.2 Model resolution
 
 * `ob model` on the call, if present
 * else config model (`via state`)
 * else default `qwen3-vl:8b-instruct`
 
-### 3.2 Prompt assembly
+### 3.3 Prompt assembly
 
 The runtime constructs the model request from:
 
-1. system prompt from config (`via discourse`)
+1. system prompt from config (`from discourse`)
 2. tool capability block (if provided, see §7)
-3. recent history messages from the resolved dialogue (see §4)
+3. recent history messages from the resolved dialogue or series (see §4)
 4. current user prompt from the invocation (`ob text <text>`)
 5. upstream `inputs` passed by the bridge (implementation-defined)
 
@@ -103,18 +117,31 @@ The runtime constructs the model request from:
 
 ## 4. Dialogue histories
 
-History is stored as memory facts keyed by a dialogue name.
+Pyash supports two history sources:
 
-### 4.1 Dialogue selection
+1. **Series history** via `accordingto name <session>` (preferred for cross-mind sharing).
+2. **Internal per-mind history** (default) keyed by `<mind> story`.
 
-Priority (first match wins):
+### 4.1 Series history (explicit)
 
-1. `from text` on the call
-2. `fromtext name` or `fromtext text` on the call
-3. `from text` or `fromtext` on the config sentence
-4. `<mind> story` (default)
+If a `be mind` config or call includes `accordingto name <session>`, the runtime:
 
-### 4.2 History window
+* reads `<session>` as a **series** (`be series`)
+* converts entries into `{ role, content }` pairs
+* uses that list as history (bounded by the window in §4.3)
+* appends new user/assistant entries back into the same series
+
+Series entries are sentences with:
+
+* `su name <role>` (e.g. `user`, `assistant`, `tool`)
+* `ob text <content>`
+
+### 4.2 Internal history (default)
+
+If no series is attached, history is stored as memory facts keyed by a dialogue
+name. The default dialogue is `<mind> story`.
+
+### 4.3 History window
 
 The window is:
 
@@ -124,7 +151,7 @@ The window is:
 
 Each window holds `window * 2` messages (user + assistant pairs).
 
-### 4.3 History fact shapes
+### 4.4 Internal history fact shapes
 
 For each invocation the runtime appends two facts to the selected dialogue:
 
@@ -148,7 +175,7 @@ be answer ya
 
 `<n>` is a zero-padded decimal counter with fixed width (recommended: 5 digits).
 
-### 4.4 Counter rule
+### 4.5 Counter rule
 
 `<n>` comes from:
 
