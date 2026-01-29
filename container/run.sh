@@ -39,6 +39,8 @@ export PYASH_GID="$(id -g)"
 export PYASH_PULSE_DIR="/run/user/${PYASH_UID}/pulse"
 export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
 export PYASH_CODEX_DIR="$HOME/.codex"
+export PYASH_GITCONFIG="$HOME/.gitconfig"
+export PYASH_GITCONFIG_XDG="$HOME/.config/git/config"
 
 node "$ROOT_DIR/container/update_compose.mjs"
 

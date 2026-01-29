@@ -2,10 +2,12 @@ import { doRemember, remember, setDefault } from "../remember/index.mjs";
 
 const ENV_BINDINGS = [
   { env: "PYA_MIND_RESPONSE", name: "mind response", type: "text" },
+  { env: "PYA_MIND_DEBUG", name: "mind debug", type: "bool" },
   { env: "PYA_STREAM_STDOUT", name: "stream stdout", type: "bool" },
   { env: "PYA_OLLAMA_STREAM_TEST", name: "ollama stream test", type: "bool" },
   { env: "OLLAMA_TEST_MODEL", name: "ollama test model", type: "text" },
   { env: "PYA_COMMAND_RESPONSE", name: "command response", type: "text" },
+  { env: "PYA_COMMAND_DEBUG", name: "command debug", type: "bool" },
   { env: "PYA_PIPER_BIN", name: "piper bin", type: "text" },
   { env: "PYA_PIPER_VOICE", name: "piper voice", type: "text" },
   { env: "PYA_PIPER_FIXTURE", name: "piper fixture", type: "text" },
@@ -59,14 +61,17 @@ export function applyEnvDefaults({ rememberFn = remember, doRememberFn = doRemem
   for (const binding of ENV_BINDINGS) {
     const raw = env?.[binding.env];
     if (raw === undefined || raw === "") continue;
-    if (rememberFn?.(binding.name)) continue;
+    const existing = rememberFn?.(binding.name);
+    if (existing && existing.be !== "default") continue;
     const ob = buildObValue(raw, binding.type);
-    setDefault(binding.name, {
-      mood: "ya",
-      su: { name: binding.name },
-      be: "default",
-      ob
-    });
+    if (existing) {
+      existing.mood = "ya";
+      existing.be = "default";
+      existing.su = { name: binding.name };
+      existing.ob = ob;
+      continue;
+    }
+    setDefault(binding.name, { mood: "ya", su: { name: binding.name }, be: "default", ob });
   }
 }
 
