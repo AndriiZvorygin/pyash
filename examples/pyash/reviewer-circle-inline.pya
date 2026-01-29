@@ -1,41 +1,35 @@
 exists su name author prompter ob text "Draft: be concise and friendly." be text ya
-exists su name reviewer prompter ob text "Review the TASK and ANSWER. Return only PASS or FAIL." be text ya
+exists su name reviewer prompter ob text "Review the prior exchange. Return PASS or FAIL, and if FAIL add a short reason after a newline." be text ya
 
-exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompter ya
-exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompter ya
+exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext name reviewer prompter ya
 
 exists su name task ob text "Write a short greeting." be text ya
 
 su name reviewer try ob name text task to name text output be ceremony def
 su name sketch out ob name task for name author to name text sketch out by num 0 be write do
-exists su name reviewer input ob text "TASK:\n" be text ya
-ob name task to name reviewer input be plus do
-ob text "\nANSWER:\n" to name reviewer input be plus do
-ob name sketch out to name reviewer input be plus do
-su name criticism out ob name text reviewer input for name reviewer to name text criticism out by num 0 be write do
+exists su name review session be series def
+su name user ob text of task be text ya
+su name assistant ob text of sketch out be text ya
+prah
+su name review out ob text "Review the prior exchange and respond now." for name reviewer accordingto name review session to name text review out by num 0 be write do
 
-ob name criticism out from text "PASS" be equally then
+ob name review out from text "PASS" be equally then
 exists su name decision out ob text "" be text ya
-ob name criticism out from text "PASS" be equally then
+ob name review out from text "PASS" be equally then
 ob name sketch out to name decision out be plus do
 
-ob name criticism out from text "FAIL" be equally then
-exists su name better input ob text "TASK:\n" be text ya
-ob name criticism out from text "FAIL" be equally then
-ob name task to name better input be plus do
-ob name criticism out from text "FAIL" be equally then
-ob text "\nANSWER:\n" to name better input be plus do
-ob name criticism out from text "FAIL" be equally then
-ob name sketch out to name better input be plus do
-ob name criticism out from text "FAIL" be equally then
-ob text "\nCRITICISM:\n" to name better input be plus do
-ob name criticism out from text "FAIL" be equally then
-ob name criticism out to name better input be plus do
-ob name criticism out from text "FAIL" be equally then
-su name better out ob name text better input for name author to name text better out by num 0 be write do
-ob name criticism out from text "FAIL" be equally then
+ob name review out from text "FAIL" be equally then
+exists su name revise session be series def
+su name user ob text of task be text ya
+su name assistant ob text of sketch out be text ya
+su name user ob text of review out be text ya
+prah
+ob name review out from text "FAIL" be equally then
+su name better out ob text "Revise the prior answer based on the review." for name author accordingto name revise session to name text better out by num 0 be write do
+ob name review out from text "FAIL" be equally then
 exists su name decision out ob text "" be text ya
-ob name criticism out from text "FAIL" be equally then
+ob name review out from text "FAIL" be equally then
 ob name better out to name decision out be plus do
 
 su name decision out ret

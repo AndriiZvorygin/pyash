@@ -370,3 +370,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `interpret` can resolve `ob name text` scripts for mind/tool usage.
 * Mind tool calls now propagate `tool_call_id` and pass raw interpret stdout back to the model.
 * Added a mind tool example for JavaScript execution (`examples/pyash/mind-interpret-tool.pya`) with a complex prime task.
+
+### Jan 29, 2026: Mind session map
+
+* Mind history now exposes a read-only `mind session map` with per-dialogue series snapshots.
+* Added a shared session store for mind logs across backends.
+* Reviewer circle inline example now uses session series instead of string concatenation.

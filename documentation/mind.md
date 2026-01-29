@@ -173,6 +173,21 @@ su name assistant ob text "Hi!" be text ya
 
 `su` is the role, `ob text` is the content. Other fields are ignored.
 
+### Mind session map
+
+Interpreter builds a shared, read-only map that exposes session histories:
+
+* `mind session map` is a pyash map.
+* Each entry key is a dialogue name (e.g. `"helper story"`).
+* Each entry value points at a **series** named `"<dialogue> session"`.
+
+Example:
+
+```pyash
+ob name mind session map be write do
+ob name helper story session be write do
+```
+
 ### Caller-provided context
 
 Callers may also embed their own context inside the current `ob` text or other fields. The automatic history stitching runs in addition to any explicit context the caller supplies.

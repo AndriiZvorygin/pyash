@@ -9,6 +9,7 @@ import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { makeStream } from "../../library/runtimePrimitives.mjs";
 import { appendLog, buildHistoryMessages, historyDialogueName, nextAnswerName, resetMindLogs as resetMindHistory } from "./history.mjs";
+import { getMindLog } from "./session.mjs";
 import { recordMindJson, resetMindDebugCounters, stripContext } from "./logging.mjs";
 import { buildToolSchemas, buildToolSentence, toolListFromMap } from "./tooling.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
@@ -180,6 +181,49 @@ function appendSeriesEntries({ seriesName, callPrompt, responseText }) {
   });
 }
 
+function seriesNameForDialogue(dialogue) {
+  if (!dialogue) return null;
+  return `${dialogue} session`;
+}
+
+function buildSeriesEntriesFromLog(log) {
+  return (log || []).map((entry) => ({
+    mood: "ya",
+    su: { name: entry?.role ?? "assistant" },
+    ob: { text: entry?.content ?? "" }
+  }));
+}
+
+function syncSessionFacts({ dialogue }) {
+  if (!dialogue) return;
+  const log = getMindLog(dialogue);
+  const seriesName = seriesNameForDialogue(dialogue);
+  if (!seriesName) return;
+  const seriesEntries = buildSeriesEntriesFromLog(log);
+  doRemember({
+    mood: "ya",
+    su: { name: seriesName },
+    be: "series",
+    ob: { series: seriesEntries }
+  });
+  const mapFact = remember("mind session map");
+  const map = (mapFact?.ob?.map && typeof mapFact.ob.map === "object")
+    ? { ...mapFact.ob.map }
+    : {};
+  map[dialogue] = {
+    mood: "ya",
+    su: { name: dialogue },
+    be: "series",
+    ob: { name: seriesName }
+  };
+  doRemember({
+    mood: "ya",
+    su: { name: "mind session map" },
+    be: "map",
+    ob: { map }
+  });
+}
+
 function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName }) {
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   if (callPrompt) {
@@ -221,6 +265,7 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, output
   if (historySeriesName) {
     appendSeriesEntries({ seriesName: historySeriesName, callPrompt, responseText });
   }
+  syncSessionFacts({ dialogue });
   return answerSentence;
 }
 
@@ -294,6 +339,36 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     }
     return null;
   };
+  const resolveGenitiveText = (genitive) => {
+    const chain = Array.isArray(genitive?.chain) ? genitive.chain : [];
+    if (chain.length === 0) return null;
+    let curr = typeof chain[0] === "string" ? remember(chain[0]) : null;
+    for (const part of chain.slice(1)) {
+      if (curr && typeof curr === "object" && curr.name) {
+        const nextFact = remember(curr.name);
+        if (nextFact) curr = nextFact.ob ?? nextFact;
+      }
+      if (curr && typeof curr === "object") {
+        if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+          curr = curr.ob.map[part];
+        } else if (curr.ob && curr.ob[part] !== undefined) {
+          curr = curr.ob[part];
+        } else {
+          curr = curr?.[part];
+        }
+      } else {
+        curr = curr?.[part];
+      }
+    }
+    if (typeof curr === "string") return curr;
+    if (typeof curr === "number") return String(curr);
+    if (curr && typeof curr === "object") {
+      if (curr.text !== undefined) return String(curr.text);
+      if (curr.num !== undefined) return String(curr.num);
+      if (curr.boolean !== undefined) return curr.boolean ? "truth" : "lie";
+    }
+    return null;
+  };
   const resolvePromptValue = (value) => {
     if (!value) return null;
     if (typeof value?.text === "string") return value.text;
@@ -341,6 +416,8 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         const content =
           entry?.content ??
           entry?.ob?.text ??
+          (entry?.ob?.genitive ? resolveGenitiveText(entry.ob.genitive) : null) ??
+          (entry?.ob?.name ? (resolvePromptFromName(entry.ob.name) ?? entry.ob.name) : null) ??
           (typeof entry?.ob?.num === "number" ? String(entry.ob.num) : null);
         if (!role || content == null) return null;
         return { role: String(role).toLowerCase(), content: String(content) };
