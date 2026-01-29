@@ -1,4 +1,4 @@
-# `30-data-formats.md` (merged)
+# `06-data-formats.md` (merged)
 
 Merged specification file. Original sources:
 - `30-maps.md`
@@ -20,7 +20,7 @@ A **pyash map** is a general container used by the runtime. Entries are **full P
 
 This specification defines syntax, semantics, access rules, official write ordering, dynamic updates, and error behaviour for pyash maps.
 
-JSON maps (`be json map def`) are specified in `30-data-formats.md`.
+JSON maps (`be json map def`) are specified in `06-data-formats.md`.
 
 ---
 
@@ -164,7 +164,7 @@ Errors are raised only for structural violations.
 
 Notes:
 
-* JSON map tests live under `30-data-formats.md` and remain unchanged:
+* JSON map tests live under `06-data-formats.md` and remain unchanged:
 
   * `quiz/json_map_export.test.mjs`
   * `quiz/import_json_map.test.mjs`
@@ -458,7 +458,7 @@ A YAML document loads into Pyash as a JSON value tree:
   - boolean → `ob bool truth|lie`
   - null → `ob hollow`
 
-Allowed JSON map contents are defined in `30-data-formats.md`. :contentReference[oaicite:9]{index=9}
+Allowed JSON map contents are defined in `06-data-formats.md`. :contentReference[oaicite:9]{index=9}
 
 ### 3.2 Root constraints (v0.1)
 
@@ -694,7 +694,7 @@ A **JSON map** is a constrained map form whose contents represent a **JSON value
 
 This specification defines JSON map syntax, semantics, access rules, enumeration, arrays, nesting, JSON loading, and JSON export behaviour.
 
-Pyash maps (`be map def`) are specified in `30-data-formats.md`.
+Pyash maps (`be map def`) are specified in `06-data-formats.md`.
 
 ---
 
