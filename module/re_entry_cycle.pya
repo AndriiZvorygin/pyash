@@ -1,7 +1,7 @@
 su name re-entry attempt to name text output be ceremony def
   su name draft out ob name task for name author to name text draft out by num 0 be write do
-  su name critique out ob name draft out for name critic to name text critique out by num 0 be write do
-  su name revised out ob name critique out for name author to name text revised out by num 0 be write do
+  su name review out ob name draft out for name reviewer to name text review out by num 0 be write do
+  su name revised out ob name review out for name author to name text revised out by num 0 be write do
   su name revised out ret
 prah
 
