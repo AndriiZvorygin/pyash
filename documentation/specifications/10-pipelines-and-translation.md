@@ -489,7 +489,13 @@ prah
 ```
 
 After each `re-entry attempt` completes, control returns to the supervisor, `fromindex` advances, and
-the attempt ceremony is invoked again. The cycle ends when the bound is reached (or earlier by runner policy).
+the attempt ceremony is invoked again. The cycle ends when the bound is reached or when an explicit
+early-exit condition is triggered (judge pass, max attempts, or timebox).
+
+Explicit loop rule (normative):
+* If the attempt fails verification, the supervisor MUST schedule another attempt unless a stop
+  condition has been reached.
+* If the attempt passes verification, the supervisor SHOULD end the loop early.
 
 ---
 
