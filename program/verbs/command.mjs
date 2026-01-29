@@ -7,7 +7,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 
@@ -85,6 +85,7 @@ async function runCommandText(cmd, { input } = {}) {
 export async function command(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "command", caseKey: "vyah" });
+  const debug = resolveConfigBool("command debug", { rememberFn }) === true;
   if (aspect === "cancel") {
     const targetName = sentence?.su?.name;
     if (!targetName) {
@@ -249,6 +250,12 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   }
 
   const res = await runCommandText(cmd, { input });
+  if (debug) {
+    const stdout = String(res.stdout ?? "");
+    const stderr = String(res.stderr ?? "");
+    // eslint-disable-next-line no-console
+    console.error(`[command debug] ${JSON.stringify({ cmd, status: res.status ?? 0, stdoutLength: stdout.length, stderrLength: stderr.length, stderr: stderr.slice(0, 200) })}`);
+  }
   if (res.status) {
     throwErrorSentence({
       name: "command defective",

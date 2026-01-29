@@ -64,6 +64,8 @@ const lines = [
 const pulseDir = process.env.PYASH_PULSE_DIR;
 const pulseCookie = process.env.PYASH_PULSE_COOKIE;
 const codexDir = process.env.PYASH_CODEX_DIR;
+const gitConfig = process.env.PYASH_GITCONFIG;
+const gitConfigXdg = process.env.PYASH_GITCONFIG_XDG;
 
 const volumes = [];
 const devices = [];
@@ -86,6 +88,20 @@ if (codexDir) {
     await fs.stat(codexDir);
     volumes.push(`${"${PYASH_CODEX_DIR}"}:/workplace/.codex`);
     lines.push("      - CODEX_HOME=/workplace/.codex");
+  } catch {}
+}
+
+if (gitConfig) {
+  try {
+    await fs.stat(gitConfig);
+    volumes.push(`${"${PYASH_GITCONFIG}"}:/workplace/.gitconfig:ro`);
+  } catch {}
+}
+
+if (gitConfigXdg) {
+  try {
+    await fs.stat(gitConfigXdg);
+    volumes.push(`${"${PYASH_GITCONFIG_XDG}"}:/workplace/.config/git/config:ro`);
   } catch {}
 }
 

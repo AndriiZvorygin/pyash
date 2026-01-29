@@ -20,7 +20,7 @@ async function resolveInterpret() {
   return mod.interpret;
 }
 
-async function callMindBackend({ backendName, payload }) {
+async function callMindBackend({ backendName, payload, debug }) {
   if (!backendName) return null;
   const interpret = await resolveInterpret();
   const response = await interpret({
@@ -28,6 +28,21 @@ async function callMindBackend({ backendName, payload }) {
     be: backendName,
     ob: { text: JSON.stringify(payload) }
   });
+  if (debug) {
+    const obText = response?.ob?.text;
+    const valueText = response?.value?.text;
+    const resultText = response?.result?.text ?? response?.result?.ob?.text;
+    const summary = {
+      label: "backend-raw",
+      type: typeof response,
+      keys: response && typeof response === "object" ? Object.keys(response) : [],
+      obTextLength: typeof obText === "string" ? obText.length : null,
+      valueTextLength: typeof valueText === "string" ? valueText.length : null,
+      resultTextLength: typeof resultText === "string" ? resultText.length : null
+    };
+    // eslint-disable-next-line no-console
+    console.error(`[mind debug] ${JSON.stringify(summary)}`);
+  }
   const rawText =
     response?.ob?.text ??
     response?.value?.text ??
@@ -270,6 +285,26 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
   const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
   const ollamaHost = resolveConfigText("ollama host", { rememberFn: remember }) ?? null;
+  const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
+
+  const debugMind = (label, payload) => {
+    if (!mindDebug) return;
+    const mode = payload?.mode ?? "generate";
+    const host = payload?.host ?? "(unset)";
+    const endpoint = typeof payload?.host === "string"
+      ? `${payload.host.replace(/\/$/, "")}/api/${mode === "chat" ? "chat" : "generate"}`
+      : "(unset)";
+    const summary = {
+      label,
+      mode,
+      model: payload?.model ?? null,
+      stream: !!payload?.stream,
+      host,
+      endpoint
+    };
+    // eslint-disable-next-line no-console
+    console.error(`[mind debug] ${JSON.stringify(summary)}`);
+  };
 
   // Combine upstream inputs into a context string
   let inputText = "";
@@ -328,9 +363,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
     while (turns < maxToolTurns) {
       turns += 1;
-      const requestPayload = { mode: "chat", model, messages, tools };
+      const requestPayload = { mode: "chat", model, messages, tools, stream: false };
       if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      debugMind("request", requestPayload);
       const mockResponse = nextMockResponse();
       if (mockResponse) {
         if (typeof mockResponse === "string") {
@@ -351,9 +387,13 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
             raw: { requestPayload }
           });
         }
-        lastResponse = await callMindBackend({ backendName, payload: requestPayload });
+        lastResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
       }
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
+      if (mindDebug) {
+        // eslint-disable-next-line no-console
+        console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(lastResponse?.message?.tool_calls), contentLength: (lastResponse?.message?.content ?? "").length })}`);
+      }
 
       const toolCalls = lastResponse?.message?.tool_calls;
       if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
@@ -423,6 +463,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     if (responseText === "DID_NOT_RECEIVE_TOOL_RESULT" && lastToolText) {
       responseText = lastToolText;
     }
+    if (mindDebug && !responseText) {
+      // eslint-disable-next-line no-console
+      console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", lastResponse: stripContext(lastResponse ?? {}) })}`);
+    }
   } else {
     const promptParts = [];
     if (resolvedConfigPrompt) promptParts.push(resolvedConfigPrompt);
@@ -444,6 +488,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: true };
       if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      debugMind("request", requestPayload);
       (async () => {
         let streamedText = "";
         try {
@@ -461,6 +506,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
             }
             const finalText = String(mockResponse ?? "").trim();
             recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks }) });
+            if (mindDebug) {
+              // eslint-disable-next-line no-console
+              console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
+            }
             writeStreamEnd(streamOutputPath);
             recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
           } else if (backendName) {
@@ -494,6 +543,10 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
               });
             });
             recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: streamedText }) });
+            if (mindDebug) {
+              // eslint-disable-next-line no-console
+              console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: streamedText.length })}`);
+            }
             writeStreamEnd(streamOutputPath);
             recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName });
           } else {
@@ -520,14 +573,16 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
         ob: { filename: streamOutputPath, index: 0, kind: "mind", backend: "ollama" }
       });
     } else if (mockResponse) {
-      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: false };
       if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      debugMind("request", requestPayload);
       responseText = mockResponse;
     } else {
-      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim() };
+      const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: false };
       if (ollamaHost) requestPayload.host = ollamaHost;
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      debugMind("request", requestPayload);
       if (!backendName) {
         throwErrorSentence({
           name: "mind backend missing",
@@ -536,9 +591,25 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
           raw: { requestPayload }
         });
       }
-      const backendResponse = await callMindBackend({ backendName, payload: requestPayload });
+      const backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
       responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
+      if (mindDebug) {
+        // eslint-disable-next-line no-console
+        console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: responseText.length })}`);
+        if (!responseText) {
+          // eslint-disable-next-line no-console
+          console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", backendResponse: stripContext(backendResponse ?? {}) })}`);
+        }
+      }
+      if (!responseText) {
+        throwErrorSentence({
+          name: "mind hollow answer",
+          message: "mind hollow answer from backend",
+          from: { name: "mind" },
+          raw: { requestPayload, backendResponse: stripContext(backendResponse ?? {}) }
+        });
+      }
     }
   }
 

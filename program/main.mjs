@@ -37,11 +37,27 @@ async function loadConfigFile({ configPath, interpretFn }) {
 async function loadDefaultConfig({ cwd, interpretFn }) {
   const configPaths = [
     path.resolve(cwd, "configure", "default.pya"),
+    path.resolve(cwd, "configure", "container.pya"),
     path.resolve(cwd, "configure", "secret.pya")
   ];
   for (const configPath of configPaths) {
+    if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
     await loadConfigFile({ configPath, interpretFn });
   }
+}
+
+async function isContainerEnv() {
+  if (process.env?.PYA_CONTAINER || process.env?.CONTAINER || process.env?.container) return true;
+  const markers = ["/.dockerenv", "/run/.containerenv"];
+  for (const marker of markers) {
+    try {
+      await fs.access(marker);
+      return true;
+    } catch {
+      // ignore missing markers
+    }
+  }
+  return false;
 }
 
 async function repl() {
