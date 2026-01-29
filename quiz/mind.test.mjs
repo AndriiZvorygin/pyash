@@ -158,4 +158,32 @@ test("mind history defaults to `<name> story` bucket when fromtext absent", asyn
   }
 });
 
+test("mind session map exposes per-dialogue series", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+
+  try {
+    await interpret(parse('exists su helper be mind via state "qwen3:8b" ya'));
+    await interpret(parse('su q ob discourse "Hello" for name helper to name text helper-out be write do'));
+
+    const mem = allRemember();
+    const mapFact = mem.find(s => s.su?.name === "mind session map");
+    assert.ok(mapFact);
+    assert.equal(mapFact.be, "map");
+    const entry = mapFact.ob?.map?.["helper story"];
+    assert.ok(entry);
+    assert.equal(entry.ob?.name, "helper story session");
+
+    const series = mem.find(s => s.su?.name === "helper story session");
+    assert.ok(series);
+    assert.equal(series.be, "series");
+    assert.equal(series.ob?.series?.length, 2);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test.todo("mind call can override series with accordingto on invocation (pending spec)");
