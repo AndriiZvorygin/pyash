@@ -1,5 +1,3 @@
-; Run with: ./run examples/pyash/reviewer-circle.pya --refinery "reviewer circle"
-
 from name ./module/reviewer_circle.pya to name reviewer circle be import do
 
 exists su name author prompter ob text "Draft: be concise and friendly." be text ya
