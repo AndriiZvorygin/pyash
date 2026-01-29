@@ -136,6 +136,51 @@ function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
+function collectSentenceNodes(root) {
+  const nodes = [];
+  const stack = [root];
+  const seen = new Set();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    if (current.be || current.mood) nodes.push(current);
+    for (const value of Object.values(current)) {
+      if (value && typeof value === "object") stack.push(value);
+    }
+  }
+  return nodes;
+}
+
+function shouldAutoEnableNewspaper({ entries, rememberFn }) {
+  const knownMinds = new Set();
+  for (const entry of entries) {
+    const line = entry.text.trim();
+    if (!line) continue;
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      continue;
+    }
+    const nodes = collectSentenceNodes(sentence);
+    for (const node of nodes) {
+      if (node?.be === "mind" && node?.mood === "ya" && node?.su?.name) {
+        knownMinds.add(node.su.name);
+      }
+      if (node?.be === "mind" && node?.mood === "do") return true;
+      if (node?.be !== "write" || node?.mood !== "do") continue;
+      if (node?.for?.name) return true;
+      if (node?.totext?.name) return true;
+      const targetName = node?.to?.name;
+      if (targetName && knownMinds.has(targetName)) return true;
+      if (targetName && rememberFn?.(targetName)?.be === "mind") return true;
+    }
+  }
+  return false;
+}
+
 function dateStampFromRunTime(runTime) {
   const match = String(runTime ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) return `${match[1]}${match[2]}${match[3]}`;
@@ -216,7 +261,7 @@ async function main() {
   const full = args.includes("--full");
   const verbose = args.includes("--verbose");
   const showResult = args.includes("--result");
-  const useNewspaper = args.includes("--newspaper");
+  const useNewspaperFlag = args.includes("--newspaper");
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
   const runIdFlag = readFlagValue(args, "--run-id");
@@ -265,6 +310,13 @@ async function main() {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
   const sentences = splitSentencesWithLines(text, { includeThen: true });
+  let useNewspaper = useNewspaperFlag;
+  const autoNewspaperMind = resolveConfigBool("newspaper mind auto", { rememberFn: remember });
+  if (!useNewspaper && !useAgain && autoNewspaperMind) {
+    if (shouldAutoEnableNewspaper({ entries: sentences, rememberFn: remember })) {
+      useNewspaper = true;
+    }
+  }
   const outputs = [];
   const timeZone = resolveTimeZone(remember);
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());

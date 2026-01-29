@@ -29,7 +29,7 @@ Thrown errors (`be error do`) NEVER appear in the newspaper. Only surfaced error
 
 The newspaper is an **official `.pya` artifact**. Other formats are optional exports and are not normative.
 
-Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). When emission is enabled, all rules in this spec apply.
+Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). Runners MAY also auto-enable newspaper emission when a run includes mind/tool calls, if configured. When emission is enabled, all rules in this spec apply.
 
 Canonical examples live in `documentation/examples/examples-list.md` (see `examples/pyash/again-newspaper.pya` and `examples/pyash/refinery-mind-say-hear.pya`).
 
