@@ -1,5 +1,11 @@
 # Changelog
 
+### Jan 29, 2026: Spec consolidation into numbered chapters
+
+* **Merged specification files** into chaptered docs under `documentation/specifications/` to stay under model file limits.
+* **Updated references** across docs to point at the new chapter files.
+* **Normalized merged spec headers** to label legacy source sections without dangling filenames.
+
 ### Jan 29, 2026: Mind backend fixes + container dev ergonomics
 
 * **Mind backend request handling hardened**: avoid hash inconsistency by piping payloads over stdin instead of reusing a fixed request file.
@@ -107,7 +113,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
   * JSON export key ordering rule (stated + golden)
   * `unspecified` omission rule during JSON export (golden)
   * Self-referential export errors (golden)
-* Spec drop: `30-data-formats.md` status bumped to v0.2
+* Spec drop: `06-data-formats.md` status bumped to v0.2
 * Hardening: JSON → Pyash → JSON round-trip snapshots (byte-stable)
 * Hardening: cross-backend error parity audit for JSON map structural errors
 
@@ -119,7 +125,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Memoized parsing; multi-alias initialization supported
 * Qualified names via alias prefix (ceremonies + facts) with namespace map binding
 * Cycle detection and alias-shadowing errors
-* Spec drop: `50-modules.md` v0.1 (identity, resolution, cycles, visibility)
+* Spec drop: `11-modules.md` v0.1 (identity, resolution, cycles, visibility)
 
 
 ### Dec 27, 2025: CSV parity and roundtrip hardening complete
@@ -132,7 +138,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 28, 2025: YAML parity + CSV/Pyash roundtrip complete (maps done)
 
-* YAML spec v0.1 implemented (`30-data-formats.md`) with deterministic official ordering.
+* YAML spec v0.1 implemented (`06-data-formats.md`) with deterministic official ordering.
 * Parity goldens for interpreter/JS/C (YAML → Pyash, Pyash → YAML → Pyash).
 * YAML inline compile precompute for JS/C (no runtime YAML dependency when inline).
 * CSV → Pyash and Pyash → CSV → Pyash parity in interpreter/JS/C.
@@ -142,22 +148,22 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 29, 2025: Pre-week hygiene gates complete
 
-* `50-modules.md` promoted to v0.1.
-* Aspect spec moved to `08-vyah-and-aspect.md` and referenced from the spec index.
+* `11-modules.md` promoted to v0.1.
+* Aspect spec moved to `03-vyah-and-aspect.md` and referenced from the spec index.
 * Import rules locked in quizzes (entry allows top-level `do`; imported modules declarations-only).
-* `08-vyah-and-aspect.md` shipped (official ordering; `vyah … sloh` success marker).
+* `03-vyah-and-aspect.md` shipped (official ordering; `vyah … sloh` success marker).
 * Subordinate clauses (`la … ko`) shipped at parity (supports embedded mood when present).
 * Runtime contracts shipped in code (duty / stream / chip + lifecycle acks; chip exhaustion errors).
 * Error surfacing shipped in code: thrown errors are `be error do`, surfaced runtime results are `be error ya`.
 
 ### Dec 30, 2025: Refinery scaffolding + compiled run newspapers
 
-* Refinery spec drafted (`14-refinery.md`, refinery/platform/activity vocabulary) and indexed.
+* Refinery spec drafted (`10-pipelines-and-translation.md`, refinery/platform/activity vocabulary) and indexed.
 * Interpreter captures refinery/platform definitions into a normalized registry (no execution at definition time).
 * Refinery runner shipped (deterministic scheduling + fail-fast) for interpreter/JS/C.
 * Run newspaper implemented as opt-in (`--newspaper`) and locked with parity tests across interpreter / JS / C.
 * Compiled JS/C runs emit the same newspaper format (via shared runner) when flagged.
-* `11-run-recording-and-artifacts.md` shipped so JS/C can emit comparable newspapers.
+* `05-run-recording-and-artifacts.md` shipped so JS/C can emit comparable newspapers.
 * `runjs`/`runc` use unique temp outputs to avoid collisions.
 * Exchange filesystem rules locked: locator reuse, hash consistency, newline normalization, JS/C parity tests.
 
@@ -198,7 +204,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Jan 3, 2026: Again subset + documentation hardening
 
-* Again-mode strict subset documented in `11-run-recording-and-artifacts.md`.
+* Again-mode strict subset documented in `05-run-recording-and-artifacts.md`.
 * Fresh Codex Primer written in `documentation/handoff.md`.
 * Spec conformance pointers added, plus `90-implementation-map.md`.
 * Roadmap/changelog cleanup and guidance aligned to new doc structure.
@@ -265,7 +271,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Jan 8, 2026: Speech spec freeze + talk loop goldens
 
-* Speech specs frozen as v0.1 (`18-say-and-hear.md`, `19-speech-artifacts.md`) and index labels updated.
+* Speech specs frozen as v0.1 (`09-speech-and-hear.md`, `09-speech-and-hear.md`) and index labels updated.
 * Added talk loop golden examples (`examples/pyash/talk-loop-smoke.pya`, `examples/pyash/talk-loop-cancel.pya`).
 
 ### Jan 9, 2026: Streaming say buffering + fixtures
@@ -336,7 +342,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added date/time duration units (`second`/`minute`/`hour`/`day`/`week`) and date math for `plus`/`subtract`.
 * Added date math compile parity in JS/C with a shared C helper and new quizzes.
 * Added a date math example (`examples/pyash/date-plus-30.pya`) plus write support for date outputs.
-* Added `31-date-and-time.md` spec and indexed it in the spec list.
+* Added `07-io-and-scripts.md` spec and indexed it in the spec list.
 
 ### Jan 23, 2026: Interpret verb + C genitive fix
 

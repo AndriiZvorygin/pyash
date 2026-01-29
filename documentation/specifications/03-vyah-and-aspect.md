@@ -1,4 +1,4 @@
-# `08-vyah-and-aspect.md` (merged)
+# `03-vyah-and-aspect.md` (merged)
 
 Merged specification file. Original sources:
 - `08-vyah.md`
@@ -71,7 +71,7 @@ Modifiers in `vyah` fall into **five categories**, ordered below by **importance
 ### 3.1 Aspect modifiers (highest priority)
 
 **Status:** required for execution
-**Defined in:** `08-vyah-and-aspect.md` (Aspect section)
+**Defined in:** `03-vyah-and-aspect.md` (Aspect section)
 
 Aspect modifiers determine **how the event is evaluated in time** and **which runtime contract applies**.
 

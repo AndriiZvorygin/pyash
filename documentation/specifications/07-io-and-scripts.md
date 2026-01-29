@@ -1,4 +1,14 @@
-# `24-directory-commands.md` (draft v0.1)
+# `07-io-and-scripts.md` (merged)
+
+Merged specification sources (legacy IDs):
+- 24-directory-commands
+- 31-date-and-time
+- 32-interpret-script
+- 33-download
+
+---
+
+# Directory commands (draft v0.1)
 
 **Status:** draft (semantics locked, wording polish pending)
 
@@ -456,3 +466,342 @@ These are not specified yet; names and cases may evolve.
 * `be network be list do` — list network interfaces.
 * `be user be list do` — list local users.
 * `be group be list do` — list local groups.
+
+
+---
+
+# Date and time (draft v0.1)
+
+This document defines date/time literals, duration units, and basic date math.
+
+## 1. Date literals
+
+Pyash uses the `date` type for time values.
+
+- `ob date <ISO 8601>` is the canonical form.
+- Date-only strings are allowed (for example `2025-01-20`).
+
+Dynamic constants:
+- `ob date today` resolves to the current day in the runtime time zone.
+- `ob date now` resolves to the current timestamp in the runtime time zone.
+
+Example:
+```
+ob date today be record ya
+ob date now be record ya
+```
+
+## 2. Duration unit types
+
+Durations are expressed using unit type tokens with numeric payloads.
+
+Supported unit types:
+- `second`
+- `minute`
+- `hour`
+- `day`
+- `week`
+- `month`
+
+Plural unit words (`seconds`, `minutes`, `hours`, `days`, `weeks`, `months`) are aliases.
+
+Examples:
+```
+ob day 3 be record ya
+ob hours 4 be record ya
+ob month 1 be record ya
+```
+
+## 3. Date math with `add` / `subtract`
+
+Adding a duration to a date produces a date.
+
+Examples:
+```
+be add ob day 3 to date today do
+be add ob hour 4 to date now do
+be add ob weeks 3 to date today do
+be add ob month 1 to date today do
+```
+
+Subtracting a duration from a date produces a date:
+```
+be subtract ob day 7 from date today do
+be subtract ob month 1 from date today do
+```
+
+### 3.1 Result shape
+
+- The result is a `date` literal in ISO 8601 form.
+- Runtimes MUST apply the runtime time zone when resolving `today` and `now`.
+
+## 4. Error behavior
+
+- Unknown unit types MUST emit `be error ya`.
+- Non-numeric unit payloads MUST emit `be error ya`.
+
+
+---
+
+# Interpret script (draft v0.2)
+
+This document defines the `interpret` verb for running embedded scripts in a **sandboxed interpreter**.
+
+## 1. Sentence shape
+
+```
+be interpret ob text quoted.javascript.<code>.javascript.quoted as wo javascript be do
+```
+
+Notes:
+
+* `ob text` is required and MUST be a quoted block.
+* `as wo javascript` is required in v0.2.
+* The quoted block contains **raw JavaScript source text**, not JSON and not an expression fragment.
+
+## 2. Behavior (interpreter)
+
+### 2.1 Execution model
+
+* The runtime executes the provided JavaScript source as a **script**, not as an expression.
+* Execution occurs inside a **WebAssembly (WASM) sandbox** using:
+
+  * a WASI-compatible JavaScript engine (QuickJS)
+  * a WASM runtime (for example Wasmtime)
+
+The interpreter host:
+
+* writes the quoted JavaScript source into a temporary script file
+* executes that file inside the WASM sandbox
+* captures standard output and standard error
+
+### 2.2 Filesystem sandbox
+
+* The script is executed with **capability-based filesystem access**.
+* By default, the sandbox is granted access to **one temporary directory only**.
+* The script MAY read and write files inside that directory.
+* The script MUST NOT have access to:
+
+  * the host filesystem outside the sandbox directory
+  * user home directories
+  * configuration directories
+  * secrets or credentials
+
+This directory preopen model corresponds to WASI `--dir=<path>` semantics.
+
+### 2.3 Time and resource limits
+
+* Implementations SHOULD enforce:
+
+  * a wall-clock execution limit (for example 0.5 s)
+  * an upper bound on captured output size
+* Termination due to limits MUST be reported as an error (see §4).
+
+### 2.4 Input
+
+* In v0.2, the JavaScript source is provided **only** via the quoted block.
+* Standard input piping is not required and not assumed.
+* Any required input files MUST be placed in the sandbox directory by the host prior to execution.
+
+## 3. Output
+
+* Standard output produced by the script is captured verbatim.
+* No trimming, normalisation, or newline removal is required.
+
+On success, the interpreter returns:
+
+```
+su name result ob text "<stdout>" be interpret ya
+```
+
+Notes:
+
+* `<stdout>` MAY be empty.
+* Output is treated as opaque text.
+
+## 4. Errors
+
+Any failure MUST return a deterministic error sentence:
+
+```
+su name interpret defective ob text "<reason>" from name interpret be error ya
+```
+
+Failures include, but are not limited to:
+
+* JavaScript parse or runtime errors
+* sandbox violations (for example filesystem access outside the allowed directory)
+* execution timeout
+* output size limit exceeded
+* interpreter or WASM runtime failure
+
+The `<reason>` string SHOULD be stable and human-readable.
+
+## 5. Safety
+
+* `interpret` executes **sandboxed code**, not arbitrary host code.
+* The sandbox:
+
+  * provides filesystem isolation via directory capabilities
+  * provides execution isolation via WASM
+  * provides no network access unless explicitly enabled by policy
+* Runtimes MAY disable the verb entirely by policy.
+* Runtimes MAY further restrict available capabilities (read-only directories, smaller limits).
+
+## 6. Vendoring and reproducibility
+
+Implementations SHOULD support vendoring:
+
+* the WASM JavaScript runner (for example `qjs.wasm`)
+* the WASM runtime binary (for example `wasmtime`)
+
+To ensure reproducibility, runtimes SHOULD record:
+
+* runner identity (hash of `qjs.wasm`)
+* runtime version
+* enforced limits
+
+## 7. Future extensions (non-normative)
+
+* Additional language runners via `as wo <language>` (for example `python`, `lua`).
+* Reserved `as wo` values (for example `lua`, `python.micro`) MUST return a deterministic error until implemented.
+* Structured input via `from text` or `from name`.
+* Structured output via official JSON objects.
+* Multiple preopened directories with explicit naming.
+* Deterministic PRNG seeding for replay.
+
+---
+
+### Summary of what changed from v0.1
+
+* Removed the claim that `interpret` executes arbitrary host code.
+* Defined WASM + QuickJS as the **reference execution model**.
+* Formalised the directory-based sandbox.
+* Clarified why stdin piping is not required.
+* Added vendoring and reproducibility guidance.
+
+
+---
+
+# Download (draft v0.1)
+
+This document defines the `download` verb as a **signature-first** tool for pulling remote content into local files.
+It is designed to avoid backend dispatch inside the verb body by encoding transport and intent in cases.
+
+## 1. Canonical verb shape
+
+```
+be download fromstate <scheme> from filename <url> [as wo <intent>] [to filename <path>] do
+```
+
+- `fromstate` encodes the transport/scheme (`http`, `https`, `magnet`, `ipfs`).
+- `from filename` carries the URL (text payload; not a local filename).
+- `as wo` encodes the intent (`video`, `audio`, `web`, `file`) and maps to the backend choice.
+- `to filename` is the local output path (optional; defaults to current working directory).
+
+## 2. Scheme and intent vocabulary
+
+**Schemes (`fromstate`):**
+- `http`
+- `https`
+- `magnet`
+- `ipfs`
+
+**Intents (`as wo`):**
+- `video`
+- `audio`
+- `web`
+- `file`
+
+Notes:
+- `as wo` is optional when the scheme has a single backend (e.g., `magnet`, `ipfs`).
+- `as wo` is required when multiple backends are valid for the scheme (e.g., `http`, `https`).
+- `ob wo all` MAY be used to request a multi-item download (playlists/channels/feeds).
+
+## 3. Signature-first dispatch (normative)
+
+Each backend registers its own signature. Examples:
+
+```
+be download fromstate magnet from filename filename to filename filename do
+be download fromstate ipfs from filename filename to filename filename do
+be download fromstate https from filename filename as wo video to filename filename do
+be download fromstate https from filename filename as wo web to filename filename do
+```
+
+Dispatch MUST be signature-first. Backends MUST NOT switch on URL contents inside the verb body.
+
+## 4. URL normalization (sugar)
+
+Implementations MAY support a sugar form that infers `fromstate` from the URL **before signature derivation**:
+
+```
+be download from filename "https://example.com/file.zip" as wo file to filename "out.zip" do
+```
+
+Normalization rules (normative):
+- `magnet:` → `fromstate magnet`
+- `ipfs://` or `ipfs:` → `fromstate ipfs`
+- `http://` → `fromstate http`
+- `https://` → `fromstate https`
+
+If inference fails, the call MUST error (`download defective: missing fromstate`).
+
+## 5. Output contract
+
+On success, return:
+
+```
+su name <result> ob filename "<path>" be download ya
+```
+
+On failure, return:
+
+```
+su name download defective ob text "<reason>" from name download be error ya
+```
+
+## 6. Tooling boundaries
+
+Suggested backend mapping (non-normative):
+- `http/https + video|audio` → `yt-dlp`
+- `http/https + web|file` → `curl` (or equivalent)
+- `magnet` → torrent client
+- `ipfs` → ipfs client
+
+Backends live as modules or command helpers. Keep side effects localized.
+
+## 6.1 Optional cases (download-specific)
+
+These cases are interpreted by the download backend and do not change global grammar.
+
+* `ob wo all` — download multiple items when the source is a playlist/channel/feed.
+* `during months <n>` — restrict downloads to the last `<n>` months (backend-specific).
+
+If `to filename` is omitted, the backend MUST write into the current working directory,
+using its default naming template.
+
+Additional backend arguments MAY be supplied via defaults, e.g.:
+
+```
+su name download extra ob ve text "--cookies-from-browser firefox" ya
+```
+
+## 7. Example sentences
+
+```
+be download fromstate https from filename "https://example.com/file.zip" as wo file to filename "out/file.zip" do
+be download fromstate https from filename "https://escribemeetings.com/..." as wo audio to filename "out/audio.mp3" do
+be download fromstate magnet from filename "magnet:?xt=urn:btih:..." to filename "out.torrent" do
+be download fromstate ipfs from filename "ipfs://bafy..." to filename "out.bin" do
+```
+
+Sugar example (pre-dispatch normalization):
+```
+be download from filename "https://example.com/file.zip" as wo file to filename "out/file.zip" do
+```
+
+Playlist/channel example (download all items from last month into CWD):
+```
+be download ob wo all during months 1 from filename "https://www.youtube.com/@AndriiZ/videos" as wo audio do
+```

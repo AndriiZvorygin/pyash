@@ -2,37 +2,46 @@
 
 ### `documentation/specifications/`
 
-Small, normative modules. Each one 1–3 pages, same template.
+Small, normative modules. Consolidated into numbered chapters to keep file count low.
 
 * `00-index.md`
   Reading order, what is “core”, what is “feature”, and links to examples that demonstrate each concept.
 
 * `01-sentence-and-grammar.md`
-  Fields, cases, typed terms, genitives, quoting.
+  Fields, cases, typed terms, genitives, quoting, and official ordering.
 
-* `01-sentence-and-grammar.md`
-  `ya/do/def/prah/then`, `exists` on `ya`, memory store and lookup.
+* `02-core-execution.md`
+  Dispatch/signature rules, ceremonies + `this`, control flow, and error sentence contracts.
 
-* `03-dispatch-and-signatures.md`
-  Signature derivation rules, ignored registers, unknown signature error.
+* `03-vyah-and-aspect.md`
+  `vyah` modifiers and the aspect inventory.
 
-* `04-ceremonies-and-this.md`
-  Define/invoke, `this`, registers, return contract.
+* `04-runtime-primitives.md`
+  C IR, duty/stream/chip primitives, and vector `at all`.
 
-* `05-control-flow.md`
-  Official conditional form, loops (`fromindex/toindex`), stop rules.
+* `05-run-recording-and-artifacts.md`
+  Run newspaper, exchanges, artifacts, and again-mode determinism.
 
-* `06-errors.md`
-  Error sentence contract, stable error names, where errors originate.
+* `06-data-formats.md`
+  Map/JSON/YAML/CSV formats, canonical ordering, and determinism rules.
 
-Feature specifications (only if you want them “blessed”):
+* `07-io-and-scripts.md`
+  Directory verbs, date/time, interpret-script, and download.
 
-* `20-arithmetic.md`
-* `21-vectors.md`
-* `22-understand.md`
-* `23-compile.md`
-* `24-mind.md`
-* Later: `30-data-formats.md` (when maps harden)
+* `08-tools-and-mcp.md`
+  Mind + tool calling, tool ABI, tool envelope, and MCP integration.
+
+* `09-speech-and-hear.md`
+  Say/hear verbs, speech artifacts, whisper input, and caterer vendoring.
+
+* `10-pipelines-and-translation.md`
+  Refinery, re-entry cycle, and translation.
+
+* `11-modules.md`
+  Module system and tool runner contract.
+
+* `90-implementation-map.md`
+  Code pointers for implementers.
 
 ### `documentation/guideline/`
 
@@ -98,7 +107,7 @@ In `documentation/specifications/00-index.md`, include a short recommended readi
 3. Read `03-dispatch-and-signatures.md` then intentionally trigger a signature error example
 4. Read `04-ceremonies-and-this.md` then run `examples/pyash/ceremony-invoke.pya` and `this-registers.pya`
 5. Read `05-control-flow.md` then run `tloh-loop.pya`, `until-loop.pya`, and a conditional example
-6. Read `06-errors.md` then run a trace (`program/command/read_pya_trace.mjs`) and inspect the error sentence shape
+6. Read `02-core-execution.md` then run a trace (`program/command/read_pya_trace.mjs`) and inspect the error sentence shape
 
 That gives the model a tight, reproducible mental model.
 
