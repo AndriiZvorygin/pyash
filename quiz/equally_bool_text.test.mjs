@@ -28,3 +28,14 @@ test("equally compares truth/lie text (false case)", async () => {
   const hits = remember("hits");
   assert.equal(hits.ob.num, 0);
 });
+
+test("equally resolves ob name text in conditionals", async () => {
+  forget();
+
+  await run("exists su name status ob text \"PASS\" be text ya");
+  await run("exists su name hits ob num 0 be number ya");
+  await run("ob name status from text \"PASS\" be equally then ob num 1 to name hits be plus do");
+
+  const hits = remember("hits");
+  assert.equal(hits.ob.num, 1);
+});
