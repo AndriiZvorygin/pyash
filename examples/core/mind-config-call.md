@@ -6,7 +6,7 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya
+  su generator be mind from space "http://localhost:11434" via state "qwen3:8b" from discourse "orchestrator" ya
   su question ob discourse "Hello" for name generator to name text generator-out be write do
   mem
   ```
@@ -20,7 +20,7 @@
       "be": "mind",
       "from": { "name": "http://localhost:11434" },
       "as": { "name": "qwen3:8b" },
-      "accordingto": { "name": "orchestrator" },
+      "fromtext": { "name": "orchestrator" },
       "mood": "ya"
     },
     {

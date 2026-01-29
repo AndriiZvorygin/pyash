@@ -23,6 +23,13 @@
 * **Reviewer circle module simplified** with explicit reviewer input assembly and text-only outputs.
 * **Example run now returns text**, and a quiz covers `ob name` conditionals.
 
+### Jan 29, 2026: Series + mind history updates
+
+* **Added `be series def`** for ordered sentence lists and documented it near maps.
+* **Mind prompts now come from `from discourse`**, while `accordingto` points to a session series.
+* **Series-backed history** can be shared across minds and is appended on each call.
+* **Docs + examples refreshed**, and new quizzes cover series storage and mind series history.
+
 ## Timeline summary (from the commits you pasted)
 
 ## One-paragraph “progress so far” (copy-paste friendly)

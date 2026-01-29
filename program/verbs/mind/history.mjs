@@ -2,12 +2,6 @@ const mindLogs = new Map();
 const mindAnswerCounters = new Map();
 
 export function historyDialogueName({ callSentence, configSentence, targetName }) {
-  if (typeof callSentence?.from?.text === "string") return callSentence.from.text;
-  if (callSentence?.fromtext?.name) return String(callSentence.fromtext.name);
-  if (typeof callSentence?.fromtext?.text === "string") return callSentence.fromtext.text;
-  if (typeof configSentence?.from?.text === "string") return configSentence.from.text;
-  if (configSentence?.fromtext?.name) return String(configSentence.fromtext.name);
-  if (typeof configSentence?.fromtext?.text === "string") return configSentence.fromtext.text;
   if (targetName) return `${targetName} story`;
   return "mind story";
 }

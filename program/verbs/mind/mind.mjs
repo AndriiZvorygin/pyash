@@ -153,7 +153,34 @@ function resolveStreamStdoutEnabled({ rememberFn } = {}) {
   return process?.stdout?.isTTY === true;
 }
 
-function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName }) {
+function appendSeriesEntries({ seriesName, callPrompt, responseText }) {
+  if (!seriesName) return;
+  const fact = remember(seriesName);
+  if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return;
+  const entries = [...fact.ob.series];
+  if (callPrompt) {
+    entries.push({
+      mood: "ya",
+      su: { name: "user" },
+      ob: { text: callPrompt },
+      be: "write"
+    });
+  }
+  if (responseText !== undefined) {
+    entries.push({
+      mood: "ya",
+      su: { name: "assistant" },
+      ob: { text: responseText },
+      be: "answer"
+    });
+  }
+  doRemember({
+    ...fact,
+    ob: { series: entries }
+  });
+}
+
+function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName }) {
   const { count, name: answerName } = nextAnswerName(mindName, dialogue);
   if (callPrompt) {
     doRemember({
@@ -191,6 +218,9 @@ function recordMindAnswer({ mindName, dialogue, callPrompt, responseText, output
     ob: { text: responseText }
   });
   appendLog(dialogue, { role: "assistant", content: responseText });
+  if (historySeriesName) {
+    appendSeriesEntries({ seriesName: historySeriesName, callPrompt, responseText });
+  }
   return answerSentence;
 }
 
@@ -204,9 +234,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     ? sentence.vyah.ve.values
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
   const aspect = getEffectiveVyahAspect(vyahValues, { verb: "mind", caseKey: "vyah" });
-  const dialogue = typeof sentence?.from?.text === "string"
-    ? sentence.from.text
-    : historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
+  const dialogue = historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
   const historyWindow =
     sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
@@ -222,8 +250,9 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const configModel = configSentence?.as?.name ?? null;
   const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
 
-  // Prompt resolution: config accordingto (discourse) + call prompt/text
-  const configPromptName = configSentence?.accordingto?.name ?? null;
+  // Prompt resolution: config/call fromtext (discourse source) + call prompt/text
+  const configPromptValue = configSentence?.fromtext ?? null;
+  const callPromptValue = sentence?.fromtext ?? null;
 
   const resolvePromptFromName = (name) => {
     if (!name) return null;
@@ -265,6 +294,12 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     }
     return null;
   };
+  const resolvePromptValue = (value) => {
+    if (!value) return null;
+    if (typeof value?.text === "string") return value.text;
+    if (value?.name) return resolvePromptFromName(value.name) ?? value.name;
+    return null;
+  };
   const obNamePrompt = sentence?.ob?.name && !sentence?.ob?.model
     ? (resolvePromptFromName(sentence.ob.name) ?? sentence.ob.name)
     : null;
@@ -277,12 +312,47 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
     obNamePrompt ??
     ob?.text ??
     inlineObNamePrompt;
-  const resolvedConfigPrompt = configPromptName ? (resolvePromptFromName(configPromptName) ?? configPromptName) : null;
+  const resolvedConfigPrompt = resolvePromptValue(callPromptValue) ?? resolvePromptValue(configPromptValue);
 
   const toolMapName = sentence?.with?.name ?? null;
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
 
-  const historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
+  const historySeriesName =
+    sentence?.accordingto?.name ??
+    sentence?.accordingto?.text ??
+    configSentence?.accordingto?.name ??
+    configSentence?.accordingto?.text ??
+    null;
+  let historyMessages = [];
+  if (historySeriesName) {
+    const historyFact = remember(historySeriesName);
+    if (!historyFact || historyFact.be !== "series" || !Array.isArray(historyFact.ob?.series)) {
+      throwErrorSentence({
+        name: "series defective",
+        message: `series history missing: ${historySeriesName}`,
+        from: { name: "mind" },
+        raw: { historySeriesName }
+      });
+    }
+    historyMessages = historyFact.ob.series
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const role = entry?.role ?? entry?.su?.name ?? entry?.su?.text ?? entry?.from?.name ?? null;
+        const content =
+          entry?.content ??
+          entry?.ob?.text ??
+          (typeof entry?.ob?.num === "number" ? String(entry.ob.num) : null);
+        if (!role || content == null) return null;
+        return { role: String(role).toLowerCase(), content: String(content) };
+      })
+      .filter(Boolean);
+    if (historyWindow > 0) {
+      const max = historyWindow * 2;
+      historyMessages = historyMessages.slice(-max);
+    }
+  } else {
+    historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
+  }
   const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
   const ollamaHost = resolveConfigText("ollama host", { rememberFn: remember }) ?? null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
@@ -511,7 +581,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
               console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: finalText.length })}`);
             }
             writeStreamEnd(streamOutputPath);
-            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName });
+            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: finalText, outputName, historySeriesName });
           } else if (backendName) {
             const backendStream = await callMindBackendStream({ backendName, payload: requestPayload });
             const backendPath =
@@ -548,7 +618,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
               console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: streamedText.length })}`);
             }
             writeStreamEnd(streamOutputPath);
-            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName });
+            recordMindAnswer({ mindName, dialogue, callPrompt, responseText: streamedText.trim(), outputName, historySeriesName });
           } else {
             throwErrorSentence({
               name: "mind backend missing",
@@ -614,7 +684,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   }
 
   // Record turn so future calls have context
-  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName });
+  const answerSentence = recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName });
   return answerSentence;
 }
 

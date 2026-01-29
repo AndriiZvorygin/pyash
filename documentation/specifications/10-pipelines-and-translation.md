@@ -503,16 +503,16 @@ Explicit loop rule (normative):
 ## Mind configuration (author/reviewer/judge)
 
 The author, reviewer, and judge are **mind configurations**. Define them with `be mind` sentences and
-set their model + system prompt via `as` and `accordingto`:
+set their model + system prompt via `as` and `from discourse`:
 
 ```pyash
 exists su name author prompt ob text "Draft: be concise and follow the task." be text ya
 exists su name reviewer prompt ob text "Review: list issues + patch plan." be text ya
 exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
 
-exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompt ya
-exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompt ya
-exists su name judge be mind as name "qwen3-vl:8b-instruct" accordingto name judge prompt ya
+exists su name author be mind as name "qwen3-vl:8b-instruct" from discourse name author prompt ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" from discourse name reviewer prompt ya
+exists su name judge be mind as name "qwen3-vl:8b-instruct" from discourse name judge prompt ya
 ```
 
 These can live in `configure/default.pya` for global defaults or inline in a specific program.
