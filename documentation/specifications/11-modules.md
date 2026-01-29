@@ -1,4 +1,4 @@
-# `50-modules.md`
+# `11-modules.md`
 
 **Status:** v0.1
 
@@ -22,7 +22,7 @@ This document defines surface syntax and runtime semantics.
 
 ## Addendum: external tool runner contract (v0.1)
 
-This addendum defines a minimal, backend-agnostic contract for invoking external tools from Pyash modules while keeping built-ins small. It complements the tool envelope specs (`16-mind-and-tools.md`, `11-run-recording-and-artifacts.md`) by defining how a module calls an external command and how results are surfaced.
+This addendum defines a minimal, backend-agnostic contract for invoking external tools from Pyash modules while keeping built-ins small. It complements the tool envelope specs (`08-tools-and-mcp.md`, `05-run-recording-and-artifacts.md`) by defining how a module calls an external command and how results are surfaced.
 
 ### A.1 Tool runner goals
 
@@ -89,7 +89,7 @@ The runner MUST define one or more explicit exit conditions:
 
 ### A.5 Tool event recording
 
-Each command execution used as a tool runner MUST emit a tool event as specified in `16-mind-and-tools.md` and `11-run-recording-and-artifacts.md`:
+Each command execution used as a tool runner MUST emit a tool event as specified in `08-tools-and-mcp.md` and `05-run-recording-and-artifacts.md`:
 
 ```
 su name tool event <counter>
@@ -102,7 +102,7 @@ The tool event MUST appear after any `write` records that capture raw tool reque
 
 ### A.6 Artifact recording
 
-If the tool creates files (audio, transcripts, metadata), the runner MUST emit `be artifact ya` records as described in `11-run-recording-and-artifacts.md`. Modules SHOULD pass explicit filenames to enable deterministic artifact names.
+If the tool creates files (audio, transcripts, metadata), the runner MUST emit `be artifact ya` records as described in `05-run-recording-and-artifacts.md`. Modules SHOULD pass explicit filenames to enable deterministic artifact names.
 
 ---
 

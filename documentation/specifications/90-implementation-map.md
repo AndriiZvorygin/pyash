@@ -21,5 +21,5 @@ Short map from spec contracts → implementation locations.
 | Source maps | `program/verbs/exchange/compile.mjs` (JS/C sourcemap embedding) |
 | Maps (plain/json/csv/yaml) | `program/bridge/maps.mjs`, `program/verbs/exchange/json.mjs`, `program/verbs/exchange/csv.mjs`, `program/verbs/exchange/yaml.mjs`, compiled: `program/verbs/exchange/compile/c/helpers_c.mjs` |
 | Modules | `program/bridge/modules.mjs`, `program/verbs/exchange/compile.mjs` (closed-world include) |
-| C IR | `program/verbs/exchange/compile/c/helpers_c.mjs`, `documentation/specifications/07-c-ir.md` |
+| C IR | `program/verbs/exchange/compile/c/helpers_c.mjs`, `documentation/specifications/04-runtime-primitives.md` |
 | Compiler (JS/C) | `program/verbs/exchange/compile.mjs` (`transpileProgram`) |

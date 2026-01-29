@@ -1,4 +1,4 @@
-# `11-run-recording-and-artifacts.md` (merged)
+# `05-run-recording-and-artifacts.md` (merged)
 
 Merged specification file. Original sources:
 - `11-run-newspaper.md`
@@ -29,7 +29,7 @@ Thrown errors (`be error do`) NEVER appear in the newspaper. Only surfaced error
 
 The newspaper is an **official `.pya` artifact**. Other formats are optional exports and are not normative.
 
-Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). When emission is enabled, all rules in this spec apply.
+Tooling MAY choose to emit the newspaper only when explicitly requested (for example via a CLI flag). Runners MAY also auto-enable newspaper emission when a run includes mind/tool calls, if configured. When emission is enabled, all rules in this spec apply.
 
 Canonical examples live in `documentation/examples/examples-list.md` (see `examples/pyash/again-newspaper.pya` and `examples/pyash/refinery-mind-say-hear.pya`).
 
@@ -132,7 +132,7 @@ The newspaper MUST support the following event kinds:
 - `tool`
 - `artifact`
 
-The `tool` event schema is defined in `16-mind-and-tools.md`.
+The `tool` event schema is defined in `08-tools-and-mcp.md`.
 
 Later specifications may plus additional event kinds, but these MUST exist.
 
@@ -230,7 +230,7 @@ su name S3 atindex num 0 ob text "he" as name notfinal be chip ya
 Rules:
 
 - State sentences MUST be emitted using official ordering rules.
-- State sentences MUST include all required fields for that primitive as defined in `09-runtime-primitives.md`.
+- State sentences MUST include all required fields for that primitive as defined in `04-runtime-primitives.md`.
 
 ---
 
@@ -273,7 +273,7 @@ Minimum required fields:
 
 su name <artifact> to filename <path-or-uri> from name <producer> be artifact ya
 
-Additional artifact fields (hash, size, mime, etc.) are defined in `11-run-recording-and-artifacts.md`.
+Additional artifact fields (hash, size, mime, etc.) are defined in `05-run-recording-and-artifacts.md`.
 
 ---
 
@@ -314,7 +314,7 @@ An implementation MUST be able to:
 
 - run again using only the newspaper and referenced artifacts
 - reproduce the same sequence of result sentences
-- verify artifact hashes during again (hash rules defined in `11-run-recording-and-artifacts.md`)
+- verify artifact hashes during again (hash rules defined in `05-run-recording-and-artifacts.md`)
 
 Again MUST fail if:
 
@@ -523,7 +523,7 @@ This spec defines:
 - locator (path/uri) normalization rules
 - official hashing rules for artifact bytes
 - exchange event sentence forms (read/write/fetch/push)
-- how exchange and artifacts appear in the run newspaper (`11-run-recording-and-artifacts.md`)
+- how exchange and artifacts appear in the run newspaper (`05-run-recording-and-artifacts.md`)
 
 ---
 
@@ -848,12 +848,12 @@ If again mode is enabled and the implementation cannot persist and hash fetched 
 
 ## 11. Errors
 
-Failures related to exchange and artifacts MUST follow `06-errors.md`:
+Failures related to exchange and artifacts MUST follow `02-core-execution.md`:
 
 - thrown as `be error do`
 - surfaced as `be error ya` at observation boundaries
 
-Recommended stable error names for this spec (plus to `06-errors.md` if not already present):
+Recommended stable error names for this spec (plus to `02-core-execution.md` if not already present):
 
 - `exchange defective`
 - `artifact defective`
