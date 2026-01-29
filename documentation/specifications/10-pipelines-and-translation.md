@@ -595,7 +595,7 @@ prah
 
 ## Verifier report bundle (subsection)
 
-The verifier loop MUST emit a deterministic report bundle per run.
+The verifier loop MAY emit a deterministic report bundle per run. The bundle is optional and fully derivable from the run newspaper plus artifacts, so it MUST NOT contain information that is not present in the recorded run.
 
 ### Bundle location
 
@@ -667,7 +667,7 @@ prah
 
 ### Error handling
 
-If the verifier cannot write the report bundle, it MUST emit:
+If the verifier attempts to write the report bundle and cannot, it MUST emit:
 
 ```
 su name report defective ob text "<reason>" from name verify be error ya
@@ -678,6 +678,33 @@ su name report defective ob text "<reason>" from name verify be error ya
 **Classification note:** This spec achieves **RPT-1+** because later passes incorporate feedback
 from earlier passes through deliberate re-entry. Using different models for author, critic, or judge
 remains valid, since recurrence is defined at the system level.
+
+---
+
+## Newspaper extraction helper (informative)
+
+When you want the report bundle view without producing extra files, extract it from the run newspaper.
+The goal is a small, stable summary suitable for dashboards or CI.
+
+Recommended extraction fields (derive from newspaper + artifacts):
+
+- run id, run time, run root, source filename
+- verifier status (pass/fail) and counts (passed/failed/skipped)
+- quiz entries (name, file, status, duration, failure message)
+- artifact references (locators for report inputs/outputs)
+- notes (optional, human-readable)
+
+Suggested CLI shape:
+
+```
+./run-newspaper-summary --run-id <id> --format pya|json --out <path>
+```
+
+Suggested default behavior:
+
+- read `newspaper/<run-id>.pya`
+- emit a `summary.pya`-shaped report to stdout (or JSON when `--format json`)
+- include only surfaced (`be ... ya`) records
 
 
 ---
