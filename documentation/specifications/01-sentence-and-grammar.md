@@ -37,7 +37,7 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - Newlines inside quoted blocks are preserved; escaped `\\n` sequences are unescaped before parsing.
 - Internal sentence objects use `su` / `ob` keys; `subj` / `obj` are accepted at the surface but canonicalize to `su` / `ob` on parse.
 - Keyword lists (moods, cases, type tokens, vyah modifiers) are defined in `program/library/grammar/keywords.mjs` and MUST be treated as the source of truth.
-- Official ordering (for sentence formatting and signature words) follows the compositional case order (`01-sentence-and-grammar.md`) and JSON official key ordering (`30-data-formats.md`).
+- Official ordering (for sentence formatting and signature words) follows the compositional case order (`01-sentence-and-grammar.md`) and JSON official key ordering (`06-data-formats.md`).
 
 ## 4. Error contracts
 - If a sentence cannot be parsed, the parser raises an error (see `quiz/parser.test.mjs`).
@@ -379,7 +379,7 @@ ob la ob la su name x be text ko be evoke ko be log ya
 
 ## 8. Error conditions
 
-The following conditions MUST raise an error per `06-errors.md`:
+The following conditions MUST raise an error per `02-core-execution.md`:
 
 * missing `ko`
 * malformed embedded sentence form

@@ -26,6 +26,7 @@ const ENV_BINDINGS = [
   { env: "PYA_CHECKPOINTS", name: "checkpoint seed", type: "text" },
   { env: "PYA_NO_CHECKPOINT", name: "checkpoint disabled", type: "bool" },
   { env: "PYA_NEWSPAPER", name: "newspaper enabled", type: "bool" },
+  { env: "PYA_NEWSPAPER_MIND_AUTO", name: "newspaper mind auto", type: "bool" },
   { env: "PYA_RUN_ID", name: "run id", type: "text" },
   { env: "PYA_REFINERY", name: "refinery name", type: "text" },
   { env: "OLLAMA_HOST", name: "ollama host", type: "text" },

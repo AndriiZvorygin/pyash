@@ -3,20 +3,29 @@
 Purpose: provide the normative specs for Pyash. Each module follows the same template and links to existing examples and quizzes.
 
 Reading order (core):
-1. `01-sentence-and-grammar.md`
-2. `08-vyah-and-aspect.md`
-3. `03-dispatch-and-signatures.md`
-4. `04-ceremonies-and-this.md`
-5. `05-control-flow.md`
-6. `06-errors.md`
+1. `01-sentence-and-grammar.md` — sentence shape, cases, quoting, official ordering.
+2. `02-core-execution.md` — dispatch/signatures, ceremonies + `this`, control flow, error sentences.
+3. `03-vyah-and-aspect.md` — `vyah` modifiers and aspect inventory.
+4. `04-runtime-primitives.md` — C IR + duty/stream/chip primitives.
+5. `05-run-recording-and-artifacts.md` — newspaper/exchange/artifacts + again-mode determinism.
+6. `06-data-formats.md` — maps/JSON/YAML/CSV and canonical ordering.
+
+Reading order (feature chapters):
+7. `07-io-and-scripts.md` — directory verbs, date/time, interpret-script, download.
+8. `08-tools-and-mcp.md` — mind + tool calling + MCP.
+9. `09-speech-and-hear.md` — say/hear, speech artifacts, whisper input, vendoring.
+10. `10-pipelines-and-translation.md` — refinery, re-entry cycle, translation.
+11. `11-modules.md` — module system and tool runner contract.
 
 Recommended practice loop
-1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-plus-to-js-text.pya`.
-2. Read `08-vyah-and-aspect.md`, then run `examples/pyash/fizzbuzz.pya`.
-3. Read `03-dispatch-and-signatures.md`, then trigger a signature inconsistency (see `quiz/ceremony_signature_inconsistency.test.mjs`).
-4. Read `04-ceremonies-and-this.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-plus-two.pya`.
-5. Read `05-control-flow.md`, then run `examples/pyash/insertion-sort.pya`.
-6. Read `06-errors.md`, then run `quiz/exists_do.test.mjs` and inspect `err.sentence`.
+1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
+2. Read `02-core-execution.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-plus-two.pya`.
+3. Read `02-core-execution.md`, then trigger a signature inconsistency (see `quiz/ceremony_signature_inconsistency.test.mjs`).
+4. Read `03-vyah-and-aspect.md`, then run `examples/pyash/fizzbuzz.pya`.
+5. Read `04-runtime-primitives.md`, then run `quiz/runtime_primitives_lifecycle.test.mjs`.
+6. Read `05-run-recording-and-artifacts.md`, then run `quiz/run_newspaper_basic.test.mjs`.
+7. Read `06-data-formats.md`, then run `quiz/json_map_roundtrip_canonical.test.mjs`.
+8. Read `10-pipelines-and-translation.md`, then run `examples/pyash/re-entry-cycle-fixture.pya`.
 
 If you need code locations without scanning the repo, read `documentation/specifications/90-implementation-map.md`.
 
@@ -40,28 +49,12 @@ Contributing overview (quick)
 3. Source of truth for keywords and ordering
 - Keywords (moods, cases, types, vyah): `program/library/grammar/keywords.mjs`
 - Compositional case mapping/order: `program/library/compositionalCases.mjs`
-- Official JSON key ordering: `documentation/specifications/30-data-formats.md`
+- Official JSON key ordering: `documentation/specifications/06-data-formats.md`
 
 Feature specs (optional, when blessed):
-- `07-c-ir.md` (v0.1)
-- `09-runtime-primitives.md` (v0.1)
-- `01-sentence-and-grammar.md` (merged)
-- `11-run-recording-and-artifacts.md` (merged)
-- `14-refinery.md` (v0.1)
-- `16-mind-and-tools.md` (merged)
-- `17-tool-abi.md` (v0.1 consolidation)
-- `22-mcp-integration.md` (draft v0.1)
-- `18-say-and-hear.md` (v0.1)
-- `19-speech-artifacts.md` (v0.1)
-- `20-whisper-english-to-pyash.md` (v0.1 draft)
-- `21-vector-at-all.md` (v0.1)
-- `23-caterer-hear-say-vendoring.md` (v0.1)
-- `24-directory-commands.md` (draft v0.1)
-- `30-data-formats.md` (merged)
-- `31-date-and-time.md` (draft v0.1)
-- `32-interpret-script.md` (draft v0.1)
-- `33-download.md` (draft v0.1)
-- `34-translation.md` (draft v0.1)
-- `08-vyah-and-aspect.md` (merged)
-- `50-modules.md` (v0.1)
+- `07-io-and-scripts.md`
+- `08-tools-and-mcp.md`
+- `09-speech-and-hear.md`
+- `10-pipelines-and-translation.md`
+- `11-modules.md` (v0.1)
 - `documentation/whisper_initial_prompt.md` (draft)
