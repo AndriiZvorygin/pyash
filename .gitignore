@@ -8,6 +8,8 @@ configure/secret.pya
 configure/workplace.pya
 container/compose.override.yaml
 .bash_history
+.gitconfig
+.codex/
 .cache/
 .npm/
 
