@@ -9,6 +9,12 @@
 * Golden corpus grows continuously; snapshots must match across backends
 * `write` is official for screen/file output and mind calls; `say` reserved for TTS flows
 
+## Jan 29, 2026: Recent maintenance (not a roadmap milestone)
+
+* Mind backend payload handling hardened; curl fallback and debug toggles added.
+* Container dev ergonomics improved (auto-load container config; host git config mounts).
+* Re-entry cycle fixture updated to inline the flow and use reviewer dialogue history.
+
 
 ## Timeline summary (from the commits you pasted)
 
