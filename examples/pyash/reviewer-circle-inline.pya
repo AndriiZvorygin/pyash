@@ -14,23 +14,27 @@ su name assistant ob text of sketch out be text ya
 prah
 su name review out ob text "Review the prior exchange and respond now." for name reviewer accordingto name review session to name text review out by num 0 be write do
 
+su name accept draft to name text decision out be ceremony def
+  exists su name decision out ob text "" be text ya
+  ob name sketch out to name decision out be plus do
+prah
+
+su name revise draft to name text decision out be ceremony def
+  exists su name revise session be series def
+  su name user ob text of task be text ya
+  su name assistant ob text of sketch out be text ya
+  su name user ob text of review out be text ya
+  prah
+  su name better out ob text "Revise the prior answer based on the review." for name author accordingto name revise session to name text better out by num 0 be write do
+  exists su name decision out ob text "" be text ya
+  ob name better out to name decision out be plus do
+prah
+
 ob name review out from text "PASS" be equally then
-exists su name decision out ob text "" be text ya
-ob name review out from text "PASS" be equally then
-ob name sketch out to name decision out be plus do
+to name text decision out be accept draft do
 
 ob name review out from text "FAIL" be equally then
-exists su name revise session be series def
-su name user ob text of task be text ya
-su name assistant ob text of sketch out be text ya
-su name user ob text of review out be text ya
-prah
-ob name review out from text "FAIL" be equally then
-su name better out ob text "Revise the prior answer based on the review." for name author accordingto name revise session to name text better out by num 0 be write do
-ob name review out from text "FAIL" be equally then
-exists su name decision out ob text "" be text ya
-ob name review out from text "FAIL" be equally then
-ob name better out to name decision out be plus do
+to name text decision out be revise draft do
 
 su name decision out ret
 prah
