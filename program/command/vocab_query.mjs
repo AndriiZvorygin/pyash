@@ -43,7 +43,7 @@ export async function queryVocabLines(prefix) {
   const normalized = input.toLowerCase();
   const { entries, blacklist } = await loadData();
 
-  const lines = [];
+  const lines = new Set();
   for (const entry of entries) {
     if (!entry?.pya || !entry?.en) continue;
     if (
@@ -51,11 +51,11 @@ export async function queryVocabLines(prefix) {
       matchesPrefix(entry.en, normalized)
     ) {
       const line = buildLine(entry);
-      if (line) lines.push(line);
+      if (line) lines.add(line);
     }
   }
 
-  if (lines.length > 0) return lines;
+  if (lines.size > 0) return [...lines];
 
   const alias = resolveEnglishAlias(normalized);
   if (alias && alias !== normalized) {
@@ -63,10 +63,10 @@ export async function queryVocabLines(prefix) {
       if (!entry?.pya || !entry?.en) continue;
       if (matchesPrefix(entry.en, alias) || matchesPrefix(entry.pya, alias)) {
         const line = buildLine(entry);
-        if (line) lines.push(line);
+        if (line) lines.add(line);
       }
     }
-    if (lines.length > 0) return lines;
+    if (lines.size > 0) return [...lines];
   }
 
   const blocked = blacklist[`X${normalized}`] ?? blacklist[`X${input}`];
@@ -74,5 +74,5 @@ export async function queryVocabLines(prefix) {
     return [JSON.stringify(blocked)];
   }
 
-  return lines;
+  return [];
 }

@@ -235,10 +235,20 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       const lines = await queryRyan(token);
       const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-      const suggestionList = lines.filter(
-        line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
-      );
-      const preview = suggestionList.slice(0, 4).join(" | ");
+    const suggestionList = lines.filter(
+      line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
+    );
+    const glosses = [];
+    const seenGlosses = new Set();
+    for (const line of suggestionList) {
+      const gloss = getGlossFromLine(line);
+      if (!gloss) continue;
+      const lower = gloss.toLowerCase();
+      if (seenGlosses.has(lower)) continue;
+      seenGlosses.add(lower);
+      glosses.push(gloss);
+    }
+    const preview = glosses.slice(0, 4).join(" | ");
       const fileList = [...filesForToken]
         .map(name => name.replace(`${process.cwd()}/`, ""))
         .filter(name => name && name !== "input");
