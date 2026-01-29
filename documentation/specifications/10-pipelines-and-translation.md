@@ -415,7 +415,8 @@ The Re-entry Cycle delivers the first meaningful jump using existing models and 
 ### How (mechanism)
 
 The system intentionally **re-enters the same task** multiple times. Each pass produces a draft,
-receives reviewer criticism, applies revisions, and may be judged. Feedback from earlier passes shapes later ones.
+receives reviewer criticism, and only applies revisions when the reviewer reports failure. A pass can
+skip revision entirely. Feedback from earlier passes shapes later ones.
 The recurrence lives in **control flow** (`fromindex … toindex … do`), not inside the model.
 One mind or multiple minds may be used; both qualify as RPT-1 because the task itself is what is re-entered.
 

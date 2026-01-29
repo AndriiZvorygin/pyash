@@ -1,4 +1,4 @@
-; Run with: ./run --refinery reviewer circle examples/pyash/reviewer-circle.pya
+; Run with: ./run examples/pyash/reviewer-circle.pya --refinery "reviewer circle"
 
 from name ./module/reviewer_circle.pya to name reviewer circle be import do
 

@@ -26,6 +26,10 @@ su name reviewer trying to name text output be ceremony def
   by num 0
   be write do
 
+  su name decision out ob text of criticism out be text ya
+  ob text of decision out be equally from text "PASS" then
+  su name sketch out ret
+
   su name better out
   ob text criticism out
   for name author
@@ -33,7 +37,6 @@ su name reviewer trying to name text output be ceremony def
   by num 0
   be write do
 
-  su name decision out ob text of criticism out be text ya
   ob name judge triggered be equally from text truth then
   be judge moment do
 
