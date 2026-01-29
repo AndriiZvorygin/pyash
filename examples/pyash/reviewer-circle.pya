@@ -1,0 +1,14 @@
+; Run with: ./run --refinery reviewer circle examples/pyash/reviewer-circle.pya
+
+from name ./module/reviewer_circle.pya to name reviewer circle be import do
+
+exists su name author prompter ob text "Draft: be concise and friendly." be text ya
+exists su name reviewer prompter ob text "Review the TASK and ANSWER. Return only PASS or FAIL." be text ya
+exists su name judge prompter ob text "Score 0..1. Return only PASS if score >= 0.8 else FAIL." be text ya
+
+exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompter ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompter ya
+exists su name judge be mind as name "qwen3-vl:8b-instruct" accordingto name judge prompter ya
+
+exists su name judge triggered ob text lie be text ya
+exists su name task ob text "Write a short greeting." be text ya

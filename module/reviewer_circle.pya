@@ -1,0 +1,53 @@
+su name judge moment be ceremony def
+  su name judged out
+  ob text of better out
+  for name judge
+  to name text judged out
+  by num 0
+  be write do
+
+  su name decision out ob text of judged out be text ya
+prah
+
+su name reviewer trying to name text output be ceremony def
+  su name task ob text ob of this ya
+
+  su name sketch out
+  ob text task
+  for name author
+  to name text sketch out
+  by num 0
+  be write do
+
+  su name criticism out
+  ob text sketch out
+  for name reviewer
+  to name text criticism out
+  by num 0
+  be write do
+
+  su name better out
+  ob text criticism out
+  for name author
+  to name text better out
+  by num 0
+  be write do
+
+  su name decision out ob text of criticism out be text ya
+  ob name judge triggered be equally from text truth then
+  be judge moment do
+
+  ob text of decision out be equally from text "PASS" then
+  su name better out ret
+
+  su name reviewer defective ob text "reviewer fail" be error ya
+  su name reviewer defective ret
+prah
+
+su name reviewer circle be refinery def
+exists su name reviewer round ob la ob text of task to name text output be reviewer trying do ko be platform ya
+prah
+
+exists su name reviewer trying be export ya
+exists su name reviewer circle be export ya
+exists su name judge moment be export ya
