@@ -415,7 +415,7 @@ The Re-entry Cycle delivers the first meaningful jump using existing models and 
 ### How (mechanism)
 
 The system intentionally **re-enters the same task** multiple times. Each pass produces a draft,
-receives critique, applies revisions, and may be judged. Feedback from earlier passes shapes later ones.
+receives reviewer criticism, applies revisions, and may be judged. Feedback from earlier passes shapes later ones.
 The recurrence lives in **control flow** (`fromindex … toindex … do`), not inside the model.
 One mind or multiple minds may be used; both qualify as RPT-1 because the task itself is what is re-entered.
 
@@ -442,7 +442,7 @@ Produce a concise, structured candidate answer.
 State assumptions explicitly when needed.
 ```
 
-**Critique (critic mind)**
+**Review (reviewer mind)**
 
 ```
 Review the candidate.
@@ -499,18 +499,18 @@ Explicit loop rule (normative):
 
 ---
 
-## Mind configuration (author/critic/judge)
+## Mind configuration (author/reviewer/judge)
 
-The author, critic, and judge are **mind configurations**. Define them with `be mind` sentences and
+The author, reviewer, and judge are **mind configurations**. Define them with `be mind` sentences and
 set their model + system prompt via `as` and `accordingto`:
 
 ```pyash
 exists su name author prompt ob text "Draft: be concise and follow the task." be text ya
-exists su name critic prompt ob text "Critique: list issues + patch plan." be text ya
+exists su name reviewer prompt ob text "Review: list issues + patch plan." be text ya
 exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
 
 exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompt ya
-exists su name critic be mind as name "qwen3-vl:8b-instruct" accordingto name critic prompt ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompt ya
 exists su name judge be mind as name "qwen3-vl:8b-instruct" accordingto name judge prompt ya
 ```
 
@@ -571,17 +571,17 @@ su name re-entry attempt to name text output be ceremony def
   by num 0
   be write do
 
-  ; critique (draft -> critic -> critique)
-  su name critique out
+  ; review (draft -> reviewer -> criticism)
+  su name criticism out
   ob text draft out
-  for name critic
-  to name critique out
+  for name reviewer
+  to name criticism out
   by num 0
   be write do
 
-  ; revise (critique -> author -> revised)
+  ; revise (criticism -> author -> revised)
   su name revised out
-  ob text critique out
+  ob text criticism out
   for name author
   to name revised out
   by num 0
@@ -599,9 +599,9 @@ prah
 
 ---
 
-## Verifier report bundle (subsection)
+## Reviewer report bundle (subsection)
 
-The verifier loop MAY emit a deterministic report bundle per run. The bundle is optional and fully derivable from the run newspaper plus artifacts, so it MUST NOT contain information that is not present in the recorded run.
+The reviewer loop MAY emit a deterministic report bundle per run. The bundle is optional and fully derivable from the run newspaper plus artifacts, so it MUST NOT contain information that is not present in the recorded run.
 
 ### Bundle location
 
@@ -673,10 +673,10 @@ prah
 
 ### Error handling
 
-If the verifier attempts to write the report bundle and cannot, it MUST emit:
+If the reviewer attempts to write the report bundle and cannot, it MUST emit:
 
 ```
-su name report defective ob text "<reason>" from name verify be error ya
+su name report defective ob text "<reason>" from name reviewer be error ya
 ```
 
 ---
@@ -695,7 +695,7 @@ The goal is a small, stable summary suitable for dashboards or CI.
 Recommended extraction fields (derive from newspaper + artifacts):
 
 - run id, run time, run root, source filename
-- verifier status (pass/fail) and counts (passed/failed/skipped)
+- reviewer status (pass/fail) and counts (passed/failed/skipped)
 - quiz entries (name, file, status, duration, failure message)
 - artifact references (locators for report inputs/outputs)
 - notes (optional, human-readable)
