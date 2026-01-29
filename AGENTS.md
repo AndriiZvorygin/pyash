@@ -26,6 +26,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Favor small, pure functions; reset shared state explicitly (e.g., `forget`) and keep side effects localized.
 - Add brief, targeted comments only where behavior is non-obvious.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
+- Run `vocab_suggest` for new Pyash sentence words (names, error names, verbs); quoted prompt text does not need Pyash vocabulary.
 - `vocab_suggest` applies to Pyash tokens (verbs/names/signatures/error names) and **not** to content inside quoted text.
 
 ## Quiz Guidelines

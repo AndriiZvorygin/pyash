@@ -16,6 +16,13 @@
 * **Re-entry cycle fixture** updated: inlined flow, Pyash-valid tokens, and reviewer uses explicit dialogue history.
 * **Agent guidance** clarified: `vocab_suggest` applies to Pyash tokens, not quoted content.
 
+### Jan 29, 2026: Reviewer loop reliability
+
+* **Conditional resolution improved** so `ob name <text>` comparisons dereference stored values in `then` checks.
+* **Ceremony conditionals no longer abort** execution on false; they now behave like single-line skips.
+* **Reviewer circle module simplified** with explicit reviewer input assembly and text-only outputs.
+* **Example run now returns text**, and a quiz covers `ob name` conditionals.
+
 ## Timeline summary (from the commits you pasted)
 
 ## One-paragraph “progress so far” (copy-paste friendly)
