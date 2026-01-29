@@ -1,9 +1,10 @@
 exists su name author prompter ob text "Draft: be concise and friendly." be text ya
-exists su name reviewer prompter ob text "Verify: return JSON with REASONING bullet points and SCORE PASS|FAIL." be text ya
+exists su name reviewer prompter ob text "Given the QUESTION and ANSWER in the dialogue, decide whether the ANSWER fulfills the QUESTION. Return JSON with REASONING bullet points and SCORE PASS|FAIL." be text ya
 exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompter ya
-exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompter ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" accordingto name reviewer prompter fromtext text "verify session" ya
 exists su name duty ob text "Write a short greeting." be text ya
 su name sketch ob name duty for name author to name text sketch recorder be write do
-su name reviewer phrase ob name sketch recorder for name reviewer to name text reviewer recorder be write do
+su name reviewer question ob name duty for name reviewer to name text reviewer question be write do
+su name reviewer phrase ob name sketch recorder for name reviewer to name text reviewer recorder by num 1 be write do
 ob name sketch recorder be write do
 ob name reviewer recorder be write do
