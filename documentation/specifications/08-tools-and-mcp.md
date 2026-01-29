@@ -7,6 +7,15 @@ Merged specification sources (legacy IDs):
 
 ---
 
+# Chapter map
+
+This chapter is ordered for first-read clarity:
+1. Mind (how `be write` is configured and invoked).
+2. Mind tool calling (adapter rules and payload shapes).
+3. Tool envelope (canonical tool event + request/response records).
+4. Tool ABI (minimal event schema and invariants).
+5. MCP integration (transport + runner expectations).
+
 ## Mind (draft v0.2)
 
 Define the **mind** verb as implemented today (interpreter + compiled JS), plus the
