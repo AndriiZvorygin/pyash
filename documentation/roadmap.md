@@ -277,7 +277,6 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ### Spec drops (freeze v0.45)
 
-* **Reports spec v0.1** (fields, ordering, paths)
 * **Mind event schema v0.1** (ids, hashes, provenance)
 * **Patch bundle schema v0.1** (diff layout, tests, provenance)
 
