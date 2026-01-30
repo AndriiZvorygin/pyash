@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { remember } from "../remember/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
+import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
@@ -26,6 +27,161 @@ function resolveText(value, { rememberFn } = {}) {
   return "";
 }
 
+function resolveMotor(value, { rememberFn } = {}) {
+  if (!value) return "";
+  if (typeof value.filename === "string") return value.filename;
+  if (typeof value.text === "string") return value.text;
+  if (value.name && rememberFn) {
+    const fact = rememberFn(value.name);
+    if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
+  return "";
+}
+
+function normalizeSearxUrl(base, question, limit) {
+  const trimmed = String(base ?? "").replace(/\/+$/, "");
+  const hasSearch = trimmed.endsWith("/search");
+  const url = new URL(hasSearch ? trimmed : `${trimmed}/search`);
+  url.searchParams.set("q", question);
+  url.searchParams.set("format", "json");
+  if (limit) url.searchParams.set("count", String(limit));
+  return url.toString();
+}
+
+function padRank(rank) {
+  return String(rank).padStart(6, "0");
+}
+
+async function loadFixture() {
+  const envPath = process.env.PYA_WEB_SEARCH_FIXTURE;
+  if (envPath) {
+    return fs.readFile(envPath, "utf8");
+  }
+  const cfg = resolveConfigText("web search fixture", { rememberFn: remember });
+  if (cfg) {
+    return fs.readFile(String(cfg), "utf8");
+  }
+  const fact = remember("web search fixture");
+  const filename = fact?.ob?.filename ?? fact?.ob?.text;
+  if (filename) {
+    return fs.readFile(String(filename), "utf8");
+  }
+  return null;
+}
+
+function buildFoundMap({ question, motorUrl, limit, results }) {
+  const map = {};
+  map.metadata = {
+    mood: "ya",
+    su: { name: "metadata" },
+    ob: { text: question },
+    fromstate: { text: "web", wo: "web" },
+    from: { filename: motorUrl },
+    by: { num: limit }
+  };
+  const motorId = (() => {
+    try {
+      return new URL(motorUrl).hostname;
+    } catch {
+      return "motor";
+    }
+  })();
+  map.metadata.via = { name: motorId };
+
+  results.forEach((entry, idx) => {
+    const rank = idx + 1;
+    const key = `found ${padRank(rank)}`;
+    const sentence = {
+      mood: "ya",
+      su: { name: key },
+      by: { num: rank },
+      from: { filename: entry.url }
+    };
+    if (entry.title) sentence.ob = { text: entry.title };
+    if (entry.abstract) sentence.as = { text: entry.abstract };
+    if (entry.branch) sentence.fromstate = { text: entry.branch, wo: entry.branch };
+    if (entry.motor) sentence.via = { name: entry.motor };
+    map[key] = sentence;
+  });
+  return map;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`status ${res.status}`);
+  }
+  return res.json();
+}
+
+async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
+  const question = resolveText(sentence?.ob, { rememberFn });
+  if (!question) {
+    throwErrorSentence({
+      name: "web search question lost",
+      message: "web search question lost",
+      from: { name: "search" },
+      raw: { sentence }
+    });
+  }
+  const explicitMotor = resolveMotor(sentence?.from, { rememberFn });
+  let motorUrl = explicitMotor;
+  if (!motorUrl) {
+    const motorFact = rememberFn("web search motor");
+    motorUrl = motorFact?.ob?.filename ?? motorFact?.ob?.text ?? "";
+  }
+  if (!motorUrl) {
+    throwErrorSentence({
+      name: "web search motor lost",
+      message: "web search motor lost",
+      from: { name: "search" },
+      raw: { sentence }
+    });
+  }
+  const limit = Math.max(1, Math.trunc(Number(sentence?.by?.num ?? 10)));
+
+  let payload;
+  const fixture = await loadFixture();
+  if (fixture) {
+    payload = JSON.parse(fixture);
+  } else {
+    const url = normalizeSearxUrl(motorUrl, question, limit);
+    try {
+      payload = await fetchJson(url);
+    } catch (err) {
+      throwErrorSentence({
+        name: "web search defective",
+        message: "web search defective",
+        from: { name: "search" },
+        raw: { error: err?.message ?? String(err) }
+      });
+    }
+  }
+  const rawResults = Array.isArray(payload?.results) ? payload.results : [];
+  const normalized = rawResults.slice(0, limit).map((result) => {
+    const url = result?.url ?? result?.link ?? "";
+    const title = result?.title ?? "";
+    const abstract = result?.content ?? result?.summary ?? "";
+    const branch = result?.category ?? "";
+    const motor = result?.engine ?? (Array.isArray(result?.engines) ? result.engines[0] : "");
+    return {
+      url: String(url || ""),
+      title: title ? String(title) : "",
+      abstract: abstract ? String(abstract) : "",
+      branch: branch ? String(branch) : "",
+      motor: motor ? String(motor) : ""
+    };
+  }).filter(entry => entry.url);
+
+  const map = buildFoundMap({ question, motorUrl, limit, results: normalized });
+  const targetName = sentence?.su?.name ?? sentence?.to?.name ?? null;
+  if (targetName) {
+    doRemember({ mood: "ya", su: { name: targetName }, ob: { map }, be: "map" });
+  }
+  return { ob: { map }, be: "map" };
+}
+
 async function listFiles(root) {
   const stats = await fs.stat(root);
   if (stats.isFile()) return [root];
@@ -45,6 +201,10 @@ async function listFiles(root) {
 }
 
 export async function search(sentence, { remember: rememberFn = remember } = {}) {
+  const webFlag = sentence?.fromstate?.wo === "web" || sentence?.fromstate?.text === "web";
+  if (webFlag) {
+    return searchWeb(sentence, { remember: rememberFn });
+  }
   const pattern = resolveText(sentence?.ob, { rememberFn });
   const target = resolveFilename(sentence?.in ?? sentence?.inside, { rememberFn });
   if (!pattern) {
@@ -103,6 +263,18 @@ export async function search(sentence, { remember: rememberFn = remember } = {})
 export default search;
 
 export const signatures = [
+  { signatureWords: ["be", "search", "ob", "text", "fromstate", "wo", "web"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "fromstate", "wo", "web"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "fromstate", "wo", "web", "by", "num"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "fromstate", "wo", "web", "by", "num"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "fromstate", "wo", "web", "from", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "fromstate", "wo", "web", "from", "filename"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "fromstate", "wo", "web", "from", "filename", "by", "num"], handler: search },
+  { signatureWords: ["be", "search", "ob", "name", "text", "fromstate", "wo", "web", "from", "filename", "by", "num"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "from", "filename", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "from", "filename", "ob", "name", "text"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "in", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "name", "text", "in", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "in", "name", "filename"], handler: search },

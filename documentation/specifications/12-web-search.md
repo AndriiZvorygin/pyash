@@ -63,7 +63,7 @@ su name <found> be map def
     ob text "<question>"
     fromstate wo web
     from filename "<search-engine-url>"
-    from name <motor-id>
+    via name <motor-id>
     by num <limit>
   ya
 
@@ -82,7 +82,7 @@ Each found entry is one sentence stored as a map entry. Recommended fields:
 | URL       | `from filename "<url>"` |      Yes | Canonical target URL                                      |
 | name      | `ob text "<name>"`      | Optional | Result title                                              |
 | abstract  | `as text "<abstract>"`  | Optional | Result summary/extract                                    |
-| motor id  | `from name <motor-id>`  | Optional | Stable engine label (example: `searxng`)                  |
+| motor id  | `via name <motor-id>`   | Optional | Stable engine label (example: `searxng`)                  |
 | branch    | `from state <branch>`   | Optional | Example: `web`, `news`, `images`                          |
 
 Example entry:
@@ -93,7 +93,7 @@ by num 1
 from filename "https://example.com/a"
 ob text "Title here"
 as text "Abstract here"
-from name searxng
+via name searxng
 ya
 ```
 
