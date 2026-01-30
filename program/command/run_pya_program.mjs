@@ -15,7 +15,7 @@ import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
 import { closeMcpServers } from "../motor/mcp.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
-import { resolveConfigBool } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 
 async function loadConfigFile({ configPath, interpretFn }) {
   try {
@@ -258,9 +258,9 @@ async function loadCheckpointIndex({ runId, cwd }) {
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
-  const full = args.includes("--full");
-  const verbose = args.includes("--verbose");
-  const showResult = args.includes("--result");
+  const fullFlag = args.includes("--full");
+  const verboseFlag = args.includes("--verbose");
+  const showResultFlag = args.includes("--result");
   const useNewspaperFlag = args.includes("--newspaper");
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
@@ -349,6 +349,8 @@ async function main() {
     return target?.be === "mind";
   };
 
+  const full = fullFlag;
+  const verbose = verboseFlag;
   if (full) {
     console.log("Program:");
     if (gross) {
@@ -373,9 +375,8 @@ async function main() {
   }
   let runError = null;
   let refineryResult = null;
-  const checkpointIndex = (!noCheckpoint && refineryFlag)
-    ? await loadCheckpointIndex({ runId, cwd: process.cwd() })
-    : null;
+  let refineryName = refineryFlag ?? null;
+  let checkpointIndex = null;
 
   const toResultSentence = (res, fallbackSentence) => {
     if (res?.mood && res?.be) return res;
@@ -421,11 +422,17 @@ async function main() {
     if (sentence?.mood === "que") outputs.push(res);
   }
 
-  if (!runError && refineryFlag) {
+  if (!runError && !refineryName) {
+    refineryName = resolveConfigText("refinery name", { rememberFn: remember }) ?? null;
+  }
+  if (!runError && refineryName && !noCheckpoint) {
+    checkpointIndex = await loadCheckpointIndex({ runId, cwd: process.cwd() });
+  }
+  if (!runError && refineryName) {
     let pendingToolEvoked = null;
     try {
       refineryResult = await runRefinery({
-        name: refineryFlag,
+        name: refineryName,
         interpret,
         checkpointIndex,
         checkpointEnabled: !noCheckpoint,
@@ -479,6 +486,9 @@ async function main() {
   if (full) {
     console.log("\nResult:");
   }
+
+  const showResultConfig = resolveConfigBool("run result", { rememberFn: remember });
+  const showResult = showResultFlag || showResultConfig === true;
 
   if (gross) {
     console.log(JSON.stringify({ outputs, result }, null, 2));
