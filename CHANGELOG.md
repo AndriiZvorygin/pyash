@@ -376,3 +376,9 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Mind history now exposes a read-only `mind session map` with per-dialogue series snapshots.
 * Added a shared session store for mind logs across backends.
 * Reviewer circle inline example now uses session series instead of string concatenation.
+
+### Jan 30, 2026: Inline refinery execution
+
+* Added `be refinery do` inline execution with task binding from `ob`.
+* Reviewer circle example now runs the refinery inline and prints the result without CLI flags.
+* Refinery spec updated to describe inline invocation and newspaper/artefact source-of-truth invariants.
