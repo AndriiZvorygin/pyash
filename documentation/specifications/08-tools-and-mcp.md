@@ -216,8 +216,8 @@ This sentence is intended for human output. It does not replace the answer fact.
 When newspaper and again mode are enabled, each mind invocation is recorded using the
 tool envelope specs (`08-tools-and-mcp.md`, `05-run-recording-and-artifacts.md`).
 
-Request/response JSON is recorded as `be write ya` sentences with `quoted.json`
-payloads (see `08-tools-and-mcp.md`).
+Request/response payloads are recorded as `be json map def … prah` chains
+using the `<mind> request <n>` and `<mind> response <n>` names.
 
 ### 6.1 Required recorded inputs
 
@@ -562,48 +562,14 @@ su name say ob text "" be say can
 su name tools be map def
 su name say ob text "" be say can
 prah
-su name helper request 000001 ob text quoted.json.{
-  "model": "qwen3-vl:8b-instruct",
-  "messages": [
-    {
-      "role": "system",
-      "content": "TOOLS:\nsu name say ob text \"\" be say can"
-    },
-    {
-      "role": "user",
-      "content": "use the say tool to say hello world"
-    }
-  ],
-  "tools": [
-    {
-      "type": "function",
-      "function": {
-        "name": "be_say_ob_text",
-        "description": "su name say ob text \"\" be say can",
-        "signature": "be say ob text",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "ob": { "type": "string" }
-          },
-          "required": ["ob"]
-        }
-      }
-    }
-  ],
-  "stream": false
-}.json.quoted from name mind be write ya
-su name helper response 000001 ob text quoted.json.{
-  "model": "qwen3-vl:8b-instruct",
-  "message": {
-    "role": "assistant",
-    "content": "",
-    "tool_calls": [
-      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
-    ]
-  },
-  "done": true
-}.json.quoted from name mind be write ya
+su name helper request 000001 be json map def
+su name model ob text "qwen3-vl:8b-instruct" ya
+su name stream ob bool lie ya
+prah
+su name helper response 000001 be json map def
+su name model ob text "qwen3-vl:8b-instruct" ya
+su name done ob bool truth ya
+prah
 su name tool event 000001 ob la ob text "use the say tool to say hello world" for name helper to name text helper-out with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
 su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
 ```
@@ -957,7 +923,7 @@ This spec links to:
 ## 2. Terms
 
 - **tool event**: a newspaper record that pairs an evoked sentence with a surfaced result sentence.
-- **request/response record**: `be write ya` sentences carrying raw JSON for mind calls.
+- **request/response record**: `be json map def … prah` chains carrying mind request/response payloads.
 
 ---
 
@@ -980,17 +946,20 @@ Rules:
 
 ### 3.2 Mind request/response records
 
-Mind adapters MUST emit request/response JSON as write sentences:
+Mind adapters MUST emit request/response payloads as json map definition chains:
 
 ```
-su name <mind> request <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
-su name <mind> response <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
+su name <mind> request <n> be json map def
+su name model ob text "<model>" ya
+prah
+su name <mind> response <n> be json map def
+su name done ob bool truth|lie ya
+prah
 ```
 
 Rules:
 
 - `<n>` is the per-dialogue mind counter.
-- JSON bytes are recorded exactly as emitted (newlines preserved).
 - Records appear in the newspaper before the tool event.
 
 ---
@@ -1001,48 +970,14 @@ Rules:
 su name tools be map def
 su name say ob text "" be say can
 prah
-su name helper request 000001 ob text quoted.json.{
-  "model": "qwen3-vl:8b-instruct",
-  "messages": [
-    {
-      "role": "system",
-      "content": "TOOLS:\nsu name say ob text \"\" be say can"
-    },
-    {
-      "role": "user",
-      "content": "use the say tool to say hello world"
-    }
-  ],
-  "tools": [
-    {
-      "type": "function",
-      "function": {
-        "name": "be_say_ob_text",
-        "description": "su name say ob text \"\" be say can",
-        "signature": "be say ob text",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "ob": { "type": "string" }
-          },
-          "required": ["ob"]
-        }
-      }
-    }
-  ],
-  "stream": false
-}.json.quoted from name mind be write ya
-su name helper response 000001 ob text quoted.json.{
-  "model": "qwen3-vl:8b-instruct",
-  "message": {
-    "role": "assistant",
-    "content": "",
-    "tool_calls": [
-      { "function": { "name": "be_say_ob_text", "arguments": "{\"ob\":\"hello world\"}" } }
-    ]
-  },
-  "done": true
-}.json.quoted from name mind be write ya
+su name helper request 000001 be json map def
+su name model ob text "qwen3-vl:8b-instruct" ya
+su name stream ob bool lie ya
+prah
+su name helper response 000001 be json map def
+su name model ob text "qwen3-vl:8b-instruct" ya
+su name done ob bool truth ya
+prah
 su name tool event 000001 ob la ob text "use the say tool to say hello world" for name helper to name text helper-out with name tools be write do ko to la su name helper answer 1 from name helper ob text "say hello world" be answer ya ko be tool ya
 su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256 fromtext text "3a0b...ff" by num 6 from name exchange be artifact ya
 ```
@@ -1098,22 +1033,25 @@ Rules:
 - `<counter>` is zero-padded, 6-digit, monotonic per run (`000001`, `000002`, …).
 - Embedded sentences use official ordering.
 - The tool event is appended in execution order.
-- Tool events appear **after** any request/response `be write ya` records.
+- Tool events appear **after** any request/response `be json map def … prah` records.
 
 Sources: `08-tools-and-mcp.md` §15, `05-run-recording-and-artifacts.md` §9.
 
 ## 3. Mind request/response records (normative)
 
-Mind adapters must emit request/response JSON as `be write ya` sentences:
+Mind adapters must emit request/response payloads as json map definition chains:
 
 ```pyash
-su name <mind> request <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
-su name <mind> response <n> ob text quoted.json.<json>.json.quoted from name mind be write ya
+su name <mind> request <n> be json map def
+su name model ob text "<model>" ya
+prah
+su name <mind> response <n> be json map def
+su name done ob bool truth|lie ya
+prah
 ```
 
 Rules:
 - `<n>` is the per-dialogue mind counter.
-- JSON bytes are recorded exactly as emitted (no rewriting).
 - Records appear before the corresponding tool event.
 
 Sources: `08-tools-and-mcp.md` §15.
