@@ -6,8 +6,6 @@ import { compareUtf8, jsonValueFromObj } from "./json_map_export.mjs";
 import { read_fromstate_csv } from "./read_csv.mjs";
 import { read_fromstate_json } from "./read_json.mjs";
 import { read_fromstate_yaml } from "./read_yaml.mjs";
-import { read_fromstate_html } from "./read_html.mjs";
-import { read_fromstate_pdf } from "./read_pdf.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,13 +30,6 @@ export async function read_ob_filename(sentence) {
   return read_from_filename({ from: sentence?.ob });
 }
 
-function read_as_html(sentence) {
-  return read_fromstate_html({ ...sentence, fromstate: { name: "html" } });
-}
-
-function read_as_pdf(sentence) {
-  return read_fromstate_pdf({ ...sentence, fromstate: { name: "pdf" } });
-}
 
 function parseAllGenitive(genitive) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -125,16 +116,4 @@ export const signatures = [
   { signatureWords: ["be", "read", "from", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
   { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name"], handler: read_fromstate_yaml },
   { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "html"], handler: read_fromstate_html },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "html", "to", "name"], handler: read_fromstate_html },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "html", "to", "name", "text"], handler: read_fromstate_html },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "html"], handler: read_as_html },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "html", "to", "name"], handler: read_as_html },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "html", "to", "name", "text"], handler: read_as_html },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "pdf"], handler: read_fromstate_pdf },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "pdf", "to", "name"], handler: read_fromstate_pdf },
-  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "pdf", "to", "name", "text"], handler: read_fromstate_pdf },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "pdf"], handler: read_as_pdf },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "pdf", "to", "name"], handler: read_as_pdf },
-  { signatureWords: ["be", "read", "from", "filename", "as", "wo", "pdf", "to", "name", "text"], handler: read_as_pdf }
 ];

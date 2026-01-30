@@ -695,19 +695,22 @@ To ensure reproducibility, runtimes SHOULD record:
 # Read (text extraction, v0.1)
 
 `be read` can extract plain text from document formats when `fromstate` is explicit.
+HTML/PDF extraction is provided by modules that register additional `read` signatures.
 
 Canonical forms:
 
 ```
-from filename "<path>" fromstate name html to name text <out> be read do
-from filename "<path>" fromstate name pdf to name text <out> be read do
+ob name read from filename "../../module/read_html.pya" to name read be import do
+from filename "<path>" fromstate wo html to name text <out> be read do
+ob name read from filename "../../module/read_pdf.pya" to name read be import do
+from filename "<path>" fromstate wo pdf to name text <out> be read do
 ```
 
 Notes:
 * `fromstate` is required for HTML/PDF extraction in v0.1.
-* Optional sugar: `as wo html` / `as wo pdf` MAY be treated as `fromstate name html/pdf`.
-* Implementations may use external helpers (e.g. pandoc, pdftotext) to extract text.
-* Errors: `html defective`, `html lost`, `pdf defective`, `pdf lost`.
+* Import `module/read_html.pya` or `module/read_pdf.pya` (exporting `read`) to register these signatures.
+* Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
+* Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
 
 ---
 

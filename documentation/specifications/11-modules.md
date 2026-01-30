@@ -5,6 +5,7 @@
 ## 1. Purpose
 
 Define a **file-based module system** for Pyash that stays compatible with **signature-first dispatch** and supports interpreter, JS, and C targets.
+Module files are **Pyash source** (`.pya`), not Python.
 
 External tool wrappers (ffmpeg, xdotool, piper, espeak, whisper.cpp, etc.) SHOULD be expressed as modules and imported via `configure/default.pya`, so defaults wire external dependencies once and programs stay declarative.
 
