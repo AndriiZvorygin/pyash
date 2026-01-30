@@ -15,10 +15,14 @@ function stripMindContext(obj) {
 function recordMindJson(targetName, label, payload) {
   if (!pyaNewspaperEnabled()) return;
   const count = nextMindDebugCount(targetName);
-  const jsonText = JSON.stringify(payload ?? null, null, 2);
-  const quoted = "quoted.json." + jsonText + ".json.quoted";
   const name = targetName || "mind";
-  pyaEmitNewspaper("su name " + name + " " + label + " " + count + " ob text " + quoted + " from name mind be write ya");
+  const mapName = name + " " + label + " " + count;
+  const pyashText = jsonToPyashTextRuntime(payload ?? {}, mapName);
+  const lines = pyashText.split("\\n");
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    pyaEmitNewspaper(line);
+  }
 }
 function toolTypeWordsFromValue(value, caseKey) {
   if (!value || typeof value !== "object") return [];

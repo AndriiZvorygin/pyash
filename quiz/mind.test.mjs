@@ -6,16 +6,34 @@ import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
+import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
+
+function buildMapIndex(records) {
+  const index = new Map();
+  for (let i = 0; i < records.length; i += 1) {
+    const sentence = records[i];
+    if (sentence?.mood !== "def" || sentence?.be !== "json map" || !sentence?.su?.name) continue;
+    const name = sentence.su.name;
+    const map = {};
+    i += 1;
+    for (; i < records.length; i += 1) {
+      const entry = records[i];
+      if (entry?.mood === "prah" && entry?.su?.name === name) break;
+      if (entry?.mood === "ya" && entry?.su?.name) {
+        map[entry.su.name] = entry.ob ?? {};
+      }
+    }
+    index.set(name, { mood: "ya", su: { name }, be: "json map", ob: { map } });
+  }
+  return index;
+}
 
 function decodeMindPayload(records, name, label = "request") {
-  const entry = [...records].reverse().find(s => s.su?.name?.startsWith(`${name} ${label} `));
-  const raw = entry?.ob?.text ?? "";
-  const prefix = "quoted.json.";
-  const suffix = ".json.quoted";
-  const jsonText = raw.startsWith(prefix) && raw.endsWith(suffix)
-    ? raw.slice(prefix.length, -suffix.length)
-    : raw;
-  return JSON.parse(jsonText || "{}");
+  const index = buildMapIndex(records);
+  const mapName = [...index.keys()].reverse().find(key => key.startsWith(`${name} ${label} `));
+  if (!mapName) return {};
+  const remember = (map) => index.get(map);
+  return jsonObjectFromMapName(mapName, { remember, seen: new Set(), sourceName: "mind test", allowHollowVector: true });
 }
 
 test("mind registration stores engine/model/prompt contexts", async () => {
