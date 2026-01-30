@@ -1,10 +1,9 @@
-version: "3.8"
 services:
   pyash:
     container_name: pyash
     build:
-      context: ..
-      dockerfile: container/Dockerfile
+      context: ../..
+      dockerfile: ../Dockerfile
     image: pyash-dev
     working_dir: /workplace
     volumes:
