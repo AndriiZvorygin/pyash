@@ -248,9 +248,6 @@ None (Week 3 complete).
 
 ### Ship
 
-* **Verifier loop**
-
-  * run quizzes and emit a deterministic structured report bundle
 * **Reducer loop**
 
   * produce minimal repro `.pya` deterministically
