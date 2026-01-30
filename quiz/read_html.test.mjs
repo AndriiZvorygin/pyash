@@ -22,7 +22,8 @@ test("read html extracts text", { skip: !pandocAvailable }, async () => {
   const filename = "/tmp/pyash-read-html.html";
   await fs.writeFile(filename, "<html><body><h1>Hello</h1><p>World</p></body></html>", "utf8");
 
-  await run(`from filename \"${filename}\" fromstate name html to name text out be read do`);
+  await run("ob name read from filename \"./module/read_html.pya\" to name read be import do");
+  await run(`from filename \"${filename}\" fromstate wo html to name text out be read do`);
   const out = remember("out");
   assert.ok(out?.ob?.text?.includes("Hello"));
   assert.ok(out?.ob?.text?.includes("World"));

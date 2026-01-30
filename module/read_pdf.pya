@@ -1,0 +1,19 @@
+su name read from filename input fromstate wo pdf be ceremony def
+  exists su name cmd ob text "pdftotext -layout \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name cmd be plus do
+  ob text "\" -" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name read from filename input fromstate wo pdf to name text output be ceremony def
+  exists su name cmd ob text "pdftotext -layout \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name cmd be plus do
+  ob text "\" -" to name cmd be plus do
+  ob text of cmd to name text output be command do
+  su name output ret
+prah
+
+exists su name read be export ya

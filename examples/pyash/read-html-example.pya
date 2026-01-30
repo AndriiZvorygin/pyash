@@ -1,0 +1,4 @@
+ob text "<html><body><h1>Hello</h1><p>World</p></body></html>" to filename "/tmp/pyash-read-html-example.html" be write do
+ob name read from filename "../../module/read_html.pya" to name read be import do
+from filename "/tmp/pyash-read-html-example.html" fromstate wo html to name text output be read do
+ob name output be write do
