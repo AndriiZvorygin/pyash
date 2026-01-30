@@ -9,7 +9,11 @@ RUN apt-get update \
     git \
     gnupg \
     dialog \
+    fd-find \
     jq \
+    yq \
+    pandoc \
+    poppler-utils \
     python3 \
     python3-pip \
     python3-venv \
@@ -41,6 +45,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get update \
   && apt-get install -y --no-install-recommends nodejs \
   && npm install -g @openai/codex \
+  && npm install -D typescript eslint prettier \
   && rm -rf /var/lib/apt/lists/*
 
 COPY caterer/wasmtime/bin/wasmtime /usr/local/bin/wasmtime
