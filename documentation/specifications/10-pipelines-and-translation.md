@@ -304,6 +304,14 @@ su name report end be report ya
 Implementations MAY include additional report entries, but MUST preserve the
 canonical ordering and required fields above.
 
+### Extraction interfaces (non-normative)
+
+Implementations may expose report extraction via:
+
+- CLI (`node program/command/extract_report.mjs --run-id <id>`)
+- Inline verb (`be reporter do`) that reads the current run's newspaper buffer
+  or the on-disk newspaper when present.
+
 
 ---
 

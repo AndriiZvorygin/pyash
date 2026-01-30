@@ -13,6 +13,7 @@ import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath, pushModuleDir, popModuleDir } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
+import { setRunNewspaperLines } from "../bridge/newspaper.mjs";
 import { closeMcpServers } from "../motor/mcp.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
@@ -345,6 +346,7 @@ async function main() {
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const newspaperLines = [];
+  setRunNewspaperLines(newspaperLines);
   let toolCounter = 0;
   const pushNewspaper = (line) => {
     if (!line) return;
