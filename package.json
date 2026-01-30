@@ -13,5 +13,8 @@
   "dependencies": {
     "csv-parse": "^5.5.0",
     "yaml": "^2.4.1"
+  },
+  "bin": {
+    "pyash": "command/pyash.mjs"
   }
 }
