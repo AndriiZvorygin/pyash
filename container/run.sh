@@ -26,6 +26,7 @@ get_map_value() {
 }
 
 ai_host="$(get_map_value "ai host")"
+web_search_enabled="$(get_map_value "web search enabled")"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -61,8 +62,23 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
   exec docker exec -it pyash bash
 fi
 
+compose_args=(-f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE")
+if [[ "${web_search_enabled:-lie}" == "truth" ]]; then
+  searx_env="$ROOT_DIR/container/searxng/.env"
+  if [[ ! -f "$searx_env" ]]; then
+    umask 077
+    if command -v openssl >/dev/null 2>&1; then
+      secret="$(openssl rand -hex 16)"
+    else
+      secret="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')"
+    fi
+    printf 'SEARXNG_SECRET=%s\n' "$secret" > "$searx_env"
+  fi
+  compose_args+=(-f "$ROOT_DIR/container/searxng/docker-compose.yml")
+fi
+
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
-  docker compose -f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE" up -d
+  docker compose "${compose_args[@]}" up -d
 
 echo "Container started. Entering..."
 exec docker exec -it pyash bash

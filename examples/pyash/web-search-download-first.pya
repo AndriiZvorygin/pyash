@@ -1,0 +1,8 @@
+exists su name web search motor ob filename "https://tsoc.liberit.ca/" be default ya
+exists su name question ob text "pyash language" be text ya
+
+su name found ob name question fromstate wo web by num 3 be search do
+
+from filename of from of 1 of found fromstate name https to filename "examples/out/web-search-first.html" as wo web be download do
+
+ob name found be write do
