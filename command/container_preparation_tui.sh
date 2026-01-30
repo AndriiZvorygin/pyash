@@ -313,7 +313,7 @@ else
   esac
 fi
 
-COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/orchestrate.yaml" "up" "--build")
+COMPOSE_CMD=("docker" "compose" "-f" "$ROOT_DIR/container/service/pyash.yaml" "up" "--build")
 RUN_ENV="OPENAI_BASE_URL=${OPENAI_BASE_URL_VALUE}"
 
 OVERRIDE_FILE="/tmp/pyash-compose.override.yaml"
@@ -327,7 +327,7 @@ device_requests_enabled="no"
 if [[ "$VNC_CHOICE" == "yes" ]]; then
   ports+=("\"5900:5900\"")
   ports+=("\"6080:6080\"")
-  command_line='["/workplace/container/run_vnc_novnc.sh"]'
+  command_line='["/workplace/container/command/run_vnc_novnc.sh"]'
 fi
 
 if [[ "$GPU_CHOICE" == "yes" ]]; then
@@ -390,7 +390,7 @@ fi
   fi
 } > "$OVERRIDE_FILE"
 
-COMPOSE_CMD=("$ROOT_DIR/container/run.sh")
+COMPOSE_CMD=("$ROOT_DIR/container/command/begin.sh")
 SUMMARY="$(get_text build_cmd)\n${COMPOSE_CMD[*]}\n\n$(get_text run_cmd)\n${COMPOSE_CMD[*]}"
 
 gpu_enabled_value="lie"

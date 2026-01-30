@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 WORKPLACE_CONFIG="$ROOT_DIR/configure/workplace.pya"
-OVERRIDE_FILE="$ROOT_DIR/container/compose.override.yaml"
+OVERRIDE_FILE="$ROOT_DIR/container/building/compose.override.yaml"
 
 get_map_value() {
   local key="$1"
@@ -55,16 +55,16 @@ elif [[ -L /etc/localtime ]]; then
   fi
 fi
 
-node "$ROOT_DIR/container/update_compose.mjs"
+node "$ROOT_DIR/container/tools/update_compose.mjs"
 
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
   echo "Container already running."
   exec docker exec -it pyash bash
 fi
 
-compose_args=(-f "$ROOT_DIR/container/orchestrate.yaml" -f "$OVERRIDE_FILE")
+compose_args=(-f "$ROOT_DIR/container/service/pyash.yaml" -f "$OVERRIDE_FILE")
 if [[ "${web_search_enabled:-lie}" == "truth" ]]; then
-  searx_env="$ROOT_DIR/container/searxng/.env"
+  searx_env="$ROOT_DIR/container/configure/ecology/searxng.env"
   if [[ ! -f "$searx_env" ]]; then
     umask 077
     if command -v openssl >/dev/null 2>&1; then
@@ -74,7 +74,7 @@ if [[ "${web_search_enabled:-lie}" == "truth" ]]; then
     fi
     printf 'SEARXNG_SECRET=%s\n' "$secret" > "$searx_env"
   fi
-  compose_args+=(-f "$ROOT_DIR/container/searxng/docker-compose.yml")
+  compose_args+=(-f "$ROOT_DIR/container/service/searxng.yaml")
 fi
 
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \

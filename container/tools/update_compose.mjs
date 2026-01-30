@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const rootDir = path.resolve(new URL("..", import.meta.url).pathname);
+const rootDir = path.resolve(new URL("../..", import.meta.url).pathname);
 const configPath = path.join(rootDir, "configure", "workplace.pya");
-const overridePath = path.join(rootDir, "container", "compose.override.yaml");
+const overridePath = path.join(rootDir, "container", "building", "compose.override.yaml");
 
 function parseWorkplace(text) {
   const out = new Map();
@@ -121,7 +121,7 @@ if (hostTz) {
 if (vncEnabled) {
   ports.push("\"5900:5900\"");
   ports.push("\"6080:6080\"");
-  lines.push("    command: [\"/workplace/container/run_vnc_novnc.sh\"]");
+  lines.push("    command: [\"/workplace/container/command/run_vnc_novnc.sh\"]");
 }
 
 if (gpuEnabled) {

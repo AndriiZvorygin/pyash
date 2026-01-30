@@ -23,7 +23,7 @@
 * **Env defaults no longer leak into ceremony bodies**, fixing mind backend resolution inside sandpits.
 * **Debug toggles added**: `PYA_MIND_DEBUG` and `PYA_COMMAND_DEBUG` for request/response tracing.
 * **Ollama runner fallback**: handles streamed NDJSON and falls back to curl when Node networking fails.
-* **Container config improvements**: `configure/container.pya` auto-loads in run/REPL; `container/run.sh` mounts host git config via `container/update_compose.mjs`.
+* **Container config improvements**: `configure/container.pya` auto-loads in run/REPL; `container/command/begin.sh` mounts host git config via `container/tools/update_compose.mjs`.
 * **Re-entry cycle fixture** updated: inlined flow, Pyash-valid tokens, and reviewer uses explicit dialogue history.
 * **Agent guidance** clarified: `vocab_suggest` applies to Pyash tokens, not quoted content.
 

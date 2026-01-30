@@ -74,7 +74,7 @@ For sites that block headless browsers, run a headed Chromium under Xvfb and acc
 Start the display stack in the container:
 
 ```bash
-./container/run_vnc_novnc.sh
+./container/command/run_vnc_novnc.sh
 ```
 
 Default ports:
@@ -139,7 +139,7 @@ exists su name openai base url ob text "http://host.docker.internal:11434" be de
 ## Docker compose (orchestrate)
 
 ```bash
-docker compose -f container/orchestrate.yaml up --build
+docker compose -f container/service/pyash.yaml up --build
 ```
 
 ## Python ML tooling (optional)

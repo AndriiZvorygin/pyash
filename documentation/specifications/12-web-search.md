@@ -140,5 +140,5 @@ Wire format for the motor response is implementation-defined in v0.1. Each motor
 For a zero‑config local engine, the container runner can start SearxNG for you:
 
 * Set `su name web search enabled ob bool truth ya` in `configure/workplace.pya`.
-* Run `container/run.sh` (it will generate `container/searxng/.env` if missing).
+* Run `container/command/begin.sh` (it will generate `container/configure/ecology/searxng.env` if missing).
 * Default motor: `http://localhost:60490/`.

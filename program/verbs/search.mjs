@@ -150,7 +150,7 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
     try {
       payload = await fetchJson(url);
     } catch (err) {
-      const hint = "hint: enable web search in configure/workplace.pya and run container/run.sh to start searxng (default http://localhost:60490/), or set web search motor explicitly";
+      const hint = "hint: enable web search in configure/workplace.pya and run container/command/begin.sh to start searxng (default http://localhost:60490/), or set web search motor explicitly";
       throwErrorSentence({
         name: "web search defective",
         message: `web search defective: ${err?.message ?? "request failed"}; ${hint}`,

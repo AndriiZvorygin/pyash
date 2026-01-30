@@ -44,7 +44,7 @@ fi
 
 case "$CHOICE" in
   1)
-    exec "$ROOT_DIR/container/run.sh"
+    exec "$ROOT_DIR/container/command/begin.sh"
     ;;
   2)
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
@@ -59,7 +59,7 @@ Container prep:
   ./command/container_preparation_tui.sh
 
 Docker compose:
-  ./container/run.sh
+  ./container/command/begin.sh
 
 Local demo:
   ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
