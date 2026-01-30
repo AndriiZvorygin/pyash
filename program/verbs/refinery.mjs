@@ -1,6 +1,8 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
+import { emitExchangeSentence } from "../bridge/exchange.mjs";
+import { surfaceErrorSentence } from "../error.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -72,7 +74,23 @@ async function refinery(sentence) {
   }
 
   try {
-    const resultSentence = await runRefinery({ name: refineryName, interpret });
+    const resultSentence = await runRefinery({
+      name: refineryName,
+      interpret,
+      onEvoke: (actionSentence) => {
+        emitExchangeSentence({ mood: "ya", be: "evoke", ob: { la: actionSentence } });
+      },
+      onCheckpoint: (checkpointSentence) => {
+        emitExchangeSentence(checkpointSentence);
+      },
+      onRetry: (retrySentence) => {
+        emitExchangeSentence(retrySentence);
+      },
+      onResult: (res) => {
+        const surfaced = surfaceErrorSentence(res);
+        if (surfaced?.mood) emitExchangeSentence(surfaced);
+      }
+    });
     if (resultSentence?.mood && resultSentence?.be) {
       if (resultSentence.be === "error") return resultSentence;
       return { ob: resultSentence.ob ?? {}, be: resultSentence.be };
