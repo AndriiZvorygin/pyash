@@ -1,9 +1,6 @@
+exists su name web search motor ob filename "https://tsoc.liberit.ca/" be default ya
 exists su name question ob text "pyash language" be text ya
 
-su name found
-ob name question
-fromstate wo web
-by num 3
-be search do
+su name found ob name question fromstate wo web by num 3 be search do
 
 ob name found be write do
