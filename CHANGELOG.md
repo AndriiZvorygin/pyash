@@ -1,5 +1,15 @@
 # Changelog
 
+### Jan 30, 2026: Verifier loop + deterministic reporting
+
+* **Inline refinery still writes to the newspaper**, so verifier loops stay deterministic without flags.
+* **Report extraction added**: `extract_report.mjs` CLI and `be reporter do` verb emit a stable report from the newspaper.
+* **Reviewer loop example updated** to use inline report extraction, plus a standalone `reporter-inline.pya` example.
+* **Report extraction quiz** locks output determinism and covers inline reporter usage.
+* **Reports spec v0.1** finalized (fields, ordering, paths).
+* **Mind event schema v0.1** documented (request/response fields + naming).
+* **Error sieve verb** added with a minimal inline example and quiz.
+
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
 * **Merged specification files** into chaptered docs under `documentation/specifications/` to stay under model file limits.
@@ -15,6 +25,20 @@
 * **Container config improvements**: `configure/container.pya` auto-loads in run/REPL; `container/run.sh` mounts host git config via `container/update_compose.mjs`.
 * **Re-entry cycle fixture** updated: inlined flow, Pyash-valid tokens, and reviewer uses explicit dialogue history.
 * **Agent guidance** clarified: `vocab_suggest` applies to Pyash tokens, not quoted content.
+
+### Jan 29, 2026: Reviewer loop reliability
+
+* **Conditional resolution improved** so `ob name <text>` comparisons dereference stored values in `then` checks.
+* **Ceremony conditionals no longer abort** execution on false; they now behave like single-line skips.
+* **Reviewer circle module simplified** with explicit reviewer input assembly and text-only outputs.
+* **Example run now returns text**, and a quiz covers `ob name` conditionals.
+
+### Jan 29, 2026: Series + mind history updates
+
+* **Added `be series def`** for ordered sentence lists and documented it near maps.
+* **Mind prompts now come from `from discourse`**, while `accordingto` points to a session series.
+* **Series-backed history** can be shared across minds and is appended on each call.
+* **Docs + examples refreshed**, and new quizzes cover series storage and mind series history.
 
 ## Timeline summary (from the commits you pasted)
 
@@ -356,3 +380,15 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * `interpret` can resolve `ob name text` scripts for mind/tool usage.
 * Mind tool calls now propagate `tool_call_id` and pass raw interpret stdout back to the model.
 * Added a mind tool example for JavaScript execution (`examples/pyash/mind-interpret-tool.pya`) with a complex prime task.
+
+### Jan 29, 2026: Mind session map
+
+* Mind history now exposes a read-only `mind session map` with per-dialogue series snapshots.
+* Added a shared session store for mind logs across backends.
+* Reviewer circle inline example now uses session series instead of string concatenation.
+
+### Jan 30, 2026: Inline refinery execution
+
+* Added `be refinery do` inline execution with task binding from `ob`.
+* Reviewer circle example now runs the refinery inline and prints the result without CLI flags.
+* Refinery spec updated to describe inline invocation and newspaper/artefact source-of-truth invariants.

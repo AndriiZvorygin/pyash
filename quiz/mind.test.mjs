@@ -6,23 +6,41 @@ import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
+import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
+
+function buildMapIndex(records) {
+  const index = new Map();
+  for (let i = 0; i < records.length; i += 1) {
+    const sentence = records[i];
+    if (sentence?.mood !== "def" || sentence?.be !== "json map" || !sentence?.su?.name) continue;
+    const name = sentence.su.name;
+    const map = {};
+    i += 1;
+    for (; i < records.length; i += 1) {
+      const entry = records[i];
+      if (entry?.mood === "prah" && entry?.su?.name === name) break;
+      if (entry?.mood === "ya" && entry?.su?.name) {
+        map[entry.su.name] = entry.ob ?? {};
+      }
+    }
+    index.set(name, { mood: "ya", su: { name }, be: "json map", ob: { map } });
+  }
+  return index;
+}
 
 function decodeMindPayload(records, name, label = "request") {
-  const entry = [...records].reverse().find(s => s.su?.name?.startsWith(`${name} ${label} `));
-  const raw = entry?.ob?.text ?? "";
-  const prefix = "quoted.json.";
-  const suffix = ".json.quoted";
-  const jsonText = raw.startsWith(prefix) && raw.endsWith(suffix)
-    ? raw.slice(prefix.length, -suffix.length)
-    : raw;
-  return JSON.parse(jsonText || "{}");
+  const index = buildMapIndex(records);
+  const mapName = [...index.keys()].reverse().find(key => key.startsWith(`${name} ${label} `));
+  if (!mapName) return {};
+  const remember = (map) => index.get(map);
+  return jsonObjectFromMapName(mapName, { remember, seen: new Set(), sourceName: "mind test", allowHollowVector: true });
 }
 
 test("mind registration stores engine/model/prompt contexts", async () => {
   forget();
 
   const sentence = parse(
-    'exists su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya'
+    'exists su generator be mind from space "http://localhost:11434" from discourse "orchestrator" via state "qwen3:8b" ya'
   );
 
   await interpret(sentence);
@@ -34,7 +52,7 @@ test("mind registration stores engine/model/prompt contexts", async () => {
   assert.equal(fact.be, "mind");
   assert.equal(fact.from?.name, "http://localhost:11434");
   assert.equal(fact.as?.name, "qwen3:8b");
-  assert.equal(fact.accordingto?.name, "orchestrator");
+  assert.equal(fact.fromtext?.name, "orchestrator");
 });
 
 test("mind invocation pulls model + prompt from registered mind", async () => {
@@ -47,7 +65,7 @@ test("mind invocation pulls model + prompt from registered mind", async () => {
   try {
     // Register the mind
     await interpret(
-      parse('exists su generator be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+      parse('exists su generator be mind from space "http://localhost:11434" from discourse "orchestrator" via state "qwen3:8b" ya')
     );
 
     // Ask the mind (no model/prompt on the call; should resolve from memory)
@@ -85,7 +103,7 @@ test("mind invocation includes recent history in prompt with per-mind window", a
 
   try {
     await interpret(
-      parse('exists su generator by num 1 be mind from space "http://localhost:11434" via state "qwen3:8b" via discourse "orchestrator" ya')
+      parse('exists su generator by num 1 be mind from space "http://localhost:11434" from discourse "orchestrator" via state "qwen3:8b" ya')
     );
 
     await interpret(parse('be write ob text "Hi" for name generator to name text generator-out do'));
@@ -103,7 +121,7 @@ test("mind invocation includes recent history in prompt with per-mind window", a
   }
 });
 
-test("mind history is isolated by fromtext bucket", async () => {
+test("mind history can be injected from a series via accordingto", async () => {
   forget();
   resetMindLogs();
   const original = process.env.PYA_MIND_RESPONSE;
@@ -112,28 +130,23 @@ test("mind history is isolated by fromtext bucket", async () => {
   setExchangeRecorder({ record: (sentence) => records.push(sentence) });
 
   try {
-    // Mind A with custom bucket
-    await interpret(
-      parse('exists su helperA from text bucketA be mind via state "qwen3:8b" ya')
-    );
-    // Mind B with different bucket
-    await interpret(
-      parse('exists su helperB from text bucketB be mind via state "qwen3:8b" ya')
-    );
+    await interpret(parse("su name session be series def"));
+    await interpret(parse('su name user ob text "Hi from series" be text ya'));
+    await interpret(parse('su name assistant ob text "Series reply" be text ya'));
+    await interpret(parse("prah"));
+    await interpret(parse('exists su helper be mind accordingto name session via state "qwen3:8b" ya'));
 
-    await interpret(parse('be write ob text "Hi A" for name helperA to name text helperA-out do'));
-    await interpret(parse('be write ob text "Hi B" for name helperB to name text helperB-out do'));
+    await interpret(parse('su q ob discourse "Hello" for name helper to name text helper-out be write do'));
 
-    await interpret(parse('su q ob discourse "Hello A" for name helperA to name text helperA-out be write do'));
-    await interpret(parse('su q ob discourse "Hello B" for name helperB to name text helperB-out be write do'));
+    const payload = decodeMindPayload(records, "helper");
+    assert.match(payload.prompt ?? "", /USER: Hi from series/);
+    assert.match(payload.prompt ?? "", /ASSISTANT: Series reply/);
 
-    const payloadA = decodeMindPayload(records, "helperA");
-    const payloadB = decodeMindPayload(records, "helperB");
-
-    assert.match(payloadA.prompt ?? "", /Hi A/);
-    assert.doesNotMatch(payloadA.prompt ?? "", /Hi B/);
-    assert.match(payloadB.prompt ?? "", /Hi B/);
-    assert.doesNotMatch(payloadB.prompt ?? "", /Hi A/);
+    const mem = allRemember();
+    const session = mem.find(s => s.su?.name === "session");
+    assert.ok(session);
+    assert.ok(Array.isArray(session.ob?.series));
+    assert.equal(session.ob.series.length, 4);
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
@@ -163,4 +176,32 @@ test("mind history defaults to `<name> story` bucket when fromtext absent", asyn
   }
 });
 
-test.todo("mind call can override bucket with fromtext on invocation (pending signature/case support)");
+test("mind session map exposes per-dialogue series", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+
+  try {
+    await interpret(parse('exists su helper be mind via state "qwen3:8b" ya'));
+    await interpret(parse('su q ob discourse "Hello" for name helper to name text helper-out be write do'));
+
+    const mem = allRemember();
+    const mapFact = mem.find(s => s.su?.name === "mind session map");
+    assert.ok(mapFact);
+    assert.equal(mapFact.be, "map");
+    const entry = mapFact.ob?.map?.["helper story"];
+    assert.ok(entry);
+    assert.equal(entry.ob?.name, "helper story session");
+
+    const series = mem.find(s => s.su?.name === "helper story session");
+    assert.ok(series);
+    assert.equal(series.be, "series");
+    assert.equal(series.ob?.series?.length, 2);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test.todo("mind call can override series with accordingto on invocation (pending spec)");

@@ -214,6 +214,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (inferred?.be === "chip") return ["name", "chip"];
     if (inferred?.be === "mind") return ["name", "mind"];
     if (inferred?.be === "map") return ["name", "map"];
+    if (inferred?.be === "series") return ["name", "series"];
     if (inferred?.be === "csv map") return ["name", "csv", "map"];
     if (inferred?.be === "json map") return ["name", "json", "map"];
 
@@ -287,6 +288,10 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
   if (!sentence) return null;
   const verb = normalizeWords(sentence.be);
   if (!verb) return null;
+  const targetMind = sentence?.for?.name
+    ? remember?.(sentence.for.name)
+    : (sentence?.to?.name ? remember?.(sentence.to.name) : null);
+  const isMindWrite = verb === "write" && (sentence?.for?.name || targetMind?.be === "mind");
 
   const cases = [];
   for (const [key, value] of Object.entries(sentence)) {
@@ -294,6 +299,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     if (NON_CASE_FIELDS.has(key)) continue;
     if (key === "su" && sentence.mood !== "then") continue;
     if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
+    if (isMindWrite && (key === "fromtext" || key === "accordingto")) continue;
     const typeWords = caseTypeWordsWithMemory(value, remember, verb, key);
     if (typeWords.length === 0) {
       console.error("derive-signature-fail", { key, value, verb });

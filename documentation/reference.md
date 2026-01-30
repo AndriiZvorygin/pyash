@@ -23,6 +23,13 @@ node program/command/run_pya_program.mjs [--full] [--gross] path/to/file.pya
 ```
 Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` returns `{ outputs, result }` JSON; `--full` also prints the program.
 
+Runner config can be set inside the program:
+
+```pyash
+exists su name run result ob bool truth ya
+exists su name refinery name ob text "reviewer circle" be text ya
+```
+
 To emit a newspaper, plus `--newspaper` and optionally `--run-id <name>`:
 
 ```bash

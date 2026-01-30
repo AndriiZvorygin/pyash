@@ -13,9 +13,10 @@ import { surfaceErrorSentence } from "../error.mjs";
 import { setEntryModulePath, pushModuleDir, popModuleDir } from "../bridge/modules.mjs";
 import { state } from "../bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
+import { setRunNewspaperLines } from "../bridge/newspaper.mjs";
 import { closeMcpServers } from "../motor/mcp.mjs";
 import { runRefinery } from "../bridge/refinery.mjs";
-import { resolveConfigBool } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 
 async function loadConfigFile({ configPath, interpretFn }) {
   try {
@@ -181,6 +182,24 @@ function shouldAutoEnableNewspaper({ entries, rememberFn }) {
   return false;
 }
 
+function shouldAutoEnableNewspaperForRefinery({ entries }) {
+  for (const entry of entries) {
+    const line = entry.text.trim();
+    if (!line) continue;
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      continue;
+    }
+    const nodes = collectSentenceNodes(sentence);
+    for (const node of nodes) {
+      if (node?.be === "refinery" && node?.mood === "do") return true;
+    }
+  }
+  return false;
+}
+
 function dateStampFromRunTime(runTime) {
   const match = String(runTime ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) return `${match[1]}${match[2]}${match[3]}`;
@@ -258,9 +277,9 @@ async function loadCheckpointIndex({ runId, cwd }) {
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
-  const full = args.includes("--full");
-  const verbose = args.includes("--verbose");
-  const showResult = args.includes("--result");
+  const fullFlag = args.includes("--full");
+  const verboseFlag = args.includes("--verbose");
+  const showResultFlag = args.includes("--result");
   const useNewspaperFlag = args.includes("--newspaper");
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
@@ -317,11 +336,17 @@ async function main() {
       useNewspaper = true;
     }
   }
+  if (!useNewspaper && !useAgain) {
+    if (shouldAutoEnableNewspaperForRefinery({ entries: sentences })) {
+      useNewspaper = true;
+    }
+  }
   const outputs = [];
   const timeZone = resolveTimeZone(remember);
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const newspaperLines = [];
+  setRunNewspaperLines(newspaperLines);
   let toolCounter = 0;
   const pushNewspaper = (line) => {
     if (!line) return;
@@ -349,6 +374,8 @@ async function main() {
     return target?.be === "mind";
   };
 
+  const full = fullFlag;
+  const verbose = verboseFlag;
   if (full) {
     console.log("Program:");
     if (gross) {
@@ -373,9 +400,8 @@ async function main() {
   }
   let runError = null;
   let refineryResult = null;
-  const checkpointIndex = (!noCheckpoint && refineryFlag)
-    ? await loadCheckpointIndex({ runId, cwd: process.cwd() })
-    : null;
+  let refineryName = refineryFlag ?? null;
+  let checkpointIndex = null;
 
   const toResultSentence = (res, fallbackSentence) => {
     if (res?.mood && res?.be) return res;
@@ -421,11 +447,17 @@ async function main() {
     if (sentence?.mood === "que") outputs.push(res);
   }
 
-  if (!runError && refineryFlag) {
+  if (!runError && !refineryName) {
+    refineryName = resolveConfigText("refinery name", { rememberFn: remember }) ?? null;
+  }
+  if (!runError && refineryName && !noCheckpoint) {
+    checkpointIndex = await loadCheckpointIndex({ runId, cwd: process.cwd() });
+  }
+  if (!runError && refineryName) {
     let pendingToolEvoked = null;
     try {
       refineryResult = await runRefinery({
-        name: refineryFlag,
+        name: refineryName,
         interpret,
         checkpointIndex,
         checkpointEnabled: !noCheckpoint,
@@ -479,6 +511,9 @@ async function main() {
   if (full) {
     console.log("\nResult:");
   }
+
+  const showResultConfig = resolveConfigBool("run result", { rememberFn: remember });
+  const showResult = showResultFlag || showResultConfig === true;
 
   if (gross) {
     console.log(JSON.stringify({ outputs, result }, null, 2));
