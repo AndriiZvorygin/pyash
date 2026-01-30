@@ -17,7 +17,6 @@ RUN apt-get update \
     jq \
     less \
     netcat-openbsd \
-    net-tools \
     tree \
     yq \
     pandoc \
