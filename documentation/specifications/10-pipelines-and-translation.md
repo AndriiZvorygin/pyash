@@ -662,85 +662,42 @@ prah
 
 ---
 
-## Reviewer report bundle (subsection)
+## Run newspaper + artifacts as source of truth (normative)
 
-The reviewer loop MAY emit a deterministic report bundle per run. The bundle is optional and fully derivable from the run newspaper plus artifacts, so it MUST NOT contain information that is not present in the recorded run.
+The run newspaper is the single source of truth for “what happened.” Artifacts are
+stored separately, but the newspaper MUST record their IDs and provenance.
 
-### Bundle location
+This section captures the invariants that keep representation flexible (single-file
+newspaper, compressed bundles, on-demand reports, or no extra files at all) while
+preserving determinism and replayability.
 
-```
-artifacts/reports/<run-id>/
-```
+### Invariants (normative)
 
-### Required files
+* **Single source of truth for “what happened”**  
+  One append-only run newspaper that records every platform action and its result, in order.
 
-#### `report.pya`
+* **Hard separation of roles**  
+  * interpretation: derive meaning, bind circumstances once  
+  * evaluation: decide pass or fail based on meaning  
+  * recording: write what happened, with no judgement
 
-Pyash sentences, one per line:
+* **Deterministic replay contract**  
+  Again-mode re-verifies using recorded inputs plus recorded tool results, with no new mind calls and no re-fetching.
 
-```
-su name report run id ob text "<run-id>" be report ya
-su name report run time ob date <iso8601> be report ya
-su name report run root ob filename "<absolute path>" be report ya
-su name report source ob filename "<path>" be report ya
-su name report status ob text "pass|fail" be report ya
-su name report quiz count ob num <n> be report ya
-su name report quiz passed ob num <n> be report ya
-su name report quiz failed ob num <n> be report ya
-su name report quiz skipped ob num <n> be report ya
-su name report artifacts ob ve text "<rel>" "<rel>" be report ya
-su name report notes ob ve text "<note>" "<note>" be report ya
-```
+* **Stable identifiers and provenance**  
+  Every meaningful input/output has an ID (hash or name) and provenance chain: “this sentence/result came from this invocation and these inputs”.
 
-Rules:
+* **Explicit error semantics**  
+  Tool failures become first-class records (`be error ya` with structured payload), never hidden in prose.
 
-* `report artifacts` and `report notes` vectors MUST be sorted ASCII.
-* `report status` MUST be `fail` if any quiz failed.
-* `report source` MUST be:
-  * the `.pya` path if `./run` was used, or
-  * `"(inline)"` if stdin/inline input.
+* **Artifact discipline**  
+  Artifacts exist independently of the log, but the newspaper must record: artifact ID, type, origin step, and how it was derived.
 
-#### `quiz.pya`
+* **Re-entry as a control structure**  
+  The outer loop can repeat with new inputs derived from prior outputs, while preserving the previous pass as immutable history.
 
-Pyash sentences, ordered lexicographically by quiz `name`:
-
-```
-su name quiz "<name>" ob text "<file>" as text "<status>" by num <duration_ms> be quiz ya
-su name quiz "<name>" ob text "<file>" as text "fail" by num <duration_ms> to text "<message>" be quiz ya
-```
-
-#### `summary.pya`
-
-```
-su name report summary be map def
-  su name run ob text "<run-id>" be report ya
-  su name time ob date <iso8601> be report ya
-  su name status ob text "pass|fail" be report ya
-  su name quizzes ob text "<passed>/<total>" be report ya
-  su name failures ob num <n> be report ya
-prah
-```
-
-### Optional files
-
-* `diff.pya` — text diff lines as `su name diff line ... be report ya` (if produced).
-* `env.pya` — stable environment inputs as `be ecology`-style sentences (optional).
-* `tools.pya` — tool call summaries as `be tool` events (optional).
-
-### Determinism rules
-
-* Files are Pyash sentences (one per line).
-* Lists must be sorted ASCII.
-* Timestamps must be ISO 8601 with offset if known.
-* Paths must be normalized to use `/`.
-
-### Error handling
-
-If the reviewer attempts to write the report bundle and cannot, it MUST emit:
-
-```
-su name report defective ob text "<reason>" from name reviewer be error ya
-```
+* **Minimal, typed envelopes**  
+  Tool calls and mind calls use a consistent envelope shape, so modules and external tools plug in without special cases.
 
 ---
 
@@ -752,7 +709,7 @@ remains valid, since recurrence is defined at the system level.
 
 ## Newspaper extraction helper (informative)
 
-When you want the report bundle view without producing extra files, extract it from the run newspaper.
+When you want a compact report without producing extra files, extract it from the run newspaper.
 The goal is a small, stable summary suitable for dashboards or CI.
 
 Recommended extraction fields (derive from newspaper + artifacts):
