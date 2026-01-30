@@ -7,6 +7,7 @@
 * **Reviewer loop example updated** to use inline report extraction, plus a standalone `reporter-inline.pya` example.
 * **Report extraction quiz** locks output determinism and covers inline reporter usage.
 * **Reports spec v0.1** finalized (fields, ordering, paths).
+* **Mind event schema v0.1** documented (request/response fields + naming).
 
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
