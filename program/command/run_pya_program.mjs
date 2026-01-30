@@ -181,6 +181,24 @@ function shouldAutoEnableNewspaper({ entries, rememberFn }) {
   return false;
 }
 
+function shouldAutoEnableNewspaperForRefinery({ entries }) {
+  for (const entry of entries) {
+    const line = entry.text.trim();
+    if (!line) continue;
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      continue;
+    }
+    const nodes = collectSentenceNodes(sentence);
+    for (const node of nodes) {
+      if (node?.be === "refinery" && node?.mood === "do") return true;
+    }
+  }
+  return false;
+}
+
 function dateStampFromRunTime(runTime) {
   const match = String(runTime ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (match) return `${match[1]}${match[2]}${match[3]}`;
@@ -314,6 +332,11 @@ async function main() {
   const autoNewspaperMind = resolveConfigBool("newspaper mind auto", { rememberFn: remember });
   if (!useNewspaper && !useAgain && autoNewspaperMind) {
     if (shouldAutoEnableNewspaper({ entries: sentences, rememberFn: remember })) {
+      useNewspaper = true;
+    }
+  }
+  if (!useNewspaper && !useAgain) {
+    if (shouldAutoEnableNewspaperForRefinery({ entries: sentences })) {
       useNewspaper = true;
     }
   }

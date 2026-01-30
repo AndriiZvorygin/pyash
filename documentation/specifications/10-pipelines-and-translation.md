@@ -181,6 +181,129 @@ The inline call behaves like a normal verb:
 * it writes the `result` fact
 * errors surface normally and terminate execution unless handled
 
+---
+
+## 5.5 Report extraction contract (draft v0.2)
+
+This section defines a deterministic report extracted from the run newspaper
+plus referenced artifacts. The report is derivable and optional.
+
+### Report name + ordering
+
+The report is emitted as a single Pyash file (suggested: `report.pya`) with a
+canonical ordering. A report is a linear list of sentences in this order:
+
+1. Run header
+2. Run root + environment
+3. Platform outcomes (sorted by platform name, then start order)
+4. Mind/tool calls (sorted by appearance in the newspaper)
+5. Failures (sorted by appearance)
+6. Artifacts (sorted by appearance)
+7. Footer (end marker)
+
+### Required fields (minimal)
+
+**Run header**
+
+- `run id` (string)
+- `run time` (RFC 3339 text)
+- `run root` (filename)
+
+**Platform outcomes**
+
+For each platform execution:
+- `platform name`
+- `platform order` (1-based, execution order)
+- `platform activity` (embedded sentence)
+- `platform result` (embedded sentence)
+- `platform status` (`ok` | `error`)
+
+**Mind calls**
+
+For each mind request/response:
+- `mind name`
+- `mind label` (`request` | `response` | `empty-response` | `error`)
+- `mind map` (json map def name)
+- `mind order` (1-based, appearance order)
+
+**Tool calls**
+
+For each tool event (tool request + result):
+- `tool name`
+- `tool order` (1-based, appearance order)
+- `tool event` (embedded event sentence)
+
+**Failures**
+
+For each error:
+- `error name`
+- `error sentence` (embedded sentence)
+- `error order` (1-based, appearance order)
+
+**Artifacts**
+
+For each artifact:
+- `artifact id`
+- `artifact kind`
+- `artifact origin` (embedded sentence, if available)
+- `artifact order` (1-based, appearance order)
+
+### Canonical sentence shapes
+
+Report data MUST be emitted as json map def blocks, one block per report item.
+This keeps the report single-sentence per line while preserving multiple fields.
+
+```
+su name report header be json map def
+su name run id ob text "<id>" ya
+su name run time ob text "<time>" ya
+su name run root ob filename "<root>" ya
+su name report header prah
+
+su name platform outcome 1 be json map def
+su name platform name ob name <platform> ya
+su name platform order ob num 1 ya
+su name platform activity ob la <sentence> ko ya
+su name platform result ob la <sentence> ko ya
+su name platform status ob text "ok" ya
+su name platform outcome 1 prah
+
+su name mind call 1 be json map def
+su name mind name ob name <mind> ya
+su name mind label ob text "request" ya
+su name mind map ob name <map-name> ya
+su name mind order ob num 1 ya
+su name mind call 1 prah
+
+su name tool call 1 be json map def
+su name tool name ob name <tool> ya
+su name tool order ob num 1 ya
+su name tool event ob la <sentence> ko ya
+su name tool call 1 prah
+
+su name failure 1 be json map def
+su name error name ob name <error> ya
+su name error sentence ob la <sentence> ko ya
+su name error order ob num 1 ya
+su name failure 1 prah
+
+su name artifact entry 1 be json map def
+su name artifact id ob text "<hash>" ya
+su name artifact kind ob text "<kind>" ya
+su name artifact origin ob la <sentence> ko ya
+su name artifact order ob num 1 ya
+su name artifact entry 1 prah
+```
+
+The report ends with:
+
+```
+su name report end be report ya
+```
+
+Implementations MAY include additional report entries, but MUST preserve the
+canonical ordering and required fields above.
+
 
 ---
 

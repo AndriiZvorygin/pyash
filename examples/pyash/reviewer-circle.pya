@@ -14,3 +14,11 @@ prah
 
 ob name text task from name reviewer circle to name text output be refinery do
 ob name output be write do
+ob text "mkdir -p artifacts/report" be command do
+exists su name report cmd ob text "" be text ya
+ob text "node program/command/extract_report.mjs --run-id " to name report cmd be plus do
+ob name run id to name report cmd be plus do
+ob text " --out artifacts/report/" to name report cmd be plus do
+ob name run id to name report cmd be plus do
+ob text ".pya" to name report cmd be plus do
+ob name report cmd be command do
