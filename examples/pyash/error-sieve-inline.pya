@@ -1,0 +1,5 @@
+exists su name source ob text quoted.pyash.exists su name foo ob text "ok" be text ya
+su name bar ob text "bad" be text ya.pyash.quoted be text ya
+
+ob name source to name text output be error sieve do
+ob name output be write do

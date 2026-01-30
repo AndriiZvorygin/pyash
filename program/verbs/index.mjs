@@ -50,6 +50,7 @@ import touch, { signatures as touchSignatures } from "./touch.mjs";
 import del, { signatures as deleteSignatures } from "./delete.mjs";
 import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
+import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 
 export {
   plus,
@@ -90,7 +91,8 @@ export {
   touch,
   del,
   refinery,
-  reporter
+  reporter,
+  errorSieve
 };
 
 export const builtInSignatures = [
@@ -146,4 +148,5 @@ export const builtInSignatures = [
   ...deleteSignatures,
   ...refinerySignatures,
   ...reporterSignatures,
+  ...errorSieveSignatures,
 ];
