@@ -5,6 +5,7 @@ services:
       context: ../..
       dockerfile: container/Dockerfile
     image: pyash-dev
+    user: "${PYASH_UID}:${PYASH_GID}"
     working_dir: /workplace
     volumes:
       - ../..:/workplace
