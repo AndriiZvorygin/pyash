@@ -78,6 +78,7 @@ fi
 if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; then
   searx_env="$ROOT_DIR/container/configure/ecology/searxng.env"
   if [[ ! -f "$searx_env" ]]; then
+    mkdir -p "$(dirname "$searx_env")"
     umask 077
     if command -v openssl >/dev/null 2>&1; then
       secret="$(openssl rand -hex 16)"
