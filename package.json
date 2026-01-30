@@ -16,5 +16,19 @@
   },
   "bin": {
     "pyash": "command/pyash.mjs"
-  }
+  },
+  "files": [
+    "program/",
+    "command/",
+    "module/",
+    "documentation/",
+    "configure/",
+    "examples/",
+    "quiz/",
+    "caterer/",
+    "skills/",
+    "README.md",
+    "LICENSE",
+    "AGENTS.md"
+  ]
 }
