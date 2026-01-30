@@ -312,6 +312,60 @@ Implementations may expose report extraction via:
 - Inline verb (`be reporter do`) that reads the current run's newspaper buffer
   or the on-disk newspaper when present.
 
+---
+
+## 5.6 Error sieve (draft v0.1)
+
+The error sieve is a deterministic process that shrinks a failing program or
+run into a minimal `.pya` reproduction while preserving the failure.
+
+### Purpose
+
+* produce the smallest repro that still fails
+* enable deterministic debugging and regression tests
+* emit a reduction report that references the original run
+
+### Inputs
+
+* original program source (`.pya`) or run newspaper
+* a verifier action that returns PASS/FAIL (or error/success)
+* optional constraints (minimum sentences, keep module imports, etc.)
+
+### Required behavior
+
+1. **Deterministic selection**
+   The same input and verifier must produce the same minimized output.
+
+2. **Monotonic shrinking**
+   The reducer only removes or simplifies sentences; it does not invent new
+   program content.
+
+3. **Failure preservation**
+   A reduction step is accepted only if the verifier still fails.
+
+4. **Recorded trace**
+   Each reduction step is recorded in the run newspaper when enabled.
+
+### Output
+
+* `repro.pya` — minimized failing program
+* `report.pya` — reduction report (optional, derived from newspaper)
+
+### Minimal example (conceptual)
+
+```
+su name error sieve demo be refinery def
+exists su name reduce
+  ob la
+    ob name source to name output be error sieve do
+  ko
+  be platform ya
+prah
+```
+
+This spec defines the reducer loop at a high level; an implementation may
+introduce an inline `be reducer do` verb or a runner policy in a future revision.
+
 
 ---
 
