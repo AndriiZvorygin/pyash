@@ -25,6 +25,10 @@ verifiable to run again when again mode is enabled
 
 compatible with duties, streams, chips, exchange, artifacts, and run newspaper
 
+Refinery execution is a **runner policy** in v0.1: the runner may execute a refinery
+after it finishes interpreting the program body. Refinery execution is not yet a
+first-class sentence inside the program.
+
 
 This spec defines:
 
@@ -51,6 +55,9 @@ depend — a platform name that MUST complete before another platform may start
 already platform — a platform whose depend list is complete
 
 again mode — runner policy that requires recording and verification sufficient to run again (see 05-run-recording-and-artifacts.md)
+
+runner policy — behavior controlled by the runner (CLI/config), not by in-program
+sentences. Examples: selecting which refinery to run, and when to print results.
 
 
 
@@ -118,6 +125,61 @@ The refinery name <refinery> is a su name identifier.
 ### 5.2 Multiple refineries
 
 A file MAY declare more than one refinery. Selecting which refinery to run is a runner policy (outside this spec).
+
+### 5.3 Runner invocation (v0.1 behavior)
+
+In v0.1, refinery execution is **not** triggered by a Pyash sentence. The runner
+is responsible for selecting a refinery (by CLI/config) and may run it **after**
+the program body finishes executing.
+
+This means:
+
+* The program itself cannot run additional sentences after refinery completion.
+* The refinery result is returned to the runner, which decides whether and how to print it.
+
+Future revisions may add a first-class `be refinery do` sentence so refineries can
+run inline and return values to the program.
+
+---
+
+## 5.4 Inline refinery execution (draft v0.2)
+
+An implementation MAY support running a refinery inside the program as a normal
+verb. This enables post-refinery logic and programmatic access to the result.
+
+### Sentence form (draft)
+
+```
+ob text "<task>" to name text <output> be refinery do
+```
+
+Optional refinery selector:
+
+```
+ob text "<task>" from name <refinery> to name text <output> be refinery do
+```
+
+If `from name <refinery>` is omitted, the runtime SHOULD read the refinery name
+from memory (`su name refinery name ob text "<name>" be text ya`).
+
+### Task binding
+
+If `ob` is provided, the runtime SHOULD bind the task into memory as:
+
+```
+su name task ob text "<task>" be text ya
+```
+
+so platform activities can read `task` normally. The binding MAY be temporary;
+implementations SHOULD restore a prior `task` value if it existed.
+
+### Result
+
+The inline call behaves like a normal verb:
+
+* it stores the final refinery result into the `to` target
+* it writes the `result` fact
+* errors surface normally and terminate execution unless handled
 
 
 ---

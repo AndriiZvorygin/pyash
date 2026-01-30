@@ -48,6 +48,7 @@ import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
 import del, { signatures as deleteSignatures } from "./delete.mjs";
+import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 
 export {
   plus,
@@ -86,7 +87,8 @@ export {
   go,
   copy,
   touch,
-  del
+  del,
+  refinery
 };
 
 export const builtInSignatures = [
@@ -140,4 +142,5 @@ export const builtInSignatures = [
   ...searchSignatures,
   ...touchSignatures,
   ...deleteSignatures,
+  ...refinerySignatures,
 ];
