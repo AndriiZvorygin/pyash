@@ -27,6 +27,7 @@ get_map_value() {
 
 ai_host="$(get_map_value "ai host")"
 web_search_enabled="$(get_map_value "web search enabled")"
+search_only="lie"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -55,15 +56,26 @@ elif [[ -L /etc/localtime ]]; then
   fi
 fi
 
+for arg in "$@"; do
+  if [[ "$arg" == "--search-only" ]]; then
+    search_only="truth"
+  fi
+done
+
 node "$ROOT_DIR/container/tools/update_compose.mjs"
 
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
-  echo "Container already running."
-  exec docker exec -it pyash bash
+if [[ "$search_only" != "truth" ]]; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
+    echo "Container already running."
+    exec docker exec -it pyash bash
+  fi
 fi
 
-compose_args=(-f "$ROOT_DIR/container/service/pyash.yaml" -f "$OVERRIDE_FILE")
-if [[ "${web_search_enabled:-lie}" == "truth" ]]; then
+compose_args=()
+if [[ "$search_only" != "truth" ]]; then
+  compose_args=(-f "$ROOT_DIR/container/service/pyash.yaml" -f "$OVERRIDE_FILE")
+fi
+if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; then
   searx_env="$ROOT_DIR/container/configure/ecology/searxng.env"
   if [[ ! -f "$searx_env" ]]; then
     umask 077
@@ -77,8 +89,18 @@ if [[ "${web_search_enabled:-lie}" == "truth" ]]; then
   compose_args+=(-f "$ROOT_DIR/container/service/searxng.yaml")
 fi
 
+if [[ ${#compose_args[@]} -eq 0 ]]; then
+  echo "No services selected. Enable web search or omit --search-only."
+  exit 1
+fi
+
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
   docker compose "${compose_args[@]}" up -d
+
+if [[ "$search_only" == "truth" ]]; then
+  echo "Search service started."
+  exit 0
+fi
 
 echo "Container started. Entering..."
 exec docker exec -it pyash bash
