@@ -8,6 +8,7 @@
 * **Report extraction quiz** locks output determinism and covers inline reporter usage.
 * **Reports spec v0.1** finalized (fields, ordering, paths).
 * **Mind event schema v0.1** documented (request/response fields + naming).
+* **Error sieve verb** added with a minimal inline example and quiz.
 
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
