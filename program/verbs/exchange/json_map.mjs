@@ -145,6 +145,9 @@ export function mapSentenceToPyash(sentence) {
   } else if (sentence?.ob?.text) {
     headerParts.push(`ob ${npToPyash({ text: sentence.ob.text })}`);
   }
+  if (sentence?.from?.filename) {
+    headerParts.push(`from ${npToPyash({ filename: sentence.from.filename })}`);
+  }
   headerParts.push(`be ${kind} def`);
   const lines = [headerParts.join(" ")];
   const entries = sentence?.ob?.map ?? {};

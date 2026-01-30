@@ -58,7 +58,7 @@ Return value: a **Pyash map** whose entries are **full sentences**, one per sear
 Top-level map:
 
 ```
-su name <found> be map def
+su name <found> ob text "<question>" from filename "<search-engine-url>" be map def
   su name metadata
     ob text "<question>"
     fromstate wo web

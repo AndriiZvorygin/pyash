@@ -177,9 +177,15 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
   const map = buildFoundMap({ question, motorUrl, limit, results: normalized });
   const targetName = sentence?.su?.name ?? sentence?.to?.name ?? null;
   if (targetName) {
-    doRemember({ mood: "ya", su: { name: targetName }, ob: { map }, be: "map" });
+    return {
+      mood: "ya",
+      su: { name: targetName },
+      ob: { map, text: question },
+      from: { filename: motorUrl },
+      be: "map"
+    };
   }
-  return { ob: { map }, be: "map" };
+  return { ob: { map, text: question }, be: "map" };
 }
 
 async function listFiles(root) {
