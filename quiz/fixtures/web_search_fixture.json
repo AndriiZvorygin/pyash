@@ -1,0 +1,18 @@
+{
+  "results": [
+    {
+      "url": "https://example.com/a",
+      "title": "Example A",
+      "content": "Alpha summary",
+      "engine": "searxng",
+      "category": "web"
+    },
+    {
+      "url": "https://example.com/b",
+      "title": "Example B",
+      "content": "Beta summary",
+      "engine": "searxng",
+      "category": "news"
+    }
+  ]
+}

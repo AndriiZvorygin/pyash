@@ -9,6 +9,7 @@
 * **Reports spec v0.1** finalized (fields, ordering, paths).
 * **Mind event schema v0.1** documented (request/response fields + naming).
 * **Error sieve verb** added with a minimal inline example and quiz.
+* **Web search v0.1 spec + MVP**: `be search` with `fromstate wo web`, fixture-backed quiz, and example.
 
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
