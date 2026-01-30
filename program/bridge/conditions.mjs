@@ -21,6 +21,9 @@ export async function handleCondition(sentence, { state, remember }) {
     const target = remember(su.name);
     if (!target) throw new Error(`Unknown su: ${su.name}`);
     subjValue = target.ob;
+  } else if (ob?.name) {
+    const target = remember(ob.name);
+    if (target) subjValue = target.ob;
   }
 
   const fromValue =

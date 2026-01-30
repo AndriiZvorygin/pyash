@@ -248,12 +248,12 @@ None (Week 3 complete).
 
 ### Ship
 
-* **Verifier loop**
-
-  * run quizzes and emit a deterministic structured report bundle
-* **Reducer loop**
+* **Error sieve**
 
   * produce minimal repro `.pya` deterministically
+* **Success sieve**
+
+  * minimize passing programs for code-bloat reduction
 * **Resolution chain for lost signatures**
 
   * search project modules + stdlib namespaces
@@ -262,6 +262,10 @@ None (Week 3 complete).
 
   * content-hash keys
   * deterministic cache-hit records and stable outputs
+* **Web search support**
+* **RAG support**
+* **Puppeteer support**
+* **Mind long-term memory tooling**
 
 ### Add: Pipeline Workload Pack (golden scenario)
 
@@ -280,8 +284,6 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ### Spec drops (freeze v0.45)
 
-* **Reports spec v0.1** (fields, ordering, paths)
-* **Mind event schema v0.1** (ids, hashes, provenance)
 * **Patch bundle schema v0.1** (diff layout, tests, provenance)
 
 ### Hardening gates

@@ -25,6 +25,10 @@ verifiable to run again when again mode is enabled
 
 compatible with duties, streams, chips, exchange, artifacts, and run newspaper
 
+Refinery execution is a **runner policy** in v0.1: the runner may execute a refinery
+after it finishes interpreting the program body. Refinery execution is not yet a
+first-class sentence inside the program.
+
 
 This spec defines:
 
@@ -51,6 +55,9 @@ depend — a platform name that MUST complete before another platform may start
 already platform — a platform whose depend list is complete
 
 again mode — runner policy that requires recording and verification sufficient to run again (see 05-run-recording-and-artifacts.md)
+
+runner policy — behavior controlled by the runner (CLI/config), not by in-program
+sentences. Examples: selecting which refinery to run, and when to print results.
 
 
 
@@ -118,6 +125,247 @@ The refinery name <refinery> is a su name identifier.
 ### 5.2 Multiple refineries
 
 A file MAY declare more than one refinery. Selecting which refinery to run is a runner policy (outside this spec).
+
+### 5.3 Runner invocation (v0.1 behavior)
+
+In v0.1, refinery execution is **not** triggered by a Pyash sentence. The runner
+is responsible for selecting a refinery (by CLI/config) and may run it **after**
+the program body finishes executing.
+
+This means:
+
+* The program itself cannot run additional sentences after refinery completion.
+* The refinery result is returned to the runner, which decides whether and how to print it.
+
+Future revisions may add a first-class `be refinery do` sentence so refineries can
+run inline and return values to the program.
+
+---
+
+## 5.4 Inline refinery execution (draft v0.2)
+
+An implementation MAY support running a refinery inside the program as a normal
+verb. This enables post-refinery logic and programmatic access to the result.
+
+### Sentence form (draft)
+
+```
+ob text "<task>" to name text <output> be refinery do
+```
+
+Optional refinery selector:
+
+```
+ob text "<task>" from name <refinery> to name text <output> be refinery do
+```
+
+If `from name <refinery>` is omitted, the runtime SHOULD read the refinery name
+from memory (`su name refinery name ob text "<name>" be text ya`).
+
+### Task binding
+
+If `ob` is provided, the runtime SHOULD bind the task into memory as:
+
+```
+su name task ob text "<task>" be text ya
+```
+
+so platform activities can read `task` normally. The binding MAY be temporary;
+implementations SHOULD restore a prior `task` value if it existed.
+
+### Result
+
+The inline call behaves like a normal verb:
+
+* it stores the final refinery result into the `to` target
+* it writes the `result` fact
+* errors surface normally and terminate execution unless handled
+
+---
+
+## 5.5 Report extraction contract (v0.1)
+
+This section defines a deterministic report extracted from the run newspaper
+plus referenced artifacts. The report is derivable and optional. **Status: v0.1**.
+
+### Report name + ordering
+
+The report is emitted as a single Pyash file (suggested: `report.pya`) with a
+canonical ordering. A report is a linear list of sentences in this order:
+
+1. Run header
+2. Run root + environment
+3. Platform outcomes (sorted by platform name, then start order)
+4. Mind/tool calls (sorted by appearance in the newspaper)
+5. Failures (sorted by appearance)
+6. Artifacts (sorted by appearance)
+7. Footer (end marker)
+
+### Required fields (minimal)
+
+**Run header**
+
+- `run id` (string)
+- `run time` (RFC 3339 text)
+- `run root` (filename)
+
+**Platform outcomes**
+
+For each platform execution:
+- `platform name`
+- `platform order` (1-based, execution order)
+- `platform activity` (embedded sentence)
+- `platform result` (embedded sentence)
+- `platform status` (`ok` | `error`)
+
+**Mind calls**
+
+For each mind request/response:
+- `mind name`
+- `mind label` (`request` | `response` | `empty-response` | `error`)
+- `mind map` (json map def name)
+- `mind order` (1-based, appearance order)
+
+**Tool calls**
+
+For each tool event (tool request + result):
+- `tool name`
+- `tool order` (1-based, appearance order)
+- `tool event` (embedded event sentence)
+
+**Failures**
+
+For each error:
+- `error name`
+- `error sentence` (embedded sentence)
+- `error order` (1-based, appearance order)
+
+**Artifacts**
+
+For each artifact:
+- `artifact id`
+- `artifact kind`
+- `artifact origin` (embedded sentence, if available)
+- `artifact order` (1-based, appearance order)
+
+### Canonical sentence shapes
+
+Report data MUST be emitted as json map def blocks, one block per report item.
+This keeps the report single-sentence per line while preserving multiple fields.
+
+```
+su name report header be json map def
+su name run id ob text "<id>" ya
+su name run time ob text "<time>" ya
+su name run root ob filename "<root>" ya
+su name report header prah
+
+su name platform outcome 1 be json map def
+su name platform name ob name <platform> ya
+su name platform order ob num 1 ya
+su name platform activity ob la <sentence> ko ya
+su name platform result ob la <sentence> ko ya
+su name platform status ob text "ok" ya
+su name platform outcome 1 prah
+
+su name mind call 1 be json map def
+su name mind name ob name <mind> ya
+su name mind label ob text "request" ya
+su name mind map ob name <map-name> ya
+su name mind order ob num 1 ya
+su name mind call 1 prah
+
+su name tool call 1 be json map def
+su name tool name ob name <tool> ya
+su name tool order ob num 1 ya
+su name tool event ob la <sentence> ko ya
+su name tool call 1 prah
+
+su name failure 1 be json map def
+su name error name ob name <error> ya
+su name error sentence ob la <sentence> ko ya
+su name error order ob num 1 ya
+su name failure 1 prah
+
+su name artifact entry 1 be json map def
+su name artifact id ob text "<hash>" ya
+su name artifact kind ob text "<kind>" ya
+su name artifact origin ob la <sentence> ko ya
+su name artifact order ob num 1 ya
+su name artifact entry 1 prah
+```
+
+The report ends with:
+
+```
+su name report end be report ya
+```
+
+Implementations MAY include additional report entries, but MUST preserve the
+canonical ordering and required fields above.
+
+### Extraction interfaces (non-normative)
+
+Implementations may expose report extraction via:
+
+- CLI (`node program/command/extract_report.mjs --run-id <id>`)
+- Inline verb (`be reporter do`) that reads the current run's newspaper buffer
+  or the on-disk newspaper when present.
+
+---
+
+## 5.6 Error sieve (draft v0.1)
+
+The error sieve is a deterministic process that shrinks a failing program or
+run into a minimal `.pya` reproduction while preserving the failure.
+
+### Purpose
+
+* produce the smallest repro that still fails
+* enable deterministic debugging and regression tests
+* emit a reduction report that references the original run
+
+### Inputs
+
+* original program source (`.pya`) or run newspaper
+* a verifier action that returns PASS/FAIL (or error/success)
+* optional constraints (minimum sentences, keep module imports, etc.)
+* `atmost num` — maximum number of reduction attempts
+
+### Required behavior
+
+1. **Deterministic selection**
+   The same input and verifier must produce the same minimized output.
+
+2. **Monotonic shrinking**
+   The reducer only removes or simplifies sentences; it does not invent new
+   program content.
+
+3. **Failure preservation**
+   A reduction step is accepted only if the verifier still fails.
+
+4. **Recorded trace**
+   Each reduction step is recorded in the run newspaper when enabled.
+
+### Output
+
+* `repro.pya` — minimized failing program
+* `report.pya` — reduction report (optional, derived from newspaper)
+
+### Minimal example (conceptual)
+
+```
+su name error sieve demo be refinery def
+exists su name reduce
+  ob la
+    ob name source to name output be error sieve do
+  ko
+  be platform ya
+prah
+```
+
+This spec defines the reducer loop at a high level; an implementation may
+introduce an inline `be error sieve do` verb or a runner policy in a future revision.
 
 
 ---
@@ -415,7 +663,8 @@ The Re-entry Cycle delivers the first meaningful jump using existing models and 
 ### How (mechanism)
 
 The system intentionally **re-enters the same task** multiple times. Each pass produces a draft,
-receives critique, applies revisions, and may be judged. Feedback from earlier passes shapes later ones.
+receives reviewer criticism, and only applies revisions when the reviewer reports failure. A pass can
+skip revision entirely. Feedback from earlier passes shapes later ones.
 The recurrence lives in **control flow** (`fromindex … toindex … do`), not inside the model.
 One mind or multiple minds may be used; both qualify as RPT-1 because the task itself is what is re-entered.
 
@@ -442,7 +691,7 @@ Produce a concise, structured candidate answer.
 State assumptions explicitly when needed.
 ```
 
-**Critique (critic mind)**
+**Review (reviewer mind)**
 
 ```
 Review the candidate.
@@ -499,19 +748,19 @@ Explicit loop rule (normative):
 
 ---
 
-## Mind configuration (author/critic/judge)
+## Mind configuration (author/reviewer/judge)
 
-The author, critic, and judge are **mind configurations**. Define them with `be mind` sentences and
-set their model + system prompt via `as` and `accordingto`:
+The author, reviewer, and judge are **mind configurations**. Define them with `be mind` sentences and
+set their model + system prompt via `as` and `from discourse`:
 
 ```pyash
 exists su name author prompt ob text "Draft: be concise and follow the task." be text ya
-exists su name critic prompt ob text "Critique: list issues + patch plan." be text ya
+exists su name reviewer prompt ob text "Review: list issues + patch plan." be text ya
 exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
 
-exists su name author be mind as name "qwen3-vl:8b-instruct" accordingto name author prompt ya
-exists su name critic be mind as name "qwen3-vl:8b-instruct" accordingto name critic prompt ya
-exists su name judge be mind as name "qwen3-vl:8b-instruct" accordingto name judge prompt ya
+exists su name author be mind as name "qwen3-vl:8b-instruct" from discourse name author prompt ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" from discourse name reviewer prompt ya
+exists su name judge be mind as name "qwen3-vl:8b-instruct" from discourse name judge prompt ya
 ```
 
 These can live in `configure/default.pya` for global defaults or inline in a specific program.
@@ -571,17 +820,17 @@ su name re-entry attempt to name text output be ceremony def
   by num 0
   be write do
 
-  ; critique (draft -> critic -> critique)
-  su name critique out
+  ; review (draft -> reviewer -> criticism)
+  su name criticism out
   ob text draft out
-  for name critic
-  to name critique out
+  for name reviewer
+  to name criticism out
   by num 0
   be write do
 
-  ; revise (critique -> author -> revised)
+  ; revise (criticism -> author -> revised)
   su name revised out
-  ob text critique out
+  ob text criticism out
   for name author
   to name revised out
   by num 0
@@ -599,85 +848,42 @@ prah
 
 ---
 
-## Verifier report bundle (subsection)
+## Run newspaper + artifacts as source of truth (normative)
 
-The verifier loop MAY emit a deterministic report bundle per run. The bundle is optional and fully derivable from the run newspaper plus artifacts, so it MUST NOT contain information that is not present in the recorded run.
+The run newspaper is the single source of truth for “what happened.” Artifacts are
+stored separately, but the newspaper MUST record their IDs and provenance.
 
-### Bundle location
+This section captures the invariants that keep representation flexible (single-file
+newspaper, compressed bundles, on-demand reports, or no extra files at all) while
+preserving determinism and replayability.
 
-```
-artifacts/reports/<run-id>/
-```
+### Invariants (normative)
 
-### Required files
+* **Single source of truth for “what happened”**  
+  One append-only run newspaper that records every platform action and its result, in order.
 
-#### `report.pya`
+* **Hard separation of roles**  
+  * interpretation: derive meaning, bind circumstances once  
+  * evaluation: decide pass or fail based on meaning  
+  * recording: write what happened, with no judgement
 
-Pyash sentences, one per line:
+* **Deterministic replay contract**  
+  Again-mode re-verifies using recorded inputs plus recorded tool results, with no new mind calls and no re-fetching.
 
-```
-su name report run id ob text "<run-id>" be report ya
-su name report run time ob date <iso8601> be report ya
-su name report run root ob filename "<absolute path>" be report ya
-su name report source ob filename "<path>" be report ya
-su name report status ob text "pass|fail" be report ya
-su name report quiz count ob num <n> be report ya
-su name report quiz passed ob num <n> be report ya
-su name report quiz failed ob num <n> be report ya
-su name report quiz skipped ob num <n> be report ya
-su name report artifacts ob ve text "<rel>" "<rel>" be report ya
-su name report notes ob ve text "<note>" "<note>" be report ya
-```
+* **Stable identifiers and provenance**  
+  Every meaningful input/output has an ID (hash or name) and provenance chain: “this sentence/result came from this invocation and these inputs”.
 
-Rules:
+* **Explicit error semantics**  
+  Tool failures become first-class records (`be error ya` with structured payload), never hidden in prose.
 
-* `report artifacts` and `report notes` vectors MUST be sorted ASCII.
-* `report status` MUST be `fail` if any quiz failed.
-* `report source` MUST be:
-  * the `.pya` path if `./run` was used, or
-  * `"(inline)"` if stdin/inline input.
+* **Artifact discipline**  
+  Artifacts exist independently of the log, but the newspaper must record: artifact ID, type, origin step, and how it was derived.
 
-#### `quiz.pya`
+* **Re-entry as a control structure**  
+  The outer loop can repeat with new inputs derived from prior outputs, while preserving the previous pass as immutable history.
 
-Pyash sentences, ordered lexicographically by quiz `name`:
-
-```
-su name quiz "<name>" ob text "<file>" as text "<status>" by num <duration_ms> be quiz ya
-su name quiz "<name>" ob text "<file>" as text "fail" by num <duration_ms> to text "<message>" be quiz ya
-```
-
-#### `summary.pya`
-
-```
-su name report summary be map def
-  su name run ob text "<run-id>" be report ya
-  su name time ob date <iso8601> be report ya
-  su name status ob text "pass|fail" be report ya
-  su name quizzes ob text "<passed>/<total>" be report ya
-  su name failures ob num <n> be report ya
-prah
-```
-
-### Optional files
-
-* `diff.pya` — text diff lines as `su name diff line ... be report ya` (if produced).
-* `env.pya` — stable environment inputs as `be ecology`-style sentences (optional).
-* `tools.pya` — tool call summaries as `be tool` events (optional).
-
-### Determinism rules
-
-* Files are Pyash sentences (one per line).
-* Lists must be sorted ASCII.
-* Timestamps must be ISO 8601 with offset if known.
-* Paths must be normalized to use `/`.
-
-### Error handling
-
-If the verifier attempts to write the report bundle and cannot, it MUST emit:
-
-```
-su name report defective ob text "<reason>" from name verify be error ya
-```
+* **Minimal, typed envelopes**  
+  Tool calls and mind calls use a consistent envelope shape, so modules and external tools plug in without special cases.
 
 ---
 
@@ -689,13 +895,13 @@ remains valid, since recurrence is defined at the system level.
 
 ## Newspaper extraction helper (informative)
 
-When you want the report bundle view without producing extra files, extract it from the run newspaper.
+When you want a compact report without producing extra files, extract it from the run newspaper.
 The goal is a small, stable summary suitable for dashboards or CI.
 
 Recommended extraction fields (derive from newspaper + artifacts):
 
 - run id, run time, run root, source filename
-- verifier status (pass/fail) and counts (passed/failed/skipped)
+- reviewer status (pass/fail) and counts (passed/failed/skipped)
 - quiz entries (name, file, status, duration, failure message)
 - artifact references (locators for report inputs/outputs)
 - notes (optional, human-readable)

@@ -1,4 +1,5 @@
 import { emitExchangeSentence } from "../../bridge/exchange.mjs";
+import { jsonToMapSentences } from "../exchange/json_map.mjs";
 
 const mindDebugCounters = new Map();
 
@@ -9,8 +10,27 @@ function nextDebugCount(targetName) {
   return count;
 }
 
-function toQuotedJson(text) {
-  return `quoted.json.${text}.json.quoted`;
+function compareUtf8(a, b) {
+  if (a === b) return 0;
+  const bufA = Buffer.from(String(a), "utf8");
+  const bufB = Buffer.from(String(b), "utf8");
+  const len = Math.min(bufA.length, bufB.length);
+  for (let i = 0; i < len; i += 1) {
+    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
+  }
+  return bufA.length < bufB.length ? -1 : 1;
+}
+
+function mapSentenceToDefChain(sentence) {
+  const name = sentence?.su?.name ?? "map";
+  const entries = sentence?.ob?.map ?? {};
+  const keys = Object.keys(entries).sort(compareUtf8);
+  const lines = [{ mood: "def", su: { name }, be: "json map" }];
+  for (const key of keys) {
+    lines.push({ mood: "ya", su: { name: key }, ob: entries[key] ?? {} });
+  }
+  lines.push({ mood: "prah", su: { name } });
+  return lines;
 }
 
 export function stripContext(obj) {
@@ -22,14 +42,13 @@ export function stripContext(obj) {
 
 export function recordMindJson({ targetName, label, payload }) {
   const count = nextDebugCount(targetName);
-  const jsonText = JSON.stringify(payload ?? null, null, 2);
-  emitExchangeSentence({
-    mood: "ya",
-    su: { name: `${targetName || "mind"} ${label} ${count}` },
-    be: "write",
-    from: { name: "mind" },
-    ob: { text: toQuotedJson(jsonText) }
-  });
+  const baseName = `${targetName || "mind"} ${label} ${count}`;
+  const jsonValue = payload ?? {};
+  const { sentences } = jsonToMapSentences(jsonValue, baseName);
+  for (const sentence of sentences) {
+    const chain = mapSentenceToDefChain(sentence);
+    for (const entry of chain) emitExchangeSentence(entry);
+  }
 }
 
 export function resetMindDebugCounters() {

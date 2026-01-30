@@ -66,6 +66,7 @@ const pulseCookie = process.env.PYASH_PULSE_COOKIE;
 const codexDir = process.env.PYASH_CODEX_DIR;
 const gitConfig = process.env.PYASH_GITCONFIG;
 const gitConfigXdg = process.env.PYASH_GITCONFIG_XDG;
+const hostTz = process.env.PYASH_TZ;
 
 const volumes = [];
 const devices = [];
@@ -102,6 +103,18 @@ if (gitConfigXdg) {
   try {
     await fs.stat(gitConfigXdg);
     volumes.push(`${"${PYASH_GITCONFIG_XDG}"}:/workplace/.config/git/config:ro`);
+  } catch {}
+}
+
+if (hostTz) {
+  lines.push(`      - TZ=${quote(hostTz)}`);
+  try {
+    await fs.stat("/etc/localtime");
+    volumes.push("/etc/localtime:/etc/localtime:ro");
+  } catch {}
+  try {
+    await fs.stat("/etc/timezone");
+    volumes.push("/etc/timezone:/etc/timezone:ro");
   } catch {}
 }
 

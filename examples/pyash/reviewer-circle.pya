@@ -1,0 +1,18 @@
+from name ../../module/reviewer_circle.pya to name reviewer be import do
+
+exists su name author prompter ob text "Draft: be concise and friendly." be text ya
+exists su name reviewer prompter ob text "Review the TASK and ANSWER. Return only PASS or FAIL." be text ya
+
+exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
+exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext name reviewer prompter ya
+
+exists su name task ob text "Write a short greeting." be text ya
+
+su name reviewer circle be refinery def
+exists su name reviewer round ob la ob name text task to name text output be reviewer trying do ko be platform ya
+prah
+
+ob name text task from name reviewer circle to name text output be refinery do
+ob name output be write do
+to name text report out be reporter do
+ob name report out be write do

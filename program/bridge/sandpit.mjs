@@ -89,10 +89,6 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       for (const step of baseBody) {
         // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
         lastResult = await interpret(clone(step));
-        if (step.mood === "then" && state.lastCondition === false) {
-          state.lastCondition = true;
-          break;
-        }
       }
 
       const updatedTloh = registerValue(state.currentEvokeRef.fromindex, { state, memory });
@@ -184,10 +180,6 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     for (const step of body) {
       // Avoid mutating definition body sentences across invocations.
       lastResult = await interpret(clone(step));
-      if (step.mood === "then" && state.lastCondition === false) {
-        state.lastCondition = true;
-        break;
-      }
     }
   } finally {
     const sandpit = [state.currentEvokeRef, ...memory.allRemember()];

@@ -9,6 +9,7 @@ configure/workplace.pya
 container/compose.override.yaml
 .bash_history
 .gitconfig
+.viminfo
 .codex/
 .cache/
 .npm/

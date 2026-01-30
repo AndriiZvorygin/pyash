@@ -41,6 +41,18 @@ export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
 export PYASH_CODEX_DIR="$HOME/.codex"
 export PYASH_GITCONFIG="$HOME/.gitconfig"
 export PYASH_GITCONFIG_XDG="$HOME/.config/git/config"
+export PYASH_TZ=""
+
+if [[ -f /etc/timezone ]]; then
+  PYASH_TZ="$(cat /etc/timezone)"
+elif command -v timedatectl >/dev/null 2>&1; then
+  PYASH_TZ="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
+elif [[ -L /etc/localtime ]]; then
+  tz_path="$(readlink -f /etc/localtime || true)"
+  if [[ "$tz_path" == */zoneinfo/* ]]; then
+    PYASH_TZ="${tz_path#*/zoneinfo/}"
+  fi
+fi
 
 node "$ROOT_DIR/container/update_compose.mjs"
 
