@@ -16,6 +16,7 @@ Reading order (feature chapters):
 9. `09-speech-and-hear.md` — say/hear, speech artifacts, whisper input, vendoring.
 10. `10-pipelines-and-translation.md` — refinery, re-entry cycle, translation.
 11. `11-modules.md` — module system and tool runner contract.
+12. `12-web-search.md` — web search spec (draft).
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
