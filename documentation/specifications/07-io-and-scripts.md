@@ -14,7 +14,8 @@ This chapter is four sections in order:
 1. Directory commands (filesystem verbs).
 2. Date and time (literals and date math).
 3. Interpret script (execute `.pya` text files).
-4. Download (URL fetch into files).
+4. Read (text extraction).
+5. Download (URL fetch into files).
 
 # Directory commands (draft v0.1)
 
@@ -688,6 +689,25 @@ To ensure reproducibility, runtimes SHOULD record:
 * Clarified why stdin piping is not required.
 * Added vendoring and reproducibility guidance.
 
+
+---
+
+# Read (text extraction, v0.1)
+
+`be read` can extract plain text from document formats when `fromstate` is explicit.
+
+Canonical forms:
+
+```
+from filename "<path>" fromstate name html to name text <out> be read do
+from filename "<path>" fromstate name pdf to name text <out> be read do
+```
+
+Notes:
+* `fromstate` is required for HTML/PDF extraction in v0.1.
+* Optional sugar: `as wo html` / `as wo pdf` MAY be treated as `fromstate name html/pdf`.
+* Implementations may use external helpers (e.g. pandoc, pdftotext) to extract text.
+* Errors: `html defective`, `html lost`, `pdf defective`, `pdf lost`.
 
 ---
 
