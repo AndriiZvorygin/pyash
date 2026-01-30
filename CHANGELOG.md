@@ -1,5 +1,12 @@
 # Changelog
 
+### Jan 30, 2026: Verifier loop + deterministic reporting
+
+* **Inline refinery still writes to the newspaper**, so verifier loops stay deterministic without flags.
+* **Report extraction added**: `extract_report.mjs` CLI and `be reporter do` verb emit a stable report from the newspaper.
+* **Reviewer loop example updated** to use inline report extraction, plus a standalone `reporter-inline.pya` example.
+* **Report extraction quiz** locks output determinism and covers inline reporter usage.
+
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
 * **Merged specification files** into chaptered docs under `documentation/specifications/` to stay under model file limits.
