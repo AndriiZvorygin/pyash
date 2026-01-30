@@ -251,6 +251,9 @@ None (Week 3 complete).
 * **Error sieve**
 
   * produce minimal repro `.pya` deterministically
+* **Success sieve**
+
+  * minimize passing programs for code-bloat reduction
 * **Resolution chain for lost signatures**
 
   * search project modules + stdlib namespaces
@@ -259,6 +262,10 @@ None (Week 3 complete).
 
   * content-hash keys
   * deterministic cache-hit records and stable outputs
+* **Web search support**
+* **RAG support**
+* **Puppeteer support**
+* **Mind long-term memory tooling**
 
 ### Add: Pipeline Workload Pack (golden scenario)
 
