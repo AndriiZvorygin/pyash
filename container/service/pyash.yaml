@@ -7,7 +7,7 @@ services:
     image: pyash-dev
     working_dir: /workplace
     volumes:
-      - ..:/workplace
+      - ../..:/workplace
       - ../minds:/minds
     stdin_open: true
     tty: true
