@@ -22,6 +22,7 @@ node --test quiz  # direct invoke
 ## Quick Run (Interpreter / JS / C)
 ```bash
 ./run examples/pyash/mind-tool-call.pya --newspaper --run-id demo
+./command/pyash.mjs examples/pyash/mind-tool-call.pya --newspaper --run-id demo-npx
 ./runjs examples/pyash/mind-tool-call.pya --newspaper --run-id demo-js
 ./runc examples/pyash/mind-tool-call.pya --newspaper --run-id demo-c
 ```
