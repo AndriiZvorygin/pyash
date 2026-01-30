@@ -41,6 +41,69 @@ function resolveFillCount(by, remember) {
   return null;
 }
 
+function matchCaseValue(expected, actual) {
+  if (!expected || typeof expected !== "object") return true;
+  const expectedName = expected.name ?? expected.text ?? expected.wo ?? expected.filename;
+  if (expectedName === undefined) return true;
+  if (!actual || typeof actual !== "object") return false;
+  return (
+    actual.name === expectedName
+    || actual.text === expectedName
+    || actual.wo === expectedName
+    || actual.filename === expectedName
+  );
+}
+
+function matchesDefaultClause(clause, sentence) {
+  if (!clause || typeof clause !== "object") return false;
+  for (const [key, expected] of Object.entries(clause)) {
+    if (key === "be") {
+      if (sentence?.be !== expected) return false;
+      continue;
+    }
+    if (key === "fromstate") {
+      if (!matchCaseValue(expected, sentence?.fromstate)) return false;
+      continue;
+    }
+    if (key === "su") {
+      if (!matchCaseValue(expected, sentence?.su)) return false;
+      continue;
+    }
+    if (!matchCaseValue(expected, sentence?.[key])) return false;
+  }
+  return true;
+}
+
+function mergeDefaultSlot(target, source) {
+  if (source == null) return target;
+  if (target == null || typeof target !== "object") {
+    return globalThis.structuredClone
+      ? globalThis.structuredClone(source)
+      : JSON.parse(JSON.stringify(source));
+  }
+  if (typeof source !== "object") return target;
+  for (const [key, value] of Object.entries(source)) {
+    if (target[key] === undefined) {
+      target[key] = value;
+    }
+  }
+  return target;
+}
+
+function applyDynamicDefaults(sentence) {
+  if (!sentence || sentence.be === "default") return sentence;
+  const rules = allRemember().filter(entry => entry?.be === "default" && entry?.ob?.la && entry?.mood === "ya");
+  if (!rules.length) return sentence;
+  for (const rule of rules) {
+    if (!matchesDefaultClause(rule.ob.la, sentence)) continue;
+    for (const [key, value] of Object.entries(rule)) {
+      if (key === "mood" || key === "be" || key === "su" || key === "ob" || key === "exists") continue;
+      sentence[key] = mergeDefaultSlot(sentence[key], value);
+    }
+  }
+  return sentence;
+}
+
 for (const sig of builtInSignatures) {
   registerSignatureHandler(sig);
 }
@@ -107,6 +170,7 @@ export async function interpret(sentence) {
     }
   }
   applyEnvDefaults({ rememberFn: remember, doRememberFn: doRemember });
+  applyDynamicDefaults(sentence);
   if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
   if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;
   if (sentence.subj) delete sentence.subj;

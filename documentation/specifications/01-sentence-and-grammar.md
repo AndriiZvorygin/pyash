@@ -39,6 +39,29 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - Keyword lists (moods, cases, type tokens, vyah modifiers) are defined in `program/library/grammar/keywords.mjs` and MUST be treated as the source of truth.
 - Official ordering (for sentence formatting and signature words) follows the compositional case order (`01-sentence-and-grammar.md`) and JSON official key ordering (`06-data-formats.md`).
 
+## 3.1 Dynamic defaults (adapter rules)
+
+Dynamic defaults let configuration attach missing cases to matching sentences without custom code.
+
+Rule form (stored as a normal default fact):
+
+```
+exists su name <rule-name>
+  ob la <match-clause> ko
+  <case> <value>
+  <case> <value>
+be default ya
+```
+
+Matching:
+* The `ob la … ko` clause is a **pattern** that must match the target sentence by `be` and any cases present in the clause.
+* If the clause omits a case, that case is ignored for matching.
+
+Application:
+* For each matching rule, any **missing** case on the target sentence is filled from the rule sentence.
+* The rule does **not** overwrite cases that are already present on the target sentence.
+* The rule’s `mood`, `be`, `su`, `ob`, and `exists` are never copied.
+
 ## 4. Error contracts
 - If a sentence cannot be parsed, the parser raises an error (see `quiz/parser.test.mjs`).
 

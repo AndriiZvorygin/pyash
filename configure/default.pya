@@ -11,16 +11,18 @@ exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya
 exists su name keyboard enabled ob bool truth be default ya
+exists su name search web default ob la be search fromstate wo web ko from filename "http://localhost:60490/" be default ya
 exists su name ffmpeg input ob text "pulse" be default ya
 exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
 exists su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
 exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
+exists su name download extra default ob la be download as wo video ko with name download extra be default ya
+exists su name download extra default ob la be download as wo audio ko with name download extra be default ya
 exists su name reiterate delay ob num 250 be number ya
 exists su name reiterate backoff ob num 2 be number ya
 exists su name reiterate attempts ob num 5 be number ya
 exists su name reiterate cap ob num 8000 be number ya
 exists su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
-exists su name timezone be ob "America/Toronto" be text ya
 exists su hear be default ob name whisper command hear ya

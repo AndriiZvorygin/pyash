@@ -49,8 +49,8 @@ function normalizeSearxUrl(base, question, limit) {
   return url.toString();
 }
 
-function padRank(rank) {
-  return String(rank).padStart(6, "0");
+function rankKey(rank) {
+  return String(rank);
 }
 
 async function loadFixture() {
@@ -91,11 +91,11 @@ function buildFoundMap({ question, motorUrl, limit, results }) {
 
   results.forEach((entry, idx) => {
     const rank = idx + 1;
-    const key = `found ${padRank(rank)}`;
+    const key = rankKey(rank);
     const sentence = {
       mood: "ya",
       su: { name: key },
-      by: { num: rank },
+      atindex: { num: rank },
       from: { filename: entry.url }
     };
     if (entry.title) sentence.ob = { text: entry.title };
@@ -150,11 +150,12 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
     try {
       payload = await fetchJson(url);
     } catch (err) {
+      const hint = "hint: enable web search in configure/workplace.pya and run container/run.sh to start searxng (default http://localhost:60490/), or set web search motor explicitly";
       throwErrorSentence({
         name: "web search defective",
-        message: "web search defective",
+        message: `web search defective: ${err?.message ?? "request failed"}; ${hint}`,
         from: { name: "search" },
-        raw: { error: err?.message ?? String(err) }
+        raw: { error: err?.message ?? String(err), motor: motorUrl }
       });
     }
   }
@@ -281,6 +282,10 @@ export const signatures = [
   { signatureWords: ["be", "search", "ob", "name", "text", "fromstate", "wo", "web", "from", "filename", "by", "num"], handler: search },
   { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "from", "filename", "ob", "text"], handler: search },
   { signatureWords: ["be", "search", "by", "num", "fromstate", "wo", "web", "from", "filename", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "from", "filename", "fromstate", "wo", "web", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "by", "num", "from", "filename", "fromstate", "wo", "web", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "from", "filename", "fromstate", "wo", "web", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "from", "filename", "fromstate", "wo", "web", "ob", "name", "text"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "in", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "name", "text", "in", "filename"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "in", "name", "filename"], handler: search },

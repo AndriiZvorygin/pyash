@@ -33,7 +33,8 @@ test("web search returns map of found entries", async () => {
   assert.equal(meta?.ob?.text, "example");
   assert.equal(meta?.from?.filename, "https://tsoc.liberit.ca/");
 
-  const first = map["found 000001"];
+  const first = map["1"];
+  assert.equal(first?.atindex?.num, 1);
   assert.equal(first?.from?.filename, "https://example.com/a");
   assert.equal(first?.ob?.text, "Example A");
   assert.equal(first?.as?.text, "Alpha summary");

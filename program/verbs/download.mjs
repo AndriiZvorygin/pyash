@@ -3,13 +3,56 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { remember } from "../remember/index.mjs";
+import { state } from "../bridge/state.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { recordArtifact, recordExchange } from "../bridge/exchange.mjs";
+
+function resolveGenitive(genitive, { rememberFn } = {}) {
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return undefined;
+
+  const [root, ...rest] = chainArr;
+  let curr =
+    root === "this"
+      ? (state.currentEvokeRef || state.currentEvoke)
+      : (typeof root === "string" && rememberFn ? rememberFn(root) : undefined);
+
+  for (const part of rest) {
+    if (curr && typeof curr === "object" && curr.name && rememberFn) {
+      const fact = rememberFn(curr.name);
+      if (fact) curr = fact.ob ?? fact;
+    }
+    if (curr && typeof curr === "object") {
+      if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+        curr = curr.ob.map[part];
+      } else if (curr.ob && curr.ob[part] !== undefined) {
+        curr = curr.ob[part];
+      } else {
+        curr = curr?.[part];
+      }
+    } else {
+      curr = curr?.[part];
+    }
+  }
+
+  if (typeof curr === "string") return curr;
+  if (typeof curr === "number") return String(curr);
+  if (curr && typeof curr === "object") {
+    if (typeof curr.filename === "string") return curr.filename;
+    if (typeof curr.text === "string") return curr.text;
+    if (typeof curr.name === "string") return curr.name;
+  }
+  return curr;
+}
 
 function resolveText(value, { rememberFn } = {}) {
   if (!value) return "";
   if (typeof value.filename === "string") return value.filename;
   if (typeof value.text === "string") return value.text;
+  if (value.genitive) {
+    const resolved = resolveGenitive(value.genitive, { rememberFn });
+    if (typeof resolved === "string") return resolved;
+  }
   if (value.name && rememberFn) {
     const fact = rememberFn(value.name);
     if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
@@ -27,9 +70,11 @@ function resolveOutput(sentence, { rememberFn } = {}) {
   return resolveText(sentence?.to, { rememberFn });
 }
 
-function resolveExtraArgs({ rememberFn } = {}) {
+function resolveExtraArgs(sentence, { rememberFn } = {}) {
   if (!rememberFn) return [];
-  const fact = rememberFn("download extra");
+  const sourceName = sentence?.with?.name ?? sentence?.with?.text ?? null;
+  if (!sourceName) return [];
+  const fact = rememberFn(sourceName);
   const values = fact?.ob?.ve?.values;
   if (!Array.isArray(values)) return [];
   return values.map(value => String(value)).filter(Boolean);
@@ -165,7 +210,7 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
     return { ob: { filename: resolvedDest }, be: "download" };
   }
 
-  const extraArgs = resolveExtraArgs({ rememberFn });
+  const extraArgs = resolveExtraArgs(sentence, { rememberFn });
   const { status, stderr } = await runCurl({ url, outputPath: resolvedDest, extraArgs });
   if (status !== 0) {
     throwErrorSentence({
@@ -224,7 +269,7 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
     return { ob: { filename: outputTemplate.includes("%(") ? outputDir : mockTarget }, be: "download" };
   }
 
-  const extraArgs = resolveExtraArgs({ rememberFn });
+  const extraArgs = resolveExtraArgs(sentence, { rememberFn });
   const { status, stderr } = await runYtDlp({
     url,
     outputPath: outputTemplate,
@@ -287,6 +332,10 @@ export const signatures = [
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "with", "text", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "with", "text", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "with", "text", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "with", "text", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "from", "filename", "fromstate", "name", "magnet", "to", "filename"], handler: (s) => download_missing(s, { scheme: "magnet" }) },
   { signatureWords: ["be", "download", "from", "filename", "fromstate", "name", "ipfs", "to", "filename"], handler: (s) => download_missing(s, { scheme: "ipfs" }) },
   { signatureWords: ["be", "download", "as", "wo", "web", "from", "name", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "web", ...ctx }) },
@@ -301,6 +350,10 @@ export const signatures = [
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "with", "text", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "with", "text", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "with", "text", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "with", "text", "to", "name", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "web", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "web", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "file", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "file", ...ctx }) },
@@ -309,6 +362,10 @@ export const signatures = [
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "with", "text"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "https", "with", "text"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "video", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "with", "text"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "with", "text"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "audio", "from", "filename", "fromstate", "name", "https", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "https", intent: "audio", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "ob", "wo"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },
