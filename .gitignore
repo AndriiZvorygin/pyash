@@ -7,6 +7,7 @@ quiz/sandpit/
 configure/secret.pya
 configure/workplace.pya
 container/building/compose.override.yaml
+container/compose.override.yaml
 container/configure/ecology/searxng.env
 .bash_history
 .gitconfig
