@@ -183,10 +183,10 @@ The inline call behaves like a normal verb:
 
 ---
 
-## 5.5 Report extraction contract (draft v0.2)
+## 5.5 Report extraction contract (v0.1)
 
 This section defines a deterministic report extracted from the run newspaper
-plus referenced artifacts. The report is derivable and optional.
+plus referenced artifacts. The report is derivable and optional. **Status: v0.1**.
 
 ### Report name + ordering
 
