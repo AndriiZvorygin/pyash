@@ -26,6 +26,67 @@ newspaper and again mode are enabled.
 
 ---
 
+## Mind event schema v0.1
+
+This section freezes the event schema for mind calls as recorded in the
+newspaper. Each event is a json map def block with a stable name:
+
+```
+<mind-name> <label> <count>
+```
+
+where:
+
+- `<label>` is one of `request`, `response`, `empty-response`, `error`
+- `<count>` is a per-mind 1-based integer
+
+### Required fields
+
+**Request**
+
+Required keys:
+
+- `mode` (text)
+- `model` (text)
+- `prompt` (text)
+- `host` (text)
+- `stream` (bool)
+
+Optional keys:
+
+- `tools` (text, serialized JSON array)
+- `options` (json map, if supported)
+
+**Response**
+
+Required keys:
+
+- `model` (text)
+- `response` (text, may be empty)
+- `done` (bool)
+
+Optional keys:
+
+- `done_reason` (text)
+- `created_at` (text)
+- `context` (vec)
+- `total_duration`, `load_duration`, `prompt_eval_count`,
+  `prompt_eval_duration`, `eval_count`, `eval_duration` (num)
+
+### Canonical encoding
+
+Each event is emitted as:
+
+```
+su name <mind-name> <label> <count> be json map def
+su name <field> ob <value> ya
+...
+su name <mind-name> <label> <count> prah
+```
+
+The field order is not semantically important, but implementations SHOULD emit
+fields in a stable order to aid diffing.
+
 ## 1. Purpose
 
 `be write` invokes a language-model backend and returns a text response.
