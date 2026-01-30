@@ -108,6 +108,14 @@ if (gitConfigXdg) {
 
 if (hostTz) {
   lines.push(`      - TZ=${quote(hostTz)}`);
+  try {
+    await fs.stat("/etc/localtime");
+    volumes.push("/etc/localtime:/etc/localtime:ro");
+  } catch {}
+  try {
+    await fs.stat("/etc/timezone");
+    volumes.push("/etc/timezone:/etc/timezone:ro");
+  } catch {}
 }
 
 if (vncEnabled) {
