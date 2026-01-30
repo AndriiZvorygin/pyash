@@ -330,6 +330,7 @@ run into a minimal `.pya` reproduction while preserving the failure.
 * original program source (`.pya`) or run newspaper
 * a verifier action that returns PASS/FAIL (or error/success)
 * optional constraints (minimum sentences, keep module imports, etc.)
+* `atmost num` — maximum number of reduction attempts
 
 ### Required behavior
 
@@ -364,7 +365,7 @@ prah
 ```
 
 This spec defines the reducer loop at a high level; an implementation may
-introduce an inline `be reducer do` verb or a runner policy in a future revision.
+introduce an inline `be error sieve do` verb or a runner policy in a future revision.
 
 
 ---
