@@ -27,6 +27,8 @@ test("web search returns map of found entries", async () => {
   const found = remember("found");
   assert.equal(found?.be, "map");
   const map = found?.ob?.map ?? {};
+  assert.equal(found?.ob?.text, "example");
+  assert.equal(found?.from?.filename, "https://tsoc.liberit.ca/");
   const meta = map.metadata;
   assert.equal(meta?.ob?.text, "example");
   assert.equal(meta?.from?.filename, "https://tsoc.liberit.ca/");
