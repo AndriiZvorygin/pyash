@@ -3,7 +3,7 @@ services:
     container_name: pyash
     build:
       context: ../..
-      dockerfile: ../Dockerfile
+      dockerfile: container/Dockerfile
     image: pyash-dev
     working_dir: /workplace
     volumes:
