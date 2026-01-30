@@ -6,11 +6,19 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    dnsutils \
     git \
     gnupg \
     dialog \
     fd-find \
+    file \
+    iproute2 \
+    iputils-ping \
     jq \
+    less \
+    netcat-openbsd \
+    net-tools \
+    tree \
     yq \
     pandoc \
     poppler-utils \
