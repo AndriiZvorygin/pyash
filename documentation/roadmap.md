@@ -248,7 +248,7 @@ None (Week 3 complete).
 
 ### Ship
 
-* **Reducer loop**
+* **Error sieve**
 
   * produce minimal repro `.pya` deterministically
 * **Resolution chain for lost signatures**
