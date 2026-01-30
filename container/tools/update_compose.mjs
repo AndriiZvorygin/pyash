@@ -146,4 +146,10 @@ if (volumes.length) {
   lines.push(...yamlList(volumes.map(quote), "      "));
 }
 
-await fs.writeFile(overridePath, `${lines.join("\n")}\n`, "utf8");
+try {
+  await fs.mkdir(path.dirname(overridePath), { recursive: true });
+  await fs.writeFile(overridePath, `${lines.join("\n")}\n`, "utf8");
+} catch (err) {
+  console.error("compose override write failed: run ./introductory to bootstrap, or create container/building/");
+  throw err;
+}
