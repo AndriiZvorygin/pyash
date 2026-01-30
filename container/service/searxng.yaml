@@ -11,9 +11,9 @@ services:
     ports:
       - "60490:8080"
     env_file:
-      - .env
+      - ../configure/ecology/searxng.env
     volumes:
-      - "./configure:/etc/searxng"
+      - "../configure/searxng:/etc/searxng"
     environment:
       - BASE_URL=http://[::]:8080/
       - INSTANCE_NAME=search

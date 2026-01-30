@@ -6,8 +6,8 @@ newspaper/
 quiz/sandpit/
 configure/secret.pya
 configure/workplace.pya
-container/compose.override.yaml
-container/searxng/.env
+container/building/compose.override.yaml
+container/configure/ecology/searxng.env
 .bash_history
 .gitconfig
 .viminfo
