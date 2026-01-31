@@ -29,6 +29,16 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
       const fact = rememberFn(curr.name);
       if (fact) curr = fact.ob ?? fact;
     }
+    if (curr && typeof curr === "object" && curr.text !== undefined) {
+      if (part === "filename") {
+        curr = curr.text;
+        continue;
+      }
+      if (part === "text") {
+        curr = curr.text;
+        continue;
+      }
+    }
     if (curr && typeof curr === "object" && curr.ob?.text !== undefined) {
       if (part === "filename" && curr.ob.filename === undefined) {
         curr = curr.ob.text;
