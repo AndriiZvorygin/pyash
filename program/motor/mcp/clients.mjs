@@ -26,12 +26,21 @@ class McpClient {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      try {
+        this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+      } catch (err) {
+        this.pending.delete(id);
+        reject(err);
+      }
     });
   }
 
   sendNotification(method, params) {
-    this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+    try {
+      this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+    } catch {
+      // ignore notifications on closed pipes
+    }
   }
 
   onData(chunk) {

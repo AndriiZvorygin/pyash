@@ -23,7 +23,9 @@ export async function read_from_filename({ from }) {
   }
   const mod = await import(modulePath);
   const result = await mod.default({ from });
-  return { ob: result.ob, be: "read" };
+  const response = { ob: result.ob, be: "read" };
+  if (result?.value) response.value = result.value;
+  return response;
 }
 
 export async function read_ob_filename(sentence) {
