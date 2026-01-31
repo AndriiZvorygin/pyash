@@ -11,7 +11,7 @@ import { appendLog, buildHistoryMessages, historyDialogueName, resetMindLogs as 
 import { recordMindJson, resetMindDebugCounters, stripContext } from "./logging.mjs";
 import { buildToolSchemas, buildToolSentence, toolListFromMap } from "./tooling.mjs";
 import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
-import { callMindBackend, callMindBackendStream } from "./backend.mjs";
+import { resolveInterpret, callMindBackend, callMindBackendStream } from "./backend.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
 import { resolveStreamOutputPath, writeStreamChunk, writeStreamEnd, startStreamFile, startStreamTail, resolveStreamStdoutEnabled } from "./stream.mjs";
 import { recordMindAnswer, seriesNameForDialogue } from "./series.mjs";

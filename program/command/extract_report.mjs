@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 
 import { sentenceToPyash } from "../beautiful.mjs";
@@ -32,14 +33,21 @@ async function main() {
     console.error(sentenceToPyash(errSentence));
     process.exit(1);
   }
+  const normalized = output.endsWith("\n") ? output : `${output}\n`;
   if (outPath) {
-    await fs.writeFile(path.resolve(outPath), output, "utf8");
+    await fs.writeFile(path.resolve(outPath), normalized, "utf8");
   } else {
-    process.stdout.write(output);
+    try {
+      fsSync.writeFileSync(1, normalized);
+    } catch {
+      await new Promise(resolve => process.stdout.write(normalized, resolve));
+    }
   }
 }
 
-main().catch(err => {
+try {
+  await main();
+} catch (err) {
   const errSentence = surfaceErrorSentence(buildErrorSentence({
     name: "reporter defective",
     message: err?.message ?? "reporter defective",
@@ -47,4 +55,4 @@ main().catch(err => {
   }));
   console.error(sentenceToPyash(errSentence));
   process.exit(1);
-});
+}

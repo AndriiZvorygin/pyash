@@ -60,4 +60,4 @@ async function callMindBackendStream({ backendName, payload }) {
   });
 }
 
-export { callMindBackend, callMindBackendStream };
+export { resolveInterpret, callMindBackend, callMindBackendStream };

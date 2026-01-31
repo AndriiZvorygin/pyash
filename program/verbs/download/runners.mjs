@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 
-import { recordArtifact, recordExchange } from "../bridge/exchange.mjs";
-import { throwErrorSentence } from "../error.mjs";
+import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
+import { throwErrorSentence } from "../../error.mjs";
 import { formatMonthWindow } from "./helpers.mjs";
 
 function missingBackend(sentence, { scheme, intent } = {}) {
