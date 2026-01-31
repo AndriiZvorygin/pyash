@@ -5,6 +5,5 @@ su name found ob name question fromstate wo web by num 3 be search do
 
 from filename of from of 1 of found fromstate name https to filename "examples/out/web-search-first.html" as wo web be download do
 
-ob name read from filename "../../module/read_html_markdown.pya" to name read be import do
 from filename "examples/out/web-search-first.html" fromstate wo html become wo markdown to name text output be read do
 ob name output be write do
