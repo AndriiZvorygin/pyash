@@ -1,2 +1,2 @@
 ob text "again demo" to filename "examples/out/pyash-again-demo.txt" be write do
-from filename "examples/out/pyash-again-demo.txt" be read do
+from filename "examples/out/pyash-again-demo.txt" become wo text be read do

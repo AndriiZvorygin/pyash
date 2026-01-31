@@ -1,3 +1,3 @@
 su name prompt ob text "Copy CHANGELOG.md into artifacts/copy/CHANGELOG.md." be write do
 be copy ob filename "CHANGELOG.md" to filename "artifacts/copy/CHANGELOG.md" do
-from filename "artifacts/copy/CHANGELOG.md" be read do
+from filename "artifacts/copy/CHANGELOG.md" become wo text be read do

@@ -692,14 +692,19 @@ To ensure reproducibility, runtimes SHOULD record:
 
 ---
 
-# Read (text extraction, v0.1)
+# Read (raw bytes + text extraction, v0.1)
 
-`be read` can extract plain text from document formats when `fromstate` is explicit.
-HTML/PDF extraction is provided by modules that register additional `read` signatures.
+`be read` reads raw bytes by default. Text extraction is explicit via `become wo text`
+or a specific `fromstate` (HTML/PDF, CSV/YAML/JSON, etc.).
 
 Canonical forms:
 
 ```
+from filename "<path>" be read do
+
+ob name read from filename "../../module/read_auto.pya" to name read be import do
+from filename "<path>" become wo text to name text <out> be read do
+
 ob name read from filename "../../module/read_html.pya" to name read be import do
 from filename "<path>" fromstate wo html to name text <out> be read do
 ob name read from filename "../../module/read_pdf.pya" to name read be import do
@@ -717,11 +722,33 @@ from filename "<path>" fromstate wo pdf become wo markdown plain to name text <o
 ```
 
 Notes:
-* `fromstate` is required for HTML/PDF extraction in v0.1.
-* Import `module/read_html.pya`, `module/read_pdf.pya`, `module/read_html_markdown.pya`, `module/read_html_markdown_plain.pya`, `module/read_pdf_html.pya`, `module/read_pdf_markdown.pya`, or `module/read_pdf_markdown_plain.pya` (exporting `read`) to register these signatures.
+* Default `be read` returns a raw filename reference (`ob filename <path>`).
+  When newspaper exchange is enabled, the raw bytes are also recorded as an artifact.
+* `become wo text` enables text extraction. `module/read_auto.pya` dispatches by MIME.
+* `fromstate` is required for HTML/PDF extraction unless `read_auto` is used with `become wo text`.
+* Import `module/read_auto.pya`, `module/read_html.pya`, `module/read_pdf.pya`, `module/read_html_markdown.pya`, `module/read_html_markdown_plain.pya`, `module/read_pdf_html.pya`, `module/read_pdf_markdown.pya`, or `module/read_pdf_markdown_plain.pya` (exporting `read`) to register these signatures.
 * Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
 * Markdown output defaults to GitHub-flavored Markdown (GFM) where available.
 * Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
+
+### Read auto dispatcher (module)
+
+`module/read_auto.pya` provides a generic dispatcher that inspects file MIME type
+and routes to the appropriate read module (HTML, PDF, or plain text). It also
+falls back to `hear` for audio/video where configured.
+
+Canonical forms:
+
+```
+ob name read from filename "../../module/read_auto.pya" to name read be import do
+from filename "<path>" become wo text to name text <out> be read do
+from filename "<path>" become wo markdown to name text <out> be read do
+from filename "<path>" become wo markdown plain to name text <out> be read do
+```
+
+Notes:
+* Uses `file --mime-type` for detection; behavior depends on available helpers.
+* `become wo markdown` targets GFM when supported by underlying modules.
 
 ---
 

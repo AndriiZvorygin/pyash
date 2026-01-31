@@ -17,9 +17,27 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
       : (typeof root === "string" && rememberFn ? rememberFn(root) : undefined);
 
   for (const part of rest) {
+    if (curr && typeof curr === "object" && curr.genitive) {
+      const resolved = resolveGenitive(curr.genitive, { rememberFn });
+      if (resolved !== undefined && (part === "filename" || part === "text" || part === "name")) {
+        curr = resolved;
+        continue;
+      }
+      curr = resolved;
+    }
     if (curr && typeof curr === "object" && curr.name && rememberFn) {
       const fact = rememberFn(curr.name);
       if (fact) curr = fact.ob ?? fact;
+    }
+    if (curr && typeof curr === "object" && curr.ob?.text !== undefined) {
+      if (part === "filename" && curr.ob.filename === undefined) {
+        curr = curr.ob.text;
+        continue;
+      }
+      if (part === "text") {
+        curr = curr.ob.text;
+        continue;
+      }
     }
     if (curr && typeof curr === "object") {
       if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {

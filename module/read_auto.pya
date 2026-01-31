@@ -1,0 +1,193 @@
+su name read from filename input become wo text to name text output be ceremony def
+  exists su name mime ob text "file --mime-type -b \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name mime be plus do
+  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text of mime to name text mime be command do
+
+  exists su name cat ob text "cat \"" be text ya
+  ob name input to name cat be plus do
+  ob text "\"" to name cat be plus do
+
+  exists su name kind ob text "case \"" be text ya
+  ob name mime to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text of kind to name text kind be command do
+
+  exists su name handled ob num 0 be number ya
+  ob name kind be equally from text "html" then
+  from filename of input fromstate wo html to name text output be read html do
+  ob name kind be equally from text "html" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "pdf" then
+  from filename of input fromstate wo pdf to name text output be read pdf do
+  ob name kind be equally from text "pdf" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "audio" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "audio" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "video" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "video" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "text" then
+  ob text of cat to name text output be command do
+  ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name handled be equally from num 0 then
+  ob text of cat to name text output be command do
+
+  su name output ret
+prah
+
+su name read from filename input become wo text be ceremony def
+  exists su name mime ob text "file --mime-type -b \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name mime be plus do
+  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text of mime to name text mime be command do
+
+  exists su name cat ob text "cat \"" be text ya
+  ob name input to name cat be plus do
+  ob text "\"" to name cat be plus do
+
+  exists su name kind ob text "case \"" be text ya
+  ob name mime to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text of kind to name text kind be command do
+
+  exists su name handled ob num 0 be number ya
+  ob name kind be equally from text "html" then
+  from filename of input fromstate wo html to name text output be read html do
+  ob name kind be equally from text "html" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "pdf" then
+  from filename of input fromstate wo pdf to name text output be read pdf do
+  ob name kind be equally from text "pdf" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "audio" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "audio" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "video" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "video" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "text" then
+  ob text of cat to name text output be command do
+  ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name handled be equally from num 0 then
+  ob text of cat to name text output be command do
+
+  su name output ret
+prah
+
+su name read from filename input become wo markdown to name text output be ceremony def
+  exists su name mime ob text "file --mime-type -b \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name mime be plus do
+  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text of mime to name text mime be command do
+
+  exists su name cat ob text "cat \"" be text ya
+  ob name input to name cat be plus do
+  ob text "\"" to name cat be plus do
+
+  exists su name kind ob text "case \"" be text ya
+  ob name mime to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text of kind to name text kind be command do
+
+  exists su name handled ob num 0 be number ya
+  ob name kind be equally from text "html" then
+  from filename of input fromstate wo html become wo markdown to name text output be read html markdown do
+  ob name kind be equally from text "html" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "pdf" then
+  from filename of input fromstate wo pdf become wo markdown to name text output be read pdf markdown do
+  ob name kind be equally from text "pdf" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "audio" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "audio" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "video" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "video" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "text" then
+  ob text of cat to name text output be command do
+  ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name handled be equally from num 0 then
+  ob text of cat to name text output be command do
+
+  su name output ret
+prah
+
+su name read from filename input become wo markdown plain to name text output be ceremony def
+  exists su name mime ob text "file --mime-type -b \"" be text ya
+  ob filename of from of this to name text input be text do
+  ob name input to name mime be plus do
+  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text of mime to name text mime be command do
+
+  exists su name cat ob text "cat \"" be text ya
+  ob name input to name cat be plus do
+  ob text "\"" to name cat be plus do
+
+  exists su name kind ob text "case \"" be text ya
+  ob name mime to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text of kind to name text kind be command do
+
+  exists su name handled ob num 0 be number ya
+  ob name kind be equally from text "html" then
+  from filename of input fromstate wo html become wo markdown plain to name text output be read html markdown plain do
+  ob name kind be equally from text "html" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "pdf" then
+  from filename of input fromstate wo pdf become wo markdown plain to name text output be read pdf markdown plain do
+  ob name kind be equally from text "pdf" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "audio" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "audio" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "video" then
+  from filename of input to name text output be hear do
+  ob name kind be equally from text "video" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "text" then
+  ob text of cat to name text output be command do
+  ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name handled be equally from num 0 then
+  ob text of cat to name text output be command do
+
+  su name output ret
+prah
+
+exists su name read be export ya
