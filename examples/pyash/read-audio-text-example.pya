@@ -1,3 +1,3 @@
-su name note ob text "Place an audio file at /tmp/pyash-read-audio-example.mp3." be write do
-from filename "/tmp/pyash-read-audio-example.mp3" become wo text to name text output be read do
+ob text "Hello from Pyash audio example." to filename "/tmp/pyash-read-audio-example.wav" be say do
+from filename "/tmp/pyash-read-audio-example.wav" become wo text to name text output be read do
 ob name output be write do
