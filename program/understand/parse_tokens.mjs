@@ -398,19 +398,42 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         target[unit] = Number.isNaN(maybeNum) ? value : maybeNum;
         i++;
       } else {
-        const raw = words[i + 1];
-        const value = tokenValue(raw);
-        const maybeNum = Number(value);
-        if (t === "text" || t === "wo") {
-          target.text = value;
-          if (t === "wo") target.wo = value;
-        } else if (t === "filename") {
-          target.filename = value;
+        if (t === "wo") {
+          const parts = [];
+          let j = i + 1;
+          const isBoundary = (token) =>
+            ROLE_KEYS.includes(token) ||
+            CONTEXT_KEYS.includes(token) ||
+            token === "be" ||
+            token === "then" ||
+            token === "ta" ||
+            token === "ret";
+          while (j < words.length) {
+            const look = words[j];
+            if (isBoundary(look)) break;
+            parts.push(tokenValue(look));
+            j++;
+          }
+          const value = parts.join(" ");
+          if (value) {
+            target.text = value;
+            target.wo = value;
+          }
+          i = j - 1;
         } else {
-          // num / number → numeric
-          target.num = isNaN(maybeNum) ? value : maybeNum;
+          const raw = words[i + 1];
+          const value = tokenValue(raw);
+          const maybeNum = Number(value);
+          if (t === "text") {
+            target.text = value;
+          } else if (t === "filename") {
+            target.filename = value;
+          } else {
+            // num / number → numeric
+            target.num = isNaN(maybeNum) ? value : maybeNum;
+          }
+          i++; // skip the value we just consumed
         }
-        i++; // skip the value we just consumed
       }
 
       continue;
