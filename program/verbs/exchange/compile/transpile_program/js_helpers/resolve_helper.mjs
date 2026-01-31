@@ -1,0 +1,3 @@
+export function resolveHelperSource() {
+  return `function pyaResolveFilename(value) {\n  if (!value) return \"\";\n  const slot = (value && typeof value === \"object\" && value.ob) ? value.ob : value;\n  if (typeof slot?.filename === \"string\") return slot.filename;\n  if (typeof slot?.text === \"string\") return slot.text;\n  if (slot?.name) {\n    const fact = remember(slot.name);\n    if (typeof fact?.ob?.filename === \"string\") return fact.ob.filename;\n    if (typeof fact?.ob?.text === \"string\") return fact.ob.text;\n    if (typeof fact?.filename === \"string\") return fact.filename;\n    if (typeof fact?.text === \"string\") return fact.text;\n  }\n  return \"\";\n}`;
+}
