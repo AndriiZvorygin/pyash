@@ -1,5 +1,5 @@
-import { remember } from "../remember/index.mjs";
-import { state } from "../bridge/state.mjs";
+import { remember } from "../../remember/index.mjs";
+import { state } from "../../bridge/state.mjs";
 
 function resolveGenitive(genitive, { rememberFn } = {}) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
