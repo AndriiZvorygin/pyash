@@ -7,6 +7,10 @@
 Define a **file-based module system** for Pyash that stays compatible with **signature-first dispatch** and supports interpreter, JS, and C targets.
 Module files are **Pyash source** (`.pya`), not Python.
 
+Note on imports:
+* **Namespace import** (`from name <module> to name <alias> be import do`) binds a module namespace for genitive access.
+* **Symbol import** (`from name <module> ob name <symbol> to name <local> be import do`) is required to register ceremony signatures (verbs).
+
 External tool wrappers (ffmpeg, xdotool, piper, espeak, whisper.cpp, etc.) SHOULD be expressed as modules and imported via `configure/default.pya`, so defaults wire external dependencies once and programs stay declarative.
 
 Modules should:
