@@ -1,2 +1,2 @@
 ob text "again newspaper" to filename "examples/out/again-newspaper.txt" be write do
-from filename "examples/out/again-newspaper.txt" be read do
+from filename "examples/out/again-newspaper.txt" become wo text be read do

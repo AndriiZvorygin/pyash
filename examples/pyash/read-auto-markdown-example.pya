@@ -1,0 +1,3 @@
+ob text "<p>See <a href=\"https://example.com\">Example</a>.</p>" to filename "/tmp/pyash-read-auto-md.html" be write do
+from filename "/tmp/pyash-read-auto-md.html" become wo markdown to name text output be read do
+ob name output be write do

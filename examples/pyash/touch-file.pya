@@ -1,3 +1,3 @@
 su name prompt ob text "Touch artifacts/touch/example.txt." be write do
 be touch ob filename "artifacts/touch/example.txt" do
-from filename "artifacts/touch/example.txt" be read do
+from filename "artifacts/touch/example.txt" become wo text be read do

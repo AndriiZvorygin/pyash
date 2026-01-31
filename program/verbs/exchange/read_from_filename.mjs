@@ -10,6 +10,5 @@ export default async function readFromFilename({ from }) {
   if (artifact?.su?.name) {
     recordExchange({ artifactName: artifact.su.name, op: "read", producer: "exchange" });
   }
-  const text = buffer.toString("utf8");
-  return { ob: { text } };
+  return { ob: { filename } };
 }

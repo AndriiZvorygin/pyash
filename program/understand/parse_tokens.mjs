@@ -453,7 +453,19 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         target[unit] = Number.isNaN(maybeNum) ? value : maybeNum;
         i++;
       } else {
-        if (t === "wo") {
+        if (t === "filename" && (words[i + 1] === "of" || words[i + 1] === "ti")) {
+          const chain = [t];
+          let j = i + 1;
+          while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
+            const next = words[j + 1];
+            if (!next) break;
+            chain.push(next);
+            j += 2;
+          }
+          const ordered = chain.slice().reverse();
+          target.genitive = { chain: ordered };
+          i = j - 1;
+        } else if (t === "wo") {
           const parts = [];
           let j = i + 1;
           const isBoundary = (token) =>
