@@ -53,7 +53,11 @@ const TOOL_NON_CASE_FIELDS = new Set([
 function toolTypeWordsFromValue(value, caseKey) {
   if (value == null) return [];
   if (value.la) return ["la"];
-  if (caseKey === "become" || caseKey === "fromstate" || caseKey === "tostate") return ["name"];
+  if (caseKey === "become" || caseKey === "fromstate" || caseKey === "tostate") {
+    if (value.wo !== undefined) return ["wo"];
+    if (value.name) return ["name"];
+    return ["name"];
+  }
   if (value.ve) {
     const inner = typeof value.ve.type === "string" ? value.ve.type : "";
     return ["vec", ...(inner ? [inner] : [])].filter(Boolean);
