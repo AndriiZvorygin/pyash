@@ -1,0 +1,37 @@
+# Pyash index map (lookup guide)
+
+Use this when the cheat sheet is not enough.
+
+## If you need…
+
+- **Sentence order, cases, quoting, `wo` rules** → `01-sentence-and-grammar.md`
+- **Dispatch / signatures / ceremonies / `this` / errors** → `02-core-execution.md`
+- **`vyah` aspects (stream/eval/start/await/cancel)** → `03-vyah-and-aspect.md`
+- **Runtime primitives (streams/tasks/IR)** → `04-runtime-primitives.md`
+- **Run recording, newspaper, artifacts, again-mode** → `05-run-recording-and-artifacts.md`
+- **Maps / JSON / YAML / CSV formats** → `06-data-formats.md`
+- **IO verbs (read/write/download/command/etc.)** → `07-io-and-scripts.md`
+- **Mind + tool calling + MCP** → `08-tools-and-mcp.md`
+- **Say / hear / speech artifacts / whisper** → `09-speech-and-hear.md`
+- **Refinery / re-entry / translation** → `10-pipelines-and-translation.md`
+- **Module system + runner contract** → `11-modules.md`
+- **Web search** → `12-web-search.md`
+
+## If you see errors about…
+
+- **Unknown verb/signature** → `02-core-execution.md` (dispatch/signature derivation)
+- **Case order / canonicalization** → `01-sentence-and-grammar.md`
+- **Stream or task lifecycle** → `03-vyah-and-aspect.md`
+- **Artifact or newspaper mismatch** → `05-run-recording-and-artifacts.md`
+- **Map / JSON formatting** → `06-data-formats.md`
+
+## If you are doing tool calls…
+
+- **Mind calls or tool calling envelope** → `08-tools-and-mcp.md`
+- **External binaries / modules** → `11-modules.md`
+
+## If you are doing IO or web…
+
+- **Download + read text/markdown** → `07-io-and-scripts.md`
+- **Web search** → `12-web-search.md`
+
