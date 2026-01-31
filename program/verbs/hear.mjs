@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
@@ -9,116 +8,17 @@ import { recordArtifact, getExchangeSentenceId } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
-import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 import { state } from "../bridge/state.mjs";
+import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath } from "./hear/config.mjs";
+import { parseFixtureLines, isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail, resolveStreamStdoutEnabled, maybeEnableStreamStdout, startStreamEndWatcher } from "./hear/stream.mjs";
+import { resolveConfigText } from "../configure/env.mjs";
 
 const hearStreamProcesses = new Map();
 
 let hearCounter = 0;
 
-function compareUtf8(a, b) {
-  if (a === b) return 0;
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const len = Math.min(bufA.length, bufB.length);
-  for (let i = 0; i < len; i += 1) {
-    if (bufA[i] !== bufB[i]) return bufA[i] < bufB[i] ? -1 : 1;
-  }
-  return bufA.length < bufB.length ? -1 : 1;
-}
-
-function canonicalizeJsonValue(value) {
-  if (Array.isArray(value)) return value.map((item) => canonicalizeJsonValue(item));
-  if (value && typeof value === "object") {
-    const out = {};
-    const keys = Object.keys(value).sort(compareUtf8);
-    for (const key of keys) {
-      out[key] = canonicalizeJsonValue(value[key]);
-    }
-    return out;
-  }
-  return value;
-}
-
-function canonicalJsonStringify(value) {
-  return JSON.stringify(canonicalizeJsonValue(value));
-}
-
-function sha256(bytes) {
-  return crypto.createHash("sha256").update(bytes).digest("hex");
-}
-
-function resolveComputer() {
-  const arch = process.arch;
-  switch (process.platform) {
-    case "win32":
-      return arch === "x64" ? "win-x64" : `win-${arch}`;
-    case "darwin":
-      if (arch === "x64") return "darwin-x64";
-      if (arch === "arm64") return "darwin-arm64";
-      return `darwin-${arch}`;
-    case "linux":
-      if (arch === "x64") return "linux-x64";
-      if (arch === "arm64") return "linux-arm64";
-      return `linux-${arch}`;
-    default:
-      return `${process.platform}-${arch}`;
-  }
-}
-
-function resolveWhisperBinary({ rememberFn } = {}) {
-  const configuredBin = resolveConfigText("hear bin", { rememberFn });
-  if (configuredBin) return configuredBin;
-  const computer = resolveComputer();
-  const ext = computer.startsWith("win-") ? ".exe" : "";
-  return path.join("caterer", "hear", "binary", computer, `whisper-main${ext}`);
-}
-
-function resolveWhisperStreamBinary({ rememberFn } = {}) {
-  const configuredBin = resolveConfigText("hear stream bin", { rememberFn });
-  if (configuredBin) return configuredBin;
-  const computer = resolveComputer();
-  const ext = computer.startsWith("win-") ? ".exe" : "";
-  return path.join("caterer", "hear", "binary", computer, `whisper-stream${ext}`);
-}
-
-function resolveModelPath({ rememberFn } = {}) {
-  const configured = resolveConfigText("hear model", { rememberFn });
-  if (configured) return configured;
-  const baseBin = path.join("caterer", "hear", "template", "whisper", "ggml-base.bin");
-  if (fsSync.existsSync(baseBin)) return baseBin;
-  return path.join("caterer", "hear", "template", "whisper", "ggml-base.en.bin");
-}
-
-function resolveHearLanguage({ rememberFn } = {}) {
-  return resolveConfigText("hear language", { rememberFn }) || "auto";
-}
-
-function resolveHearCapture({ rememberFn } = {}) {
-  const num = resolveConfigNum("hear capture", { rememberFn });
-  if (num !== undefined) return String(num);
-  const text = resolveConfigText("hear capture", { rememberFn });
-  return text || "0";
-}
-
-function resolveHearPrompt(sentence) {
-  const prompt = sentence?.ob?.text;
-  if (typeof prompt !== "string") return "";
-  const trimmed = prompt.trim();
-  return trimmed.length ? trimmed : "";
-}
-
-export function resolveHearInputPath(sentence, { rememberFn } = {}) {
-  if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
-  if (typeof sentence?.from?.text === "string") return sentence.from.text;
-  const fromName = sentence?.from?.name;
-  if (!fromName || !rememberFn) return null;
-  const fact = rememberFn(fromName);
-  if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
-  if (typeof fact?.ob?.text === "string") return fact.ob.text;
-  if (typeof fact?.ob?.name === "string") return fact.ob.name;
-  return null;
-}
+export { resolveHearInputPath } from "./hear/config.mjs";
 
 function resolveOutputPath(sentence) {
   const base = getExchangeSentenceId() || sentence?.su?.name || `hear-${hearCounter++}`;
@@ -137,32 +37,6 @@ function metadataPathForOutput(outputPath) {
   return `${outputPath}.metadata.json`;
 }
 
-function startFileTail({ filename, onLine }) {
-  let offset = 0;
-  let pending = "";
-  const interval = setInterval(() => {
-    let stats;
-    try {
-      stats = fsSync.statSync(filename);
-    } catch {
-      return;
-    }
-    if (stats.size <= offset) return;
-    const fd = fsSync.openSync(filename, "r");
-    const buffer = Buffer.alloc(stats.size - offset);
-    fsSync.readSync(fd, buffer, 0, buffer.length, offset);
-    fsSync.closeSync(fd);
-    offset = stats.size;
-    const text = pending + buffer.toString("utf8");
-    const lines = text.split(/\r?\n/);
-    pending = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.length) onLine(line);
-    }
-  }, 200);
-  return () => clearInterval(interval);
-}
-
 async function readInputBytes(sentence) {
   const filename = sentence?.from?.filename;
   if (!filename) return Buffer.alloc(0);
@@ -171,181 +45,6 @@ async function readInputBytes(sentence) {
   } catch {
     return Buffer.alloc(0);
   }
-}
-
-function parseFixtureLines(fixtureText) {
-  return String(fixtureText ?? "")
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !isBlankAudioLine(line));
-}
-
-function normalizeStreamLine(line) {
-  return String(line ?? "").trim().toLowerCase();
-}
-
-function normalizeStreamPrefix(line) {
-  const normalized = normalizeStreamLine(line);
-  return normalized.replace(/[.]+$/u, "");
-}
-
-function normalizeDedupLine(line) {
-  return String(line ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-}
-
-function isBlankAudioLine(line) {
-  const trimmed = String(line ?? "").trim();
-  return trimmed.includes("[BLANK_AUDIO]");
-}
-
-function collapseStreamLines(lines) {
-  const output = [];
-  const seen = new Set();
-  let lastLine = "";
-  let lastNormalized = "";
-  for (const line of lines) {
-    const trimmed = String(line ?? "").trim();
-    if (!trimmed || isBlankAudioLine(trimmed)) continue;
-    const dedup = normalizeDedupLine(trimmed);
-    if (dedup && seen.has(dedup) && dedup !== lastNormalized) continue;
-    if (!lastLine) {
-      output.push(trimmed);
-      lastLine = trimmed;
-      lastNormalized = dedup;
-      if (dedup) seen.add(dedup);
-      continue;
-    }
-    const normLast = normalizeStreamLine(lastLine);
-    const normNext = normalizeStreamLine(trimmed);
-    const normLastPrefix = normalizeStreamPrefix(lastLine);
-    if (normNext === normLast) continue;
-    if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
-      if (lastNormalized) seen.delete(lastNormalized);
-      output[output.length - 1] = trimmed;
-      lastLine = trimmed;
-      lastNormalized = dedup;
-      if (dedup) seen.add(dedup);
-      continue;
-    }
-    output.push(trimmed);
-    lastLine = trimmed;
-    lastNormalized = dedup;
-    if (dedup) seen.add(dedup);
-  }
-  return output;
-}
-
-function buildStreamTranscript(text) {
-  const lines = String(text ?? "").split(/\r?\n/);
-  return collapseStreamLines(lines).join("\n");
-}
-
-function sanitizeTranscript(text) {
-  return String(text ?? "")
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0 && !isBlankAudioLine(line))
-    .join("\n");
-}
-
-function makeStreamStdoutWriter() {
-  let lastLine = "";
-  let lastNormalized = "";
-  const seen = new Set();
-  let lineOpen = false;
-  return {
-    write(line) {
-      const trimmed = String(line ?? "").trim();
-      if (!trimmed || trimmed === "[BLANK_AUDIO]") return;
-      const dedup = normalizeDedupLine(trimmed);
-      if (dedup && seen.has(dedup) && dedup !== lastNormalized) return;
-      if (!lastLine) {
-        process.stdout.write(trimmed);
-        lastLine = trimmed;
-        lastNormalized = dedup;
-        if (dedup) seen.add(dedup);
-        lineOpen = true;
-        return;
-      }
-      const normLast = normalizeStreamLine(lastLine);
-      const normNext = normalizeStreamLine(trimmed);
-      const normLastPrefix = normalizeStreamPrefix(lastLine);
-      if (normNext === normLast) return;
-      if (normNext.startsWith(normLast) || (normLastPrefix && normNext.startsWith(normLastPrefix))) {
-        const suffix = trimmed.slice(lastLine.length);
-        if (suffix) {
-          process.stdout.write(suffix);
-          lastLine = trimmed;
-          if (lastNormalized) seen.delete(lastNormalized);
-          lastNormalized = dedup;
-          if (dedup) seen.add(dedup);
-          lineOpen = true;
-        }
-        return;
-      }
-      if (lineOpen) process.stdout.write("\n");
-      process.stdout.write(trimmed);
-      lastLine = trimmed;
-      lastNormalized = dedup;
-      if (dedup) seen.add(dedup);
-      lineOpen = true;
-    },
-    finish() {
-      if (lineOpen) process.stdout.write("\n");
-      lineOpen = false;
-    }
-  };
-}
-
-function startStreamStdoutTail(streamOutputPath, { onBlank, enabled = true } = {}) {
-  if (!enabled) return () => {};
-  const writer = makeStreamStdoutWriter();
-  const stopTail = startFileTail({
-    filename: streamOutputPath,
-    onLine: (line) => {
-      const trimmed = String(line ?? "").trim();
-      if (!trimmed) return;
-      if (isBlankAudioLine(trimmed)) {
-        if (onBlank) onBlank();
-        return;
-      }
-      writer.write(trimmed);
-    }
-  });
-  return () => {
-    stopTail();
-    writer.finish();
-  };
-}
-
-function resolveStreamStdoutEnabled({ rememberFn } = {}) {
-  const configured = resolveConfigBool("stream stdout", { rememberFn });
-  if (configured !== undefined) return configured;
-  return process.stdout?.isTTY === true;
-}
-
-function maybeEnableStreamStdout(streamOutputPath, { onBlank, rememberFn } = {}) {
-  return startStreamStdoutTail(streamOutputPath, {
-    onBlank,
-    enabled: resolveStreamStdoutEnabled({ rememberFn })
-  });
-}
-
-function startStreamEndWatcher(streamOutputPath, { onBlank } = {}) {
-  return startFileTail({
-    filename: streamOutputPath,
-    onLine: (line) => {
-      const trimmed = String(line ?? "").trim();
-      if (!trimmed) return;
-      if (isBlankAudioLine(trimmed)) {
-        if (onBlank) onBlank();
-      }
-    }
-  });
 }
 
 export async function hear(sentence, { remember: rememberFn = remember } = {}) {
