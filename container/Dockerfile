@@ -59,7 +59,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
   && cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build -D BUILD_SHARED_LIBS=ON -D CMAKE_BUILD_TYPE=Release \
   && cmake --build /tmp/whisper.cpp/build -j \
-  && find /tmp/whisper.cpp/build -type f \\( -name 'libwhisper.so*' -o -name 'libggml.so*' \\) -exec cp {} /usr/local/lib/ \\; \
+  && find /tmp/whisper.cpp/build -type f -name 'libwhisper.so*' -exec cp {} /usr/local/lib/ \\; -o \
+     -type f -name 'libggml.so*' -exec cp {} /usr/local/lib/ \\; \
   && ldconfig \
   && rm -rf /tmp/whisper.cpp
 
