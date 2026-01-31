@@ -43,20 +43,46 @@ export async function isContainerEnv() {
   return false;
 }
 
-export async function loadDefaultConfig({ cwd, interpretFn }) {
-  const configPaths = [
-    path.resolve(cwd, "configure", "default.pya"),
-    path.resolve(cwd, "configure", "container.pya"),
-    path.resolve(cwd, "configure", "secret.pya")
-  ];
-  pushModuleDir(cwd);
-  try {
-    for (const configPath of configPaths) {
-      if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
-      await loadConfigFile({ configPath, interpretFn });
+async function findConfigRoots({ cwd, entryPath }) {
+  const roots = [];
+  const seen = new Set();
+  const addRoot = (root) => {
+    if (!root || seen.has(root)) return;
+    seen.add(root);
+    roots.push(root);
+  };
+  addRoot(path.resolve(cwd));
+  let cursor = entryPath ? path.dirname(entryPath) : null;
+  while (cursor && cursor !== path.dirname(cursor)) {
+    const candidate = path.join(cursor, "configure", "default.pya");
+    try {
+      await fs.access(candidate);
+      addRoot(cursor);
+      break;
+    } catch {
+      cursor = path.dirname(cursor);
     }
-  } finally {
-    popModuleDir();
+  }
+  return roots;
+}
+
+export async function loadDefaultConfig({ cwd, interpretFn, entryPath }) {
+  const roots = await findConfigRoots({ cwd, entryPath });
+  for (const root of roots) {
+    const configPaths = [
+      path.resolve(root, "configure", "default.pya"),
+      path.resolve(root, "configure", "container.pya"),
+      path.resolve(root, "configure", "secret.pya")
+    ];
+    pushModuleDir(root);
+    try {
+      for (const configPath of configPaths) {
+        if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
+        await loadConfigFile({ configPath, interpretFn });
+      }
+    } finally {
+      popModuleDir();
+    }
   }
 }
 

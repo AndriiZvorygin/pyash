@@ -16,22 +16,22 @@ su name read from filename input become wo text to name text output be ceremony 
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
-  from name input fromstate wo html to name text output be read html do
+  from filename of input fromstate wo html to name text output be read html do
   ob name kind be equally from text "html" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "pdf" then
-  from name input fromstate wo pdf to name text output be read pdf do
+  from filename of input fromstate wo pdf to name text output be read pdf do
   ob name kind be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "audio" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "audio" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "video" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "video" then
   ob num 1 to name handled be plus do
 
@@ -112,22 +112,22 @@ su name read from filename input become wo markdown to name text output be cerem
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
-  from name input fromstate wo html become wo markdown to name text output be read html markdown do
+  from filename of input fromstate wo html become wo markdown to name text output be read html markdown do
   ob name kind be equally from text "html" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "pdf" then
-  from name input fromstate wo pdf become wo markdown to name text output be read pdf markdown do
+  from filename of input fromstate wo pdf become wo markdown to name text output be read pdf markdown do
   ob name kind be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "audio" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "audio" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "video" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "video" then
   ob num 1 to name handled be plus do
 
@@ -160,22 +160,22 @@ su name read from filename input become wo markdown plain to name text output be
 
   exists su name handled ob num 0 be number ya
   ob name kind be equally from text "html" then
-  from name input fromstate wo html become wo markdown plain to name text output be read html markdown plain do
+  from filename of input fromstate wo html become wo markdown plain to name text output be read html markdown plain do
   ob name kind be equally from text "html" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "pdf" then
-  from name input fromstate wo pdf become wo markdown plain to name text output be read pdf markdown plain do
+  from filename of input fromstate wo pdf become wo markdown plain to name text output be read pdf markdown plain do
   ob name kind be equally from text "pdf" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "audio" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "audio" then
   ob num 1 to name handled be plus do
 
   ob name kind be equally from text "video" then
-  from name input to name text output be hear do
+  from filename of input to name text output be hear do
   ob name kind be equally from text "video" then
   ob num 1 to name handled be plus do
 

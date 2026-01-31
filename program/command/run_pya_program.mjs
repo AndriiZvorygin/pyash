@@ -68,7 +68,7 @@ async function main() {
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
   }
-  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret, entryPath: resolved });
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   if (!remember("run root")) {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
