@@ -133,7 +133,9 @@ export async function runToolChat({
       if (surfacedTool && typeof surfacedTool === "object") {
         const mapName = surfacedTool.ob?.name;
         const mapFact = mapName ? remember(mapName) : null;
-        if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
+        if (surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
+          toolText = surfacedTool.ob.text;
+        } else if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
         } else if (surfacedTool.be === "interpret" && typeof surfacedTool.ob?.text === "string") {
           const rawText = surfacedTool.ob.text;
