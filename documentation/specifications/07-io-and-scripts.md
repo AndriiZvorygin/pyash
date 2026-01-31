@@ -704,11 +704,13 @@ ob name read from filename "../../module/read_html.pya" to name read be import d
 from filename "<path>" fromstate wo html to name text <out> be read do
 ob name read from filename "../../module/read_pdf.pya" to name read be import do
 from filename "<path>" fromstate wo pdf to name text <out> be read do
+ob name read from filename "../../module/read_html_markdown.pya" to name read be import do
+from filename "<path>" fromstate wo html become wo markdown to name text <out> be read do
 ```
 
 Notes:
 * `fromstate` is required for HTML/PDF extraction in v0.1.
-* Import `module/read_html.pya` or `module/read_pdf.pya` (exporting `read`) to register these signatures.
+* Import `module/read_html.pya`, `module/read_pdf.pya`, or `module/read_html_markdown.pya` (exporting `read`) to register these signatures.
 * Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
 * Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
 

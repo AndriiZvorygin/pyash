@@ -1,0 +1,4 @@
+ob text "<html><body><p>See <a href=\"https://example.com\">Example</a>.</p></body></html>" to filename "/tmp/pyash-read-html-md-example.html" be write do
+ob name read from filename "../../module/read_html_markdown.pya" to name read be import do
+from filename "/tmp/pyash-read-html-md-example.html" fromstate wo html become wo markdown to name text output be read do
+ob name output be write do
