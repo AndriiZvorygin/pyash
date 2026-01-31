@@ -1,5 +1,5 @@
-su name read from filename input fromstate wo html become wo markdown be ceremony def
-  exists su name cmd ob text "pandoc --from=html --to=gfm --wrap=none \"" be text ya
+su name read from filename input fromstate wo pdf become wo html be ceremony def
+  exists su name cmd ob text "pdftohtml -stdout -i -q \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name cmd be plus do
   ob text "\"" to name cmd be plus do
@@ -7,8 +7,8 @@ su name read from filename input fromstate wo html become wo markdown be ceremon
   su name result ret
 prah
 
-su name read from filename input fromstate wo html become wo markdown to name text output be ceremony def
-  exists su name cmd ob text "pandoc --from=html --to=gfm --wrap=none \"" be text ya
+su name read from filename input fromstate wo pdf become wo html to name text output be ceremony def
+  exists su name cmd ob text "pdftohtml -stdout -i -q \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name cmd be plus do
   ob text "\"" to name cmd be plus do

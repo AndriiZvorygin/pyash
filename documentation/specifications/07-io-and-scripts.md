@@ -706,12 +706,21 @@ ob name read from filename "../../module/read_pdf.pya" to name read be import do
 from filename "<path>" fromstate wo pdf to name text <out> be read do
 ob name read from filename "../../module/read_html_markdown.pya" to name read be import do
 from filename "<path>" fromstate wo html become wo markdown to name text <out> be read do
+ob name read from filename "../../module/read_html_markdown_plain.pya" to name read be import do
+from filename "<path>" fromstate wo html become wo markdown plain to name text <out> be read do
+ob name read from filename "../../module/read_pdf_html.pya" to name read be import do
+from filename "<path>" fromstate wo pdf become wo html to name text <out> be read do
+ob name read from filename "../../module/read_pdf_markdown.pya" to name read be import do
+from filename "<path>" fromstate wo pdf become wo markdown to name text <out> be read do
+ob name read from filename "../../module/read_pdf_markdown_plain.pya" to name read be import do
+from filename "<path>" fromstate wo pdf become wo markdown plain to name text <out> be read do
 ```
 
 Notes:
 * `fromstate` is required for HTML/PDF extraction in v0.1.
-* Import `module/read_html.pya`, `module/read_pdf.pya`, or `module/read_html_markdown.pya` (exporting `read`) to register these signatures.
+* Import `module/read_html.pya`, `module/read_pdf.pya`, `module/read_html_markdown.pya`, `module/read_html_markdown_plain.pya`, `module/read_pdf_html.pya`, `module/read_pdf_markdown.pya`, or `module/read_pdf_markdown_plain.pya` (exporting `read`) to register these signatures.
 * Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
+* Markdown output defaults to GitHub-flavored Markdown (GFM) where available.
 * Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
 
 ---
