@@ -608,6 +608,28 @@ Include source context fields when available, including `from filename`, `by num
 
 If you want this spec to plug into dispatch cleanly, emit canonical order and canonical case keywords before deriving signature words, since dispatch is signature-first and case order is normalised. 
 
+---
+
+# Future: SRT + see + video reading (notes)
+
+This spec will extend `hear` to support **SRT output** (subtitle blocks with
+timestamps). The intent is to keep `hear` as the canonical STT verb and expose
+SRT as an output mode rather than a separate verb. Proposed shape:
+
+- `be hear ... become wo srt` returns SRT text.
+- `be hear ... become wo srt to name <text>` assigns the SRT text to a name.
+
+We will also add a `see` capability for **local VL models** (vision-language).
+Video reading will combine `hear` + `see`:
+
+- `hear` produces SRT (timestamps + text).
+- For each SRT window (or every N windows), sample frames.
+- Pass sampled frames to `see` and merge the image summaries with the SRT block.
+
+This keeps speech and vision separate, composable tools: `hear` owns audio
+transcription, `see` owns image understanding, and a higher-level video reader
+joins them using the SRT timeline.
+
 
 ---
 
