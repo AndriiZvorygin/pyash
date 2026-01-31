@@ -2,8 +2,6 @@ su name tools be map def
 su name read be read from filename "path" become wo text to name text out can
 prah
 
-exists su name ollama host ob text "http://localhost:11434" be text ya
-
 exists su name reviewer be mind via state "qwen3-vl:8b-instruct" fromtext text "You must call tools to read documentation/specifications/13-cheat-sheet.md and documentation/specifications/14-index-map.md. Tool call shape: be read from filename <path> become wo text to name text out. If you cannot see tools, are confused about how to call them, or do not receive tool results, respond exactly: NEED_TOOL_HELP. After tool calls, respond with: (1) a clarity verdict, (2) 3 improvements, (3) a tiny Pyash program (no markdown fences) that downloads a page, reads it as text, and writes a summary file, (4) one-sentence explanation of why the program follows the cheat sheet. Output must be Pyash only and must use sentences, not other languages." ya
 ob text "Review the cheat sheet and index map now." for name reviewer to name text review-out with name tools be write do
 ob name review-out be write do
