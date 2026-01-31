@@ -8,15 +8,7 @@ import {
 } from "../library/grammar/keywords.mjs";
 import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
-
-const UNIT_TYPE_ALIASES = {
-  months: "month",
-  seconds: "second",
-  minutes: "minute",
-  hours: "hour",
-  days: "day",
-  weeks: "week"
-};
+import { UNIT_TYPE_ALIASES, parseAllEnumeration, parseClause } from "./parse_tokens_helpers.mjs";
 
 export function parseTokens(tokens, { allowMoodless = false, quotedText = null } = {}) {
   if (tokens.length === 0) return null;
@@ -54,55 +46,8 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     return token;
   };
 
-  function parseAllEnumeration(startIdx) {
-    if (words[startIdx] !== "all") return null;
-    let idx = startIdx + 1;
-    let role = null;
-    if (words[idx] === "su" || words[idx] === "ob") {
-      role = words[idx];
-      idx += 1;
-    }
-    if (words[idx] === "of" || words[idx] === "ti") {
-      idx += 1;
-    } else if (!role) {
-      return null;
-    }
-    const nameTokens = [];
-    while (
-      idx < words.length &&
-      !ROLE_KEYS.includes(words[idx]) &&
-      !CONTEXT_KEYS.includes(words[idx]) &&
-      !["be", "then", "ta", "ret"].includes(words[idx])
-    ) {
-      nameTokens.push(words[idx]);
-      idx += 1;
-    }
-    if (nameTokens.length === 0) return null;
-    const mapName = nameTokens.join(" ");
-    const chain = role ? [mapName, role, "all"] : [mapName, "all"];
-    return { chain, endIndex: idx };
-  }
-
-  function parseClause(startIdx) {
-    if (words[startIdx] !== "la") return null;
-    let depth = 1;
-    const clauseTokens = [];
-    for (let j = startIdx + 1; j < words.length; j++) {
-      const word = words[j];
-      if (word === "la") {
-        depth += 1;
-      } else if (word === "ko") {
-        depth -= 1;
-        if (depth === 0) {
-          const clause = parseTokens(clauseTokens, { allowMoodless: true, quotedText });
-          if (!clause) throw new Error("malformed embedded sentence form");
-          return { clause, endIndex: j };
-        }
-      }
-      clauseTokens.push(word);
-    }
-    throw new Error("subordinate clause missing ko");
-  }
+  const parseAllEnumerationBound = (startIdx) => parseAllEnumeration(words, startIdx, { ROLE_KEYS, CONTEXT_KEYS });
+  const parseClauseBound = (startIdx) => parseClause(words, startIdx, { parseTokens, quotedText });
 
   for (let i = 0; i < words.length; i++) {
     let t = words[i];
@@ -146,7 +91,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (t === "la") {
-      const parsed = parseClause(i);
+      const parsed = parseClauseBound(i);
       if (parsed) {
         const target = slot || (current ? s[current] : null);
         if (target) {
@@ -160,7 +105,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (t === "all") {
-      const parsed = parseAllEnumeration(i);
+      const parsed = parseAllEnumerationBound(i);
       if (parsed) {
         s.ob = { genitive: { chain: parsed.chain } };
         i = parsed.endIndex - 1;
