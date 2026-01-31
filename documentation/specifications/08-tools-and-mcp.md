@@ -454,6 +454,8 @@ Tool request/response logging MUST follow `08-tools-and-mcp.md` and appear as
 * Pyash programs express tool availability using ordinary `can` sentences.
 * Pyash programs do not mention backend-specific fields such as `tool_calls` or `tool_use`.
 * Model-specific details are a runtime concern.
+* Tool invocations are interpreted as **normal Pyash sentences** using the same parser
+  and canonicalization rules; the only difference is that the runtime sets the mood to `do`.
 
 ### 3.2 Runtime-facing contract
 

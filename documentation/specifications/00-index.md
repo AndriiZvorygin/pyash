@@ -17,6 +17,8 @@ Reading order (feature chapters):
 10. `10-pipelines-and-translation.md` — refinery, re-entry cycle, translation.
 11. `11-modules.md` — module system and tool runner contract.
 12. `12-web-search.md` — web search spec (draft).
+13. `13-cheat-sheet.md` — compact coding-only reference (for small models).
+14. `14-index-map.md` — quick lookup map into the full specs.
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
