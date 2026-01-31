@@ -54,7 +54,12 @@ function toolTypeWordsFromValue(value, caseKey) {
   if (value == null) return [];
   if (value.la) return ["la"];
   if (caseKey === "become" || caseKey === "fromstate" || caseKey === "tostate") {
-    if (value.wo !== undefined) return ["wo"];
+  if (value.wo !== undefined) return ["wo"];
+  if (value.name) return ["name"];
+  return ["name"];
+  }
+  if (caseKey === "to") {
+    if (value.nameTypeWords?.includes("text")) return ["name", "text"];
     if (value.name) return ["name"];
     return ["name"];
   }

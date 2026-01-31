@@ -3,5 +3,5 @@ su name say be say ob text "" can
 su name hear audio be hear ob name text from state name audio can
 prah
 
-exists su name qwenbot be mind from space "http://localhost:11434" via state "qwen3-vl:8b-instruct" via discourse "You may call tools." ya
+exists su name qwenbot be mind from space "http://localhost:11434" via state "qwen3-vl:8b-instruct" fromtext text "You may call tools." ya
 be write ob text "say hello world out loud" for name qwenbot to name text qwenbot-out with name tools do

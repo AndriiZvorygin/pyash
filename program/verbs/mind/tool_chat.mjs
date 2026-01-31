@@ -125,6 +125,9 @@ export async function runToolChat({
         capability,
         args: call?.function?.arguments ?? call?.arguments
       });
+      if (capability?.be === "read" && !toolSentence.to) {
+        toolSentence.to = { name: "result", nameTypeWords: ["text"] };
+      }
       const toolResult = await interpret(toolSentence);
       const surfacedTool = (toolResult && toolResult.mood)
         ? toolResult
