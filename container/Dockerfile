@@ -60,7 +60,7 @@ RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggml-org/whisper.cpp.
   && cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build -D BUILD_SHARED_LIBS=ON -D CMAKE_BUILD_TYPE=Release \
   && cmake --build /tmp/whisper.cpp/build -j \
   && find /tmp/whisper.cpp/build -type f -name 'libwhisper.so*' -print0 | xargs -0 -I {} cp {} /usr/local/lib/ \
-  && find /tmp/whisper.cpp/build -type f -name 'libggml.so*' -print0 | xargs -0 -I {} cp {} /usr/local/lib/ \
+  && find /tmp/whisper.cpp/build -type f -name 'libggml*.so*' -print0 | xargs -0 -I {} cp {} /usr/local/lib/ \
   && ldconfig \
   && rm -rf /tmp/whisper.cpp
 
