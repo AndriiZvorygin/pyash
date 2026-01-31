@@ -22,7 +22,7 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - A sentence has `mood`, `be`, and any number of cases.
 - Cases are keyworded fields (`su`, `ob`, `to`, `from`, `by`, `fromindex`, `toindex`, `atindex`).
 - `su name <x>` identifies a subject name; `ob num <n>` / `ob text <t>` / `ob date <d>` are typed payloads. Dates are ISO 8601.
-- `wo` is a literal word type: `ob wo microphone` stores the literal token and does not resolve memory names. It is used for strict literal dispatch in signatures.
+- `wo` is a literal word type: `ob wo microphone` stores the literal token(s) and does not resolve memory names. It is used for strict literal dispatch in signatures. `wo` values may be multi-token (e.g., `become wo markdown plain`) and consume tokens until a boundary keyword.
 - Typed name references use `name <type> <literal>` (e.g., `to name num counter`, `to name text line`); the type must immediately follow `name` to allow multi-word literals.
 - Genitives resolve a field chain on a sentence:
   - Possessive: `this ti ob ti num` maps to `this.ob.num`.
