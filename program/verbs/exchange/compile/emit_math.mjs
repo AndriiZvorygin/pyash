@@ -1,3 +1,7 @@
+import { handleMathConditional } from "./emit_math_conditionals.mjs";
+import { handleVectorProduce } from "./emit_math_vector.mjs";
+import { handleDateMath } from "./emit_math_date.mjs";
+
 export function handleMathSentence(context, helpers) {
   const {
     sentence,
@@ -29,174 +33,14 @@ export function handleMathSentence(context, helpers) {
     cExpr
   } = helpers;
 
-  // Conditionals (tiny/giant/equally) with then consequence
-  if (sentence.consequence && (baseBe === "tiny" || baseBe === "giant" || baseBe === "equally")) {
-    const lhsSlot =
-      (ob && (ob.name || ob.num !== undefined || ob.text !== undefined || ob.genitive || ob.thisRef))
-        ? ob
-        : (sentence.su?.name ? { name: sentence.su.name } : ob);
-    const comparesText =
-      lhsSlot?.text !== undefined ||
-      sentence.from?.text !== undefined ||
-      (lhsSlot?.name && localsTypes?.get(sanitizeName(lhsSlot.name)) === "text");
-    const lhs = (() => {
-      if (lhsSlot?.name) {
-        const baseName = sanitizeName(lhsSlot.name);
-        if (locals?.has(baseName)) {
-          return comparesText ? `${baseName}.ob?.text` : `${baseName}.ob?.num ?? ${baseName}`;
-        }
-      }
-      return exprForSlot(lhsSlot, {
-        sentenceArg,
-        locals,
-        declared,
-        defaultExpr: sentenceArg ? (comparesText ? `${sentenceArg}.ob?.text` : `${sentenceArg}.ob?.num`) : "lhs",
-        field: comparesText ? "text" : "num"
-      }) ?? "lhs";
-    })();
-    const rhs = exprForSlot(sentence.from, {
-      sentenceArg,
-      locals,
-      declared,
-      defaultExpr: sentenceArg ? (comparesText ? `${sentenceArg}.from?.text` : `${sentenceArg}.from?.num`) : "rhs",
-      field: comparesText ? "text" : "num"
-    }) ?? "rhs";
-    const op = baseBe === "tiny" ? "<" : baseBe === "giant" ? ">" : (lang === "c" ? "==" : "===");
-    const consequence = sentence.consequence;
-    const body = transpileSentence(consequence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs }) ?? `// TODO: ${JSON.stringify(consequence)}`;
-    const finalBody = body.split("\n").map(l => (l ? `  ${l}` : l)).join("\n");
-    const cLhs = lang === "c"
-      ? String(lhs)
-          .replace(/\?\./g, ".")
-          .replace(/\.ob\.(num|text|name|boolean)\b/g, "")
-          .replace(/\s*\?\?\s*[^)]+/g, "")
-      : lhs;
-    const cRhs = lang === "c"
-      ? String(rhs)
-          .replace(/\?\./g, ".")
-          .replace(/\.ob\.(num|text|name|boolean)\b/g, "")
-          .replace(/\s*\?\?\s*[^)]+/g, "")
-      : rhs;
-    const jsLhs = `(${lhs})`;
-    const jsRhs = `(${rhs})`;
-    const cLhsWrapped = `(${cLhs})`;
-    const cRhsWrapped = `(${cRhs})`;
-    if (lang === "c" && comparesText && baseBe === "equally") {
-      return `if (strcmp(${cLhsWrapped}, ${cRhsWrapped}) == 0) {\n${finalBody}\n}`;
-    }
-    return `if (${lang === "c" ? cLhsWrapped : jsLhs} ${op} ${lang === "c" ? cRhsWrapped : jsRhs}) {\n${finalBody}\n}`;
-  }
+  const conditional = handleMathConditional(context, helpers);
+  if (conditional) return conditional;
 
-  // Dot product (produce) for vectors
-  if (baseBe === "produce" && (ob?.ve || ob?.name || sentence.by || sentence.from)) {
-    const leftSlot = (ob && Object.keys(ob).length) ? ob : sentence.from;
-    const leftVec = vectorValuesExpr(leftSlot, { sentenceArg, locals, declared });
-    const rightVec = vectorValuesExpr(sentence.by || sentence.from, { sentenceArg, locals, declared });
-    const targetName = sentence.to?.name || "result";
-    const targetBase = sanitizeName(targetName);
-    const targetLval = lvalueForName(targetName, { declared, locals, field: "num" });
+  const produce = handleVectorProduce(context, helpers);
+  if (produce) return produce;
 
-    const resultName = targetName === "result" ? targetName : "result";
-    const resultBase = sanitizeName(resultName);
-    const resultLval = lvalueForName(resultName, { declared, locals, field: "num" });
-
-    const lines = [];
-    lines.push(`const _a = ${leftVec};`);
-    lines.push(`const _b = ${rightVec};`);
-    lines.push(`if (_a.length !== _b.length) throw new Error("produce: vectors must be the same length");`);
-    lines.push(`let _sum = 0;`);
-    lines.push(`for (let i = 0; i < _a.length; i++) { const x = Number(_a[i]); const y = Number(_b[i]); if (Number.isNaN(x) || Number.isNaN(y)) throw new Error("produce: numeric values required"); _sum += x * y; }`);
-
-    const ensureTargetObject = () => {
-      if (!declared?.has(targetBase) && !locals?.has(targetBase)) {
-        lines.push(`let ${targetBase} = { su: { name: "${targetName}" }, ob: {}, be: "number", mood: "ya" };`);
-        declared?.add(targetBase);
-      }
-    };
-    const ensureResultObject = () => {
-      if (!declared?.has(resultBase) && !locals?.has(resultBase)) {
-        lines.push(`let ${resultBase} = { su: { name: "${resultName}" }, ob: {}, be: "number", mood: "ya" };`);
-        declared?.add(resultBase);
-      }
-    };
-
-    ensureTargetObject();
-    const targetAssign = targetLval.includes(".ob.") ? targetLval : `${targetBase}.ob.num`;
-    lines.push(`${targetAssign} = _sum;`);
-
-    ensureResultObject();
-    const resultAssign = resultLval.includes(".ob.") ? resultLval : `${resultBase}.ob.num`;
-    lines.push(`${resultAssign} = _sum;`);
-
-    return lines.join("\n");
-  }
-
-  const durationUnit = ob && ["second", "minute", "hour", "day", "week", "month"].find((unit) => ob[unit] !== undefined);
-  if ((baseBe === "plus" || baseBe === "subtract") && durationUnit) {
-    const direction = baseBe === "plus" ? 1 : -1;
-    const amountValue = Number(ob[durationUnit]);
-    if (Number.isNaN(amountValue)) return `// TODO: ${JSON.stringify(sentence)}`;
-    const sourceSlot = baseBe === "plus" ? sentence.to : sentence.from;
-    const targetSlot = sourceSlot;
-    const dateExpr = (() => {
-      if (!sourceSlot) return null;
-      if (sourceSlot.date !== undefined) return JSON.stringify(sourceSlot.date);
-      if (sourceSlot.name) {
-        const baseName = sanitizeName(sourceSlot.name);
-        if (lang === "c") return baseName;
-        if (locals?.has(baseName) || declared?.has(baseName)) {
-          return `${baseName}.ob?.date ?? ${baseName}.date ?? ${baseName}`;
-        }
-        return baseName;
-      }
-      if (sentenceArg) {
-        const role = baseBe === "plus" ? "to" : "from";
-        return targetPath(role, sentenceArg, "date", sourceSlot, { locals, declared });
-      }
-      return null;
-    })();
-    if (!dateExpr) return `// TODO: ${JSON.stringify(sentence)}`;
-    if (lang === "c") {
-      if (cHelpers) {
-        cHelpers.usesDateMath = true;
-        cHelpers.usesTextHelper = true;
-        cHelpers.usesString = true;
-        cHelpers.usesStdlib = true;
-        cHelpers.usesPrintf = true;
-      }
-      const targetName = targetSlot?.name ?? "result";
-      const targetVar = sanitizeName(targetName);
-      const needsDecl = !locals?.has(targetVar) && !declared?.has(targetName);
-      if (needsDecl) locals?.add(targetVar);
-      const lines = [];
-      lines.push(`char _date_buf[PYA_TEXT_CAP];`);
-      lines.push(`if (!pya_date_add(${dateExpr}, "${durationUnit}", ${amountValue}, ${direction}, _date_buf, sizeof(_date_buf))) { fprintf(stderr, "date defective\\n"); exit(1); }`);
-      if (needsDecl) {
-        lines.push(`char ${targetVar}[PYA_TEXT_CAP];`);
-      }
-      lines.push(`snprintf(${targetVar}, PYA_TEXT_CAP, "%s", _date_buf);`);
-      return lines.join("\n");
-    }
-    jsHelpers.usesDateMath = true;
-    const dateCall = `pyaDateAdd(${dateExpr}, "${durationUnit}", ${amountValue}, ${direction})`;
-    if (sentenceArg) {
-      const role = baseBe === "plus" ? "to" : "from";
-      const target = targetPath(role, sentenceArg, "date", targetSlot, { locals, declared }) ?? targetSlot?.name;
-      return `${target} = ${dateCall};`;
-    }
-    if (targetSlot?.name) {
-      const baseName = sanitizeName(targetSlot.name);
-      const lines = [];
-      if (!locals?.has(baseName) && !declared?.has(baseName)) {
-        lines.push(`let ${baseName} = { su: { name: "${targetSlot.name}" }, ob: {}, be: "date", mood: "ya" };`);
-        locals?.add(baseName);
-      }
-      lines.push(`${baseName}.ob = ${baseName}.ob ?? {};`);
-      lines.push(`${baseName}.ob.date = ${dateCall};`);
-      return lines.join("\n");
-    }
-    return `globalThis["result"] = { su: { name: "result" }, ob: { date: ${dateCall} }, be: "date", mood: "ya" };`;
-  }
+  const dateMath = handleDateMath(context, helpers);
+  if (dateMath) return dateMath;
 
   // Text concatenation via add (numeric source)
   if (baseBe === "plus" && (sentence.to?.name || sentence.to?.genitive)) {
