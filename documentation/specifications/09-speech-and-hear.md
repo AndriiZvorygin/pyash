@@ -631,6 +631,50 @@ transcription, `see` owns image understanding, and a higher-level video reader
 joins them using the SRT timeline.
 
 
+# Specification: `see` (vision-language)
+
+`see` exposes a Pyash module/ceremony rather than a built-in verb. The canonical call is:
+
+```
+ob text "<prompt>" from filename <loc> be see to name text <result> do
+```
+
+The input prompt lives in `ob.text` and the image locator draws from `from.filename`. The module writes the prompt to `artifacts/see/prompt.txt`, then launches `node command/see_vl_runner.mjs` with:
+
+```
+--prompt-file "artifacts/see/prompt.txt"
+--image "<loc>"
+--model "<model>"
+--host "<ollama host>"
+```
+
+`<model>` defaults to `qwen3-vl:8b-instruct` via `configure/default.pya`, and the host is read from the remembered `ollama host` fact defined in `configure/default.pya` or `configure/secret.pya`.
+
+The runner builds an OpenAI-compatible chat request:
+
+```
+{
+  "model": "qwen3-vl:8b",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "<prompt>" },
+        { "type": "image_url", "image_url": "data:<mime>;base64,<base64bytes>" }
+      ]
+    }
+  ],
+  "max_tokens": 300
+}
+```
+
+Each image is encoded as a `data:<mime>;base64,` URL and added to the single message’s `content` array immediately after the prompt text part. `max_tokens` is optional and only included when explicitly configured.
+
+Requests are POSTed to `http://<ollama host>/v1/chat/completions` (OpenAI-compatible). If that returns `404` or `405`, the runner retries via `http://<ollama host>/api/chat` using Ollama’s `messages[].images` format. The response text is extracted from `choices[0].message.content` (OpenAI-style) or `message.content` (Ollama-style). The runner writes the assembled description to stdout, so that the Pyash module can return it as `ob.text`.
+
+For offline testing, set `PYA_SEE_VL_FIXTURE` to a fixed string before invoking `see`. When that environment variable is present, `command/see_vl_runner.mjs` bypasses Ollama and simply echoes the fixture string.
+
+
 ---
 
 # Specification: Caterer vendoring for hear and say

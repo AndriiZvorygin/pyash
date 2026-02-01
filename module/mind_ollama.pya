@@ -69,6 +69,30 @@ su name restart ob text model to name text target be ceremony def
   ob text of ob of this be begin do
   ob text "ollama mind restarted" ret
 prah
+
+su name mind begin ob text model be ceremony def
+  ob text of ob of this be begin do
+prah
+
+su name mind begin ob text model to name text target be ceremony def
+  ob text of ob of this to name text target be begin do
+prah
+
+su name mind discharge ob text model be ceremony def
+  ob text of ob of this be discharge do
+prah
+
+su name mind discharge ob text model to name text target be ceremony def
+  ob text of ob of this to name text target be discharge do
+prah
+
+su name mind restart ob text model be ceremony def
+  ob text of ob of this be restart do
+prah
+
+su name mind restart ob text model to name text target be ceremony def
+  ob text of ob of this to name text target be restart do
+prah
 exists su name mind be export ya
 exists su name begin be export ya
 exists su name discharge be export ya
