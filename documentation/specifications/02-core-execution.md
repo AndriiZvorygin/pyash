@@ -41,6 +41,33 @@ Define how signature words are derived and used for dispatch.
 - `quiz/ceremony_sequence_signature.test.mjs`
 - `quiz/map_signature.test.mjs`
 
+---
+
+# Configuration Defaults (dynamic)
+
+## 1. Purpose
+Define how runtime defaults are discovered and loaded at program start.
+
+## 2. Rules (normative)
+- Defaults are **dynamic facts** loaded at runtime, not hard-coded in verbs.
+- The runtime MUST load config files in this order:
+  1) `configure/default.pya`
+  2) `configure/container.pya` (only when running in a container environment)
+  3) `configure/secret.pya`
+- Config discovery is **root-relative to the entry program path**:
+  - The runtime MUST search upward from the entry file’s directory until it finds a `configure/default.pya` and use that directory as a config root.
+  - The runtime MUST also load config files from the current working directory as a root (if different).
+- Each config file is interpreted as normal Pyash sentences; defaults are expressed as `be default` facts.
+- Later defaults override earlier defaults **only when explicitly redefined**.
+
+## 3. Error contracts
+- Missing config files are **not errors** (silent skip).
+- Parse errors in config files surface as `be error ya`.
+
+## 4. Related specs
+- `07-io-and-scripts.md` (filesystem + IO)
+- `11-modules.md` (module import and runner contract)
+
 
 ---
 
