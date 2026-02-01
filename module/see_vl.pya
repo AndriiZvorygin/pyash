@@ -1,22 +1,155 @@
-su name see ob text prompt from filename image to name text output be ceremony def
-  ob text "mkdir -p artifacts/see" be command do
-  ob text of ob of this to filename "artifacts/see/prompt.txt" be write do
-  exists su name cmd ob text "node command/see_vl_runner.mjs" be text ya
-  ob text " --prompt-file \"artifacts/see/prompt.txt\"" to name cmd be plus do
-  ob text " --image \"" to name cmd be plus do
+su name see from filename image ob text prompt as text model to name text output be ceremony def
+  ob text of ob of this to name text prompt be text do
   ob filename of from of this to name text image path be text do
+  ob text of as of this to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
   ob name image path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob name ollama host to name text host be text do
   ob text " --host \"" to name cmd be plus do
   ob name host to name cmd be plus do
   ob text "\"" to name cmd be plus do
-  ob name see model to name text model be text do
   ob text " --model \"" to name cmd be plus do
   ob name model to name cmd be plus do
   ob text "\"" to name cmd be plus do
-  ob text of cmd to name text output be command do
+  ob text of cmd fromtext text of prompt to name text output be command do
   su name output ret
 prah
 
+su name see from filename image ob text prompt as text model be ceremony def
+  ob text of ob of this to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob text of as of this to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text result be command do
+  su name result ret
+prah
+
+su name see from filename image ob text prompt to name text output be ceremony def
+  ob text of ob of this to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob name see model to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text output be command do
+  su name output ret
+prah
+
+su name see from filename image ob text prompt be ceremony def
+  ob text of ob of this to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob name see model to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text result be command do
+  su name result ret
+prah
+
+su name see from filename image as text model to name text output be ceremony def
+  ob name see prompt to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob text of as of this to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text output be command do
+  su name output ret
+prah
+
+su name see from filename image as text model be ceremony def
+  ob name see prompt to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob text of as of this to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text result be command do
+  su name result ret
+prah
+
+su name see from filename image to name text output be ceremony def
+  ob name see prompt to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob name see model to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text output be command do
+  su name output ret
+prah
+
+su name see from filename image be ceremony def
+  ob name see prompt to name text prompt be text do
+  ob filename of from of this to name text image path be text do
+  ob name see model to name text model be text do
+  exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
+  ob text " --image \"" to name cmd be plus do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of prompt to name text result be command do
+  su name result ret
+prah
+
+exists su name see prompt ob text "Describe the image." be default ya
+exists su name see model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name see be export ya
