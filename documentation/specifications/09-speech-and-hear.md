@@ -639,16 +639,24 @@ joins them using the SRT timeline.
 ob text "<prompt>" from filename <loc> be see to name text <result> do
 ```
 
-The input prompt lives in `ob.text` and the image locator draws from `from.filename`. The module writes the prompt to `artifacts/see/prompt.txt`, then launches `node command/see_vl_runner.mjs` with:
+The input prompt lives in `ob.text` and the image locator draws from `from.filename`. The module sends the prompt to `node command/see_vl_runner.mjs` over stdin and passes the image/model/host flags:
 
 ```
---prompt-file "artifacts/see/prompt.txt"
+--prompt-stdin
 --image "<loc>"
 --model "<model>"
 --host "<ollama host>"
 ```
 
-`<model>` defaults to `qwen3-vl:8b-instruct` via `configure/default.pya`, and the host is read from the remembered `ollama host` fact defined in `configure/default.pya` or `configure/secret.pya`.
+`<model>` is supplied via `as text "<model>"`. `configure/default.pya` adds **dynamic defaults** so any `be see` call is expanded with:
+
+```
+exists su name see default model ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
+exists su name see default prompt ob la be see ko ob text "Describe the image." be default ya
+exists su name see default output ob la be see ko to name text "see result" be default ya
+```
+
+The host is read from the remembered `ollama host` fact defined in `configure/default.pya` or `configure/secret.pya`.
 
 The runner builds an OpenAI-compatible chat request:
 

@@ -3,18 +3,17 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 
-const ARTIFACT_PROMPT = "artifacts/see/prompt.txt";
 const ARTIFACT_IMAGE = "artifacts/see/sample.png";
+const PROMPT_TEXT = "Describe this image.";
 
 async function ensureArtifacts() {
   await fs.mkdir("artifacts/see", { recursive: true });
   await fs.writeFile(ARTIFACT_IMAGE, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-  await fs.writeFile(ARTIFACT_PROMPT, "Describe this image.", "utf8");
 }
 
 function runWithOverrides({ fixtureText, fixtureFile } = {}) {
   const env = { ...process.env };
-  const args = ["command/see_vl_runner.mjs", "--prompt-file", ARTIFACT_PROMPT, "--image", ARTIFACT_IMAGE];
+  const args = ["command/see_vl_runner.mjs", "--prompt", PROMPT_TEXT, "--image", ARTIFACT_IMAGE];
   if (fixtureText) {
     args.push("--fixture-text", fixtureText);
   }

@@ -10,6 +10,7 @@
 * **Mind event schema v0.1** documented (request/response fields + naming).
 * **Error sieve verb** added with a minimal inline example and quiz.
 * **Web search v0.1 spec + MVP**: `be search` with `fromstate wo web`, fixture-backed quiz, and example.
+* **Vision-language `see` module** wires `module/see_vl.pya` to `command/see_vl_runner.mjs`, posts Ollama chat completions with data-URL images, and ships a fixture-backed quiz plus updated spec notes.
 
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
