@@ -11,7 +11,7 @@ su name read from filename input become wo text to name text output be ceremony 
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
   ob text of kind to name text kind be command do
 
   exists su name handled ob num 0 be number ya
@@ -38,6 +38,11 @@ su name read from filename input become wo text to name text output be ceremony 
   ob name kind be equally from text "text" then
   ob text of cat to name text output be command do
   ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "image" then
+  from filename of input to name text output be see do
+  ob name kind be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then
@@ -59,7 +64,7 @@ su name read from filename input become wo text be ceremony def
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
   ob text of kind to name text kind be command do
 
   exists su name handled ob num 0 be number ya
@@ -88,6 +93,11 @@ su name read from filename input become wo text be ceremony def
   ob name kind be equally from text "text" then
   ob num 1 to name handled be plus do
 
+  ob name kind be equally from text "image" then
+  from filename of input to name text output be see do
+  ob name kind be equally from text "image" then
+  ob num 1 to name handled be plus do
+
   ob name handled be equally from num 0 then
   ob text of cat to name text output be command do
 
@@ -107,7 +117,7 @@ su name read from filename input become wo markdown to name text output be cerem
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
   ob text of kind to name text kind be command do
 
   exists su name handled ob num 0 be number ya
@@ -136,6 +146,11 @@ su name read from filename input become wo markdown to name text output be cerem
   ob name kind be equally from text "text" then
   ob num 1 to name handled be plus do
 
+  ob name kind be equally from text "image" then
+  from filename of input to name text output be see do
+  ob name kind be equally from text "image" then
+  ob num 1 to name handled be plus do
+
   ob name handled be equally from num 0 then
   ob text of cat to name text output be command do
 
@@ -155,7 +170,7 @@ su name read from filename input become wo markdown plain to name text output be
 
   exists su name kind ob text "case \"" be text ya
   ob name mime to name kind be plus do
-  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
+  ob text "\" in text/html) echo html ;; application/pdf) echo pdf ;; text/*) echo text ;; audio/*) echo audio ;; video/*) echo video ;; image/*) echo image ;; *) echo other ;; esac | tr -d '\\n'" to name kind be plus do
   ob text of kind to name text kind be command do
 
   exists su name handled ob num 0 be number ya
@@ -182,6 +197,11 @@ su name read from filename input become wo markdown plain to name text output be
   ob name kind be equally from text "text" then
   ob text of cat to name text output be command do
   ob name kind be equally from text "text" then
+  ob num 1 to name handled be plus do
+
+  ob name kind be equally from text "image" then
+  from filename of input to name text output be see do
+  ob name kind be equally from text "image" then
   ob num 1 to name handled be plus do
 
   ob name handled be equally from num 0 then
