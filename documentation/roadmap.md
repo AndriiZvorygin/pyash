@@ -16,8 +16,7 @@ Goal: runnable agent loop with search, download, read-to-markdown, tool-calling 
 Must-have:
 * Tool-calling mind adapter: request/execute tools, return tool results, and continue the exchange.
 * Web research pipeline: search → download → read (HTML/PDF) → markdown (GFM default).
-* Artifact + newspaper recording for all tool calls (search/download/read/command).
-* Workspace write sandbox (agent output dir) + deterministic run recording.
+* Workspace write sandbox (agent output dir).
 * Command runner tool exposed to agents (streaming output supported).
 
 Nice-to-have:
