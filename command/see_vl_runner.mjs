@@ -8,6 +8,8 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   const parsed = {
     promptFile: null,
+    promptText: null,
+    promptStdin: false,
     images: [],
     model: null,
     host: null,
@@ -21,6 +23,13 @@ function parseArgs(argv) {
       case "--prompt-file":
         parsed.promptFile = args[i + 1] ?? null;
         i += 1;
+        break;
+      case "--prompt":
+        parsed.promptText = args[i + 1] ?? null;
+        i += 1;
+        break;
+      case "--prompt-stdin":
+        parsed.promptStdin = true;
         break;
       case "--image":
         if (args[i + 1]) parsed.images.push(args[i + 1]);
@@ -231,12 +240,12 @@ async function main() {
       throw new Error(`see_vl_runner: fixture file missing (${err?.message ?? err})`);
     }
   }
-  if (!args.promptFile) {
-    throw new Error("see_vl_runner: --prompt-file is required");
-  }
-  const prompt = await resolvePrompt(args.promptFile);
+  const prompt =
+    args.promptText ??
+    (args.promptFile ? await resolvePrompt(args.promptFile) : null) ??
+    (args.promptStdin ? fsSync.readFileSync(0, "utf8") : null);
   if (!prompt) {
-    throw new Error("see_vl_runner: prompt file is empty");
+    throw new Error("see_vl_runner: prompt is required");
   }
   if (!Array.isArray(args.images) || args.images.length === 0) {
     throw new Error("see_vl_runner: at least one --image is required");
