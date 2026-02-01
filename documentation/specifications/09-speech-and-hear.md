@@ -651,8 +651,8 @@ The input prompt lives in `ob.text` and the image locator draws from `from.filen
 `<model>` is supplied via `as text "<model>"`. `configure/default.pya` adds **dynamic defaults** so any `be see` call is expanded with:
 
 ```
-exists su name see default model ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
-exists su name see default prompt ob la be see ko ob text "Describe the image." be default ya
+exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
+exists su name see default prompter ob la be see ko ob text "Describe the image." be default ya
 exists su name see default output ob la be see ko to name text "see result" be default ya
 ```
 

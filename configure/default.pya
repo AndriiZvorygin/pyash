@@ -20,11 +20,8 @@ from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read p
 from filename "./module/see_vl.pya" ob name see to name see be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
-exists su name see default model ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
-exists su name see default prompt ob la be see ko ob text "Describe the image." be default ya
-exists su name see default output ob la be see ko to name text "see result" be default ya
-exists su name see model ob text "qwen3-vl:8b-instruct" be default ya
-exists su name see prompt ob text "Describe the image." be default ya
+exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
+exists su name see default prompter ob la be see ko ob text "Describe the image." be default ya
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name stream stdout ob bool lie be default ya
