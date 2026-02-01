@@ -1,0 +1,22 @@
+su name see ob text prompt from filename image to name text output be ceremony def
+  ob text "mkdir -p artifacts/see" be command do
+  ob text of ob of this to filename "artifacts/see/prompt.txt" be write do
+  exists su name cmd ob text "node command/see_vl_runner.mjs" be text ya
+  ob text " --prompt-file \"artifacts/see/prompt.txt\"" to name cmd be plus do
+  ob text " --image \"" to name cmd be plus do
+  ob filename of from of this to name text image path be text do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name ollama host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name see model to name text model be text do
+  ob text " --model \"" to name cmd be plus do
+  ob name model to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd to name text output be command do
+  su name output ret
+prah
+
+exists su name see be export ya
