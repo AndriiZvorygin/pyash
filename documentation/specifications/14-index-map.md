@@ -6,6 +6,7 @@ Use this when the cheat sheet is not enough.
 
 - **Sentence order, cases, quoting, `wo` rules** → `01-sentence-and-grammar.md`
 - **Dispatch / signatures / ceremonies / `this` / errors** → `02-core-execution.md`
+- **Configuration defaults (dynamic)** → `02-core-execution.md`
 - **`vyah` aspects (stream/eval/start/await/cancel)** → `03-vyah-and-aspect.md`
 - **Runtime primitives (streams/tasks/IR)** → `04-runtime-primitives.md`
 - **Run recording, newspaper, artifacts, again-mode** → `05-run-recording-and-artifacts.md`
@@ -34,4 +35,3 @@ Use this when the cheat sheet is not enough.
 
 - **Download + read text/markdown** → `07-io-and-scripts.md`
 - **Web search** → `12-web-search.md`
-

@@ -104,6 +104,12 @@ ob text "pyash language" fromstate text "web" be search do
 from filename "./module/read_auto.pya" ob name read to name read be import do
 ```
 
+## 5b) Runtime defaults (dynamic)
+
+- Defaults are loaded from `configure/default.pya`, then `configure/container.pya` (in containers), then `configure/secret.pya`.
+- Config roots are found by searching upward from the entry program path, plus the current working directory.
+- Defaults are normal sentences using `be default` facts.
+
 ## 6) Common idioms (10–20)
 
 1) Declare constant:
@@ -206,4 +212,3 @@ MoodEnd  := "ya" | "do" | "prah"
 - `be read` uses `become wo text` when text is needed.
 - Every block has `prah`.
 - If using `wo`, ensure it matches the signature word exactly.
-

@@ -4,7 +4,7 @@ Purpose: provide the normative specs for Pyash. Each module follows the same tem
 
 Reading order (core):
 1. `01-sentence-and-grammar.md` — sentence shape, cases, quoting, official ordering.
-2. `02-core-execution.md` — dispatch/signatures, ceremonies + `this`, control flow, error sentences.
+2. `02-core-execution.md` — dispatch/signatures, ceremonies + `this`, control flow, error sentences, dynamic defaults.
 3. `03-vyah-and-aspect.md` — `vyah` modifiers and aspect inventory.
 4. `04-runtime-primitives.md` — C IR + duty/stream/chip primitives.
 5. `05-run-recording-and-artifacts.md` — newspaper/exchange/artifacts + again-mode determinism.
