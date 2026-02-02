@@ -23,11 +23,13 @@ export function handleRefineryDefinition({
   }
   const platforms = [];
   const seen = new Set();
+  let priorName = null;
   for (const entry of body) {
-    if (entry?.mood !== "ya" || entry?.be !== "platform") {
+    const isPlatformDecl = entry?.mood === "ya" && entry?.be === "platform";
+    if (!isPlatformDecl && (entry?.mood === "def" || entry?.mood === "prah")) {
       throwErrorSentence({
         name: "platform defective",
-        message: "platform declaration must be be platform ya",
+        message: "platform declaration must be be platform ya or a series entry",
         from: { name: "compile" },
         raw: entry
       });
@@ -51,45 +53,56 @@ export function handleRefineryDefinition({
     }
     seen.add(platformName);
     let deps = [];
-    if (entry.from) {
-      if (!entry.from?.ve || entry.from.ve.type !== "name" || !Array.isArray(entry.from.ve.values)) {
+    let action = null;
+    if (isPlatformDecl) {
+      if (entry.from) {
+        if (!entry.from?.ve || entry.from.ve.type !== "name" || !Array.isArray(entry.from.ve.values)) {
+          throwErrorSentence({
+            name: "depend defective",
+            message: "depend list must be from ve name ...",
+            from: { name: "compile" },
+            raw: entry.from
+          });
+        }
+        deps = entry.from.ve.values.map((value) => String(value));
+      }
+      const ob = entry?.ob;
+      if (!ob || typeof ob !== "object" || !("la" in ob)) {
         throwErrorSentence({
-          name: "depend defective",
-          message: "depend list must be from ve name ...",
+          name: "platform defective",
+          message: "platform activity must be ob la ... ko",
           from: { name: "compile" },
-          raw: entry.from
+          raw: entry
         });
       }
-      deps = entry.from.ve.values.map((value) => String(value));
+      const extraKeys = Object.keys(ob).filter((key) => key !== "la");
+      if (extraKeys.length > 0) {
+        throwErrorSentence({
+          name: "platform defective",
+          message: "platform activity must contain exactly one embedded sentence",
+          from: { name: "compile" },
+          raw: { extra: extraKeys }
+        });
+      }
+      const clause = ob.la;
+      if (!clause || typeof clause !== "object") {
+        throwErrorSentence({
+          name: "platform defective",
+          message: "platform activity must be ob la ... ko",
+          from: { name: "compile" },
+          raw: clause
+        });
+      }
+      action = clause;
+    } else {
+      if (entry.from?.ve?.type === "name" && Array.isArray(entry.from.ve.values)) {
+        deps = entry.from.ve.values.map((value) => String(value));
+      }
+      if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
+      action = entry;
     }
-    const ob = entry?.ob;
-    if (!ob || typeof ob !== "object" || !("la" in ob)) {
-      throwErrorSentence({
-        name: "platform defective",
-        message: "platform activity must be ob la ... ko",
-        from: { name: "compile" },
-        raw: entry
-      });
-    }
-    const extraKeys = Object.keys(ob).filter((key) => key !== "la");
-    if (extraKeys.length > 0) {
-      throwErrorSentence({
-        name: "platform defective",
-        message: "platform activity must contain exactly one embedded sentence",
-        from: { name: "compile" },
-        raw: { extra: extraKeys }
-      });
-    }
-    const clause = ob.la;
-    if (!clause || typeof clause !== "object") {
-      throwErrorSentence({
-        name: "platform defective",
-        message: "platform activity must be ob la ... ko",
-        from: { name: "compile" },
-        raw: clause
-      });
-    }
-    platforms.push({ name: platformName, deps, action: clause });
+    platforms.push({ name: platformName, deps, action });
+    priorName = platformName;
   }
   refineryDefs.set(name, { name, platforms });
   return { endIndex: j };
