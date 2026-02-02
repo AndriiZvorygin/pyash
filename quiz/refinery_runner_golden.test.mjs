@@ -30,10 +30,10 @@ test("refinery runner ordering, fail-fast, newspaper entries", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [
     "su name line be refinery def",
-    "su name beta ob la ob text \"b\" be write do ko be platform ya",
-    "su name alpha ob la ob text \"a\" be write do ko be platform ya",
-    "su name crash ob la ob text \"boom\" be unknown do ko be platform ya",
-    "su name delta ob la ob text \"d\" be write do ko be platform ya",
+    "su name beta ob text \"b\" be write do",
+    "su name alpha ob text \"a\" be write do",
+    "su name crash ob text \"boom\" be unknown do",
+    "su name delta ob text \"d\" be write do",
     "prah",
     ""
   ].join("\n"), "utf8");

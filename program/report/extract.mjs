@@ -69,7 +69,6 @@ export async function extractReport({ runId = "run", runRoot, lines } = {}) {
     parsedLines = normalizeLinesFromText(runText);
   }
 
-  const platformDefs = new Map();
   const platformOutcomes = [];
   const mindCalls = [];
   const toolCalls = [];
@@ -97,13 +96,6 @@ export async function extractReport({ runId = "run", runRoot, lines } = {}) {
 
     if (sentence.be === "run root" && sentence.ob?.filename) {
       runRootValue = sentence.ob.filename;
-      continue;
-    }
-
-    if (sentence.be === "platform" && sentence.mood === "ya") {
-      const platformName = sentence.su?.name;
-      const action = sentence.ob?.la;
-      if (platformName && action) platformDefs.set(platformName, action);
       continue;
     }
 
@@ -183,7 +175,7 @@ export async function extractReport({ runId = "run", runRoot, lines } = {}) {
 
   for (let i = 0; i < platformOutcomes.length; i += 1) {
     const entry = platformOutcomes[i];
-    const action = platformDefs.get(entry.platformName) ?? entry.resultSentence;
+    const action = entry.resultSentence;
     reportLines.push(...mapDefLines(`platform outcome ${i + 1}`, [
       { su: { name: "platform name" }, ob: { name: entry.platformName }, mood: "ya" },
       { su: { name: "platform order" }, ob: { num: entry.order }, mood: "ya" },

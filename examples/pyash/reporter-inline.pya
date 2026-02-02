@@ -1,5 +1,5 @@
 su name demo refinery be refinery def
-exists su name step ob la exists su name marker ob text "ok" be text ya ko be platform ya
+su name step ob text "ok" be write do
 prah
 
 ob text "noop" from name demo refinery to name text output be refinery do
