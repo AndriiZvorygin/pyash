@@ -181,6 +181,9 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.hollow) return ["hollow"];
 
   if (value.name) {
+    if (verb === "refinery" && caseKey === "from" && !value.nameTypeWords?.length) {
+      return ["name", "text"];
+    }
     if (caseKey === "fromstate" || caseKey === "tostate" || caseKey === "become") {
       const stateName = normalizeWords(value.name);
       if (stateName) return ["name", stateName];
