@@ -60,7 +60,7 @@ again mode — runner policy that requires recording and verification sufficient
 runner policy — behavior controlled by the runner (CLI/config), not by in-program
 sentences. Examples: selecting which refinery to run, and when to print results.
 
-ratification — a hard approval gate that MUST halt execution until an explicit decision is provided
+propositive mood — `propose` mood used for approval gates; MUST halt execution until an explicit decision is provided
 
 
 
@@ -105,7 +105,7 @@ be platform ya is a declaration entry form inside a refinery.
 
 If an implementation supports user-defined ceremonies named refinery or platform, that support MUST be gated off while parsing refinery blocks (the declaration meaning wins inside the refinery).
 
-The word ratification is reserved for approval gates when a refinery runner or workflow runner is active.
+The propositive mood (`propose`) is reserved for approval gates when a refinery runner or workflow runner is active.
 
 
 ---
@@ -147,25 +147,29 @@ run inline and return values to the program.
 
 ---
 
-## 5.7 Ratification (approval gate) (draft v0.1)
+## 5.7 Propositive approval gate (draft v0.1)
 
-Ratification is the Pyash-native approval gate for deterministic workflows.
+Propositive mood (`propose`) is the Pyash-native approval gate for deterministic workflows.
 
 ### 5.7.1 Sentence form
 
+Use any sentence that would otherwise be executed, but in `propose` mood.
+
+Minimal prompt-only form:
+
 ```
-ob text "<prompt>" be ratification do
+ob text "<prompt>" be command propose
 ```
 
 Optional storage of a decision:
 
 ```
-ob text "<prompt>" to name text <decision> be ratification do
+ob text "<prompt>" to name text <decision> be command propose
 ```
 
 ### 5.7.2 Required behavior
 
-* A ratification gate MUST halt execution when evaluated in a runner workflow or refinery runner.
+* A `propose` gate MUST halt execution when evaluated in a runner workflow or refinery runner.
 * The runner MUST emit a structured approval request that includes:
   - prompt text
   - a resume token
@@ -180,7 +184,18 @@ Implementations MAY expose an inline verb, but the runner command is the compati
 Minimal contract:
 
 * decision values: `yes` / `no`
-* resume continues at the next stage after the ratification gate
+* resume continues at the next stage after the `propose` gate
+
+### 5.7.4 Resume token (draft)
+
+The resume token MUST be derivable from the run newspaper and SHOULD include:
+
+* run id
+* sentence id (or platform index) of the `propose` gate
+* refinery/workflow name
+* decision field name (if provided)
+
+The run newspaper is the canonical state store for resumption.
 
 ---
 
@@ -214,7 +229,7 @@ Each step map MAY contain:
 1. Load JSON/YAML into a Pyash json map def (per `06-data-formats.md`).
 2. Convert each step into a platform activity sentence:
    * `command` is parsed into a sentence and embedded in `ob la ... ko`.
-   * `approval: required` injects a `ob text "<prompt>" be ratification do` activity.
+   * `approval: required` injects a `propose` gate activity.
 3. `stdin` and `env` are expanded as subordinate clauses on the activity sentence.
 4. `condition` determines whether the platform is scheduled (runner policy).
 
