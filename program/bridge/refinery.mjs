@@ -362,6 +362,9 @@ export async function runRefinery({
       decisionRaw = resume.decision;
       decision = resume.decision.toLowerCase();
     }
+    if (typeof resume.raw === "string") {
+      decisionRaw = resume.raw;
+    }
     if (decision !== "truth" && decision !== "lie") {
       throwErrorSentence({
         name: "resume defective",
