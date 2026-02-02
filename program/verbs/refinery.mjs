@@ -68,12 +68,9 @@ async function refinery(sentence) {
     null;
   const inputOb = resolveInputOb(sentence?.ob);
   const priorInput = remember("input");
-  const priorTask = remember("task");
 
   if (inputOb) {
     doRemember({ mood: "ya", su: { name: "input" }, ob: inputOb, be: "text" });
-    // Legacy compatibility: keep task in sync when present.
-    doRemember({ mood: "ya", su: { name: "task" }, ob: inputOb, be: "text" });
   }
 
   try {
@@ -103,7 +100,6 @@ async function refinery(sentence) {
     return { ob: resultSentence ?? {}, be: "result" };
   } finally {
     if (priorInput) doRemember(priorInput);
-    if (priorTask) doRemember(priorTask);
   }
 }
 

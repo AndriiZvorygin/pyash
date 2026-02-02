@@ -12,7 +12,7 @@ test("inline refinery call stores final result to target", async () => {
   await interpret(parse('su name step ob text "ok" be write do'));
   await interpret(parse("prah"));
 
-  await interpret(parse('ob text "task" from name demo to name text output be refinery do'));
+  await interpret(parse('ob text "input" from name demo to name text output be refinery do'));
 
   const output = remember("output");
   assert.ok(output);
