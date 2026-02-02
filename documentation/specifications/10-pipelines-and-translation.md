@@ -177,6 +177,20 @@ ob text "<prompt>" to name text <decision> be command propose
   - the decision field name (if provided)
 * Execution MUST NOT continue until a resume action supplies an explicit decision.
 
+#### 5.7.2.1 Surfaced sentence (normative)
+
+When a runner encounters a `propose` gate, it MUST surface a `be ratify do`
+sentence (not `be propose ya`). The surfaced sentence MUST include:
+
+* `su name <platform>` — the evoking sentence subject name
+* `ob text "<prompt>"` — prompt text (direct or resolved)
+* `from name <refinery>` — refinery or workflow name
+* `accordingto name "resume token"`
+* `fromtext text "<resume-token>"`
+* optional `to name <decision>` if the evoking sentence provided a decision field
+
+This surfaced sentence is recorded in the run newspaper like any other result.
+
 ### 5.7.3 Resume (draft)
 
 Resume is a runner command (not an in-language verb) that accepts a resume token and decision.
@@ -184,8 +198,21 @@ Implementations MAY expose an inline verb, but the runner command is the compati
 
 Minimal contract:
 
-* decision values: `yes` / `no`
+* decision values: `truth` / `lie`
 * resume continues at the next stage after the `propose` gate
+
+#### 5.7.3.1 Resume sentence (normative)
+
+The decision is expressed as a boolean. A compatible surfaced decision sentence is:
+
+```
+su name <platform>
+ob bool truth|lie
+be ratify ya
+```
+
+Runners MAY accept equivalent decision payloads, but MUST interpret `truth` as
+approve/continue and `lie` as decline/stop.
 
 ### 5.7.4 Resume token (draft)
 

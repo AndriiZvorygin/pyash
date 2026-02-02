@@ -29,3 +29,12 @@ test("genitive math inputs resolve in refinery", async () => {
   const fact = remember("doubled");
   assert.equal(fact?.ob?.num, 100);
 });
+
+test("imperatives also store results under su name", async () => {
+  forget();
+  await interpret(parse("su name sum from num 3 ob num 2 be plus do"));
+  const sum = remember("sum");
+  const result = remember("result");
+  assert.equal(sum?.ob?.num, 5);
+  assert.equal(result?.ob?.num, 5);
+});

@@ -463,6 +463,16 @@ export async function handleImperative({
       memory.doRemember(dest);
     }
 
+    // Also store result under the action's su name to ease migration.
+    if (sentence?.su?.name) {
+      memory.doRemember({
+        su: { name: sentence.su.name },
+        ob: normalizedObj,
+        be: resultBe,
+        mood: "ya"
+      });
+    }
+
     // Always store a result fact for reference
     memory.doRemember({
       su: { name: "result" },
