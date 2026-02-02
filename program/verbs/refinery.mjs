@@ -106,9 +106,12 @@ async function refinery(sentence) {
 export const signatures = [
   { signatureWords: ["be", "refinery", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "num", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "ob", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "ob", "name", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: refinery },
