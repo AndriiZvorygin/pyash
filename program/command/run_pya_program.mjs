@@ -149,7 +149,8 @@ async function main() {
   let refineryResult = null;
   let refineryName = refineryFlag ?? null;
   let checkpointIndex = null;
-  const isInteractive = process.stdout?.isTTY === true && process.stdin?.isTTY === true;
+  const isInteractive = process.env.PYA_FORCE_INTERACTIVE === "1" ||
+    (process.stdout?.isTTY === true && process.stdin?.isTTY === true);
   let pendingToolEvoked = null;
 
   const toResultSentence = (res, fallbackSentence) => {
