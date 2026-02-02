@@ -65,6 +65,8 @@ function exchangeRuntimeHelper() {
     "  return abs;",
     "}",
     "function pyaResolveAgentCwd() {",
+    "  const sandbox = globalThis && Object.prototype.hasOwnProperty.call(globalThis, \"agent sandbox\") ? globalThis[\"agent sandbox\"] : null;",
+    "  if (sandbox?.ob?.boolean !== true) return null;",
     "  const entry = globalThis && Object.prototype.hasOwnProperty.call(globalThis, \"agent cwd\") ? globalThis[\"agent cwd\"] : null;",
     "  const raw = entry?.ob?.filename ?? entry?.ob?.text ?? entry?.ob?.name;",
     "  if (!raw) return null;",

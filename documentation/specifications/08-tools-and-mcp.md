@@ -393,10 +393,11 @@ do
 
 ### 7.6 Agent CWD binding
 
-When a mind call includes `at filename <path>`, the runtime MUST record the value
-as the **agent CWD** (`su name agent cwd`) and use it to constrain destructive tool
-effects. Relative output paths MUST be resolved under this directory, and attempts
-to write outside it MUST error.
+When a mind call includes `at filename <path>` and tool capabilities are enabled
+(`with name <tool map>`), the runtime MUST record the value as the **agent CWD**
+(`su name agent cwd`) and enable the **agent sandbox** (`su name agent sandbox`).
+Destructive tool effects are constrained to this directory: relative output paths
+MUST be resolved under it, and attempts to write outside it MUST error.
 
 Example:
 

@@ -2,6 +2,8 @@ import path from "node:path";
 
 export function resolveAgentCwd({ rememberFn } = {}) {
   if (typeof rememberFn !== "function") return null;
+  const sandbox = rememberFn("agent sandbox");
+  if (sandbox?.ob?.boolean !== true) return null;
   const fact = rememberFn("agent cwd");
   const raw = fact?.ob?.filename ?? fact?.ob?.text ?? fact?.ob?.name ?? null;
   if (!raw) return null;

@@ -19,15 +19,6 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
   const config = mindName ? remember(mindName) : null;
   const configSentence = config?.be === "mind" ? config : null;
-  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
-  if (agentCwd) {
-    doRemember({
-      mood: "ya",
-      be: "cwd",
-      su: { name: "agent cwd" },
-      ob: { filename: String(agentCwd) }
-    });
-  }
   const vyahValues = Array.isArray(sentence?.vyah?.ve?.values)
     ? sentence.vyah.ve.values
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
@@ -60,6 +51,21 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   });
 
   const toolMapName = sentence?.with?.name ?? null;
+  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
+  if (toolMapName && agentCwd) {
+    doRemember({
+      mood: "ya",
+      be: "truth",
+      su: { name: "agent sandbox" },
+      ob: { boolean: true }
+    });
+    doRemember({
+      mood: "ya",
+      be: "cwd",
+      su: { name: "agent cwd" },
+      ob: { filename: String(agentCwd) }
+    });
+  }
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
 
   const { historySeriesName, historyMessages } = resolveHistoryContext({
