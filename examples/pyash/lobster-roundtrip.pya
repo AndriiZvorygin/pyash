@@ -1,0 +1,2 @@
+from filename "quiz/fixtures/inbox-triage.lobster" fromstate name yaml to name workflow be read do
+ob name workflow become name yaml be write do
