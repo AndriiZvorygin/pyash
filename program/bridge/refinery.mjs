@@ -247,6 +247,42 @@ export function getRefinery(name) {
   return refineryRegistry.get(name);
 }
 
+function resolveProposePrompt(sentence) {
+  if (!sentence || typeof sentence !== "object") return "";
+  if (typeof sentence.ob?.text === "string") return sentence.ob.text;
+  if (typeof sentence.ob?.name === "string") {
+    const fact = remember(sentence.ob.name);
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
+  return sentenceToPyash(sentence);
+}
+
+function buildResumeToken({ runId, refineryName, platformName, index, decisionName } = {}) {
+  const payload = {
+    runId: runId ?? "",
+    refinery: refineryName ?? "",
+    step: platformName ?? "",
+    index: typeof index === "number" ? index : -1,
+    decision: decisionName ?? ""
+  };
+  return JSON.stringify(payload);
+}
+
+function buildProposeSentence({ refineryName, platformName, actionSentence, resumeToken, decisionName } = {}) {
+  const prompt = resolveProposePrompt(actionSentence);
+  const sentence = {
+    mood: "ya",
+    be: "propose",
+    su: { name: platformName },
+    ob: { text: prompt },
+    from: { name: refineryName },
+    accordingto: { name: "resume token" },
+    fromtext: { text: resumeToken }
+  };
+  if (decisionName) sentence.to = { name: decisionName };
+  return sentence;
+}
+
 export async function runRefinery({
   name,
   interpret,
@@ -256,7 +292,8 @@ export async function runRefinery({
   onRetry,
   checkpointIndex,
   checkpointEnabled = true,
-  retryConfig
+  retryConfig,
+  runId
 } = {}) {
   if (!name) {
     throwErrorSentence({
@@ -318,6 +355,25 @@ export async function runRefinery({
       });
     }
     if (onEvoke) onEvoke(platform.actionSentence);
+    if (platform.actionSentence?.mood === "propose") {
+      const decisionName = platform.actionSentence?.to?.name ?? null;
+      const resumeToken = buildResumeToken({
+        runId,
+        refineryName: name,
+        platformName: nextName,
+        index: refinery.order.indexOf(nextName),
+        decisionName
+      });
+      const proposeSentence = buildProposeSentence({
+        refineryName: name,
+        platformName: nextName,
+        actionSentence: platform.actionSentence,
+        resumeToken,
+        decisionName
+      });
+      if (onResult) onResult(proposeSentence);
+      return proposeSentence;
+    }
     const deps = platform.deps ?? [];
     const sortedDeps = [...deps].sort(compareUtf8);
     const depResults = sortedDeps.map(dep => results.get(dep) ?? "");

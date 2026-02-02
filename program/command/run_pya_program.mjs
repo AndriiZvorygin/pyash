@@ -206,6 +206,7 @@ async function main() {
         interpret,
         checkpointIndex,
         checkpointEnabled: !noCheckpoint,
+        runId,
         onEvoke: (actionSentence) => {
           const embedded = sentenceToPyash(actionSentence);
           if (isToolSentence(actionSentence)) pendingToolEvoked = embedded;

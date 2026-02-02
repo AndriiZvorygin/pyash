@@ -77,6 +77,7 @@ async function refinery(sentence) {
     const resultSentence = await runRefinery({
       name: refineryName,
       interpret,
+      runId: null,
       onEvoke: (actionSentence) => {
         emitExchangeSentence({ mood: "ya", be: "evoke", ob: { la: actionSentence } });
       },
