@@ -13,6 +13,12 @@ so Pyash becomes a stable **pivot language** between people and machines.
 
 ---
 
+### Mascot and naming
+
+Pyash uses the raven as its mascot. The framing is a deep-time North Pacific story sphere: a world-making trickster and shapeshifter who crosses boundaries, steals or releases essentials like light and fire, teaches skills, and reshapes a harsh environment through cleverness. That maps to Pyash as a language of transformation and translation: it turns sentence-shaped intent into executable action, crosses the boundary between human meaning and machine procedure, and rewards compositional reuse and careful tool-calling. The raven is also a mixed figure, benefactor and troublemaker, which fits a practical builder mindset where power and shortcuts carry consequences.
+
+For the C IR/VLIW line, the mascot is the muskrat.
+
 ### Design goals
 
 1. **Grammar-driven dispatch**
