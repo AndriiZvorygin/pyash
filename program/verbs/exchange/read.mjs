@@ -6,6 +6,7 @@ import { compareUtf8, jsonValueFromObj } from "./json_map_export.mjs";
 import { read_fromstate_csv } from "./read_csv.mjs";
 import { read_fromstate_json } from "./read_json.mjs";
 import { read_fromstate_yaml } from "./read_yaml.mjs";
+import { read_fromstate_lobster } from "./read_lobster.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,4 +119,12 @@ export const signatures = [
   { signatureWords: ["be", "read", "from", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
   { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name"], handler: read_fromstate_yaml },
   { signatureWords: ["be", "read", "fromtext", "text", "fromstate", "name", "yaml", "to", "name", "num"], handler: read_fromstate_yaml },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "from", "filename", "fromstate", "name", "lobster", "to", "name", "text"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "from", "filename", "fromstate", "name", "lobster", "to", "name", "num"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "from", "text", "fromstate", "name", "lobster", "to", "name", "text"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "from", "text", "fromstate", "name", "lobster", "to", "name", "num"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromtext", "text", "fromstate", "name", "lobster", "to", "name", "text"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromtext", "text", "fromstate", "name", "lobster", "to", "name", "num"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "text"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "num"], handler: read_fromstate_lobster }
 ];

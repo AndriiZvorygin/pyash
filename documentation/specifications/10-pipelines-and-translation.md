@@ -228,11 +228,20 @@ Each step map MAY contain:
 ### 5.8.2 Conversion rules
 
 1. Load JSON/YAML into a Pyash json map def (per `06-data-formats.md`).
-2. Convert each step into a platform activity sentence:
+2. Emit optional prelude entries before steps:
+   * `cwd` becomes a go step: `be go to filename "<cwd>" do`
+   * `env` becomes ecology facts in the series (one per key), e.g.:
+     `su name <key> ob text "<value>" be ecology ya`
+3. Convert each step into a platform activity sentence:
    * `command` is parsed into a sentence and used as the series entry body (no `ob la ... ko` wrapper).
    * `approval: required` injects a `propose` gate activity.
-3. `stdin` and `env` are expanded as subordinate clauses on the activity sentence.
-4. `condition` determines whether the platform is scheduled (runner policy).
+4. `stdin` is expanded as a subordinate clause on the activity sentence.
+5. Step-level `env` becomes ecology facts with the step prefix:
+   `su name <step-id> env <key> ob text "<value>" be ecology ya`
+6. `condition` determines whether the platform is scheduled (runner policy). When
+   a condition references `$<step>.approved`, the series form MAY emit:
+   `ob text "truth" from name <step> approved be remains do` followed by
+   `ob text "truth" be then then` to gate the next step.
 
 This conversion is deterministic and reversible via the json map representation.
 
