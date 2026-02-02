@@ -38,6 +38,7 @@ This spec defines:
 - failure policy
 - interaction with run newspaper and again mode
 - compatibility notes for workflow files and approval gates
+- series-based pipeline compatibility for workflow files
 
 
 
@@ -234,6 +235,48 @@ Each step map MAY contain:
 4. `condition` determines whether the platform is scheduled (runner policy).
 
 This conversion is deterministic and reversible via the json map representation.
+
+---
+
+## 5.9 Series pipeline compatibility (draft v0.1)
+
+Workflow files MAY also be represented as a Pyash **series** of command sentences.
+This is a lightweight, Pyash-native representation for simple pipelines.
+
+### 5.9.1 Shape
+
+```
+su name <workflow> be series def
+su name <step-id> ob text "<command>" be command ya
+su name <step-id> ob text "<command>" from to of <prior-step> be command ya
+su name <step-id> ob text "<command>" be command propose
+su name <workflow> prah
+```
+
+Rules:
+
+* The series name is the workflow name.
+* Each step is a `be command` sentence using `su name <step-id>`.
+* When a step consumes prior output, it uses `from to of <prior-step>` (or the chosen canonical reference).
+* Approval gates are expressed by using the **propositive mood** (`propose`) on a command sentence.
+
+### 5.9.2 Resume token binding
+
+When a `propose` step is encountered in a series pipeline:
+
+* the resume token MUST reference the series name and the step index
+* the runner MUST resume at the next step after the proposed one
+* the run newspaper is the canonical state store
+
+### 5.9.3 Conversion from workflow files
+
+If the workflow file includes `approval: required`, the step becomes:
+
+```
+su name <step-id> ob text "<prompt>" be command propose
+```
+
+If the workflow file includes `stdin`, it becomes `from to of <prior-step>` in the series form.
 
 ---
 
