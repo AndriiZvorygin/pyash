@@ -51,6 +51,7 @@ import del, { signatures as deleteSignatures } from "./delete.mjs";
 import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
+import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
 
 export {
   plus,
@@ -92,7 +93,8 @@ export {
   del,
   refinery,
   reporter,
-  errorSieve
+  errorSieve,
+  successSieve
 };
 
 export const builtInSignatures = [
@@ -149,4 +151,5 @@ export const builtInSignatures = [
   ...refinerySignatures,
   ...reporterSignatures,
   ...errorSieveSignatures,
+  ...successSieveSignatures,
 ];

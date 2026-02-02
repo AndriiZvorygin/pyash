@@ -52,7 +52,7 @@ test("refinery runner ordering, fail-fast, newspaper entries", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
   const evokeLines = lines.filter(line => line.includes("be evoke ya"));
-  const actionEvokes = evokeLines.filter(line => line.startsWith("ob la ob text"));
+  const actionEvokes = evokeLines.filter(line => line.startsWith("ob la su name"));
 
   assert.ok(actionEvokes.some(line => line.includes("ob text \"a\"")));
   assert.ok(actionEvokes.some(line => line.includes("ob text \"b\"")));
@@ -62,7 +62,7 @@ test("refinery runner ordering, fail-fast, newspaper entries", async () => {
   const alphaIndex = actionEvokes.findIndex(line => line.includes("ob text \"a\""));
   const betaIndex = actionEvokes.findIndex(line => line.includes("ob text \"b\""));
   assert.ok(alphaIndex !== -1 && betaIndex !== -1);
-  assert.ok(alphaIndex < betaIndex);
+  assert.ok(betaIndex < alphaIndex);
 
   assert.ok(lines.some(line => line.includes("be error") && line.endsWith("ya")));
 });
