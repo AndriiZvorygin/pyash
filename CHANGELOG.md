@@ -1,5 +1,9 @@
 # Changelog
 
+### Feb 2, 2026: Command streaming clarified
+
+* **Command streaming documented** (`vyah stream` + cancel semantics) in `07-io-and-scripts.md`.
+
 ### Jan 30, 2026: Verifier loop + deterministic reporting
 
 * **Inline refinery still writes to the newspaper**, so verifier loops stay deterministic without flags.

@@ -874,3 +874,53 @@ Playlist/channel example (download all items from last month into CWD):
 ```
 be download ob wo all during months 1 from filename "https://www.youtube.com/@AndriiZ/videos" as wo audio do
 ```
+
+---
+
+# Command (draft v0.1)
+
+This document defines the `command` verb for executing host commands.
+
+## 1. Canonical verb shape
+
+```
+be command ob text "<cmd>" [from filename "<path>" | from text "<stdin>" | fromtext text "<stdin>"] [to name text <out> | to filename "<path>"] do
+```
+
+Notes:
+* `ob text` is the command string.
+* `from filename` pipes file contents to stdin.
+* `from text` / `fromtext` pipe text to stdin.
+* `to name text` stores stdout in memory.
+* `to filename` writes stdout to a file.
+
+## 2. Streaming execution
+
+Streaming uses `vyah stream` and requires `su name` as a stream identifier.
+
+Start a stream:
+```
+su name build ob text "npm test" vyah stream be command do
+```
+
+Return value (stream open):
+```
+su name build ob filename "artifacts/command/build.stream.txt" be stream ya
+```
+
+Notes:
+* The stream writes stdout into the stream file as it arrives.
+* A stream end token is appended when the process exits.
+* `from name stream` can be used to pipe an existing stream into the command’s stdin.
+
+Cancel a stream:
+```
+su name build vyah cancel be command do
+```
+
+## 3. Errors
+
+On failure, return:
+```
+su name command defective ob text "<reason>" from la <sentence> be error ya
+```
