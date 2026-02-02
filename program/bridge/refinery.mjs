@@ -284,8 +284,8 @@ function buildResumeToken({ runId, refineryName, platformName, index, decisionNa
 function buildProposeSentence({ refineryName, platformName, actionSentence, resumeToken, decisionName } = {}) {
   const prompt = resolveProposePrompt(actionSentence);
   const sentence = {
-    mood: "ya",
-    be: "propose",
+    mood: "do",
+    be: "ratify",
     su: { name: platformName },
     ob: { text: prompt },
     from: { name: refineryName },
@@ -353,11 +353,16 @@ export async function runRefinery({
         raw: { token: rawToken }
       });
     }
-    const decision = typeof resume.decision === "string" ? resume.decision.toLowerCase() : "";
-    if (decision !== "yes" && decision !== "no") {
+    let decision = "";
+    if (typeof resume.decision === "boolean") {
+      decision = resume.decision ? "truth" : "lie";
+    } else if (typeof resume.decision === "string") {
+      decision = resume.decision.toLowerCase();
+    }
+    if (decision !== "truth" && decision !== "lie") {
       throwErrorSentence({
         name: "resume defective",
-        message: "resume decision must be yes or no",
+        message: "resume decision must be truth or lie",
         from: { name: "interpret" },
         raw: { decision }
       });
@@ -444,9 +449,9 @@ export async function runRefinery({
         if (matchesName || matchesIndex) {
           const decisionSentence = {
             mood: "ya",
-            be: "text",
+            be: "ratify",
             su: { name: nextName },
-            ob: { text: resumeGate.decision }
+            ob: { boolean: resumeGate.decision === "truth" }
           };
           if (onResult) onResult(decisionSentence);
           lastResult = decisionSentence;

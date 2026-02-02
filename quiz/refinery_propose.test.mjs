@@ -9,7 +9,7 @@ async function run(line) {
   return interpret(parse(line));
 }
 
-test("refinery halts on propose and emits propose result", async () => {
+test("refinery halts on propose and emits ratify result", async () => {
   forget();
   await run("su name flow be refinery def");
   await run("su name gate ob text \"Approve?\" be command propose");
@@ -19,7 +19,7 @@ test("refinery halts on propose and emits propose result", async () => {
   await run("from name flow be refinery do");
 
   const result = remember("result");
-  assert.equal(result?.be, "propose");
+  assert.equal(result?.be, "ratify");
   assert.equal(result?.ob?.text, "Approve?");
   const after = remember("after");
   assert.equal(after, undefined);

@@ -94,7 +94,7 @@ async function refinery(sentence) {
     });
     if (resultSentence?.mood && resultSentence?.be) {
       if (resultSentence.be === "error") return resultSentence;
-      if (resultSentence.be === "propose") return resultSentence;
+      if (resultSentence.be === "ratify") return resultSentence;
       return { ob: resultSentence.ob ?? {}, be: resultSentence.be };
     }
     return { ob: resultSentence ?? {}, be: "result" };
