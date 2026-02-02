@@ -210,7 +210,11 @@ export function recordPlatform(sentence) {
   }
   let deps = [];
   let actionSentence = null;
-  if (sentence.from && !(sentence.from.ve?.type === "name" && Array.isArray(sentence.from.ve.values))) {
+  if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
+    deps = sentence.from.ve.values.map((entry) => String(entry));
+  } else if (sentence.from && (sentence.from.filename || sentence.from.text || sentence.from.name)) {
+    // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
+  } else if (sentence.from) {
     throwErrorSentence({
       name: "depend defective",
       message: "depend list must be from ve name ...",
@@ -218,13 +222,10 @@ export function recordPlatform(sentence) {
       raw: sentence.from
     });
   }
-  if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
-    deps = sentence.from.ve.values.map((entry) => String(entry));
-  }
   const priorName = frame.order.length > 0 ? frame.order[frame.order.length - 1] : null;
   if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
   actionSentence = { ...sentence };
-  if (actionSentence.from) delete actionSentence.from;
+  if (actionSentence.from?.ve?.type === "name") delete actionSentence.from;
   frame.platforms.set(name, { deps, actionSentence });
   frame.order.push(name);
   return { recorded: true };
