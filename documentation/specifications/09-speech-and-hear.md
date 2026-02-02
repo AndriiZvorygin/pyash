@@ -572,6 +572,12 @@ Normalised canonical Pyash:
 ob num 5 to name result be plus do
 ```
 
+You can also supply the second operand via `from` when no `to` is present:
+
+```pyash
+ob num 2 from num 3 be plus do
+```
+
 If you prefer the “be plus … do” ordering during emission, keep it consistent with your formatter, since signature derivation uses canonical ordering anyway. 
 
 ### 9.2 Subject included without using `by`

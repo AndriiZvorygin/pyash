@@ -4,7 +4,7 @@ import { toNumber, resolveGenitiveTarget, resolveScalarValue, resolveDateSlot, e
 
 export async function plus_obj_num_to_name_num(sentence, { remember }) {
   if (sentence.ob == null) throw new Error("plus: ob is required");
-  if (sentence.to == null) throw new Error("plus: to is required");
+  if (sentence.to == null && sentence.from == null) throw new Error("plus: to or from is required");
 
   const duration = extractDuration(sentence.ob);
   if (duration) {
@@ -101,7 +101,7 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
     }
   }
 
-  if (sentence.to.genitive) {
+  if (sentence.to?.genitive) {
     const target = resolveGenitiveTarget(sentence.to.genitive, remember);
     if (target) {
       const delta = toNumber(sentence.ob);
@@ -112,7 +112,7 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
   }
 
   const a = toNumber(sentence.ob);
-  const b = toNumber(sentence.to);
+  const b = toNumber(sentence.to ?? sentence.from);
   return { ob: a + b, be: "number" };
 }
 
@@ -193,6 +193,10 @@ export const signatures = [
   { signatureWords: ["be", "plus", "ob", "name", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num", "to", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "num", "ob", "num"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "from", "num"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "name", "num", "ob", "num"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "num", "from", "name", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "to", "name", "num"], handler: plus_obj_num_to_name_num },
   // Vector element: ob num ... to vec at idx
   { signatureWords: ["be", "plus", "ob", "num", "to", "name", "vec", "at", "num"], handler: plus_obj_num_to_name_vec_at_num },

@@ -126,6 +126,20 @@ Define official conditionals and loop semantics.
   - Disjunction: `be or ob la <sentence> ko with la <sentence> ko` yields truth if either is truth.
   - These forms return `ob bool truth|lie`.
 
+## 3.1 Result facts (normative)
+
+On successful imperative execution, the runtime stores a **`ya`** result sentence:
+
+* If the invoked sentence has `su name <id>`, store `su name <id> ob <value> be <verb> ya`.
+* For compatibility, also store `su name result ob <value> be <verb> ya`.
+
+The value always lives in `ob`, so it can be retrieved with genitives such as
+`ob num of <id>`.
+
+Implementations MAY also record a fully-resolved copy of the evoker sentence
+(with `to` bound to its resolved target) when that is useful for reuse, but the
+primary result fact is the `su name <id> … ya` sentence above.
+
 ## 4. Error contracts
 - Invalid conditionals or unknown verbs raise `be error do`.
 
