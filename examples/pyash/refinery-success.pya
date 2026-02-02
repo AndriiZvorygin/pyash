@@ -3,3 +3,5 @@ su name beta ob text "b" be write do
 su name alpha ob text "a" be write do
 su name delta ob text "d" be write do
 prah
+
+from name line be refinery do

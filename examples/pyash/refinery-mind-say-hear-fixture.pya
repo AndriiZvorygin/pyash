@@ -4,3 +4,5 @@ su name speak from ve name draft ob name mind-out to filename "artifacts/say/ref
 su name listen from ve name speak from filename "artifacts/say/refinery-fixture.wav" be hear do
 su name report from ve name listen ob name transcript be write do
 prah
+
+from name loop be refinery do
