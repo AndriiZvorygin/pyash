@@ -19,7 +19,9 @@ Pyash uses the raven as its mascot. A plausible deep-time framing is that a Rave
 
 Those Raven attributes map cleanly onto Pyash. Pyash is a language about transformation and translation, turning sentence‑shaped intent into executable action, much as Raven turns darkness into light by strategy rather than force. Raven’s boundary‑crossing fits Pyash’s bridge between human meaning and machine procedure; Raven’s opportunistic creativity mirrors compositional reuse and tool‑calling; Raven’s mixed nature, benefactor plus troublemaker, matches a practical builder mindset where power is handled with care, because every clever shortcut carries consequences.
 
-For the C IR/VLIW line, the mascot is the muskrat.
+For the C IR/VLIW line, the mascot is the muskrat. A parallel deep‑time framing for the earth‑diver cycle is that it belongs to an even older circumpolar creation layer, shared across north Eurasia and North America: in the beginning there is only water, and a humble diver brings up the first bit of mud or sand so land can form. In Eurasian tellings the diver is often a loon or duck; in many North American “Turtle Island” tellings the diver is often muskrat (sometimes after larger divers fail), and the tiny clump of mud becomes the seed that expands into the world. The motif emphasizes endurance, humility, and the reality that a small being can establish the foundation that everything else depends on.
+
+That maps cleanly onto a C IR / VLIW ISA / bytecode interpreter layer. The earth‑diver is the part of your stack that dives into the hard depths and returns with something minimal yet decisive: a small, correct substrate that can grow into a whole machine world. Muskrat fits as a symbol for this layer because it is a builder and shaper of wetlands, turning mud and plant fibre into stable structures. In the same way, an ISA or interpreter turns simple primitives into a reliable ground plane: deterministic execution, a clear memory model, small composable operations, and predictable control flow. Raven can bring the light at the language layer, while muskrat brings up the mud that makes land exist in the first place.
 
 ### Design goals
 
