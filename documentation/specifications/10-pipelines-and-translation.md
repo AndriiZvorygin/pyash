@@ -349,6 +349,9 @@ from name <refinery> be refinery do
 If both `ob` and `from name` are omitted, the runtime MUST resolve the refinery
 name from memory and run that refinery.
 
+Note: the surface form is `from name <refinery>` (a name). Do not write
+`from name text`; that is only an internal signature typing detail.
+
 ### Task binding
 
 If `ob` is provided, the runtime SHOULD bind the task into memory as:
