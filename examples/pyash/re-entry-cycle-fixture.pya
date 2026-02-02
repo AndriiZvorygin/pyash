@@ -1,8 +1,8 @@
 exists su name author prompter ob text "Draft: be concise and friendly." be text ya
-exists su name reviewer prompter ob text "Review: check if the draft fulfills the task. Return JSON with REASONING bullets and SCORE PASS|FAIL." be text ya
+exists su name reviewer prompter ob text "Review: check if the draft fulfills the input. Return JSON with REASONING bullets and SCORE PASS|FAIL." be text ya
 exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
 exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext name reviewer prompter ya
 from filename "../../module/re_entry_cycle.pya" ob name re-entry cycle to name re-entry cycle be import do
-exists su name task ob text "Write a short greeting." be text ya
+exists su name input ob text "Write a short greeting." be text ya
 fromindex num 0 toindex num 0 to name text result be re-entry cycle do
 ob name result be write do
