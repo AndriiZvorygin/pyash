@@ -8,11 +8,11 @@ import { forget, remember } from "../program/remember/index.mjs";
 test("inline refinery call stores final result to target", async () => {
   forget();
 
-  await interpret(parse("su name demo refinery be refinery def"));
+  await interpret(parse("su name demo be refinery def"));
   await interpret(parse('su name step ob text "ok" be write do'));
   await interpret(parse("prah"));
 
-  await interpret(parse('ob text "task" from name demo refinery to name text output be refinery do'));
+  await interpret(parse('ob text "task" from name demo to name text output be refinery do'));
 
   const output = remember("output");
   assert.ok(output);
@@ -22,11 +22,11 @@ test("inline refinery call stores final result to target", async () => {
 test("inline refinery call works with from name only", async () => {
   forget();
 
-  await interpret(parse("su name demo refinery be refinery def"));
+  await interpret(parse("su name demo be refinery def"));
   await interpret(parse('su name step ob text "ok" be write do'));
   await interpret(parse("prah"));
 
-  await interpret(parse("from name demo refinery be refinery do"));
+  await interpret(parse("from name demo be refinery do"));
   const result = remember("result");
   assert.equal(result?.ob?.text, "ok");
 });
