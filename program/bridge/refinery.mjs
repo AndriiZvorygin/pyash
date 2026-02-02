@@ -354,9 +354,12 @@ export async function runRefinery({
       });
     }
     let decision = "";
+    let decisionRaw = "";
     if (typeof resume.decision === "boolean") {
       decision = resume.decision ? "truth" : "lie";
+      decisionRaw = decision;
     } else if (typeof resume.decision === "string") {
+      decisionRaw = resume.decision;
       decision = resume.decision.toLowerCase();
     }
     if (decision !== "truth" && decision !== "lie") {
@@ -387,7 +390,9 @@ export async function runRefinery({
       platformName: parsed.step || null,
       index: typeof parsed.index === "number" ? parsed.index : -1,
       decision,
-      decisionName: parsed.decision || null
+      decisionRaw,
+      decisionName: parsed.decision || null,
+      token: rawToken ?? null
     };
     if (resumeGate.index >= 0) {
       for (let i = 0; i < resumeGate.index; i += 1) {
@@ -453,6 +458,16 @@ export async function runRefinery({
             su: { name: nextName },
             ob: { boolean: resumeGate.decision === "truth" }
           };
+          if (resumeGate.decisionRaw) {
+            decisionSentence.totext = { text: resumeGate.decisionRaw };
+          }
+          if (resumeGate.token) {
+            decisionSentence.accordingto = { name: "resume token" };
+            decisionSentence.fromtext = { text: resumeGate.token };
+          }
+          if (resumeGate.decisionName) {
+            decisionSentence.to = { name: resumeGate.decisionName };
+          }
           if (onResult) onResult(decisionSentence);
           lastResult = decisionSentence;
           results.set(nextName, sentenceToPyash(decisionSentence));
