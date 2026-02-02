@@ -12,6 +12,13 @@
 * **Web search v0.1 spec + MVP**: `be search` with `fromstate wo web`, fixture-backed quiz, and example.
 * **Vision-language `see` module** wires `module/see_vl.pya` to `command/see_vl_runner.mjs`, posts Ollama chat completions with data-URL images, and ships a fixture-backed quiz plus updated spec notes.
 
+### Jan 24–31, 2026: Agent harness research path complete
+
+* **Tool-calling mind adapter** in place with interpreter/JS/C parity (Jan 24).
+* **Download verb + yt-dlp backend** for web/file/media retrieval (Jan 24).
+* **Web search v0.1** wired to default searxng (Jan 30).
+* **Read-to-markdown pipeline** for HTML/PDF (GFM default) with examples (Jan 31).
+
 ### Jan 29, 2026: Spec consolidation into numbered chapters
 
 * **Merged specification files** into chaptered docs under `documentation/specifications/` to stay under model file limits.
