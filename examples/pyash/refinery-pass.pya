@@ -2,3 +2,4 @@ su name line be refinery def
 su name alpha ob text "a" be write do
 su name beta ob text "b" be write do
 prah
+from name line be refinery do

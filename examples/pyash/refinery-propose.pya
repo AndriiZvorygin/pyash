@@ -1,0 +1,6 @@
+su name gate be refinery def
+su name check ob text "Approve this run?" be command propose
+su name after ob text "After approval." be write do
+prah
+
+from name gate be refinery do
