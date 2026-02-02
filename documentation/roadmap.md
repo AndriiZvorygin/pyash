@@ -14,15 +14,12 @@
 Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.
 
 Must-have:
-* Tool-calling mind adapter: request/execute tools, return tool results, and continue the exchange.
-* Web research pipeline: search → download → read (HTML/PDF) → markdown (GFM default).
 * Workspace write sandbox (agent output dir).
 * Command runner tool exposed to agents (streaming output supported).
 
 Nice-to-have:
-* Link-preserving PDF extraction path (pdftohtml → markdown).
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
-* Helper examples: search+download+read, review loop, code edit loop.
+* Helper examples: review loop, code edit loop.
 
 ## Jan 29, 2026: Recent maintenance (not a roadmap milestone)
 
