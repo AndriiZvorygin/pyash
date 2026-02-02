@@ -62,20 +62,21 @@ export function handleRefineryDefinition({
     seen.add(platformName);
     let deps = [];
     let action = null;
-    if (entry.from) {
-      if (!entry.from?.ve || entry.from.ve.type !== "name" || !Array.isArray(entry.from.ve.values)) {
-        throwErrorSentence({
-          name: "depend defective",
-          message: "depend list must be from ve name ...",
-          from: { name: "compile" },
-          raw: entry.from
-        });
-      }
+    if (entry.from?.ve?.type === "name" && Array.isArray(entry.from.ve.values)) {
       deps = entry.from.ve.values.map((value) => String(value));
+    } else if (entry.from && (entry.from.filename || entry.from.text || entry.from.name)) {
+      // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
+    } else if (entry.from) {
+      throwErrorSentence({
+        name: "depend defective",
+        message: "depend list must be from ve name ...",
+        from: { name: "compile" },
+        raw: entry.from
+      });
     }
     if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
     action = { ...entry };
-    if (action.from) delete action.from;
+    if (action.from?.ve?.type === "name") delete action.from;
     platforms.push({ name: platformName, deps, action });
     priorName = platformName;
   }
