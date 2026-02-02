@@ -150,6 +150,7 @@ async function main() {
   let refineryName = refineryFlag ?? null;
   let checkpointIndex = null;
   const isInteractive = process.stdout?.isTTY === true && process.stdin?.isTTY === true;
+  let pendingToolEvoked = null;
 
   const toResultSentence = (res, fallbackSentence) => {
     if (res?.mood && res?.be) return res;
@@ -299,7 +300,6 @@ async function main() {
     checkpointIndex = await loadCheckpointIndex({ runId, cwd: process.cwd() });
   }
   if (!runError && refineryName) {
-    let pendingToolEvoked = null;
     try {
       refineryResult = await runRefineryWithCallbacks();
     } catch (err) {
