@@ -164,11 +164,11 @@ async function main() {
   const promptDecision = async (promptText) => {
     const rl = readline.createInterface({ input, output });
     try {
-      // Default to "no" on empty input for safety.
+      // Default to "lie" on empty input for safety.
       const answer = await rl.question(`${promptText} [y/N] `);
       const normalized = answer.trim().toLowerCase();
-      if (normalized === "y" || normalized === "yes") return "yes";
-      if (normalized === "n" || normalized === "no" || normalized === "") return "no";
+      if (normalized === "y" || normalized === "yes") return "truth";
+      if (normalized === "n" || normalized === "no" || normalized === "") return "lie";
       return null;
     } finally {
       rl.close();
@@ -177,11 +177,12 @@ async function main() {
 
   const recordDecision = (decisionName, decisionText) => {
     if (!decisionName) return;
+    const decisionBool = decisionText === "truth";
     const decisionSentence = {
       mood: "ya",
-      be: "text",
+      be: "bool",
       su: { name: decisionName },
-      ob: { text: decisionText }
+      ob: { boolean: decisionBool }
     };
     doRemember(decisionSentence);
     pushNewspaper(sentenceToPyash(decisionSentence));
@@ -246,22 +247,22 @@ async function main() {
       const surfaced = surfaceErrorSentence(resultSentence);
       if (isToolCall && surfaced?.mood) emitToolEvent(embedded, sentenceToPyash(surfaced));
       pushNewspaper(sentenceToPyash(surfaced));
-      if (surfaced?.mood === "ya" && surfaced?.be === "propose" && isInteractive) {
+      if (surfaced?.mood === "do" && surfaced?.be === "ratify" && isInteractive) {
         let decision = null;
         const promptText = surfaced?.ob?.text ?? "Approve?";
         while (decision === null) {
           decision = await promptDecision(promptText);
         }
-        if (decision !== "yes") {
+        if (decision !== "truth") {
           const errorSentence = {
             mood: "ya",
             be: "error",
-            su: { name: "proposal declined" },
+            su: { name: "ratification declined" },
             ob: { text: promptText },
             from: { name: surfaced?.from?.name ?? "refinery" }
           };
           pushNewspaper(sentenceToPyash(errorSentence));
-          const err = new Error("proposal declined");
+          const err = new Error("ratification declined");
           err.sentence = errorSentence;
           runError = err;
           break;
@@ -311,22 +312,22 @@ async function main() {
     }
   }
 
-  while (!runError && refineryResult?.mood === "ya" && refineryResult?.be === "propose" && isInteractive) {
+  while (!runError && refineryResult?.mood === "do" && refineryResult?.be === "ratify" && isInteractive) {
     let decision = null;
     const promptText = refineryResult?.ob?.text ?? "Approve?";
     while (decision === null) {
       decision = await promptDecision(promptText);
     }
-    if (decision !== "yes") {
+    if (decision !== "truth") {
       const errorSentence = {
         mood: "ya",
         be: "error",
-        su: { name: "proposal declined" },
+        su: { name: "ratification declined" },
         ob: { text: promptText },
         from: { name: refineryName ?? "refinery" }
       };
       pushNewspaper(sentenceToPyash(errorSentence));
-      const err = new Error("proposal declined");
+      const err = new Error("ratification declined");
       err.sentence = errorSentence;
       runError = err;
       break;
