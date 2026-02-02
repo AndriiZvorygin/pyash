@@ -24,7 +24,7 @@ test("refinery retries on error and records reiterate", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [
     "su name line be refinery def",
-    "su name flaky ob la ob text \"\" be command do ko be platform ya",
+    "su name flaky ob text \"\" be command do",
     "prah",
     ""
   ].join("\n"), "utf8");

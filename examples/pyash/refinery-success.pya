@@ -1,5 +1,5 @@
 su name line be refinery def
-exists su name beta ob la ob text "b" be write do ko be platform ya
-exists su name alpha ob la ob text "a" be write do ko be platform ya
-exists su name delta ob la ob text "d" be write do ko be platform ya
+su name beta ob text "b" be write do
+su name alpha ob text "a" be write do
+su name delta ob text "d" be write do
 prah

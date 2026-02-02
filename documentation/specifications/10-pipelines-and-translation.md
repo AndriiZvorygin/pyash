@@ -15,7 +15,7 @@ Merged specification sources (legacy IDs):
 
 ## 1. Purpose
 
-Define refinery execution: a runner-controlled way to execute a set of named platforms with explicit depend lists, using normal Pyash sentences as the activity for each platform.
+Define refinery execution: a runner-controlled way to execute a set of named steps (series entries) with explicit depend lists, using normal Pyash sentences as the activity for each step.
 
 This spec exists to make multi-step runs:
 
@@ -33,7 +33,7 @@ first-class sentence inside the program.
 This spec defines:
 
 - refinery declaration form
-- platform declaration form
+- series entry form
 - depend rules and deterministic scheduling
 - failure policy
 - interaction with run newspaper and again mode
@@ -46,11 +46,11 @@ This spec defines:
 
 ## 2. Terms
 
-refinery — a named collection of platform declarations executed by a runner
+refinery — a named collection of series entries executed by a runner
 
-platform — one named unit of refinery work
+platform — one named unit of refinery work (a series entry)
 
-activity — the sentence (embedded in la … ko) that the runner evaluates for a platform
+activity — the sentence the runner evaluates for a platform (the series entry itself)
 
 depend — a platform name that MUST complete before another platform may start
 
@@ -78,7 +78,7 @@ The runner MUST NOT rewrite platform activities. Activities are evaluated as nor
 
 
 3. Definition does not execute activities
-A refinery definition is declarative: activities inside ob la … ko are not executed at definition time. They are executed only when the runner runs the refinery.
+A refinery definition is declarative: series entries inside the refinery block are not executed at definition time. They are executed only when the runner runs the refinery.
 
 
 4. Newspaper is optional
@@ -101,7 +101,7 @@ The words refinery and platform are reserved for refinery declarations and MUST 
 
 be refinery def … prah is a declaration form.
 
-be platform ya is a declaration entry form inside a refinery.
+Series entries inside a refinery are normal sentences with `su name` and optional `from ve name ...` depend lists.
 
 
 If an implementation supports user-defined ceremonies named refinery or platform, that support MUST be gated off while parsing refinery blocks (the declaration meaning wins inside the refinery).
@@ -121,7 +121,7 @@ A refinery is declared as:
 
 su name <refinery> be refinery def
 
-followed by one or more platform declarations
+followed by one or more series entries
 
 ending with prah
 
@@ -229,7 +229,7 @@ Each step map MAY contain:
 
 1. Load JSON/YAML into a Pyash json map def (per `06-data-formats.md`).
 2. Convert each step into a platform activity sentence:
-   * `command` is parsed into a sentence and embedded in `ob la ... ko`.
+   * `command` is parsed into a sentence and used as the series entry body (no `ob la ... ko` wrapper).
    * `approval: required` injects a `propose` gate activity.
 3. `stdin` and `env` are expanded as subordinate clauses on the activity sentence.
 4. `condition` determines whether the platform is scheduled (runner policy).
@@ -494,36 +494,90 @@ run into a minimal `.pya` reproduction while preserving the failure.
 
 ```
 su name error sieve demo be refinery def
-exists su name reduce
-  ob la
-    ob name source to name output be error sieve do
-  ko
-  be platform ya
+su name reduce ob name source to name output be error sieve do
 prah
 ```
 
 This spec defines the reducer loop at a high level; an implementation may
 introduce an inline `be error sieve do` verb or a runner policy in a future revision.
 
+---
+
+## 5.7 Success sieve (draft v0.1)
+
+The success sieve is a reduction process that shrinks a *passing* program or
+run into a minimal `.pya` reproduction while preserving success criteria.
+
+Unlike the error sieve, success preservation may require a judgment step when
+outputs are stochastic (e.g., mind responses). Implementations MAY use an LLM
+judge to evaluate equivalence or success.
+
+### Purpose
+
+* produce the smallest example that still **passes**
+* enable compact “golden” examples for docs and regression tests
+* preserve behavioral equivalence when exact output matching is unreliable
+
+### Inputs
+
+* original program source (`.pya`) and an optional clone file (working copy)
+* a success verifier:
+  - deterministic check (exit code, exact output match, structured facts), or
+  - a judge policy (LLM or heuristic) that returns PASS/FAIL
+* optional constraints (minimum sentences, keep module imports, fixed seeds)
+* `atmost num` — maximum number of reduction attempts
+
+### Required behavior
+
+1. **Deterministic selection**
+   Given the same input, verifier, and judge policy, the reducer must produce
+   the same minimized output. If an LLM judge is used, the judge prompt and
+   decision MUST be recorded.
+
+2. **Monotonic shrinking**
+   The reducer only removes or simplifies sentences; it does not invent new
+   program content.
+
+3. **Success preservation**
+   A reduction step is accepted only if the verifier still passes. When a
+   judge is used, the judge decision MUST be PASS for acceptance.
+
+4. **Recorded trace**
+   Each reduction step and verdict is recorded in the run newspaper when
+   enabled, including the judge payload and verdict if applicable.
+
+### Output
+
+* `repro.pya` — minimized passing program
+* `report.pya` — reduction report (optional, derived from newspaper)
+
+### Minimal example (conceptual)
+
+```
+su name success sieve demo be refinery def
+su name reduce ob name source to name output be success sieve do
+prah
+```
+
+This spec defines the reducer loop at a high level; an implementation may
+introduce an inline `be success sieve do` verb or a runner policy in a future revision.
+
 
 ---
 
-## 6. Platform declaration (official)
+## 6. Series entry (official)
 
-Each platform is declared by a single sentence inside the refinery block.
+Each platform is declared by a single **series entry** sentence inside the refinery block.
 
-### 6.1 Platform sentence form
+### 6.1 Series entry form
 
-A platform declaration is a sentence with:
+A series entry is a normal sentence with:
 
 su name <platform> (required)
 
 from ve name <dep0> <dep1> ... (optional depend list)
 
-ob la <activity sentence> ko (required activity)
-
-be platform ya
-
+<activity sentence> (required; the rest of the sentence)
 
 Rules:
 
@@ -531,10 +585,7 @@ Rules:
 
 The depend list is carried in from ve name ... as a vector of platform names.
 
-The activity is embedded using subordinate clauses (01-sentence-and-grammar.md) in ob la … ko.
-
-The embedded activity MAY include an embedded mood token per subordinate clause policy. The runner MUST preserve the embedded structure when recording.
-
+The activity is the sentence itself (no ob la … ko wrapper). The runner MUST preserve the sentence when recording.
 
 ### 6.2 Uniqueness
 
@@ -543,10 +594,10 @@ Platform names within a refinery MUST be unique. Duplicate platform names are an
 ### 6.3 Examples
 
 Platform with no depend list:
-su name parse ob la su name src ob text "data/input.csv" be load ya ko be platform ya
+su name parse ob text "data/input.csv" be load do
 
 Platform that depends on parse:
-su name compile from ve name parse ob la su name ast vyah eval be compile ya ko be platform ya
+su name compile from ve name parse ob text "ok" be write do
 
 
 ---
@@ -763,7 +814,7 @@ An implementation conforms to this spec if it:
 
 parses refinery def / prah blocks
 
-parses platform declarations with su name, optional from ve name ..., and ob la … ko
+parses series entries with su name and optional from ve name ...
 
 treats refinery and platform as reserved declaration verbs inside refinery declarations
 

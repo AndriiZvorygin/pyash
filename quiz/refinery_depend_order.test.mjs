@@ -23,10 +23,10 @@ test("refinery runner respects depend ordering", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [
     "su name build be refinery def",
-    "su name alpha ob la ob text \"alpha\" be write do ko be platform ya",
-    "su name beta from ve name alpha ob la ob text \"beta\" be write do ko be platform ya",
-    "su name gamma from ve name alpha ob la ob text \"gamma\" be write do ko be platform ya",
-    "su name zeta from ve name beta gamma ob la ob text \"zeta\" be write do ko be platform ya",
+    "su name alpha ob text \"alpha\" be write do",
+    "su name beta from ve name alpha ob text \"beta\" be write do",
+    "su name gamma from ve name alpha ob text \"gamma\" be write do",
+    "su name zeta from ve name beta gamma ob text \"zeta\" be write do",
     "prah",
     ""
   ].join("\n"), "utf8");
@@ -44,7 +44,7 @@ test("refinery runner respects depend ordering", async () => {
   const newspaperPath = path.join(tmpDir, "newspaper", "run-refinery-deps.pya");
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
-  const evokes = lines.filter(line => line.startsWith("ob la ob text") && line.includes("be write do ko be evoke ya"));
+  const evokes = lines.filter(line => line.startsWith("ob la su name") && line.includes("be write do ko be evoke ya"));
   const order = evokes.map(line => {
     if (line.includes("\"alpha\"")) return "alpha";
     if (line.includes("\"beta\"")) return "beta";

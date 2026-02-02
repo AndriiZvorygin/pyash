@@ -68,9 +68,9 @@ su text "be rel bump do" ob text "" ya
 su text "be second bump do" ob text "" ya
 su text "exists su name a ob num 1 be number ya" ob text "a есть число 1." ya
 su text "exists su name acc ob be number ya" ob text "" ya
-su text "exists su name alpha ob la ob text \"a\" be write do ko be platform ya" ob text "" ya
+su text "su name alpha ob text \"a\" be write do" ob text "" ya
 su text "exists su name base ob date today be date ya" ob text "base есть дата today." ya
-su text "exists su name beta ob la ob text \"b\" be write do ko be platform ya" ob text "" ya
+su text "su name beta ob text \"b\" be write do" ob text "" ya
 su text "exists su name bucket ob num 0 be number ya" ob text "bucket есть число 0." ya
 su text "exists su name cmd ob text \"ffmpeg -y -f \" be text ya" ob text "cmd есть текст \"ffmpeg -y -f \"." ya
 su text "exists su name collector ob num 1 be number ya" ob text "collector есть число 1." ya
@@ -80,8 +80,8 @@ su text "exists su name collector ob num 7 be number ya" ob text "collector ес
 su text "exists su name composite ob ve bool lie by num 10 be vector ya" ob text "composite есть вектор." ya
 su text "exists su name composite ob ve bool lie by num 100 be vector ya" ob text "composite есть вектор." ya
 su text "exists su name counter ob num 0 be number ya" ob text "counter есть число 0." ya
-su text "exists su name crash ob la ob text \"boom\" be unknown do ko be platform ya" ob text "" ya
-su text "exists su name delta ob la ob text \"d\" be write do ko be platform ya" ob text "" ya
+su text "su name crash ob text \"boom\" be unknown do" ob text "" ya
+su text "su name delta ob text \"d\" be write do" ob text "" ya
 su text "exists su name depend during date 2025-05-01 be reform ya" ob text "" ya
 su text "exists su name door ob be number ya" ob text "" ya
 su text "exists su name doorNum ob be number ya" ob text "" ya
@@ -91,8 +91,8 @@ su text "exists su name doors ob ve bool truth lie truth be vector ya" ob text "
 su text "exists su name doors ob ve num 0 0 0 0 0 0 0 0 0 0 be vector ya" ob text "doors есть вектор." ya
 su text "exists su name doors ob ve num 0 by num 100 be vector ya" ob text "doors есть вектор." ya
 su text "exists su name doors ob ve num 3 1 0 be vector ya" ob text "doors есть вектор." ya
-su text "exists su name draft ob la su name lines ob text \"Reply in one short sentence.\" to name text mind-out for name mind be write do ko from ve name listen be platform ya" ob text "" ya
-su text "exists su name draft ob la su name lines ob text \"Write three short sentences about rain.\" to name text mind-out for name mind be write do ko be platform ya" ob text "" ya
+su text "su name draft from ve name listen ob text \"Reply in one short sentence.\" to name text mind-out for name mind be write do" ob text "" ya
+su text "su name draft ob text \"Write three short sentences about rain.\" to name text mind-out for name mind be write do" ob text "" ya
 su text "exists su name ffmpeg input device ob text \"anullsrc=r=16000:cl=mono\" be default ya" ob text "" ya
 su text "exists su name ffmpeg input ob text \"lavfi\" be default ya" ob text "" ya
 su text "exists su name generator from name http://localhost:11434 be mind ya" ob text "" ya
@@ -112,9 +112,9 @@ su text "exists su name lhs ob num 5 be number ya" ob text "lhs есть чис�
 su text "exists su name lhs ob num 6 be number ya" ob text "lhs есть число 6." ya
 su text "exists su name lhs ob num 8 be number ya" ob text "lhs есть число 8." ya
 su text "exists su name line ob text \"\" be text ya" ob text "line есть текст \"\"." ya
-su text "exists su name listen ob la su name transcript from filename artifacts/hear/talk-loop-input.wav be hear do ko be platform ya" ob text "" ya
-su text "exists su name listen ob la su name transcript from filename artifacts/say/refinery-fixture.wav be hear do ko from ve name speak be platform ya" ob text "" ya
-su text "exists su name listen ob la su name transcript from filename artifacts/say/refinery.wav be hear do ko from ve name speak be platform ya" ob text "" ya
+su text "su name listen from filename artifacts/hear/talk-loop-input.wav be hear do" ob text "" ya
+su text "su name listen from ve name speak from filename artifacts/say/refinery-fixture.wav be hear do" ob text "" ya
+su text "su name listen from ve name speak from filename artifacts/say/refinery.wav be hear do" ob text "" ya
 su text "exists su name mcp time ob text \"uvx\" by ve text mcp-server-time ya" ob text "" ya
 su text "exists su name mind be mind ya" ob text "" ya
 su text "exists su name nums ob ve num 1 2 3 be vector ya" ob text "nums есть вектор." ya
@@ -137,18 +137,18 @@ su text "exists su name qwenbot from name http://localhost:11434 as name qwen3-v
 su text "exists su name record ob la su name clause ob name example be text ya ko be note ya" ob text "" ya
 su text "exists su name rem3 ob num 0 be number ya" ob text "rem3 есть число 0." ya
 su text "exists su name rem5 ob num 0 be number ya" ob text "rem5 есть число 0." ya
-su text "exists su name report ob la ob name transcript be write do ko from ve name listen be platform ya" ob text "" ya
+su text "su name report from ve name listen ob name transcript be write do" ob text "" ya
 su text "exists su name result ob num 5 be number ya" ob text "result есть число 5." ya
 su text "exists su name rhs ob num 5 be number ya" ob text "rhs есть число 5." ya
 su text "exists su name say ob name say be default ya" ob text "" ya
 su text "exists su name seen-fromindex ob num 0 be number ya" ob text "seen-fromindex есть число 0." ya
 su text "exists su name seen-toindex ob num 0 be number ya" ob text "seen-toindex есть число 0." ya
 su text "exists su name source ob text  __QUOTED_BLOCK__  be text ya" ob text "source есть текст \"__QUOTED_BLOCK__\"." ya
-su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/refinery-fixture.wav be say do ko from ve name draft be platform ya" ob text "" ya
-su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/refinery.wav be say do ko from ve name draft be platform ya" ob text "" ya
-su text "exists su name speak ob la su name audio ob name mind-out to filename artifacts/say/talk-loop-smoke.wav be say do ko from ve name draft be platform ya" ob text "" ya
-su text "exists su name speak ob la su name voice ob name mind-out vyah stream be say do ko from ve name draft be platform ya" ob text "" ya
-su text "exists su name stop ob la su name voice vyah cancel be say do ko from ve name speak be platform ya" ob text "" ya
+su text "su name speak from ve name draft ob name mind-out to filename artifacts/say/refinery-fixture.wav be say do" ob text "" ya
+su text "su name speak from ve name draft ob name mind-out to filename artifacts/say/refinery.wav be say do" ob text "" ya
+su text "su name speak from ve name draft ob name mind-out to filename artifacts/say/talk-loop-smoke.wav be say do" ob text "" ya
+su text "su name speak from ve name draft ob name mind-out vyah stream be say do" ob text "" ya
+su text "su name stop from ve name speak ob name voice vyah cancel be say do" ob text "" ya
 su text "exists su name stream stdout ob bool lie be default ya" ob text "" ya
 su text "exists su name stream stdout ob bool truth be default ya" ob text "" ya
 su text "exists su name switches ob ve bool truth lie truth be vector ya" ob text "switches есть вектор." ya

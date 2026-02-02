@@ -277,7 +277,7 @@ export async function interpret(sentence) {
   if (!insideRefinery && mood === "ya" && be === "platform") {
     throwErrorSentence({
       name: "refinery defective",
-      message: "platform outside refinery",
+      message: "platform declarations are deprecated; use series entries",
       from: { name: "interpret" },
       raw: sentence
     });

@@ -37,12 +37,12 @@ test("runjs refinery newspaper records platform evoke/result", async () => {
   const evokes = lines.filter(line => line.includes("be evoke ya"));
   const results = lines.filter(line => line.includes("be write do"));
 
-  const evokeA = "ob la ob text \"a\" be write do ko be evoke ya";
-  const evokeB = "ob la ob text \"b\" be write do ko be evoke ya";
+  const evokeA = "ob la su name alpha ob text \"a\" be write do ko be evoke ya";
+  const evokeB = "ob la su name beta ob text \"b\" be write do ko be evoke ya";
   assert.ok(evokes.includes(evokeA));
   assert.ok(evokes.includes(evokeB));
-  assert.ok(results.includes("ob text \"a\" be write do"));
-  assert.ok(results.includes("ob text \"b\" be write do"));
+  assert.ok(results.includes("su name alpha ob text \"a\" be write do"));
+  assert.ok(results.includes("su name beta ob text \"b\" be write do"));
 
   assert.ok(lines.indexOf(evokeA) < lines.indexOf(evokeB));
 });

@@ -1,7 +1,7 @@
 exists su say be default ob name say ya
 su name loop be refinery def
-exists su name listen ob la su name transcript from filename "artifacts/hear/talk-loop-input.wav" be hear do ko be platform ya
-exists su name draft from ve name listen ob la su name lines ob text "Reply in one short sentence." for name mind to name text mind-out be write do ko be platform ya
-exists su name speak from ve name draft ob la su name voice ob name mind-out be say vyah stream do ko be platform ya
-exists su name stop from ve name speak ob la su name voice be say vyah cancel do ko be platform ya
+su name listen from filename "artifacts/hear/talk-loop-input.wav" be hear do
+su name draft from ve name listen ob text "Reply in one short sentence." for name mind to name text mind-out be write do
+su name speak from ve name draft ob name mind-out be say vyah stream do
+su name stop from ve name speak ob name voice vyah cancel be say do
 prah

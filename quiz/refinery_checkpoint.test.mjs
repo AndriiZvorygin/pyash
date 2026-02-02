@@ -14,7 +14,7 @@ test("refinery checkpoints reuse prior results", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [
     "su name line be refinery def",
-    "su name writeout ob la ob text \"alpha\" to filename \"out.txt\" be write do ko be platform ya",
+    "su name writeout ob text \"alpha\" to filename \"out.txt\" be write do",
     "prah",
     ""
   ].join("\n"), "utf8");

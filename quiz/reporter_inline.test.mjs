@@ -15,9 +15,8 @@ test("reporter extracts report from in-memory newspaper", async () => {
     "exists su name sample-run from time 2026-01-30T00:00:00.000Z be run ya",
     "ob filename /workplace be run root ya",
     "su name demo be refinery def",
-    "exists su name step ob la exists su name marker ob text \"ok\" be text ya ko be platform ya",
     "prah",
-    "su name step ob text \"deadbeef\" from name demo to la exists su name marker ob text \"ok\" be text ya ko be checkpoint ya"
+    "su name step ob text \"deadbeef\" from name demo to la su name step ob text \"ok\" be write ya ko be checkpoint ya"
   ]);
 
   await reporter({ mood: "do", be: "reporter", to: { name: "report out", nameTypeWords: ["text"] } });
