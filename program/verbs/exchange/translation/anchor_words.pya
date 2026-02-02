@@ -5,4 +5,5 @@ su name containers ob text "container" as wo noun ya
 su name reviewer ob text "review" as wo verb ya
 su name searching ob text "search" as wo verb ya
 su name places ob text "place" as wo noun ya
+su name ratification ob text "ratify" as wo verb ya
 prah
