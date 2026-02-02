@@ -5,3 +5,5 @@ su name draft from ve name listen ob text "Reply in one short sentence." for nam
 su name speak from ve name draft ob name mind-out be say vyah stream do
 su name stop from ve name speak ob name voice vyah cancel be say do
 prah
+
+from name loop be refinery do

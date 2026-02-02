@@ -4,3 +4,5 @@ su name alpha ob text "a" be write do
 su name crash ob text "boom" be unknown do
 su name delta ob text "d" be write do
 prah
+
+from name line be refinery do

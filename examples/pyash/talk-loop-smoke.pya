@@ -3,3 +3,5 @@ su name listen from filename "artifacts/hear/talk-loop-input.wav" be hear do
 su name draft from ve name listen ob text "Reply in one short sentence." for name mind to name text mind-out be write do
 su name speak from ve name draft ob name mind-out to filename "artifacts/say/talk-loop-smoke.wav" be say do
 prah
+
+from name loop be refinery do
