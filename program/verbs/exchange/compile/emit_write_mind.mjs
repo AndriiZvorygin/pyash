@@ -46,7 +46,8 @@ export function handleMindWrite(context, helpers) {
       }
     }
   }
-  if (agentCwd) {
+  if (sentence.with?.name && agentCwd) {
+    lines.push("globalThis[\"agent sandbox\"] = { su: { name: \"agent sandbox\" }, ob: { boolean: true }, be: \"truth\", mood: \"ya\" };");
     lines.push(`globalThis["agent cwd"] = { su: { name: "agent cwd" }, ob: { filename: ${JSON.stringify(String(agentCwd))} }, be: "cwd", mood: "ya" };`);
   }
   lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);

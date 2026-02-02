@@ -877,10 +877,10 @@ be download ob wo all during months 1 from filename "https://www.youtube.com/@An
 
 ## Agent CWD enforcement
 
-If `su name agent cwd` is defined (usually via a mind call `at filename <path>`),
-the runtime MUST treat it as the allowed root for destructive file operations.
-Relative paths are resolved under this directory; absolute paths outside it MUST
-error.
+If `su name agent sandbox` is truth and `su name agent cwd` is defined (typically
+via a mind call `at filename <path>` with tools enabled), the runtime MUST treat
+that directory as the allowed root for destructive file operations. Relative paths
+are resolved under this directory; absolute paths outside it MUST error.
 
 Applies to: `write`, `download`, `delete`, `copy`, `touch`.
 
