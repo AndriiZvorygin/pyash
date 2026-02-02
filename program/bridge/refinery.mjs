@@ -383,6 +383,9 @@ export async function runRefinery({
   }
   const resolveResultSentence = (value, fallbackSentence) => {
     if (value?.mood && value?.be) return value;
+    if (value?.be && value?.ob !== undefined) {
+      return { ...value, mood: "ya" };
+    }
     if (value?.sentence?.mood && value?.sentence?.be) return value.sentence;
     if (value?.result?.mood && value?.result?.be) return value.result;
     if (value?.result !== undefined && fallbackSentence?.be) {
