@@ -193,6 +193,6 @@ test("unknown imperative verb throws", async () => {
 test("plus missing roles triggers signature error", async () => {
   forget();
 
-  await assert.rejects(() => run("ob num 1 be plus do"), /plus: to is required/);
+  await assert.rejects(() => run("ob num 1 be plus do"), /plus: to or from is required/);
   await assert.rejects(() => run("to name target be plus do"), /plus: ob is required/);
 });
