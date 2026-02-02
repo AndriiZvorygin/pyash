@@ -209,6 +209,9 @@ The decision is expressed as a boolean. A compatible surfaced decision sentence 
 su name <platform>
 ob bool truth|lie
 be ratify ya
+totext text "<raw input>"
+accordingto name "resume token"
+fromtext text "<resume-token>"
 ```
 
 Runners MAY accept equivalent decision payloads, but MUST interpret `truth` as

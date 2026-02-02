@@ -167,8 +167,8 @@ async function main() {
       // Default to "lie" on empty input for safety.
       const answer = await rl.question(`${promptText} [y/N] `);
       const normalized = answer.trim().toLowerCase();
-      if (normalized === "y" || normalized === "yes") return "truth";
-      if (normalized === "n" || normalized === "no" || normalized === "") return "lie";
+      if (normalized === "y" || normalized === "yes") return { decision: "truth", raw: answer };
+      if (normalized === "n" || normalized === "no" || normalized === "") return { decision: "lie", raw: answer };
       return null;
     } finally {
       rl.close();
@@ -249,9 +249,14 @@ async function main() {
       pushNewspaper(sentenceToPyash(surfaced));
       if (surfaced?.mood === "do" && surfaced?.be === "ratify" && isInteractive) {
         let decision = null;
+        let decisionRaw = "";
         const promptText = surfaced?.ob?.text ?? "Approve?";
         while (decision === null) {
-          decision = await promptDecision(promptText);
+          const decisionResult = await promptDecision(promptText);
+          if (decisionResult) {
+            decision = decisionResult.decision;
+            decisionRaw = decisionResult.raw ?? "";
+          }
         }
         if (decision !== "truth") {
           const errorSentence = {
@@ -273,7 +278,7 @@ async function main() {
         const resumeRefinery = surfaced?.from?.name ?? null;
         if (resumeRefinery) {
           try {
-            const resumed = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision }, nameOverride: resumeRefinery });
+            const resumed = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision, raw: decisionRaw }, nameOverride: resumeRefinery });
             if (resumed?.be) {
               doRemember({
                 mood: resumed?.mood ?? "ya",
@@ -314,9 +319,14 @@ async function main() {
 
   while (!runError && refineryResult?.mood === "do" && refineryResult?.be === "ratify" && isInteractive) {
     let decision = null;
+    let decisionRaw = "";
     const promptText = refineryResult?.ob?.text ?? "Approve?";
     while (decision === null) {
-      decision = await promptDecision(promptText);
+      const decisionResult = await promptDecision(promptText);
+      if (decisionResult) {
+        decision = decisionResult.decision;
+        decisionRaw = decisionResult.raw ?? "";
+      }
     }
     if (decision !== "truth") {
       const errorSentence = {
@@ -336,7 +346,7 @@ async function main() {
     recordDecision(decisionName, decision);
     const resumeToken = refineryResult?.fromtext?.text ?? null;
     try {
-      refineryResult = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision } });
+      refineryResult = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision, raw: decisionRaw } });
     } catch (err) {
       const surfaced = surfaceErrorSentence(err?.sentence ?? err);
       if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
