@@ -1,0 +1,6 @@
+su name pipe be refinery def
+su name seed ob text "echo hello" to name text seed stdout be command do
+su name echo from ve name seed ob text "cat" to name text echo stdout fromtext text of seed stdout be command do
+su name show from ve name echo ob name echo stdout be write do
+prah
+from name pipe be refinery do

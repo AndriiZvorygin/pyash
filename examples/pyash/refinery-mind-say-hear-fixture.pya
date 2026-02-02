@@ -1,7 +1,7 @@
 su name loop be refinery def
 su name draft ob text "Write three short sentences about rain." for name mind to name text mind-out be write do
 su name speak from ve name draft ob name mind-out to filename "artifacts/say/refinery-fixture.wav" be say do
-su name listen from ve name speak from filename "artifacts/say/refinery-fixture.wav" be hear do
+su name listen from ve name speak from filename "artifacts/say/refinery-fixture.wav" to name text transcript be hear do
 su name report from ve name listen ob name transcript be write do
 prah
 

@@ -126,15 +126,20 @@ async function startMcpClient({ record, source }) {
     if (!Number.isFinite(startTimeoutMs) || startTimeoutMs <= 0) {
       return client.send(method, params);
     }
-    return await Promise.race([
-      client.send(method, params),
-      new Promise((_, reject) => {
-        const timer = setTimeout(() => {
-          clearTimeout(timer);
-          reject(new Error(`mcp ${label} timeout`));
-        }, startTimeoutMs);
-      })
-    ]);
+    let timer;
+    try {
+      return await Promise.race([
+        client.send(method, params),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            clearTimeout(timer);
+            reject(new Error(`mcp ${label} timeout`));
+          }, startTimeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   };
 
   try {

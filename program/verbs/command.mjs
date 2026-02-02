@@ -151,6 +151,11 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   let input = null;
   if (sentence.from?.filename) {
     input = await fs.readFile(sentence.from.filename, "utf8");
+  } else if (sentence.from) {
+    const resolved = renderSayValue(sentence.from, { rememberFn });
+    if (resolved !== undefined && resolved !== null) {
+      input = String(resolved);
+    }
   } else if (sentence.fromtext) {
     const resolved = renderSayValue(sentence.fromtext, { rememberFn });
     if (resolved !== undefined && resolved !== null) {
@@ -288,12 +293,28 @@ export const signatures = [
   { signatureWords: ["be", "command", "ob", "wo", "to", "filename"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "text"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "text"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "name", "wo"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "text"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "wo"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "name", "wo"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "text", "to", "name", "text"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo", "to", "name", "text"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "text", "to", "filename"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "text", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "wo", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "text", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "from", "text", "ob", "wo", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "text", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "wo", "to", "name", "text"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "text", "to", "filename"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "wo", "to", "filename"], handler: command },
   { signatureWords: ["be", "command", "ob", "text", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "ob", "wo", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "from", "filename", "ob", "text", "vyah", "stream"], handler: command },
@@ -302,5 +323,7 @@ export const signatures = [
   { signatureWords: ["be", "command", "from", "name", "stream", "ob", "wo", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "text", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "fromtext", "text", "ob", "wo", "vyah", "stream"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "text", "vyah", "stream"], handler: command },
+  { signatureWords: ["be", "command", "fromtext", "name", "text", "ob", "wo", "vyah", "stream"], handler: command },
   { signatureWords: ["be", "command", "vyah", "cancel"], handler: command }
 ];

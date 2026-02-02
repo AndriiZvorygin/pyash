@@ -257,7 +257,7 @@ This is a lightweight, Pyash-native representation for simple pipelines.
 ```
 su name <workflow> be series def
 su name <step-id> ob text "<command>" be command ya
-su name <step-id> ob text "<command>" from to of <prior-step> be command ya
+su name <step-id> ob text "<command>" fromtext text of <prior-step> stdout be command ya
 su name <step-id> ob text "<command>" be command propose
 su name <workflow> prah
 ```
@@ -266,7 +266,7 @@ Rules:
 
 * The series name is the workflow name.
 * Each step is a `be command` sentence using `su name <step-id>`.
-* When a step consumes prior output, it uses `from to of <prior-step>` (or the chosen canonical reference).
+* When a step consumes prior output, it uses `fromtext text of <prior-step> stdout` (or another canonical reference).
 * Approval gates are expressed by using the **propositive mood** (`propose`) on a command sentence.
 
 ### 5.9.2 Resume token binding
@@ -285,7 +285,7 @@ If the workflow file includes `approval: required`, the step becomes:
 su name <step-id> ob text "<prompt>" be command propose
 ```
 
-If the workflow file includes `stdin`, it becomes `from to of <prior-step>` in the series form.
+If the workflow file includes `stdin`, it becomes `fromtext text of <prior-step> stdout` in the series form.
 
 ---
 

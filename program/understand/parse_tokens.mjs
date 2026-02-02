@@ -48,6 +48,45 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
   const parseAllEnumerationBound = (startIdx) => parseAllEnumeration(words, startIdx, { ROLE_KEYS, CONTEXT_KEYS });
   const parseClauseBound = (startIdx) => parseClause(words, startIdx, { parseTokens, quotedText });
+  const boundaryTokens = new Set([...ROLE_KEYS, ...CONTEXT_KEYS, "be", "then", "ta", "ret"]);
+
+  const parseGenitiveChain = (startIdx, { reverse = true } = {}) => {
+    const next = words[startIdx + 1];
+    if (next !== "of" && next !== "ti") return null;
+
+    const readNode = (idx) => {
+      const parts = [];
+      let j = idx;
+      while (j < words.length) {
+        const tok = words[j];
+        if (tok === "of" || tok === "ti") break;
+        if (boundaryTokens.has(tok)) {
+          if (parts.length === 0 && tok !== "be" && tok !== "then" && tok !== "ta" && tok !== "ret") {
+            parts.push(tokenValue(tok));
+            j += 1;
+          }
+          break;
+        }
+        parts.push(tokenValue(tok));
+        j += 1;
+      }
+      if (parts.length === 0) return null;
+      return { value: parts.join(" "), endIndex: j };
+    };
+
+    const chain = [tokenValue(words[startIdx])];
+    let j = startIdx + 1;
+    while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
+      const node = readNode(j + 1);
+      if (!node) break;
+      chain.push(node.value);
+      j = node.endIndex;
+    }
+
+    if (chain.length <= 1) return null;
+    const ordered = reverse ? chain.slice().reverse() : chain;
+    return { chain: ordered, endIndex: j - 1 };
+  };
 
   for (let i = 0; i < words.length; i++) {
     let t = words[i];
@@ -158,11 +197,15 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       }
 
       const next = words[i + 1];
+      const nextNext = words[i + 2];
+      const startsGenitive =
+        nextNext && (nextNext === "of" || nextNext === "ti");
       if (
         next &&
         !ROLE_KEYS.includes(next) &&
         !["be", "then", "ta"].includes(next) &&
-        !TYPE_TOKENS.includes(next)
+        !TYPE_TOKENS.includes(next) &&
+        !startsGenitive
       ) {
         slot.name = tokenValue(next);
         i++; // consume the name token
@@ -232,21 +275,11 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
     }
 
     if (t === "ve" || t === "vec") {
-      if (words[i + 1] === "of" || words[i + 1] === "ti") {
-        const chain = [t];
-        let j = i + 1;
-        while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
-          const next = words[j + 1];
-          if (!next) break;
-          chain.push(next);
-          j += 2;
-        }
-        if (chain.length > 1) {
-          const ordered = chain.slice().reverse(); // store root-first
-          slot.genitive = { chain: ordered };
-          i = j - 1;
-          continue;
-        }
+      const genitive = parseGenitiveChain(i);
+      if (genitive) {
+        slot.genitive = { chain: genitive.chain };
+        i = genitive.endIndex;
+        continue;
       }
 
       const elemType = words[i + 1];
@@ -295,21 +328,11 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       // Genitive chains:
       //   backward: "num of ob of this"   => chain ["this","ob","num"]
       //   forward:  "num ti ob ti this"   => chain ["this","ob","num"]
-      if (words[i + 1] === "of" || words[i + 1] === "ti") {
-        const chain = [t];
-        let j = i + 1;
-        while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
-          const next = words[j + 1];
-          if (!next) break;
-          chain.push(next);
-          j += 2;
-        }
-        if (chain.length > 1) {
-          const ordered = chain.slice().reverse(); // store root-first
-          slot.genitive = { chain: ordered };
-          i = j - 1;
-          continue;
-        }
+      const genitive = parseGenitiveChain(i);
+      if (genitive) {
+        slot.genitive = { chain: genitive.chain };
+        i = genitive.endIndex;
+        continue;
       }
 
       const target = slot || (current ? s[current] : null);
@@ -453,39 +476,25 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
     // Forward root-first genitive starting with "this" (e.g., "this ti ob ti num")
     if (t === "this" && words[i + 1] === "ti") {
-      const chain = [t];
-      let j = i + 1;
-      while (j < words.length && words[j] === "ti") {
-        const next = words[j + 1];
-        if (!next) break;
-        chain.push(next);
-        j += 2;
-      }
-      if (chain.length > 1) {
+      const forward = parseGenitiveChain(i, { reverse: false });
+      if (forward) {
         slot = slot || (current ? s[current] : null);
         if (slot) {
-          slot.genitive = { chain };
-          i = j - 1;
+          slot.genitive = { chain: forward.chain };
+          i = forward.endIndex;
           continue;
         }
       }
     }
 
     // --- bare value after a role defaults to name ---
-    if (current && (words[i + 1] === "of" || words[i + 1] === "ti")) {
-      const chain = [t];
-      let j = i + 1;
-      while (j < words.length && (words[j] === "of" || words[j] === "ti")) {
-        const next = words[j + 1];
-        if (!next) break;
-        chain.push(next);
-        j += 2;
-      }
-      if (chain.length > 1) {
+    if (current) {
+      const genitive = parseGenitiveChain(i);
+      if (genitive) {
         slot = slot || (current ? s[current] : null);
         if (slot) {
-          slot.genitive = { chain: chain.slice().reverse() };
-          i = j - 1;
+          slot.genitive = { chain: genitive.chain };
+          i = genitive.endIndex;
           continue;
         }
       }

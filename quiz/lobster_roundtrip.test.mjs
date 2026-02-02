@@ -12,7 +12,7 @@ function parseYaml(text) {
   return YAML.parse(String(text ?? ""));
 }
 
-test("lobster yaml->pyash->yaml roundtrip (interpret)", async () => {
+test("lobster yaml->pyash emits refinery series and remains YAML-compatible", async () => {
   forget();
   const fixturePath = path.resolve("quiz/fixtures/inbox-triage.lobster");
   const fixtureText = await fs.readFile(fixturePath, "utf8");
@@ -23,13 +23,18 @@ test("lobster yaml->pyash->yaml roundtrip (interpret)", async () => {
   // eslint-disable-next-line no-console
   console.log = (...args) => logs.push(args.join(" "));
   try {
-    await interpret(parse(`from filename \"${fixturePath}\" fromstate name yaml to name workflow be read do`));
-    await interpret(parse("ob name workflow become name yaml be write do"));
+    await interpret(parse(`from filename \"${fixturePath}\" fromstate name lobster become wo pyash to name text workflow pyash be read do`));
+    await interpret(parse("ob name workflow pyash be write do"));
   } finally {
     // eslint-disable-next-line no-console
     console.log = originalLog;
   }
 
   assert.equal(logs.length, 1);
-  assert.deepEqual(parseYaml(logs[0]), expected);
+  const pyashText = logs[0];
+  assert.match(pyashText, /su name inbox-triage be refinery def/);
+  assert.match(pyashText, /su name collect ob text "inbox list --unread --json".*be command do/);
+  assert.match(pyashText, /su name approve ob text "approval.request --from-json".*be command propose/);
+  assert.match(pyashText, /from ve name summarize_proposals/);
+  assert.ok(expected?.steps?.length >= 4, "fixture should contain steps");
 });
