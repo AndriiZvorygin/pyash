@@ -4,7 +4,7 @@ exists su name reviewer prompter ob text "Review the prior exchange. Return PASS
 exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
 exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext name reviewer prompter ya
 
-exists su name task ob text "Write a short greeting." be text ya
+exists su name input ob text "Write a short greeting." be text ya
 
 su name review session be series def
 prah
@@ -18,7 +18,7 @@ prah
 
 su name revise draft to name text decision out be ceremony def
   su name revise session be series def
-  su name user ob text of task be text ya
+  su name user ob text of input be text ya
   su name assistant ob text of sketch out be text ya
   su name user ob text of review out be text ya
   prah
@@ -27,10 +27,10 @@ su name revise draft to name text decision out be ceremony def
   ob name better out to name decision out be plus do
 prah
 
-su name reviewer try ob name text task to name text output be ceremony def
-su name sketch out ob name task for name author to name text sketch out by num 0 be write do
+su name reviewer try ob name text input to name text output be ceremony def
+su name sketch out ob name input for name author to name text sketch out by num 0 be write do
 su name review session be series def
-su name user ob text of task be text ya
+su name user ob text of input be text ya
 su name assistant ob text of sketch out be text ya
 prah
 su name review out ob text "Review the prior exchange and respond now." for name reviewer accordingto name review session to name text review out by num 0 be write do
@@ -45,8 +45,8 @@ su name decision out ret
 prah
 
 su name reviewer circle be refinery def
-su name reviewer round ob name task to name text output be reviewer try do
+su name reviewer round ob name input to name text output be reviewer try do
 prah
 
-ob name task from name reviewer circle to name text output be refinery do
+ob name input from name reviewer circle to name text output be refinery do
 ob name output be write do
