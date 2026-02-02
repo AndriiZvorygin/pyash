@@ -48,7 +48,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya>");
+    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
     process.exit(1);
   }
 
@@ -299,8 +299,14 @@ async function main() {
     if (sentence?.mood === "que") outputs.push(res);
   }
 
+  if (refineryFlag) {
+    console.warn("warning: --refinery is deprecated; invoke refineries with `be refinery do` instead.");
+  }
   if (!runError && !refineryName) {
     refineryName = resolveConfigText("refinery name", { rememberFn: remember }) ?? null;
+    if (refineryName) {
+      console.warn("warning: auto-running refinery via config is deprecated; invoke with `be refinery do` instead.");
+    }
   }
   if (!runError && refineryName && !noCheckpoint) {
     checkpointIndex = await loadCheckpointIndex({ runId, cwd: process.cwd() });
