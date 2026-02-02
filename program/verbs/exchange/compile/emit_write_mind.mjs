@@ -26,6 +26,7 @@ export function handleMindWrite(context, helpers) {
   const promptVal = typeof ob.text === "string" ? JSON.stringify(ob.text) : JSON.stringify(ob.name ?? "");
   const explicitModel = ob.model ? JSON.stringify(ob.model) : null;
   const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
+  const agentCwd = sentence.at?.filename ?? sentence.at?.text ?? sentence.at?.name ?? null;
   const lines = ["{"]; // block scope to avoid duplicate const per call
   if (sentence.with?.name) {
     if (jsHelpers) jsHelpers.usesVectorFormat = true;
@@ -44,6 +45,9 @@ export function handleMindWrite(context, helpers) {
         }
       }
     }
+  }
+  if (agentCwd) {
+    lines.push(`globalThis["agent cwd"] = { su: { name: "agent cwd" }, ob: { filename: ${JSON.stringify(String(agentCwd))} }, be: "cwd", mood: "ya" };`);
   }
   lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
   lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);

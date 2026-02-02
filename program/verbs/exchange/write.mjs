@@ -5,6 +5,7 @@ import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
+import { resolveAgentPath } from "../../library/agent_cwd.mjs";
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
 import { resolveKeyboardCommand, sendKeyboardText } from "./write_keyboard.mjs";
@@ -22,7 +23,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
     });
   }
 
-  const target = sentence?.to?.filename;
+  let target = sentence?.to?.filename;
   const targetName = sentence?.to?.name ?? sentence?.to?.wo ?? sentence?.to?.text;
   const isKeyboard = targetName === "keyboard";
   if (isKeyboard) {
@@ -159,6 +160,16 @@ export default async function write(sentence, { remember: rememberFn = remember 
       });
     }
   } else if (target) {
+    const { resolved, outside, agentCwd } = resolveAgentPath(target, { rememberFn });
+    if (outside) {
+      throwErrorSentence({
+        name: "write defective",
+        message: `write defective: outside agent cwd (${agentCwd})`,
+        from: { name: "write" },
+        raw: { target }
+      });
+    }
+    target = resolved;
     await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
     const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });

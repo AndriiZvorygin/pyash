@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -28,7 +29,15 @@ export async function del(sentence, { remember: rememberFn = remember } = {}) {
       raw: { sentence }
     });
   }
-  const resolved = path.resolve(String(target));
+  const { resolved, outside, agentCwd } = resolveAgentPath(String(target), { rememberFn });
+  if (outside) {
+    throwErrorSentence({
+      name: "delete defective",
+      message: `delete defective: outside agent cwd (${agentCwd})`,
+      from: { name: "delete" },
+      raw: { target }
+    });
+  }
   let stats;
   try {
     stats = await fs.stat(resolved);

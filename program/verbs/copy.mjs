@@ -4,6 +4,7 @@ import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { recordArtifact, recordExchange } from "../bridge/exchange.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -32,7 +33,15 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
     });
   }
   const resolvedSrc = path.resolve(src);
-  const resolvedDest = path.resolve(dest);
+  const { resolved: resolvedDest, outside, agentCwd } = resolveAgentPath(dest, { rememberFn });
+  if (outside) {
+    throwErrorSentence({
+      name: "copy defective",
+      message: `copy defective: outside agent cwd (${agentCwd})`,
+      from: { name: "copy" },
+      raw: { dest }
+    });
+  }
   let stats;
   try {
     stats = await fs.stat(resolvedSrc);
