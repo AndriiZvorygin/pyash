@@ -594,6 +594,9 @@ Rules:
 
 The depend list is carried in from ve name ... as a vector of platform names.
 
+When this spec says “previous step”, it refers to the **su name** of any
+preceding step in the series (not necessarily the immediately preceding line).
+
 The activity is the sentence itself (no ob la … ko wrapper). The runner MUST preserve the sentence when recording.
 
 ### 6.2 Uniqueness
