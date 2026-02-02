@@ -1,0 +1,9 @@
+su name calc be refinery def
+exists su name a ob num 10 be number ya
+exists su name b ob num 5 be number ya
+su name product ob num of a by num of b be multiply do
+su name doubled ob num of product by num 2 be multiply do
+su name show from ve name doubled ob text "result: " by num of to of doubled be write do
+prah
+
+from name calc be refinery do
