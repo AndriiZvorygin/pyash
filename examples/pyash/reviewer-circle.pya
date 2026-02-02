@@ -9,10 +9,10 @@ exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext name rev
 exists su name task ob text "Write a short greeting." be text ya
 
 su name reviewer circle be refinery def
-exists su name reviewer round ob la ob name text task to name text output be reviewer trying do ko be platform ya
+su name reviewer round ob name task to name text output be reviewer trying do
 prah
 
-ob name text task from name reviewer circle to name text output be refinery do
+ob name task from name reviewer circle to name text output be refinery do
 ob name output be write do
 to name text report out be reporter do
 ob name report out be write do
