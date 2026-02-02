@@ -875,6 +875,15 @@ Playlist/channel example (download all items from last month into CWD):
 be download ob wo all during months 1 from filename "https://www.youtube.com/@AndriiZ/videos" as wo audio do
 ```
 
+## Agent CWD enforcement
+
+If `su name agent cwd` is defined (usually via a mind call `at filename <path>`),
+the runtime MUST treat it as the allowed root for destructive file operations.
+Relative paths are resolved under this directory; absolute paths outside it MUST
+error.
+
+Applies to: `write`, `download`, `delete`, `copy`, `touch`.
+
 ---
 
 # Command (draft v0.1)

@@ -19,6 +19,15 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
   const config = mindName ? remember(mindName) : null;
   const configSentence = config?.be === "mind" ? config : null;
+  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
+  if (agentCwd) {
+    doRemember({
+      mood: "ya",
+      be: "cwd",
+      su: { name: "agent cwd" },
+      ob: { filename: String(agentCwd) }
+    });
+  }
   const vyahValues = Array.isArray(sentence?.vyah?.ve?.values)
     ? sentence.vyah.ve.values
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);

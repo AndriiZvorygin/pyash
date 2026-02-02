@@ -391,6 +391,24 @@ with name tools
 do
 ```
 
+### 7.6 Agent CWD binding
+
+When a mind call includes `at filename <path>`, the runtime MUST record the value
+as the **agent CWD** (`su name agent cwd`) and use it to constrain destructive tool
+effects. Relative output paths MUST be resolved under this directory, and attempts
+to write outside it MUST error.
+
+Example:
+
+```pyash
+ob text "summarize"
+for name qwenbot
+to name text out
+with name tools
+at filename "artifacts/agent"
+be write do
+```
+
 ---
 
 ## 8. Errors

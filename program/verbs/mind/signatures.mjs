@@ -1,4 +1,4 @@
-export const mindSignatureWords = [
+const baseMindSignatureWords = [
   ["be", "write", "ob", "text", "to", "name", "mind", "vyah", "stream"],
   ["be", "write", "ob", "text", "to", "name", "mind", "with", "name", "map", "vyah", "stream"],
   ["be", "write", "ob", "name", "text", "to", "name", "mind", "vyah", "stream"],
@@ -47,3 +47,13 @@ export const mindSignatureWords = [
   ["be", "write", "ob", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"],
   ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"]
 ];
+
+const agentCwdSignatures = baseMindSignatureWords.map(words => [
+  "be",
+  "write",
+  "at",
+  "filename",
+  ...words.slice(2)
+]);
+
+export const mindSignatureWords = baseMindSignatureWords.concat(agentCwdSignatures);

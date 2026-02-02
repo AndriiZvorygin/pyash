@@ -2,12 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
+import { resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
 import { resolveUrl, resolveOutput, resolveExtraArgs, parseMonthWindow, isMultiDownload } from "./helpers.mjs";
 import { missingBackend, recordDownloadArtifact, runCurl, runYtDlp } from "./runners.mjs";
 
 export async function download_http(sentence, { scheme, intent, remember: rememberFn = remember } = {}) {
   const url = resolveUrl(sentence, { rememberFn });
   const dest = resolveOutput(sentence, { rememberFn });
+  const agentCwd = resolveAgentCwd({ rememberFn });
   if (!url) {
     throwErrorSentence({
       name: "download defective",
@@ -17,15 +19,26 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
     });
   }
   const resolvedDest = dest
-    ? path.resolve(dest)
+    ? (() => {
+      const { resolved, outside, agentCwd: cwd } = resolveAgentPath(dest, { rememberFn });
+      if (outside) {
+        throwErrorSentence({
+          name: "download defective",
+          message: `download defective: outside agent cwd (${cwd})`,
+          from: { name: "download" },
+          raw: { dest }
+        });
+      }
+      return resolved;
+    })()
     : (() => {
       try {
         const parsed = new URL(url);
         const base = path.basename(parsed.pathname || "");
         const name = base && base !== "/" ? base : "download.bin";
-        return path.resolve(process.cwd(), name);
+        return path.resolve(agentCwd ?? process.cwd(), name);
       } catch {
-        return path.resolve(process.cwd(), "download.bin");
+        return path.resolve(agentCwd ?? process.cwd(), "download.bin");
       }
     })();
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
@@ -53,6 +66,7 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
 export async function download_ytdlp(sentence, { scheme, intent, remember: rememberFn = remember } = {}) {
   const url = resolveUrl(sentence, { rememberFn });
   const dest = resolveOutput(sentence, { rememberFn });
+  const agentCwd = resolveAgentCwd({ rememberFn });
   if (!url) {
     throwErrorSentence({
       name: "download defective",
@@ -64,7 +78,19 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
   const multi = isMultiDownload(sentence);
   const monthWindow = parseMonthWindow(sentence);
   const cwd = process.cwd();
-  let resolvedDest = dest ? path.resolve(dest) : "";
+  let resolvedDest = "";
+  if (dest) {
+    const { resolved, outside, agentCwd: cwd } = resolveAgentPath(dest, { rememberFn });
+    if (outside) {
+      throwErrorSentence({
+        name: "download defective",
+        message: `download defective: outside agent cwd (${cwd})`,
+        from: { name: "download" },
+        raw: { dest }
+      });
+    }
+    resolvedDest = resolved;
+  }
   let outputTemplate = "";
   let outputDir = "";
   if (dest) {
@@ -81,7 +107,7 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       outputTemplate = resolvedDest;
     }
   } else {
-    outputDir = cwd;
+    outputDir = agentCwd ?? cwd;
     outputTemplate = path.join(outputDir, "%(upload_date)s - %(title)s [%(id)s].%(ext)s");
   }
   await fs.mkdir(outputDir, { recursive: true });

@@ -14,8 +14,6 @@
 Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.
 
 Must-have:
-* Workspace write sandbox (agent output dir).
-
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
 * Helper examples: review loop, code edit loop.

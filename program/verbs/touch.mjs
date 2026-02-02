@@ -4,6 +4,7 @@ import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { recordArtifact, recordExchange } from "../bridge/exchange.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -27,7 +28,15 @@ export async function touch(sentence, { remember: rememberFn = remember } = {}) 
       raw: { sentence }
     });
   }
-  const resolved = path.resolve(String(target));
+  const { resolved, outside, agentCwd } = resolveAgentPath(String(target), { rememberFn });
+  if (outside) {
+    throwErrorSentence({
+      name: "touch defective",
+      message: `touch defective: outside agent cwd (${agentCwd})`,
+      from: { name: "touch" },
+      raw: { target }
+    });
+  }
   await fs.mkdir(path.dirname(resolved), { recursive: true });
   let handle;
   try {

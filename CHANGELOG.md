@@ -3,6 +3,7 @@
 ### Feb 2, 2026: Command streaming clarified
 
 * **Command streaming documented** (`vyah stream` + cancel semantics) in `07-io-and-scripts.md`.
+* **Agent CWD sandbox**: `at filename` on mind calls sets `agent cwd`, enforcing write/download/delete/copy/touch under that directory.
 
 ### Jan 30, 2026: Verifier loop + deterministic reporting
 
