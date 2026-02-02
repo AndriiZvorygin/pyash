@@ -44,5 +44,9 @@ to name text decision out be revise draft do
 su name decision out ret
 prah
 
-ob name text task to name text output be reviewer try do
+su name reviewer circle be refinery def
+su name reviewer round ob name task to name text output be reviewer try do
+prah
+
+ob name task from name reviewer circle to name text output be refinery do
 ob name output be write do
