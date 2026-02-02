@@ -271,7 +271,15 @@ async function main() {
         const resumeRefinery = surfaced?.from?.name ?? null;
         if (resumeRefinery) {
           try {
-            await runRefineryWithCallbacks({ resume: { token: resumeToken, decision }, nameOverride: resumeRefinery });
+            const resumed = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision }, nameOverride: resumeRefinery });
+            if (resumed?.be) {
+              doRemember({
+                mood: resumed?.mood ?? "ya",
+                su: { name: "result" },
+                be: resumed.be,
+                ob: resumed.ob ?? {}
+              });
+            }
           } catch (err) {
             const resumed = surfaceErrorSentence(err?.sentence ?? err);
             if (resumed?.mood) pushNewspaper(sentenceToPyash(resumed));
