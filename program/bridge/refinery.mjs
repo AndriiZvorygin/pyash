@@ -174,10 +174,11 @@ export function recordPlatform(sentence) {
       from: { name: "interpret" }
     });
   }
-  if (sentence?.mood !== "ya" || sentence?.be !== "platform") {
+  const isPlatformDecl = sentence?.mood === "ya" && sentence?.be === "platform";
+  if (!isPlatformDecl && (sentence?.mood === "def" || sentence?.mood === "prah")) {
     throwErrorSentence({
       name: "platform defective",
-      message: "platform declaration must be be platform ya",
+      message: "platform declaration must be be platform ya or a series entry",
       from: { name: "interpret" },
       raw: sentence
     });
@@ -199,8 +200,19 @@ export function recordPlatform(sentence) {
       raw: sentence
     });
   }
-  const deps = sentence.from ? assertNameVector(sentence.from) : [];
-  const actionSentence = assertPlatformAction(sentence.ob);
+  let deps = [];
+  let actionSentence = null;
+  if (isPlatformDecl) {
+    deps = sentence.from ? assertNameVector(sentence.from) : [];
+    actionSentence = assertPlatformAction(sentence.ob);
+  } else {
+    if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
+      deps = sentence.from.ve.values.map((entry) => String(entry));
+    }
+    const priorName = frame.order.length > 0 ? frame.order[frame.order.length - 1] : null;
+    if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
+    actionSentence = sentence;
+  }
   frame.platforms.set(name, { deps, actionSentence });
   frame.order.push(name);
   return { recorded: true };

@@ -50,3 +50,22 @@ test("refinery rejects missing activity clause", async () => {
     (err) => err?.sentence?.su?.name === "platform defective"
   );
 });
+
+test("refinery registry captures series entries with implicit order deps", async () => {
+  forget();
+  await runLines([
+    "su name flow be refinery def",
+    "su name collect ob text \"echo one\" be command do",
+    "su name summarize ob text \"echo two\" be command do",
+    "prah"
+  ]);
+
+  const refinery = getRefinery("flow");
+  assert.ok(refinery);
+  assert.deepStrictEqual(refinery.order, ["collect", "summarize"]);
+  const collectStage = refinery.platforms.get("collect");
+  const summarizeStage = refinery.platforms.get("summarize");
+  assert.equal(collectStage.actionSentence.be, "command");
+  assert.equal(collectStage.actionSentence.mood, "do");
+  assert.deepStrictEqual(summarizeStage.deps, ["collect"]);
+});
