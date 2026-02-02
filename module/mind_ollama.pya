@@ -1,14 +1,10 @@
 su name mind ob text payload be ceremony def
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs --payload-file " be text ya
-  ob text of ob of this to filename "artifacts/mind/ollama-request.json" be write do
-  ob text "artifacts/mind/ollama-request.json" to name cmd be plus do
-  ob text of cmd be command do
+  exists su name cmd ob text "node command/mind_ollama_runner.mjs" be text ya
+  ob text of cmd fromtext text of ob of this be command do
 prah
 su name mind ob text payload vyah stream be ceremony def
-  exists su name cmd ob text "node command/mind_ollama_runner.mjs --stream --payload-file " be text ya
-  ob text of ob of this to filename "artifacts/mind/ollama-request.json" be write do
-  ob text "artifacts/mind/ollama-request.json" to name cmd be plus do
-  su name run ob text of cmd vyah stream be command do
+  exists su name cmd ob text "node command/mind_ollama_runner.mjs --stream" be text ya
+  su name run ob text of cmd fromtext text of ob of this vyah stream be command do
   su name run ret
 prah
 su name begin ob text model be ceremony def
