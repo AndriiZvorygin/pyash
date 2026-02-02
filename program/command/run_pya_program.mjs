@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import readline from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "../understand/index.mjs";
 import { interpret } from "../bridge/index.mjs";
@@ -147,6 +149,7 @@ async function main() {
   let refineryResult = null;
   let refineryName = refineryFlag ?? null;
   let checkpointIndex = null;
+  const isInteractive = process.stdout?.isTTY === true && process.stdin?.isTTY === true;
 
   const toResultSentence = (res, fallbackSentence) => {
     if (res?.mood && res?.be) return res;
@@ -156,6 +159,60 @@ async function main() {
     if (fallbackSentence?.mood) return fallbackSentence;
     return null;
   };
+
+  const promptDecision = async (promptText) => {
+    const rl = readline.createInterface({ input, output });
+    try {
+      // Default to "no" on empty input for safety.
+      const answer = await rl.question(`${promptText} [y/N] `);
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === "y" || normalized === "yes") return "yes";
+      if (normalized === "n" || normalized === "no" || normalized === "") return "no";
+      return null;
+    } finally {
+      rl.close();
+    }
+  };
+
+  const recordDecision = (decisionName, decisionText) => {
+    if (!decisionName) return;
+    const decisionSentence = {
+      mood: "ya",
+      be: "text",
+      su: { name: decisionName },
+      ob: { text: decisionText }
+    };
+    doRemember(decisionSentence);
+    pushNewspaper(sentenceToPyash(decisionSentence));
+  };
+
+  const runRefineryWithCallbacks = async ({ resume, nameOverride } = {}) => runRefinery({
+    name: nameOverride ?? refineryName,
+    interpret,
+    checkpointIndex,
+    checkpointEnabled: !noCheckpoint,
+    runId,
+    resume,
+    onEvoke: (actionSentence) => {
+      const embedded = sentenceToPyash(actionSentence);
+      if (isToolSentence(actionSentence)) pendingToolEvoked = embedded;
+      pushNewspaper(`ob la ${embedded} ko be evoke ya`);
+    },
+    onCheckpoint: (checkpointSentence) => {
+      pushNewspaper(sentenceToPyash(checkpointSentence));
+    },
+    onRetry: (retrySentence) => {
+      pushNewspaper(sentenceToPyash(retrySentence));
+    },
+    onResult: (res) => {
+      const resultSentence = toResultSentence(res, null);
+      if (!resultSentence?.mood) return;
+      const surfaced = surfaceErrorSentence(resultSentence);
+      if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
+      pendingToolEvoked = null;
+      pushNewspaper(sentenceToPyash(surfaced));
+    }
+  });
 
   let evokeCounter = -1;
   for (const entry of sentences) {
@@ -188,6 +245,41 @@ async function main() {
       const surfaced = surfaceErrorSentence(resultSentence);
       if (isToolCall && surfaced?.mood) emitToolEvent(embedded, sentenceToPyash(surfaced));
       pushNewspaper(sentenceToPyash(surfaced));
+      if (surfaced?.mood === "ya" && surfaced?.be === "propose" && isInteractive) {
+        let decision = null;
+        const promptText = surfaced?.ob?.text ?? "Approve?";
+        while (decision === null) {
+          decision = await promptDecision(promptText);
+        }
+        if (decision !== "yes") {
+          const errorSentence = {
+            mood: "ya",
+            be: "error",
+            su: { name: "proposal declined" },
+            ob: { text: promptText },
+            from: { name: surfaced?.from?.name ?? "refinery" }
+          };
+          pushNewspaper(sentenceToPyash(errorSentence));
+          const err = new Error("proposal declined");
+          err.sentence = errorSentence;
+          runError = err;
+          break;
+        }
+        const decisionName = surfaced?.to?.name ?? null;
+        recordDecision(decisionName, decision);
+        const resumeToken = surfaced?.fromtext?.text ?? null;
+        const resumeRefinery = surfaced?.from?.name ?? null;
+        if (resumeRefinery) {
+          try {
+            await runRefineryWithCallbacks({ resume: { token: resumeToken, decision }, nameOverride: resumeRefinery });
+          } catch (err) {
+            const resumed = surfaceErrorSentence(err?.sentence ?? err);
+            if (resumed?.mood) pushNewspaper(sentenceToPyash(resumed));
+            runError = err;
+            break;
+          }
+        }
+      }
     }
     if (sentence?.mood === "que") outputs.push(res);
   }
@@ -201,38 +293,48 @@ async function main() {
   if (!runError && refineryName) {
     let pendingToolEvoked = null;
     try {
-      refineryResult = await runRefinery({
-        name: refineryName,
-        interpret,
-        checkpointIndex,
-        checkpointEnabled: !noCheckpoint,
-        runId,
-        onEvoke: (actionSentence) => {
-          const embedded = sentenceToPyash(actionSentence);
-          if (isToolSentence(actionSentence)) pendingToolEvoked = embedded;
-          pushNewspaper(`ob la ${embedded} ko be evoke ya`);
-        },
-        onCheckpoint: (checkpointSentence) => {
-          pushNewspaper(sentenceToPyash(checkpointSentence));
-        },
-        onRetry: (retrySentence) => {
-          pushNewspaper(sentenceToPyash(retrySentence));
-        },
-        onResult: (res) => {
-          const resultSentence = toResultSentence(res, null);
-          if (!resultSentence?.mood) return;
-          const surfaced = surfaceErrorSentence(resultSentence);
-          if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
-          pendingToolEvoked = null;
-          pushNewspaper(sentenceToPyash(surfaced));
-        }
-      });
+      refineryResult = await runRefineryWithCallbacks();
     } catch (err) {
       const surfaced = surfaceErrorSentence(err?.sentence ?? err);
       if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
       pendingToolEvoked = null;
       if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
       runError = err;
+    }
+  }
+
+  while (!runError && refineryResult?.mood === "ya" && refineryResult?.be === "propose" && isInteractive) {
+    let decision = null;
+    const promptText = refineryResult?.ob?.text ?? "Approve?";
+    while (decision === null) {
+      decision = await promptDecision(promptText);
+    }
+    if (decision !== "yes") {
+      const errorSentence = {
+        mood: "ya",
+        be: "error",
+        su: { name: "proposal declined" },
+        ob: { text: promptText },
+        from: { name: refineryName ?? "refinery" }
+      };
+      pushNewspaper(sentenceToPyash(errorSentence));
+      const err = new Error("proposal declined");
+      err.sentence = errorSentence;
+      runError = err;
+      break;
+    }
+    const decisionName = refineryResult?.to?.name ?? null;
+    recordDecision(decisionName, decision);
+    const resumeToken = refineryResult?.fromtext?.text ?? null;
+    try {
+      refineryResult = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision } });
+    } catch (err) {
+      const surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      if (pendingToolEvoked && surfaced?.mood) emitToolEvent(pendingToolEvoked, sentenceToPyash(surfaced));
+      pendingToolEvoked = null;
+      if (surfaced?.mood) pushNewspaper(sentenceToPyash(surfaced));
+      runError = err;
+      break;
     }
   }
 

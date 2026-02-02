@@ -293,7 +293,8 @@ export async function runRefinery({
   checkpointIndex,
   checkpointEnabled = true,
   retryConfig,
-  runId
+  runId,
+  resume
 } = {}) {
   if (!name) {
     throwErrorSentence({
@@ -315,6 +316,71 @@ export async function runRefinery({
   const results = new Map();
   const retrySettings = normalizeRetryConfig(retryConfig ?? readRetryConfig());
   let lastResult = null;
+  let resumeGate = null;
+  if (resume) {
+    const rawToken = typeof resume === "string" ? resume : resume.token ?? resume.fromtext ?? null;
+    let parsed = null;
+    if (rawToken) {
+      try {
+        parsed = JSON.parse(rawToken);
+      } catch (err) {
+        throwErrorSentence({
+          name: "resume defective",
+          message: "resume token must be valid JSON",
+          from: { name: "interpret" },
+          raw: { token: rawToken }
+        });
+      }
+    }
+    if (!parsed || typeof parsed !== "object") {
+      throwErrorSentence({
+        name: "resume defective",
+        message: "resume token missing",
+        from: { name: "interpret" },
+        raw: { token: rawToken }
+      });
+    }
+    const decision = typeof resume.decision === "string" ? resume.decision.toLowerCase() : "";
+    if (decision !== "yes" && decision !== "no") {
+      throwErrorSentence({
+        name: "resume defective",
+        message: "resume decision must be yes or no",
+        from: { name: "interpret" },
+        raw: { decision }
+      });
+    }
+    if (runId && parsed.runId && parsed.runId !== runId) {
+      throwErrorSentence({
+        name: "resume defective",
+        message: "resume run id mismatch",
+        from: { name: "interpret" },
+        raw: { expected: runId, got: parsed.runId }
+      });
+    }
+    if (parsed.refinery && parsed.refinery !== name) {
+      throwErrorSentence({
+        name: "resume defective",
+        message: "resume refinery mismatch",
+        from: { name: "interpret" },
+        raw: { expected: name, got: parsed.refinery }
+      });
+    }
+    resumeGate = {
+      platformName: parsed.step || null,
+      index: typeof parsed.index === "number" ? parsed.index : -1,
+      decision,
+      decisionName: parsed.decision || null
+    };
+    if (resumeGate.index >= 0) {
+      for (let i = 0; i < resumeGate.index; i += 1) {
+        const priorName = refinery.order[i];
+        if (!priorName) continue;
+        completed.add(priorName);
+        pending.delete(priorName);
+        if (!results.has(priorName)) results.set(priorName, "");
+      }
+    }
+  }
   const resolveResultSentence = (value, fallbackSentence) => {
     if (value?.mood && value?.be) return value;
     if (value?.sentence?.mood && value?.sentence?.be) return value.sentence;
@@ -356,6 +422,25 @@ export async function runRefinery({
     }
     if (onEvoke) onEvoke(platform.actionSentence);
     if (platform.actionSentence?.mood === "propose") {
+      if (resumeGate) {
+        const matchesName = resumeGate.platformName && resumeGate.platformName === nextName;
+        const matchesIndex = resumeGate.index >= 0 && resumeGate.index === refinery.order.indexOf(nextName);
+        if (matchesName || matchesIndex) {
+          const decisionSentence = {
+            mood: "ya",
+            be: "text",
+            su: { name: nextName },
+            ob: { text: resumeGate.decision }
+          };
+          if (onResult) onResult(decisionSentence);
+          lastResult = decisionSentence;
+          results.set(nextName, sentenceToPyash(decisionSentence));
+          completed.add(nextName);
+          pending.delete(nextName);
+          resumeGate = null;
+          continue;
+        }
+      }
       const decisionName = platform.actionSentence?.to?.name ?? null;
       const resumeToken = buildResumeToken({
         runId,
