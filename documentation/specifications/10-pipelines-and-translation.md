@@ -338,6 +338,17 @@ ob text "<task>" from name <refinery> to name text <output> be refinery do
 If `from name <refinery>` is omitted, the runtime SHOULD read the refinery name
 from memory (`su name refinery name ob text "<name>" be text ya`).
 
+#### Optional task
+
+`ob` is optional. A minimal inline invocation uses only the refinery selector:
+
+```
+from name <refinery> be refinery do
+```
+
+If both `ob` and `from name` are omitted, the runtime MUST resolve the refinery
+name from memory and run that refinery.
+
 ### Task binding
 
 If `ob` is provided, the runtime SHOULD bind the task into memory as:
