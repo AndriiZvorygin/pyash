@@ -132,19 +132,17 @@ The refinery name <refinery> is a su name identifier.
 
 A file MAY declare more than one refinery. Selecting which refinery to run is a runner policy (outside this spec).
 
-### 5.3 Runner invocation (v0.1 behavior)
+### 5.3 Runner invocation (deprecated)
 
-In v0.1, refinery execution is **not** triggered by a Pyash sentence. The runner
-is responsible for selecting a refinery (by CLI/config) and may run it **after**
-the program body finishes executing.
+Older runners may execute a refinery **after** the program body finishes by selecting
+it via CLI/config. This mode is **deprecated**.
 
-This means:
+If this legacy mode is used:
 
 * The program itself cannot run additional sentences after refinery completion.
 * The refinery result is returned to the runner, which decides whether and how to print it.
 
-Future revisions may add a first-class `be refinery do` sentence so refineries can
-run inline and return values to the program.
+New code should invoke refineries inline using `be refinery do` (see §5.4).
 
 ---
 
@@ -319,12 +317,13 @@ If the workflow file includes `stdin`, it becomes `fromtext text of <prior-step>
 
 ---
 
-## 5.4 Inline refinery execution (draft v0.2)
+## 5.4 Inline refinery execution (v0.1)
 
-An implementation MAY support running a refinery inside the program as a normal
-verb. This enables post-refinery logic and programmatic access to the result.
+Inline refinery execution is the **default** and **recommended** invocation model.
+It runs a refinery inside the program as a normal verb, enabling post-refinery logic
+and programmatic access to the result.
 
-### Sentence form (draft)
+### Sentence form
 
 ```
 ob text "<task>" to name text <output> be refinery do
@@ -357,6 +356,9 @@ The inline call behaves like a normal verb:
 * it stores the final refinery result into the `to` target
 * it writes the `result` fact
 * errors surface normally and terminate execution unless handled
+
+Inline refinery execution is the canonical path; runner-level invocation exists only
+for backward compatibility.
 
 ---
 
