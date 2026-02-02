@@ -37,6 +37,7 @@ This spec defines:
 - depend rules and deterministic scheduling
 - failure policy
 - interaction with run newspaper and again mode
+- compatibility notes for workflow files and approval gates
 
 
 
@@ -58,6 +59,8 @@ again mode — runner policy that requires recording and verification sufficient
 
 runner policy — behavior controlled by the runner (CLI/config), not by in-program
 sentences. Examples: selecting which refinery to run, and when to print results.
+
+ratification — a hard approval gate that MUST halt execution until an explicit decision is provided
 
 
 
@@ -102,6 +105,8 @@ be platform ya is a declaration entry form inside a refinery.
 
 If an implementation supports user-defined ceremonies named refinery or platform, that support MUST be gated off while parsing refinery blocks (the declaration meaning wins inside the refinery).
 
+The word ratification is reserved for approval gates when a refinery runner or workflow runner is active.
+
 
 ---
 
@@ -139,6 +144,81 @@ This means:
 
 Future revisions may add a first-class `be refinery do` sentence so refineries can
 run inline and return values to the program.
+
+---
+
+## 5.7 Ratification (approval gate) (draft v0.1)
+
+Ratification is the Pyash-native approval gate for deterministic workflows.
+
+### 5.7.1 Sentence form
+
+```
+ob text "<prompt>" be ratification do
+```
+
+Optional storage of a decision:
+
+```
+ob text "<prompt>" to name text <decision> be ratification do
+```
+
+### 5.7.2 Required behavior
+
+* A ratification gate MUST halt execution when evaluated in a runner workflow or refinery runner.
+* The runner MUST emit a structured approval request that includes:
+  - prompt text
+  - a resume token
+  - the decision field name (if provided)
+* Execution MUST NOT continue until a resume action supplies an explicit decision.
+
+### 5.7.3 Resume (draft)
+
+Resume is a runner command (not an in-language verb) that accepts a resume token and decision.
+Implementations MAY expose an inline verb, but the runner command is the compatibility target.
+
+Minimal contract:
+
+* decision values: `yes` / `no`
+* resume continues at the next stage after the ratification gate
+
+---
+
+## 5.8 Workflow file compatibility (draft v0.1)
+
+Workflow files (`.json`, `.yaml`, `.yml`, `.lobster`) MUST be treated as **sources**
+that are converted into Pyash structures using existing JSON/YAML import rules.
+Pyash remains the canonical in-language form.
+
+### 5.8.1 Workflow shape
+
+Workflow files map to a Pyash map with these top-level keys:
+
+* `name` (text, optional)
+* `steps` (vector of maps, required)
+* `env` (map, optional)
+* `cwd` (text, optional)
+
+Each step map MAY contain:
+
+* `id` (text, required)
+* `command` (text, required) — a sentence string
+* `stdin` (text, optional) — references prior step output
+* `env` (map, optional)
+* `cwd` (text, optional)
+* `condition` (text, optional) — boolean expression against prior results
+* `approval` (text, optional) — when `"required"`, insert a ratification gate
+
+### 5.8.2 Conversion rules
+
+1. Load JSON/YAML into a Pyash json map def (per `06-data-formats.md`).
+2. Convert each step into a platform activity sentence:
+   * `command` is parsed into a sentence and embedded in `ob la ... ko`.
+   * `approval: required` injects a `ob text "<prompt>" be ratification do` activity.
+3. `stdin` and `env` are expanded as subordinate clauses on the activity sentence.
+4. `condition` determines whether the platform is scheduled (runner policy).
+
+This conversion is deterministic and reversible via the json map representation.
 
 ---
 
