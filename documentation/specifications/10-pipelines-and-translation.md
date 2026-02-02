@@ -326,13 +326,13 @@ and programmatic access to the result.
 ### Sentence form
 
 ```
-ob text "<task>" to name text <output> be refinery do
+ob text "<input>" to name text <output> be refinery do
 ```
 
 Optional refinery selector:
 
 ```
-ob text "<task>" from name <refinery> to name text <output> be refinery do
+ob text "<input>" from name <refinery> to name text <output> be refinery do
 ```
 
 If `from name <refinery>` is omitted, the runtime SHOULD read the refinery name
@@ -354,14 +354,16 @@ Note: the surface form is `from name <refinery>` (a name). Do not write
 
 ### Task binding
 
-If `ob` is provided, the runtime SHOULD bind the task into memory as:
+If `ob` is provided, the runtime SHOULD bind the input into memory as:
 
 ```
-su name task ob text "<task>" be text ya
+su name input ob text "<input>" be text ya
 ```
 
-so platform activities can read `task` normally. The binding MAY be temporary;
-implementations SHOULD restore a prior `task` value if it existed.
+so platform activities can read `input` normally. The binding MAY be temporary;
+implementations SHOULD restore a prior `input` value if it existed.
+
+Implementations MAY also bind the legacy name `task` for backward compatibility.
 
 ### Result
 

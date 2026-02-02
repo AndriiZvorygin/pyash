@@ -41,7 +41,7 @@ function resolveGenitiveText(genitive) {
   return curr;
 }
 
-function resolveTaskOb(ob) {
+function resolveInputOb(ob) {
   if (!ob || typeof ob !== "object") return null;
   if (typeof ob.text === "string") return { text: ob.text };
   if (typeof ob.num === "number") return { num: ob.num };
@@ -66,11 +66,14 @@ async function refinery(sentence) {
     sentence?.from?.name ??
     resolveConfigText("refinery name", { rememberFn: remember }) ??
     null;
-  const taskOb = resolveTaskOb(sentence?.ob);
+  const inputOb = resolveInputOb(sentence?.ob);
+  const priorInput = remember("input");
   const priorTask = remember("task");
 
-  if (taskOb) {
-    doRemember({ mood: "ya", su: { name: "task" }, ob: taskOb, be: "text" });
+  if (inputOb) {
+    doRemember({ mood: "ya", su: { name: "input" }, ob: inputOb, be: "text" });
+    // Legacy compatibility: keep task in sync when present.
+    doRemember({ mood: "ya", su: { name: "task" }, ob: inputOb, be: "text" });
   }
 
   try {
@@ -99,9 +102,8 @@ async function refinery(sentence) {
     }
     return { ob: resultSentence ?? {}, be: "result" };
   } finally {
-    if (priorTask) {
-      doRemember(priorTask);
-    }
+    if (priorInput) doRemember(priorInput);
+    if (priorTask) doRemember(priorTask);
   }
 }
 
