@@ -338,7 +338,7 @@ ob text "<input>" from name <refinery> to name text <output> be refinery do
 If `from name <refinery>` is omitted, the runtime SHOULD read the refinery name
 from memory (`su name refinery name ob text "<name>" be text ya`).
 
-#### Optional task
+#### Optional input
 
 `ob` is optional. A minimal inline invocation uses only the refinery selector:
 
@@ -352,7 +352,7 @@ name from memory and run that refinery.
 Note: the surface form is `from name <refinery>` (a name). Do not write
 `from name text`; that is only an internal signature typing detail.
 
-### Task binding
+### Input binding
 
 If `ob` is provided, the runtime SHOULD bind the input into memory as:
 
@@ -363,7 +363,6 @@ su name input ob text "<input>" be text ya
 so platform activities can read `input` normally. The binding MAY be temporary;
 implementations SHOULD restore a prior `input` value if it existed.
 
-Implementations MAY also bind the legacy name `task` for backward compatibility.
 
 ### Result
 
@@ -895,13 +894,13 @@ integrates with run newspaper and again mode requirements (§9–§10)
 
 Autoregressive LLMs process inputs in a single forward sweep per token. That limits correction,
 global coherence, and error recovery. **Recurrent Processing Theory (RPT)** highlights that refinement
-comes from *re-entering* the same task with feedback before accepting an outcome. The goal here is
+comes from *re-entering* the same input with feedback before accepting an outcome. The goal here is
 **RPT-1+**: system-level recurrence achieved through orchestration, without changing model weights.
 
 | System pattern          | Recurrence locus              | Approx RPT |
 | ----------------------- | ----------------------------- | ---------- |
 | Single-pass AR LLM      | token sequence only           | ~0.5       |
-| AR LLM + re-entry       | external task re-entry        | ~1.0–1.2   |
+| AR LLM + re-entry       | external input re-entry       | ~1.0–1.2   |
 | Diffusion LLM           | intrinsic latent refinement   | ~1.5       |
 | Human perceptual cortex | intrinsic multi-area feedback | ~2         |
 
@@ -911,11 +910,11 @@ The Re-entry Cycle delivers the first meaningful jump using existing models and 
 
 ### How (mechanism)
 
-The system intentionally **re-enters the same task** multiple times. Each pass produces a draft,
+The system intentionally **re-enters the same input** multiple times. Each pass produces a draft,
 receives reviewer criticism, and only applies revisions when the reviewer reports failure. A pass can
 skip revision entirely. Feedback from earlier passes shapes later ones.
 The recurrence lives in **control flow** (`fromindex … toindex … do`), not inside the model.
-One mind or multiple minds may be used; both qualify as RPT-1 because the task itself is what is re-entered.
+One mind or multiple minds may be used; both qualify as RPT-1 because the input itself is what is re-entered.
 
 ---
 
@@ -924,7 +923,7 @@ One mind or multiple minds may be used; both qualify as RPT-1 because the task i
 A **Re-entry Cycle** is a bounded, deterministic outer cycle implemented as a ceremony (or refinery)
 that repeats a fixed attempt ceremony. Each attempt follows the same stages and then loops back to the
 supervisor, which advances the index and invokes the next attempt. The **revised output of each attempt**
-becomes the **next task input**, so the cycle is a pipeline rather than parallel drafts.
+becomes the **next input**, so the cycle is a pipeline rather than parallel drafts.
 
 ---
 
@@ -978,11 +977,11 @@ Revised candidate:
 
 ```pyash
 su name re-entry cycle be ceremony def
-  ; evoker provides ob text <task>, fromindex <start>, toindex <limit>
+  ; evoker provides ob text <input>, fromindex <start>, toindex <limit>
 
   to name text latest
   be re-entry attempt do
-  su name task ob text of latest be text ya
+  su name input ob text of latest be text ya
 prah
 ```
 
@@ -1003,7 +1002,7 @@ The author, reviewer, and judge are **mind configurations**. Define them with `b
 set their model + system prompt via `as` and `from discourse`:
 
 ```pyash
-exists su name author prompt ob text "Draft: be concise and follow the task." be text ya
+exists su name author prompt ob text "Draft: be concise and follow the input." be text ya
 exists su name reviewer prompt ob text "Review: list issues + patch plan." be text ya
 exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
 
@@ -1059,11 +1058,11 @@ prah
 ```pyash
 su name re-entry attempt to name text output be ceremony def
 
-  su name task ob text ob of this ya
+  su name input ob text ob of this ya
 
-  ; draft (task -> author -> draft)
+  ; draft (input -> author -> draft)
   su name draft out
-  ob text task
+  ob text input
   for name author
   to name draft out
   by num 0

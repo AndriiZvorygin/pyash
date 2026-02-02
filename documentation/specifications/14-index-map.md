@@ -22,7 +22,7 @@ Use this when the cheat sheet is not enough.
 
 - **Unknown verb/signature** → `02-core-execution.md` (dispatch/signature derivation)
 - **Case order / canonicalization** → `01-sentence-and-grammar.md`
-- **Stream or task lifecycle** → `03-vyah-and-aspect.md`
+- **Stream or input lifecycle** → `03-vyah-and-aspect.md`
 - **Artifact or newspaper mismatch** → `05-run-recording-and-artifacts.md`
 - **Map / JSON formatting** → `06-data-formats.md`
 
