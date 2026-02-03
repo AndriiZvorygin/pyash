@@ -6,5 +6,6 @@ Utility scripts for working with Pyash from the shell:
 - `read_pya_trace.mjs [--gross] <path>` — interpret a `.pya` file and show memory/sandpit traces (beautiful by default).
 - `list_pyash_words.mjs` — print a comma-separated list of English entries from `pyashWords.json`.
 - `anchor_words_add.mjs --anchor <name> --form <text> --role <role>` — append a new anchor word mapping to `anchor_words.pya`.
+- `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
 
 Run with `node command/<file>.mjs ...`.
