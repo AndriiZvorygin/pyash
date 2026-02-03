@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 
-import { sentenceToPyash } from "../beautiful.mjs";
-import { buildErrorSentence, surfaceErrorSentence } from "../error.mjs";
-import { extractReport } from "../report/extract.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
+import { extractReport } from "../program/report/extract.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;

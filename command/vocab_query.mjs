@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 
 let cachedData = null;
 
@@ -13,7 +13,7 @@ async function loadJson(path) {
 async function loadData() {
   if (cachedData) return cachedData;
   const here = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = resolve(here, "../..");
+  const repoRoot = resolve(here, "..");
   const lyacRoot = resolve(repoRoot, "caterer/pyac/lyac");
   const [kwonEn, pyashWords, pyackwon, dictionaryEn] = await Promise.all([
     loadJson(resolve(lyacRoot, "kwon_en.json")),

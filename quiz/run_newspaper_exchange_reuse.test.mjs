@@ -27,7 +27,7 @@ test("exchange reuses artifact name for repeated writes to same locator", async 
     ""
   ].join("\n"), "utf8");
 
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     runPath,
     "--newspaper",

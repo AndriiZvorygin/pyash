@@ -3,22 +3,22 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
-import { parse } from "../understand/index.mjs";
-import { interpret } from "../bridge/index.mjs";
-import { forget, remember, doRemember } from "../remember/index.mjs";
-import { builtInSignatures } from "../verbs/index.mjs";
-import { signatures as compileSignatures } from "../verbs/exchange/compile.mjs";
-import { registerSignatureHandler, clearSignatureHandlers } from "../bridge/signature.mjs";
-import { splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
-import { sentenceToPyash } from "../beautiful.mjs";
-import { surfaceErrorSentence } from "../error.mjs";
-import { setEntryModulePath } from "../bridge/modules.mjs";
-import { state } from "../bridge/state.mjs";
-import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../bridge/exchange.mjs";
-import { setRunNewspaperLines } from "../bridge/newspaper.mjs";
-import { closeMcpServers } from "../motor/mcp.mjs";
-import { runRefinery } from "../bridge/refinery.mjs";
-import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, remember, doRemember } from "../program/remember/index.mjs";
+import { builtInSignatures } from "../program/verbs/index.mjs";
+import { signatures as compileSignatures } from "../program/verbs/exchange/compile.mjs";
+import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
+import { splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { surfaceErrorSentence } from "../program/error.mjs";
+import { setEntryModulePath } from "../program/bridge/modules.mjs";
+import { state } from "../program/bridge/state.mjs";
+import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
+import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
+import { closeMcpServers } from "../program/motor/mcp.mjs";
+import { runRefinery } from "../program/bridge/refinery.mjs";
+import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
 import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex } from "./run_pya_helpers.mjs";
 
 async function main() {
@@ -48,7 +48,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
     process.exit(1);
   }
 

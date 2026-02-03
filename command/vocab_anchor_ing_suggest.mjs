@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { buildProgram } from "../program.mjs";
+import { buildProgram } from "../program/program.mjs";
 
 const args = process.argv.slice(2);
 const limitIndex = args.indexOf("--limit");
@@ -57,7 +57,7 @@ function buildBaseCandidates(lower) {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../..");
+const repoRoot = resolve(here, "..");
 const lyacRoot = resolve(repoRoot, "caterer/pyac/lyac");
 const anchorPath = resolve(repoRoot, "program/verbs/exchange/translation/anchor_words.pya");
 

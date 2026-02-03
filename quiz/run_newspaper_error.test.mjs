@@ -23,7 +23,7 @@ test("run newspaper records surfaced error", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "be blorp do\n", "utf8");
 
-  const scriptPath = path.join(repoRoot, "program/command/run_pya_program.mjs");
+  const scriptPath = path.join(repoRoot, "command/run_pya_program.mjs");
   let failed = false;
   try {
     await execFileAsync(process.execPath, [

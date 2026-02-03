@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../..");
+const repoRoot = resolve(here, "..");
 const ryanPath = resolve(repoRoot, "caterer/pyac/lyac/program/ryan.mjs");
 const { queryRyan } = await import(ryanPath);
 
@@ -42,7 +42,7 @@ function shouldUseAlias(lines) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const query = process.argv[2];
   if (!query) {
-    console.error("usage: node program/command/ryan.mjs <prefix>");
+    console.error("usage: node command/ryan.mjs <prefix>");
     process.exit(1);
   }
   const lines = await queryRyanLines(query);

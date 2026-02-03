@@ -3,7 +3,7 @@
 - Inspect memory during REPL: `mem`
 - Reset memory during REPL: `reset`
 - Trace a program:
-  - `node program/command/read_pya_trace.mjs path/to/file.pya`
+  - `node command/read_pya_trace.mjs path/to/file.pya`
   - Inspect `{ memory, sandpits }` for evoker/register values.
 - If you hit `unknown verb/signature`, check:
   - The derived signature in the error sentence (`err.sentence.ob.text`).

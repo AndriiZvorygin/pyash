@@ -102,7 +102,7 @@ To keep code and commands closer to human speech, we use Pyash-flavoured names i
 - `program/understand/` — the parser; turns text into sentences.
 - `program/bridge/` — the dispatcher; routes moods/verbs to handlers.
 - `program/remember/` — memory; functions are `doRemember`, `remember`, `allRemember`, `forget`.
-- `program/command/` — CLI helpers such as `run_pya_program.mjs`, `read_pya_trace.mjs`, `list_pyash_words.mjs`.
+- `command/` — CLI helpers such as `run_pya_program.mjs`, `read_pya_trace.mjs`, `list_pyash_words.mjs`.
 - `program/beautiful.mjs` — rendering sentences back to readable Pyash strings.
 - `quiz/` — automated quizzes (tests) to pin behaviour.
 - `program/configure/` — example configuration data (e.g., `workplace.json`).
@@ -115,11 +115,11 @@ The goal is to make the codebase read like controlled natural language, reducing
 
 Use the vocab helpers before introducing new verbs, files, directory names, or example words.
 
-- `node program/command/vocab_suggest.mjs examples/pyash` scans `.pya` files for non-Pyash tokens and suggests replacements.
-- `node program/command/vocab_suggest.mjs --text "new verb name"` checks a proposed token or phrase without touching files.
-- `node program/command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
+- `node command/vocab_suggest.mjs examples/pyash` scans `.pya` files for non-Pyash tokens and suggests replacements.
+- `node command/vocab_suggest.mjs "new verb name"` checks a proposed token or phrase without touching files.
+- `node command/vocab_check.mjs examples/pyash` enforces that every token is already in the dictionaries.
 
-These helpers use the `caterer/pyac/lyac` dictionaries via `program/command/ryan.mjs`.
+These helpers use the `caterer/pyac/lyac` dictionaries via `command/ryan.mjs`.
 
 ---
 

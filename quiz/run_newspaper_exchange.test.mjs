@@ -23,7 +23,7 @@ test("run newspaper records artifact + exchange for write", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"hello\" to filename \"out.txt\" be write do\n", "utf8");
 
-  const scriptPath = path.join(repoRoot, "program/command/run_pya_program.mjs");
+  const scriptPath = path.join(repoRoot, "command/run_pya_program.mjs");
   await execFileAsync(process.execPath, [
     scriptPath,
     "--newspaper",
