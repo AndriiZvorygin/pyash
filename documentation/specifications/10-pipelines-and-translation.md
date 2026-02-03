@@ -1492,3 +1492,17 @@ English aliases:
 - `program/verbs/exchange/translation/english_aliases.mjs` builds a lookup that maps
   anchor-word surface forms back to the anchor for English gloss matching.
 - This is a lookup helper for translation pairs, not a language-wide stemming system.
+
+### 10.2 Updating anchor words
+
+To add a new anchor mapping:
+1. Add a line to `program/verbs/exchange/translation/anchor_words.pya`:
+   ```
+   su name <anchor> ob text "<surface form>" as wo <role> ya
+   ```
+2. Keep `<anchor>` as the canonical Pyash token; use `ob text` for the surface form.
+3. Use `as wo <role>` to tag the form (noun/verb/adverb/etc.).
+
+Helper:
+- `node program/command/vocab_anchor_ing_suggest.mjs` scans the vocabulary and prints
+  safe `-ing` → anchor suggestions.
