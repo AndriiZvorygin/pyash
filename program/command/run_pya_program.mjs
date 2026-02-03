@@ -149,7 +149,8 @@ async function main() {
   let refineryResult = null;
   let refineryName = refineryFlag ?? null;
   let checkpointIndex = null;
-  const isInteractive = process.stdout?.isTTY === true && process.stdin?.isTTY === true;
+  const isInteractive = process.env.PYA_FORCE_INTERACTIVE === "1" ||
+    (process.stdout?.isTTY === true && process.stdin?.isTTY === true);
   let pendingToolEvoked = null;
 
   const toResultSentence = (res, fallbackSentence) => {
@@ -186,6 +187,28 @@ async function main() {
     };
     doRemember(decisionSentence);
     pushNewspaper(sentenceToPyash(decisionSentence));
+  };
+
+  const buildRatifyDecisionSentence = ({ surfaced, decision, decisionRaw }) => {
+    if (!surfaced || surfaced.be !== "ratify") return null;
+    const decisionSentence = {
+      mood: "ya",
+      be: "ratify",
+      su: surfaced.su,
+      ob: { boolean: decision === "truth" }
+    };
+    if (typeof decisionRaw === "string" && decisionRaw) {
+      decisionSentence.totext = { text: decisionRaw };
+    }
+    const resumeToken = surfaced?.fromtext?.text ?? null;
+    if (resumeToken) {
+      decisionSentence.accordingto = { name: "resume token" };
+      decisionSentence.fromtext = { text: resumeToken };
+    }
+    if (surfaced?.to?.name) {
+      decisionSentence.to = { name: surfaced.to.name };
+    }
+    return decisionSentence;
   };
 
   const runRefineryWithCallbacks = async ({ resume, nameOverride } = {}) => runRefinery({
@@ -258,25 +281,14 @@ async function main() {
             decisionRaw = decisionResult.raw ?? "";
           }
         }
-        if (decision !== "truth") {
-          const errorSentence = {
-            mood: "ya",
-            be: "error",
-            su: { name: "ratification declined" },
-            ob: { text: promptText },
-            from: { name: surfaced?.from?.name ?? "refinery" }
-          };
-          pushNewspaper(sentenceToPyash(errorSentence));
-          const err = new Error("ratification declined");
-          err.sentence = errorSentence;
-          runError = err;
-          break;
-        }
         const decisionName = surfaced?.to?.name ?? null;
         recordDecision(decisionName, decision);
-        const resumeToken = surfaced?.fromtext?.text ?? null;
         const resumeRefinery = surfaced?.from?.name ?? null;
-        if (resumeRefinery) {
+        if (decision !== "truth") {
+          const decisionSentence = buildRatifyDecisionSentence({ surfaced, decision, decisionRaw });
+          if (decisionSentence) pushNewspaper(sentenceToPyash(decisionSentence));
+        } else if (resumeRefinery) {
+          const resumeToken = surfaced?.fromtext?.text ?? null;
           try {
             const resumed = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision, raw: decisionRaw }, nameOverride: resumeRefinery });
             if (resumed?.be) {
@@ -334,22 +346,13 @@ async function main() {
         decisionRaw = decisionResult.raw ?? "";
       }
     }
-    if (decision !== "truth") {
-      const errorSentence = {
-        mood: "ya",
-        be: "error",
-        su: { name: "ratification declined" },
-        ob: { text: promptText },
-        from: { name: refineryName ?? "refinery" }
-      };
-      pushNewspaper(sentenceToPyash(errorSentence));
-      const err = new Error("ratification declined");
-      err.sentence = errorSentence;
-      runError = err;
-      break;
-    }
     const decisionName = refineryResult?.to?.name ?? null;
     recordDecision(decisionName, decision);
+    if (decision !== "truth") {
+      const decisionSentence = buildRatifyDecisionSentence({ surfaced: refineryResult, decision, decisionRaw });
+      if (decisionSentence) pushNewspaper(sentenceToPyash(decisionSentence));
+      break;
+    }
     const resumeToken = refineryResult?.fromtext?.text ?? null;
     try {
       refineryResult = await runRefineryWithCallbacks({ resume: { token: resumeToken, decision, raw: decisionRaw } });
