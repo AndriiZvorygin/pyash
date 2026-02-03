@@ -70,7 +70,8 @@ async function refinery(sentence) {
   const priorInput = remember("input");
 
   if (inputOb) {
-    doRemember({ mood: "ya", su: { name: "input" }, ob: inputOb, be: "text" });
+    const inputBe = inputOb?.num !== undefined ? "number" : inputOb?.boolean !== undefined ? "bool" : "text";
+    doRemember({ mood: "ya", su: { name: "input" }, ob: inputOb, be: inputBe });
   }
 
   try {
