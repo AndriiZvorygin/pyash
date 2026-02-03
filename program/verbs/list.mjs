@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { remember } from "../remember/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { appendWorldActivity, derivePresence, ensureWorldDir, isWorldToolsActive, readActivityTail, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../library/world.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -60,14 +61,35 @@ function normalizeFilter(value) {
 }
 
 export async function list(sentence, { remember: rememberFn = remember } = {}) {
+  const worldMode = isWorldToolsActive({ rememberFn });
   const rootRaw = resolveFilename(sentence?.from, { rememberFn }) || ".";
-  const root = path.resolve(String(rootRaw));
+  const root = worldMode
+    ? (() => {
+      if (sentence?.from) {
+        const { resolved, outside, root: worldRoot } = resolveWorldPath(rootRaw, { rememberFn });
+        if (outside) {
+          throwErrorSentence({
+            name: "list defective",
+            message: `list defective: outside world root (${worldRoot})`,
+            from: { name: "list" },
+            raw: { root: rootRaw }
+          });
+        }
+        return resolved;
+      }
+      const place = resolveWorldPlace({ rememberFn }) ?? "commons";
+      return resolveWorldPlaceDir(place, { rememberFn }) ?? path.resolve(String(rootRaw));
+    })()
+    : path.resolve(String(rootRaw));
   const hiddenToken = sentence?.with?.name ?? sentence?.with?.text ?? sentence?.with?.wo;
   const hidden = hiddenToken === "hidden";
   const mode = sentence?.as?.wo;
   const recursive = mode === "recursive";
   const filter = recursive ? "all" : normalizeFilter(mode);
 
+  if (worldMode && root) {
+    await ensureWorldDir(root);
+  }
   let stats;
   try {
     stats = await fs.stat(root);
@@ -101,7 +123,39 @@ export async function list(sentence, { remember: rememberFn = remember } = {}) {
   }
 
   if (!entries.length) {
-    return { ob: { ve: { type: "hollow", values: [] } }, be: "list" };
+    if (!worldMode) return { ob: { ve: { type: "hollow", values: [] } }, be: "list" };
+  }
+  if (worldMode) {
+    const place = resolveWorldPlace({ rememberFn }) ?? "commons";
+    const placeDir = resolveWorldPlaceDir(place, { rememberFn });
+    const activity = await readActivityTail({ placeDir });
+    const presence = derivePresence(activity);
+    const mapName = sentence?.to?.name ?? "world list";
+    doRemember({
+      mood: "ya",
+      su: { name: mapName },
+      be: "map",
+      ob: {
+        map: {
+          entries: { mood: "ya", su: { name: "entries" }, ob: { ve: { type: "text", values: entries } }, be: "vector" },
+          presence: { mood: "ya", su: { name: "presence" }, ob: { ve: { type: "text", values: presence } }, be: "vector" },
+          place: { mood: "ya", su: { name: "place" }, ob: { text: String(place) }, be: "text" }
+        }
+      }
+    });
+    const agent = resolveWorldAgent({ rememberFn });
+    if (agent && placeDir) {
+      await appendWorldActivity({
+        placeDir,
+        sentence: {
+          mood: "ya",
+          su: { name: agent },
+          at: { date: new Date().toISOString() },
+          be: "list"
+        }
+      });
+    }
+    return { ob: { name: mapName }, be: "list" };
   }
   return { ob: { ve: { type: "text", values: entries } }, be: "list" };
 }

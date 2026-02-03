@@ -3,10 +3,14 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
 import { compareUtf8, jsonValueFromObj } from "./json_map_export.mjs";
+import { remember } from "../../remember/index.mjs";
+import { sentenceToPyash } from "../../beautiful.mjs";
+import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { read_fromstate_csv } from "./read_csv.mjs";
 import { read_fromstate_json } from "./read_json.mjs";
 import { read_fromstate_yaml } from "./read_yaml.mjs";
 import { read_fromstate_lobster } from "./read_lobster.mjs";
+import { isWorldToolsActive, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +22,18 @@ function detectType(value) {
 }
 
 export async function read_from_filename({ from }) {
+  if (isWorldToolsActive({ rememberFn: remember })) {
+    const { resolved, outside, root } = resolveWorldPath(from?.filename ?? "", { rememberFn: remember });
+    if (outside) {
+      throwErrorSentence({
+        name: "read defective",
+        message: `read defective: outside world root (${root})`,
+        from: { name: "read" },
+        raw: { from }
+      });
+    }
+    from = { ...from, filename: resolved };
+  }
   const modulePath = path.join(__dirname, "read_from_filename.mjs");
   if (!fs.existsSync(modulePath)) {
     throw new Error("read: no handler for filename");
@@ -31,6 +47,56 @@ export async function read_from_filename({ from }) {
 
 export async function read_ob_filename(sentence) {
   return read_from_filename({ from: sentence?.ob });
+}
+
+export async function read_tail_from_filename(sentence) {
+  const fromValue = sentence?.from ?? {};
+  const filename = fromValue?.filename ?? fromValue?.text ?? null;
+  const tailFlag = sentence?.ob?.wo ?? sentence?.ob?.text ?? null;
+  if (tailFlag && String(tailFlag) !== "tail") {
+    throwErrorSentence({
+      name: "read defective",
+      message: `read defective: unknown tail mode ${tailFlag}`,
+      from: { name: "read" },
+      raw: { sentence }
+    });
+  }
+  const limit = sentence?.atmost?.num ?? sentence?.atmost?.quantity?.num ?? 10;
+  if (!filename) {
+    throwErrorSentence({
+      name: "read defective",
+      message: "read defective: missing filename",
+      from: { name: "read" },
+      raw: { sentence }
+    });
+  }
+  let targetPath = path.resolve(String(filename));
+  if (isWorldToolsActive({ rememberFn: remember })) {
+    if (filename === ".activity.pya") {
+      const place = resolveWorldPlace({ rememberFn: remember }) ?? "commons";
+      const placeDir = resolveWorldPlaceDir(place, { rememberFn: remember });
+      if (placeDir) targetPath = path.join(placeDir, filename);
+    } else {
+      const { resolved, outside, root } = resolveWorldPath(filename, { rememberFn: remember });
+      if (outside) {
+        throwErrorSentence({
+          name: "read defective",
+          message: `read defective: outside world root (${root})`,
+          from: { name: "read" },
+          raw: { filename }
+        });
+      }
+      targetPath = resolved;
+    }
+  }
+  let text = "";
+  try {
+    text = fs.readFileSync(targetPath, "utf8");
+  } catch {
+    return { ob: { ve: { type: "hollow", values: [] } }, be: "read" };
+  }
+  const lines = splitSentences(text).slice(-(limit > 0 ? limit : undefined));
+  return { ob: { ve: { type: "text", values: lines } }, be: "read" };
 }
 
 
@@ -102,6 +168,10 @@ export default async function read({ from }) {
 export const signatures = [
   { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename },
   { signatureWords: ["be", "read", "ob", "filename"], handler: read_ob_filename },
+  { signatureWords: ["be", "read", "ob", "wo", "tail", "from", "filename"], handler: read_tail_from_filename },
+  { signatureWords: ["be", "read", "ob", "wo", "tail", "from", "filename", "atmost", "num"], handler: read_tail_from_filename },
+  { signatureWords: ["be", "read", "ob", "wo", "tail", "atmost", "num", "from", "filename"], handler: read_tail_from_filename },
+  { signatureWords: ["be", "read", "atmost", "num", "from", "filename", "ob", "wo"], handler: read_tail_from_filename },
   { signatureWords: ["be", "read", "ob", "all"], handler: read_from_json_map_all },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name"], handler: read_fromstate_json },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "json", "to", "name", "num"], handler: read_fromstate_json },
