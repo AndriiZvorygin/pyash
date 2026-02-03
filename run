@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-node program/command/run_pya_program.mjs "$@"
+node command/run_pya_program.mjs "$@"

@@ -50,7 +50,7 @@ test("refinery mind -> say -> hear fixture loop emits transcript", async () => {
   process.env.PYA_PIPER_FIXTURE = "fixture-audio";
   process.env.PYA_HEAR_FIXTURE = "Fixture transcript.";
   try {
-    const { logs, errors } = await runScript("program/command/run_pya_program.mjs", [
+    const { logs, errors } = await runScript("command/run_pya_program.mjs", [
       "--refinery",
       "loop",
       "examples/pyash/refinery-mind-say-hear-fixture.pya"

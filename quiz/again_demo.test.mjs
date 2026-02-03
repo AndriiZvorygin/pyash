@@ -47,7 +47,7 @@ async function runScript(scriptRelPath, args) {
 test("again demo replays from newspaper", async () => {
   const examplePath = "examples/pyash/again-demo.pya";
   const runId = "again-demo";
-  const script = "program/command/run_pya_program.mjs";
+  const script = "command/run_pya_program.mjs";
 
   const first = await runScript(script, ["--newspaper", "--run-id", runId, examplePath]);
   assert.equal(first.errors.join("\n"), "");

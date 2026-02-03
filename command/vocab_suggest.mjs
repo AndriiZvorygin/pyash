@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
-import { buildProgram } from "../program.mjs";
+import { buildProgram } from "../program/program.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
-import { resolveEnglishAlias } from "../verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
 
 function parseArgs(args) {
   const inputs = [];
@@ -22,8 +22,7 @@ function parseArgs(args) {
     }
     inputs.push(arg);
   }
-  const roots = inputs.length > 0 ? inputs : (textInputs.length > 0 ? [] : ["examples/pyash"]);
-  return { inputs, textInputs, mapPath, roots };
+  return { inputs, textInputs, mapPath };
 }
 
 const checked = new Map();
@@ -172,8 +171,34 @@ function extractQuotedPyashBlocks(text) {
   return blocks;
 }
 
+async function resolveRootsAndTokens(inputs, textInputs) {
+  const roots = [];
+  const tokens = [...textInputs];
+  if (inputs.length === 0 && tokens.length === 0) {
+    return { roots: ["examples/pyash"], tokens };
+  }
+  for (const input of inputs) {
+    if (textInputs.length > 0) {
+      roots.push(input);
+      continue;
+    }
+    try {
+      const stats = await fs.stat(input);
+      if (stats.isDirectory() || stats.isFile()) {
+        roots.push(input);
+      } else {
+        tokens.push(input);
+      }
+    } catch {
+      tokens.push(input);
+    }
+  }
+  return { roots, tokens };
+}
+
 export async function runVocabSuggest(args = process.argv.slice(2), { report = console.log } = {}) {
-  const { textInputs, mapPath, roots } = parseArgs(args);
+  const { inputs, textInputs, mapPath } = parseArgs(args);
+  const { roots, tokens: resolvedTextInputs } = await resolveRootsAndTokens(inputs, textInputs);
   const occurrences = new Map();
   const okTextTokens = new Set();
   const files = [];
@@ -183,7 +208,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
 
   let missing = 0;
   const textTokens = new Set();
-  for (const input of textInputs) {
+  for (const input of resolvedTextInputs) {
     for (const token of tokenizeName(input)) textTokens.add(token);
   }
   for (const file of files) {

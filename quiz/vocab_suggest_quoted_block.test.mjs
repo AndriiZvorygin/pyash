@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runVocabSuggest } from "../program/command/vocab_suggest.mjs";
+import { runVocabSuggest } from "../command/vocab_suggest.mjs";
 
 test("vocab_suggest checks quoted pyash blocks", () => {
   const lines = [];

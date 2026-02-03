@@ -26,8 +26,8 @@ test("extract_report emits deterministic report from newspaper", async () => {
   const runId = "report-extract";
   const runTime = "2026-01-30T00:00:00.000Z";
   const fixturePath = path.join("quiz", "fixtures", "report_extract_fixture.pya");
-  const runScriptPath = "program/command/run_pya_program.mjs";
-  const extractScriptPath = "program/command/extract_report.mjs";
+  const runScriptPath = "command/run_pya_program.mjs";
+  const extractScriptPath = "command/extract_report.mjs";
 
   const runResult = await runScript(runScriptPath, [
     "--run-id", runId,

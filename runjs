@@ -92,9 +92,9 @@ if [[ "$NEWSPAPER" -eq 1 ]]; then
     RUN_ARGS+=(--again)
   fi
   if [[ -n "$REFINERY" ]]; then
-    PYA_REFINERY="$REFINERY" node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- node "$TMP_JS"
+    PYA_REFINERY="$REFINERY" node "$SCRIPT_DIR/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- node "$TMP_JS"
   else
-    node "$SCRIPT_DIR/program/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- node "$TMP_JS"
+    node "$SCRIPT_DIR/command/run_with_newspaper.mjs" --source "$SRC" "${RUN_ARGS[@]}" -- node "$TMP_JS"
   fi
 else
   if [[ -n "$REFINERY" ]]; then

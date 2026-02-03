@@ -381,8 +381,8 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 ---
 ## 16. Implementation pointers
 
-- Interpreter runner: `program/command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`, `nextToolCounter`).
-- Run wrapper: `program/command/run_with_newspaper.mjs` (PYA_NEWSPAPER capture and file write).
+- Interpreter runner: `command/run_pya_program.mjs` (`pushNewspaper`, `emitToolEvent`, `nextToolCounter`).
+- Run wrapper: `command/run_with_newspaper.mjs` (PYA_NEWSPAPER capture and file write).
 - Compiled JS runtime: `program/verbs/exchange/compile/js/runtime_helpers.mjs` (`newspaperRuntimeHelper`, `pyaEmitNewspaper`).
 - Compiled C runtime: `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`, PYA_NEWSPAPER block markers).
 

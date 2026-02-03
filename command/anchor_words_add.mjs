@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { buildProgram } from "../program.mjs";
+import { buildProgram } from "../program/program.mjs";
 
 const args = process.argv.slice(2);
 
@@ -34,12 +34,12 @@ const role = readFlagValue("--role");
 const fileOverride = readFlagValue("--file");
 
 if (!anchor || !form || !role) {
-  console.error("Usage: node program/command/anchor_words_add.mjs --anchor <name> --form <text> --role <role> [--file <path>]");
+  console.error("Usage: node command/anchor_words_add.mjs --anchor <name> --form <text> --role <role> [--file <path>]");
   process.exit(1);
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, "../..");
+const repoRoot = path.resolve(here, "..");
 const defaultPath = path.resolve(repoRoot, "program/verbs/exchange/translation/anchor_words.pya");
 const anchorPath = fileOverride ? path.resolve(fileOverride) : defaultPath;
 

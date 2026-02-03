@@ -502,7 +502,7 @@ canonical ordering and required fields above.
 
 Implementations may expose report extraction via:
 
-- CLI (`node program/command/extract_report.mjs --run-id <id>`)
+- CLI (`node command/extract_report.mjs --run-id <id>`)
 - Inline verb (`be reporter do`) that reads the current run's newspaper buffer
   or the on-disk newspaper when present.
 
