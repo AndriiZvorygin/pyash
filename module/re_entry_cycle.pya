@@ -7,7 +7,7 @@ prah
 
 su name re-entry cycle fromindex num 0 toindex num 0 to name text output be ceremony def
   to name text latest be re-entry attempt do
-  su name task ob text of latest be text ya
+  exists su name task ob text of latest be text ya
   su name latest ret
 prah
 
