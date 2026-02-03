@@ -47,8 +47,12 @@ export function handleMindWrite(context, helpers) {
     }
   }
   if (sentence.with?.name && agentCwd) {
-    lines.push("globalThis[\"agent sandbox\"] = { su: { name: \"agent sandbox\" }, ob: { boolean: true }, be: \"truth\", mood: \"ya\" };");
-    lines.push(`globalThis["agent cwd"] = { su: { name: "agent cwd" }, ob: { filename: ${JSON.stringify(String(agentCwd))} }, be: "cwd", mood: "ya" };`);
+    const toolMapDef = mapDefs?.get(sentence.with.name);
+    const sandpit = toolMapDef?.as?.wo === "sandpit" || toolMapDef?.as?.text === "sandpit";
+    if (sandpit) {
+      lines.push("globalThis[\"agent sandbox\"] = { su: { name: \"agent sandbox\" }, ob: { boolean: true }, be: \"truth\", mood: \"ya\" };");
+      lines.push(`globalThis["agent cwd"] = { su: { name: "agent cwd" }, ob: { filename: ${JSON.stringify(String(agentCwd))} }, be: "cwd", mood: "ya" };`);
+    }
   }
   lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
   lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);

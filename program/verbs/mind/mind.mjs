@@ -52,7 +52,9 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
 
   const toolMapName = sentence?.with?.name ?? null;
   const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
-  if (toolMapName && agentCwd) {
+  const toolMapFact = toolMapName ? remember(toolMapName) : null;
+  const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
+  if (toolMapName && agentCwd && toolMapSandpit) {
     doRemember({
       mood: "ya",
       be: "truth",

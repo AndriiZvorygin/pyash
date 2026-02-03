@@ -394,14 +394,22 @@ do
 ### 7.6 Agent CWD binding
 
 When a mind call includes `at filename <path>` and tool capabilities are enabled
-(`with name <tool map>`), the runtime MUST record the value as the **agent CWD**
-(`su name agent cwd`) and enable the **agent sandbox** (`su name agent sandbox`).
+(`with name <tool map>`), the runtime MUST enable the **agent sandbox** only when
+the tool map definition is marked `as wo sandpit`. In that case it MUST record the
+value as the **agent CWD** (`su name agent cwd`) and enforce path restrictions.
 Destructive tool effects are constrained to this directory: relative output paths
 MUST be resolved under it, and attempts to write outside it MUST error.
 
 Example:
 
 ```pyash
+su name tools as wo sandpit be map def
+  su name read ob wo payload be ceremony def
+    ob wo of ob of this be read do
+  prah
+  exists su name read be export ya
+prah
+
 ob text "summarize"
 for name qwenbot
 to name text out
