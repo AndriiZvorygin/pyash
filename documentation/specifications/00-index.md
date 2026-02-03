@@ -14,7 +14,8 @@ Reading order (feature chapters):
 7. `07-io-and-scripts.md` — directory verbs, date/time, interpret-script, download.
 8. `08-tools-and-mcp.md` — mind + tool calling + MCP.
 9. `09-speech-and-hear.md` — say/hear, speech artifacts, whisper input, vendoring.
-10. `10-pipelines-and-translation.md` — refinery, re-entry cycle, translation.
+10. `10-pipelines.md` — refinery, re-entry cycle.
+11. `11-translation.md` — translation pipeline.
 11. `11-modules.md` — module system and tool runner contract.
 12. `12-web-search.md` — web search spec (draft).
 13. `13-cheat-sheet.md` — compact coding-only reference (for small models).
@@ -28,7 +29,7 @@ Recommended practice loop
 5. Read `04-runtime-primitives.md`, then run `quiz/runtime_primitives_lifecycle.test.mjs`.
 6. Read `05-run-recording-and-artifacts.md`, then run `quiz/run_newspaper_basic.test.mjs`.
 7. Read `06-data-formats.md`, then run `quiz/json_map_roundtrip_canonical.test.mjs`.
-8. Read `10-pipelines-and-translation.md`, then run `examples/pyash/re-entry-cycle-fixture.pya`.
+8. Read `10-pipelines.md`, then run `examples/pyash/re-entry-cycle-fixture.pya`.
 
 If you need code locations without scanning the repo, read `documentation/specifications/90-implementation-map.md`.
 
@@ -58,6 +59,7 @@ Feature specs (optional, when blessed):
 - `07-io-and-scripts.md`
 - `08-tools-and-mcp.md`
 - `09-speech-and-hear.md`
-- `10-pipelines-and-translation.md`
+- `10-pipelines.md`
+- `11-translation.md`
 - `11-modules.md` (v0.1)
 - `documentation/whisper_initial_prompt.md` (draft)

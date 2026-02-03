@@ -34,7 +34,8 @@ Small, normative modules. Consolidated into numbered chapters to keep file count
 * `09-speech-and-hear.md`
   Say/hear verbs, speech artifacts, whisper input, and caterer vendoring.
 
-* `10-pipelines-and-translation.md`
+* `10-pipelines.md`
+* `11-translation.md`
   Refinery, re-entry cycle, and translation.
 
 * `11-modules.md`
