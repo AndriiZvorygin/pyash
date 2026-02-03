@@ -142,6 +142,14 @@ exists su name openai base url ob text "http://host.docker.internal:11434" be de
 docker compose -f container/service/pyash.yaml up --build
 ```
 
+### Build + restart helper
+
+```bash
+./container/command/build.sh [--no-cache] [-- <docker compose build args>]
+```
+
+`container/build.sh` is kept as a wrapper to call the command script.
+
 ## Python ML tooling (optional)
 
 The image includes Python + venv. For Transformers / vLLM or diffusion tooling:
