@@ -16,7 +16,7 @@ test("replay rejects hash mismatch", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"alpha\" to filename \"out.txt\" be write do\n", "utf8");
 
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     runPath,
     "--again",
@@ -38,7 +38,7 @@ test("replay rejects hash mismatch", async () => {
   const caRel = path.join("artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}${ext}`);
   await fs.writeFile(path.join(tmpDir, caRel), "tampered\n", "utf8");
 
-  const replayPath = path.join(repoRoot, "program", "command", "replay_newspaper.mjs");
+  const replayPath = path.join(repoRoot, "command", "replay_newspaper.mjs");
   let failed = false;
   try {
     await execFileAsync("node", [

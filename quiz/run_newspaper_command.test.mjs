@@ -23,7 +23,7 @@ test("run can emit tool event for command", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"noop\" to name text output be command do\n", "utf8");
 
-  const scriptPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const scriptPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     scriptPath,
     "--newspaper",

@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const rootDir = path.resolve(path.dirname(__filename), "..");
-const runner = path.join(rootDir, "program", "command", "run_pya_program.mjs");
+const runner = path.join(rootDir, "command", "run_pya_program.mjs");
 
 const child = spawn(process.execPath, [runner, ...process.argv.slice(2)], {
   stdio: "inherit"

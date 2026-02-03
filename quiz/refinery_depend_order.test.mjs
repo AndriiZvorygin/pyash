@@ -31,7 +31,7 @@ test("refinery runner respects depend ordering", async () => {
     ""
   ].join("\n"), "utf8");
 
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     runPath,
     "--refinery", "build",
