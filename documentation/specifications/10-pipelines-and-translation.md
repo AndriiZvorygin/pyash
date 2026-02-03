@@ -1321,6 +1321,28 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 
 ---
 
+## 5.1 Reverse pairs and template matching (implementation notes)
+
+Implementation lives in `program/verbs/exchange/translation/reverse_pairs.mjs`.
+
+- Reverse pairs are built by inverting the exact pairs file (`pairs_<lang>.pya`) into
+  a gloss → Pyash map.
+- Reverse templates compile each template gloss into a regex by replacing placeholder
+  slots with `(.+?)`, then substitute the captured values back into the Pyash template.
+- Matching prefers the longest gloss template (greedy by template length) when multiple
+  templates match the same input.
+- Boolean glosses are normalized per language during reverse substitution:
+  - English: `truth/lie` or `true/false`
+  - Russian: `истина/ложь`
+  - French: `vrai/faux`
+
+Usage:
+- `parse()` fallback uses reverse pairs/templates with no adapter involved.
+- `be translation do` (gloss → Pyash) also uses reverse pairs/templates for most adapters
+  (English/French/etc.), but some adapters parse directly instead (Russian/Chinese/Interlingua/Hindi).
+
+---
+
 ## 6. Tests that define truth
 
 - `quiz/translation.test.mjs`
@@ -1452,3 +1474,21 @@ Interpretation:
 - `as wo <role>` tags the form (noun/adverb/etc.).
 
 Implementations MAY normalize incoming text by mapping known forms back to the anchor word.
+
+### 10.1 Implementation behavior
+
+Anchor words are implemented in `program/verbs/exchange/translation/anchor_words.mjs`
+and applied via `normalizeAnchorSentence()` in `program/verbs/exchange/translation/helpers.mjs`.
+
+Rules:
+- Anchor forms are loaded from `program/verbs/exchange/translation/anchor_words.pya`.
+- The normalization walks a parsed sentence object and rewrites **name tokens** only
+  (e.g., `su.name`, `ob.name`, `to.name`, `from.name`) by splitting on whitespace and
+  mapping any known form back to its anchor.
+- This is applied when translating **gloss → Pyash** inside `be translation do`.
+  It is not applied in the core parser fallback (`parse()`).
+
+English aliases:
+- `program/verbs/exchange/translation/english_aliases.mjs` builds a lookup that maps
+  anchor-word surface forms back to the anchor for English gloss matching.
+- This is a lookup helper for translation pairs, not a language-wide stemming system.
