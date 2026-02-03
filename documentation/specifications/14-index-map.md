@@ -14,7 +14,8 @@ Use this when the cheat sheet is not enough.
 - **IO verbs (read/write/download/command/etc.)** → `07-io-and-scripts.md`
 - **Mind + tool calling + MCP** → `08-tools-and-mcp.md`
 - **Say / hear / speech artifacts / whisper** → `09-speech-and-hear.md`
-- **Refinery / re-entry / translation** → `10-pipelines-and-translation.md`
+- **Refinery / re-entry** → `10-pipelines.md`
+- **Translation** → `11-translation.md`
 - **Module system + runner contract** → `11-modules.md`
 - **Web search** → `12-web-search.md`
 

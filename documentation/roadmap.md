@@ -167,7 +167,7 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 
 ### Dec 30, 2025: Refinery scaffolding + compiled run newspapers
 
-* Refinery spec drafted (`10-pipelines-and-translation.md`, refinery/platform/activity vocabulary) and indexed.
+* Refinery spec drafted (`10-pipelines.md`, refinery/platform/activity vocabulary) and indexed.
 * Interpreter captures refinery/platform definitions into a normalized registry (no execution at definition time).
 * Refinery runner shipped (deterministic scheduling + fail-fast) for interpreter/JS/C.
 * Run newspaper implemented as opt-in (`--newspaper`) and locked with parity tests across interpreter / JS / C.
