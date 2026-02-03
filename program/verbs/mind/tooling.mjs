@@ -59,6 +59,7 @@ function toolTypeWordsFromValue(value, caseKey) {
   return ["name"];
   }
   if (caseKey === "to") {
+    if (value.filename !== undefined) return ["filename"];
     if (value.nameTypeWords?.includes("text")) return ["name", "text"];
     if (value.name) return ["name"];
     return ["name"];

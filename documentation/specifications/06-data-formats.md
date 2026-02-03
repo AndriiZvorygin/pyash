@@ -69,6 +69,8 @@ Rules:
 
 `be map def … prah` produces a **pyash map value** stored under `<M>`.
 
+**Storage note:** the map definition block is compiled into a single stored **map sentence** (`mood: "ya"`, `be: "map"`, `ob.map = { switch -> entry }`). Header cases on the `be map def` sentence (e.g., `as`, `from`, `to`, `with`, `at`, `by`, `during`, `accordingto`, `become`) are preserved by copying them onto the stored map sentence. The original header sentence is not stored separately unless explicitly defined elsewhere.
+
 ### 4.2 Entry aggregation
 
 Inside a map definition block, each entry contributes one association:
