@@ -11,7 +11,7 @@ Pyash is a compact, speakable language that can be interpreted or compiled to Ja
 ```bash
 ./introductory
 ```
-See `documentation/docker.md` for full container workflows (build, compose, VNC/noVNC, GPU).
+See `documentation/container.md` for full container workflows (build, compose, VNC/noVNC, GPU).
 
 ## Install & Quizzes
 ```bash
