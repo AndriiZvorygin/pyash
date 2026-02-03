@@ -406,3 +406,8 @@ Work started **Nov 12, 2025** with a sentence-based core, unified memory, and an
 * Added `be refinery do` inline execution with task binding from `ob`.
 * Reviewer circle example now runs the refinery inline and prints the result without CLI flags.
 * Refinery spec updated to describe inline invocation and newspaper/artefact source-of-truth invariants.
+
+### Feb 3, 2026: Tool sandpit agent cwd enforcement
+
+* Tool sandpit now scopes destructive tool writes to the agent CWD when the tool map is `as wo sandpit`.
+* Added a tool sandpit example (`examples/pyash/mind-tool-sandpit-agent-cwd.pya`).
