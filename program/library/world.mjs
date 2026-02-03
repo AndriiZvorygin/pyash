@@ -38,11 +38,12 @@ export function resolveWorldPlace({ rememberFn } = {}) {
 
 export function setWorldPlace(place, { doRememberFn } = {}) {
   const rememberImpl = typeof doRememberFn === "function" ? doRememberFn : doRemember;
+  const normalized = path.basename(String(place ?? ""));
   rememberImpl({
     mood: "ya",
     su: { name: "world place" },
     be: "text",
-    ob: { text: String(place) }
+    ob: { text: normalized }
   });
 }
 
@@ -115,4 +116,3 @@ export function derivePresence(sentences) {
   }
   return present;
 }
-
