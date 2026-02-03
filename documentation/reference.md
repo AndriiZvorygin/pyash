@@ -12,14 +12,14 @@ Commands: `mem` (dump memory), `reset`, `quit`, `paste` (multi-line). Enter Pyas
 
 ## Trace a .pya file to memory
 ```bash
-node program/command/read_pya_trace.mjs path/to/file.pya
+node command/read_pya_trace.mjs path/to/file.pya
 ```
 Reads Pyash text, interprets each sentence, and prints `{ memory, sandpits }` as JSON.
 Use `--gross` for raw JSON; without it, beautiful trace output is printed.
 
 Run a program and see outputs:
 ```bash
-node program/command/run_pya_program.mjs [--full] [--gross] path/to/file.pya
+node command/run_pya_program.mjs [--full] [--gross] path/to/file.pya
 ```
 Beautiful mode shows `Outputs` (from `que`) and final `Result`; `--gross` returns `{ outputs, result }` JSON; `--full` also prints the program.
 

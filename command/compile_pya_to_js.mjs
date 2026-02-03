@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parse } from "../understand/index.mjs";
-import { splitSentences } from "../library/sentenceSplitter.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 
 function usage() {
-  console.error("Usage: node program/command/compile_pya_to_js.mjs <path/to/file.pya>");
+  console.error("Usage: node command/compile_pya_to_js.mjs <path/to/file.pya>");
   process.exit(1);
 }
 

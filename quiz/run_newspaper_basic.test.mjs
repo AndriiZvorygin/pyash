@@ -23,7 +23,7 @@ test("run writes run newspaper with evoke/result", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "exists su name alpha ob num 1 be number ya\n", "utf8");
 
-  const scriptPath = path.join(repoRoot, "program/command/run_pya_program.mjs");
+  const scriptPath = path.join(repoRoot, "command/run_pya_program.mjs");
   await execFileAsync(process.execPath, [
     scriptPath,
     "--newspaper",

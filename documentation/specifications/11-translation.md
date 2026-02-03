@@ -335,5 +335,7 @@ To add a new anchor mapping:
 3. Use `as wo <role>` to tag the form (noun/verb/adverb/etc.).
 
 Helper:
-- `node program/command/vocab_anchor_ing_suggest.mjs` scans the vocabulary and prints
+- `node command/vocab_anchor_ing_suggest.mjs` scans the vocabulary and prints
   safe `-ing` → anchor suggestions.
+- `node command/anchor_words_add.mjs --anchor <name> --form <text> --role <role>`
+  appends a new mapping to the anchor file.

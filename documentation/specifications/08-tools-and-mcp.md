@@ -1076,7 +1076,7 @@ su name artifact-0 ob name evoke-0 to filename "out.txt" accordingto name sha256
 
 ## 5. Implementation pointers
 
-- Tool event emission (interpreter): `program/command/run_pya_program.mjs` (`emitToolEvent`).
+- Tool event emission (interpreter): `command/run_pya_program.mjs` (`emitToolEvent`).
 - Mind JSON records: `program/verbs/mind/mind.mjs` (`recordMindJson`).
 - Compiled JS tool events: `program/verbs/exchange/compile/emit_mind.mjs`, `program/verbs/exchange/compile/emit_command.mjs`, `program/verbs/exchange/compile/emit_write.mjs` (tool event `pyaEmitNewspaper` emissions).
 - Compiled C tool events: `program/verbs/exchange/compile/c/helpers_c.mjs` (`pya_emit_exchange`).

@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parse } from "../understand/index.mjs";
-import { interpret } from "../bridge/index.mjs";
-import { forget, allRemember, dumpSandpits } from "../remember/index.mjs";
-import { splitSentences } from "../library/sentenceSplitter.mjs";
-import { sentenceToPyash } from "../beautiful.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, allRemember, dumpSandpits } from "../program/remember/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
 
 async function main() {
   const args = process.argv.slice(2);

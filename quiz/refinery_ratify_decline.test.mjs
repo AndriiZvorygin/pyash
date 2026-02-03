@@ -23,7 +23,7 @@ test("declined ratify records decision and exits refinery without aborting progr
   await fs.writeFile(programPath, `${program}\n`, "utf8");
 
   const { logs, errors } = await runScriptWithInput(
-    "program/command/run_pya_program.mjs",
+    "command/run_pya_program.mjs",
     ["--gross", programPath],
     "n\n"
   );

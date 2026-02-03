@@ -23,7 +23,7 @@ test("--again forces newspaper and records again marker", async () => {
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"alpha\" to filename \"out.txt\" be write do\n", "utf8");
 
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     runPath,
     "--again",

@@ -4,7 +4,7 @@ Pyash CLI helpers
 Three convenience scripts live at the repo root:
 
 - `./interpret` starts the interactive REPL (backs `node program/main.mjs`).
-- `./run <file.pya>` executes a Pyash program file through the interpreter (same as `node program/command/run_pya_program.mjs file.pya`).
+- `./run <file.pya>` executes a Pyash program file through the interpreter (same as `node command/run_pya_program.mjs file.pya`).
 - `./compile` wraps common compile flows.
 
 `./compile` usage

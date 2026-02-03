@@ -22,7 +22,7 @@ if [[ "$#" -ge 1 && "$1" != -* ]]; then
     elif [[ ! "$SENTENCE" =~ [[:space:]](do|ya|que|ret|def|prah)[[:space:]]?$ ]]; then
       SENTENCE+=" do"
     fi
-    node "$SCRIPT_DIR/program/command/run_pya_program.mjs" "${SENTENCE}"
+    node "$SCRIPT_DIR/command/run_pya_program.mjs" "${SENTENCE}"
   else
     INPUT="$1"
     OUTPUT="$2"
@@ -33,15 +33,15 @@ if [[ "$#" -ge 1 && "$1" != -* ]]; then
     fi
     if [[ "$OUTPUT" == -* ]]; then
       # Treat flag-like args as pass-through to run_pya_program.
-      node "$SCRIPT_DIR/program/command/run_pya_program.mjs" --gross "$@"
+      node "$SCRIPT_DIR/command/run_pya_program.mjs" --gross "$@"
       exit 0
     fi
     if [[ -z "$TARGET" ]]; then
       TARGET="javascript"
     fi
     SENTENCE="from filename \"${INPUT}\" from state pyash to filename \"${OUTPUT}\" to state ${TARGET} be compile do"
-    node "$SCRIPT_DIR/program/command/run_pya_program.mjs" "${SENTENCE}"
+    node "$SCRIPT_DIR/command/run_pya_program.mjs" "${SENTENCE}"
   fi
 else
-  node "$SCRIPT_DIR/program/command/run_pya_program.mjs" --gross "$@"
+  node "$SCRIPT_DIR/command/run_pya_program.mjs" --gross "$@"
 fi

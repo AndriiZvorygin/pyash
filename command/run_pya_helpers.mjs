@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parse } from "../understand/index.mjs";
-import { splitSentences, splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
-import { sentenceToPyash } from "../beautiful.mjs";
-import { state } from "../bridge/state.mjs";
-import { pushModuleDir, popModuleDir } from "../bridge/modules.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { splitSentences, splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { state } from "../program/bridge/state.mjs";
+import { pushModuleDir, popModuleDir } from "../program/bridge/modules.mjs";
 
 export async function loadConfigFile({ configPath, interpretFn }) {
   try {

@@ -62,7 +62,7 @@ test("run uses timezone from config when writing run start", async () => {
     const programPath = path.join(tmpDir, "program.pya");
     await fs.writeFile(programPath, "su name ok ob text \"done\" be write do\n", "utf8");
     process.chdir(tmpDir);
-    const { errors } = await runScript("program/command/run_pya_program.mjs", ["--newspaper", "--run-id", "tz-run", programPath]);
+    const { errors } = await runScript("command/run_pya_program.mjs", ["--newspaper", "--run-id", "tz-run", programPath]);
     assert.equal(errors.join("\n"), "");
     const newspaperPath = path.join(tmpDir, "newspaper", "tz-run.pya");
     const output = await fs.readFile(newspaperPath, "utf8");
