@@ -46,6 +46,7 @@ import notVerb, { signatures as notSignatures } from "./not.mjs";
 import orVerb, { signatures as orSignatures } from "./or.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
+import sleep, { signatures as sleepSignatures } from "./sleep.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
 import del, { signatures as deleteSignatures } from "./delete.mjs";
 import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
@@ -89,6 +90,7 @@ export {
   restart,
   go,
   copy,
+  sleep,
   touch,
   del,
   refinery,
@@ -146,6 +148,7 @@ export const builtInSignatures = [
   ...orSignatures,
   ...renameSignatures,
   ...searchSignatures,
+  ...sleepSignatures,
   ...touchSignatures,
   ...deleteSignatures,
   ...refinerySignatures,

@@ -1,0 +1,10 @@
+exists su name world tools ob bool truth ya
+exists su name world root ob filename "world" be default ya
+exists su name world agent ob text "demo" be text ya
+exists su name world place ob text "commons" be text ya
+
+to name text "commons" be go do
+be list do
+ob text "Hello from the commons." to filename "notes/hello.txt" be write do
+be read ob wo tail atmost num 10 from filename ".activity.pya" do
+be sleep do

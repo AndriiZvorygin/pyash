@@ -54,6 +54,7 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
   const toolMapFact = toolMapName ? remember(toolMapName) : null;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
+  const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
   if (toolMapName && agentCwd && toolMapSandpit) {
     doRemember({
       mood: "ya",
@@ -66,6 +67,27 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       be: "cwd",
       su: { name: "agent cwd" },
       ob: { filename: String(agentCwd) }
+    });
+  }
+  if (toolMapName && toolMapWorld) {
+    const worldRoot = agentCwd ?? "world";
+    doRemember({
+      mood: "ya",
+      be: "truth",
+      su: { name: "world tools" },
+      ob: { boolean: true }
+    });
+    doRemember({
+      mood: "ya",
+      be: "root",
+      su: { name: "world root" },
+      ob: { filename: String(worldRoot) }
+    });
+    doRemember({
+      mood: "ya",
+      be: "text",
+      su: { name: "world agent" },
+      ob: { text: String(mindName) }
     });
   }
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
