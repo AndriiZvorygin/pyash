@@ -6,9 +6,9 @@
     "test": "node --test \"quiz/**/*.test.mjs\"",
     "quiz": "node --test \"quiz/**/*.test.mjs\"",
     "repl": "node program/main.mjs",
-    "run": "node program/command/run_pya_program.mjs",
-    "trace": "node program/command/read_pya_trace.mjs",
-    "compile": "node program/command/run_pya_program.mjs --gross"
+    "run": "node command/run_pya_program.mjs",
+    "trace": "node command/read_pya_trace.mjs",
+    "compile": "node command/run_pya_program.mjs --gross"
   },
   "dependencies": {
     "csv-parse": "^5.5.0",

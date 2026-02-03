@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { parse } from "../understand/index.mjs";
-import { buildErrorSentence, surfaceErrorSentence } from "../error.mjs";
-import { sentenceToPyash } from "../beautiful.mjs";
-import { hashLocator, setExchangeRecorder, clearExchangeRecorder, setExchangeRunRoot } from "../bridge/exchange.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { hashLocator, setExchangeRecorder, clearExchangeRecorder, setExchangeRunRoot } from "../program/bridge/exchange.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;

@@ -4,10 +4,10 @@ import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { parse } from "../understand/index.mjs";
-import { splitSentences } from "../library/sentenceSplitter.mjs";
-import { sentenceToPyash } from "../beautiful.mjs";
-import { buildErrorSentence, surfaceErrorSentence } from "../error.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -87,7 +87,7 @@ async function run() {
   const sourcePathFlag = readFlagValue(args, "--source");
   const cmdIndex = args.indexOf("--");
   if (!sourcePathFlag || cmdIndex === -1) {
-    console.error("Usage: node program/command/run_with_newspaper.mjs --source <file.pya> [--run-id <id>] [--run-time <iso>] [--no-checkpoint] -- <command...>");
+    console.error("Usage: node command/run_with_newspaper.mjs --source <file.pya> [--run-id <id>] [--run-time <iso>] [--no-checkpoint] -- <command...>");
     process.exit(1);
   }
   const command = args.slice(cmdIndex + 1);

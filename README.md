@@ -78,7 +78,7 @@ Still evolving / fragile:
 - `program/verbs/mind/mind.mjs` — mind invocation + tool adapter
 - `program/library/grammar/keywords.mjs` — canonical keyword lists
 - `quiz/` — node:test quizzes (core, parser, compositional, mind, understand/read, beautiful, motor)
-- `program/command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).
-- `program/command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
+- `command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }` for inspection (beautiful by default; `--gross` for JSON).
+- `command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
 See `documentation/handoff.md` for the Fresh Codex Primer, and `documentation/roadmap.md` for the living plan. Examples live in `examples/`.

@@ -108,7 +108,7 @@ In `documentation/specifications/00-index.md`, include a short recommended readi
 3. Read `03-dispatch-and-signatures.md` then intentionally trigger a signature error example
 4. Read `04-ceremonies-and-this.md` then run `examples/pyash/ceremony-invoke.pya` and `this-registers.pya`
 5. Read `05-control-flow.md` then run `tloh-loop.pya`, `until-loop.pya`, and a conditional example
-6. Read `02-core-execution.md` then run a trace (`program/command/read_pya_trace.mjs`) and inspect the error sentence shape
+6. Read `02-core-execution.md` then run a trace (`command/read_pya_trace.mjs`) and inspect the error sentence shape
 
 That gives the model a tight, reproducible mental model.
 
