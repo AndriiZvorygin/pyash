@@ -9,8 +9,8 @@ const repoRoot = path.join(path.dirname(__filename), "..");
 
 test("again can replay from newspaper", async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-again-newspaper-"));
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
-  const replayPath = path.join(repoRoot, "program", "command", "replay_newspaper.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const replayPath = path.join(repoRoot, "command", "replay_newspaper.mjs");
   const programPath = path.join(repoRoot, "examples", "pyash", "again-newspaper.pya");
   const runId = "again-newspaper";
   await fs.mkdir(path.join(tmpDir, "examples", "out"), { recursive: true });

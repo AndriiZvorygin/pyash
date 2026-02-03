@@ -31,7 +31,7 @@ test("refinery retries on error and records reiterate", async () => {
 
   const __filename = fileURLToPath(import.meta.url);
   const repoRoot = path.join(path.dirname(__filename), "..");
-  const runPath = path.join(repoRoot, "program", "command", "run_pya_program.mjs");
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
 
   await execFileAsync("node", [
     runPath,

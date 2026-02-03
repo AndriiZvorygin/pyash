@@ -48,7 +48,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node program/cli/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
     process.exit(1);
   }
 
