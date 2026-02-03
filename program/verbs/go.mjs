@@ -32,7 +32,7 @@ export async function go(sentence, { remember: rememberFn = remember } = {}) {
     });
   }
   if (isWorldToolsActive({ rememberFn })) {
-    const place = String(target);
+    const place = path.basename(String(target));
     const placeDir = resolveWorldPlaceDir(place, { rememberFn });
     if (!placeDir) {
       throwErrorSentence({
