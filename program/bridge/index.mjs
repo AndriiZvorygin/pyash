@@ -185,7 +185,17 @@ export async function interpret(sentence) {
   const insideRefinery = isInsideRefinery();
 
   if (isMapDef) {
-    state.mapStack.push({ name: su?.name ?? null, kind: be, entries: [] });
+    const header = {};
+    if (sentence.as !== undefined) header.as = sentence.as;
+    if (sentence.from !== undefined) header.from = sentence.from;
+    if (sentence.to !== undefined) header.to = sentence.to;
+    if (sentence.with !== undefined) header.with = sentence.with;
+    if (sentence.at !== undefined) header.at = sentence.at;
+    if (sentence.by !== undefined) header.by = sentence.by;
+    if (sentence.during !== undefined) header.during = sentence.during;
+    if (sentence.accordingto !== undefined) header.accordingto = sentence.accordingto;
+    if (sentence.become !== undefined) header.become = sentence.become;
+    state.mapStack.push({ name: su?.name ?? null, kind: be, entries: [], header });
     return { mapStart: true };
   }
 
@@ -257,6 +267,11 @@ export async function interpret(sentence) {
       be: frame.kind,
       ob: { map }
     };
+    if (frame.header) {
+      for (const [key, value] of Object.entries(frame.header)) {
+        if (value !== undefined) mapSentence[key] = value;
+      }
+    }
     doRemember(mapSentence);
     return { stored: frame.name };
   }

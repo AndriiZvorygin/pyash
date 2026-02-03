@@ -1,0 +1,6 @@
+su name tools as wo sandpit be map def
+su name write be write ob text "payload" to filename "note.txt" can
+prah
+
+exists su name reviewer be mind via state "qwen3-vl:8b-instruct" ya
+ob text "Write a file named note.txt in the agent cwd. Content: ok." for name reviewer to name text out with name tools at filename "artifacts/agent" be write do
