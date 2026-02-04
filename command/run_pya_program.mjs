@@ -27,7 +27,7 @@ async function main() {
   const fullFlag = args.includes("--full");
   const verboseFlag = args.includes("--verbose");
   const showResultFlag = args.includes("--result");
-  const useNewspaperFlag = args.includes("--newspaper");
+  const useNewspaperFlag = true;
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
   const runIdFlag = readFlagValue(args, "--run-id");
