@@ -51,7 +51,9 @@ test("full module import (logical + relative + absolute) golden parity", async (
     ["command/run_pya_program.mjs", tmpEntryPath],
     { timeout: 120000 }
   );
-  assert.deepEqual(runStdout.trim().split(/\r?\n/), ["2", "5", "7", "3", "4", "8", "1", "6", "9"]);
+  const stripAnsi = (text) => String(text).replace(/\u001b\[[0-9;]*m/g, "");
+  const stdoutLines = stripAnsi(runStdout).trim().split(/\r?\n/);
+  assert.deepEqual(stdoutLines, ["2", "5", "7", "3", "4", "8", "1", "6", "9"]);
 
   const jsSentence = parse(`from filename "${tmpEntryPath}" to state javascript to text output be compile do`);
   const jsResult = await interpret(jsSentence);
