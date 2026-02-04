@@ -1,5 +1,5 @@
 su name example meta be map def
-su name requires ob ve text "uvx" "OLLAMA_HOST" "PYA_MIND_TOOL" ya
+su name required ob ve text "uvx" "OLLAMA_HOST" "PYA_MIND_TOOL" ya
 prah
 
 su name tools be map def

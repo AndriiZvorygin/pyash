@@ -44,15 +44,15 @@ function parseQuotedValues(line = "") {
 }
 
 function parseMeta(block) {
-  const meta = { mode: null, requires: [], inputs: [] };
+  const meta = { mode: null, required: [], inputs: [] };
   if (!block) return meta;
   const modeLine = block.find((line) => line.startsWith("su name mode ob text "));
   if (modeLine) {
     const [value] = parseQuotedValues(modeLine);
     if (value) meta.mode = value;
   }
-  const requiresLine = block.find((line) => line.startsWith("su name requires ob ve text "));
-  if (requiresLine) meta.requires = parseQuotedValues(requiresLine);
+  const requiredLine = block.find((line) => line.startsWith("su name required ob ve text "));
+  if (requiredLine) meta.required = parseQuotedValues(requiredLine);
   const inputsLine = block.find((line) => line.startsWith("su name inputs ob ve text "));
   if (inputsLine) meta.inputs = parseQuotedValues(inputsLine);
   return meta;
@@ -146,9 +146,9 @@ async function main() {
     }
     console.log(`==> ${file}`);
     const meta = await extractMeta(file);
-    if (meta?.requires?.length) {
+    if (meta?.required?.length) {
       const unmet = [];
-      for (const req of meta.requires) {
+      for (const req of meta.required) {
         const ok = await checkRequirement(req);
         if (!ok) unmet.push(req);
       }

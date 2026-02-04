@@ -1,5 +1,5 @@
 su name example meta be map def
-su name requires ob ve text "yt-dlp" "PYA_DOWNLOAD_RESPONSE" ya
+su name required ob ve text "yt-dlp" ya
 prah
 be directory ob filename "examples/out" do
-be download from filename "https://example.com/video" as wo video to filename "examples/out/video.mp4" do
+be download from filename "https://www.youtube.com/watch?v=BaW_jenozKc" as wo video to filename "examples/out/video.mp4" do

@@ -1,5 +1,5 @@
 su name example meta be map def
-su name requires ob ve text "pandoc" ya
+su name required ob ve text "pandoc" ya
 prah
 
 be directory ob filename "artifacts/read" do

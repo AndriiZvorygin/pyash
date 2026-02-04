@@ -1,5 +1,5 @@
 su name example meta be map def
-su name requires ob ve text "pdftotext" ya
+su name required ob ve text "pdftotext" ya
 prah
 
 be directory ob filename "artifacts/read" do

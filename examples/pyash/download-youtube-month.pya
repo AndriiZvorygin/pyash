@@ -1,6 +1,6 @@
 su name note ob text "Download last month of audio from a YouTube channel (uses defaults + CWD output)." be write do
 su name example meta be map def
-su name requires ob ve text "yt-dlp" "PYA_DOWNLOAD_RESPONSE" ya
+su name required ob ve text "yt-dlp" ya
 prah
 be directory ob filename "artifacts/download" do
 be download ob wo all during month 1 from filename "https://www.buzzsprout.com/2320595/episodes" as wo audio to filename "artifacts/download" do
