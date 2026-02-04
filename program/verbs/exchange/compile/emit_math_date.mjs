@@ -18,7 +18,7 @@ export function handleDateMath(context, helpers) {
   const direction = baseBe === "plus" ? 1 : -1;
   const amountValue = Number(ob[durationUnit]);
   if (Number.isNaN(amountValue)) return `// TODO: ${JSON.stringify(sentence)}`;
-  const sourceSlot = baseBe === "plus" ? sentence.to : sentence.from;
+  const sourceSlot = baseBe === "plus" ? (sentence.to ?? sentence.from) : sentence.from;
   const targetSlot = sourceSlot;
   const dateExpr = (() => {
     if (!sourceSlot) return null;
@@ -32,7 +32,7 @@ export function handleDateMath(context, helpers) {
       return baseName;
     }
     if (sentenceArg) {
-      const role = baseBe === "plus" ? "to" : "from";
+      const role = baseBe === "plus" ? (sentence.to ? "to" : "from") : "from";
       return targetPath(role, sentenceArg, "date", sourceSlot, { locals, declared });
     }
     return null;
@@ -62,7 +62,7 @@ export function handleDateMath(context, helpers) {
   jsHelpers.usesDateMath = true;
   const dateCall = `pyaDateAdd(${dateExpr}, "${durationUnit}", ${amountValue}, ${direction})`;
   if (sentenceArg) {
-    const role = baseBe === "plus" ? "to" : "from";
+    const role = baseBe === "plus" ? (sentence.to ? "to" : "from") : "from";
     const target = targetPath(role, sentenceArg, "date", targetSlot, { locals, declared }) ?? targetSlot?.name;
     return `${target} = ${dateCall};`;
   }
