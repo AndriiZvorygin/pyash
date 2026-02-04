@@ -11,6 +11,7 @@ use_buildx=true
 cache_dir="$ROOT_DIR/container/.buildx-cache"
 push=false
 load=false
+no_restart=false
 while [[ $# -gt 0 ]]; do
   arg="$1"
   case "$arg" in
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-buildx)
       use_buildx=false
+      shift
+      ;;
+    --no-restart)
+      no_restart=true
       shift
       ;;
     --tag)
@@ -48,12 +53,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help|-h)
       cat <<'EOF'
-Usage: ./container/command/build.sh [--no-cache] [--no-buildx] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
+Usage: ./container/command/build.sh [--no-cache] [--no-buildx] [--no-restart] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
 
 Builds the pyash container, then restarts via begin.sh.
 
 Notes:
   - Buildx is the default (cached). Use --no-buildx to fall back to docker compose build.
+  - Use --no-restart to skip docker compose down/begin when using compose builds.
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
   - Cache is stored at ./container/.buildx-cache unless overridden.
@@ -107,6 +113,8 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
   fi
 else
   docker compose -f "$COMPOSE_FILE" build "${build_args[@]}"
-  docker compose -f "$COMPOSE_FILE" down
-  "$ROOT_DIR/container/command/begin.sh"
+  if [[ "$no_restart" != true ]]; then
+    docker compose -f "$COMPOSE_FILE" down
+    "$ROOT_DIR/container/command/begin.sh"
+  fi
 fi
