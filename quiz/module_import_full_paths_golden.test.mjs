@@ -11,7 +11,6 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
-import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,7 +27,9 @@ test("full module import (logical + relative + absolute) golden parity", async (
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-import-"));
   const entryTmpDir = path.join(tmpRoot, "examples", "pyash");
   await fs.mkdir(entryTmpDir, { recursive: true });
-  const rewritten = source.replaceAll("/home/htaf/pyac/pyash", tmpRoot);
+  const rewritten = source
+    .replaceAll("/home/htaf/pyac/pyash", tmpRoot)
+    .replaceAll("/workplace", tmpRoot);
   const tmpEntryPath = path.join(entryTmpDir, "module-import-full-paths.pya");
   const exampleDir = path.dirname(entryPath);
   await fs.writeFile(tmpEntryPath, rewritten, "utf8");
@@ -45,24 +46,12 @@ test("full module import (logical + relative + absolute) golden parity", async (
   }
   setEntryModulePath(tmpEntryPath);
 
-  const lines = splitSentences(rewritten);
-
-  const logs = [];
-  const originalLog = console.log;
-  // eslint-disable-next-line no-console
-  console.log = (...args) => logs.push(args.join(" "));
-  try {
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      const sentence = parse(line);
-      await interpret(sentence);
-    }
-  } finally {
-    // eslint-disable-next-line no-console
-    console.log = originalLog;
-  }
-
-  assert.deepEqual(logs, ["2", "5", "7", "3", "4", "8", "1", "6", "9"]);
+  const { stdout: runStdout } = await execFileAsync(
+    "node",
+    ["command/run_pya_program.mjs", tmpEntryPath],
+    { timeout: 120000 }
+  );
+  assert.deepEqual(runStdout.trim().split(/\r?\n/), ["2", "5", "7", "3", "4", "8", "1", "6", "9"]);
 
   const jsSentence = parse(`from filename "${tmpEntryPath}" to state javascript to text output be compile do`);
   const jsResult = await interpret(jsSentence);

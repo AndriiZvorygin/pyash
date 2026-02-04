@@ -109,9 +109,10 @@ export async function handleImperative({
 
     const exportFacts = new Map();
     const exportRefs = new Map();
+    const exportNameMap = record.alreadyLoaded && record.primaryNameMap ? record.primaryNameMap : record.nameMap;
     for (const name of record.exportNames) {
       if (record.localCeremonies.has(name)) continue;
-      const mapped = record.nameMap.get(name);
+      const mapped = exportNameMap.get(name);
       const fact = mapped ? memory.remember(mapped) : null;
       if (fact?.ob !== undefined) exportFacts.set(name, fact.ob);
       if (mapped) exportRefs.set(name, { name: mapped });
