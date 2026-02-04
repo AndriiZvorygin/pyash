@@ -1,5 +1,5 @@
 su name example meta be map def
-su name requires ob ve text "xdotool" "DISPLAY" ya
+su name required ob ve text "xdotool" "DISPLAY" ya
 prah
 
 from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do

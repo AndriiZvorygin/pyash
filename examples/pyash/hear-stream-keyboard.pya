@@ -2,7 +2,7 @@ exists su name stream stdout ob bool lie be default ya
 exists su name hear fixture ob text "Hello from stream." be default ya
 exists su name keyboard bin ob text "true" be default ya
 su name example meta be map def
-su name requires ob ve text "xdotool" "DISPLAY" ya
+su name required ob ve text "xdotool" "DISPLAY" ya
 prah
 
 su name prompt ob text "Focus the target app now. Live transcript will type into the focused window." be write do
