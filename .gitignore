@@ -32,6 +32,7 @@ container/configure/ecology/searxng.env
 .cache/
 .npm/
 .node_repl_history
+.fluxbox/
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
