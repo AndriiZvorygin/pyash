@@ -8,12 +8,19 @@ import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSig
 export async function runAtAll({
   sentence,
   remember,
+  memory,
   getDefinitionEntry,
   state,
   recordSandpitTrace,
   interpret
 }) {
-  const base = structuredClone(sentence);
+  const base = {
+    ...sentence,
+    ob: sentence?.ob ? { ...sentence.ob } : sentence?.ob,
+    at: sentence?.at ? { ...sentence.at } : sentence?.at,
+    by: sentence?.by ? { ...sentence.by } : sentence?.by,
+    this: sentence?.this ? { ...sentence.this } : sentence?.this
+  };
   // If the caller passed a genitive `by` like "by num of fromindex of this",
   // resolve it against the *current evoker* once so per-element ceremonies see a plain number.
   if (base.by?.genitive) {
@@ -43,18 +50,25 @@ export async function runAtAll({
   const isPrimitive = !getDefinitionEntry(base.be);
 
   for (let i = 0; i < vecValues.length; i++) {
-    const elemSentence = structuredClone(base);
-    elemSentence.atindex = { num: i, register: true };
-    elemSentence.this = {
-      ...(elemSentence.this || {}),
-      atindex: elemSentence.atindex,
-      by: elemSentence.by,
-      fromindex: elemSentence.fromindex,
-      toindex: elemSentence.toindex,
+    const elemSentence = {
+      ...base,
+      atindex: { num: i, register: true }
     };
-    if (elemSentence.at) delete elemSentence.at; // per-element call should not carry at all
+    elemSentence.this = {
+      ...(base.this || {}),
+      atindex: elemSentence.atindex,
+      by: base.by,
+      fromindex: base.fromindex,
+      toindex: base.toindex
+    };
+    if (base.at) {
+      elemSentence.at = undefined;
+    }
 
     let resultObj;
+    if (memory?.pushMemoryContext) {
+      memory.pushMemoryContext({ seedFromCurrent: true });
+    }
     if (isPrimitive) {
       // reuse single-element handler by setting at:num and providing the element value
       const elemValue = vecValues[i];
@@ -88,6 +102,9 @@ export async function runAtAll({
       if (resultObj === undefined && elemSentence.ob !== undefined) {
         resultObj = elemSentence.ob;
       }
+    }
+    if (memory?.popMemoryContext) {
+      memory.popMemoryContext();
     }
 
     if (typeof resultObj === "object" && resultObj !== null) {
