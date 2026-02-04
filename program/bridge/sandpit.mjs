@@ -54,13 +54,25 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   if (initialIndex == null) throw new Error("fromindex is required to loop");
   const untilSeed = registerValue(sentence.toindex, { state, memory });
 
-  const clone =
-    globalThis.structuredClone ||
-    ((v) => JSON.parse(JSON.stringify(v)));
+  const cloneSentence = (step) => {
+    if (!step || typeof step !== "object") return step;
+    const cloned = { ...step };
+    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence"];
+    for (const field of fields) {
+      if (step[field] && typeof step[field] === "object") {
+        const next = { ...step[field] };
+        if (next.genitive?.chain) {
+          next.genitive = { ...next.genitive, chain: [...next.genitive.chain] };
+        }
+        cloned[field] = next;
+      }
+    }
+    return cloned;
+  };
 
   const baseBody = memory.allRemember()
     .slice(defEntry.index + 1, defEntry.end)
-    .map((step) => clone(step));
+    .map((step) => cloneSentence(step));
   let lastResult;
   state.currentEvoke = {
     ...sentence,
@@ -88,7 +100,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 
       for (const step of baseBody) {
         // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
-        lastResult = await interpret(clone(step));
+        lastResult = await interpret(cloneSentence(step));
       }
 
       const updatedTloh = registerValue(state.currentEvokeRef.fromindex, { state, memory });
@@ -161,9 +173,21 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
   const { to } = sentence;
-  const clone =
-    globalThis.structuredClone ||
-    ((v) => JSON.parse(JSON.stringify(v)));
+  const cloneSentence = (step) => {
+    if (!step || typeof step !== "object") return step;
+    const cloned = { ...step };
+    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence"];
+    for (const field of fields) {
+      if (step[field] && typeof step[field] === "object") {
+        const next = { ...step[field] };
+        if (next.genitive?.chain) {
+          next.genitive = { ...next.genitive, chain: [...next.genitive.chain] };
+        }
+        cloned[field] = next;
+      }
+    }
+    return cloned;
+  };
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;
@@ -179,7 +203,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   try {
     for (const step of body) {
       // Avoid mutating definition body sentences across invocations.
-      lastResult = await interpret(clone(step));
+      lastResult = await interpret(cloneSentence(step));
     }
   } finally {
     const sandpit = [state.currentEvokeRef, ...memory.allRemember()];

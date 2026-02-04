@@ -318,6 +318,7 @@ export async function handleImperative({
     const atAllResult = await runAtAll({
       sentence,
       remember: memory.remember,
+      memory,
       getDefinitionEntry,
       state,
       recordSandpitTrace,
