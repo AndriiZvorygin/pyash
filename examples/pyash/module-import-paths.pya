@@ -1,5 +1,5 @@
 from name ./modules/bump_tools.pya to name rel be import do
-from name /home/htaf/pyac/pyash/examples/pyash/modules/bump_tools_alt.pya to name abs be import do
+from name /workplace/examples/pyash/modules/bump_tools_alt.pya to name abs be import do
 
 be rel bump do
 be abs bump do

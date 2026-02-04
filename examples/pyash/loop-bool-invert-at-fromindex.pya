@@ -5,7 +5,6 @@ su name flip index to name num bucket fromindex num 0 be ceremony def
 ob name switches at num of fromindex of this be invert do
 su name flip index be ceremony prah
 
-# Loop fromindex counts up and stops when it reaches toindex; this hits indices 0,1,2.
 to name outside fromindex num 0 toindex num 3 be flip index do
 
 ob name outside be write do

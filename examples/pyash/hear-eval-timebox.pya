@@ -1,3 +1,5 @@
+exists su name ffmpeg input ob text "lavfi" be default ya
+exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya
 su name prompt ob text "Recording 10 seconds from the microphone, then transcribing the file with hear." be write do
 su name note ob text "Override 'ffmpeg input device' if your OS uses a different device (e.g., pipewire)." be write do
 exists su name cmd ob text "ffmpeg -y -f " be text ya

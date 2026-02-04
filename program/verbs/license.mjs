@@ -212,6 +212,8 @@ export const signatures = [
   { signatureWords: ["be", "license", "as", "num", "ob", "name", "filename"], handler: license },
   { signatureWords: ["be", "license", "ob", "filename", "as", "text"], handler: license },
   { signatureWords: ["be", "license", "ob", "name", "filename", "as", "text"], handler: license },
+  { signatureWords: ["be", "license", "as", "text", "ob", "filename"], handler: license },
+  { signatureWords: ["be", "license", "as", "text", "ob", "name", "filename"], handler: license },
   { signatureWords: ["be", "license", "ob", "filename", "as", "vec"], handler: license },
   { signatureWords: ["be", "license", "ob", "name", "filename", "as", "vec"], handler: license },
   { signatureWords: ["be", "license", "as", "vec", "ob", "filename"], handler: license },

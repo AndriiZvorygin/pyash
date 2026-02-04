@@ -1,2 +1,2 @@
 su name note ob text "Download last month of audio from a YouTube channel (uses defaults + CWD output)." be write do
-be download ob wo all during months 1 from filename "https://www.buzzsprout.com/2320595/episodes" as wo audio to filename /home/htaf/Downloads/ do
+be download ob wo all during months 1 from filename "https://www.buzzsprout.com/2320595/episodes" as wo audio to filename "/tmp" do
