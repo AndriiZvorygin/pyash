@@ -53,7 +53,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # uvx (MCP helpers)
-RUN python3 -m pip install --no-cache-dir uv
+RUN python3 -m pip install --no-cache-dir --break-system-packages uv
 
 # Node.js (LTS)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
