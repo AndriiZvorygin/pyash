@@ -1,4 +1,5 @@
 su name prompt ob text "Delete artifacts/delete/example.txt (file mode)." be write do
+ob text "example" to filename "artifacts/delete/example.txt" be write do
 be delete ob filename "artifacts/delete/example.txt" as wo file do
 su name note ob text "Delete artifacts/delete/tree recursively." be write do
 be delete ob filename "artifacts/delete" as wo recursive do

@@ -1,5 +1,5 @@
 from filename "quiz/fixtures/Payment Entry.csv" from state csv to name first be read do
-ob name first to state csv to filename "/tmp/payment-entry.pyash-roundtrip.csv" be write do
-from filename "/tmp/payment-entry.pyash-roundtrip.csv" from state csv to name second be read do
+ob name first become name csv to filename "examples/out/payment-entry.pyash-roundtrip.csv" be write do
+from filename "examples/out/payment-entry.pyash-roundtrip.csv" from state csv to name second be read do
 ob name first be write do
 ob name second be write do

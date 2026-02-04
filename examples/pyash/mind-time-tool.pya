@@ -1,3 +1,7 @@
+su name example meta be map def
+su name requires ob ve text "uvx" ya
+prah
+
 su name tools be map def
 su name time now be mcp clock get_current_time ob text "America/Toronto" can
 prah

@@ -1,2 +1,2 @@
 from filename "quiz/fixtures/Bank Transaction.csv" from state csv to name people be read do
-ob name people to state csv to filename "/tmp/bank-transaction.roundtrip.csv" be write do
+ob name people become name csv to filename "examples/out/bank-transaction.roundtrip.csv" be write do

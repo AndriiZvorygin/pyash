@@ -1,7 +1,6 @@
 exists su name collector ob num 10 be number ya
 ob num 3 from name collector be subtract do
 su name collector ob what que
-reset
 exists su name lhs ob num 8 be number ya
 exists su name rhs ob num 5 be number ya
 ob name rhs from name lhs be subtract do

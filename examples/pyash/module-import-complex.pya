@@ -1,6 +1,6 @@
 from name complex tools ob name settings to name settings be import do
 from name ./modules/complex_tools.pya ob name trace to name trace rel be import do
-from name /home/htaf/pyac/pyash/examples/pyash/modules/complex_tools.pya ob name trace to name trace abs be import do
+from name /workplace/examples/pyash/modules/complex_tools.pya ob name trace to name trace abs be import do
 
 su name settings output ob name settings be write do
 ob num 2 from num 5 by num 7 at num 1 be trace rel do
