@@ -25,7 +25,7 @@ test("compile markdown to html then read markdown roundtrip", { skip: !pandocAva
   await fs.writeFile(inputFile, "Hello world.", "utf8");
   await fs.rm(htmlFile, { force: true });
 
-  await run(`from filename "${inputFile}" from state markdown to state html to filename "${htmlFile}" be compile do`);
+  await run(`from filename "${inputFile}" fromstate name markdown become name html to filename "${htmlFile}" be compile do`);
   const modulePath = path.resolve("module/read_html_markdown.pya");
   await run(`ob name read from filename "${modulePath}" to name read be import do`);
   await run(`from filename "${htmlFile}" fromstate wo html become wo markdown to name text out be read do`);

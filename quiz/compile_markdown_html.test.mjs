@@ -20,7 +20,7 @@ test("compile markdown to html file", { skip: !pandocAvailable }, async () => {
   await fs.rm(outputFile, { force: true });
 
   const sentence = parse(
-    `from filename "${inputFile}" from state markdown to state html to filename "${outputFile}" be compile do`
+    `from filename "${inputFile}" fromstate name markdown become name html to filename "${outputFile}" be compile do`
   );
   await interpret(sentence);
 
