@@ -77,7 +77,7 @@ Root: `world/` (workspace-relative unless an absolute path is configured by the 
 
 ### 3.1 Places
 
-`world/places/<place>/`
+Places are **top-level directories** under `world/` (no `world/places/` layer).
 
 Canonical places:
 
@@ -86,6 +86,7 @@ Canonical places:
 * `workplace`
 * `church` (optional)
 * `lookouts` (optional)
+* `house` (agent homes)
 
 Each place contains:
 
@@ -93,7 +94,7 @@ Each place contains:
 * local **artifacts**
 * optional pinned materials (conduct excerpts, open duty)
 
-**MVP:** `commons`, `library`, `workplace`
+**MVP:** `commons`, `library`, `workplace`, `house`
 
 Canonical filenames:
 
@@ -105,7 +106,7 @@ Canonical filenames:
 
 ### 3.2 Agents
 
-`world/agents/<agent>/`
+`world/house/<agent>/`
 
 Subspaces:
 
@@ -120,7 +121,7 @@ Subspaces:
 
 ### 3.3 Programs (communal)
 
-`world/program/<program>/`
+`world/workplace/<program>/`
 
 Subspaces:
 
@@ -148,7 +149,8 @@ Canonical filenames:
 
 ### 3.4 Tools
 
-`world/tools/<place>/`
+Tools live under the place they belong to (e.g. `world/workplace/<program>/tools/`
+or `world/library/tools/`).
 
 Tools are discovered through place perception and invoked through tool calls.
 Results always return as artifacts.

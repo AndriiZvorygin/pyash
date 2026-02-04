@@ -1,0 +1,18 @@
+su name priest tools be map def
+su name search be search fromstate wo web by num 3 can
+su name download be download from filename as wo web to filename can
+su name read be read from filename become wo text to name text out can
+su name write be write ob text to filename can
+su name list be list from filename as wo all can
+su name command be command ob text to name text out can
+prah
+
+exists su name world tools ob bool truth ya
+exists su name world root ob filename "world" be default ya
+exists su name world agent ob text "confederation-priest" be text ya
+exists su name world place ob text "workplace" be text ya
+
+exists su name priest be mind via state "qwen3-vl:8b-instruct" ya
+ob text "You are the Confederation Priest. Work inside world/workplace/confederation only. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note." to name text review out for name priest with name priest tools at filename "world/workplace/confederation" be write do
+
+ob name review out to filename "world/house/confederation-priest/ingredients/maintenance-note.txt" be write do

@@ -1,0 +1,4 @@
+su name note ob text "Download channeling index and extract text for deterministic review." ya
+from filename "https://www.llresearch.org/channeling" to filename "world/workplace/confederation/artifact/channeling.html" as wo web be download do
+from filename "world/workplace/confederation/artifact/channeling.html" become wo markdown to name text channeling text be read do
+ob name channeling text to filename "world/workplace/confederation/artifact/channeling.md" be write do

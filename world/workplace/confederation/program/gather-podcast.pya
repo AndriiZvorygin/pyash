@@ -1,0 +1,4 @@
+su name note ob text "Download podcast episode index and extract text for deterministic review." ya
+from filename "https://www.buzzsprout.com/2320595/episodes" to filename "world/workplace/confederation/artifact/podcast.html" as wo web be download do
+from filename "world/workplace/confederation/artifact/podcast.html" become wo markdown to name text podcast text be read do
+ob name podcast text to filename "world/workplace/confederation/artifact/podcast.md" be write do

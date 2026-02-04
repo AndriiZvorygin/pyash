@@ -1,9 +1,5 @@
 su name world tool map as wo world be map def
 su name go be go to text "commons" can
-su name list be list can
-su name read be read ob wo tail atmost num 10 from filename ".activity.pya" can
-su name write be write ob text "Hello from the commons." to filename "notes/hello.txt" can
-su name sleep be sleep can
 prah
 
 exists su name world tools ob bool truth ya
@@ -14,5 +10,5 @@ to name text "commons" be go do
 be list do
 
 exists su name world agent be mind as name "qwen3-vl:8b-instruct" ya
-ob text "You are in a place-world. You MUST call tools (go, list, write, read tail, sleep) in that order. Do not answer until after tool calls. If tool calls are unavailable, output exactly TOOL_REQUIRED and stop." for name world agent to name text out with name world tool map at filename "world" be write do
+ob text "use the go tool to go to commons" for name world agent to name text out with name world tool map at filename "world" be write do
 ob name out be write do
