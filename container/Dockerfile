@@ -8,6 +8,7 @@ RUN apt-get update \
     curl \
     dnsutils \
     git \
+    openssh-client \
     gnupg \
     dialog \
     fd-find \
