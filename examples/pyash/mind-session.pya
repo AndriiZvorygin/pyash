@@ -1,2 +1,7 @@
+su name example meta be map def
+su name mode ob text "session" ya
+su name inputs ob ve text "/bye" ya
+prah
+
 exists su name helper be mind via state "qwen3-vl:8b-instruct" ya
 for name helper be session do
