@@ -4,5 +4,5 @@ prah
 
 be directory ob filename "artifacts/say" do
 ob text "Hello from Pyash audio example." to filename "artifacts/say/pyash-read-audio-example.wav" be say do
-from filename "artifacts/say/pyash-read-audio-example.wav" become wo text to name text output be read do
+from filename "artifacts/say/pyash-read-audio-example.wav" to name text output be hear do
 ob name output be write do

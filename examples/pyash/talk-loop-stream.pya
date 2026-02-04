@@ -1,6 +1,6 @@
 su name example meta be map def
 su name mode ob text "session" ya
-su name requires ob ve text "OLLAMA_HOST" "espeak-ng" "ffmpeg" ya
+su name requires ob ve text "OLLAMA_HOST" "espeak-ng" "ffmpeg" "PYA_MIND_SESSION" ya
 su name inputs ob ve text "/bye" ya
 prah
 
