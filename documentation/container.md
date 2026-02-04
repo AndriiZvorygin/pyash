@@ -112,7 +112,8 @@ DISPLAY=:1 node your_script.js
 Notes:
 - This is a virtual display; it does not require host X11.
 - For audio in the browser, use host PulseAudio passthrough (above) or route audio separately.
- - `--vnc` will set `DISPLAY=:1` inside the container.
+- `--vnc` will set `DISPLAY=:1` inside the container.
+- Playwright CLI + Chromium are installed in the container (for the Playwright skill). If you need Firefox/WebKit too, run `npx playwright install --with-deps firefox webkit` inside the container.
 
 ## X11 passthrough (xdotool / keyboard)
 
