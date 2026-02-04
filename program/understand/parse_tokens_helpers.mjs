@@ -4,7 +4,9 @@ export const UNIT_TYPE_ALIASES = {
   minutes: "minute",
   hours: "hour",
   days: "day",
-  weeks: "week"
+  weeks: "week",
+  lines: "line",
+  bytes: "byte"
 };
 
 export function parseAllEnumeration(words, startIdx, { ROLE_KEYS, CONTEXT_KEYS }) {

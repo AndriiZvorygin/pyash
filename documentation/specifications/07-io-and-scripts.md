@@ -730,6 +730,10 @@ Notes:
 * Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
 * Markdown output defaults to GitHub-flavored Markdown (GFM) where available.
 * Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
+* Optional limits:
+  * `atmost line <n>` / `atmost lines <n>` limits by line count.
+  * `atmost byte <n>` / `atmost bytes <n>` limits by byte count.
+  * `fromindex line <n>` / `fromindex byte <n>` starts from a line/byte offset (0-based).
 
 ### Read auto dispatcher (module)
 

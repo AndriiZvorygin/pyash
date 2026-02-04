@@ -3,6 +3,7 @@ su name search be search ob text input fromstate wo web by num 3 can
 su name download be download from filename input as wo web to filename input can
 su name read be read from filename input become wo text to name text out can
 su name read markdown be read from filename input become wo markdown to name text out can
+su name exists be exists ob filename input can
 su name write be write ob text input to filename input can
 su name compile html be compile from filename input fromstate name markdown become name html to filename input can
 su name compile pdf be compile from filename input fromstate name markdown become name pdf to filename input can
@@ -16,4 +17,5 @@ exists su name world agent ob text "confederation-priest" be text ya
 exists su name world place ob text "workplace" be text ya
 
 exists su name priest be mind via state "qwen3-vl:8b-instruct" ya
-ob text "You are the Confederation Priest. Work inside the current directory. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf). If you compile html/pdf, first write the source markdown files (e.g., confederation_knowledge.md) in the current directory." for name priest with name priest tools be session do
+su name note ob text "ob text \"You are the Confederation Priest. Work inside the current directory. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf). If you compile html/pdf, first write the source markdown files (e.g., confederation_knowledge.md) in the current directory.\" for name priest with name priest tools be session do" be text pe
+ob text "You are the Confederation Priest. Work inside the current directory. Use tools to search, download, read, write, list, exists, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf). If a source markdown file does not exist (e.g., confederation_knowledge.md), create it before reading or compiling." for name priest with name priest tools be session do

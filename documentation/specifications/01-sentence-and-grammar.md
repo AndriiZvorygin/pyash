@@ -37,6 +37,7 @@ Define the shape of a sentence and how cases/genitives/quoting are represented.
 - Newlines inside quoted blocks are preserved; escaped `\\n` sequences are unescaped before parsing.
 - Internal sentence objects use `su` / `ob` keys; `subj` / `obj` are accepted at the surface but canonicalize to `su` / `ob` on parse.
 - Keyword lists (moods, cases, type tokens, vyah modifiers) are defined in `program/library/grammar/keywords.mjs` and MUST be treated as the source of truth.
+- Type tokens include `line/lines` and `byte/bytes` for quantity contexts (e.g., `atmost lines 30`, `fromindex byte 200`).
 - Official ordering (for sentence formatting and signature words) follows the compositional case order (`01-sentence-and-grammar.md`) and JSON official key ordering (`06-data-formats.md`).
 
 ## 3.1 Dynamic defaults (adapter rules)
@@ -115,6 +116,9 @@ This ordering is **non-semantic**: it does not rank moods by philosophical impor
 ### A.1 Tier 1 — Core runtime moods (must exist early)
 
 These moods are required to build a functioning pipeline, newspaper, again system, and tooling interface.
+
+Comment mood:
+- `pe` is a non-executing comment mood. The interpreter MUST ignore `pe` sentences and they MUST NOT affect dispatch, memory, or control flow.
 
 | Mood               | Grammar | Surface | Role                                   |
 | ------------------ | ------- | ------- | -------------------------------------- |

@@ -22,7 +22,21 @@ function detectType(value) {
   return "unknown";
 }
 
-export async function read_from_filename({ from }) {
+function extractReadLimits(sentence) {
+  const fromLine = sentence?.fromindex?.line ?? sentence?.fromindex?.lines ?? null;
+  const fromByte = sentence?.fromindex?.byte ?? sentence?.fromindex?.bytes ?? null;
+  const atmostLine = sentence?.atmost?.line ?? sentence?.atmost?.lines ?? null;
+  const atmostByte = sentence?.atmost?.byte ?? sentence?.atmost?.bytes ?? null;
+  return {
+    fromLine: Number.isFinite(fromLine) ? fromLine : null,
+    fromByte: Number.isFinite(fromByte) ? fromByte : null,
+    atmostLine: Number.isFinite(atmostLine) ? atmostLine : null,
+    atmostByte: Number.isFinite(atmostByte) ? atmostByte : null
+  };
+}
+
+export async function read_from_filename(sentence = {}) {
+  let { from } = sentence;
   if (isWorldToolsActive({ rememberFn: remember })) {
     const { resolved, outside, root } = resolveWorldPath(from?.filename ?? "", { rememberFn: remember });
     if (outside) {
@@ -40,14 +54,15 @@ export async function read_from_filename({ from }) {
     throw new Error("read: no handler for filename");
   }
   const mod = await import(modulePath);
-  const result = await mod.default({ from });
+  const limit = extractReadLimits(sentence);
+  const result = await mod.default({ from, limit });
   const response = { ob: result.ob, be: "read" };
   if (result?.value) response.value = result.value;
   return response;
 }
 
 export async function read_ob_filename(sentence) {
-  return read_from_filename({ from: sentence?.ob });
+  return read_from_filename({ ...sentence, from: sentence?.ob });
 }
 
 export async function read_tail_from_filename(sentence) {
@@ -169,6 +184,12 @@ export default async function read({ from }) {
 
 export const signatures = [
   { signatureWords: ["be", "read", "from", "filename"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "atmost", "line"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "atmost", "byte"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "fromindex", "line"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "fromindex", "byte"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "fromindex", "line", "atmost", "line"], handler: read_from_filename },
+  { signatureWords: ["be", "read", "from", "filename", "fromindex", "byte", "atmost", "byte"], handler: read_from_filename },
   { signatureWords: ["be", "read", "ob", "filename"], handler: read_ob_filename },
   { signatureWords: ["be", "read", "ob", "wo", "tail", "from", "filename"], handler: read_tail_from_filename },
   { signatureWords: ["be", "read", "ob", "wo", "tail", "from", "filename", "atmost", "num"], handler: read_tail_from_filename },
