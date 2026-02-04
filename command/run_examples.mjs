@@ -13,11 +13,15 @@ const includeCommand = process.argv.includes("--include-command");
 const parallelAll = process.argv.includes("--parallel-all");
 const parallelArgIndex = process.argv.findIndex((arg) => arg === "--parallel");
 const parallelValue = parallelArgIndex >= 0 ? Number(process.argv[parallelArgIndex + 1]) : NaN;
+const cpuCount = Math.max(1, os.cpus().length);
+const defaultConcurrency = Math.max(1, cpuCount - 1);
 const concurrency = Number.isFinite(parallelValue) && parallelValue > 0
   ? parallelValue
-  : (parallelAll || parallelArgIndex < 0 ? Number.POSITIVE_INFINITY : Math.max(1, os.cpus().length));
+  : (parallelAll || parallelArgIndex < 0 ? defaultConcurrency : defaultConcurrency);
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const successLogPath = path.join(os.tmpdir(), "pyash-run-examples-success.log");
+const failureLogPath = path.join(os.tmpdir(), "pyash-run-examples-failure.log");
 
 const skip = new Set();
 if (!includeMind) {
@@ -103,6 +107,10 @@ function runWithTimeout(cmd, args, { timeoutMs, inputLines }) {
 }
 
 async function main() {
+  await fs.writeFile(successLogPath, "");
+  await fs.writeFile(failureLogPath, "");
+  console.log(`Logging successes to ${successLogPath}`);
+  console.log(`Logging failures to ${failureLogPath}`);
   if ((includeSay || includeCommand) && !(await checkRequirement("espeak-ng"))) {
     console.error("espeak-ng not found; skipping say/command espeak examples.");
     skip.add("examples/pyash/say-default.pya");
@@ -119,6 +127,14 @@ async function main() {
   const failures = [];
   const missing = [];
   const timeouts = [];
+  const logSuccess = async (line) => {
+    if (!line) return;
+    await fs.appendFile(successLogPath, line + "\n");
+  };
+  const logFailure = async (line) => {
+    if (!line) return;
+    await fs.appendFile(failureLogPath, line + "\n");
+  };
 
   const queue = [...files];
   const workers = [];
@@ -138,7 +154,9 @@ async function main() {
       }
       if (unmet.length) {
         console.log(`==> ${file} (missing: ${unmet.join(" ")})`);
-        missing.push(`${file}: ${unmet.join(" ")}`);
+        const detail = `${file}: ${unmet.join(" ")}`;
+        missing.push(detail);
+        await logFailure(`MISSING ${detail}`);
         return;
       }
     }
@@ -151,6 +169,7 @@ async function main() {
     if (result.timedOut) {
       console.log(`TIMEOUT: ${file}`);
       timeouts.push(file);
+      await logFailure(`TIMEOUT ${file}`);
       return;
     }
     if (result.code !== 0) {
@@ -158,6 +177,10 @@ async function main() {
       const tail = (result.stderr || result.stdout || "").trim().split("\n").slice(-8).join("\n");
       if (tail) console.log(tail);
       failures.push(file);
+      await logFailure(`FAILED ${file}`);
+      if (tail) await logFailure(tail);
+    } else {
+      await logSuccess(`OK ${file}`);
     }
   }
 
