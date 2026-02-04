@@ -90,14 +90,20 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
   fi
   cache_from="type=local,src=$cache_dir"
   cache_to="type=local,dest=$cache_dir,mode=max"
+  driver="$(docker buildx ls 2>/dev/null | awk '$1 ~ /^\*/ {print $3}')"
+  if [[ "$driver" == "docker" ]]; then
+    echo "warn: buildx driver is docker; cache export disabled (enable containerd image store or switch driver)." >&2
+    cache_from=""
+    cache_to=""
+  fi
   if [[ "$push" == true ]]; then
     docker buildx build \
       -f "$ROOT_DIR/container/Dockerfile" \
       -t "$tag" \
       --platform "$platform" \
       --push \
-      --cache-from "$cache_from" \
-      --cache-to "$cache_to" \
+      ${cache_from:+--cache-from "$cache_from"} \
+      ${cache_to:+--cache-to "$cache_to"} \
       "${build_args[@]}" \
       "$ROOT_DIR"
   else
@@ -106,8 +112,8 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
       -t "$tag" \
       --platform "$platform" \
       ${load:+--load} \
-      --cache-from "$cache_from" \
-      --cache-to "$cache_to" \
+      ${cache_from:+--cache-from "$cache_from"} \
+      ${cache_to:+--cache-to "$cache_to"} \
       "${build_args[@]}" \
       "$ROOT_DIR"
   fi
