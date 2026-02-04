@@ -52,6 +52,9 @@ RUN apt-get update \
     websockify \
   && rm -rf /var/lib/apt/lists/*
 
+# uvx (MCP helpers)
+RUN python3 -m pip install --no-cache-dir uv
+
 # Node.js (LTS)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get update \

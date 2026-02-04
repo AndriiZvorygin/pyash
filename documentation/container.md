@@ -116,6 +116,10 @@ docker run --rm -it \
   pyash-dev
 ```
 
+Notes:
+- `hear-stream-keyboard.pya` and `hear-eval-keyboard.pya` require `DISPLAY` and `xdotool`.
+- For a headless setup, start Xvfb/noVNC via `./container/command/run_vnc_novnc.sh` and use `DISPLAY=:1`.
+
 ## Ollama (host service)
 
 To connect to Ollama running on the host:
