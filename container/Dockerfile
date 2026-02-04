@@ -65,7 +65,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Playwright CLI + browsers
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/local/share/playwright
 RUN npm install -g @playwright/mcp \
-  && npx --yes playwright install --with-deps chromium
+  && npx --yes playwright install --with-deps chromium firefox
 
 # Whisper.cpp shared libraries (for caterer/hear binaries)
 RUN git clone --depth 1 --branch v1.8.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper.cpp \
