@@ -14,6 +14,12 @@ class McpClient {
     this.proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc.stdout.on("data", (chunk) => this.onData(chunk));
     this.proc.stderr.on("data", () => {});
+    this.proc.stdin.on("error", (err) => {
+      if (err?.code !== "EPIPE") return;
+      const error = new Error(`mcp server pipe closed: ${serverName}`);
+      for (const { reject } of this.pending.values()) reject(error);
+      this.pending.clear();
+    });
     this.proc.on("exit", (code, signal) => {
       if (this.onExit) this.onExit({ code, signal, serverName });
       const err = new Error(`mcp server exited: ${serverName} status=${code ?? 0} signal=${signal ?? ""}`);
@@ -26,11 +32,19 @@ class McpClient {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      try {
-        this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
-      } catch (err) {
-        this.pending.delete(id);
+      const handleError = (err) => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+        }
         reject(err);
+      };
+      try {
+        const ok = this.proc.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+        if (!ok) {
+          this.proc.stdin.once("error", handleError);
+        }
+      } catch (err) {
+        handleError(err);
       }
     });
   }
