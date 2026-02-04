@@ -97,18 +97,32 @@ export function doRemember(sentence) {
 
 }
 
+function getMemoryLayers() {
+  const ctx = contextStack[contextStack.length - 1];
+  if (ctx?.baseMemory) return [memory, ctx.baseMemory];
+  return [memory];
+}
+
 export function remember(name) {
   if (!name) return undefined;
-  for (let i = memory.length - 1; i >= 0; i--) {
-    const s = memory[i];
-    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
-    if (s.mood === "do") continue;
-    if (s.su?.name === name) return s;
+  const layers = getMemoryLayers();
+  const ctx = contextStack[contextStack.length - 1];
+  for (const layer of layers) {
+    for (let i = layer.length - 1; i >= 0; i--) {
+      const s = layer[i];
+      if (layer !== memory || !ctx?.baseMemory) {
+        if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
+      }
+      if (s.mood === "do") continue;
+      if (s.su?.name === name) return s;
+    }
   }
   return defaults.get(name);
 }
 
 export function allRemember() {
+  const ctx = contextStack[contextStack.length - 1];
+  if (ctx?.baseMemory) return [...ctx.baseMemory, ...memory];
   return memory;
 }
 
@@ -195,8 +209,14 @@ export function clearDefaults() {
 }
 
 export function pushMemoryContext({ seedFromCurrent = false } = {}) {
+  if (seedFromCurrent) {
+    contextStack.push({ memory, history, baseMemory: memory, baseHistory: history });
+    memory = [];
+    history = [];
+    return;
+  }
   contextStack.push({ memory, history });
-  memory = seedFromCurrent ? [...memory] : [];
+  memory = [];
   history = [];
 }
 
