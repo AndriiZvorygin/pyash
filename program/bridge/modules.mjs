@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 
 import { buildProgram } from "../program.mjs";
@@ -130,7 +131,12 @@ async function resolveModuleSpecifier(spec, { source }) {
     return { modulePath: `mcp:${serverName}`, alias: spec, specType: "mcp", serverName };
   }
   if (isPathSpecifier(spec)) {
-    const resolved = path.resolve(currentModuleDir(), spec);
+    let resolved = path.resolve(currentModuleDir(), spec);
+    try {
+      if (fsSync.existsSync(resolved)) {
+        resolved = fsSync.realpathSync(resolved);
+      }
+    } catch {}
     return { modulePath: resolved, alias: deriveAliasFromPath(resolved), specType: "path" };
   }
 
@@ -144,9 +150,14 @@ async function resolveModuleSpecifier(spec, { source }) {
       raw: { spec }
     });
   }
-  const resolved = path.isAbsolute(mapped)
+  let resolved = path.isAbsolute(mapped)
     ? mapped
     : path.resolve(entryModuleDir, mapped);
+  try {
+    if (fsSync.existsSync(resolved)) {
+      resolved = fsSync.realpathSync(resolved);
+    }
+  } catch {}
   return { modulePath: resolved, alias: spec, specType: "logical" };
 }
 
@@ -332,6 +343,8 @@ export async function loadModule({ specifier, alias, source }) {
       localNames: new Set(),
       importAliases: new Set(),
       loadedAliases: new Set(),
+      primaryAlias: null,
+      primaryNameMap: null,
       loading: true
     };
     moduleCache.set(moduleId, base);
@@ -369,6 +382,10 @@ export async function loadModule({ specifier, alias, source }) {
     exportNames: base.exportNames,
     importAliases: base.importAliases
   });
+  if (!base.primaryAlias) {
+    base.primaryAlias = moduleAlias;
+    base.primaryNameMap = nameMap;
+  }
 
   if (resolved.specType === "mcp") {
     for (const tool of base.tools ?? []) {
@@ -393,6 +410,8 @@ export async function loadModule({ specifier, alias, source }) {
   return {
     id: base.id,
     alias: moduleAlias,
+    primaryAlias: base.primaryAlias,
+    primaryNameMap: base.primaryNameMap,
     dir: base.dir,
     alreadyLoaded,
     exportNames: base.exportNames,

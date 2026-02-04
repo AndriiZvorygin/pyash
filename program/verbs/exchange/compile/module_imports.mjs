@@ -11,6 +11,8 @@ async function expandModulesForCompile(entryPath, sentences) {
   const modules = [];
   const seen = new Set();
   const aliasToId = new Map();
+  const aliasesById = new Map();
+  const aliasRecords = [];
   const entryDir = entryPath ? path.dirname(path.resolve(entryPath)) : process.cwd();
   const normalizeSpecifier = (specifier, baseDir) => {
     if (!specifier) return specifier;
@@ -33,24 +35,32 @@ async function expandModulesForCompile(entryPath, sentences) {
       alias,
       source: "compile import"
     });
-    const cacheKey = `${record.id}::${record.alias}`;
-    if (seen.has(cacheKey)) return record;
-    seen.add(cacheKey);
+    const cacheKey = record.id;
+    if (!seen.has(cacheKey)) {
+      seen.add(cacheKey);
 
-    const local = [];
-    for (const s of record.sentences) {
-      if (s?.mood === "do" && s?.be === "import") {
-        const specifier = s?.from?.name ?? s?.from?.filename ?? s?.ob?.filename;
-        if (specifier) {
-          await includeModule(specifier, s?.to?.name, record.dir);
-          continue;
+      const local = [];
+      for (const s of record.sentences) {
+        if (s?.mood === "do" && s?.be === "import") {
+          const specifier = s?.from?.name ?? s?.from?.filename ?? s?.ob?.filename;
+          if (specifier) {
+            await includeModule(specifier, s?.to?.name, record.dir);
+            continue;
+          }
         }
+        local.push(s);
       }
-      local.push(s);
+
+      const exportFacts = collectExportFacts(record, local);
+      modules.push({ record, sentences: local, exportFacts });
     }
 
-    const exportFacts = collectExportFacts(record, local);
-    modules.push({ record, sentences: local, exportFacts });
+    if (alias) {
+      const aliasSet = aliasesById.get(record.id) ?? new Set();
+      aliasSet.add(alias);
+      aliasesById.set(record.id, aliasSet);
+      aliasRecords.push({ alias, record });
+    }
     return record;
   };
 
@@ -65,7 +75,7 @@ async function expandModulesForCompile(entryPath, sentences) {
         continue;
       }
       const symbol = s.ob?.name;
-      const record = await includeModule(specifier, symbol ? null : s.to?.name, entryDir);
+      const record = await includeModule(specifier, symbol ? null : s.to?.name ?? s.from?.name, entryDir);
       const aliasName = symbol ? null : (record.alias ?? s.to?.name);
       if (aliasName) {
         const existing = aliasToId.get(aliasName);
@@ -114,10 +124,35 @@ async function expandModulesForCompile(entryPath, sentences) {
   }
 
   const combined = [];
+  const addedCeremonies = new Set();
   for (const mod of modules) {
     combined.push(...mod.sentences);
-    if (mod.exportFacts.size && mod.record.alias) {
-      combined.push(...mapNamespaceSentences({ alias: mod.record.alias, exportFacts: mod.exportFacts, nameMap: mod.record.nameMap }));
+    for (const sentence of mod.sentences) {
+      if (sentence?.mood === "def" && sentence?.be === "ceremony" && sentence?.su?.name) {
+        addedCeremonies.add(sentence.su.name);
+      }
+    }
+    if (mod.exportFacts.size) {
+      const aliasSet = aliasesById.get(mod.record.id);
+      if (aliasSet && aliasSet.size) {
+        for (const alias of aliasSet) {
+          combined.push(...mapNamespaceSentences({ alias, exportFacts: mod.exportFacts, nameMap: mod.record.nameMap }));
+        }
+      } else if (mod.record.alias) {
+        combined.push(...mapNamespaceSentences({ alias: mod.record.alias, exportFacts: mod.exportFacts, nameMap: mod.record.nameMap }));
+      }
+    }
+  }
+
+  for (const { record } of aliasRecords) {
+    for (const sentence of record.sentences) {
+      if (sentence?.mood !== "def" || sentence?.be !== "ceremony" || !sentence?.su?.name) continue;
+      if (addedCeremonies.has(sentence.su.name)) continue;
+      const block = findDefinitionBlock(record.sentences, sentence.su.name);
+      if (block?.def) {
+        combined.push(block.def, ...block.body, block.prah);
+        addedCeremonies.add(sentence.su.name);
+      }
     }
   }
 

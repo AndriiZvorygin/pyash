@@ -28,7 +28,9 @@ test("complex module import golden: run, runjs, runc parity", async () => {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-import-"));
   const entryTmpDir = path.join(tmpRoot, "examples", "pyash");
   await fs.mkdir(entryTmpDir, { recursive: true });
-  const rewritten = source.replaceAll("/home/htaf/pyac/pyash", tmpRoot);
+  const rewritten = source
+    .replaceAll("/home/htaf/pyac/pyash", tmpRoot)
+    .replaceAll("/workplace", tmpRoot);
   const tmpEntryPath = path.join(entryTmpDir, "module-import-complex.pya");
   const exampleDir = path.dirname(entryPath);
   await fs.writeFile(tmpEntryPath, rewritten, "utf8");
