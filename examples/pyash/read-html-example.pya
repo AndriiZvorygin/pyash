@@ -1,3 +1,8 @@
-ob text "<html><body><h1>Hello</h1><p>World</p></body></html>" to filename "/tmp/pyash-read-html-example.html" be write do
-from filename "/tmp/pyash-read-html-example.html" fromstate wo html to name text output be read do
+su name example meta be map def
+su name requires ob ve text "pandoc" ya
+prah
+
+be directory ob filename "artifacts/read" do
+ob text "<html><body><h1>Hello</h1><p>World</p></body></html>" to filename "artifacts/read/pyash-read-html-example.html" be write do
+from filename "artifacts/read/pyash-read-html-example.html" fromstate wo html to name text output be read do
 ob name output be write do

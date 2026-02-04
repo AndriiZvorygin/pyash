@@ -1,2 +1,6 @@
+su name example meta be map def
+su name requires ob ve text "OLLAMA_HOST" ya
+prah
+
 from filename "quiz/fixtures/pyash_raven.png" become wo text to name text description be read do
 ob name description be write do

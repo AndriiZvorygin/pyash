@@ -1,3 +1,8 @@
-ob text "Hello from Pyash audio example." to filename "/tmp/pyash-read-audio-example.wav" be say do
-from filename "/tmp/pyash-read-audio-example.wav" become wo text to name text output be read do
+su name example meta be map def
+su name requires ob ve text "espeak-ng" "ffmpeg" ya
+prah
+
+be directory ob filename "artifacts/say" do
+ob text "Hello from Pyash audio example." to filename "artifacts/say/pyash-read-audio-example.wav" be say do
+from filename "artifacts/say/pyash-read-audio-example.wav" become wo text to name text output be read do
 ob name output be write do
