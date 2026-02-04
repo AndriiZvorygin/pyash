@@ -56,19 +56,21 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? toolMapCwd;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
   const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
-  if (toolMapName && agentCwd && toolMapSandpit) {
-    doRemember({
-      mood: "ya",
-      be: "truth",
-      su: { name: "agent sandbox" },
-      ob: { boolean: true }
-    });
+  if (toolMapName && agentCwd) {
     doRemember({
       mood: "ya",
       be: "cwd",
       su: { name: "agent cwd" },
       ob: { filename: String(agentCwd) }
     });
+    if (toolMapSandpit) {
+      doRemember({
+        mood: "ya",
+        be: "truth",
+        su: { name: "agent sandbox" },
+        ob: { boolean: true }
+      });
+    }
   }
   if (toolMapName && toolMapWorld) {
     const worldRoot = agentCwd ?? "world";
