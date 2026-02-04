@@ -1,17 +1,21 @@
+from filename "./pandoc_command.pya" to name pandoc command be import do
+
 su name read from filename input fromstate wo html become wo markdown be ceremony def
-  exists su name cmd ob text "pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none \"" be text ya
+  ob name "pandoc command html markdown prefix" to name text cmd be text do
   ob filename of from of this to name text input be text do
   ob name input to name cmd be plus do
-  ob text "\" | sed -e 's/<span[^>]*><\\/span>//g'" to name cmd be plus do
+  ob name "pandoc command html markdown suffix" to name text suffix be text do
+  ob name suffix to name cmd be plus do
   ob text of cmd be command do
   su name result ret
 prah
 
 su name read from filename input fromstate wo html become wo markdown to name text output be ceremony def
-  exists su name cmd ob text "pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none \"" be text ya
+  ob name "pandoc command html markdown prefix" to name text cmd be text do
   ob filename of from of this to name text input be text do
   ob name input to name cmd be plus do
-  ob text "\" | sed -e 's/<span[^>]*><\\/span>//g'" to name cmd be plus do
+  ob name "pandoc command html markdown suffix" to name text suffix be text do
+  ob name suffix to name cmd be plus do
   ob text of cmd to name text output be command do
   su name output ret
 prah
