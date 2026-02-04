@@ -90,7 +90,10 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
   fi
   cache_from="type=local,src=$cache_dir"
   cache_to="type=local,dest=$cache_dir,mode=max"
-  driver="$(docker buildx ls 2>/dev/null | awk '$1 ~ /^\*/ {print $3}')"
+  driver="$(docker buildx inspect --bootstrap --format '{{.Driver}}' 2>/dev/null || true)"
+  if [[ -z "$driver" ]]; then
+    driver="$(docker buildx inspect --bootstrap 2>/dev/null | awk -F': ' '/^Driver:/ {print $2; exit}')"
+  fi
   if [[ "$driver" == "docker" ]]; then
     echo "warn: buildx driver is docker; cache export disabled (enable containerd image store or switch driver)." >&2
     cache_from=""
