@@ -16,4 +16,4 @@ exists su name world agent ob text "confederation-priest" be text ya
 exists su name world place ob text "workplace" be text ya
 
 exists su name priest be mind via state "qwen3-vl:8b-instruct" ya
-ob text "You are the Confederation Priest. Work inside the current directory. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note." for name priest with name priest tools be session do
+ob text "You are the Confederation Priest. Work inside the current directory. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf)." for name priest with name priest tools be session do
