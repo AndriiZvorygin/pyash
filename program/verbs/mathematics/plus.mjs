@@ -8,9 +8,11 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
 
   const duration = extractDuration(sentence.ob);
   if (duration) {
-    const dateValue = resolveDateSlot(sentence.to, remember);
+    const dateValue = resolveDateSlot(sentence.to ?? sentence.from, remember);
     const date = addDurationToDate(dateValue, duration, 1);
-    const targetName = typeof sentence.to?.name === "string" ? sentence.to.name : null;
+    const targetName = typeof sentence.to?.name === "string"
+      ? sentence.to.name
+      : (typeof sentence.from?.name === "string" ? sentence.from.name : null);
     const targetFact = targetName && remember ? remember(targetName) : null;
     return { ob: { date }, be: targetFact?.be ?? "date" };
   }
@@ -171,6 +173,18 @@ export async function plus_obj_num_from_name_vec_at_num(sentence, { remember }) 
 export const plus = plus_obj_num_to_name_num;
 
 export const signatures = [
+  { signatureWords: ["be", "plus", "ob", "second", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "month", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "minute", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "hour", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "day", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "week", "from", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "second", "from", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "month", "from", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "minute", "from", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "hour", "from", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "day", "from", "name", "date"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "ob", "week", "from", "name", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "second", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "month", "to", "date"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "minute", "to", "date"], handler: plus_obj_num_to_name_num },

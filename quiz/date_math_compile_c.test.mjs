@@ -60,3 +60,15 @@ test("compile C adds months to a date", { skip: skipWindows }, async () => {
   const out = await runC(c);
   assert.equal(out, "2025-02-20T00:00:00.000Z");
 });
+
+test("compile C adds days from a date", { skip: skipWindows }, async () => {
+  forget();
+  const pyash = [
+    "exists su name base ob date 2025-01-20T00:00:00Z be record ya",
+    "ob day 3 from name base be plus do",
+    "ob name base be write do"
+  ].join("\\n");
+  const c = await compileToC(pyash);
+  const out = await runC(c);
+  assert.equal(out, "2025-01-23T00:00:00.000Z");
+});
