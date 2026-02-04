@@ -400,6 +400,10 @@ value as the **agent CWD** (`su name agent cwd`) and enforce path restrictions.
 Destructive tool effects are constrained to this directory: relative output paths
 MUST be resolved under it, and attempts to write outside it MUST error.
 
+If the tool map definition itself includes `at filename <path>`, that path becomes
+the **default** agent working directory when the mind call omits `at filename`.
+A call-level `at filename` always overrides the tool map default.
+
 Example:
 
 ```pyash

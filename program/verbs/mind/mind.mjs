@@ -51,8 +51,9 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   });
 
   const toolMapName = sentence?.with?.name ?? null;
-  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
   const toolMapFact = toolMapName ? remember(toolMapName) : null;
+  const toolMapCwd = toolMapFact?.at?.filename ?? toolMapFact?.at?.text ?? toolMapFact?.at?.name ?? null;
+  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? toolMapCwd;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
   const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
   if (toolMapName && agentCwd && toolMapSandpit) {
