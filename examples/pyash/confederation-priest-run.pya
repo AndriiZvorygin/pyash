@@ -1,4 +1,4 @@
-su name priest tools at filename "world/workplace/confederation" be map def
+su name priest tools at filename "world/workplace/confederation" as wo sandpit be map def
 su name search be search ob text input fromstate wo web by num 3 can
 su name download be download from filename input as wo web to filename input can
 su name read be read from filename input become wo text to name text out can
