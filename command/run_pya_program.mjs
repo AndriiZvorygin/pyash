@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
@@ -21,6 +22,44 @@ import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
 import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex } from "./run_pya_helpers.mjs";
 
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+
+function sentenceHasLoopRegisters(sentence) {
+  return Boolean(sentence?.mood === "do" && (sentence.fromindex || sentence.toindex));
+}
+
+function detectNestedLoops(parsedSentences) {
+  const defRanges = new Map();
+  for (let i = 0; i < parsedSentences.length; i += 1) {
+    const sentence = parsedSentences[i];
+    const defName = sentence?.su?.name;
+    if (!defName || sentence?.be !== "ceremony") continue;
+    if (sentence.mood === "def" && !defRanges.has(defName)) {
+      defRanges.set(defName, { start: i, end: null });
+    } else if (sentence.mood === "prah") {
+      const entry = defRanges.get(defName);
+      if (entry && entry.end == null) entry.end = i;
+    }
+  }
+
+  const defHasLoop = new Set();
+  for (const [name, range] of defRanges.entries()) {
+    if (!range || typeof range.start !== "number" || typeof range.end !== "number") continue;
+    const body = parsedSentences.slice(range.start + 1, range.end);
+    if (body.some(sentenceHasLoopRegisters)) {
+      defHasLoop.add(name);
+    }
+  }
+
+  if (defHasLoop.size === 0) return false;
+  for (const sentence of parsedSentences) {
+    if (sentenceHasLoopRegisters(sentence) && defHasLoop.has(sentence.be)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
@@ -28,6 +67,7 @@ async function main() {
   const verboseFlag = args.includes("--verbose");
   const showResultFlag = args.includes("--result");
   const disableNewspaperFlag = args.includes("--no-newspaper");
+  const disableJitFlag = args.includes("--no-jit");
   const useNewspaperFlag = !disableNewspaperFlag;
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
@@ -49,19 +89,21 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--no-jit] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
     process.exit(1);
   }
 
   const resolved = path.resolve(filePath);
   setEntryModulePath(resolved);
   let text;
+  let readFromFile = true;
   try {
     text = await fs.readFile(resolved, "utf8");
   } catch (err) {
     if (err.code !== "ENOENT") throw err;
     // Treat the positional args as inline Pyash when the path does not exist.
     text = positional.join(" ");
+    readFromFile = false;
   }
 
   forget();
@@ -77,6 +119,18 @@ async function main() {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
   const sentences = splitSentencesWithLines(text, { includeThen: true });
+  if (!disableJitFlag && process.env.PYA_NO_JIT_LOOPS !== "1" && readFromFile) {
+    const parsed = sentences
+      .map(({ text: sentenceText }) => parse(sentenceText))
+      .filter(Boolean);
+    if (detectNestedLoops(parsed)) {
+      const runjsArgs = args.filter((arg) => arg !== "--no-jit");
+      const runjsPath = path.resolve(root, "runjs");
+      const child = spawn(runjsPath, runjsArgs, { stdio: "inherit" });
+      child.on("exit", (code) => process.exit(code ?? 0));
+      return;
+    }
+  }
   let useNewspaper = useNewspaperFlag;
   const autoNewspaperMind = resolveConfigBool("newspaper mind auto", { rememberFn: remember });
   if (!useNewspaper && !useAgain && autoNewspaperMind) {
