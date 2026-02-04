@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { buildProgram } from "../../../program.mjs";
 import { doRemember, remember } from "../../../remember/index.mjs";
 import { throwErrorSentence } from "../../../error.mjs";
@@ -10,10 +11,18 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 
 export async function compile_from_filename_to_filename(sentence) {
-  const sourceFilename =
+  const agentCwd = remember("agent cwd")?.ob?.filename ?? null;
+  const sandboxActive = remember("agent sandbox")?.ob?.boolean === true;
+  const resolveSandboxPath = (filename) => {
+    if (!filename || !agentCwd) return filename;
+    return path.isAbsolute(filename) ? filename : path.resolve(agentCwd, filename);
+  };
+
+  const sourceFilenameRaw =
     sentence?.from?.filename ??
     sentence?.ob?.filename ??
     sentence?.filename;
+  const sourceFilename = resolveSandboxPath(sourceFilenameRaw);
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;
 
@@ -23,7 +32,18 @@ export async function compile_from_filename_to_filename(sentence) {
   }
 
   if (!sourceText && sourceFilename) {
-    sourceText = await fs.readFile(sourceFilename, "utf8");
+    try {
+      sourceText = await fs.readFile(sourceFilename, "utf8");
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: `file or directory unavailable: ${sourceFilename}`,
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
   }
   if (typeof sourceText !== "string") {
     throwErrorSentence({
@@ -33,11 +53,93 @@ export async function compile_from_filename_to_filename(sentence) {
     });
   }
 
-  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  const sourceState = String(
+    sentence?.fromstate?.name ??
+    sentence?.fromstate?.wo ??
+    sentence?.fromstate ??
+    ""
+  ).toLowerCase();
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
   }
-  const targetState = (sentence?.tostate?.name || sentence?.become?.name || "javascript").toLowerCase();
+  const targetState = String(
+    sentence?.tostate?.name ??
+    sentence?.tostate?.wo ??
+    sentence?.become?.name ??
+    sentence?.become?.wo ??
+    "javascript"
+  ).toLowerCase();
+
+  if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
+    const targetFilenameRaw = sentence?.to?.filename;
+    const targetFilename = resolveSandboxPath(targetFilenameRaw);
+    if (!sourceFilename || !targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: markdown conversions require from filename and to filename",
+        from: { name: "compile" }
+      });
+    }
+    const args = targetState === "html"
+      ? ["--from=markdown", "--to=html", "--wrap=none", sourceFilename, "-o", targetFilename]
+      : ["--from=markdown", sourceFilename, "-o", targetFilename];
+    let res;
+    try {
+      res = spawnSync("pandoc", args, { stdio: "pipe" });
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: "file or directory unavailable: pandoc",
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
+    if (res.error || res.status !== 0) {
+      const stderr = res.stderr ? res.stderr.toString("utf8") : "";
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: pandoc failed${stderr ? ` (${stderr.trim()})` : ""}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetState === "html") {
+      let htmlText = "";
+      try {
+        htmlText = await fs.readFile(targetFilename, "utf8");
+      } catch (err) {
+        if (err?.code === "ENOENT") {
+          throwErrorSentence({
+            name: "file or directory unavailable error",
+            message: `file or directory unavailable: ${targetFilename}`,
+            from: { name: "compile" }
+          });
+        }
+        throw err;
+      }
+      const wrappedText = `quoted.html.\\n${htmlText}.html.quoted`;
+      if (targetName) {
+        doRemember({
+          su: { name: targetName },
+          be: "html",
+          ob: { text: wrappedText },
+          mood: "ya",
+        });
+      }
+      return { ob: { text: wrappedText }, be: "html" };
+    }
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "pdf",
+        ob: { filename: targetFilename },
+        mood: "ya",
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "pdf" };
+  }
   if (sourceState === "json" && targetState === "pyash") {
     let parsed;
     try {
@@ -122,7 +224,8 @@ export async function compile_from_filename_to_filename(sentence) {
   const body = wantsJsMap ? inlineSourceMap(bodyRaw, { sourceName, sourceText }) : bodyRaw;
   const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;
 
-  const targetFilename = sentence?.to?.filename;
+  const targetFilenameRaw = sentence?.to?.filename;
+  const targetFilename = resolveSandboxPath(targetFilenameRaw);
   if (targetFilename) {
     await fs.writeFile(targetFilename, body, "utf8");
   }

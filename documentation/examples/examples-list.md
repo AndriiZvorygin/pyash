@@ -25,7 +25,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Translate Pyash to Hindi | `examples/pyash/translate-pyash-map-ceremony-to-hindi.pya` |
 | Map + Ceremony Demo | `examples/pyash/map-ceremony-demo.pya` |
 | Modules | `examples/pyash/module-import-full.pya`, `examples/pyash/module-import-full-paths.pya` |
-| Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya` |
+| Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya`, `examples/pyash/mind-session.pya` |
 | Download | `examples/pyash/download-ytdlp.pya` |
 | Tool envelope / again | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |
 | Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |

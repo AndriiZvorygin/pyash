@@ -3,6 +3,7 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { resolveInterpret, callMindBackend } from "./backend.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
+import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
 import { buildToolSentence } from "./tooling.mjs";
@@ -23,7 +24,8 @@ export async function runToolChat({
   ollamaHost,
   mindDebug,
   debugMind,
-  inputs
+  inputs,
+  onToolCall
 } = {}) {
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
@@ -125,6 +127,9 @@ export async function runToolChat({
         capability,
         args: call?.function?.arguments ?? call?.arguments
       });
+      if (typeof onToolCall === "function") {
+        onToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
+      }
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
@@ -140,6 +145,8 @@ export async function runToolChat({
           toolText = surfacedTool.ob.text;
         } else if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
+        } else if (surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {
+          toolText = mapSentenceToPyash(surfacedTool);
         } else if (surfacedTool.be === "interpret" && typeof surfacedTool.ob?.text === "string") {
           const rawText = surfacedTool.ob.text;
           const match = rawText.match(/^quoted\.([^.]+)\.([\s\S]*?)\.\1\.quoted$/);
@@ -149,6 +156,9 @@ export async function runToolChat({
         }
       } else {
         toolText = String(surfacedTool ?? "");
+      }
+      if (typeof onToolCall === "function") {
+        onToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
       }
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;

@@ -4,7 +4,8 @@ export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can"];
 
 export const COMPOSITIONAL_ALIASES = {
   inside: "in",
-  along: "on"
+  along: "on",
+  tostate: "become"
 };
 
 const EXTRA_CONTEXT_KEYWORDS = {
@@ -22,6 +23,8 @@ export const COMPOSITIONAL_KEYWORDS = Array.from(
   )
 );
 
+const COMPOSITIONAL_ALIAS_KEYS = Object.keys(COMPOSITIONAL_ALIASES);
+
 export const ROLE_KEYS = [
   "su",
   "subj",
@@ -29,7 +32,8 @@ export const ROLE_KEYS = [
   "obj",
   "vyah",
   "via",
-  ...COMPOSITIONAL_KEYWORDS
+  ...COMPOSITIONAL_KEYWORDS,
+  ...COMPOSITIONAL_ALIAS_KEYS
 ];
 
 export const TYPE_TOKENS = [

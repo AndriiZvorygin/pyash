@@ -1,3 +1,42 @@
+const READ_COMMANDS = {
+  html: {
+    text: {
+      prefix: "pandoc --from=html --to=plain --wrap=none \"",
+      suffix: "\""
+    },
+    markdown: {
+      prefix: "pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none \"",
+      suffix: "\" | sed -e 's/<span[^>]*><\\\\/span>//g'"
+    },
+    markdownPlain: {
+      prefix: "pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none \"",
+      suffix: "\" | sed -e 's/<span[^>]*><\\\\/span>//g'"
+    }
+  },
+  pdf: {
+    text: {
+      prefix: "pdftotext -layout \"",
+      suffix: "\" -"
+    },
+    markdown: {
+      prefix: "pdftohtml -stdout -i -q \"",
+      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none | sed -e 's/<span[^>]*><\\\\/span>//g' -e '/^-----/d'"
+    },
+    markdownPlain: {
+      prefix: "pdftohtml -stdout -i -q \"",
+      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none | sed -e 's/<span[^>]*><\\\\/span>//g' -e '/^-----/d'"
+    }
+  }
+};
+
+function resolveStateValue(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value?.wo) return String(value.wo);
+  if (value?.name) return String(value.name);
+  return "";
+}
+
 export function handleReadSentence(context, helpers) {
   const {
     sentence,
@@ -29,7 +68,80 @@ export function handleReadSentence(context, helpers) {
 
   cState.evokeCounter = (cState.evokeCounter ?? -1) + 1;
   const sentenceId = sentenceIdForText(sentenceToPyash(sentence), cState.evokeCounter);
-  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  const sourceState = resolveStateValue(sentence?.fromstate).toLowerCase();
+  const becomeState = resolveStateValue(sentence?.become).toLowerCase();
+  if (sourceState === "html" || sourceState === "pdf") {
+    const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
+    const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;
+    if (!sourceFilename) return null;
+    const wantsMarkdown = becomeState.startsWith("markdown");
+    const wantsPlain = becomeState.includes("plain");
+    const wantsText = becomeState === "text" || !becomeState;
+    let commandSpec = null;
+    if (wantsMarkdown && wantsPlain) commandSpec = READ_COMMANDS[sourceState].markdownPlain;
+    else if (wantsMarkdown) commandSpec = READ_COMMANDS[sourceState].markdown;
+    else if (wantsText) commandSpec = READ_COMMANDS[sourceState].text;
+    if (!commandSpec) return null;
+    const safeName = sanitizeName(targetName);
+    const alreadyDeclared = declared?.has(targetName);
+    markDeclared(declared, targetName);
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    const cmd = `${commandSpec.prefix}${sourceFilename}${commandSpec.suffix}`;
+    if (lang !== "c") {
+      if (jsHelpers) {
+        jsHelpers.usesCommand = true;
+        jsHelpers.usesExchange = true;
+      }
+      const assignLine = alreadyDeclared
+        ? `${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: String(__pyaOut ?? \"\") }, be: "text", mood: "ya" };`
+        : `const ${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: String(__pyaOut ?? \"\") }, be: "text", mood: "ya" };`;
+      const evoked = JSON.stringify(sentenceToPyash(sentence));
+      const toolTarget = JSON.stringify(targetName);
+      return [
+        "{",
+        `const __pyaToolEvoked = ${evoked};`,
+        `const __pyaCmd = ${JSON.stringify(cmd)};`,
+        "let __pyaOut;",
+        "try {",
+        "  __pyaOut = pyaCommand(__pyaCmd);",
+        "} catch (err) {",
+        "  const __pyaMsg = `command defective: ${String(err?.message ?? \"command defective\")}`;",
+        "  pyaEmitNewspaper(`su name command defective ob text ${JSON.stringify(__pyaMsg)} from la ${__pyaToolEvoked} ko be error ya`);",
+        "  throw err;",
+        "}",
+        assignLine,
+        `globalThis[${JSON.stringify(targetName)}] = ${safeName};`,
+        `const __pyaToolResult = "su name " + ${toolTarget} + " ob text " + JSON.stringify(String(__pyaOut ?? \"\")) + " be text ya";`,
+        "pyaEmitNewspaper(`su name tool event ${pyaNextToolEventId()} ob la ${__pyaToolEvoked} ko to la ${__pyaToolResult} ko be tool ya`);",
+        "}"
+      ].join("\n");
+    }
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesCommand = true;
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesStdlib = true;
+        cHelpers.usesPrintf = true;
+        cHelpers.usesExchange = true;
+      }
+      const evoked = JSON.stringify(sentenceToPyash(sentence));
+      const toolTarget = JSON.stringify(targetName);
+      const outVar = `read_out_${cState?.fileCounter ?? 0}`;
+      if (cState) cState.fileCounter += 1;
+      const lines = [];
+      if (!locals?.has(safeName) && !alreadyDeclared) {
+        lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
+      }
+      lines.push(`const char *__pyaCmd = ${JSON.stringify(cmd)};`);
+      lines.push(`char *${outVar} = pya_command(__pyaCmd);`);
+      lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\\\\"command defective\\\\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+      lines.push(`snprintf(${safeName}, sizeof(${safeName}), "%s", ${outVar} ? ${outVar} : "");`);
+      lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\\\\\"%s\\\\\\" be text ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${toolTarget}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);
+      lines.push(`if (${outVar}) free(${outVar});`);
+      return lines.join("\n");
+    }
+  }
   if (sourceState === "json") {
     const targetName = sentence?.to?.name ?? sentence?.su?.name ?? "result";
     const sourceFilename = sentence?.from?.filename ?? sentence?.ob?.filename;

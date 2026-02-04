@@ -27,7 +27,8 @@ async function main() {
   const fullFlag = args.includes("--full");
   const verboseFlag = args.includes("--verbose");
   const showResultFlag = args.includes("--result");
-  const useNewspaperFlag = args.includes("--newspaper");
+  const disableNewspaperFlag = args.includes("--no-newspaper");
+  const useNewspaperFlag = !disableNewspaperFlag;
   const useAgain = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
   const runIdFlag = readFlagValue(args, "--run-id");
@@ -36,7 +37,7 @@ async function main() {
   const positional = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--gross" || arg === "--full" || arg === "--result" || arg === "--newspaper" || arg === "--again" || arg === "--no-checkpoint") continue;
+    if (arg === "--gross" || arg === "--full" || arg === "--result" || arg === "--newspaper" || arg === "--no-newspaper" || arg === "--again" || arg === "--no-checkpoint") continue;
     if (arg === "--run-id" || arg === "--run-time" || arg === "--refinery") {
       i += 1;
       continue;
@@ -48,7 +49,7 @@ async function main() {
   const filePath = positional[0];
 
   if (!filePath) {
-    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
     process.exit(1);
   }
 

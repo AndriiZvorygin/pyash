@@ -6,6 +6,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { setEntryModuleDir } from "../bridge/modules.mjs";
 import { setExchangeRunRoot } from "../bridge/exchange.mjs";
+import { appendWorldActivity, ensureWorldDir, isWorldToolsActive, resolveWorldAgent, resolveWorldPlaceDir, setWorldPlace } from "../library/world.mjs";
 
 function resolveTargetDir(sentence, { rememberFn } = {}) {
   const to = sentence?.to ?? {};
@@ -29,6 +30,32 @@ export async function go(sentence, { remember: rememberFn = remember } = {}) {
       from: { name: "go" },
       raw: { sentence }
     });
+  }
+  if (isWorldToolsActive({ rememberFn })) {
+    const place = path.basename(String(target));
+    const placeDir = resolveWorldPlaceDir(place, { rememberFn });
+    if (!placeDir) {
+      throwErrorSentence({
+        name: "go target missing",
+        message: "go target missing: world root",
+        from: { name: "go" },
+        raw: { sentence }
+      });
+    }
+    await ensureWorldDir(placeDir);
+    setWorldPlace(place);
+    const agent = resolveWorldAgent({ rememberFn }) ?? "agent";
+    await appendWorldActivity({
+      placeDir,
+      sentence: {
+        mood: "ya",
+        su: { name: agent },
+        to: { name: place },
+        at: { date: new Date().toISOString() },
+        be: "go"
+      }
+    });
+    return { ob: { filename: placeDir }, be: "go" };
   }
   const resolved = path.resolve(String(target));
   let stats;
