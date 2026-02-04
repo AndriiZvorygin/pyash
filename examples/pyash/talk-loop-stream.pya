@@ -1,3 +1,9 @@
+su name example meta be map def
+su name mode ob text "session" ya
+su name requires ob ve text "OLLAMA_HOST" "espeak-ng" "ffmpeg" ya
+su name inputs ob ve text "/bye" ya
+prah
+
 exists su name stream stdout ob bool truth be default ya
 su name talk loop fromindex num 0 toindex num 0 be ceremony def
   su name prompt ob text "Speak now. Say \"bye\" to stop. Press Ctrl+D when done." be write do

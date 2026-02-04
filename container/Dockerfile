@@ -19,6 +19,7 @@ RUN apt-get update \
     netcat-openbsd \
     tree \
     yq \
+    yt-dlp \
     pandoc \
     texlive-latex-base \
     texlive-latex-recommended \
