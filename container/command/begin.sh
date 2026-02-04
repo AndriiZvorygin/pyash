@@ -28,7 +28,7 @@ get_map_value() {
 ai_host="$(get_map_value "ai host")"
 web_search_enabled="$(get_map_value "web search enabled")"
 search_only="lie"
-vnc_enabled=""
+vnc_enabled="truth"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -62,6 +62,8 @@ for arg in "$@"; do
     search_only="truth"
   elif [[ "$arg" == "--vnc" ]]; then
     vnc_enabled="truth"
+  elif [[ "$arg" == "--no-vnc" ]]; then
+    vnc_enabled="lie"
   fi
 done
 
