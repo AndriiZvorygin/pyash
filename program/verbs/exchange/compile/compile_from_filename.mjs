@@ -11,8 +11,8 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 
 export async function compile_from_filename_to_filename(sentence) {
+  const agentCwd = remember("agent cwd")?.ob?.filename ?? null;
   const sandboxActive = remember("agent sandbox")?.ob?.boolean === true;
-  const agentCwd = sandboxActive ? remember("agent cwd")?.ob?.filename : null;
   const resolveSandboxPath = (filename) => {
     if (!filename || !agentCwd) return filename;
     return path.isAbsolute(filename) ? filename : path.resolve(agentCwd, filename);
