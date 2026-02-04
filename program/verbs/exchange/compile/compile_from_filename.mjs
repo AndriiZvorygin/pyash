@@ -32,7 +32,18 @@ export async function compile_from_filename_to_filename(sentence) {
   }
 
   if (!sourceText && sourceFilename) {
-    sourceText = await fs.readFile(sourceFilename, "utf8");
+    try {
+      sourceText = await fs.readFile(sourceFilename, "utf8");
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: `file or directory unavailable: ${sourceFilename}`,
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
   }
   if (typeof sourceText !== "string") {
     throwErrorSentence({
@@ -72,7 +83,19 @@ export async function compile_from_filename_to_filename(sentence) {
     const args = targetState === "html"
       ? ["--from=markdown", "--to=html", "--wrap=none", sourceFilename, "-o", targetFilename]
       : ["--from=markdown", sourceFilename, "-o", targetFilename];
-    const res = spawnSync("pandoc", args, { stdio: "pipe" });
+    let res;
+    try {
+      res = spawnSync("pandoc", args, { stdio: "pipe" });
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: "file or directory unavailable: pandoc",
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
     if (res.error || res.status !== 0) {
       const stderr = res.stderr ? res.stderr.toString("utf8") : "";
       throwErrorSentence({
@@ -83,7 +106,19 @@ export async function compile_from_filename_to_filename(sentence) {
     }
     const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
     if (targetState === "html") {
-      const htmlText = await fs.readFile(targetFilename, "utf8");
+      let htmlText = "";
+      try {
+        htmlText = await fs.readFile(targetFilename, "utf8");
+      } catch (err) {
+        if (err?.code === "ENOENT") {
+          throwErrorSentence({
+            name: "file or directory unavailable error",
+            message: `file or directory unavailable: ${targetFilename}`,
+            from: { name: "compile" }
+          });
+        }
+        throw err;
+      }
       const wrappedText = `quoted.html.\\n${htmlText}.html.quoted`;
       if (targetName) {
         doRemember({
