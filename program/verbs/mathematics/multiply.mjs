@@ -18,9 +18,25 @@ function resolveNumber(v, remember) {
           curr = undefined;
           break;
         }
+        if (curr && typeof curr === "object" && curr.thisRef) {
+          const reg = state.currentEvokeRef?.[curr.thisRef] ?? state.currentEvoke?.[curr.thisRef];
+          const regNum = typeof reg === "number" ? reg : reg?.num;
+          if (regNum !== undefined) {
+            curr = regNum;
+            if (part === "num") continue;
+          }
+        }
         if (curr && typeof curr === "object" && curr.name && remember) {
           const fact = remember(curr.name);
           if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
+        }
+        if (curr && typeof curr === "object" && curr.thisRef) {
+          const reg = state.currentEvokeRef?.[curr.thisRef] ?? state.currentEvoke?.[curr.thisRef];
+          const regNum = typeof reg === "number" ? reg : reg?.num;
+          if (regNum !== undefined) {
+            curr = regNum;
+            if (part === "num") continue;
+          }
         }
         if (curr == null) break;
         if (curr && typeof curr === "object") {
