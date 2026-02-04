@@ -158,13 +158,34 @@ The mind call understands these cases:
 * `with name <map>` — tool schema map (enables tool calling).
 * `vyah stream` — stream output (where supported).
 
-### 3.2 Model resolution
+### 3.2 Interactive sessions (`be session`)
+
+An interactive session is a REPL-like loop that repeatedly invokes the same
+mind call and prints responses as they arrive. It uses the same mind tooling
+and history rules as `be write`.
+
+Canonical form:
+
+```pyash
+for name <mind>
+with name <tool-map>  ; optional
+at filename <cwd>     ; optional
+be session do
+```
+
+Rules:
+
+* `/bye` exits the session loop.
+* If tools are enabled, tool calls are surfaced to the user as they happen.
+* The session uses the same model/prompt/tool map resolution as `be write`.
+
+### 3.3 Model resolution
 
 * `ob model` on the call, if present
 * else config model (`via state`)
 * else default `qwen3-vl:8b-instruct`
 
-### 3.3 Prompt assembly
+### 3.4 Prompt assembly
 
 The runtime constructs the model request from:
 
@@ -400,6 +421,10 @@ value as the **agent CWD** (`su name agent cwd`) and enforce path restrictions.
 Destructive tool effects are constrained to this directory: relative output paths
 MUST be resolved under it, and attempts to write outside it MUST error.
 
+If the tool map definition itself includes `at filename <path>`, that path becomes
+the **default** agent working directory when the mind call omits `at filename`.
+A call-level `at filename` always overrides the tool map default.
+
 Example:
 
 ```pyash
@@ -605,6 +630,39 @@ Adapter output:
 
 Name is derived by joining signature words with underscores (`be_say_ob_text`).
 Description MUST be the canonical printed `can` sentence.
+
+#### Input markers (optional)
+
+If a capability sentence includes the literal marker `input` in a case value
+(for example, `ob text input`), only those **input-marked** cases are exposed as
+tool parameters. All other cases in the `can` sentence are treated as fixed and
+are copied verbatim into the executed `do` sentence.
+
+Input markers work with any type word (`text`, `num`, `filename`, `vec`, `wo`,
+etc.) and multiple input-marked cases may appear in a single sentence.
+
+If no input markers are present, only **open slots** are exposed as parameters.
+An open slot is a case that names a type without content, for example:
+
+```pyash
+su name read file be read from name filename can
+su name write note be write ob name text to filename "/tmp/note.txt" can
+```
+
+If a capability has **no** input markers and **no** open slots, the tool schema
+has no parameters (a fixed tool call).
+
+If **no** input markers are present, the tool schema includes **only open slots**
+(cases with a type but no content).
+
+Example:
+
+```pyash
+su name write note be write ob text input to filename "world/workplace/confederation/artifact/note.txt" can
+```
+
+Tool parameters: `ob` only. The tool handler will fill `ob` from arguments,
+and leave `to filename ...` unchanged.
 
 ### 7.2 Request: provide tools to the model
 

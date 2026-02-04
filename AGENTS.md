@@ -49,6 +49,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 - If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
 
+## Skills Discipline
+- Check the `skills/` folder for relevant skills before starting a task.
+- If a skill applies, follow it and update the skill when you learn new, reusable information while working.
+- Create a new skill (under `skills/`) when a task required more than one attempt or uncovered a repeatable workflow.
+
 ## Security & Configuration Tips
 - `motor/ollama.mjs` calls an Ollama HTTP server (configured via `OLLAMA_HOST`, default `http://localhost:11434`); ensure the server is reachable.
 - Never commit secrets or personal data; prefer env vars or local, git-ignored config.

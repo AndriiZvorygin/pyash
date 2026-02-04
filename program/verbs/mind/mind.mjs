@@ -13,7 +13,7 @@ import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 
-export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
+export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = {}) {
   const ob = sentence?.ob ?? {};
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
@@ -51,21 +51,46 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
   });
 
   const toolMapName = sentence?.with?.name ?? null;
-  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name;
   const toolMapFact = toolMapName ? remember(toolMapName) : null;
+  const toolMapCwd = toolMapFact?.at?.filename ?? toolMapFact?.at?.text ?? toolMapFact?.at?.name ?? null;
+  const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? toolMapCwd;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
-  if (toolMapName && agentCwd && toolMapSandpit) {
-    doRemember({
-      mood: "ya",
-      be: "truth",
-      su: { name: "agent sandbox" },
-      ob: { boolean: true }
-    });
+  const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
+  if (toolMapName && agentCwd) {
     doRemember({
       mood: "ya",
       be: "cwd",
       su: { name: "agent cwd" },
       ob: { filename: String(agentCwd) }
+    });
+    if (toolMapSandpit) {
+      doRemember({
+        mood: "ya",
+        be: "truth",
+        su: { name: "agent sandbox" },
+        ob: { boolean: true }
+      });
+    }
+  }
+  if (toolMapName && toolMapWorld) {
+    const worldRoot = agentCwd ?? "world";
+    doRemember({
+      mood: "ya",
+      be: "truth",
+      su: { name: "world tools" },
+      ob: { boolean: true }
+    });
+    doRemember({
+      mood: "ya",
+      be: "root",
+      su: { name: "world root" },
+      ob: { filename: String(worldRoot) }
+    });
+    doRemember({
+      mood: "ya",
+      be: "text",
+      su: { name: "world agent" },
+      ob: { text: String(mindName) }
     });
   }
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
@@ -142,7 +167,8 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       ollamaHost,
       mindDebug,
       debugMind,
-      inputs: { inputText, mockResponseRaw }
+      inputs: { inputText, mockResponseRaw },
+      onToolCall
     });
   } else {
     const { responseText: text, stream } = await runGenerate({

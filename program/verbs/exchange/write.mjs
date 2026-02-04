@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
+import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
-import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { ensureAgentPathDir, resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
 import { resolveKeyboardCommand, sendKeyboardText } from "./write_keyboard.mjs";
@@ -160,22 +162,70 @@ export default async function write(sentence, { remember: rememberFn = remember 
       });
     }
   } else if (target) {
-    const { resolved, outside, agentCwd } = resolveAgentPath(target, { rememberFn });
+    const worldMode = isWorldToolsActive({ rememberFn });
+    const agentCwd = resolveAgentCwd({ rememberFn });
+    if (agentCwd && !path.isAbsolute(String(target))) {
+      target = path.resolve(agentCwd, String(target));
+    } else if (worldMode) {
+      const place = resolveWorldPlace({ rememberFn }) ?? "commons";
+      const placeDir = resolveWorldPlaceDir(place, { rememberFn });
+      if (!placeDir) {
+        throwErrorSentence({
+          name: "write defective",
+          message: "write defective: world place missing",
+          from: { name: "write" },
+          raw: { target }
+        });
+      }
+      const resolvedTarget = path.resolve(placeDir, String(target));
+      const { outside, root } = resolveWorldPath(resolvedTarget, { rememberFn });
+      if (outside) {
+        throwErrorSentence({
+          name: "write defective",
+          message: `write defective: outside world root (${root})`,
+          from: { name: "write" },
+          raw: { target }
+        });
+      }
+      target = resolvedTarget;
+    }
+    const { resolved, outside, agentCwd: resolvedAgentCwd } = resolveAgentPath(target, { rememberFn });
     if (outside) {
       throwErrorSentence({
         name: "write defective",
-        message: `write defective: outside agent cwd (${agentCwd})`,
+        message: `write defective: outside agent cwd (${resolvedAgentCwd})`,
         from: { name: "write" },
         raw: { target }
       });
     }
-    await ensureAgentPathDir(resolved, { agentCwd, outside });
+    await ensureAgentPathDir(resolved, { agentCwd: resolvedAgentCwd, outside });
     target = resolved;
+    if (worldMode) {
+      await fs.mkdir(path.dirname(target), { recursive: true });
+    }
     await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
     const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
     if (artifact?.su?.name) {
       recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+    }
+    if (worldMode) {
+      const agent = resolveWorldAgent({ rememberFn }) ?? "agent";
+      const place = resolveWorldPlace({ rememberFn }) ?? "commons";
+      const placeDir = resolveWorldPlaceDir(place, { rememberFn });
+      if (placeDir) {
+        const rel = path.relative(placeDir, target);
+        await appendWorldActivity({
+          placeDir,
+          sentence: {
+            mood: "ya",
+            su: { name: agent },
+            to: { filename: rel },
+            at: { date: new Date().toISOString() },
+            be: "write"
+          }
+        });
+      }
     }
   } else {
     // eslint-disable-next-line no-console

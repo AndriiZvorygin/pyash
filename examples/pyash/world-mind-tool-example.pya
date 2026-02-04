@@ -1,0 +1,14 @@
+su name world tool map as wo world be map def
+su name go be go to text "commons" can
+prah
+
+exists su name world tools ob bool truth ya
+exists su name world root ob filename "world" be default ya
+exists su name world agent ob text "system" be text ya
+exists su name world place ob text "commons" be text ya
+to name text "commons" be go do
+be list do
+
+exists su name world agent be mind as name "qwen3-vl:8b-instruct" ya
+ob text "use the go tool to go to commons" for name world agent to name text out with name world tool map at filename "world" be write do
+ob name out be write do

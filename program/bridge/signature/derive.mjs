@@ -189,6 +189,10 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
       if (stateName) return ["name", stateName];
     }
     const inferred = remember ? remember(value.name) : null;
+    const literalTail = normalizeWords(value.name);
+    if (!inferred && literalTail && (literalTail === "num" || literalTail === "text" || literalTail === "vec" || literalTail === "ve" || literalTail === "filename" || literalTail === "bool" || literalTail === "mind" || literalTail === "date")) {
+      return ["name", literalTail];
+    }
     const factObj = inferred?.ob;
     const vecType = factObj?.ve?.type;
 

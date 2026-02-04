@@ -1,0 +1,3 @@
+su name note ob text "Transcribe the latest audio file. Update the filename when new audio is downloaded." ya
+su name transcript from filename "world/workplace/confederation/artifact/audio/latest.mp3" be hear do
+ob name transcript to filename "world/workplace/confederation/artifact/latest-transcript.txt" be write do

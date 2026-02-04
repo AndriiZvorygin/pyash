@@ -59,8 +59,71 @@ test("mind tool adapter sends non-empty tools array for with name map", async ()
     const tool = capturedTools[0]?.function ?? {};
     assert.equal(tool.name, "be_plus_ob_num_to_name_num");
     assert.equal(tool.signature, "be plus ob num to name num");
-    assert.ok(tool.parameters?.properties?.ob, "tool should include ob");
     assert.ok(tool.parameters?.properties?.to, "tool should include to");
+    assert.ok(!tool.parameters?.properties?.ob, "tool should not include ob when fixed");
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("mind tool adapter respects input markers in can sentences", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name write note be write ob text input to filename \"/tmp/example.txt\" can"));
+    await interpret(parse("prah"));
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+
+    await interpret(parse("ob text \"use write\" for name helper to name text helper-out with name tools be write do"));
+
+    const payload = decodeMindPayload(records, "helper");
+    const capturedTools = payload.tools;
+    assert.ok(Array.isArray(capturedTools), "tools should be passed to chat");
+    assert.ok(capturedTools.length > 0, "tools should be non-empty");
+    const tool = capturedTools[0]?.function ?? {};
+    assert.equal(tool.name, "be_write_ob_text_to_filename");
+    assert.ok(tool.parameters?.properties?.ob, "tool should include ob");
+    assert.ok(!tool.parameters?.properties?.to, "tool should not include to when not marked input");
+    assert.deepEqual(tool.parameters?.required ?? [], ["ob"]);
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("mind tool adapter exposes open slots when no input markers", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name read file be read from name filename can"));
+    await interpret(parse("prah"));
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+
+    await interpret(parse("ob text \"use read\" for name helper to name text helper-out with name tools be write do"));
+
+    const payload = decodeMindPayload(records, "helper");
+    const capturedTools = payload.tools;
+    assert.ok(Array.isArray(capturedTools), "tools should be passed to chat");
+    assert.ok(capturedTools.length > 0, "tools should be non-empty");
+    const tool = capturedTools[0]?.function ?? {};
+    assert.equal(tool.name, "be_read_from_name_filename");
+    assert.ok(tool.parameters?.properties?.from, "tool should include from");
+    assert.deepEqual(tool.parameters?.required ?? [], ["from"]);
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;

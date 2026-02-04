@@ -77,7 +77,7 @@ Root: `world/` (workspace-relative unless an absolute path is configured by the 
 
 ### 3.1 Places
 
-`world/places/<place>/`
+Places are **top-level directories** under `world/` (no `world/places/` layer).
 
 Canonical places:
 
@@ -86,6 +86,7 @@ Canonical places:
 * `workplace`
 * `church` (optional)
 * `lookouts` (optional)
+* `house` (agent homes)
 
 Each place contains:
 
@@ -93,7 +94,7 @@ Each place contains:
 * local **artifacts**
 * optional pinned materials (conduct excerpts, open duty)
 
-**MVP:** `commons`, `library`, `workplace`
+**MVP:** `commons`, `library`, `workplace`, `house`
 
 Canonical filenames:
 
@@ -105,7 +106,7 @@ Canonical filenames:
 
 ### 3.2 Agents
 
-`world/agents/<agent>/`
+`world/house/<agent>/`
 
 Subspaces:
 
@@ -120,13 +121,14 @@ Subspaces:
 
 ### 3.3 Programs (communal)
 
-`world/program/<program>/`
+`world/workplace/<program>/`
 
 Subspaces:
 
 * `brief/`
 * `duty/`
 * `artifact/`
+* `program/`
 * `criterion/`
 * `session/` or `gathering/`
 
@@ -135,7 +137,10 @@ Rule:
 * solitary work → agent `program/`
 * shared outcomes → world `program/`
 
-**MVP:** one communal program with `brief`, `duty`, `artifact`
+Deterministic automation lives in `program/` as Pyash programs that can be
+run or maintained by agents (download, transcribe, extract, compile).
+
+**MVP:** one communal program with `brief`, `duty`, `artifact`, `program`
 
 Canonical filenames:
 
@@ -148,10 +153,14 @@ Canonical filenames:
 
 ### 3.4 Tools
 
-`world/tools/<place>/`
+Tools live under the place they belong to (e.g. `world/workplace/<program>/tools/`
+or `world/library/tools/`).
 
 Tools are discovered through place perception and invoked through tool calls.
 Results always return as artifacts.
+
+When a tools definition includes `at filename <path>`, that path becomes the
+tool base path (agent cwd) used to resolve relative filenames in tool calls.
 
 **MVP:** at least one tool in `library` and one in `workplace`
 
@@ -182,8 +191,9 @@ Conceptually holds:
 * current turn pointer
 * eligibility queue
 * rest and cooldown state
+* optional heartbeat schedule (wakes an agent for routine maintenance)
 
-**MVP:** single turn pointer and queue
+**MVP:** single turn pointer and queue, optional heartbeat
 
 ---
 
@@ -313,6 +323,7 @@ A turn consists of:
 * optional read
 * optional write
 * implicit yield
+* bounded by a time/context budget
 
 ### 8.3 Eligibility
 
@@ -392,6 +403,7 @@ During sleep, the world requests:
 * failures
 * lessons
 * next practice
+* training gold (high-signal facts, mistakes, and corrections)
 
 ### 11.3 Practice
 
@@ -407,6 +419,7 @@ Practice tasks are written to bedroom and optionally shared to workplace.
 * Library: factual clarity and sourcing
 * Workplace: bounded change with outcome
 * Tools: intent before use, interpretation after
+* Library: curated promotion from workplace artifacts
 
 Conduct is enforced by itinerary and review, not by syntax.
 
