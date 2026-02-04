@@ -11,10 +11,18 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 
 export async function compile_from_filename_to_filename(sentence) {
-  const sourceFilename =
+  const sandboxActive = remember("agent sandbox")?.ob?.boolean === true;
+  const agentCwd = sandboxActive ? remember("agent cwd")?.ob?.filename : null;
+  const resolveSandboxPath = (filename) => {
+    if (!filename || !agentCwd) return filename;
+    return path.isAbsolute(filename) ? filename : path.resolve(agentCwd, filename);
+  };
+
+  const sourceFilenameRaw =
     sentence?.from?.filename ??
     sentence?.ob?.filename ??
     sentence?.filename;
+  const sourceFilename = resolveSandboxPath(sourceFilenameRaw);
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;
 
@@ -52,7 +60,8 @@ export async function compile_from_filename_to_filename(sentence) {
   ).toLowerCase();
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
-    const targetFilename = sentence?.to?.filename;
+    const targetFilenameRaw = sentence?.to?.filename;
+    const targetFilename = resolveSandboxPath(targetFilenameRaw);
     if (!sourceFilename || !targetFilename) {
       throwErrorSentence({
         name: "compile error",
@@ -180,7 +189,8 @@ export async function compile_from_filename_to_filename(sentence) {
   const body = wantsJsMap ? inlineSourceMap(bodyRaw, { sourceName, sourceText }) : bodyRaw;
   const wrappedText = `quoted.${targetLang}.\n${body}.${targetLang}.quoted`;
 
-  const targetFilename = sentence?.to?.filename;
+  const targetFilenameRaw = sentence?.to?.filename;
+  const targetFilename = resolveSandboxPath(targetFilenameRaw);
   if (targetFilename) {
     await fs.writeFile(targetFilename, body, "utf8");
   }
