@@ -97,33 +97,18 @@ export function doRemember(sentence) {
 
 }
 
-function getMemoryLayers() {
-  const ctx = contextStack[contextStack.length - 1];
-  if (ctx?.baseMemory) return [memory, ctx.baseMemory];
-  return [memory];
-}
-
 export function remember(name) {
   if (!name) return undefined;
-  const layers = getMemoryLayers();
-  const ctx = contextStack[contextStack.length - 1];
-  const skipDefinitionIndex = Boolean(ctx?.baseMemory);
-  for (const layer of layers) {
-    for (let i = layer.length - 1; i >= 0; i--) {
-      const s = layer[i];
-      if (!skipDefinitionIndex) {
-        if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
-      }
-      if (s.mood === "do") continue;
-      if (s.su?.name === name) return s;
-    }
+  for (let i = memory.length - 1; i >= 0; i--) {
+    const s = memory[i];
+    if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
+    if (s.mood === "do") continue;
+    if (s.su?.name === name) return s;
   }
   return defaults.get(name);
 }
 
 export function allRemember() {
-  const ctx = contextStack[contextStack.length - 1];
-  if (ctx?.baseMemory) return [...ctx.baseMemory, ...memory];
   return memory;
 }
 
@@ -135,11 +120,6 @@ export function getDefinition(name) {
   if (!name) return undefined;
   const entry = getDefinitionEntry(name);
   if (!entry) return undefined;
-  const ctx = contextStack[contextStack.length - 1];
-  if (ctx?.baseMemory) {
-    const combined = allRemember();
-    return combined[entry.index];
-  }
   return memory[entry.index];
 }
 
@@ -173,11 +153,9 @@ export function getDefinitionBody(name) {
   const entry = getDefinitionEntry(name);
   if (!entry) return [];
   const start = entry.index + 1;
-  const ctx = contextStack[contextStack.length - 1];
-  const source = ctx?.baseMemory ? allRemember() : memory;
-  const end = typeof entry.end === "number" ? entry.end : source.length;
+  const end = typeof entry.end === "number" ? entry.end : memory.length;
   if (end <= start) return [];
-  return source.slice(start, end);
+  return memory.slice(start, end);
 }
 
 export function dumpDefinitionIndex() {
@@ -217,17 +195,8 @@ export function clearDefaults() {
 }
 
 export function pushMemoryContext({ seedFromCurrent = false } = {}) {
-  if (seedFromCurrent) {
-    const parent = contextStack[contextStack.length - 1];
-    const baseMemory = parent?.baseMemory ?? memory;
-    const baseHistory = parent?.baseHistory ?? history;
-    contextStack.push({ memory, history, baseMemory, baseHistory });
-    memory = [];
-    history = [];
-    return;
-  }
   contextStack.push({ memory, history });
-  memory = [];
+  memory = seedFromCurrent ? [...memory] : [];
   history = [];
 }
 
