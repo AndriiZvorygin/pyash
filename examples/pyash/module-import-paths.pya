@@ -1,6 +1,5 @@
 from name ./modules/bump_tools.pya to name rel be import do
-ob text "pwd | tr -d '\\n'" to name text root be command do
-ob name root ob text "/examples/pyash/modules/bump_tools_alt.pya" to name text full path be plus do
+ob text "pwd | tr -d '\\n' | sed 's|$|/examples/pyash/modules/bump_tools_alt.pya|'" to name text full path be command do
 from name full path to name abs be import do
 
 be rel bump do

@@ -2,13 +2,13 @@ su name example meta be map def
 su name requires ob ve text "OLLAMA_HOST" ya
 prah
 
-from filename "quiz/fixtures/pyash_raven.png" be see do
+from filename "quiz/fixtures/pyash_raven.png" ob text "Describe the image." be see do
 ob name result be write do
 
-from filename "quiz/fixtures/pyash_raven.png" to name text out be see do
+from filename "quiz/fixtures/pyash_raven.png" ob text "Describe the image." to name text out be see do
 ob name out be write do
 
-from filename "quiz/fixtures/pyash_raven.png" as text "qwen3-vl:8b-instruct" be see do
+from filename "quiz/fixtures/pyash_raven.png" ob text "Describe the image." as text "qwen3-vl:8b-instruct" be see do
 ob name result be write do
 
 from filename "quiz/fixtures/pyash_raven.png" ob text "Describe the image. Focus on the main subject and any text." be see do
