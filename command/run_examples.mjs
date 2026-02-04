@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
@@ -9,6 +10,12 @@ process.chdir(root);
 const includeMind = process.argv.includes("--include-mind");
 const includeSay = process.argv.includes("--include-say");
 const includeCommand = process.argv.includes("--include-command");
+const parallelAll = process.argv.includes("--parallel-all");
+const parallelArgIndex = process.argv.findIndex((arg) => arg === "--parallel");
+const parallelValue = parallelArgIndex >= 0 ? Number(process.argv[parallelArgIndex + 1]) : NaN;
+const concurrency = parallelAll
+  ? Number.POSITIVE_INFINITY
+  : (Number.isFinite(parallelValue) && parallelValue > 0 ? parallelValue : Math.max(1, os.cpus().length));
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -113,10 +120,13 @@ async function main() {
   const missing = [];
   const timeouts = [];
 
-  for (const file of files) {
+  const queue = [...files];
+  const workers = [];
+
+  async function runOne(file) {
     if (skip.has(file)) {
       console.log(`==> ${file} (skipped)`);
-      continue;
+      return;
     }
     console.log(`==> ${file}`);
     const meta = await extractMeta(file);
@@ -129,7 +139,7 @@ async function main() {
       if (unmet.length) {
         console.log(`==> ${file} (missing: ${unmet.join(" ")})`);
         missing.push(`${file}: ${unmet.join(" ")}`);
-        continue;
+        return;
       }
     }
     const isSession = meta?.mode === "session";
@@ -141,7 +151,7 @@ async function main() {
     if (result.timedOut) {
       console.log(`TIMEOUT: ${file}`);
       timeouts.push(file);
-      continue;
+      return;
     }
     if (result.code !== 0) {
       console.log(`FAILED: ${file}`);
@@ -150,6 +160,18 @@ async function main() {
       failures.push(file);
     }
   }
+
+  async function worker() {
+    while (queue.length) {
+      const file = queue.shift();
+      if (!file) return;
+      await runOne(file);
+    }
+  }
+
+  const workerCount = Number.isFinite(concurrency) ? Math.min(queue.length, concurrency) : queue.length;
+  for (let i = 0; i < workerCount; i += 1) workers.push(worker());
+  await Promise.all(workers);
 
   if (failures.length || timeouts.length || missing.length) {
     if (failures.length) {
