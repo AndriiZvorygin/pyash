@@ -127,7 +127,7 @@ export async function runToolChat({
         args: call?.function?.arguments ?? call?.arguments
       });
       if (typeof onToolCall === "function") {
-        onToolCall({ toolName, toolSentence, toolCall: call });
+        onToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
       }
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
@@ -153,6 +153,9 @@ export async function runToolChat({
         }
       } else {
         toolText = String(surfacedTool ?? "");
+      }
+      if (typeof onToolCall === "function") {
+        onToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
       }
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;
