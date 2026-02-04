@@ -13,9 +13,9 @@ const includeCommand = process.argv.includes("--include-command");
 const parallelAll = process.argv.includes("--parallel-all");
 const parallelArgIndex = process.argv.findIndex((arg) => arg === "--parallel");
 const parallelValue = parallelArgIndex >= 0 ? Number(process.argv[parallelArgIndex + 1]) : NaN;
-const concurrency = parallelAll
-  ? Number.POSITIVE_INFINITY
-  : (Number.isFinite(parallelValue) && parallelValue > 0 ? parallelValue : Math.max(1, os.cpus().length));
+const concurrency = Number.isFinite(parallelValue) && parallelValue > 0
+  ? parallelValue
+  : (parallelAll || parallelArgIndex < 0 ? Number.POSITIVE_INFINITY : Math.max(1, os.cpus().length));
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
