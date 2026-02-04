@@ -1,4 +1,6 @@
 import { invokeLoop, runDefinitionBody } from "./sandpit.mjs";
+import fs from "node:fs";
+import path from "node:path";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature, lookupSignatureHandler } from "./signature.mjs";
 import { runAtAll } from "./map.mjs";
 import compileHandler from "../verbs/exchange/compile.mjs";
@@ -11,6 +13,43 @@ import { handleLifecycleAspect } from "./runtime.mjs";
 import { resolveVerbAlias } from "../library/verbAliases.mjs";
 import { callMcpTool, lookupMcpTool } from "../motor/mcp.mjs";
 import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumberForVerb } from "./imperative_helpers.mjs";
+import { throwFileUnavailable } from "../library/file_errors.mjs";
+import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
+
+function resolveSourceFilename(raw, { rememberFn } = {}) {
+  if (!raw) return null;
+  const value = String(raw);
+  if (isWorldToolsActive({ rememberFn })) {
+    const { resolved } = resolveWorldPath(value, { rememberFn });
+    return resolved;
+  }
+  const agentCwd = rememberFn?.("agent cwd")?.ob?.filename ?? null;
+  if (agentCwd && !path.isAbsolute(value)) {
+    return path.resolve(agentCwd, value);
+  }
+  return path.resolve(value);
+}
+
+function guardSourceFilenames(sentence, { rememberFn } = {}) {
+  if (sentence?.mood !== "do") return;
+  const be = sentence?.be ?? "";
+  if (be === "download") return;
+  const slots = [
+    sentence?.from?.filename ? { role: "from", value: sentence.from.filename } : null,
+    sentence?.ob?.filename ? { role: "ob", value: sentence.ob.filename } : null
+  ].filter(Boolean);
+  if (!slots.length) return;
+  for (const slot of slots) {
+    const raw = String(slot.value ?? "");
+    if (!raw) continue;
+    if (/^https?:\/\//i.test(raw)) continue;
+    const resolved = resolveSourceFilename(raw, { rememberFn });
+    if (!resolved) continue;
+    if (!fs.existsSync(resolved)) {
+      throwFileUnavailable({ path: resolved, from: be || "interpret" });
+    }
+  }
+}
 
 export async function handleImperative({
   sentence,
@@ -34,6 +73,8 @@ export async function handleImperative({
 
   const { mood, be, ob, to, from, su } = sentence;
   if (mood !== "do") return null;
+
+  guardSourceFilenames(sentence, { rememberFn: memory.remember });
 
   if (be === "import" && (sentence.from?.name || sentence.from?.filename)) {
     const specifier = sentence.from.name ?? sentence.from.filename;
