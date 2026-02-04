@@ -75,7 +75,7 @@ done
 
 if [[ -n "$platform" || "$use_buildx" == true ]]; then
   if [[ -z "$platform" ]]; then
-    platform="$(docker info -f '{{.Architecture}}' 2>/dev/null | sed 's/^/linux\\//')"
+    platform="$(docker info -f '{{.Architecture}}' 2>/dev/null | sed 's|^|linux/|')"
   fi
   if [[ "$push" != true && "$load" != true ]]; then
     load=true
