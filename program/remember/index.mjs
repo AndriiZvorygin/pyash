@@ -107,10 +107,11 @@ export function remember(name) {
   if (!name) return undefined;
   const layers = getMemoryLayers();
   const ctx = contextStack[contextStack.length - 1];
+  const skipDefinitionIndex = Boolean(ctx?.baseMemory);
   for (const layer of layers) {
     for (let i = layer.length - 1; i >= 0; i--) {
       const s = layer[i];
-      if (layer !== memory || !ctx?.baseMemory) {
+      if (!skipDefinitionIndex) {
         if (isInsideDefinition(i) && s.mood !== "def" && s.mood !== "prah") continue;
       }
       if (s.mood === "do") continue;
@@ -134,6 +135,11 @@ export function getDefinition(name) {
   if (!name) return undefined;
   const entry = getDefinitionEntry(name);
   if (!entry) return undefined;
+  const ctx = contextStack[contextStack.length - 1];
+  if (ctx?.baseMemory) {
+    const combined = allRemember();
+    return combined[entry.index];
+  }
   return memory[entry.index];
 }
 
@@ -167,9 +173,11 @@ export function getDefinitionBody(name) {
   const entry = getDefinitionEntry(name);
   if (!entry) return [];
   const start = entry.index + 1;
-  const end = typeof entry.end === "number" ? entry.end : memory.length;
+  const ctx = contextStack[contextStack.length - 1];
+  const source = ctx?.baseMemory ? allRemember() : memory;
+  const end = typeof entry.end === "number" ? entry.end : source.length;
   if (end <= start) return [];
-  return memory.slice(start, end);
+  return source.slice(start, end);
 }
 
 export function dumpDefinitionIndex() {
@@ -210,7 +218,10 @@ export function clearDefaults() {
 
 export function pushMemoryContext({ seedFromCurrent = false } = {}) {
   if (seedFromCurrent) {
-    contextStack.push({ memory, history, baseMemory: memory, baseHistory: history });
+    const parent = contextStack[contextStack.length - 1];
+    const baseMemory = parent?.baseMemory ?? memory;
+    const baseHistory = parent?.baseHistory ?? history;
+    contextStack.push({ memory, history, baseMemory, baseHistory });
     memory = [];
     history = [];
     return;
