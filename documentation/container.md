@@ -77,10 +77,17 @@ Start the display stack in the container:
 ./container/command/run_vnc_novnc.sh
 ```
 
-Or launch the main container with VNC enabled:
+By default, the container starts with VNC/noVNC enabled (for Playwright and headed browsers).
+You can also explicitly enable it:
 
 ```bash
 ./container/command/begin.sh --vnc
+```
+
+To disable VNC/noVNC:
+
+```bash
+./container/command/begin.sh --no-vnc
 ```
 
 Default ports:
