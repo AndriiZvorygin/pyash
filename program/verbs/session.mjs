@@ -85,7 +85,12 @@ export default session;
 
 export const signatures = [
   { signatureWords: ["be", "session", "for", "name", "mind"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text"], handler: session },
   { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "ob", "text"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text", "with", "name", "map"], handler: session },
   { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename"], handler: session }
+  { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename", "ob", "text"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename", "ob", "text"], handler: session }
 ];
