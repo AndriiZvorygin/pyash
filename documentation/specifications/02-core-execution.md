@@ -32,6 +32,7 @@ Define how signature words are derived and used for dispatch.
 - Unknown verb/signature raises `be error do` (see `quiz/ceremony_signature_inconsistency.test.mjs`).
 - Signature derivation failures raise `be error do` (see `quiz/derive_signature` references below).
 - Surfaced errors MUST follow `02-core-execution.md`, including `from filename`, `by num`, and `at la … ko` when available.
+- For `do` sentences that include `from filename` or `ob filename`, the runtime MUST guard that the source file exists before dispatch. If missing, raise `be error do` with name `file or directory unavailable error`.
 
 ## 5. Examples (existing files only)
 - Run: `examples/pyash/ceremony-plus-two.pya`
