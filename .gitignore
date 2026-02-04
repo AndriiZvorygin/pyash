@@ -15,6 +15,9 @@ world/**/channeling_*.txt
 world/**/buzzsprout_*.txt
 know/input/
 node_modules/
+world/
+.config/
+*.log
 newspaper/
 quiz/sandpit/
 configure/secret.pya
