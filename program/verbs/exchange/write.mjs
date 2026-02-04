@@ -6,7 +6,7 @@ import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
-import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { ensureAgentPathDir, resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
 import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
@@ -163,7 +163,10 @@ export default async function write(sentence, { remember: rememberFn = remember 
     }
   } else if (target) {
     const worldMode = isWorldToolsActive({ rememberFn });
-    if (worldMode) {
+    const agentCwd = resolveAgentCwd({ rememberFn });
+    if (agentCwd && !path.isAbsolute(String(target))) {
+      target = path.resolve(agentCwd, String(target));
+    } else if (worldMode) {
       const place = resolveWorldPlace({ rememberFn }) ?? "commons";
       const placeDir = resolveWorldPlaceDir(place, { rememberFn });
       if (!placeDir) {
@@ -186,16 +189,16 @@ export default async function write(sentence, { remember: rememberFn = remember 
       }
       target = resolvedTarget;
     }
-    const { resolved, outside, agentCwd } = resolveAgentPath(target, { rememberFn });
+    const { resolved, outside, agentCwd: resolvedAgentCwd } = resolveAgentPath(target, { rememberFn });
     if (outside) {
       throwErrorSentence({
         name: "write defective",
-        message: `write defective: outside agent cwd (${agentCwd})`,
+        message: `write defective: outside agent cwd (${resolvedAgentCwd})`,
         from: { name: "write" },
         raw: { target }
       });
     }
-    await ensureAgentPathDir(resolved, { agentCwd, outside });
+    await ensureAgentPathDir(resolved, { agentCwd: resolvedAgentCwd, outside });
     target = resolved;
     if (worldMode) {
       await fs.mkdir(path.dirname(target), { recursive: true });
