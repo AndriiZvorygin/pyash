@@ -1,0 +1,31 @@
+exists su name html text prefix ob text "pandoc --from=html --to=plain --wrap=none \"" be text ya
+exists su name html text suffix ob text "\"" be text ya
+
+exists su name html markdown prefix ob text "pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none \"" be text ya
+exists su name html markdown suffix ob text "\" | sed -e 's/<span[^>]*><\\/span>//g'" be text ya
+
+exists su name html markdown plain prefix ob text "pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none \"" be text ya
+exists su name html markdown plain suffix ob text "\" | sed -e 's/<span[^>]*><\\/span>//g'" be text ya
+
+exists su name pdf text prefix ob text "pdftotext -layout \"" be text ya
+exists su name pdf text suffix ob text "\" -" be text ya
+
+exists su name pdf markdown prefix ob text "pdftohtml -stdout -i -q \"" be text ya
+exists su name pdf markdown suffix ob text "\" | pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none | sed -e 's/<span[^>]*><\\/span>//g' -e '/^-----/d'" be text ya
+
+exists su name pdf markdown plain prefix ob text "pdftohtml -stdout -i -q \"" be text ya
+exists su name pdf markdown plain suffix ob text "\" | pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none | sed -e 's/<span[^>]*><\\/span>//g' -e '/^-----/d'" be text ya
+
+exists su name pandoc command be export ya
+exists su name html text prefix be export ya
+exists su name html text suffix be export ya
+exists su name html markdown prefix be export ya
+exists su name html markdown suffix be export ya
+exists su name html markdown plain prefix be export ya
+exists su name html markdown plain suffix be export ya
+exists su name pdf text prefix be export ya
+exists su name pdf text suffix be export ya
+exists su name pdf markdown prefix be export ya
+exists su name pdf markdown suffix be export ya
+exists su name pdf markdown plain prefix be export ya
+exists su name pdf markdown plain suffix be export ya
