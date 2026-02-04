@@ -25,12 +25,16 @@ function buildToolCallLogger() {
       return;
     }
     if (stage === "result") {
-      const summary = typeof toolText === "string" ? toolText.trim() : "";
-      if (!summary) return;
-      const firstLine = summary.split("\n")[0];
-      const suffix = summary.includes("\n") ? " ..." : "";
+      const summary = typeof toolText === "string" ? toolText : "";
+      if (!summary.trim()) {
+        // eslint-disable-next-line no-console
+        console.error(`[tool ${toolName} produce] (empty)`);
+        return;
+      }
+      const lines = summary.trim().split("\n").slice(0, 6);
+      const suffix = summary.trim().split("\n").length > 6 ? "\n  ..." : "";
       // eslint-disable-next-line no-console
-      console.error(`[tool ${toolName} result] ${firstLine}${suffix}`);
+      console.error(`[tool ${toolName} produce]\n  ${lines.join("\n  ")}${suffix}`);
     }
   };
 }

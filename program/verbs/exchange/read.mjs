@@ -2,6 +2,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { throwErrorSentence } from "../../error.mjs";
+import { handleFileUnavailable } from "../../library/file_errors.mjs";
 import { compareUtf8, jsonValueFromObj } from "./json_map_export.mjs";
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
@@ -92,7 +93,8 @@ export async function read_tail_from_filename(sentence) {
   let text = "";
   try {
     text = fs.readFileSync(targetPath, "utf8");
-  } catch {
+  } catch (err) {
+    handleFileUnavailable(err, { path: targetPath, from: "read" });
     return { ob: { ve: { type: "hollow", values: [] } }, be: "read" };
   }
   const lines = splitSentences(text).slice(-(limit > 0 ? limit : undefined));
