@@ -23,7 +23,8 @@ export async function runToolChat({
   ollamaHost,
   mindDebug,
   debugMind,
-  inputs
+  inputs,
+  onToolCall
 } = {}) {
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
@@ -125,6 +126,9 @@ export async function runToolChat({
         capability,
         args: call?.function?.arguments ?? call?.arguments
       });
+      if (typeof onToolCall === "function") {
+        onToolCall({ toolName, toolSentence, toolCall: call });
+      }
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
