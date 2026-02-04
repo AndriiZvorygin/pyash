@@ -7,7 +7,7 @@ COMPOSE_FILE="$ROOT_DIR/container/service/pyash.yaml"
 build_args=()
 platform=""
 tag="pyash-dev"
-use_buildx=false
+use_buildx=true
 cache_dir="$ROOT_DIR/container/.buildx-cache"
 push=false
 load=false
@@ -24,6 +24,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --buildx)
       use_buildx=true
+      shift
+      ;;
+    --no-buildx)
+      use_buildx=false
       shift
       ;;
     --tag)
@@ -44,12 +48,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help|-h)
       cat <<'EOF'
-Usage: ./container/command/build.sh [--no-cache] [--buildx] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
+Usage: ./container/command/build.sh [--no-cache] [--no-buildx] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
 
 Builds the pyash container, then restarts via begin.sh.
 
 Notes:
-  - Use --buildx to opt into buildx for single-arch builds (faster cached rebuilds).
+  - Buildx is the default (cached). Use --no-buildx to fall back to docker compose build.
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
   - Cache is stored at ./container/.buildx-cache unless overridden.
@@ -66,6 +70,9 @@ done
 if [[ -n "$platform" || "$use_buildx" == true ]]; then
   if [[ -z "$platform" ]]; then
     platform="$(docker info -f '{{.Architecture}}' 2>/dev/null | sed 's/^/linux\\//')"
+  fi
+  if [[ "$push" != true && "$load" != true ]]; then
+    load=true
   fi
   if [[ "$platform" == *","* ]] && [[ "$push" != true ]]; then
     echo "error: multi-arch build requires --push (registry tag required)" >&2
