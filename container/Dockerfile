@@ -20,6 +20,10 @@ RUN apt-get update \
     tree \
     yq \
     pandoc \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-fonts-recommended \
+    texlive-plain-generic \
     poppler-utils \
     python3 \
     python3-pip \
