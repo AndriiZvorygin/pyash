@@ -1,11 +1,13 @@
 su name read from filename input become wo text to name text output be ceremony def
-  exists su name mime ob text "file --mime-type -b \"" be text ya
+  exists su name mime ob text "if [ -f \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name mime be plus do
-  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
+  ob name input to name mime be plus do
+  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
   ob text of mime to name text mime be command do
 
-  exists su name cat ob text "cat \"" be text ya
+  exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
@@ -52,13 +54,15 @@ su name read from filename input become wo text to name text output be ceremony 
 prah
 
 su name read from filename input become wo text be ceremony def
-  exists su name mime ob text "file --mime-type -b \"" be text ya
+  exists su name mime ob text "if [ -f \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name mime be plus do
-  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
+  ob name input to name mime be plus do
+  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
   ob text of mime to name text mime be command do
 
-  exists su name cat ob text "cat \"" be text ya
+  exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
@@ -105,13 +109,15 @@ su name read from filename input become wo text be ceremony def
 prah
 
 su name read from filename input become wo markdown to name text output be ceremony def
-  exists su name mime ob text "file --mime-type -b \"" be text ya
+  exists su name mime ob text "if [ -f \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name mime be plus do
-  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
+  ob name input to name mime be plus do
+  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
   ob text of mime to name text mime be command do
 
-  exists su name cat ob text "cat \"" be text ya
+  exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
@@ -158,13 +164,15 @@ su name read from filename input become wo markdown to name text output be cerem
 prah
 
 su name read from filename input become wo markdown plain to name text output be ceremony def
-  exists su name mime ob text "file --mime-type -b \"" be text ya
+  exists su name mime ob text "if [ -f \"" be text ya
   ob filename of from of this to name text input be text do
   ob name input to name mime be plus do
-  ob text "\" | tr -d '\\n'" to name mime be plus do
+  ob text "\" ]; then file --mime-type -b -- \"" to name mime be plus do
+  ob name input to name mime be plus do
+  ob text "\"; else echo \"\"; fi | tr -d '\\n' | tr -d '\\`'" to name mime be plus do
   ob text of mime to name text mime be command do
 
-  exists su name cat ob text "cat \"" be text ya
+  exists su name cat ob text "cat -- \"" be text ya
   ob name input to name cat be plus do
   ob text "\"" to name cat be plus do
 
