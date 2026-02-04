@@ -606,6 +606,39 @@ Adapter output:
 Name is derived by joining signature words with underscores (`be_say_ob_text`).
 Description MUST be the canonical printed `can` sentence.
 
+#### Input markers (optional)
+
+If a capability sentence includes the literal marker `input` in a case value
+(for example, `ob text input`), only those **input-marked** cases are exposed as
+tool parameters. All other cases in the `can` sentence are treated as fixed and
+are copied verbatim into the executed `do` sentence.
+
+Input markers work with any type word (`text`, `num`, `filename`, `vec`, `wo`,
+etc.) and multiple input-marked cases may appear in a single sentence.
+
+If no input markers are present, only **open slots** are exposed as parameters.
+An open slot is a case that names a type without content, for example:
+
+```pyash
+su name read file be read from name filename can
+su name write note be write ob name text to filename "/tmp/note.txt" can
+```
+
+If a capability has **no** input markers and **no** open slots, the tool schema
+has no parameters (a fixed tool call).
+
+If **no** input markers are present, the tool schema includes **only open slots**
+(cases with a type but no content).
+
+Example:
+
+```pyash
+su name write note be write ob text input to filename "world/workplace/confederation/artifact/note.txt" can
+```
+
+Tool parameters: `ob` only. The tool handler will fill `ob` from arguments,
+and leave `to filename ...` unchanged.
+
 ### 7.2 Request: provide tools to the model
 
 Example request with one tool:

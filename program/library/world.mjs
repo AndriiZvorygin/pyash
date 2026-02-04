@@ -50,7 +50,7 @@ export function setWorldPlace(place, { doRememberFn } = {}) {
 export function resolveWorldPlaceDir(place, { rememberFn } = {}) {
   const root = resolveWorldRoot({ rememberFn });
   if (!root || !place) return null;
-  return path.join(root, "places", String(place));
+  return path.join(root, String(place));
 }
 
 export function resolveWorldPath(target, { rememberFn } = {}) {

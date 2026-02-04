@@ -10,7 +10,7 @@ import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 
 test("world mvp writes activity and files under world root", async () => {
   const worldRoot = path.resolve("quiz/sandpit/world-mvp");
-  const placeDir = path.join(worldRoot, "places", "commons");
+  const placeDir = path.join(worldRoot, "commons");
   const activityPath = path.join(placeDir, ".activity.pya");
   const notePath = path.join(placeDir, "notes", "hello.txt");
 

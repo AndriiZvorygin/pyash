@@ -50,6 +50,23 @@ const TOOL_NON_CASE_FIELDS = new Set([
   "consequence"
 ]);
 
+function isInputMarker(value) {
+  if (!value || typeof value !== "object") return false;
+  return value.text === "input" || value.name === "input" || value.wo === "input" || value.filename === "input";
+}
+
+function isOpenCase(value) {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value.nameTypeWords) && value.nameTypeWords.length > 0) return true;
+  const openNames = new Set(["num", "text", "bool", "filename", "vec", "ve", "wo", "mind", "date"]);
+  if (typeof value.name === "string" && openNames.has(value.name)) return true;
+  if (value.ve) {
+    if (Array.isArray(value.ve.values) && value.ve.values.length === 0) return true;
+    if (value.ve.values == null && value.ve.type) return true;
+  }
+  return false;
+}
+
 function toolTypeWordsFromValue(value, caseKey) {
   if (value == null) return [];
   if (value.la) return ["la"];
@@ -127,7 +144,15 @@ export function buildToolSchemas(toolMapName) {
     const toolName = toolFunctionNameFromSignature(signatureWords);
     const properties = {};
     const required = [];
-    const caseKeys = Object.keys(cap.sentence).filter(k => !TOOL_NON_CASE_FIELDS.has(k));
+    const rawCaseKeys = Object.keys(cap.sentence).filter(k => !TOOL_NON_CASE_FIELDS.has(k));
+    const hasInputMarkers = rawCaseKeys.some((key) => isInputMarker(cap.sentence[key]));
+    let caseKeys;
+    if (hasInputMarkers) {
+      caseKeys = rawCaseKeys.filter((key) => isInputMarker(cap.sentence[key]));
+    } else {
+      const openKeys = rawCaseKeys.filter((key) => isOpenCase(cap.sentence[key]));
+      caseKeys = openKeys;
+    }
     caseKeys.sort(compareUtf8);
     for (const caseKey of caseKeys) {
       const value = cap.sentence[caseKey];
