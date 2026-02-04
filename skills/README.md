@@ -5,3 +5,4 @@
 - `pyash-vocab-tooling` — vocab_suggest/vocab_check/anchor helpers.
 - `pyash-spec-maintenance` — spec updates and index references.
 - `pyash-quiz-authoring` — test patterns and fixtures.
+- `pyash-parity` — run/runjs/runc parity checks across examples.
