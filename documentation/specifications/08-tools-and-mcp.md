@@ -158,13 +158,34 @@ The mind call understands these cases:
 * `with name <map>` — tool schema map (enables tool calling).
 * `vyah stream` — stream output (where supported).
 
-### 3.2 Model resolution
+### 3.2 Interactive sessions (`be session`)
+
+An interactive session is a REPL-like loop that repeatedly invokes the same
+mind call and prints responses as they arrive. It uses the same mind tooling
+and history rules as `be write`.
+
+Canonical form:
+
+```pyash
+for name <mind>
+with name <tool-map>  ; optional
+at filename <cwd>     ; optional
+be session do
+```
+
+Rules:
+
+* `/bye` exits the session loop.
+* If tools are enabled, tool calls are surfaced to the user as they happen.
+* The session uses the same model/prompt/tool map resolution as `be write`.
+
+### 3.3 Model resolution
 
 * `ob model` on the call, if present
 * else config model (`via state`)
 * else default `qwen3-vl:8b-instruct`
 
-### 3.3 Prompt assembly
+### 3.4 Prompt assembly
 
 The runtime constructs the model request from:
 

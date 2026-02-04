@@ -13,7 +13,7 @@ import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 
-export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
+export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = {}) {
   const ob = sentence?.ob ?? {};
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
@@ -165,7 +165,8 @@ export async function mind_to_name_text(sentence, { inputs = [] } = {}) {
       ollamaHost,
       mindDebug,
       debugMind,
-      inputs: { inputText, mockResponseRaw }
+      inputs: { inputText, mockResponseRaw },
+      onToolCall
     });
   } else {
     const { responseText: text, stream } = await runGenerate({
