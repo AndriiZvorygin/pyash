@@ -19,13 +19,13 @@ import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
 function resolveSourceFilename(raw, { rememberFn } = {}) {
   if (!raw) return null;
   const value = String(raw);
-  if (isWorldToolsActive({ rememberFn })) {
-    const { resolved } = resolveWorldPath(value, { rememberFn });
-    return resolved;
-  }
   const agentCwd = rememberFn?.("agent cwd")?.ob?.filename ?? null;
   if (agentCwd && !path.isAbsolute(value)) {
     return path.resolve(agentCwd, value);
+  }
+  if (isWorldToolsActive({ rememberFn })) {
+    const { resolved } = resolveWorldPath(value, { rememberFn });
+    return resolved;
   }
   return path.resolve(value);
 }
@@ -33,6 +33,7 @@ function resolveSourceFilename(raw, { rememberFn } = {}) {
 function guardSourceFilenames(sentence, { rememberFn } = {}) {
   if (sentence?.mood !== "do") return;
   const be = sentence?.be ?? "";
+  if (be === "import") return;
   if (be === "download") return;
   const slots = [
     sentence?.from?.filename ? { role: "from", value: sentence.from.filename } : null,

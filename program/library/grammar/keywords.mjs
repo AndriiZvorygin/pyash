@@ -1,6 +1,6 @@
 import { compositionalGrid } from "../compositionalCases.mjs";
 
-export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can"];
+export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can", "pe"];
 
 export const COMPOSITIONAL_ALIASES = {
   inside: "in",
@@ -58,7 +58,11 @@ export const TYPE_TOKENS = [
   "day",
   "days",
   "week",
-  "weeks"
+  "weeks",
+  "line",
+  "lines",
+  "byte",
+  "bytes"
 ];
 
 export const CONTEXT_KEYS = [...Object.keys(compositionalGrid), ...Object.keys(EXTRA_CONTEXT_KEYWORDS)];

@@ -1,6 +1,6 @@
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { throwErrorSentence } from "../../error.mjs";
+import { throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
 import { resolveInterpret, callMindBackend } from "./backend.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
@@ -133,7 +133,17 @@ export async function runToolChat({
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
-      const toolResult = await interpret(toolSentence);
+      let toolResult = null;
+      try {
+        toolResult = await interpret(toolSentence);
+      } catch (err) {
+        const surfaced = surfaceErrorSentence(err);
+        if (surfaced?.mood && surfaced?.be) {
+          toolResult = surfaced;
+        } else {
+          throw err;
+        }
+      }
       const surfacedTool = (toolResult && toolResult.mood)
         ? toolResult
         : remember("result");

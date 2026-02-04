@@ -177,6 +177,7 @@ export async function interpret(sentence) {
   if (sentence.obj) delete sentence.obj;
 
   const { mood, be, su, ob, to, from } = sentence;
+  if (mood === "pe") return { skipped: true };
   const isMapDef = mood === "def" && (be === "map" || be === "json map" || be === "csv map" || be === "series");
   const isMapPrah = mood === "prah" && (be === "map" || be === "json map" || be === "csv map" || be === "series");
   const insideMap = state.mapStack.length > 0;
