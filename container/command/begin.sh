@@ -28,6 +28,7 @@ get_map_value() {
 ai_host="$(get_map_value "ai host")"
 web_search_enabled="$(get_map_value "web search enabled")"
 search_only="lie"
+vnc_enabled=""
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -59,8 +60,14 @@ fi
 for arg in "$@"; do
   if [[ "$arg" == "--search-only" ]]; then
     search_only="truth"
+  elif [[ "$arg" == "--vnc" ]]; then
+    vnc_enabled="truth"
   fi
 done
+
+if [[ -n "$vnc_enabled" ]]; then
+  export PYASH_VNC_ENABLED="$vnc_enabled"
+fi
 
 node "$ROOT_DIR/container/tools/update_compose.mjs"
 

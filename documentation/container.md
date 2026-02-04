@@ -77,6 +77,12 @@ Start the display stack in the container:
 ./container/command/run_vnc_novnc.sh
 ```
 
+Or launch the main container with VNC enabled:
+
+```bash
+./container/command/begin.sh --vnc
+```
+
 Default ports:
 - VNC: `5900`
 - noVNC: `6080` (open `http://localhost:6080/vnc.html`)
@@ -99,6 +105,7 @@ DISPLAY=:1 node your_script.js
 Notes:
 - This is a virtual display; it does not require host X11.
 - For audio in the browser, use host PulseAudio passthrough (above) or route audio separately.
+ - `--vnc` will set `DISPLAY=:1` inside the container.
 
 ## X11 passthrough (xdotool / keyboard)
 
