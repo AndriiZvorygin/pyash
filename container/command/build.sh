@@ -7,6 +7,8 @@ COMPOSE_FILE="$ROOT_DIR/container/service/pyash.yaml"
 build_args=()
 platform=""
 tag="pyash-dev"
+use_buildx=false
+cache_dir="$ROOT_DIR/container/.buildx-cache"
 push=false
 load=false
 while [[ $# -gt 0 ]]; do
@@ -20,8 +22,16 @@ while [[ $# -gt 0 ]]; do
       platform="${2:-}"
       shift 2
       ;;
+    --buildx)
+      use_buildx=true
+      shift
+      ;;
     --tag)
       tag="${2:-}"
+      shift 2
+      ;;
+    --cache-dir)
+      cache_dir="${2:-}"
       shift 2
       ;;
     --push)
@@ -34,13 +44,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help|-h)
       cat <<'EOF'
-Usage: ./container/command/build.sh [--no-cache] [--platform <list>] [--tag <image>] [--push|--load] [-- <docker compose build args>]
+Usage: ./container/command/build.sh [--no-cache] [--buildx] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
 
 Builds the pyash container, then restarts via begin.sh.
 
 Notes:
+  - Use --buildx to opt into buildx for single-arch builds (faster cached rebuilds).
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
+  - Cache is stored at ./container/.buildx-cache unless overridden.
 EOF
       exit 0
       ;;
@@ -51,7 +63,10 @@ EOF
   esac
 done
 
-if [[ -n "$platform" ]]; then
+if [[ -n "$platform" || "$use_buildx" == true ]]; then
+  if [[ -z "$platform" ]]; then
+    platform="$(docker info -f '{{.Architecture}}' 2>/dev/null | sed 's/^/linux\\//')"
+  fi
   if [[ "$platform" == *","* ]] && [[ "$push" != true ]]; then
     echo "error: multi-arch build requires --push (registry tag required)" >&2
     exit 2
@@ -60,12 +75,16 @@ if [[ -n "$platform" ]]; then
     echo "error: --push requires --tag <registry/image>" >&2
     exit 2
   fi
+  cache_from="type=local,src=$cache_dir"
+  cache_to="type=local,dest=$cache_dir,mode=max"
   if [[ "$push" == true ]]; then
     docker buildx build \
       -f "$ROOT_DIR/container/Dockerfile" \
       -t "$tag" \
       --platform "$platform" \
       --push \
+      --cache-from "$cache_from" \
+      --cache-to "$cache_to" \
       "${build_args[@]}" \
       "$ROOT_DIR"
   else
@@ -74,6 +93,8 @@ if [[ -n "$platform" ]]; then
       -t "$tag" \
       --platform "$platform" \
       ${load:+--load} \
+      --cache-from "$cache_from" \
+      --cache-to "$cache_to" \
       "${build_args[@]}" \
       "$ROOT_DIR"
   fi
