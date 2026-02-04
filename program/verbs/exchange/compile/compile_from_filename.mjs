@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { buildProgram } from "../../../program.mjs";
 import { doRemember, remember } from "../../../remember/index.mjs";
 import { throwErrorSentence } from "../../../error.mjs";
@@ -33,11 +34,68 @@ export async function compile_from_filename_to_filename(sentence) {
     });
   }
 
-  const sourceState = (sentence?.fromstate?.name || sentence?.fromstate || "").toLowerCase();
+  const sourceState = String(
+    sentence?.fromstate?.name ??
+    sentence?.fromstate?.wo ??
+    sentence?.fromstate ??
+    ""
+  ).toLowerCase();
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
   }
-  const targetState = (sentence?.tostate?.name || sentence?.become?.name || "javascript").toLowerCase();
+  const targetState = String(
+    sentence?.tostate?.name ??
+    sentence?.tostate?.wo ??
+    sentence?.become?.name ??
+    sentence?.become?.wo ??
+    "javascript"
+  ).toLowerCase();
+
+  if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
+    const targetFilename = sentence?.to?.filename;
+    if (!sourceFilename || !targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: markdown conversions require from filename and to filename",
+        from: { name: "compile" }
+      });
+    }
+    const args = targetState === "html"
+      ? ["--from=markdown", "--to=html", "--wrap=none", sourceFilename, "-o", targetFilename]
+      : ["--from=markdown", sourceFilename, "-o", targetFilename];
+    const res = spawnSync("pandoc", args, { stdio: "pipe" });
+    if (res.error || res.status !== 0) {
+      const stderr = res.stderr ? res.stderr.toString("utf8") : "";
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: pandoc failed${stderr ? ` (${stderr.trim()})` : ""}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetState === "html") {
+      const htmlText = await fs.readFile(targetFilename, "utf8");
+      const wrappedText = `quoted.html.\\n${htmlText}.html.quoted`;
+      if (targetName) {
+        doRemember({
+          su: { name: targetName },
+          be: "html",
+          ob: { text: wrappedText },
+          mood: "ya",
+        });
+      }
+      return { ob: { text: wrappedText }, be: "html" };
+    }
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "pdf",
+        ob: { filename: targetFilename },
+        mood: "ya",
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "pdf" };
+  }
   if (sourceState === "json" && targetState === "pyash") {
     let parsed;
     try {
