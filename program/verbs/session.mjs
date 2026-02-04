@@ -17,10 +17,21 @@ function normalizeInputs(values) {
 }
 
 function buildToolCallLogger() {
-  return ({ toolName, toolSentence }) => {
-    const rendered = sentenceToPyash(toolSentence);
-    // eslint-disable-next-line no-console
-    console.error(`[tool ${toolName}] ${rendered}`);
+  return ({ stage, toolName, toolSentence, toolText }) => {
+    if (stage === "call") {
+      const rendered = sentenceToPyash(toolSentence);
+      // eslint-disable-next-line no-console
+      console.error(`[tool ${toolName}] ${rendered}`);
+      return;
+    }
+    if (stage === "result") {
+      const summary = typeof toolText === "string" ? toolText.trim() : "";
+      if (!summary) return;
+      const firstLine = summary.split("\n")[0];
+      const suffix = summary.includes("\n") ? " ..." : "";
+      // eslint-disable-next-line no-console
+      console.error(`[tool ${toolName} result] ${firstLine}${suffix}`);
+    }
   };
 }
 
@@ -59,12 +70,13 @@ export async function session(sentence, { inputs = [] } = {}) {
     return { done: false };
   };
 
+  const canReadInteractive = Boolean(input?.isTTY);
   if (scripted.length > 0) {
     for (const line of scripted) {
       const { done } = await runTurn(String(line ?? ""));
-      if (done) break;
+      if (done) return { be: "session" };
     }
-    return { be: "session" };
+    if (!canReadInteractive) return { be: "session" };
   }
 
   const rl = readline.createInterface({ input, output });
