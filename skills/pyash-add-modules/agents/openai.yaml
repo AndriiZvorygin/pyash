@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pyash Add Modules"
+  short_description: "Add Pyash modules with tests"
+  default_prompt: "Use $pyash-add-modules to add a new module to Pyash."
