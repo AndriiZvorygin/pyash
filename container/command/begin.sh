@@ -42,6 +42,7 @@ export PYASH_GID="$(id -g)"
 export PYASH_PULSE_DIR="/run/user/${PYASH_UID}/pulse"
 export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
 export PYASH_SSH_DIR="$HOME/.ssh"
+export PYASH_SSH_KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 export PYASH_CODEX_DIR="$HOME/.codex"
 export PYASH_GITCONFIG="$HOME/.gitconfig"
 export PYASH_GITCONFIG_XDG="$HOME/.config/git/config"
@@ -55,6 +56,13 @@ elif [[ -L /etc/localtime ]]; then
   tz_path="$(readlink -f /etc/localtime || true)"
   if [[ "$tz_path" == */zoneinfo/* ]]; then
     PYASH_TZ="${tz_path#*/zoneinfo/}"
+  fi
+fi
+
+if [[ -n "${PYASH_SSH_DIR:-}" ]]; then
+  mkdir -p "$PYASH_SSH_DIR"
+  if [[ -n "${PYASH_SSH_KNOWN_HOSTS:-}" ]]; then
+    touch "$PYASH_SSH_KNOWN_HOSTS"
   fi
 fi
 
