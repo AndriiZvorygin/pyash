@@ -15,8 +15,15 @@ import { callMcpTool, lookupMcpTool } from "../motor/mcp.mjs";
 import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumberForVerb } from "./imperative_helpers.mjs";
 import { throwFileUnavailable } from "../library/file_errors.mjs";
 import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
+import { TYPE_TOKENS } from "../library/grammar/keywords.mjs";
 
 const GENITIVE_TEXT_TAILS = new Set(["text", "filename"]);
+const GENITIVE_TYPE_TAILS = new Set(
+  TYPE_TOKENS.map((token) => String(token).toLowerCase())
+);
+
+GENITIVE_TYPE_TAILS.add("number");
+GENITIVE_TYPE_TAILS.add("boolean");
 
 function resolveGenitiveLiteral(genitive, { state, memory, depth = 0, seen = new Set() } = {}) {
   if (depth > 10) return null;
@@ -95,6 +102,49 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
   }
 }
 
+function resolveTypedGenitives(sentence, { state, memory } = {}) {
+  if (!sentence || typeof sentence !== "object") return;
+  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence"]);
+  for (const [key, value] of Object.entries(sentence)) {
+    if (skipKeys.has(key)) continue;
+    if (!value?.genitive) continue;
+    const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+    const tail = String(chainArr.at(-1) ?? "").toLowerCase();
+    if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
+    const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
+    if (resolved === null || resolved === undefined) continue;
+    if (tail === "text") {
+      sentence[key] = { text: String(resolved) };
+      continue;
+    }
+    if (tail === "filename") {
+      sentence[key] = { filename: String(resolved) };
+      continue;
+    }
+    if (tail === "bool" || tail === "boolean") {
+      if (typeof resolved === "boolean") {
+        sentence[key] = { boolean: resolved };
+      } else {
+        const normalized = String(resolved).toLowerCase();
+        if (normalized === "truth" || normalized === "true" || normalized === "1") {
+          sentence[key] = { boolean: true };
+        } else if (normalized === "lie" || normalized === "false" || normalized === "0") {
+          sentence[key] = { boolean: false };
+        }
+      }
+      continue;
+    }
+    if (tail === "date") {
+      sentence[key] = { date: String(resolved) };
+      continue;
+    }
+    if (tail === "month" || tail === "months" || tail === "second" || tail === "seconds" || tail === "minute" || tail === "minutes" || tail === "hour" || tail === "hours" || tail === "day" || tail === "days" || tail === "week" || tail === "weeks" || tail === "line" || tail === "lines" || tail === "byte" || tail === "bytes" || tail === "num" || tail === "number") {
+      const num = typeof resolved === "number" ? resolved : Number(resolved);
+      if (Number.isFinite(num)) sentence[key] = { num };
+    }
+  }
+}
+
 function resolveSourceFilename(raw, { rememberFn } = {}) {
   if (!raw) return null;
   const value = String(raw);
@@ -157,6 +207,7 @@ export async function handleImperative({
   if (mood !== "do") return null;
 
   resolveIoGenitives(sentence, { state, memory });
+  resolveTypedGenitives(sentence, { state, memory });
   const { be, ob, to, from, su } = sentence;
   guardSourceFilenames(sentence, { rememberFn: memory.remember });
 
