@@ -170,6 +170,11 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
 
   docker buildx build "${buildx_args[@]}" "${build_args[@]}" "$ROOT_DIR"
 
+  if [[ "$no_restart" != true ]]; then
+    docker compose -f "$COMPOSE_FILE" down
+    "$ROOT_DIR/container/command/begin.sh"
+  fi
+
 else
   # Use docker compose build
   docker compose -f "$COMPOSE_FILE" build "${build_args[@]}"
