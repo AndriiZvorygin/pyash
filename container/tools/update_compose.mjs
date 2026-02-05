@@ -89,7 +89,7 @@ if (audioEnabled && pulseDir && pulseCookie) {
 if (sshDir) {
   try {
     await fs.stat(sshDir);
-    volumes.push(`${"${PYASH_SSH_DIR}"}:/workplace/.ssh`);
+    volumes.push(`${"${PYASH_SSH_DIR}"}:/workplace/.ssh:ro`);
   } catch {}
 }
 
