@@ -1,7 +1,10 @@
 su name compile from filename input fromstate wo photograph become wo text to filename output be ceremony def
   ob filename of from of this to name text image path be text do
   ob filename of to of this to name text output path be text do
-  from filename of image path to name text description be see do
+  exists su name prompt default ob text "Describe the image." be text ya
+  ob text of ob of this to name text prompter be text do
+  ob name prompter be equally from text "" then ob text of prompt default to name text prompter be text do
+  from filename of image path ob text of prompter to name text description be see do
   exists su name cmd ob text "cat > \"" be text ya
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
