@@ -29,6 +29,7 @@ ai_host="$(get_map_value "ai host")"
 web_search_enabled="$(get_map_value "web search enabled")"
 search_only="lie"
 vnc_enabled="truth"
+restart_container="lie"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://host.docker.internal:11434"
@@ -40,7 +41,7 @@ ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
 export PYASH_UID="$(id -u)"
 export PYASH_GID="$(id -g)"
 export PYASH_USER="$(id -un)"
-export PYASH_CONTAINER_HOME="/home/${PYASH_USER}"
+export PYASH_CONTAINER_HOME="/workplace"
 export PYASH_PULSE_DIR="/run/user/${PYASH_UID}/pulse"
 export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
 export PYASH_SSH_DIR="$HOME/.ssh"
@@ -75,6 +76,8 @@ for arg in "$@"; do
     vnc_enabled="truth"
   elif [[ "$arg" == "--no-vnc" ]]; then
     vnc_enabled="lie"
+  elif [[ "$arg" == "--restart" ]]; then
+    restart_container="truth"
   fi
 done
 
@@ -83,13 +86,6 @@ if [[ -n "$vnc_enabled" ]]; then
 fi
 
 node "$ROOT_DIR/container/tools/update_compose.mjs"
-
-if [[ "$search_only" != "truth" ]]; then
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
-    echo "Container already running."
-    exec docker exec -it pyash bash
-  fi
-fi
 
 compose_args=()
 if [[ "$search_only" != "truth" ]]; then
@@ -113,6 +109,17 @@ fi
 if [[ ${#compose_args[@]} -eq 0 ]]; then
   echo "No services selected. Enable web search or omit --search-only."
   exit 1
+fi
+
+if [[ "$search_only" != "truth" ]]; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
+    if [[ "$restart_container" == "truth" ]]; then
+      docker compose "${compose_args[@]}" down
+    else
+      echo "Container already running."
+      exec docker exec -it pyash bash
+    fi
+  fi
 fi
 
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
