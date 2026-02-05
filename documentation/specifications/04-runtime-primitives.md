@@ -91,6 +91,8 @@ Store:
 
 Direction is left-to-right: `this ti ob ti num` stores base `THIS` with steps `["ob", "num"]`, matching the surface order.
 
+When resolving typed roles that carry a genitive, retain the genitive path alongside the resolved scalar so lvalue semantics (write-back to names or genitive targets) remain possible.
+
 ---
 
 ## 5. Value IR
