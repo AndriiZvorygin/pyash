@@ -16,6 +16,85 @@ import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumber
 import { throwFileUnavailable } from "../library/file_errors.mjs";
 import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
 
+const GENITIVE_TEXT_TAILS = new Set(["text", "filename"]);
+
+function resolveGenitiveLiteral(genitive, { state, memory, depth = 0, seen = new Set() } = {}) {
+  if (depth > 10) return null;
+  const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+  if (chainArr.length === 0) return null;
+  const [root, ...rest] = chainArr;
+  let curr =
+    root === "this"
+      ? (state?.currentEvokeRef || state?.currentEvoke)
+      : (typeof root === "string" && memory ? memory.remember(root) : null);
+  for (const part of rest) {
+    if (curr && typeof curr === "object" && curr.genitive) {
+      if (seen.has(curr.genitive)) return null;
+      seen.add(curr.genitive);
+      const resolved = resolveGenitiveLiteral(curr.genitive, { state, memory, depth: depth + 1, seen });
+      if (resolved !== null && resolved !== undefined) {
+        curr = resolved;
+      }
+    }
+    if (curr && typeof curr === "object" && curr.name && memory) {
+      const fact = memory.remember(curr.name);
+      if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
+    }
+    if (curr && typeof curr === "object") {
+      if (curr.text !== undefined && (part === "filename" || part === "text")) {
+        curr = curr.text;
+        continue;
+      }
+      if (curr.filename !== undefined && part === "filename") {
+        curr = curr.filename;
+        continue;
+      }
+      if (curr.ob?.text !== undefined && (part === "filename" || part === "text")) {
+        curr = curr.ob.text;
+        continue;
+      }
+      if (curr.ob?.filename !== undefined && part === "filename") {
+        curr = curr.ob.filename;
+        continue;
+      }
+      if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+        curr = curr.ob.map[part];
+      } else if (curr.ob && curr.ob[part] !== undefined) {
+        curr = curr.ob[part];
+      } else {
+        curr = curr[part];
+      }
+    } else {
+      curr = curr?.[part];
+    }
+  }
+  if (typeof curr === "string" || typeof curr === "number" || typeof curr === "boolean") return curr;
+  if (curr && typeof curr === "object") {
+    if (curr.text !== undefined) return curr.text;
+    if (curr.filename !== undefined) return curr.filename;
+    if (curr.num !== undefined) return curr.num;
+    if (curr.boolean !== undefined) return curr.boolean;
+  }
+  return curr ?? null;
+}
+
+function resolveIoGenitives(sentence, { state, memory } = {}) {
+  for (const key of ["from", "to"]) {
+    const value = sentence?.[key];
+    if (!value?.genitive) continue;
+    const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
+    const tail = chainArr.at(-1);
+    if (!GENITIVE_TEXT_TAILS.has(tail)) continue;
+    const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
+    if (resolved === null || resolved === undefined) continue;
+    if (tail === "filename") {
+      sentence[key] = { filename: String(resolved) };
+    } else if (tail === "text") {
+      sentence[key] = { text: String(resolved) };
+    }
+  }
+}
+
 function resolveSourceFilename(raw, { rememberFn } = {}) {
   if (!raw) return null;
   const value = String(raw);
@@ -74,9 +153,11 @@ export async function handleImperative({
     normalizeDownloadSentence(sentence);
   }
 
-  const { mood, be, ob, to, from, su } = sentence;
+  const { mood } = sentence;
   if (mood !== "do") return null;
 
+  resolveIoGenitives(sentence, { state, memory });
+  const { be, ob, to, from, su } = sentence;
   guardSourceFilenames(sentence, { rememberFn: memory.remember });
 
   if (be === "import" && (sentence.from?.name || sentence.from?.filename)) {
