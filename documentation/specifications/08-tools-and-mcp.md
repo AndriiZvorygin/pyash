@@ -92,7 +92,6 @@ fields in a stable order to aid diffing.
 `be write` invokes a language-model backend and returns a text response.
 
 `be write ... for name <mind> to name <output>` is the preferred invocation form.
-`be mind do` is deprecated and reserved for future use.
 
 Canonical examples live in `documentation/examples/examples-list.md` (see `examples/pyash/mind-tool-call.pya` and `examples/pyash/mind-stream-fixture.pya`).
 

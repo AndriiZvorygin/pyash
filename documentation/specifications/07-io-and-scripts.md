@@ -729,11 +729,21 @@ Notes:
 * Import `module/read_auto.pya`, `module/read_html.pya`, `module/read_pdf.pya`, `module/read_html_markdown.pya`, `module/read_html_markdown_plain.pya`, `module/read_pdf_html.pya`, `module/read_pdf_markdown.pya`, or `module/read_pdf_markdown_plain.pya` (exporting `read`) to register these signatures.
 * Modules MAY use external helpers (e.g. pandoc, pdftotext) to extract text.
 * Markdown output defaults to GitHub-flavored Markdown (GFM) where available.
+* Planned: PDF extraction SHOULD also process embedded images with an image model and append the derived text to the extracted output.
 * Failures should surface as standard command errors (e.g. `command defective`) unless a module defines a more specific error.
 * Optional limits:
   * `atmost line <n>` / `atmost lines <n>` limits by line count.
   * `atmost byte <n>` / `atmost bytes <n>` limits by byte count.
   * `fromindex line <n>` / `fromindex byte <n>` starts from a line/byte offset (0-based).
+
+Planned compile variants (non-normative):
+Use `be compile` for media-to-text extraction when the input is a binary file and the
+output is a text artifact. Canonical shapes are expected to follow the same signature-first
+rules as other compile targets. Example:
+
+```
+from filename "artifacts/photo.png" fromstate photograph to filename "artifacts/photo.txt" become text be compile do
+```
 
 ### Read auto dispatcher (module)
 
@@ -753,6 +763,7 @@ from filename "<path>" become wo markdown plain to name text <out> be read do
 Notes:
 * Uses `file --mime-type` for detection; behavior depends on available helpers.
 * `become wo markdown` targets GFM when supported by underlying modules.
+* Planned: video extraction SHOULD include visual scene descriptions alongside any transcript/subtitles, so results contain both visual and audio cues.
 
 ---
 
