@@ -18,6 +18,7 @@ from filename "./module/read_html_markdown_plain.pya" ob name read to name read 
 from filename "./module/read_pdf_markdown.pya" ob name read to name read pdf markdown be import do
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read pdf markdown plain be import do
 from filename "./module/see_vl.pya" ob name see to name see be import do
+from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
 exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya

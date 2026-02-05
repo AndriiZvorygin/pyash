@@ -280,7 +280,7 @@ export async function handleImperative({
   }
 
   // Fallback: allow compile to run even if signature words don't fully match a registered handler
-  if (!fn && be === "compile") {
+  if (!fn && !defEntry && be === "compile") {
     fn = compileHandler;
   }
 

@@ -24,6 +24,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - ESM modules, 2-space indentation, trailing semicolons, and double quotes for strings.
 - Functions/vars use `camelCase`; files and verb modules use short, descriptive snake/dash names (e.g., `add_obj_num_to_num.mjs`).
 - Favor small, pure functions; reset shared state explicitly (e.g., `forget`) and keep side effects localized.
+- Keep things DRY: prefer composing or reusing helpers over copy-paste variants.
 - Add brief, targeted comments only where behavior is non-obvious.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
 - Run `vocab_suggest` for new Pyash sentence words (names, error names, verbs); quoted prompt text does not need Pyash vocabulary.
