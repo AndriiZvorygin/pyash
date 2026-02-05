@@ -39,6 +39,8 @@ ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
 
 export PYASH_UID="$(id -u)"
 export PYASH_GID="$(id -g)"
+export PYASH_USER="$(id -un)"
+export PYASH_CONTAINER_HOME="/home/${PYASH_USER}"
 export PYASH_PULSE_DIR="/run/user/${PYASH_UID}/pulse"
 export PYASH_PULSE_COOKIE="$HOME/.config/pulse/cookie"
 export PYASH_SSH_DIR="$HOME/.ssh"
