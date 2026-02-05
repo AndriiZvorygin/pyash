@@ -65,6 +65,7 @@ const lines = [
 const pulseDir = process.env.PYASH_PULSE_DIR;
 const pulseCookie = process.env.PYASH_PULSE_COOKIE;
 const sshDir = process.env.PYASH_SSH_DIR;
+const sshKnownHosts = process.env.PYASH_SSH_KNOWN_HOSTS;
 const codexDir = process.env.PYASH_CODEX_DIR;
 const gitConfig = process.env.PYASH_GITCONFIG;
 const gitConfigXdg = process.env.PYASH_GITCONFIG_XDG;
@@ -90,6 +91,13 @@ if (sshDir) {
   try {
     await fs.stat(sshDir);
     volumes.push(`${"${PYASH_SSH_DIR}"}:/workplace/.ssh:ro`);
+  } catch {}
+}
+
+if (sshKnownHosts) {
+  try {
+    await fs.stat(sshKnownHosts);
+    volumes.push(`${"${PYASH_SSH_KNOWN_HOSTS}"}:/workplace/.ssh/known_hosts`);
   } catch {}
 }
 
@@ -126,6 +134,16 @@ if (hostTz) {
     volumes.push("/etc/timezone:/etc/timezone:ro");
   } catch {}
 }
+
+try {
+  await fs.stat("/etc/passwd");
+  volumes.push("/etc/passwd:/etc/passwd:ro");
+} catch {}
+
+try {
+  await fs.stat("/etc/group");
+  volumes.push("/etc/group:/etc/group:ro");
+} catch {}
 
 if (vncEnabled) {
   ports.push("\"5900:5900\"");
