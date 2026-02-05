@@ -64,6 +64,7 @@ const lines = [
 
 const pulseDir = process.env.PYASH_PULSE_DIR;
 const pulseCookie = process.env.PYASH_PULSE_COOKIE;
+const sshDir = process.env.PYASH_SSH_DIR;
 const codexDir = process.env.PYASH_CODEX_DIR;
 const gitConfig = process.env.PYASH_GITCONFIG;
 const gitConfigXdg = process.env.PYASH_GITCONFIG_XDG;
@@ -82,6 +83,13 @@ if (audioEnabled && pulseDir && pulseCookie) {
     volumes.push(`${"${PYASH_PULSE_DIR}"}:${"${PYASH_PULSE_DIR}"}`);
     volumes.push(`${"${PYASH_PULSE_COOKIE}"}:/workplace/.config/pulse/cookie`);
     devices.push("/dev/snd:/dev/snd");
+  } catch {}
+}
+
+if (sshDir) {
+  try {
+    await fs.stat(sshDir);
+    volumes.push(`${"${PYASH_SSH_DIR}"}:/workplace/.ssh`);
   } catch {}
 }
 
