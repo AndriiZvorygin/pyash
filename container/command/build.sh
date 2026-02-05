@@ -12,6 +12,7 @@ cache_dir="$ROOT_DIR/container/.buildx-cache"
 push=false
 load=false
 no_restart=false
+
 while [[ $# -gt 0 ]]; do
   arg="$1"
   case "$arg" in
@@ -66,6 +67,11 @@ Notes:
 EOF
       exit 0
       ;;
+    --)
+      shift
+      build_args+=("$@")
+      break
+      ;;
     *)
       build_args+=("$arg")
       shift
@@ -74,54 +80,100 @@ EOF
 done
 
 if [[ -n "$platform" || "$use_buildx" == true ]]; then
+  # Auto-detect platform if not specified
   if [[ -z "$platform" ]]; then
-    platform="$(docker info -f '{{.Architecture}}' 2>/dev/null | sed 's|^|linux/|')"
+    arch="$(docker info -f '{{.Architecture}}' 2>/dev/null || true)"
+    if [[ -z "$arch" ]]; then
+      arch="$(uname -m 2>/dev/null || true)"
+    fi
+
+    case "$arch" in
+      amd64|x86_64)
+        platform="linux/amd64"
+        ;;
+      arm64|aarch64)
+        platform="linux/arm64"
+        ;;
+      armv7l|armv7)
+        platform="linux/arm/v7"
+        ;;
+      armv6l|armv6)
+        platform="linux/arm/v6"
+        ;;
+      linux/*)
+        platform="$arch"
+        ;;
+      "")
+        platform="linux/amd64"
+        echo "warn: unable to detect architecture; defaulting to $platform" >&2
+        ;;
+      *)
+        platform="linux/$arch"
+        ;;
+    esac
   fi
+
+  # Default to --load if neither push nor load specified
   if [[ "$push" != true && "$load" != true ]]; then
     load=true
   fi
+
+  # Validate multi-arch builds
   if [[ "$platform" == *","* ]] && [[ "$push" != true ]]; then
     echo "error: multi-arch build requires --push (registry tag required)" >&2
     exit 2
   fi
+
+  # Validate push requires registry tag
   if [[ "$push" == true && "$tag" == "pyash-dev" ]]; then
     echo "error: --push requires --tag <registry/image>" >&2
     exit 2
   fi
+
+  # Set up cache
   cache_from="type=local,src=$cache_dir"
   cache_to="type=local,dest=$cache_dir,mode=max"
+
+  # Check buildx driver
   driver="$(docker buildx inspect --bootstrap --format '{{.Driver}}' 2>/dev/null || true)"
+  driver="${driver#"${driver%%[![:space:]]*}"}"
+  driver="${driver%"${driver##*[![:space:]]}"}"
   if [[ -z "$driver" ]]; then
-    driver="$(docker buildx inspect --bootstrap 2>/dev/null | awk -F': ' '/^Driver:/ {print $2; exit}')"
+    driver="$(
+      { docker buildx inspect --bootstrap 2>/dev/null || true; } \
+        | awk -F': ' '/^Driver:/ {gsub(/^ +| +$/,"",$2); print $2; exit}'
+    )"
   fi
+
+  # Disable cache for docker driver
   if [[ "$driver" == "docker" ]]; then
     echo "warn: buildx driver is docker; cache export disabled (enable containerd image store or switch driver)." >&2
     cache_from=""
     cache_to=""
   fi
+
+  # Build with buildx
+  buildx_args=(
+    -f "$ROOT_DIR/container/Dockerfile"
+    -t "$tag"
+    --platform "$platform"
+  )
+
   if [[ "$push" == true ]]; then
-    docker buildx build \
-      -f "$ROOT_DIR/container/Dockerfile" \
-      -t "$tag" \
-      --platform "$platform" \
-      --push \
-      ${cache_from:+--cache-from "$cache_from"} \
-      ${cache_to:+--cache-to "$cache_to"} \
-      "${build_args[@]}" \
-      "$ROOT_DIR"
-  else
-    docker buildx build \
-      -f "$ROOT_DIR/container/Dockerfile" \
-      -t "$tag" \
-      --platform "$platform" \
-      ${load:+--load} \
-      ${cache_from:+--cache-from "$cache_from"} \
-      ${cache_to:+--cache-to "$cache_to"} \
-      "${build_args[@]}" \
-      "$ROOT_DIR"
+    buildx_args+=(--push)
+  elif [[ "$load" == true ]]; then
+    buildx_args+=(--load)
   fi
+
+  [[ -n "$cache_from" ]] && buildx_args+=(--cache-from "$cache_from")
+  [[ -n "$cache_to" ]] && buildx_args+=(--cache-to "$cache_to")
+
+  docker buildx build "${buildx_args[@]}" "${build_args[@]}" "$ROOT_DIR"
+
 else
+  # Use docker compose build
   docker compose -f "$COMPOSE_FILE" build "${build_args[@]}"
+  
   if [[ "$no_restart" != true ]]; then
     docker compose -f "$COMPOSE_FILE" down
     "$ROOT_DIR/container/command/begin.sh"
