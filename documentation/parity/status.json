@@ -1,0 +1,2623 @@
+{
+  "lastRun": "2026-02-04T21:46:56.448Z",
+  "run": {
+    "timestamp": "2026-02-04T21:42:44.395Z",
+    "successes": [
+      "examples/pyash/add-basic.pya",
+      "examples/pyash/boolean-not.pya",
+      "examples/pyash/bank-transaction-roundtrip.pya",
+      "examples/pyash/boolean-and.pya",
+      "examples/pyash/again-demo.pya",
+      "examples/pyash/again-newspaper.pya",
+      "examples/pyash/boolean-or.pya",
+      "examples/pyash/ceremony-invoke.pya",
+      "examples/pyash/command-runner-demo.pya",
+      "examples/pyash/ceremony-plus-two.pya",
+      "examples/pyash/ceremony-nothing.pya",
+      "examples/pyash/compile-add-to-js-text.pya",
+      "examples/pyash/compile-conditional-to-js-text.pya",
+      "examples/pyash/compile-fizzbuzz.pya",
+      "examples/pyash/compile-file-to-js.pya",
+      "examples/pyash/compile-json-to-pyash.pya",
+      "examples/pyash/compile-loop.pya",
+      "examples/pyash/compile-mind.pya",
+      "examples/pyash/compile-math-write.pya",
+      "examples/pyash/compile-mixed-to-js-text.pya",
+      "examples/pyash/compile-multiply-divide-to-js-text.pya",
+      "examples/pyash/compile-subtract-to-js-text.pya",
+      "examples/pyash/compile-text-to-js-text.pya",
+      "examples/pyash/compile-text.pya",
+      "examples/pyash/compile-vector-at-to-js-text.pya",
+      "examples/pyash/compile-vector-file.pya",
+      "examples/pyash/compile-vector-produce.pya",
+      "examples/pyash/compile-write.pya",
+      "examples/pyash/copy-file.pya",
+      "examples/pyash/csv-filename-import.pya",
+      "examples/pyash/csv-pyash.pya",
+      "examples/pyash/date-plus-30.pya",
+      "examples/pyash/csv-roundtrip.pya",
+      "examples/pyash/date-timezone-golden.pya",
+      "examples/pyash/date-plus-90-from.pya",
+      "examples/pyash/def-chaining.pya",
+      "examples/pyash/directory-create.pya",
+      "examples/pyash/doors-map-10.pya",
+      "examples/pyash/ecology-all.pya",
+      "examples/pyash/ecology-get.pya",
+      "examples/pyash/ecology-set.pya",
+      "examples/pyash/equally-conditional.pya",
+      "examples/pyash/error-sieve-inline.pya",
+      "examples/pyash/evoke-registers.pya",
+      "examples/pyash/evoke-ret.pya",
+      "examples/pyash/fizzbuzz-one-write.pya",
+      "examples/pyash/fizzbuzz-return-line.pya",
+      "examples/pyash/fizzbuzz.pya",
+      "examples/pyash/giant-conditional.pya",
+      "examples/pyash/glance-file.pya",
+      "examples/pyash/fizzbuzz-100.pya",
+      "examples/pyash/hear-stream-fixture.pya",
+      "examples/pyash/hear-record-ffmpeg.pya",
+      "examples/pyash/hear-timebox.pya",
+      "examples/pyash/import-json-map.pya",
+      "examples/pyash/json-map-canonical.pya",
+      "examples/pyash/json-map-enumeration.pya",
+      "examples/pyash/json-map-write.pya",
+      "examples/pyash/json-to-pyash-golden.pya",
+      "examples/pyash/license-numeric.pya",
+      "examples/pyash/license-symbolic.pya",
+      "examples/pyash/insertion-sort.pya",
+      "examples/pyash/license-vector.pya",
+      "examples/pyash/list-directory-go.pya",
+      "examples/pyash/list-directory.pya",
+      "examples/pyash/lobster-read-run.pya",
+      "examples/pyash/lobster-roundtrip.pya",
+      "examples/pyash/loop-bool-invert-at-fromindex.pya",
+      "examples/pyash/loop-bool-toggle-index.pya",
+      "examples/pyash/map-ceremony-demo.pya",
+      "examples/pyash/loop-vector-invert.pya",
+      "examples/pyash/map-def-golden.pya",
+      "examples/pyash/mind-session.pya",
+      "examples/pyash/mind-stream-fixture.pya",
+      "examples/pyash/module-import-aliases.pya",
+      "examples/pyash/module-import-behavior.pya",
+      "examples/pyash/module-import-complex.pya",
+      "examples/pyash/module-import-full-paths.pya",
+      "examples/pyash/module-import-full.pya",
+      "examples/pyash/module-import-paths.pya",
+      "examples/pyash/module-import.pya",
+      "examples/pyash/mood-minified.pya",
+      "examples/pyash/payment-entry-pyash-roundtrip.pya",
+      "examples/pyash/payment-entry-roundtrip.pya",
+      "examples/pyash/piper-say-command.pya",
+      "examples/pyash/pyash-csv-roundtrip.pya",
+      "examples/pyash/pyash-csv.pya",
+      "examples/pyash/pyash-json-pyash-roundtrip.pya",
+      "examples/pyash/pyash-to-json-canonical.pya",
+      "examples/pyash/pyash-yaml-pyash-roundtrip.pya",
+      "examples/pyash/ratify-gate.pya",
+      "examples/pyash/read-file.pya",
+      "examples/pyash/read-pdf-example.pya",
+      "examples/pyash/read-pdf-html-example.pya",
+      "examples/pyash/read-pdf-markdown-example.pya",
+      "examples/pyash/refinery-inline-input.pya",
+      "examples/pyash/refinery-inline-minimal.pya",
+      "examples/pyash/refinery-pass-through.pya",
+      "examples/pyash/refinery-pass.pya",
+      "examples/pyash/refinery-propose.pya",
+      "examples/pyash/refinery-success.pya",
+      "examples/pyash/reporter-inline.pya",
+      "examples/pyash/result-chaining.pya",
+      "examples/pyash/refinery-basic.pya",
+      "examples/pyash/refinery-genitive-math.pya",
+      "examples/pyash/say-noop.pya",
+      "examples/pyash/refinery-mind-say-hear-fixture.pya",
+      "examples/pyash/say-piper.pya",
+      "examples/pyash/refinery-mind-say-hear.pya",
+      "examples/pyash/say-plain.pya",
+      "examples/pyash/say-stream-espeak.pya",
+      "examples/pyash/say-stream-piper.pya",
+      "examples/pyash/search-directory.pya",
+      "examples/pyash/subordinate-clause-golden.pya",
+      "examples/pyash/subtract.pya",
+      "examples/pyash/reviewer-circle-inline.pya",
+      "examples/pyash/reviewer-circle.pya",
+      "examples/pyash/this-registers.pya",
+      "examples/pyash/tiny-conditional.pya",
+      "examples/pyash/tloh-loop.pya",
+      "examples/pyash/touch-file.pya",
+      "examples/pyash/translate-add-to-english.pya",
+      "examples/pyash/translate-conditional-from-english.pya",
+      "examples/pyash/translate-conditional-to-english.pya",
+      "examples/pyash/translate-english-to-pyash.pya",
+      "examples/pyash/translate-javascript-to-pyash.pya",
+      "examples/pyash/translate-multiply-divide-to-english.pya",
+      "examples/pyash/doors-map-100.pya",
+      "examples/pyash/translate-pyash-file-to-english.pya",
+      "examples/pyash/translate-pyash-input.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-chinese.pya",
+      "examples/pyash/talk-loop-cancel.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-english.pya",
+      "examples/pyash/talk-loop-smoke.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-french.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-hindi.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya",
+      "examples/pyash/translate-pyash-sentence-to-english.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-russian.pya",
+      "examples/pyash/translate-subtract-to-english.pya",
+      "examples/pyash/translate-vector-file.pya",
+      "examples/pyash/translate-text-to-english.pya",
+      "examples/pyash/translate-vector-to-english.pya",
+      "examples/pyash/translate-whisper-english-to-pyash.pya",
+      "examples/pyash/translation-fallback-mixed.pya",
+      "examples/pyash/understand-file-to-file.pya",
+      "examples/pyash/understand-to-file.pya",
+      "examples/pyash/until-loop.pya",
+      "examples/pyash/vector-fill-doors-10.pya",
+      "examples/pyash/vector-invert-boolean.pya",
+      "examples/pyash/vector-invert-element.pya",
+      "examples/pyash/vector-toggle-index.pya",
+      "examples/pyash/vector-read-element.pya",
+      "examples/pyash/vector-write-demo.pya",
+      "examples/pyash/vector-write-index.pya",
+      "examples/pyash/word-frequency.pya",
+      "examples/pyash/world-mvp.pya",
+      "examples/pyash/yaml-to-pyash-golden.pya"
+    ],
+    "failures": [
+      "examples/pyash/cheat-sheet-review.pya",
+      "examples/pyash/compile-add-to-c-text.pya",
+      "examples/pyash/compile-conditional-to-c-text.pya",
+      "examples/pyash/compile-loop-c.pya",
+      "examples/pyash/compile-multiply-divide-to-c-text.pya",
+      "examples/pyash/compile-subtract-to-c-text.pya",
+      "examples/pyash/compile-text-to-c-text.pya",
+      "examples/pyash/confederation-priest-run.pya",
+      "examples/pyash/delete-file.pya",
+      "examples/pyash/download-youtube-month.pya",
+      "examples/pyash/download-ytdlp.pya",
+      "examples/pyash/doors-loop-10.pya",
+      "examples/pyash/doors-loop-100.pya",
+      "examples/pyash/hear-eval-timebox-module.pya",
+      "examples/pyash/hear-record-ffmpeg-ceremony.pya",
+      "examples/pyash/hear-eval-timebox.pya",
+      "examples/pyash/hear-record-ffmpeg-hear-only.pya",
+      "examples/pyash/hear-record-ffmpeg-module.pya",
+      "examples/pyash/interpret-javascript.pya",
+      "examples/pyash/mind-interpret-javascript.pya",
+      "examples/pyash/mind-interpret-tool.pya",
+      "examples/pyash/mind-tool-sandpit-agent-cwd.pya",
+      "examples/pyash/mind-time-tool.pya",
+      "examples/pyash/re-entry-cycle-fixture.pya",
+      "examples/pyash/read-auto-markdown-example.pya",
+      "examples/pyash/read-audio-text-example.pya",
+      "examples/pyash/read-html-example.pya",
+      "examples/pyash/read-html-markdown-example.pya",
+      "examples/pyash/read-image-auto.pya",
+      "examples/pyash/see-demo.pya",
+      "examples/pyash/sieve-10.pya",
+      "examples/pyash/sieve-100.pya",
+      "examples/pyash/talk-loop-stream.pya",
+      "examples/pyash/talk-loop-timebox.pya",
+      "examples/pyash/web-search-basic.pya",
+      "examples/pyash/web-search-download-first.pya",
+      "examples/pyash/web-search-first-markdown.pya",
+      "examples/pyash/world-mind-tool-example.pya"
+    ],
+    "missing": [
+      "examples/pyash/hear-eval-keyboard.pya: DISPLAY",
+      "examples/pyash/hear-stream-keyboard.pya: DISPLAY"
+    ],
+    "timeouts": [],
+    "skipped": [
+      "examples/pyash/command-espeak.pya",
+      "examples/pyash/hear-stream.pya",
+      "examples/pyash/mind-config-call.pya",
+      "examples/pyash/mind-parity.pya",
+      "examples/pyash/mind-tool-call.pya",
+      "examples/pyash/mind-tools.pya",
+      "examples/pyash/say-default.pya",
+      "examples/pyash/say-espeak.pya"
+    ]
+  },
+  "runjs": {
+    "successes": [
+      "examples/pyash/add-basic.pya",
+      "examples/pyash/boolean-not.pya",
+      "examples/pyash/bank-transaction-roundtrip.pya",
+      "examples/pyash/boolean-and.pya",
+      "examples/pyash/again-demo.pya",
+      "examples/pyash/again-newspaper.pya",
+      "examples/pyash/boolean-or.pya",
+      "examples/pyash/ceremony-invoke.pya",
+      "examples/pyash/command-runner-demo.pya",
+      "examples/pyash/ceremony-plus-two.pya",
+      "examples/pyash/ceremony-nothing.pya",
+      "examples/pyash/compile-add-to-js-text.pya",
+      "examples/pyash/compile-conditional-to-js-text.pya",
+      "examples/pyash/compile-fizzbuzz.pya",
+      "examples/pyash/compile-file-to-js.pya",
+      "examples/pyash/compile-json-to-pyash.pya",
+      "examples/pyash/compile-loop.pya",
+      "examples/pyash/compile-mind.pya",
+      "examples/pyash/compile-math-write.pya",
+      "examples/pyash/compile-mixed-to-js-text.pya",
+      "examples/pyash/compile-multiply-divide-to-js-text.pya",
+      "examples/pyash/compile-subtract-to-js-text.pya",
+      "examples/pyash/compile-text-to-js-text.pya",
+      "examples/pyash/compile-text.pya",
+      "examples/pyash/compile-vector-at-to-js-text.pya",
+      "examples/pyash/compile-vector-file.pya",
+      "examples/pyash/compile-vector-produce.pya",
+      "examples/pyash/compile-write.pya",
+      "examples/pyash/copy-file.pya",
+      "examples/pyash/csv-filename-import.pya",
+      "examples/pyash/csv-pyash.pya",
+      "examples/pyash/date-plus-30.pya",
+      "examples/pyash/csv-roundtrip.pya",
+      "examples/pyash/date-timezone-golden.pya",
+      "examples/pyash/date-plus-90-from.pya",
+      "examples/pyash/def-chaining.pya",
+      "examples/pyash/directory-create.pya",
+      "examples/pyash/doors-map-10.pya",
+      "examples/pyash/ecology-all.pya",
+      "examples/pyash/ecology-get.pya",
+      "examples/pyash/ecology-set.pya",
+      "examples/pyash/equally-conditional.pya",
+      "examples/pyash/error-sieve-inline.pya",
+      "examples/pyash/evoke-registers.pya",
+      "examples/pyash/evoke-ret.pya",
+      "examples/pyash/fizzbuzz-one-write.pya",
+      "examples/pyash/fizzbuzz-return-line.pya",
+      "examples/pyash/fizzbuzz.pya",
+      "examples/pyash/giant-conditional.pya",
+      "examples/pyash/glance-file.pya",
+      "examples/pyash/fizzbuzz-100.pya",
+      "examples/pyash/import-json-map.pya",
+      "examples/pyash/json-map-canonical.pya",
+      "examples/pyash/json-map-enumeration.pya",
+      "examples/pyash/json-map-write.pya",
+      "examples/pyash/json-to-pyash-golden.pya",
+      "examples/pyash/license-numeric.pya",
+      "examples/pyash/license-symbolic.pya",
+      "examples/pyash/insertion-sort.pya",
+      "examples/pyash/license-vector.pya",
+      "examples/pyash/list-directory-go.pya",
+      "examples/pyash/list-directory.pya",
+      "examples/pyash/lobster-read-run.pya",
+      "examples/pyash/lobster-roundtrip.pya",
+      "examples/pyash/loop-bool-invert-at-fromindex.pya",
+      "examples/pyash/loop-bool-toggle-index.pya",
+      "examples/pyash/map-ceremony-demo.pya",
+      "examples/pyash/loop-vector-invert.pya",
+      "examples/pyash/map-def-golden.pya",
+      "examples/pyash/mind-session.pya",
+      "examples/pyash/module-import-aliases.pya",
+      "examples/pyash/module-import-behavior.pya",
+      "examples/pyash/module-import-complex.pya",
+      "examples/pyash/module-import-full-paths.pya",
+      "examples/pyash/module-import-full.pya",
+      "examples/pyash/module-import-paths.pya",
+      "examples/pyash/module-import.pya",
+      "examples/pyash/mood-minified.pya",
+      "examples/pyash/payment-entry-pyash-roundtrip.pya",
+      "examples/pyash/payment-entry-roundtrip.pya",
+      "examples/pyash/piper-say-command.pya",
+      "examples/pyash/pyash-csv-roundtrip.pya",
+      "examples/pyash/pyash-csv.pya",
+      "examples/pyash/pyash-json-pyash-roundtrip.pya",
+      "examples/pyash/pyash-to-json-canonical.pya",
+      "examples/pyash/pyash-yaml-pyash-roundtrip.pya",
+      "examples/pyash/ratify-gate.pya",
+      "examples/pyash/read-file.pya",
+      "examples/pyash/read-pdf-example.pya",
+      "examples/pyash/read-pdf-html-example.pya",
+      "examples/pyash/read-pdf-markdown-example.pya",
+      "examples/pyash/refinery-inline-input.pya",
+      "examples/pyash/refinery-inline-minimal.pya",
+      "examples/pyash/refinery-pass-through.pya",
+      "examples/pyash/refinery-pass.pya",
+      "examples/pyash/refinery-propose.pya",
+      "examples/pyash/refinery-success.pya",
+      "examples/pyash/reporter-inline.pya",
+      "examples/pyash/result-chaining.pya",
+      "examples/pyash/refinery-basic.pya",
+      "examples/pyash/refinery-genitive-math.pya",
+      "examples/pyash/say-noop.pya",
+      "examples/pyash/say-plain.pya",
+      "examples/pyash/search-directory.pya",
+      "examples/pyash/subordinate-clause-golden.pya",
+      "examples/pyash/subtract.pya",
+      "examples/pyash/reviewer-circle.pya",
+      "examples/pyash/this-registers.pya",
+      "examples/pyash/tiny-conditional.pya",
+      "examples/pyash/tloh-loop.pya",
+      "examples/pyash/touch-file.pya",
+      "examples/pyash/translate-add-to-english.pya",
+      "examples/pyash/translate-conditional-from-english.pya",
+      "examples/pyash/translate-conditional-to-english.pya",
+      "examples/pyash/translate-english-to-pyash.pya",
+      "examples/pyash/translate-javascript-to-pyash.pya",
+      "examples/pyash/translate-multiply-divide-to-english.pya",
+      "examples/pyash/doors-map-100.pya",
+      "examples/pyash/translate-pyash-file-to-english.pya",
+      "examples/pyash/translate-pyash-input.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-chinese.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-english.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-french.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-hindi.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya",
+      "examples/pyash/translate-pyash-sentence-to-english.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-russian.pya",
+      "examples/pyash/translate-subtract-to-english.pya",
+      "examples/pyash/translate-vector-file.pya",
+      "examples/pyash/translate-text-to-english.pya",
+      "examples/pyash/translate-vector-to-english.pya",
+      "examples/pyash/translate-whisper-english-to-pyash.pya",
+      "examples/pyash/translation-fallback-mixed.pya",
+      "examples/pyash/understand-file-to-file.pya",
+      "examples/pyash/understand-to-file.pya",
+      "examples/pyash/until-loop.pya",
+      "examples/pyash/vector-fill-doors-10.pya",
+      "examples/pyash/vector-invert-boolean.pya",
+      "examples/pyash/vector-invert-element.pya",
+      "examples/pyash/vector-toggle-index.pya",
+      "examples/pyash/vector-read-element.pya",
+      "examples/pyash/vector-write-demo.pya",
+      "examples/pyash/vector-write-index.pya",
+      "examples/pyash/word-frequency.pya",
+      "examples/pyash/world-mvp.pya",
+      "examples/pyash/yaml-to-pyash-golden.pya"
+    ],
+    "failures": [
+      "examples/pyash/hear-stream-fixture.pya",
+      "examples/pyash/hear-record-ffmpeg.pya",
+      "examples/pyash/hear-timebox.pya",
+      "examples/pyash/mind-stream-fixture.pya",
+      "examples/pyash/refinery-mind-say-hear-fixture.pya",
+      "examples/pyash/say-piper.pya",
+      "examples/pyash/refinery-mind-say-hear.pya",
+      "examples/pyash/say-stream-espeak.pya",
+      "examples/pyash/say-stream-piper.pya",
+      "examples/pyash/reviewer-circle-inline.pya",
+      "examples/pyash/talk-loop-cancel.pya",
+      "examples/pyash/talk-loop-smoke.pya"
+    ],
+    "timeouts": []
+  },
+  "runc": {
+    "successes": [],
+    "failures": [
+      "examples/pyash/add-basic.pya",
+      "examples/pyash/boolean-not.pya",
+      "examples/pyash/bank-transaction-roundtrip.pya",
+      "examples/pyash/boolean-and.pya",
+      "examples/pyash/again-demo.pya",
+      "examples/pyash/again-newspaper.pya",
+      "examples/pyash/boolean-or.pya",
+      "examples/pyash/ceremony-invoke.pya",
+      "examples/pyash/command-runner-demo.pya",
+      "examples/pyash/ceremony-plus-two.pya",
+      "examples/pyash/ceremony-nothing.pya",
+      "examples/pyash/compile-add-to-js-text.pya",
+      "examples/pyash/compile-conditional-to-js-text.pya",
+      "examples/pyash/compile-fizzbuzz.pya",
+      "examples/pyash/compile-file-to-js.pya",
+      "examples/pyash/compile-json-to-pyash.pya",
+      "examples/pyash/compile-loop.pya",
+      "examples/pyash/compile-mind.pya",
+      "examples/pyash/compile-math-write.pya",
+      "examples/pyash/compile-mixed-to-js-text.pya",
+      "examples/pyash/compile-multiply-divide-to-js-text.pya",
+      "examples/pyash/compile-subtract-to-js-text.pya",
+      "examples/pyash/compile-text-to-js-text.pya",
+      "examples/pyash/compile-text.pya",
+      "examples/pyash/compile-vector-at-to-js-text.pya",
+      "examples/pyash/compile-vector-file.pya",
+      "examples/pyash/compile-vector-produce.pya",
+      "examples/pyash/compile-write.pya",
+      "examples/pyash/copy-file.pya",
+      "examples/pyash/csv-filename-import.pya",
+      "examples/pyash/csv-pyash.pya",
+      "examples/pyash/date-plus-30.pya",
+      "examples/pyash/csv-roundtrip.pya",
+      "examples/pyash/date-timezone-golden.pya",
+      "examples/pyash/date-plus-90-from.pya",
+      "examples/pyash/def-chaining.pya",
+      "examples/pyash/directory-create.pya",
+      "examples/pyash/doors-map-10.pya",
+      "examples/pyash/ecology-all.pya",
+      "examples/pyash/ecology-get.pya",
+      "examples/pyash/ecology-set.pya",
+      "examples/pyash/equally-conditional.pya",
+      "examples/pyash/error-sieve-inline.pya",
+      "examples/pyash/evoke-registers.pya",
+      "examples/pyash/evoke-ret.pya",
+      "examples/pyash/fizzbuzz-one-write.pya",
+      "examples/pyash/fizzbuzz-return-line.pya",
+      "examples/pyash/fizzbuzz.pya",
+      "examples/pyash/giant-conditional.pya",
+      "examples/pyash/glance-file.pya",
+      "examples/pyash/fizzbuzz-100.pya",
+      "examples/pyash/hear-stream-fixture.pya",
+      "examples/pyash/hear-record-ffmpeg.pya",
+      "examples/pyash/hear-timebox.pya",
+      "examples/pyash/import-json-map.pya",
+      "examples/pyash/json-map-canonical.pya",
+      "examples/pyash/json-map-enumeration.pya",
+      "examples/pyash/json-map-write.pya",
+      "examples/pyash/json-to-pyash-golden.pya",
+      "examples/pyash/license-numeric.pya",
+      "examples/pyash/license-symbolic.pya",
+      "examples/pyash/insertion-sort.pya",
+      "examples/pyash/license-vector.pya",
+      "examples/pyash/list-directory-go.pya",
+      "examples/pyash/list-directory.pya",
+      "examples/pyash/lobster-read-run.pya",
+      "examples/pyash/lobster-roundtrip.pya",
+      "examples/pyash/loop-bool-invert-at-fromindex.pya",
+      "examples/pyash/loop-bool-toggle-index.pya",
+      "examples/pyash/map-ceremony-demo.pya",
+      "examples/pyash/loop-vector-invert.pya",
+      "examples/pyash/map-def-golden.pya",
+      "examples/pyash/mind-session.pya",
+      "examples/pyash/mind-stream-fixture.pya",
+      "examples/pyash/module-import-aliases.pya",
+      "examples/pyash/module-import-behavior.pya",
+      "examples/pyash/module-import-complex.pya",
+      "examples/pyash/module-import-full-paths.pya",
+      "examples/pyash/module-import-full.pya",
+      "examples/pyash/module-import-paths.pya",
+      "examples/pyash/module-import.pya",
+      "examples/pyash/mood-minified.pya",
+      "examples/pyash/payment-entry-pyash-roundtrip.pya",
+      "examples/pyash/payment-entry-roundtrip.pya",
+      "examples/pyash/piper-say-command.pya",
+      "examples/pyash/pyash-csv-roundtrip.pya",
+      "examples/pyash/pyash-csv.pya",
+      "examples/pyash/pyash-json-pyash-roundtrip.pya",
+      "examples/pyash/pyash-to-json-canonical.pya",
+      "examples/pyash/pyash-yaml-pyash-roundtrip.pya",
+      "examples/pyash/ratify-gate.pya",
+      "examples/pyash/read-file.pya",
+      "examples/pyash/read-pdf-example.pya",
+      "examples/pyash/read-pdf-html-example.pya",
+      "examples/pyash/read-pdf-markdown-example.pya",
+      "examples/pyash/refinery-inline-input.pya",
+      "examples/pyash/refinery-inline-minimal.pya",
+      "examples/pyash/refinery-pass-through.pya",
+      "examples/pyash/refinery-pass.pya",
+      "examples/pyash/refinery-propose.pya",
+      "examples/pyash/refinery-success.pya",
+      "examples/pyash/reporter-inline.pya",
+      "examples/pyash/result-chaining.pya",
+      "examples/pyash/refinery-basic.pya",
+      "examples/pyash/refinery-genitive-math.pya",
+      "examples/pyash/say-noop.pya",
+      "examples/pyash/refinery-mind-say-hear-fixture.pya",
+      "examples/pyash/say-piper.pya",
+      "examples/pyash/refinery-mind-say-hear.pya",
+      "examples/pyash/say-plain.pya",
+      "examples/pyash/say-stream-espeak.pya",
+      "examples/pyash/say-stream-piper.pya",
+      "examples/pyash/search-directory.pya",
+      "examples/pyash/subordinate-clause-golden.pya",
+      "examples/pyash/subtract.pya",
+      "examples/pyash/reviewer-circle-inline.pya",
+      "examples/pyash/reviewer-circle.pya",
+      "examples/pyash/this-registers.pya",
+      "examples/pyash/tiny-conditional.pya",
+      "examples/pyash/tloh-loop.pya",
+      "examples/pyash/touch-file.pya",
+      "examples/pyash/translate-add-to-english.pya",
+      "examples/pyash/translate-conditional-from-english.pya",
+      "examples/pyash/translate-conditional-to-english.pya",
+      "examples/pyash/translate-english-to-pyash.pya",
+      "examples/pyash/translate-javascript-to-pyash.pya",
+      "examples/pyash/translate-multiply-divide-to-english.pya",
+      "examples/pyash/doors-map-100.pya",
+      "examples/pyash/translate-pyash-file-to-english.pya",
+      "examples/pyash/translate-pyash-input.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-chinese.pya",
+      "examples/pyash/talk-loop-cancel.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-english.pya",
+      "examples/pyash/talk-loop-smoke.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-french.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-hindi.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya",
+      "examples/pyash/translate-pyash-sentence-to-english.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-russian.pya",
+      "examples/pyash/translate-subtract-to-english.pya",
+      "examples/pyash/translate-vector-file.pya",
+      "examples/pyash/translate-text-to-english.pya",
+      "examples/pyash/translate-vector-to-english.pya",
+      "examples/pyash/translate-whisper-english-to-pyash.pya",
+      "examples/pyash/translation-fallback-mixed.pya",
+      "examples/pyash/understand-file-to-file.pya",
+      "examples/pyash/understand-to-file.pya",
+      "examples/pyash/until-loop.pya",
+      "examples/pyash/vector-fill-doors-10.pya",
+      "examples/pyash/vector-invert-boolean.pya",
+      "examples/pyash/vector-invert-element.pya",
+      "examples/pyash/vector-toggle-index.pya",
+      "examples/pyash/vector-read-element.pya",
+      "examples/pyash/vector-write-demo.pya",
+      "examples/pyash/vector-write-index.pya",
+      "examples/pyash/word-frequency.pya",
+      "examples/pyash/world-mvp.pya",
+      "examples/pyash/yaml-to-pyash-golden.pya"
+    ],
+    "timeouts": []
+  },
+  "parity": {
+    "green": [],
+    "red": [
+      "examples/pyash/add-basic.pya",
+      "examples/pyash/boolean-not.pya",
+      "examples/pyash/bank-transaction-roundtrip.pya",
+      "examples/pyash/boolean-and.pya",
+      "examples/pyash/again-demo.pya",
+      "examples/pyash/again-newspaper.pya",
+      "examples/pyash/boolean-or.pya",
+      "examples/pyash/ceremony-invoke.pya",
+      "examples/pyash/command-runner-demo.pya",
+      "examples/pyash/ceremony-plus-two.pya",
+      "examples/pyash/ceremony-nothing.pya",
+      "examples/pyash/compile-add-to-js-text.pya",
+      "examples/pyash/compile-conditional-to-js-text.pya",
+      "examples/pyash/compile-fizzbuzz.pya",
+      "examples/pyash/compile-file-to-js.pya",
+      "examples/pyash/compile-json-to-pyash.pya",
+      "examples/pyash/compile-loop.pya",
+      "examples/pyash/compile-mind.pya",
+      "examples/pyash/compile-math-write.pya",
+      "examples/pyash/compile-mixed-to-js-text.pya",
+      "examples/pyash/compile-multiply-divide-to-js-text.pya",
+      "examples/pyash/compile-subtract-to-js-text.pya",
+      "examples/pyash/compile-text-to-js-text.pya",
+      "examples/pyash/compile-text.pya",
+      "examples/pyash/compile-vector-at-to-js-text.pya",
+      "examples/pyash/compile-vector-file.pya",
+      "examples/pyash/compile-vector-produce.pya",
+      "examples/pyash/compile-write.pya",
+      "examples/pyash/copy-file.pya",
+      "examples/pyash/csv-filename-import.pya",
+      "examples/pyash/csv-pyash.pya",
+      "examples/pyash/date-plus-30.pya",
+      "examples/pyash/csv-roundtrip.pya",
+      "examples/pyash/date-timezone-golden.pya",
+      "examples/pyash/date-plus-90-from.pya",
+      "examples/pyash/def-chaining.pya",
+      "examples/pyash/directory-create.pya",
+      "examples/pyash/doors-map-10.pya",
+      "examples/pyash/ecology-all.pya",
+      "examples/pyash/ecology-get.pya",
+      "examples/pyash/ecology-set.pya",
+      "examples/pyash/equally-conditional.pya",
+      "examples/pyash/error-sieve-inline.pya",
+      "examples/pyash/evoke-registers.pya",
+      "examples/pyash/evoke-ret.pya",
+      "examples/pyash/fizzbuzz-one-write.pya",
+      "examples/pyash/fizzbuzz-return-line.pya",
+      "examples/pyash/fizzbuzz.pya",
+      "examples/pyash/giant-conditional.pya",
+      "examples/pyash/glance-file.pya",
+      "examples/pyash/fizzbuzz-100.pya",
+      "examples/pyash/hear-stream-fixture.pya",
+      "examples/pyash/hear-record-ffmpeg.pya",
+      "examples/pyash/hear-timebox.pya",
+      "examples/pyash/import-json-map.pya",
+      "examples/pyash/json-map-canonical.pya",
+      "examples/pyash/json-map-enumeration.pya",
+      "examples/pyash/json-map-write.pya",
+      "examples/pyash/json-to-pyash-golden.pya",
+      "examples/pyash/license-numeric.pya",
+      "examples/pyash/license-symbolic.pya",
+      "examples/pyash/insertion-sort.pya",
+      "examples/pyash/license-vector.pya",
+      "examples/pyash/list-directory-go.pya",
+      "examples/pyash/list-directory.pya",
+      "examples/pyash/lobster-read-run.pya",
+      "examples/pyash/lobster-roundtrip.pya",
+      "examples/pyash/loop-bool-invert-at-fromindex.pya",
+      "examples/pyash/loop-bool-toggle-index.pya",
+      "examples/pyash/map-ceremony-demo.pya",
+      "examples/pyash/loop-vector-invert.pya",
+      "examples/pyash/map-def-golden.pya",
+      "examples/pyash/mind-session.pya",
+      "examples/pyash/mind-stream-fixture.pya",
+      "examples/pyash/module-import-aliases.pya",
+      "examples/pyash/module-import-behavior.pya",
+      "examples/pyash/module-import-complex.pya",
+      "examples/pyash/module-import-full-paths.pya",
+      "examples/pyash/module-import-full.pya",
+      "examples/pyash/module-import-paths.pya",
+      "examples/pyash/module-import.pya",
+      "examples/pyash/mood-minified.pya",
+      "examples/pyash/payment-entry-pyash-roundtrip.pya",
+      "examples/pyash/payment-entry-roundtrip.pya",
+      "examples/pyash/piper-say-command.pya",
+      "examples/pyash/pyash-csv-roundtrip.pya",
+      "examples/pyash/pyash-csv.pya",
+      "examples/pyash/pyash-json-pyash-roundtrip.pya",
+      "examples/pyash/pyash-to-json-canonical.pya",
+      "examples/pyash/pyash-yaml-pyash-roundtrip.pya",
+      "examples/pyash/ratify-gate.pya",
+      "examples/pyash/read-file.pya",
+      "examples/pyash/read-pdf-example.pya",
+      "examples/pyash/read-pdf-html-example.pya",
+      "examples/pyash/read-pdf-markdown-example.pya",
+      "examples/pyash/refinery-inline-input.pya",
+      "examples/pyash/refinery-inline-minimal.pya",
+      "examples/pyash/refinery-pass-through.pya",
+      "examples/pyash/refinery-pass.pya",
+      "examples/pyash/refinery-propose.pya",
+      "examples/pyash/refinery-success.pya",
+      "examples/pyash/reporter-inline.pya",
+      "examples/pyash/result-chaining.pya",
+      "examples/pyash/refinery-basic.pya",
+      "examples/pyash/refinery-genitive-math.pya",
+      "examples/pyash/say-noop.pya",
+      "examples/pyash/refinery-mind-say-hear-fixture.pya",
+      "examples/pyash/say-piper.pya",
+      "examples/pyash/refinery-mind-say-hear.pya",
+      "examples/pyash/say-plain.pya",
+      "examples/pyash/say-stream-espeak.pya",
+      "examples/pyash/say-stream-piper.pya",
+      "examples/pyash/search-directory.pya",
+      "examples/pyash/subordinate-clause-golden.pya",
+      "examples/pyash/subtract.pya",
+      "examples/pyash/reviewer-circle-inline.pya",
+      "examples/pyash/reviewer-circle.pya",
+      "examples/pyash/this-registers.pya",
+      "examples/pyash/tiny-conditional.pya",
+      "examples/pyash/tloh-loop.pya",
+      "examples/pyash/touch-file.pya",
+      "examples/pyash/translate-add-to-english.pya",
+      "examples/pyash/translate-conditional-from-english.pya",
+      "examples/pyash/translate-conditional-to-english.pya",
+      "examples/pyash/translate-english-to-pyash.pya",
+      "examples/pyash/translate-javascript-to-pyash.pya",
+      "examples/pyash/translate-multiply-divide-to-english.pya",
+      "examples/pyash/doors-map-100.pya",
+      "examples/pyash/translate-pyash-file-to-english.pya",
+      "examples/pyash/translate-pyash-input.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-chinese.pya",
+      "examples/pyash/talk-loop-cancel.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-english.pya",
+      "examples/pyash/talk-loop-smoke.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-french.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-hindi.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya",
+      "examples/pyash/translate-pyash-sentence-to-english.pya",
+      "examples/pyash/translate-pyash-map-ceremony-to-russian.pya",
+      "examples/pyash/translate-subtract-to-english.pya",
+      "examples/pyash/translate-vector-file.pya",
+      "examples/pyash/translate-text-to-english.pya",
+      "examples/pyash/translate-vector-to-english.pya",
+      "examples/pyash/translate-whisper-english-to-pyash.pya",
+      "examples/pyash/translation-fallback-mixed.pya",
+      "examples/pyash/understand-file-to-file.pya",
+      "examples/pyash/understand-to-file.pya",
+      "examples/pyash/until-loop.pya",
+      "examples/pyash/vector-fill-doors-10.pya",
+      "examples/pyash/vector-invert-boolean.pya",
+      "examples/pyash/vector-invert-element.pya",
+      "examples/pyash/vector-toggle-index.pya",
+      "examples/pyash/vector-read-element.pya",
+      "examples/pyash/vector-write-demo.pya",
+      "examples/pyash/vector-write-index.pya",
+      "examples/pyash/word-frequency.pya",
+      "examples/pyash/world-mvp.pya",
+      "examples/pyash/yaml-to-pyash-golden.pya"
+    ]
+  },
+  "details": {
+    "examples/pyash/add-basic.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/add-basic.pya to filename /tmp/add-basic-pyash-GOT5JP.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/boolean-not.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/boolean-not.pya to filename /tmp/boolean-not-pyash-YhepfJ.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/bank-transaction-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/bank-transaction-roundtrip.pya to filename /tmp/bank-transaction-roundtrip-pyash-y5dl74.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/boolean-and.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/boolean-and.pya to filename /tmp/boolean-and-pyash-X7eksX.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/again-demo.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/again-demo.pya to filename /tmp/again-demo-pyash-hzL3dy.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/again-newspaper.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/again-newspaper.pya to filename /tmp/again-newspaper-pyash-nQnGWm.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/boolean-or.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/boolean-or.pya to filename /tmp/boolean-or-pyash-szXgeR.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ceremony-invoke.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ceremony-invoke.pya to filename /tmp/ceremony-invoke-pyash-ZD0e70.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/command-runner-demo.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/command-runner-demo.pya to filename /tmp/command-runner-demo-pyash-E6dCiu.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ceremony-plus-two.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ceremony-plus-two.pya to filename /tmp/ceremony-plus-two-pyash-q5Iabm.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ceremony-nothing.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ceremony-nothing.pya to filename /tmp/ceremony-nothing-pyash-8Xdvr3.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-add-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-add-to-js-text.pya to filename /tmp/compile-add-to-js-text-pyash-2B3HcJ.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-conditional-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-conditional-to-js-text.pya to filename /tmp/compile-conditional-to-js-text-pyash-c4kKVz.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-fizzbuzz.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-fizzbuzz.pya to filename /tmp/compile-fizzbuzz-pyash-B7TS03.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-file-to-js.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-file-to-js.pya to filename /tmp/compile-file-to-js-pyash-X4DM7O.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-json-to-pyash.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-json-to-pyash.pya to filename /tmp/compile-json-to-pyash-pyash-AnFNpa.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-loop.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-loop.pya to filename /tmp/compile-loop-pyash-LlHQHd.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-mind.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-mind.pya to filename /tmp/compile-mind-pyash-RVRlig.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-math-write.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-math-write.pya to filename /tmp/compile-math-write-pyash-2Ps56A.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-mixed-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-mixed-to-js-text.pya to filename /tmp/compile-mixed-to-js-text-pyash-ikr13t.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-multiply-divide-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-multiply-divide-to-js-text.pya to filename /tmp/compile-multiply-divide-to-js-text-pyash-rx61mL.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-subtract-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-subtract-to-js-text.pya to filename /tmp/compile-subtract-to-js-text-pyash-uvSEaT.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-text-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-text-to-js-text.pya to filename /tmp/compile-text-to-js-text-pyash-n6WV9e.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-text.pya to filename /tmp/compile-text-pyash-1Dm783.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-vector-at-to-js-text.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-vector-at-to-js-text.pya to filename /tmp/compile-vector-at-to-js-text-pyash-GNx73T.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-vector-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-vector-file.pya to filename /tmp/compile-vector-file-pyash-eImLfJ.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-vector-produce.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-vector-produce.pya to filename /tmp/compile-vector-produce-pyash-6kfb6x.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/compile-write.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/compile-write.pya to filename /tmp/compile-write-pyash-yWT9FV.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/copy-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/copy-file.pya to filename /tmp/copy-file-pyash-kyfG63.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/csv-filename-import.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/csv-filename-import.pya to filename /tmp/csv-filename-import-pyash-oNpfMm.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/csv-pyash.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/csv-pyash.pya to filename /tmp/csv-pyash-pyash-JSPpkn.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/date-plus-30.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/date-plus-30.pya to filename /tmp/date-plus-30-pyash-put3ko.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/csv-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/csv-roundtrip.pya to filename /tmp/csv-roundtrip-pyash-h0qA2r.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/date-timezone-golden.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/date-timezone-golden.pya to filename /tmp/date-timezone-golden-pyash-ROSmyr.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/date-plus-90-from.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/date-plus-90-from.pya to filename /tmp/date-plus-90-from-pyash-4d9D3n.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/def-chaining.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/def-chaining.pya to filename /tmp/def-chaining-pyash-PwzhEk.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/directory-create.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/directory-create.pya to filename /tmp/directory-create-pyash-JVrUqT.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/doors-map-10.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/doors-map-10.pya to filename /tmp/doors-map-10-pyash-uqzZqj.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ecology-all.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ecology-all.pya to filename /tmp/ecology-all-pyash-6GlnOK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ecology-get.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ecology-get.pya to filename /tmp/ecology-get-pyash-GGG7rH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ecology-set.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ecology-set.pya to filename /tmp/ecology-set-pyash-pYNAj1.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/equally-conditional.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/equally-conditional.pya to filename /tmp/equally-conditional-pyash-1Mwym1.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/error-sieve-inline.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/error-sieve-inline.pya to filename /tmp/error-sieve-inline-pyash-9Sjhcw.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/evoke-registers.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/evoke-registers.pya to filename /tmp/evoke-registers-pyash-5wM6fW.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/evoke-ret.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/evoke-ret.pya to filename /tmp/evoke-ret-pyash-DIonjv.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/fizzbuzz-one-write.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/fizzbuzz-one-write.pya to filename /tmp/fizzbuzz-one-write-pyash-XuzNHH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/fizzbuzz-return-line.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/fizzbuzz-return-line.pya to filename /tmp/fizzbuzz-return-line-pyash-nnw6Qo.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/fizzbuzz.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/fizzbuzz.pya to filename /tmp/fizzbuzz-pyash-69fZzB.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/giant-conditional.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/giant-conditional.pya to filename /tmp/giant-conditional-pyash-5dms74.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/glance-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/glance-file.pya to filename /tmp/glance-file-pyash-CskyJd.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/fizzbuzz-100.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/fizzbuzz-100.pya to filename /tmp/fizzbuzz-100-pyash-AnWY1k.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/hear-stream-fixture.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    at be_hear_during_num_from_wo_microphone_to_filename (file:///tmp/hear-stream-fixture-pyash-kYneRY.mjs:2740:52)\n    at file:///tmp/hear-stream-fixture-pyash-kYneRY.mjs:3477:8\n    at file:///tmp/hear-stream-fixture-pyash-kYneRY.mjs:3479:3\n    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/hear-stream-fixture.pya to filename /tmp/hear-stream-fixture-pyash-zTQpnX.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/hear-record-ffmpeg.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    at afterLoad (node:internal/modules/esm/loader:596:29)\n    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:601:12)\n    at #createModuleJob (node:internal/modules/esm/loader:624:36)\n    at #getJobFromResolveResult (node:internal/modules/esm/loader:343:34)\n    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:311:41)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:664:25)\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/hear-record-ffmpeg.pya to filename /tmp/hear-record-ffmpeg-pyash-7z4VTg.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/hear-timebox.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    at be_hear_during_num_from_wo_microphone_to_filename (file:///tmp/hear-timebox-pyash-JD6n3R.mjs:2744:33)\n    at file:///tmp/hear-timebox-pyash-JD6n3R.mjs:3475:10\n    at file:///tmp/hear-timebox-pyash-JD6n3R.mjs:3477:3\n    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/hear-timebox.pya to filename /tmp/hear-timebox-pyash-T7n8Ap.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/import-json-map.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/import-json-map.pya to filename /tmp/import-json-map-pyash-c086MV.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/json-map-canonical.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/json-map-canonical.pya to filename /tmp/json-map-canonical-pyash-Iqz1X8.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/json-map-enumeration.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/json-map-enumeration.pya to filename /tmp/json-map-enumeration-pyash-iwkQpz.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/json-map-write.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/json-map-write.pya to filename /tmp/json-map-write-pyash-8ycrCC.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/json-to-pyash-golden.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/json-to-pyash-golden.pya to filename /tmp/json-to-pyash-golden-pyash-o8fBpj.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/license-numeric.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/license-numeric.pya to filename /tmp/license-numeric-pyash-nZwzLH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/license-symbolic.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/license-symbolic.pya to filename /tmp/license-symbolic-pyash-KtEji2.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/insertion-sort.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/insertion-sort.pya to filename /tmp/insertion-sort-pyash-ruCa28.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/license-vector.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/license-vector.pya to filename /tmp/license-vector-pyash-6LpcyF.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/list-directory-go.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/list-directory-go.pya to filename /tmp/list-directory-go-pyash-HyH3bG.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/list-directory.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/list-directory.pya to filename /tmp/list-directory-pyash-VSrNRV.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/lobster-read-run.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/lobster-read-run.pya to filename /tmp/lobster-read-run-pyash-FRZ4KC.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/lobster-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/lobster-roundtrip.pya to filename /tmp/lobster-roundtrip-pyash-8lAtOK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/loop-bool-invert-at-fromindex.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/loop-bool-invert-at-fromindex.pya to filename /tmp/loop-bool-invert-at-fromindex-pyash-EUYoY9.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/loop-bool-toggle-index.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/loop-bool-toggle-index.pya to filename /tmp/loop-bool-toggle-index-pyash-5xENwq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/map-ceremony-demo.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/map-ceremony-demo.pya to filename /tmp/map-ceremony-demo-pyash-MOb11B.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/loop-vector-invert.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/loop-vector-invert.pya to filename /tmp/loop-vector-invert-pyash-lStBXU.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/map-def-golden.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/map-def-golden.pya to filename /tmp/map-def-golden-pyash-E4l4I4.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/mind-session.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/mind-session.pya to filename /tmp/mind-session-pyash-JsrYBt.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/mind-stream-fixture.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '127.0.0.1',\n    port: 11434\n  }\n}\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/mind-stream-fixture.pya to filename /tmp/mind-stream-fixture-pyash-WsZJPw.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-aliases.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-aliases.pya to filename /tmp/module-import-aliases-pyash-9x26wm.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-behavior.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-behavior.pya to filename /tmp/module-import-behavior-pyash-YhqtuX.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-complex.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-complex.pya to filename /tmp/module-import-complex-pyash-hCyEPq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-full-paths.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-full-paths.pya to filename /tmp/module-import-full-paths-pyash-DyNaSY.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-full.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-full.pya to filename /tmp/module-import-full-pyash-RvaxgU.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import-paths.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import-paths.pya to filename /tmp/module-import-paths-pyash-K3vQb6.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/module-import.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/module-import.pya to filename /tmp/module-import-pyash-vP2yNq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/mood-minified.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/mood-minified.pya to filename /tmp/mood-minified-pyash-7hjari.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/payment-entry-pyash-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/payment-entry-pyash-roundtrip.pya to filename /tmp/payment-entry-pyash-roundtrip-pyash-mQStLG.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/payment-entry-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/payment-entry-roundtrip.pya to filename /tmp/payment-entry-roundtrip-pyash-xJOsB9.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/piper-say-command.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/piper-say-command.pya to filename /tmp/piper-say-command-pyash-Tgcwbi.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/pyash-csv-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/pyash-csv-roundtrip.pya to filename /tmp/pyash-csv-roundtrip-pyash-hlDZkU.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/pyash-csv.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/pyash-csv.pya to filename /tmp/pyash-csv-pyash-vRcXd8.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/pyash-json-pyash-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/pyash-json-pyash-roundtrip.pya to filename /tmp/pyash-json-pyash-roundtrip-pyash-0eklIe.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/pyash-to-json-canonical.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/pyash-to-json-canonical.pya to filename /tmp/pyash-to-json-canonical-pyash-eGKtKr.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/pyash-yaml-pyash-roundtrip.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/pyash-yaml-pyash-roundtrip.pya to filename /tmp/pyash-yaml-pyash-roundtrip-pyash-twkTyU.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/ratify-gate.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/ratify-gate.pya to filename /tmp/ratify-gate-pyash-OsYjzu.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/read-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/read-file.pya to filename /tmp/read-file-pyash-GfOELK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/read-pdf-example.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/read-pdf-example.pya to filename /tmp/read-pdf-example-pyash-aJwfBa.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/read-pdf-html-example.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/read-pdf-html-example.pya to filename /tmp/read-pdf-html-example-pyash-FV7suH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/read-pdf-markdown-example.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/read-pdf-markdown-example.pya to filename /tmp/read-pdf-markdown-example-pyash-wXQ8eS.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-inline-input.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-inline-input.pya to filename /tmp/refinery-inline-input-pyash-a1mBBe.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-inline-minimal.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-inline-minimal.pya to filename /tmp/refinery-inline-minimal-pyash-OY0PNq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-pass-through.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-pass-through.pya to filename /tmp/refinery-pass-through-pyash-RUZLJS.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-pass.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-pass.pya to filename /tmp/refinery-pass-pyash-3188z2.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-propose.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-propose.pya to filename /tmp/refinery-propose-pyash-pgXgvi.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-success.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-success.pya to filename /tmp/refinery-success-pyash-rKtZXH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/reporter-inline.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/reporter-inline.pya to filename /tmp/reporter-inline-pyash-802CXi.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/result-chaining.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/result-chaining.pya to filename /tmp/result-chaining-pyash-iqPzV8.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-basic.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-basic.pya to filename /tmp/refinery-basic-pyash-9Ur8dv.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-genitive-math.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/refinery-genitive-math.pya to filename /tmp/refinery-genitive-math-pyash-1u5a4j.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/say-noop.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/say-noop.pya to filename /tmp/say-noop-pyash-eswgFv.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-mind-say-hear-fixture.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/refinery-mind-say-hear-fixture.pya to filename /tmp/refinery-mind-say-hear-fixture-pyash-78hrg4.mjs become name javascript be compile do ko by num 1 be error ya"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/refinery-mind-say-hear-fixture.pya to filename /tmp/refinery-mind-say-hear-fixture-pyash-UYHOlE.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/say-piper.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/say-piper.pya to filename /tmp/say-piper-pyash-tbstkS.mjs become name javascript be compile do ko by num 1 be error ya"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/say-piper.pya to filename /tmp/say-piper-pyash-5pu1iz.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/refinery-mind-say-hear.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/refinery-mind-say-hear.pya to filename /tmp/refinery-mind-say-hear-pyash-XoVy4F.mjs become name javascript be compile do ko by num 1 be error ya"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/refinery-mind-say-hear.pya to filename /tmp/refinery-mind-say-hear-pyash-T065S3.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/say-plain.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/say-plain.pya to filename /tmp/say-plain-pyash-XZyDwb.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/say-stream-espeak.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '172.17.0.1',\n    port: 11434\n  }\n}\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/say-stream-espeak.pya to filename /tmp/say-stream-espeak-pyash-pbM4Gk.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/say-stream-piper.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '172.17.0.1',\n    port: 11434\n  }\n}\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/say-stream-piper.pya to filename /tmp/say-stream-piper-pyash-XRLtJf.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/search-directory.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/search-directory.pya to filename /tmp/search-directory-pyash-DpKXfa.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/subordinate-clause-golden.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/subordinate-clause-golden.pya to filename /tmp/subordinate-clause-golden-pyash-jWSq1j.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/subtract.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/subtract.pya to filename /tmp/subtract-pyash-inDwNz.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/reviewer-circle-inline.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "    code: 'ECONNREFUSED',\n    syscall: 'connect',\n    address: '172.17.0.1',\n    port: 11434\n  }\n}\n\nNode.js v22.22.0"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/reviewer-circle-inline.pya to filename /tmp/reviewer-circle-inline-pyash-BbAeTH.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/reviewer-circle.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/reviewer-circle.pya to filename /tmp/reviewer-circle-pyash-StP8fc.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/this-registers.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/this-registers.pya to filename /tmp/this-registers-pyash-znYbV7.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/tiny-conditional.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/tiny-conditional.pya to filename /tmp/tiny-conditional-pyash-UEIJyG.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/tloh-loop.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/tloh-loop.pya to filename /tmp/tloh-loop-pyash-o5L0pE.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/touch-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/touch-file.pya to filename /tmp/touch-file-pyash-QSTtVW.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-add-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-add-to-english.pya to filename /tmp/translate-add-to-english-pyash-kKVwBr.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-conditional-from-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-conditional-from-english.pya to filename /tmp/translate-conditional-from-english-pyash-gx9q5x.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-conditional-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-conditional-to-english.pya to filename /tmp/translate-conditional-to-english-pyash-zNpf4O.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-english-to-pyash.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-english-to-pyash.pya to filename /tmp/translate-english-to-pyash-pyash-2NrFyX.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-javascript-to-pyash.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-javascript-to-pyash.pya to filename /tmp/translate-javascript-to-pyash-pyash-u4zdXK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-multiply-divide-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-multiply-divide-to-english.pya to filename /tmp/translate-multiply-divide-to-english-pyash-F7o7Xm.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/doors-map-100.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/doors-map-100.pya to filename /tmp/doors-map-100-pyash-8ZRgow.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-file-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-file-to-english.pya to filename /tmp/translate-pyash-file-to-english-pyash-fgHuTc.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-input.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-input.pya to filename /tmp/translate-pyash-input-pyash-iAgcdD.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-chinese.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-chinese.pya to filename /tmp/translate-pyash-map-ceremony-to-chinese-pyash-pdQTRD.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/talk-loop-cancel.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: say\" from name compile import at la from filename examples/pyash/talk-loop-cancel.pya to filename /tmp/talk-loop-cancel-pyash-qPBQ3l.mjs become name javascript be compile do ko by num 1 be error ya"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: say\" from name compile import at la from filename examples/pyash/talk-loop-cancel.pya to filename /tmp/talk-loop-cancel-pyash-whMzJP.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-english.pya to filename /tmp/translate-pyash-map-ceremony-to-english-pyash-8zdXRK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/talk-loop-smoke.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/talk-loop-smoke.pya to filename /tmp/talk-loop-smoke-pyash-OOCq2D.mjs become name javascript be compile do ko by num 1 be error ya"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "su name module lost ob text \"module import missing: piper command say\" from name compile import at la from filename examples/pyash/talk-loop-smoke.pya to filename /tmp/talk-loop-smoke-pyash-KapU59.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-french.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-french.pya to filename /tmp/translate-pyash-map-ceremony-to-french-pyash-VKGwh7.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-hindi.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-hindi.pya to filename /tmp/translate-pyash-map-ceremony-to-hindi-pyash-uodboe.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-interlingua.pya to filename /tmp/translate-pyash-map-ceremony-to-interlingua-pyash-n3Hs3Z.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-sentence-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-sentence-to-english.pya to filename /tmp/translate-pyash-sentence-to-english-pyash-EvK1kb.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-pyash-map-ceremony-to-russian.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-pyash-map-ceremony-to-russian.pya to filename /tmp/translate-pyash-map-ceremony-to-russian-pyash-0fDrUd.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-subtract-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-subtract-to-english.pya to filename /tmp/translate-subtract-to-english-pyash-uepoNq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-vector-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-vector-file.pya to filename /tmp/translate-vector-file-pyash-7LsljT.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-text-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-text-to-english.pya to filename /tmp/translate-text-to-english-pyash-bQvMmO.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-vector-to-english.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-vector-to-english.pya to filename /tmp/translate-vector-to-english-pyash-jTJja5.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translate-whisper-english-to-pyash.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translate-whisper-english-to-pyash.pya to filename /tmp/translate-whisper-english-to-pyash-pyash-x6a9Aq.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/translation-fallback-mixed.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/translation-fallback-mixed.pya to filename /tmp/translation-fallback-mixed-pyash-LZbMyb.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/understand-file-to-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/understand-file-to-file.pya to filename /tmp/understand-file-to-file-pyash-FsM86E.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/understand-to-file.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/understand-to-file.pya to filename /tmp/understand-to-file-pyash-4eHsn0.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/until-loop.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/until-loop.pya to filename /tmp/until-loop-pyash-xf2KpL.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-fill-doors-10.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-fill-doors-10.pya to filename /tmp/vector-fill-doors-10-pyash-22QDSZ.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-invert-boolean.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-invert-boolean.pya to filename /tmp/vector-invert-boolean-pyash-DPNuY6.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-invert-element.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-invert-element.pya to filename /tmp/vector-invert-element-pyash-LkwZLU.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-toggle-index.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-toggle-index.pya to filename /tmp/vector-toggle-index-pyash-oUZhUd.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-read-element.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-read-element.pya to filename /tmp/vector-read-element-pyash-sI26Z2.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-write-demo.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-write-demo.pya to filename /tmp/vector-write-demo-pyash-x8tSeK.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/vector-write-index.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/vector-write-index.pya to filename /tmp/vector-write-index-pyash-fwkRcs.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/word-frequency.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/word-frequency.pya to filename /tmp/word-frequency-pyash-g8HQkX.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/world-mvp.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/world-mvp.pya to filename /tmp/world-mvp-pyash-2x9MC0.c become name c be compile do ko by num 1 be error ya"
+      }
+    },
+    "examples/pyash/yaml-to-pyash-golden.pya": {
+      "run": {
+        "status": "success"
+      },
+      "runjs": {
+        "status": "success"
+      },
+      "runc": {
+        "status": "failed",
+        "tail": "ceremony redefined: mind ollama mind\nceremony redefined: mind ollama begin\nceremony redefined: mind ollama discharge\nceremony redefined: mind ollama restart\nceremony redefined: mind begin\nceremony redefined: mind discharge\nceremony redefined: mind restart\nsu name command defective ob text \"command defective\" from name compile at la from filename examples/pyash/yaml-to-pyash-golden.pya to filename /tmp/yaml-to-pyash-golden-pyash-Eflnk2.c become name c be compile do ko by num 1 be error ya"
+      }
+    }
+  }
+}
