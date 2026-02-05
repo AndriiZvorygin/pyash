@@ -33,6 +33,7 @@ container/configure/ecology/searxng.env
 .npm/
 .node_repl_history
 .fluxbox/
+*.swp
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
