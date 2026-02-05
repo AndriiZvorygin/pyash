@@ -46,3 +46,4 @@ caterer/**/build/
 # optional: ignore vendored upstream source trees if present
 caterer/whisper.cpp/
 caterer/piper/
+.ssh/
