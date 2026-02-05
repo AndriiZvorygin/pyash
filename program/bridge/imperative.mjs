@@ -104,7 +104,7 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
 
 function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
-  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence"]);
+  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "to", "from"]);
   for (const [key, value] of Object.entries(sentence)) {
     if (skipKeys.has(key)) continue;
     if (!value?.genitive) continue;
