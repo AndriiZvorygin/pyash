@@ -104,43 +104,44 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
 
 function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
-  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "to", "from"]);
+  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence"]);
   for (const [key, value] of Object.entries(sentence)) {
     if (skipKeys.has(key)) continue;
     if (!value?.genitive) continue;
+    if (typeof value !== "object") continue;
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = String(chainArr.at(-1) ?? "").toLowerCase();
     if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
     const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
     if (resolved === null || resolved === undefined) continue;
     if (tail === "text") {
-      sentence[key] = { text: String(resolved) };
+      value.text = String(resolved);
       continue;
     }
     if (tail === "filename") {
-      sentence[key] = { filename: String(resolved) };
+      value.filename = String(resolved);
       continue;
     }
     if (tail === "bool" || tail === "boolean") {
       if (typeof resolved === "boolean") {
-        sentence[key] = { boolean: resolved };
+        value.boolean = resolved;
       } else {
         const normalized = String(resolved).toLowerCase();
         if (normalized === "truth" || normalized === "true" || normalized === "1") {
-          sentence[key] = { boolean: true };
+          value.boolean = true;
         } else if (normalized === "lie" || normalized === "false" || normalized === "0") {
-          sentence[key] = { boolean: false };
+          value.boolean = false;
         }
       }
       continue;
     }
     if (tail === "date") {
-      sentence[key] = { date: String(resolved) };
+      value.date = String(resolved);
       continue;
     }
     if (tail === "month" || tail === "months" || tail === "second" || tail === "seconds" || tail === "minute" || tail === "minutes" || tail === "hour" || tail === "hours" || tail === "day" || tail === "days" || tail === "week" || tail === "weeks" || tail === "line" || tail === "lines" || tail === "byte" || tail === "bytes" || tail === "num" || tail === "number") {
       const num = typeof resolved === "number" ? resolved : Number(resolved);
-      if (Number.isFinite(num)) sentence[key] = { num };
+      if (Number.isFinite(num)) value.num = num;
     }
   }
 }
