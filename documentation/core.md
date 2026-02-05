@@ -19,6 +19,7 @@ This document summarizes the current core language model used by the interpreter
     - Possessive: `this ti ob ti num` resolves like `this.ob.num`.
     - Genitive: `num of ob of this` resolves to the same chain as above.
     - `this` refers to the evoking sentence/registers inside a ceremony.
+  - When a typed role includes a genitive (e.g., `to num of ob of this`), resolution fills the typed value without dropping the genitive path so verbs can still treat it as an assignable target.
 
 ## Moods
 - `ya`: declarative fact (stores to memory; compiler treats as declarations/assignments).

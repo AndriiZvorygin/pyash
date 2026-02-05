@@ -19,6 +19,7 @@ Add Pyash modules in `module/`, wire them into the default config, and verify be
 - Create a `.pya` file under `module/` with a descriptive name.
 - Use compositional roles (`fromtext`, `fromfilename`, `become`, `totext`, etc.).
 - Keep modules concise and rely on existing verbs where possible.
+- When resolving typed genitives in interpreter code, use `applyResolvedTypedValue` (from `program/bridge/imperative_helpers.mjs`) so genitive lvalues remain intact.
 
 3. **Wire the module into defaults**
 - Import the module in `configure/default.pya`.

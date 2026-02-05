@@ -12,7 +12,7 @@ import { deriveSignatureFromDefinition, registerSignatureAlias } from "./signatu
 import { handleLifecycleAspect } from "./runtime.mjs";
 import { resolveVerbAlias } from "../library/verbAliases.mjs";
 import { callMcpTool, lookupMcpTool } from "../motor/mcp.mjs";
-import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumberForVerb } from "./imperative_helpers.mjs";
+import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumberForVerb, applyResolvedTypedValue } from "./imperative_helpers.mjs";
 import { throwFileUnavailable } from "../library/file_errors.mjs";
 import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
 import { TYPE_TOKENS } from "../library/grammar/keywords.mjs";
@@ -114,35 +114,7 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
     if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
     const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
     if (resolved === null || resolved === undefined) continue;
-    if (tail === "text") {
-      value.text = String(resolved);
-      continue;
-    }
-    if (tail === "filename") {
-      value.filename = String(resolved);
-      continue;
-    }
-    if (tail === "bool" || tail === "boolean") {
-      if (typeof resolved === "boolean") {
-        value.boolean = resolved;
-      } else {
-        const normalized = String(resolved).toLowerCase();
-        if (normalized === "truth" || normalized === "true" || normalized === "1") {
-          value.boolean = true;
-        } else if (normalized === "lie" || normalized === "false" || normalized === "0") {
-          value.boolean = false;
-        }
-      }
-      continue;
-    }
-    if (tail === "date") {
-      value.date = String(resolved);
-      continue;
-    }
-    if (tail === "month" || tail === "months" || tail === "second" || tail === "seconds" || tail === "minute" || tail === "minutes" || tail === "hour" || tail === "hours" || tail === "day" || tail === "days" || tail === "week" || tail === "weeks" || tail === "line" || tail === "lines" || tail === "byte" || tail === "bytes" || tail === "num" || tail === "number") {
-      const num = typeof resolved === "number" ? resolved : Number(resolved);
-      if (Number.isFinite(num)) value.num = num;
-    }
+    applyResolvedTypedValue(value, tail, resolved);
   }
 }
 
