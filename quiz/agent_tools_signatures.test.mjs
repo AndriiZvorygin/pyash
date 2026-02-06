@@ -18,8 +18,8 @@ test("agent tools map exposes standard tool signatures", async () => {
   const toolSentences = [
     "su name agent tools be map def",
     "su name agent ob bool truth ya",
-    "su name read be read from filename input become wo text to name text out can",
-    "su name read markdown be read from filename input fromstate wo html become wo markdown to name text out can",
+    "su name read be read from filename input can",
+    "su name read markdown be read from filename input fromstate wo html become wo markdown can",
     "su name write be write ob text input to filename input can",
     "su name list files be list from filename input can",
     "su name search be search ob text input fromstate wo web by num 3 can",

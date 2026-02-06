@@ -167,7 +167,7 @@ Example tool map:
 su name tools be map def
 su name agent ob bool truth ya
 su name session name ob text "draft review" ya
-su name read be read from filename input become wo text to name text out can
+su name read be read from filename input can
 su name write be write ob text input to filename input can
 prah
 ```

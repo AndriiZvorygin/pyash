@@ -8,8 +8,8 @@ su name agent ob bool truth ya
 su name session name ob text "confederation priest" ya
 su name search be search ob text input fromstate wo web by num 3 can
 su name download be download from filename input as wo web to filename input can
-su name read be read from filename input become wo text to name text out can
-su name read markdown be read from filename input fromstate wo html become wo markdown to name text out can
+su name read be read from filename input can
+su name read markdown be read from filename input fromstate wo html become wo markdown can
 su name exists be exists ob filename input can
 su name write be write ob text input to filename input can
 su name compile html be compile from filename input fromstate name markdown become name html to filename input can
