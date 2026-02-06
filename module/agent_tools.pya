@@ -7,6 +7,7 @@ su name search be search ob text input fromstate wo web by num 3 can
 su name download be download from filename input as wo web to filename input can
 su name command be command ob text input to name text out can
 su name exists be exists ob filename input can
+su name compile markdown be compile from filename input fromstate name html become name markdown to filename input can
 prah
 
 exists su name agent tools be export ya
