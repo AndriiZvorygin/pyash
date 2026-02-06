@@ -82,6 +82,15 @@ export function resolvePromptValue(value, { rememberFn = remember } = {}) {
 export function resolveMindPrompt({ sentence, ob, configSentence, rememberFn = remember } = {}) {
   const configPromptValue = configSentence?.fromtext ?? null;
   const callPromptValue = sentence?.fromtext ?? null;
+  const isSessionOverride = (value) => {
+    if (!value) return false;
+    if (value?.filename) return true;
+    const raw = typeof value === "string"
+      ? value
+      : (value?.name ?? value?.text ?? "");
+    if (!raw) return false;
+    return String(raw).trim().toLowerCase().startsWith("session name ");
+  };
   const obNamePrompt = sentence?.ob?.name && !sentence?.ob?.model
     ? (resolvePromptFromName(sentence.ob.name, { rememberFn }) ?? sentence.ob.name)
     : null;
@@ -94,7 +103,7 @@ export function resolveMindPrompt({ sentence, ob, configSentence, rememberFn = r
     obNamePrompt ??
     ob?.text ??
     inlineObNamePrompt;
-  const resolvedConfigPrompt = resolvePromptValue(callPromptValue, { rememberFn })
-    ?? resolvePromptValue(configPromptValue, { rememberFn });
+  const resolvedConfigPrompt = (isSessionOverride(callPromptValue) ? null : resolvePromptValue(callPromptValue, { rememberFn }))
+    ?? (isSessionOverride(configPromptValue) ? null : resolvePromptValue(configPromptValue, { rememberFn }));
   return { callPrompt, resolvedConfigPrompt };
 }
