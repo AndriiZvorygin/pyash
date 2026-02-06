@@ -29,6 +29,7 @@ export function handleNativeInterpret(context, helpers) {
       cHelpers.usesStdlib = true;
       cHelpers.usesPrintf = true;
       cHelpers.usesToolCapture = true;
+      cHelpers.usesSysStat = true;
     }
     const needsDecl = !locals?.has(targetVar) && !declared?.has(targetVar) && !declared?.has(targetName);
     const lines = [];
@@ -46,6 +47,9 @@ export function handleNativeInterpret(context, helpers) {
     lines.push("  if (!getcwd(__pyaCwd, sizeof(__pyaCwd))) { fprintf(stderr, \"interpret defective: cwd failed\\n\"); exit(1); }");
     lines.push("  char __pyaWasmtime[PYA_TEXT_CAP];");
     lines.push("  char __pyaQuickjs[PYA_TEXT_CAP];");
+    lines.push("  const char *__pyaCacheDir = \"/tmp/pyash-wasmtime-cache\";");
+    lines.push("  const char *__pyaHome = \"/tmp\";");
+    lines.push("  mkdir(__pyaCacheDir, 0700);");
     lines.push("  snprintf(__pyaWasmtime, sizeof(__pyaWasmtime), \"%s/caterer/wasmtime/bin/wasmtime\", __pyaCwd);");
     lines.push("  snprintf(__pyaQuickjs, sizeof(__pyaQuickjs), \"%s/caterer/quickjs-wasi/qjs.wasm\", __pyaCwd);");
     lines.push("  char __pyaScriptPath[PYA_TEXT_CAP];");
@@ -56,7 +60,7 @@ export function handleNativeInterpret(context, helpers) {
     lines.push("  fputs(__pyaScript, __pyaScriptFile);");
     lines.push("  fclose(__pyaScriptFile);");
     lines.push("  char __pyaCmd[PYA_TEXT_CAP];");
-    lines.push("  snprintf(__pyaCmd, sizeof(__pyaCmd), \"\\\"%s\\\" run --dir \\\"%s\\\" \\\"%s\\\" -- \\\"%s\\\"\", __pyaWasmtime, __pyaTempDir, __pyaQuickjs, __pyaScriptPath);");
+    lines.push("  snprintf(__pyaCmd, sizeof(__pyaCmd), \"WASMTIME_CACHE_DIR=\\\"%s\\\" XDG_CACHE_HOME=\\\"%s\\\" HOME=\\\"%s\\\" \\\"%s\\\" run --dir \\\"%s\\\" \\\"%s\\\" -- \\\"%s\\\"\", __pyaCacheDir, __pyaCacheDir, __pyaHome, __pyaWasmtime, __pyaTempDir, __pyaQuickjs, __pyaScriptPath);");
     lines.push("  char *__pyaOut = pya_command(__pyaCmd);");
     lines.push("  remove(__pyaScriptPath);");
     lines.push("  rmdir(__pyaTempDir);");

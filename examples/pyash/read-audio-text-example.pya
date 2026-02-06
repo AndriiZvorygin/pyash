@@ -1,5 +1,5 @@
 su name example meta be map def
-su name required ob ve text "espeak-ng" "ffmpeg" ya
+su name required ob ve text "espeak-ng" "ffmpeg" "PYA_HEAR_FIXTURE" ya
 prah
 
 be directory ob filename "artifacts/say" do

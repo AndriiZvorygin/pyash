@@ -1,2 +1,6 @@
+su name example meta be map def
+su name required ob ve text "OLLAMA_HOST" ya
+prah
+
 exists su name generator be mind from name http://localhost:11434 ya
 su question ob discourse "Hello" for name generator to name text generator-out be write do

@@ -6,6 +6,7 @@ export function handleCommandSentence({
   lang,
   sentenceArg,
   locals,
+  localsTypes,
   declared,
   declaredTypes,
   jsHelpers,
@@ -15,7 +16,8 @@ export function handleCommandSentence({
   sentenceToPyash,
   sanitizeName,
   markDeclared,
-  exprForSlot
+  exprForSlot,
+  cExpr
 } = {}) {
   if (baseBe !== "command") return null;
 
@@ -59,6 +61,8 @@ export function handleCommandSentence({
       lines.push(`const ${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
       lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
     }
+    lines.push(`const result = { su: { name: "result" }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
+    lines.push("globalThis.result = result;");
     const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
     lines.push(`const __pyaToolResult = "su name " + ${toolTarget} + " ob text " + JSON.stringify(String(__pyaOut ?? "")) + " be text ya";`);
     lines.push(`pyaEmitNewspaper(\`su name tool event \${pyaNextToolEventId()} ob la \${__pyaToolEvoked} ko to la \${__pyaToolResult} ko be tool ya\`);`);
@@ -89,11 +93,12 @@ export function handleCommandSentence({
       defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text` : undefined,
       field: "text"
     });
+    const cmdCExpr = cExpr ? cExpr(cmdExpr) : cmdExpr;
     const outVar = `cmd_out_${cState?.fileCounter ?? 0}`;
     if (cState) cState.fileCounter += 1;
     const lines = [];
     const evoked = JSON.stringify(sentenceToPyash(sentence));
-    lines.push(`const char *__pyaCmd = ${cmdExpr ?? '""'};`);
+    lines.push(`const char *__pyaCmd = ${cmdCExpr ?? '""'};`);
     lines.push(`if (!__pyaCmd || !strlen(__pyaCmd)) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: empty command\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
     lines.push(`char *${outVar} = pya_command(__pyaCmd);`);
     lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
@@ -110,6 +115,15 @@ export function handleCommandSentence({
       markDeclared(declared, sentence.to.name);
       lines.push(`char ${target}[PYA_TEXT_CAP];`);
       lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
+    } else {
+      if (!locals?.has("result") && !declared?.has("result")) {
+        lines.push("char result[PYA_TEXT_CAP] = \"\";");
+        locals?.add("result");
+        if (localsTypes) localsTypes.set("result", "text");
+      }
+    }
+    if (locals?.has("result") || declared?.has("result") || declared?.has(sanitizeName("result"))) {
+      lines.push(`snprintf(result, sizeof(result), "%s", ${outVar} ? ${outVar} : "");`);
     }
     const toolTarget = JSON.stringify(sentence.to?.name ?? "result");
     lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\\"%s\\\" be text ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${toolTarget}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);

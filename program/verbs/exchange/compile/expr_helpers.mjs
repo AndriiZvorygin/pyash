@@ -12,8 +12,8 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
     const rootName = typeof chainArr[0] === "string" ? sanitizeName(chainArr[0]) : null;
     if (rootName && (locals?.has(rootName) || declared?.has(rootName))) {
       const rest = chainArr.slice(1);
-      if (rest.length === 0) return rootName;
-      if (rest.length === 1 && rest[0] === "num") return rootName;
+    if (rest.length === 0) return rootName;
+      if (rest.length === 1 && (rest[0] === "num" || rest[0] === "text" || rest[0] === "boolean" || rest[0] === "name")) return rootName;
       if (rest.length === 2 && rest[0] === "ob" && (rest[1] === "num" || rest[1] === "text" || rest[1] === "boolean")) return rootName;
       return [rootName, ...rest.map(part => `.${part}`)].join("");
     }
@@ -31,6 +31,15 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
         if (parts.length === 1) return "by";
         if (parts.length === 2 && parts[1] === "num") return "by";
         if (parts.length === 3 && parts[1] === "ob" && parts[2] === "num") return "by";
+      }
+      if (head === "to") {
+        if (parts.length === 1) return "pya_to_num";
+        if (parts.length === 2 && parts[1] === "num") return "pya_to_num";
+        if (parts.length === 2 && parts[1] === "text") return "pya_to_text";
+        if (parts.length === 2 && parts[1] === "boolean") return "pya_to_bool";
+        if (parts.length === 3 && parts[1] === "ob" && parts[2] === "num") return "pya_to_num";
+        if (parts.length === 3 && parts[1] === "ob" && parts[2] === "text") return "pya_to_text";
+        if (parts.length === 3 && parts[1] === "ob" && parts[2] === "boolean") return "pya_to_bool";
       }
       if (head === "from") {
         if (parts.length === 1) return "pya_from_num";

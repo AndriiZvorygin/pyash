@@ -62,6 +62,9 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
     headers.push("double pya_from_num = 0;");
     headers.push("const char *pya_ob_text = 0;");
     headers.push("int pya_ob_bool = 0;");
+    headers.push("double pya_to_num = 0;");
+    headers.push("char *pya_to_text = 0;");
+    headers.push("int pya_to_bool = 0;");
   }
   if (headers.length) lines.unshift(...headers);
   const cPrelude = [];
