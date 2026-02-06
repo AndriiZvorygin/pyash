@@ -127,6 +127,13 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     }
     return null;
   })();
+  const globalSessionNameHint = (() => {
+    const fact = remember("session name");
+    if (!fact) return null;
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+    if (typeof fact?.ob?.name === "string") return fact.ob.name;
+    return null;
+  })();
 
   let { historySeriesName, historyMessages } = resolveHistoryContext({
     sentence,
@@ -188,8 +195,9 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     if (!historySeriesName) {
       const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
-      if (sessionNameHint) {
-        const baseName = String(sessionNameHint).trim();
+      const sessionNameSeed = sessionNameHint ?? globalSessionNameHint;
+      if (sessionNameSeed) {
+        const baseName = String(sessionNameSeed).trim();
         const sessionName = buildSessionNameForDate({
           baseName,
           dateCompact: datePrefix.replace(/-$/, "")
@@ -222,10 +230,10 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
         }
       }
       if (sessionFile) {
-        const sessionHistory = sessionNameHint
+        const sessionHistory = sessionNameSeed
           ? await readSessionMessagesWithFallback({
             sessionDir,
-            baseName: String(sessionNameHint).trim(),
+            baseName: String(sessionNameSeed).trim(),
             historyWindow
           })
           : await readSessionMessages({ sessionFile, historyWindow });
