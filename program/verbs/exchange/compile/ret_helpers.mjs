@@ -9,7 +9,7 @@ function inferRetKind(slot, { localsTypes, declaredTypes } = {}) {
   if (slot.name) {
     const base = sanitizeName(slot.name);
     const localType = localsTypes?.get(base);
-    const declaredType = declaredTypes?.get(base);
+    const declaredType = declaredTypes?.get(base) ?? declaredTypes?.get(slot.name);
     const knownType = localType || declaredType;
     if (knownType === "text") return "text";
     if (knownType === "number") return "number";

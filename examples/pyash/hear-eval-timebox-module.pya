@@ -1,3 +1,7 @@
+su name example meta be map def
+su name required ob ve text "ffmpeg" "PYA_HEAR_FIXTURE" ya
+prah
+
 from filename "../../module/ffmpeg_hear.pya" ob name microphone hear to name hear be import do
 exists su name ffmpeg input ob text "lavfi" be default ya
 exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya

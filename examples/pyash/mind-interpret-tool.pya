@@ -1,3 +1,7 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" ya
+prah
+
 su name tools be map def
 su name javascript tool be interpret ob text source as wo javascript during num 30 can
 prah
