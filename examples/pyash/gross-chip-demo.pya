@@ -1,0 +1,11 @@
+su name note ob text "Gross chip demo: split the ingest spec into chips." be write do
+be directory ob filename "examples/out" do
+
+from filename "documentation/specifications/01-sentence-and-grammar.md" become wo text to name text source be read do
+from name text source to name text gross chips be gross chip do
+
+ob text of ob of 0 of series of ob of gross chips to filename "examples/out/gross-chip-0.txt" be write do
+ob text of ob of 1 of series of ob of gross chips to filename "examples/out/gross-chip-1.txt" be write do
+
+ob text of ob of 0 of series of ob of gross chips be write do
+ob text of ob of 1 of series of ob of gross chips be write do

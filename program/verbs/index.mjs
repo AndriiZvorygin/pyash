@@ -9,6 +9,9 @@ import { neuron, signatures as neuronSignatures } from "./mathematics/neuron.mjs
 import { twiceCrescent, signatures as twiceCrescentSignatures } from "./mathematics/twice_crescent.mjs";
 import { remains, signatures as remainsSignatures } from "./mathematics/remains.mjs";
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
+import grossChip, { signatures as grossChipSignatures } from "./gross_chip.mjs";
+import wiseChip, { signatures as wiseChipSignatures } from "./wise_chip.mjs";
+import seriesMap, { signatures as seriesMapSignatures } from "./series_map.mjs";
 import text, { signatures as textSignatures } from "./text.mjs";
 import filename, { signatures as filenameSignatures } from "./filename.mjs";
 import compile, { signatures as compileSignatures } from "./exchange/compile.mjs";
@@ -67,6 +70,9 @@ export {
   twiceCrescent,
   remains,
   chip,
+  grossChip,
+  wiseChip,
+  seriesMap,
   text,
   filename,
   compile,
@@ -113,6 +119,9 @@ export const builtInSignatures = [
   ...twiceCrescentSignatures,
   ...remainsSignatures,
   ...chipSignatures,
+  ...grossChipSignatures,
+  ...wiseChipSignatures,
+  ...seriesMapSignatures,
   ...textSignatures,
   ...filenameSignatures,
   ...compileSignatures,
