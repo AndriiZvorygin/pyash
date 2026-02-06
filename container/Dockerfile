@@ -41,10 +41,12 @@ RUN apt-get update \
     ffmpeg \
     espeak-ng \
     libasound2-dev \
+    libcurl4-openssl-dev \
     libpulse-dev \
     libsdl2-dev \
     libsndfile1 \
     libgomp1 \
+    libyaml-dev \
     xdotool \
     ripgrep \
     xvfb \

@@ -11,7 +11,8 @@ export function handleDoSentence(context, helpers) {
     cState,
     declared,
     declaredTypes,
-    locals
+    locals,
+    localsTypes
   } = context;
   const {
     inlineSentenceLiteral,
@@ -131,7 +132,11 @@ export function handleDoSentence(context, helpers) {
     if (lang === "c") {
       const retType = ceremonyReturnTypes?.get(baseBe) ?? null;
       const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
-      const toIsText = targetName && (declaredTypes?.get(targetName) === "text" || retType === "text");
+      const targetTypeWords = Array.isArray(sentence.to?.nameTypeWords) ? sentence.to.nameTypeWords : [];
+      const localTargetType = targetName ? localsTypes?.get(targetName) : null;
+      const declaredTargetType = targetName ? (declaredTypes?.get(targetName) ?? declaredTypes?.get(sentence.to?.name)) : null;
+      const resolvedTargetType = localTargetType || declaredTargetType;
+      const toIsText = targetName && (resolvedTargetType === "text" || targetTypeWords.includes("text") || retType === "text");
       if (cHelpers) {
         cHelpers.usesMapGlobals = true;
         cHelpers.usesCeremonyValue = true;
@@ -144,18 +149,21 @@ export function handleDoSentence(context, helpers) {
       const obNum = sentence.ob?.num;
       const obText = typeof sentence.ob?.text === "string" ? sentence.ob.text : null;
       const obName = sentence.ob?.name ? sanitizeName(sentence.ob.name) : null;
-      const obNameType = obName ? declaredTypes?.get(obName) : null;
+      const obNameType = obName ? (localsTypes?.get(obName) ?? declaredTypes?.get(obName) ?? declaredTypes?.get(sentence.ob?.name)) : null;
       const fromVal = sentence.from?.num;
       const fromName = sentence.from?.name ? sanitizeName(sentence.from.name) : null;
-      const fromNameType = fromName ? declaredTypes?.get(fromName) : null;
+      const fromNameType = fromName ? (localsTypes?.get(fromName) ?? declaredTypes?.get(fromName) ?? declaredTypes?.get(sentence.from?.name)) : null;
       const byVal = sentence.by?.num;
       const byName = sentence.by?.name ? sanitizeName(sentence.by.name) : null;
-      const byNameType = byName ? declaredTypes?.get(byName) : null;
-      const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;", "const char *_saved_ob_text = pya_ob_text;"];
+      const byNameType = byName ? (localsTypes?.get(byName) ?? declaredTypes?.get(byName) ?? declaredTypes?.get(sentence.by?.name)) : null;
+      const lines = ["{", "double _saved_ob = pya_ob_num;", "double _saved_from = pya_from_num;", "double _saved_by = by;", "const char *_saved_ob_text = pya_ob_text;", "double _saved_to = pya_to_num;", "char *_saved_to_text = pya_to_text;", "int _saved_to_bool = pya_to_bool;"];
       lines.push("pya_ob_num = 0;");
       lines.push("pya_ob_text = 0;");
       lines.push("pya_from_num = 0;");
       lines.push("by = 0;");
+      lines.push("pya_to_num = 0;");
+      lines.push("pya_to_text = 0;");
+      lines.push("pya_to_bool = 0;");
       if (obNum !== undefined) lines.push(`pya_ob_num = ${Number(obNum) || 0};`);
       if (obText !== null) lines.push(`pya_ob_text = ${JSON.stringify(obText)};`);
       if (obName && obNameType === "text") lines.push(`pya_ob_text = ${obName};`);
@@ -164,6 +172,29 @@ export function handleDoSentence(context, helpers) {
       if (fromName && fromNameType === "number") lines.push(`pya_from_num = ${fromName};`);
       if (byVal !== undefined) lines.push(`by = ${Number(byVal) || 0};`);
       if (byName && byNameType === "number") lines.push(`by = ${byName};`);
+      if (sentence.to?.name) {
+        const toName = sanitizeName(sentence.to.name);
+        const toTypeWords = Array.isArray(sentence.to?.nameTypeWords) ? sentence.to.nameTypeWords : [];
+        const toType = localsTypes?.get(toName) ?? declaredTypes?.get(toName) ?? declaredTypes?.get(sentence.to.name);
+        const toIsTextSlot = toType === "text" || toTypeWords.includes("text");
+        const toIsBoolSlot = toType === "bool" || toType === "boolean" || toTypeWords.includes("bool") || toTypeWords.includes("boolean");
+        if (toIsTextSlot) {
+          lines.push(`pya_to_text = ${toName};`);
+        } else if (toIsBoolSlot) {
+          lines.push(`pya_to_bool = (int)${toName};`);
+        } else {
+          lines.push(`pya_to_num = ${toName};`);
+        }
+        if (obNum === undefined && obText === null && !obName) {
+          if (toIsTextSlot) {
+            lines.push("pya_ob_text = pya_to_text;");
+          } else if (toIsBoolSlot) {
+            lines.push("pya_ob_num = pya_to_bool ? 1 : 0;");
+          } else {
+            lines.push("pya_ob_num = pya_to_num;");
+          }
+        }
+      }
       const retVar = `_pya_ret_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
       lines.push(`pya_value ${retVar} = ${fn}();`);
       if (targetName) {
@@ -184,7 +215,7 @@ export function handleDoSentence(context, helpers) {
           lines.push(`${targetName} = ${retVar}.num;`);
         }
       }
-      lines.push("pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "pya_ob_text = _saved_ob_text;", "}");
+      lines.push("pya_ob_num = _saved_ob;", "pya_from_num = _saved_from;", "by = _saved_by;", "pya_ob_text = _saved_ob_text;", "pya_to_num = _saved_to;", "pya_to_text = _saved_to_text;", "pya_to_bool = _saved_to_bool;", "}");
       return lines.join("\n");
     }
     const arg = inlineSentenceLiteral(sentence, declared);

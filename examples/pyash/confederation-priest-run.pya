@@ -1,6 +1,7 @@
 su name example meta be map def
 su name mode ob text "session" ya
 su name inputs ob ve text "/bye" ya
+su name required ob ve text "PYA_MIND_SESSION" "OLLAMA_HOST" ya
 prah
 
 su name priest tools at filename "world/workplace/confederation" as wo sandpit be map def

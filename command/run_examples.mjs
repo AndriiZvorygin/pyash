@@ -7,6 +7,11 @@ import path from "node:path";
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 process.chdir(root);
 
+function parseArgValue(flag) {
+  const idx = process.argv.findIndex((arg) => arg === flag);
+  return idx >= 0 ? process.argv[idx + 1] : null;
+}
+
 const includeMind = process.argv.includes("--include-mind");
 const includeSay = process.argv.includes("--include-say");
 const includeCommand = process.argv.includes("--include-command");
@@ -20,6 +25,9 @@ const concurrency = Number.isFinite(parallelValue) && parallelValue > 0
   : (parallelAll || parallelArgIndex < 0 ? defaultConcurrency : defaultConcurrency);
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const reportPath = parseArgValue("--report");
+const timeoutArg = parseArgValue("--timeout-ms");
+const timeoutMs = timeoutArg ? Number(timeoutArg) : DEFAULT_TIMEOUT_MS;
 const successLogPath = path.join(os.tmpdir(), "pyash-run-examples-success.log");
 const failureLogPath = path.join(os.tmpdir(), "pyash-run-examples-failure.log");
 
@@ -124,9 +132,11 @@ async function main() {
     .filter((file) => !file.startsWith("examples/pyash/modules/"))
     .sort();
 
+  const successes = [];
   const failures = [];
   const missing = [];
   const timeouts = [];
+  const skipped = [];
   const logSuccess = async (line) => {
     if (!line) return;
     await fs.appendFile(successLogPath, line + "\n");
@@ -142,6 +152,7 @@ async function main() {
   async function runOne(file) {
     if (skip.has(file)) {
       console.log(`==> ${file} (skipped)`);
+      skipped.push(file);
       return;
     }
     console.log(`==> ${file}`);
@@ -163,7 +174,7 @@ async function main() {
     const isSession = meta?.mode === "session";
     const inputs = isSession && meta?.inputs?.length ? meta.inputs : (isSession ? ["/bye"] : []);
     const result = await runWithTimeout("./run", [file], {
-      timeoutMs: DEFAULT_TIMEOUT_MS,
+      timeoutMs,
       inputLines: inputs
     });
     if (result.timedOut) {
@@ -180,6 +191,7 @@ async function main() {
       await logFailure(`FAILED ${file}`);
       if (tail) await logFailure(tail);
     } else {
+      successes.push(file);
       await logSuccess(`OK ${file}`);
     }
   }
@@ -195,6 +207,19 @@ async function main() {
   const workerCount = Number.isFinite(concurrency) ? Math.min(queue.length, concurrency) : queue.length;
   for (let i = 0; i < workerCount; i += 1) workers.push(worker());
   await Promise.all(workers);
+
+  if (reportPath) {
+    const report = {
+      timestamp: new Date().toISOString(),
+      successes,
+      failures,
+      missing,
+      timeouts,
+      skipped
+    };
+    await fs.mkdir(path.dirname(reportPath), { recursive: true });
+    await fs.writeFile(reportPath, JSON.stringify(report, null, 2));
+  }
 
   if (failures.length || timeouts.length || missing.length) {
     if (failures.length) {

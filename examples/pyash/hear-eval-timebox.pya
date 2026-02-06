@@ -1,3 +1,7 @@
+su name example meta be map def
+su name required ob ve text "ffmpeg" "PYA_HEAR_FIXTURE" ya
+prah
+
 exists su name ffmpeg input ob text "lavfi" be default ya
 exists su name ffmpeg input device ob text "anullsrc=r=16000:cl=mono" be default ya
 su name prompt ob text "Recording 10 seconds from the microphone, then transcribing the file with hear." be write do

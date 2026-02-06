@@ -1,3 +1,7 @@
+su name example meta be map def
+su name required ob ve text "OLLAMA_HOST" ya
+prah
+
 exists su name author prompter ob text "Draft: be concise and friendly." be text ya
 exists su name reviewer prompter ob text "Review: check if the draft fulfills the input. Return JSON with REASONING bullets and SCORE PASS|FAIL." be text ya
 exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya

@@ -106,6 +106,8 @@ async function runQuickJs({ scriptText, timeoutMs }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-interpret-"));
   const scriptPath = path.join(tempDir, "script.js");
   await fs.writeFile(scriptPath, scriptText, "utf8");
+  const cacheDir = path.join(os.tmpdir(), "pyash-wasmtime-cache");
+  await fs.mkdir(cacheDir, { recursive: true });
 
   const args = [
     "run",
@@ -121,7 +123,15 @@ async function runQuickJs({ scriptText, timeoutMs }) {
     let stderr = "";
     let finished = false;
     let timedOut = false;
-    const proc = spawn(wasmtimePath, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(wasmtimePath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        WASMTIME_CACHE_DIR: cacheDir,
+        XDG_CACHE_HOME: cacheDir,
+        HOME: os.tmpdir()
+      }
+    });
 
     const cleanup = async () => {
       if (finished) return;

@@ -10,6 +10,15 @@ import { sentenceLineNumbersFromText, inlineSourceMap } from "./source_map.mjs";
 import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 
+function resolveStateValue(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value?.wo) return String(value.wo);
+  if (value?.text) return String(value.text);
+  if (value?.name) return String(value.name);
+  return "";
+}
+
 export async function compile_from_filename_to_filename(sentence) {
   const agentCwd = remember("agent cwd")?.ob?.filename ?? null;
   const sandboxActive = remember("agent sandbox")?.ob?.boolean === true;
@@ -199,7 +208,7 @@ export async function compile_from_filename_to_filename(sentence) {
   const skipCsvInline = targetState === "javascript" || targetState === "js" || targetState === "c";
   for (const s of expanded) {
     const isRead = s?.be === "read";
-    const sourceState = (s?.fromstate?.name || s?.fromstate || "").toLowerCase();
+    const sourceState = resolveStateValue(s?.fromstate).toLowerCase();
     if (!isRead || sourceState !== "csv") continue;
     if (skipCsvInline) continue;
     const filename = s?.from?.filename ?? s?.ob?.filename;
