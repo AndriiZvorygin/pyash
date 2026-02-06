@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { remember, doRemember } from "../remember/index.mjs";
+import { resolveAgentCwd } from "./agent_cwd.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { parse } from "../understand/index.mjs";
 import { splitSentences } from "./sentenceSplitter.mjs";
@@ -59,9 +60,11 @@ export function resolveWorldPath(target, { rememberFn } = {}) {
   if (!root) {
     return { resolved: path.resolve(String(raw)), root: null, outside: false };
   }
+  const agentCwd = resolveAgentCwd({ rememberFn });
+  const base = agentCwd ?? root;
   const resolved = path.isAbsolute(String(raw))
     ? path.resolve(String(raw))
-    : path.resolve(root, String(raw));
+    : path.resolve(base, String(raw));
   const relative = path.relative(root, resolved);
   const outside = relative.startsWith("..") || path.isAbsolute(relative);
   return { resolved, root, outside };
