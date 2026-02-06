@@ -20,3 +20,9 @@ test("vyah rejects multiple aspect modifiers", () => {
   const sentence = parse("ob num 1 vyah cancel start be plus do");
   assert.throws(() => deriveSignatureFromCall(sentence), /vyah allows at most one aspect/);
 });
+
+test("vyah aspect alias cron normalizes to habit in signature", () => {
+  const sentence = parse("ob num 1 vyah cron be plus do");
+  const sig = deriveSignatureFromCall(sentence);
+  assert.equal(joinSignatureWords(sig), "be plus ob num vyah habit");
+});

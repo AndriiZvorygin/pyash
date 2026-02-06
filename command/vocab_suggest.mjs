@@ -3,6 +3,17 @@ import { resolve } from "node:path";
 import { buildProgram } from "../program/program.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import {
+  MOODS,
+  ROLE_KEYS,
+  TYPE_TOKENS,
+  COMPOSITIONAL_KEYWORDS,
+  VYAH_ASPECT_MODIFIERS,
+  VYAH_ASPECT_ALIASES,
+  VYAH_TENSE_MODIFIERS,
+  VYAH_OUTCOME_MODIFIERS,
+  VYAH_ATTITUDINAL_MODIFIERS
+} from "../program/library/grammar/keywords.mjs";
 
 function parseArgs(args) {
   const inputs = [];
@@ -30,6 +41,23 @@ const checked = new Map();
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
 const PYASH_QUOTED_END = ".pyash.quoted";
+const GRAMMAR_KEYWORDS = new Set(
+  [
+    ...MOODS,
+    ...ROLE_KEYS,
+    ...TYPE_TOKENS,
+    ...COMPOSITIONAL_KEYWORDS,
+    ...VYAH_ASPECT_MODIFIERS,
+    ...Object.keys(VYAH_ASPECT_ALIASES),
+    ...VYAH_TENSE_MODIFIERS,
+    ...VYAH_OUTCOME_MODIFIERS,
+    ...VYAH_ATTITUDINAL_MODIFIERS
+  ].map(word => String(word).toLowerCase())
+);
+
+function isGrammarKeyword(token) {
+  return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
+}
 
 function tokenizeName(name) {
   return String(name)
@@ -137,6 +165,16 @@ function isExactTokenMatch(token, lines) {
   return false;
 }
 
+async function isExactTokenMatchOrAlias(token, lines) {
+  if (isGrammarKeyword(token)) return true;
+  if (isExactTokenMatch(token, lines)) return true;
+  const alias = resolveEnglishAlias(token);
+  const lower = String(token ?? "").toLowerCase();
+  if (!alias || alias === lower) return false;
+  const aliasLines = await queryRyan(alias);
+  return isExactTokenMatch(alias, aliasLines);
+}
+
 async function collectFiles(input, out) {
   const resolved = resolve(input);
   const stats = await fs.stat(resolved);
@@ -225,6 +263,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       }
     }
     for (const token of tokens) {
+      if (isGrammarKeyword(token)) continue;
       const lines = await queryRyan(token);
       if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
         missing += 1;
@@ -232,7 +271,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         occurrences.get(token).add(file);
         continue;
       }
-      if (!isExactTokenMatch(token, lines)) {
+      if (!await isExactTokenMatchOrAlias(token, lines)) {
         missing += 1;
         if (!occurrences.has(token)) occurrences.set(token, new Set());
         occurrences.get(token).add(file);
@@ -240,13 +279,17 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
   }
   for (const token of textTokens) {
+    if (isGrammarKeyword(token)) {
+      okTextTokens.add(token);
+      continue;
+    }
     const lines = await queryRyan(token);
     const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
     if (
       lines.length === 0 ||
       (lines.length === 1 && isFileMarker(lines[0])) ||
       blacklistValue !== null ||
-      !isExactTokenMatch(token, lines)
+      !await isExactTokenMatchOrAlias(token, lines)
     ) {
       missing += 1;
       if (!occurrences.has(token)) occurrences.set(token, new Set());

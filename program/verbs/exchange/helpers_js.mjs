@@ -1,6 +1,7 @@
 import { compositionalGrid } from "../../library/compositionalCases.mjs";
 import {
   VYAH_ASPECT_MODIFIERS,
+  VYAH_ASPECT_ALIASES,
   VYAH_TENSE_MODIFIERS,
   VYAH_OUTCOME_MODIFIERS,
   VYAH_ATTITUDINAL_MODIFIERS
@@ -63,6 +64,7 @@ export function vectorFormatHelper() {
     "}",
     `const CASE_ORDER = ${JSON.stringify(FORMAT_CASE_ORDER)};`,
     `const VYAH_ASPECT = ${JSON.stringify(VYAH_ASPECT_MODIFIERS)};`,
+    `const VYAH_ASPECT_ALIAS = ${JSON.stringify(VYAH_ASPECT_ALIASES)};`,
     `const VYAH_TENSE = ${JSON.stringify(VYAH_TENSE_MODIFIERS)};`,
     `const VYAH_OUTCOME = ${JSON.stringify(VYAH_OUTCOME_MODIFIERS)};`,
     `const VYAH_ATTITUDE = ${JSON.stringify(VYAH_ATTITUDINAL_MODIFIERS)};`,
@@ -85,7 +87,8 @@ export function vectorFormatHelper() {
     "  const attitudes = [];",
     "  const other = [];",
     "  for (const raw of values) {",
-    "    const token = typeof raw === \"string\" ? raw : String(raw ?? \"\");",
+    "    const tokenRaw = typeof raw === \"string\" ? raw : String(raw ?? \"\");",
+    "    const token = VYAH_ASPECT_ALIAS[String(tokenRaw).toLowerCase()] ?? tokenRaw;",
     "    if (!token) continue;",
     "    if (VYAH_ASPECT.includes(token)) aspects.push(token);",
     "    else if (VYAH_TENSE.includes(token)) tenses.push(token);",

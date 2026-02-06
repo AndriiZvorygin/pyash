@@ -13,3 +13,14 @@ test("vyah emits modifiers in official order", () => {
   const text = sentenceToPyash(sentence);
   assert.match(text, /vyah cancel past sloh satisfied/);
 });
+
+test("vyah emits canonical habit for cron alias", () => {
+  const sentence = {
+    mood: "do",
+    be: "hear",
+    ob: { name: "mic" },
+    vyah: { ve: { type: "name", values: ["cron"] } }
+  };
+  const text = sentenceToPyash(sentence);
+  assert.match(text, /vyah habit/);
+});
