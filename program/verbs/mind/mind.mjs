@@ -184,10 +184,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       mindName,
       configPrompt: resolvedConfigPrompt
     });
-    const namingPrompt = await buildAgentNamingPrompt({
-      agentHouse,
-      configPrompt: resolvedConfigPrompt
-    });
+    const namingPrompt = resolvedConfigPrompt ?? "";
     if (!historySeriesName) {
       const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
