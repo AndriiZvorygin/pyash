@@ -193,10 +193,13 @@ export async function compile_from_filename_to_filename(sentence) {
   const configProgram = await loadDefaultConfigProgram(process.cwd());
   const program = buildProgram(sourceText);
   const configSentences = configProgram?.sentences ?? [];
-  const defaultMapping = findDefaultSayMapping([
-    ...configSentences,
-    ...program.sentences
-  ]);
+  const defaultMapping = findDefaultSayMapping(
+    [
+      ...configSentences,
+      ...program.sentences
+    ],
+    { baseDir: process.cwd() }
+  );
   const retryConfig = findRetryConfig(configSentences);
   const entrySentences = defaultMapping
     ? applyDefaultSayMapping(program.sentences, defaultMapping)

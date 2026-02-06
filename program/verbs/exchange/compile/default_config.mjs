@@ -25,7 +25,7 @@ async function loadDefaultConfigProgram(cwd) {
   return buildProgram(chunks.join("\n"));
 }
 
-function findDefaultSayMapping(sentences) {
+function findDefaultSayMapping(sentences, { baseDir = process.cwd() } = {}) {
   let mapping = null;
   for (const sentence of sentences || []) {
     if (sentence?.be !== "default") continue;
@@ -37,6 +37,22 @@ function findDefaultSayMapping(sentences) {
       fromFilename: sentence?.from?.filename,
       fromName: sentence?.from?.name
     };
+  }
+  if (mapping && !mapping.fromFilename && !mapping.fromName) {
+    for (const sentence of sentences || []) {
+      if (sentence?.mood !== "do" || sentence?.be !== "import") continue;
+      if (sentence?.ob?.name !== "say") continue;
+      if (sentence?.to?.name !== mapping.targetName) continue;
+      const fromFilename = sentence?.from?.filename;
+      if (fromFilename) {
+        mapping.fromFilename = path.isAbsolute(fromFilename)
+          ? fromFilename
+          : path.resolve(baseDir, fromFilename);
+      } else {
+        mapping.fromName = sentence?.from?.name;
+      }
+      break;
+    }
   }
   return mapping;
 }
