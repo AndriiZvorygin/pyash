@@ -1,5 +1,5 @@
 // pyash/verbs/mind.mjs
-import { remember, doRemember } from "../../remember/index.mjs";
+import { remember, doRemember, getDefinitionEntry, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { historyDialogueName, resetMindLogs as resetMindHistory, buildHistoryMessages } from "./history.mjs";
@@ -65,7 +65,16 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
 
   const toolMapName = sentence?.with?.name ?? null;
   const toolMapFact = toolMapName ? remember(toolMapName) : null;
-  const toolMapCwd = toolMapFact?.at?.filename ?? toolMapFact?.at?.text ?? toolMapFact?.at?.name ?? null;
+  const toolMapDef = toolMapName ? getDefinitionEntry(toolMapName) : null;
+  const toolMapDefSentence = toolMapDef ? allRemember()[toolMapDef.index] : null;
+  const toolMapCwd =
+    toolMapFact?.at?.filename ??
+    toolMapFact?.at?.text ??
+    toolMapFact?.at?.name ??
+    toolMapDefSentence?.at?.filename ??
+    toolMapDefSentence?.at?.text ??
+    toolMapDefSentence?.at?.name ??
+    null;
   const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? toolMapCwd;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
   const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
