@@ -72,7 +72,45 @@ export async function ensureAgentDirs(agentHouse) {
   await fs.mkdir(identityDir, { recursive: true });
   await fs.mkdir(memoryDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
+  await maybeSeedIdentity(identityDir);
   return { identityDir, memoryDir, sessionDir };
+}
+
+async function dirIsEmpty(dir) {
+  try {
+    const entries = await fs.readdir(dir);
+    return entries.length === 0;
+  } catch (err) {
+    if (err?.code === "ENOENT") return true;
+    throw err;
+  }
+}
+
+async function copyIdentityTemplate(templateDir, destDir) {
+  const entries = await fs.readdir(templateDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const src = path.join(templateDir, entry.name);
+    const dest = path.join(destDir, entry.name);
+    try {
+      await fs.copyFile(src, dest);
+    } catch (err) {
+      if (err?.code === "EEXIST") continue;
+      throw err;
+    }
+  }
+}
+
+async function maybeSeedIdentity(identityDir) {
+  const empty = await dirIsEmpty(identityDir);
+  if (!empty) return;
+  const templateDir = path.resolve("examples", "agent-identity", "agent-helper", "identity");
+  try {
+    await fs.access(templateDir);
+  } catch {
+    return;
+  }
+  await copyIdentityTemplate(templateDir, identityDir);
 }
 
 export async function listSessionFiles(sessionDir, { datePrefix } = {}) {

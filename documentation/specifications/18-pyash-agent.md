@@ -325,6 +325,9 @@ world/house/<agent>/memory/
 world/house/<agent>/session/
 ```
 
+Implementations MAY seed empty `identity/` directories from a template pack
+such as `examples/agent-identity/agent-helper/identity/`.
+
 * Build system prompt with bootstrap + memory.
 * Include session history in mind calls.
 * Execute tool calls in a deterministic loop.
