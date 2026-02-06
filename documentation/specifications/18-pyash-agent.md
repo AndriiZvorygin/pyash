@@ -440,6 +440,25 @@ Scheduler runtime SHOULD record, per job:
 * overlap skip count
 * estimated utilization percentage (`duration / interval`)
 
+### 14.4 Scheduled job session routing (normative)
+
+Session routing differs by invocation type:
+
+* Interactive/manual invocations use prompt-derived session selection.
+* Scheduled jobs use a fixed session lane per job name.
+
+Canonical lane sentence form:
+
+```
+su name <job> lane ob text "<lane name>" ya
+```
+
+Routing rules:
+
+* If a scheduled job provides a lane sentence, use that lane name.
+* If no lane sentence is provided, use the job name as the lane name.
+* Scheduled session files use the existing daily prefix format: `YYYYMMDD-<lane name>.pya`.
+
 ## 15. Channels and subprocess agents
 
 ### 15.1 Subprocess agents
@@ -449,10 +468,3 @@ Subprocess agents are treated as callable tools and MUST support deterministic i
 ### 15.2 Channels roadmap priority
 
 Matrix channel integration is a near-term priority after scheduler/approval core is stable.
-
-## 16. Open question
-
-For scheduled jobs, confirm session routing policy:
-
-* Option A: fixed session lane per job name.
-* Option B: prompt-derived session selection (same behavior as regular calls).
