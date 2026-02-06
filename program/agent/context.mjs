@@ -59,7 +59,8 @@ function buildToolExplainerBlock() {
     "",
     "Use memory tools deliberately:",
     "- `be remember ... during date today` for daily notes.",
-    "- `be remember ... during date tomorrow` for reminders.",
+    "- `be remember ... during date tomorrow` for reminders (writes tomorrow's file).",
+    "- `be remember ... during date YYYY-MM-DD` for future reminders.",
     "- `be remember ... during wo always` for long-term memory."
   ].join("\n");
 }
