@@ -1,3 +1,7 @@
+su name example meta be map def
+su name required ob ve text "ffmpeg" "PYA_HEAR_FIXTURE" ya
+prah
+
 su name microphone hear from wo microphone during num 0 to filename output be ceremony def
   exists su name cmd ob text "ffmpeg -y -f " be text ya
   ob name ffmpeg input to name cmd be plus do

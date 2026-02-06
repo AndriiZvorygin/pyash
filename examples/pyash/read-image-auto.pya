@@ -1,5 +1,5 @@
 su name example meta be map def
-su name required ob ve text "OLLAMA_HOST" ya
+su name required ob ve text "PYA_SEE_VL_FIXTURE" ya
 prah
 
 from filename "quiz/fixtures/pyash_raven.png" ob text "Describe the image." become wo text to name text description be read do

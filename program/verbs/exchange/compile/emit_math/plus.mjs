@@ -22,7 +22,8 @@ export function handleMathPlus(context, helpers) {
     vectorValuesExpr,
     lvalueForName,
     pathFromGenitive,
-    cExpr
+    cExpr,
+    markDeclared
   } = helpers;
 
   // Text concatenation via add (numeric source)
@@ -61,11 +62,23 @@ export function handleMathPlus(context, helpers) {
           cHelpers.usesPrintf = true;
         }
         const target = sanitizeName(sentence.to.name);
+        const needsDecl = !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
+        if (needsDecl) {
+          if (markDeclared) markDeclared(declared, sentence.to.name);
+          if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+          return `char ${target}[PYA_TEXT_CAP] = \"\";\n${typeof ob.text === "string" ? `pya_concat_buf(${target}, ${JSON.stringify(ob.text)});` : `pya_concat_buf(${target}, ${exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: "\"\"", field: "text" }) ?? "\"\""});`}`;
+        }
         if (typeof ob.text === "string") {
           return `pya_concat_buf(${target}, ${JSON.stringify(ob.text)});`;
         }
         const textExpr = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: "\"\"", field: "text" }) ?? "\"\"";
         return `pya_concat_buf(${target}, ${textExpr});`;
+      }
+      if (!sentenceArg && sentence.to?.name && (!declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name)))) {
+        const declName = sanitizeName(sentence.to.name);
+        if (markDeclared) markDeclared(declared, sentence.to.name);
+        if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+        return `let ${declName} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: {}, be: "text", mood: "ya" };\n${declName}.ob.text = (${declName}.ob.text ?? \"\") + ${valueExpr};\nglobalThis[${JSON.stringify(sentence.to.name)}] = ${declName};`;
       }
       return `${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};\n${sentence.to.name}.ob.text = (${sentence.to.name}.ob.text ?? \"\") + ${valueExpr};`;
     }
@@ -200,9 +213,24 @@ export function handleMathPlus(context, helpers) {
       if (!target) {
         return `// TODO: ${JSON.stringify(sentence)}`;
       }
-      return `${target} = ${target} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
+      const needsDecl = sentence.to?.name && !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
+      const init = needsDecl ? `double ${target} = 0;\n` : "";
+      if (needsDecl) {
+        if (markDeclared) markDeclared(declared, sentence.to.name);
+        if (declaredTypes) declaredTypes.set(sentence.to.name, "number");
+      }
+      return `${init}${target} = ${target} + ${Number.isNaN(safeValue) ? 0 : safeValue};`;
     }
     const lines = [];
+    if (sentence.to?.name && !declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name))) {
+      const declName = sanitizeName(sentence.to.name);
+      if (markDeclared) markDeclared(declared, sentence.to.name);
+      if (declaredTypes) declaredTypes.set(sentence.to.name, "number");
+      lines.push(`let ${declName} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: {}, be: "number", mood: "ya" };`);
+      lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${declName};`);
+      lines.push(`${declName}.ob.num = (${declName}.ob.num ?? 0) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
+      return lines.join("\n");
+    }
     lines.push(`${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};`);
     lines.push(`${sentence.to.name}.ob.num = (${sentence.to.name}.ob.num ?? 0) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
     return lines.join("\n");
@@ -231,6 +259,12 @@ export function handleMathPlus(context, helpers) {
       const concat = `${target} = ${target} + ${textExpr};`;
       return `${init}\n${concat}`;
     }
+    if (!sentenceArg && sentence.to?.name && (!declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name)))) {
+      const declName = sanitizeName(sentence.to.name);
+      if (markDeclared) markDeclared(declared, sentence.to.name);
+      if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+      return `let ${declName} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: {}, be: "text", mood: "ya" };\n${declName}.ob.text = (${declName}.ob.text ?? \"\") + ${textExpr};\nglobalThis[${JSON.stringify(sentence.to.name)}] = ${declName};`;
+    }
     if (lang === "c") {
       if (cHelpers) {
         cHelpers.usesTextHelper = true;
@@ -242,7 +276,13 @@ export function handleMathPlus(context, helpers) {
         if (target) return `pya_concat_buf(${target}, ${textExpr});`;
       }
       const target = sanitizeName(sentence.to.name);
-      return `pya_concat_buf(${target}, ${textExpr});`;
+      const needsDecl = sentence.to?.name && !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
+      const decl = needsDecl ? `char ${target}[PYA_TEXT_CAP] = \"\";\n` : "";
+      if (needsDecl) {
+        if (markDeclared) markDeclared(declared, sentence.to.name);
+        if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+      }
+      return `${decl}pya_concat_buf(${target}, ${textExpr});`;
     }
     return `${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};\n${sentence.to.name}.ob.text = (${sentence.to.name}.ob.text ?? \"\") + ${textExpr};`;
   }

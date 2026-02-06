@@ -31,8 +31,14 @@ export function handleNativeLicense(context, helpers) {
     }
     const modeText = sentence.as?.text;
     if (typeof modeText === "string" && modeText.trim()) {
-      const cmd = JSON.stringify(`chmod ${modeText} `) + " + " + targetExpr;
-      return `if (!pya_command(${cmd})) { fprintf(stderr, \"license defective\\n\"); exit(1); }`;
+      const modeLiteral = JSON.stringify(modeText);
+      return [
+        "char __pyaCmd[PYA_TEXT_CAP] = \"\";",
+        `snprintf(__pyaCmd, sizeof(__pyaCmd), "chmod %s %s", ${modeLiteral}, ${targetExpr});`,
+        "char *__pyaOut = pya_command(__pyaCmd);",
+        "if (!__pyaOut) { fprintf(stderr, \"license defective\\n\"); exit(1); }",
+        "if (__pyaOut) free(__pyaOut);"
+      ].join("\n");
     }
     const values = sentence.as?.ve?.values;
     if (Array.isArray(values) && values.length > 0) {

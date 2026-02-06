@@ -26,6 +26,10 @@ import { handleVectorMapAll } from "./transpile_sentence/vector_map_all.mjs";
 import { handleVectorLiteral } from "./transpile_sentence/vector_literal.mjs";
 import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
 
+const LANGUAGE_TYPES = new Set([
+  "english"
+]);
+
 export function transpileSentence(sentence, { lang, sentenceArg, locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, loopShim, mindShim, cHelpers, rememberFlag, jsHelpers, cState, mapDefs } = {}) {
   const ob = sentence.ob ?? {};
   const verb = sentence.be || sentence.mood || "";
@@ -35,6 +39,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   const aliasBe = resolveVerbAlias(baseBeRaw);
   const baseBe = aliasBe !== baseBeRaw && !ceremonyFns?.has(baseBeRaw) ? aliasBe : baseBeRaw;
   const effectiveBe = baseBe || sentence.mood;
+  const literalBe = LANGUAGE_TYPES.has(effectiveBe) ? "text" : effectiveBe;
 
   const handledRet = handleRetSentence(sentence, { lang, sentenceArg, locals, declared, localsTypes, declaredTypes, cHelpers });
   if (handledRet) return handledRet;
@@ -118,6 +123,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     lang,
     sentenceArg,
     locals,
+    localsTypes,
     declared,
     declaredTypes,
     jsHelpers,
@@ -127,7 +133,8 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     sentenceToPyash,
     sanitizeName,
     markDeclared,
-    exprForSlot
+    exprForSlot,
+    cExpr
   });
   if (commandResult) return commandResult;
 
@@ -267,6 +274,27 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     locals?.add(targetVar);
     return lines.join("\n");
   }
+  if (baseBe === "remember" && lang === "c" && !sentenceArg) {
+    const genitiveChain = sentence.ob?.genitive?.chain || [];
+    const genitiveHint = genitiveChain.filter(part => part !== "this").at(-1);
+    const rawName = sentence.to?.name?.split(" ")[0] || genitiveHint || "remembered";
+    const targetVar = sanitizeName(rawName) || "remembered";
+    const source = sentence.ob?.genitive
+      ? pathFromGenitive(sentence.ob.genitive, undefined, { locals, declared, allowCGlobals: true })
+      : null;
+    if (source && ["pya_to_num", "pya_to_text", "pya_to_bool", "pya_ob_num", "pya_ob_text", "pya_ob_bool", "pya_from_num", "by"].includes(source)) {
+      return null;
+    }
+    const isText = Array.isArray(genitiveChain) && genitiveChain.includes("text");
+    const lines = [];
+    if (source === "pya_to_text" || isText) {
+      lines.push(`char *${targetVar} = ${source ?? "pya_to_text"};`);
+    } else {
+      lines.push(`double ${targetVar} = ${source ?? "pya_to_num"};`);
+    }
+    locals?.add(targetVar);
+    return lines.join("\n");
+  }
 
   const mathResult = handleMathSentence({
     sentence,
@@ -294,7 +322,8 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     vectorValuesExpr,
     lvalueForName,
     pathFromGenitive,
-    cExpr
+    cExpr,
+    markDeclared
   });
   if (mathResult) return mathResult;
 
@@ -312,7 +341,8 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     cState,
     declared,
     declaredTypes,
-    locals
+    locals,
+    localsTypes
   }, {
     inlineSentenceLiteral,
     sanitizeName,
@@ -323,10 +353,24 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   if (!name || mood === "do") return null;
 
   const shouldDeclare = Boolean(sentence.exists);
+  if (shouldDeclare && literalBe === "text" && typeof ob.text !== "string" && !sentenceArg) {
+    const varName = sanitizeName(name);
+    if (lang === "c") {
+      if (cHelpers) {
+        cHelpers.usesTextHelper = true;
+        cHelpers.usesString = true;
+        cHelpers.usesPrintf = true;
+      }
+      locals?.add(varName);
+      if (localsTypes) localsTypes.set(varName, "text");
+      return `char ${varName}[PYA_TEXT_CAP] = \"\";`;
+    }
+    return `let ${varName} = { su: { name: ${JSON.stringify(name)} }, ob: { text: \"\" }, be: \"text\", mood: \"ya\" };\nglobalThis[${JSON.stringify(name)}] = ${varName};`;
+  }
 
   const vectorLiteralResult = handleVectorLiteral({
     sentence,
-    effectiveBe,
+    effectiveBe: literalBe,
     ob,
     lang,
     sentenceArg,
@@ -352,7 +396,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     lang,
     sentenceArg,
     name,
-    effectiveBe,
+    effectiveBe: literalBe,
     shouldDeclare,
     locals,
     localsTypes,
@@ -370,7 +414,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     lang,
     sentenceArg,
     name,
-    effectiveBe,
+    effectiveBe: literalBe,
     shouldDeclare,
     locals,
     localsTypes,
@@ -390,7 +434,7 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     lang,
     sentenceArg,
     name,
-    effectiveBe,
+    effectiveBe: literalBe,
     shouldDeclare,
     locals,
     localsTypes,
