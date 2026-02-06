@@ -12,6 +12,38 @@ import { read_fromstate_json } from "./read_json.mjs";
 import { read_fromstate_yaml } from "./read_yaml.mjs";
 import { read_fromstate_lobster } from "./read_lobster.mjs";
 import { isWorldToolsActive, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
+import { resolveAgentPath } from "../../library/agent_cwd.mjs";
+
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function stripHtmlTags(text) {
+  return String(text ?? "").replace(/<[^>]*>/g, "");
+}
+
+function htmlToMarkdown(html) {
+  let text = String(html ?? "");
+  text = text.replace(/<script[\s\S]*?<\/script>/gi, "");
+  text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
+  text = text.replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => {
+    const cleanLabel = stripHtmlTags(label).trim();
+    return `[${cleanLabel}](${href})`;
+  }).replace(/\[([^\]]*)\]\(([^)]*)\)/g, (_match, label, href) => `[${label}](${href})`);
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/(p|div|section|article|h[1-6]|li|ul|ol|table|tr|td|th)>/gi, "\n");
+  text = text.replace(/<\/?[^>]+>/g, "");
+  text = decodeHtmlEntities(text);
+  text = text.replace(/\r\n/g, "\n");
+  text = text.replace(/[ \t]+\n/g, "\n");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +69,12 @@ function extractReadLimits(sentence) {
 
 export async function read_from_filename(sentence = {}) {
   let { from } = sentence;
+  if (from?.filename) {
+    const { resolved, outside } = resolveAgentPath(from.filename, { rememberFn: remember });
+    if (!outside && resolved) {
+      from = { ...from, filename: resolved };
+    }
+  }
   if (isWorldToolsActive({ rememberFn: remember })) {
     const { resolved, outside, root } = resolveWorldPath(from?.filename ?? "", { rememberFn: remember });
     if (outside) {
@@ -87,6 +125,10 @@ export async function read_tail_from_filename(sentence) {
     });
   }
   let targetPath = path.resolve(String(filename));
+  const agentResolved = resolveAgentPath(filename, { rememberFn: remember });
+  if (!agentResolved.outside && agentResolved.resolved) {
+    targetPath = agentResolved.resolved;
+  }
   if (isWorldToolsActive({ rememberFn: remember })) {
     if (filename === ".activity.pya") {
       const place = resolveWorldPlace({ rememberFn: remember }) ?? "commons";
@@ -174,6 +216,22 @@ export async function read_from_json_map_all(sentence, { remember } = {}) {
   return { ob: { ve: { type: "raw", values: outEntries } }, be: "vector" };
 }
 
+export async function read_fromstate_html(sentence = {}) {
+  const become = sentence?.become?.wo ?? sentence?.become?.text ?? sentence?.become?.name ?? "";
+  if (!String(become).startsWith("markdown")) {
+    throwErrorSentence({
+      name: "read defective",
+      message: `read defective: unknown target ${become || "text"}`,
+      from: { name: "read" },
+      raw: { sentence }
+    });
+  }
+  const result = await read_from_filename(sentence);
+  const html = result?.ob?.text ?? result?.value?.text ?? "";
+  const markdown = htmlToMarkdown(html);
+  return { ob: { text: markdown }, be: "markdown" };
+}
+
 export default async function read({ from }) {
   const fromType = detectType(from);
   if (fromType === "filename") {
@@ -223,5 +281,7 @@ export const signatures = [
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromtext", "text", "fromstate", "name", "lobster", "to", "name", "text"], handler: read_fromstate_lobster },
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromtext", "text", "fromstate", "name", "lobster", "to", "name", "num"], handler: read_fromstate_lobster },
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "text"], handler: read_fromstate_lobster },
-  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "num"], handler: read_fromstate_lobster }
+  { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "num"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "html", "become", "wo", "markdown"], handler: read_fromstate_html },
+  { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html }
 ];
