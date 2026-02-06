@@ -281,7 +281,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       if (sessionFileOverride) {
         const resolvedPath = path.isAbsolute(sessionFileOverride)
           ? sessionFileOverride
-          : path.join(sessionDir, sessionFileOverride);
+          : path.resolve(sessionDir, sessionFileOverride);
         sessionFile = await ensureSessionFileAtPath({
           sessionFile: resolvedPath,
           sessionName: path.basename(resolvedPath, path.extname(resolvedPath) || ".pya"),

@@ -63,6 +63,39 @@ const withWoToolsSignatures = baseMindSignatureWords
   .map(replaceWithWoTools)
   .filter(Boolean);
 
+function removeToNameText(words) {
+  const out = [];
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i] === "to" && words[i + 1] === "name" && words[i + 2] === "text") {
+      i += 2;
+      continue;
+    }
+    out.push(words[i]);
+  }
+  return out;
+}
+
+function removeToText(words) {
+  const out = [];
+  for (let i = 0; i < words.length; i += 1) {
+    if (words[i] === "to" && words[i + 1] === "text") {
+      i += 1;
+      continue;
+    }
+    out.push(words[i]);
+  }
+  return out;
+}
+
+const withWoToolsNoToSignatures = withWoToolsSignatures
+  .filter(words => !words.includes("totext"))
+  .map((words) => {
+    const withoutNameText = removeToNameText(words);
+    const withoutText = removeToText(withoutNameText);
+    return withoutText;
+  })
+  .filter(words => words.includes("ob") && words.includes("for") && words.includes("with"));
+
 const agentCwdSignatures = baseMindSignatureWords.map(words => [
   "be",
   "write",
@@ -77,5 +110,6 @@ const agentCwdWithWoToolsSignatures = agentCwdSignatures
 
 export const mindSignatureWords = baseMindSignatureWords
   .concat(withWoToolsSignatures)
+  .concat(withWoToolsNoToSignatures)
   .concat(agentCwdSignatures)
   .concat(agentCwdWithWoToolsSignatures);
