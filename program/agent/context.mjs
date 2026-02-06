@@ -80,4 +80,15 @@ export async function buildAgentSystemPrompt({
   return parts.filter(Boolean).join("\n\n---\n\n");
 }
 
+export async function buildAgentNamingPrompt({ agentHouse, configPrompt } = {}) {
+  const parts = [];
+  if (configPrompt) parts.push(String(configPrompt));
+  if (agentHouse) {
+    const identityDir = path.join(agentHouse, "identity");
+    const bootstrap = await loadBootstrapFiles(identityDir);
+    if (bootstrap) parts.push(bootstrap);
+  }
+  return parts.filter(Boolean).join("\n\n---\n\n");
+}
+
 export { loadMemoryContext };
