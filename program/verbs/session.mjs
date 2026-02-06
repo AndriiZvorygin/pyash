@@ -42,11 +42,12 @@ function buildToolCallLogger() {
 export async function session(sentence, { inputs = [] } = {}) {
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const toolMapName = sentence?.with?.name ?? null;
+  const toolMapIsDefault = sentence?.with?.wo === "tools" || sentence?.with?.text === "tools";
   const callTemplate = {
     mood: "do",
     be: "write",
     for: { name: mindName },
-    with: toolMapName ? { name: toolMapName } : undefined,
+    with: toolMapIsDefault ? { wo: "tools" } : (toolMapName ? { name: toolMapName } : undefined),
     at: sentence?.at,
     fromtext: sentence?.fromtext,
     accordingto: sentence?.accordingto
@@ -108,5 +109,10 @@ export const signatures = [
   { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename"], handler: session },
   { signatureWords: ["be", "session", "for", "name", "mind", "at", "filename", "ob", "text"], handler: session },
   { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename"], handler: session },
-  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename", "ob", "text"], handler: session }
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "name", "map", "at", "filename", "ob", "text"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "ob", "text"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "ob", "text", "with", "wo", "tools"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "at", "filename"], handler: session },
+  { signatureWords: ["be", "session", "for", "name", "mind", "with", "wo", "tools", "at", "filename", "ob", "text"], handler: session }
 ];
