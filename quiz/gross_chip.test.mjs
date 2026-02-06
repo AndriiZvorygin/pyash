@@ -105,3 +105,25 @@ test("gross chip avoids splitting UTF-8 sequences", async () => {
     assert.equal(text.includes("\uFFFD"), false);
   }
 });
+
+test("gross chip honors atmost byte override", async () => {
+  forget();
+
+  const source = buildNumericSource(1200);
+  await run(`from text ${JSON.stringify(source)} atmost byte 360 to name text gross chips be gross chip do`);
+
+  const series = remember("gross chips");
+  const texts = series.ob.series.map(entry => entry.ob.text);
+  assert.ok(texts.length >= 2);
+
+  const maxBytes = 360;
+  const overlapBytes = Math.floor(maxBytes / 8);
+  const starts = locateStarts(source, texts);
+  for (const text of texts) {
+    assert.ok(byteLength(text) <= maxBytes);
+  }
+  for (let i = 0; i < texts.length - 1; i += 1) {
+    const expectedNext = starts[i] + byteLength(texts[i]) - overlapBytes;
+    assert.equal(starts[i + 1], expectedNext);
+  }
+});

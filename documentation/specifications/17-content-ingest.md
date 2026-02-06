@@ -229,22 +229,22 @@ Output as a json map (suggested keys): `doc_kind`, `delimiter_rules`, `anchor_st
 
 For each gross chip, call a mind with a prompt tailored by the classifier output.
 
-**Output:** a series named `boundary proposals` where each entry contains **start/end anchor pairs** for that chip.
+**Output:** a series named `boundary proposals` where each entry contains one or more **boundary marker quotes** for that chip.
 
 Sentence shape (series entry):
 
 ```pyash
 su name boundary proposal
   from num 7
-  ob ve text "<start anchor>" "<end anchor>" "<start anchor 2>" "<end anchor 2>"
+  ob ve text "<boundary marker>" "<boundary marker 2>" "<boundary marker 3>"
   be boundary ya
 ```
 
 Rules:
 
 * `from num` is the `gross_chip_index` (1-based).
-* `ob ve text` contains an **even** number of entries: alternating `start_anchor`, `end_anchor`.
-* Anchors are exact quotes copied from the chip text.
+* `ob ve text` contains one or more **boundary marker** quotes in order.
+* Markers are exact quotes copied from the chip text.
 
 You can produce `boundary proposals` by mapping a ceremony or mind over the `gross chips` series:
 
@@ -252,16 +252,22 @@ You can produce `boundary proposals` by mapping a ceremony or mind over the `gro
 from name gross chips by name boundary propose to name text boundary proposals be series map do
 ```
 
+Mapping options:
+
+* **series map**: for `series` (entries are full sentences).
+* **vector map**: for `vector` values.
+* **at all**: vector-only sugar when you want to mutate or map a vector in-place.
+* **map structures**: enumerate map entries first (for example `all su of <map> be read do` or `all ob of <map> be read do`), then map the resulting vector/series.
+
 #### 03.W.3 Resolve wise chips
 
 Combine the `boundary proposals` series with the full `source` text to extract **wise chips**:
 
 1. Walk proposals in series order (or by `gross_chip_index` when present).
-2. For each start/end anchor pair:
-   * Find the first occurrence of `start_anchor` at or after the last resolved end.
-   * Find the first occurrence of `end_anchor` after that start.
-   * If either anchor fails, skip the pair.
-3. Extract from the start of `start_anchor` to the end of `end_anchor`.
+2. For each boundary marker in order:
+   * Find the first occurrence of the marker at or after the last resolved end.
+   * If the marker fails to match, skip it.
+3. Emit the slice from this marker to the next matched marker (or end of source if last marker).
 4. Emit each extracted slice as a wise chip (series of text entries).
 
 Suggested output fact:
