@@ -130,3 +130,27 @@ test("mind tool adapter exposes open slots when no input markers", async () => {
     else process.env.PYA_MIND_RESPONSE = original;
   }
 });
+
+test("mind tool adapter loads default tools for with wo tools", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+    await interpret(parse("ob text \"use tools\" for name helper to name text helper-out with wo tools be write do"));
+
+    const payload = decodeMindPayload(records, "helper");
+    const capturedTools = payload.tools ?? [];
+    const names = capturedTools.map(tool => tool?.function?.name).filter(Boolean);
+    assert.ok(names.includes("be_read_from_filename"), "default tools should include read");
+    assert.ok(names.includes("be_write_ob_text_to_filename"), "default tools should include write");
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});

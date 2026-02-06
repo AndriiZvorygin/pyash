@@ -1,4 +1,6 @@
 // pyash/verbs/mind.mjs
+import fs from "node:fs/promises";
+import path from "node:path";
 import { remember, doRemember, getDefinitionEntry, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
@@ -25,6 +27,52 @@ import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
+import { parse } from "../../understand/index.mjs";
+
+const DEFAULT_TOOL_MAP_NAME = "agent tools";
+const DEFAULT_TOOL_MAP_PATH = path.resolve(process.cwd(), "module", "agent_tools.pya");
+
+async function ensureDefaultToolMapLoaded() {
+  const existing = remember(DEFAULT_TOOL_MAP_NAME);
+  if (existing?.be === "map") return;
+  let content = "";
+  try {
+    content = await fs.readFile(DEFAULT_TOOL_MAP_PATH, "utf8");
+  } catch {
+    return;
+  }
+  const lines = content.split(/\r?\n/).map(line => line.trim()).filter(line => line);
+  let collecting = false;
+  const entries = [];
+  for (const line of lines) {
+    const sentence = parse(line);
+    if (!sentence) continue;
+    if (!collecting) {
+      if (sentence.mood === "def" && sentence.be === "map" && sentence.su?.name === DEFAULT_TOOL_MAP_NAME) {
+        collecting = true;
+      }
+      continue;
+    }
+    if (sentence.mood === "prah") {
+      break;
+    }
+    entries.push(sentence);
+  }
+  if (!entries.length) return;
+  const map = {};
+  for (const entry of entries) {
+    const key = entry?.su?.name ?? entry?.su?.text;
+    if (!key) continue;
+    map[key] = entry;
+  }
+  if (!Object.keys(map).length) return;
+  doRemember({
+    mood: "ya",
+    su: { name: DEFAULT_TOOL_MAP_NAME },
+    be: "map",
+    ob: { map }
+  });
+}
 
 export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = {}) {
   const ob = sentence?.ob ?? {};
@@ -63,7 +111,11 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     rememberFn: remember
   });
 
-  const toolMapName = sentence?.with?.name ?? null;
+  const toolMapName = sentence?.with?.name
+    ?? (sentence?.with?.wo === "tools" || sentence?.with?.text === "tools" ? DEFAULT_TOOL_MAP_NAME : null);
+  if (toolMapName === DEFAULT_TOOL_MAP_NAME) {
+    await ensureDefaultToolMapLoaded();
+  }
   const toolMapFact = toolMapName ? remember(toolMapName) : null;
   const toolMapDef = toolMapName ? getDefinitionEntry(toolMapName) : null;
   const toolMapDefSentence = toolMapDef ? allRemember()[toolMapDef.index] : null;
