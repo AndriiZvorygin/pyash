@@ -91,7 +91,7 @@ export const VYAH_ASPECT_MODIFIERS = [
   "timebox",
   "dweh",
   "schedule",
-  "cron",
+  "habit",
   "poll",
   "init",
   "status",
@@ -99,6 +99,10 @@ export const VYAH_ASPECT_MODIFIERS = [
   "emit",
   "step"
 ];
+
+export const VYAH_ASPECT_ALIASES = {
+  cron: "habit"
+};
 
 export const VYAH_TENSE_MODIFIERS = [
   "now",

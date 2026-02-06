@@ -80,7 +80,7 @@ Examples include:
 ```
 eval, start, stream,
 await, finish, cancel,
-schedule, cron, poll,
+schedule, habit, poll,
 init, status, rule,
 emit, step
 ```
@@ -315,7 +315,7 @@ This table is the consolidated reference.
 | Telic (`tfeh`)         | goal                  | Has an inherent endpoint                                  | Goal-driven job completes when done     |
 | Atelic (`lyeh`)        | loop                  | Open-ended activity, no endpoint                          | Long-running loop/daemon                |
 | Momentane (`mreh`)     | step                  | Instantaneous punctual viewpoint                          | Atomic step                             |
-| Habitual (`xi`)        | cron                  | Regular customary action                                  | Periodic job / cron                     |
+| Habitual (`xi`)        | habit                 | Regular customary action                                  | Periodic job / cron                     |
 | Continuative (`ta2`)   | status                | Still ongoing; continues to hold                          | Keepalive / still-running check         |
 | Frequentative (`ra2`)  | poll                  | Repeated often; high frequency                            | Polling / repeated calls                |
 
@@ -399,8 +399,10 @@ These aspects primarily control existing work.
 * **`rwah` (schedule / prospective)**
   Schedule work to begin in the future; return a **TaskHandle** for the scheduled job.
 
-* **`xi` (cron / habitual)**
+* **`xi` (habit / habitual)**
   Create a recurring schedule; return a **TaskHandle** for the schedule.
+
+`cron` is accepted as a legacy alias for `habit`.
 
 * **`ra2` (poll / frequentative)**
   Repeated often; may return a **Stream** of events or a **TaskHandle** controlling the repetition policy.
