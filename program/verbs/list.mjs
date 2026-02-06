@@ -155,7 +155,11 @@ export async function list(sentence, { remember: rememberFn = remember } = {}) {
         }
       });
     }
-    return { ob: { name: mapName }, be: "list" };
+    const wantsMap = sentence?.as?.wo === "map" || sentence?.as?.text === "map" || sentence?.as?.name === "map";
+    if (wantsMap) {
+      return { ob: { name: mapName }, be: "list" };
+    }
+    return { ob: { ve: { type: "text", values: entries } }, be: "list" };
   }
   return { ob: { ve: { type: "text", values: entries } }, be: "list" };
 }

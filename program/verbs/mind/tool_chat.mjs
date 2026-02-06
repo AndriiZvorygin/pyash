@@ -166,6 +166,8 @@ export async function runToolChat({
         const mapFact = mapName ? remember(mapName) : null;
         if (surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
           toolText = surfacedTool.ob.text;
+        } else if (surfacedTool.be === "list" && Array.isArray(surfacedTool.ob?.ve?.values)) {
+          toolText = surfacedTool.ob.ve.values.join("\n");
         } else if (mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
         } else if (surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {
