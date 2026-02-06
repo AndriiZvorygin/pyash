@@ -63,7 +63,6 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages uv
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && apt-get update \
   && apt-get install -y --no-install-recommends nodejs \
-  && npm install -g @openai/codex \
   && rm -rf /var/lib/apt/lists/*
 
 # Playwright CLI + browsers
@@ -84,3 +83,6 @@ COPY caterer/quickjs-wasi/qjs.wasm /usr/local/share/pyash/qjs.wasm
 RUN chmod +x /usr/local/bin/wasmtime
 
 WORKDIR /workplace
+
+ARG CODEX_VERSION=latest
+RUN npm install -g @openai/codex@${CODEX_VERSION}
