@@ -12,6 +12,7 @@ cache_dir="$ROOT_DIR/container/.buildx-cache"
 push=false
 load=false
 no_restart=false
+codex_version=""
 
 while [[ $# -gt 0 ]]; do
   arg="$1"
@@ -44,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       cache_dir="${2:-}"
       shift 2
       ;;
+    --codex-version)
+      codex_version="${2:-}"
+      shift 2
+      ;;
     --push)
       push=true
       shift
@@ -54,7 +59,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help|-h)
       cat <<'EOF'
-Usage: ./container/command/build.sh [--no-cache] [--no-buildx] [--no-restart] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--push|--load] [-- <docker compose build args>]
+Usage: ./container/command/build.sh [--no-cache] [--no-buildx] [--no-restart] [--platform <list>] [--tag <image>] [--cache-dir <path>] [--codex-version <ver>|--new-codex] [--push|--load] [-- <docker compose build args>]
 
 Builds the pyash container, then restarts via begin.sh.
 
@@ -64,8 +69,14 @@ Notes:
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
   - Cache is stored at ./container/.buildx-cache unless overridden.
+  - Use --codex-version to force a Codex layer rebuild.
+  - Use --new-codex as a shorthand for --codex-version latest.
 EOF
       exit 0
+      ;;
+    --new-codex)
+      codex_version="latest"
+      shift
       ;;
     --)
       shift
@@ -158,6 +169,9 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
     -t "$tag"
     --platform "$platform"
   )
+  if [[ -n "$codex_version" ]]; then
+    buildx_args+=(--build-arg "CODEX_VERSION=$codex_version")
+  fi
 
   if [[ "$push" == true ]]; then
     buildx_args+=(--push)
@@ -177,6 +191,9 @@ if [[ -n "$platform" || "$use_buildx" == true ]]; then
 
 else
   # Use docker compose build
+  if [[ -n "$codex_version" ]]; then
+    build_args+=(--build-arg "CODEX_VERSION=$codex_version")
+  fi
   docker compose -f "$COMPOSE_FILE" build "${build_args[@]}"
   
   if [[ "$no_restart" != true ]]; then
