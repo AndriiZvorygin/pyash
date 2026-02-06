@@ -75,6 +75,13 @@ The memory context is a formatted block inserted into the system prompt:
 
 If a section is missing, it is omitted entirely.
 
+Optional summary block (if `memory/SUMMARY.md` exists):
+
+```
+# Summary
+<contents of SUMMARY.md>
+```
+
 ### 3.4 Agent house layout
 
 Minimum layout under `world/house/<agent>/`:

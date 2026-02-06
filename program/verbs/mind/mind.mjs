@@ -13,12 +13,15 @@ import {
   ensureAgentDirs,
   generateSessionName,
   ensureSessionFile,
+  ensureSessionFileAtPath,
+  findSessionFileBySystemPrompt,
   readSessionMessages,
   appendSessionEntry,
   pickLatestSessionFile,
   buildSessionNamePrefix,
   buildSessionNameForDate,
-  readSessionMessagesWithFallback
+  readSessionMessagesWithFallback,
+  updateSessionSummary
 } from "../../agent/session.mjs";
 import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
@@ -188,6 +191,21 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     }
     return null;
   })();
+  const sessionNameFromFromtext = (() => {
+    const raw = sentence?.fromtext?.name ?? sentence?.fromtext?.text ?? "";
+    if (!raw) return null;
+    const lower = String(raw).trim().toLowerCase();
+    if (lower.startsWith("session name ")) {
+      return String(raw).trim().slice("session name ".length).trim();
+    }
+    return null;
+  })();
+  const sessionFileOverride = (() => {
+    const filename = sentence?.fromtext?.filename;
+    if (!filename) return null;
+    if (path.isAbsolute(filename)) return filename;
+    return filename;
+  })();
   const globalSessionNameHint = (() => {
     const fact = remember("session name");
     if (!fact) return null;
@@ -259,8 +277,18 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     if (!historySeriesName) {
       const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
-      const sessionNameSeed = sessionNameHint ?? globalSessionNameHint;
-      if (sessionNameSeed) {
+      const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
+      if (sessionFileOverride) {
+        const resolvedPath = path.isAbsolute(sessionFileOverride)
+          ? sessionFileOverride
+          : path.join(sessionDir, sessionFileOverride);
+        sessionFile = await ensureSessionFileAtPath({
+          sessionFile: resolvedPath,
+          sessionName: path.basename(resolvedPath, path.extname(resolvedPath) || ".pya"),
+          systemPrompt: systemLogPrompt,
+          model
+        });
+      } else if (sessionNameSeed) {
         const baseName = String(sessionNameSeed).trim();
         const sessionName = buildSessionNameForDate({
           baseName,
@@ -273,10 +301,17 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
           model
         }) : null;
       } else {
-        sessionFile = await pickLatestSessionFile(sessionDir, { datePrefix });
+        sessionFile = await findSessionFileBySystemPrompt({
+          sessionDir,
+          datePrefix,
+          systemPrompt: namingPrompt || systemLogPrompt
+        });
+        if (!sessionFile) {
+          sessionFile = await pickLatestSessionFile(sessionDir, { datePrefix });
+        }
         if (!sessionFile) {
           const generated = await generateSessionName({
-            promptText,
+            promptText: namingPrompt || promptText,
             model,
             backendName,
             ollamaHost,
@@ -378,6 +413,19 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   if (agentEnabled && sessionFile && !historySeriesName) {
     await appendSessionEntry({ sessionFile, role: "user", content: callPrompt || "" });
     await appendSessionEntry({ sessionFile, role: "assistant", content: responseText || "" });
+    const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
+    await updateSessionSummary({
+      agentHouse,
+      mindName,
+      backendName,
+      model,
+      ollamaHost,
+      mindDebug,
+      debugMind,
+      rememberFn: remember,
+      callPrompt: callPrompt || "",
+      responseText: responseText || ""
+    });
   }
 
   // Record turn so future calls have context

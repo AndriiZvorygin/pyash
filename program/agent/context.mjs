@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"];
+const ROLE_FILE_ORDER = ["ROLE.md", "ROLES.md"];
 
 async function readFileIfExists(filePath) {
   try {
@@ -25,6 +26,39 @@ async function loadBootstrapFiles(identityDir) {
     if (content) parts.push(formatSection(filename, content));
   }
   return parts.join("\n\n");
+}
+
+async function loadRolesContext(agentHouse) {
+  if (!agentHouse) return "";
+  const rolesDir = path.join(agentHouse, "roles");
+  let entries = [];
+  try {
+    entries = await fs.readdir(rolesDir, { withFileTypes: true });
+  } catch (err) {
+    if (err?.code === "ENOENT") return "";
+    throw err;
+  }
+  const files = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+  if (!files.length) return "";
+  const ordered = [
+    ...ROLE_FILE_ORDER.filter(name => files.includes(name)),
+    ...files.filter(name => !ROLE_FILE_ORDER.includes(name)).sort()
+  ];
+  const parts = [];
+  for (const filename of ordered) {
+    const filePath = path.join(rolesDir, filename);
+    const content = await readFileIfExists(filePath);
+    if (content) parts.push(formatSection(filename, content));
+  }
+  if (!parts.length) return "";
+  return `# Roles\n\n${parts.join("\n\n")}`;
+}
+
+async function loadSummaryContext(memoryDir) {
+  const summaryPath = path.join(memoryDir, "SUMMARY.md");
+  const summary = await readFileIfExists(summaryPath);
+  if (!summary) return "";
+  return `# Summary\n\n${summary}`;
 }
 
 async function loadMemoryContext(memoryDir) {
@@ -71,6 +105,8 @@ export async function buildAgentSystemPrompt({
   configPrompt,
   includeMemory = true,
   includeIdentity = true,
+  includeRoles = true,
+  includeSummary = true,
   includeToolExplainer = true
 } = {}) {
   const parts = [];
@@ -84,6 +120,15 @@ export async function buildAgentSystemPrompt({
     const identityDir = path.join(agentHouse, "identity");
     const bootstrap = await loadBootstrapFiles(identityDir);
     if (bootstrap) parts.push(bootstrap);
+  }
+  if (includeRoles && agentHouse) {
+    const roles = await loadRolesContext(agentHouse);
+    if (roles) parts.push(roles);
+  }
+  if (includeSummary && agentHouse) {
+    const memoryDir = path.join(agentHouse, "memory");
+    const summary = await loadSummaryContext(memoryDir);
+    if (summary) parts.push(summary);
   }
   if (includeMemory && agentHouse) {
     const memoryDir = path.join(agentHouse, "memory");
