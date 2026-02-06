@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
@@ -26,9 +27,10 @@ export async function exists(sentence, { remember: rememberFn = remember } = {})
       raw: { sentence }
     });
   }
-  const resolved = path.resolve(String(target));
+  const { resolved, outside } = resolveAgentPath(target, { rememberFn });
+  const resolvedPath = outside || !resolved ? path.resolve(String(target)) : resolved;
   try {
-    await fs.access(resolved);
+    await fs.access(resolvedPath);
     return { ob: { bool: true }, be: "exists" };
   } catch (err) {
     if (err?.code === "ENOENT") {
@@ -36,7 +38,7 @@ export async function exists(sentence, { remember: rememberFn = remember } = {})
     }
     throwErrorSentence({
       name: "exists defective",
-      message: `exists defective: ${resolved}`,
+      message: `exists defective: ${resolvedPath}`,
       from: { name: "exists" },
       raw: { error: err?.message }
     });
