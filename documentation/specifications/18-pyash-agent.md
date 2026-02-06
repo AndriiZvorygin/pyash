@@ -161,6 +161,14 @@ su name session name ob text "<name>" ya
 
 When present, the session file name becomes `YYYYMMDD-<name>` for that day.
 
+Default tools map:
+
+```
+with wo tools
+```
+
+Using `with wo tools` on a mind call uses the default `agent tools` map.
+
 Example tool map:
 
 ```

@@ -48,6 +48,21 @@ const baseMindSignatureWords = [
   ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"]
 ];
 
+function replaceWithWoTools(words) {
+  const out = [...words];
+  for (let i = 0; i < out.length - 2; i += 1) {
+    if (out[i] === "with" && out[i + 1] === "name" && out[i + 2] === "map") {
+      out.splice(i, 3, "with", "wo", "tools");
+      return out;
+    }
+  }
+  return null;
+}
+
+const withWoToolsSignatures = baseMindSignatureWords
+  .map(replaceWithWoTools)
+  .filter(Boolean);
+
 const agentCwdSignatures = baseMindSignatureWords.map(words => [
   "be",
   "write",
@@ -56,4 +71,11 @@ const agentCwdSignatures = baseMindSignatureWords.map(words => [
   ...words.slice(2)
 ]);
 
-export const mindSignatureWords = baseMindSignatureWords.concat(agentCwdSignatures);
+const agentCwdWithWoToolsSignatures = agentCwdSignatures
+  .map(replaceWithWoTools)
+  .filter(Boolean);
+
+export const mindSignatureWords = baseMindSignatureWords
+  .concat(withWoToolsSignatures)
+  .concat(agentCwdSignatures)
+  .concat(agentCwdWithWoToolsSignatures);
