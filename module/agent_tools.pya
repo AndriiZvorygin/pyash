@@ -3,6 +3,7 @@ su name agent ob bool truth ya
 su name read be read from filename input become wo text to name text out can
 su name write be write ob text input to filename input can
 su name list be list can
+su name list files be list from filename input can
 su name search be search ob text input fromstate wo web by num 3 can
 su name download be download from filename input as wo web to filename input can
 su name command be command ob text input to name text out can
