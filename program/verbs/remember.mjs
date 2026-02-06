@@ -9,6 +9,12 @@ function nowDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function tomorrowDate() {
+  const dt = new Date();
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
 function resolveAgentName() {
   const agentName = remember("agent name")?.ob?.text ?? remember("agent name")?.ob?.name;
   if (agentName) return String(agentName);
@@ -71,7 +77,13 @@ export async function rememberPersistent(sentence) {
     return { mood: "ya", su: { name: "memory" }, be: "text", ob: { text } };
   }
 
-  const date = typeof during?.date === "string" ? during.date : nowDate();
+  const rawDate = typeof during?.date === "string" ? during.date : "";
+  const dateKey = rawDate.toLowerCase();
+  const date = dateKey === "today"
+    ? nowDate()
+    : dateKey === "tomorrow"
+    ? tomorrowDate()
+    : rawDate || nowDate();
   const target = path.join(memoryDir, `${date}.md`);
   const header = `# ${date}`;
   await appendFile(target, text, { addHeader: true, header });

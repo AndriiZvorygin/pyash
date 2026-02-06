@@ -135,6 +135,8 @@ Memory is stored under `memory/` in the agent house:
 The following verbs are recommended for managing memory:
 
 * `be remember ob text "<note>" during date YYYY-MM-DD do` appends to daily notes.
+* `be remember ob text "<note>" during date today do` appends to today's notes.
+* `be remember ob text "<note>" during date tomorrow do` appends to tomorrow's notes.
 * `be remember ob text "<note>" during wo always do` appends to long-term memory.
 
 These verbs are not required for initial parity; they are future-facing hooks.
