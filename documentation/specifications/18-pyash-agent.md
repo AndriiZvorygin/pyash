@@ -190,7 +190,8 @@ Session identity MAY be derived from the `from discourse` / `fromtext` config pr
 Explicit overrides (config prompt):
 
 * `from discourse filename "<session path>"` to target a specific session file.
-* `fromtext session name "<name>"` to target a specific session name.
+* `fromtext filename "<session path>"` to target a specific session file.
+* `fromtext name "session name <name>"` to target a specific session name.
 
 Optional override (tool map config):
 

@@ -1,6 +1,5 @@
 exists su name agent-helper be mind via state "qwen3-vl:8b-instruct" from discourse "You are concise." ya
 
 from filename "../../module/agent_tools.pya" ob name agent tools to name agent tools be import do
-exists su name session name ob text "draft review" ya
 
-for name agent-helper with wo tools be session do
+ob text "Say hello in one short sentence." for name agent-helper to name text agent-out with wo tools fromtext name "session name draft review" be write do
