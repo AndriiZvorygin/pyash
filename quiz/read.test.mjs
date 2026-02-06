@@ -17,5 +17,5 @@ test("read verb returns raw filename reference", async () => {
 
   assert.ok(fact, "fact stored");
   assert.equal(fact.be, "read");
-  assert.equal(fact.ob?.filename, "quiz/sandpit/compile.txt");
+  assert.equal(fact.ob?.filename, path.resolve("quiz/sandpit/compile.txt"));
 });
