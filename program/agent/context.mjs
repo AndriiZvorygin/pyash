@@ -53,12 +53,24 @@ function buildIdentityBlock({ agentHouse, mindName } = {}) {
   return lines.join("\n");
 }
 
+function buildToolExplainerBlock() {
+  return [
+    "# Tool Notes",
+    "",
+    "Use memory tools deliberately:",
+    "- `be remember ... during date today` for daily notes.",
+    "- `be remember ... during date tomorrow` for reminders.",
+    "- `be remember ... during wo always` for long-term memory."
+  ].join("\n");
+}
+
 export async function buildAgentSystemPrompt({
   agentHouse,
   mindName,
   configPrompt,
   includeMemory = true,
-  includeIdentity = true
+  includeIdentity = true,
+  includeToolExplainer = true
 } = {}) {
   const parts = [];
   if (includeIdentity) {
@@ -76,6 +88,9 @@ export async function buildAgentSystemPrompt({
     const memoryDir = path.join(agentHouse, "memory");
     const memory = await loadMemoryContext(memoryDir);
     if (memory) parts.push(memory);
+  }
+  if (includeToolExplainer) {
+    parts.push(buildToolExplainerBlock());
   }
   return parts.filter(Boolean).join("\n\n---\n\n");
 }
