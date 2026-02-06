@@ -1,8 +1,7 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
-const MAX_BYTES = 5040;
-const OVERLAP_BYTES = Math.floor(MAX_BYTES / 8);
+const DEFAULT_MAX_BYTES = 5040;
 
 function isContinuationByte(byte) {
   return (byte & 0xc0) === 0x80;
@@ -25,10 +24,10 @@ function adjustStart(buffer, start) {
   return index;
 }
 
-function findEnd(buffer, start) {
+function findEnd(buffer, start, maxBytes) {
   const length = buffer.length;
-  if (length - start <= MAX_BYTES) return length;
-  const hardEnd = Math.min(start + MAX_BYTES, length);
+  if (length - start <= maxBytes) return length;
+  const hardEnd = Math.min(start + maxBytes, length);
 
   let end = hardEnd;
   for (let i = hardEnd - 1; i >= start; i -= 1) {
@@ -56,17 +55,18 @@ function findEnd(buffer, start) {
   return end;
 }
 
-function buildGrossChips(text) {
+function buildGrossChips(text, { maxBytes }) {
   const buffer = Buffer.from(String(text ?? ""), "utf8");
   const entries = [];
   const length = buffer.length;
+  const overlapBytes = Math.floor(maxBytes / 8);
   let start = 0;
 
   while (start < length) {
     start = adjustStart(buffer, start);
     if (start >= length) break;
 
-    const end = findEnd(buffer, start);
+    const end = findEnd(buffer, start, maxBytes);
     const slice = buffer.slice(start, end);
     const chipText = slice.toString("utf8");
     entries.push({
@@ -76,7 +76,7 @@ function buildGrossChips(text) {
     });
 
     if (end >= length) break;
-    let nextStart = end - OVERLAP_BYTES;
+    let nextStart = end - overlapBytes;
     if (nextStart < 0) nextStart = 0;
     if (nextStart <= start) nextStart = end;
     start = nextStart;
@@ -96,7 +96,11 @@ export async function grossChip(sentence, { remember: rememberFn = remember } = 
     });
   }
 
-  const entries = buildGrossChips(sourceText);
+  const maxBytesRaw = sentence?.atmost?.byte ?? sentence?.atmost?.bytes;
+  const maxBytes = Number.isFinite(maxBytesRaw) && maxBytesRaw > 0
+    ? Math.trunc(maxBytesRaw)
+    : DEFAULT_MAX_BYTES;
+  const entries = buildGrossChips(sourceText, { maxBytes });
   const outputName = sentence?.to?.name ?? "gross chips";
   const seriesSentence = {
     mood: "ya",
@@ -114,5 +118,13 @@ export const signatures = [
   { signatureWords: ["be", "gross", "chip", "from", "name", "text", "to", "name", "text"], handler: grossChip },
   { signatureWords: ["be", "gross", "chip", "from", "text", "to", "name", "text"], handler: grossChip },
   { signatureWords: ["be", "gross", "chip", "from", "name", "text"], handler: grossChip },
-  { signatureWords: ["be", "gross", "chip", "from", "text"], handler: grossChip }
+  { signatureWords: ["be", "gross", "chip", "from", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "from", "name", "text", "atmost", "byte", "to", "name", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "from", "text", "atmost", "byte", "to", "name", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "from", "name", "text", "atmost", "byte"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "from", "text", "atmost", "byte"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "atmost", "byte", "from", "name", "text", "to", "name", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "atmost", "byte", "from", "text", "to", "name", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "atmost", "byte", "from", "name", "text"], handler: grossChip },
+  { signatureWords: ["be", "gross", "chip", "atmost", "byte", "from", "text"], handler: grossChip }
 ];

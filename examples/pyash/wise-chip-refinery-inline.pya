@@ -1,0 +1,19 @@
+exists su name boundary classifier be mind via state "qwen3-vl:8b-instruct" fromtext text "You read the first gross chip (user content). Identify the document kind and explain how to detect section boundaries in this document type. Your output is a prompt that will be given to small LLMs to find section boundaries in each chip and return a single exact boundary marker quote. Output exactly two paragraphs: (1) Document kind and cues. (2) Boundary detection guidance with examples anchored to the chip text and a final sentence stating the required output format (single boundary marker quote only). Use short, concrete sentences. No bullet lists." ya
+exists su name boundary swallower be mind via state "qwen3-vl:8b-instruct" fromtext name boundary prompt ya
+
+su name boundary propose be ceremony def
+  su name boundary marker ob text of ob of this for name boundary swallower to name text boundary marker be write do
+  su name boundary marker ret
+prah
+
+su name boundary refinery be refinery def
+su name load source from filename "documentation/specifications/01-sentence-and-grammar.md" become wo text to name text source be read do
+su name gross chip from name text source atmost byte 360 to name text gross chips be gross chip do
+su name show chip ob text of ob of 0 of series of ob of gross chips be write do
+su name classify prompt ob text of ob of 0 of series of ob of gross chips for name boundary classifier to name text boundary prompt be write do
+su name show prompt ob text of ob of boundary prompt be write do
+su name boundary propose map from name gross chips by name boundary propose to name text boundary proposals be series map do
+su name show proposal ob text of ob of 0 of series of ob of boundary proposals be write do
+prah
+
+from name boundary refinery be refinery do

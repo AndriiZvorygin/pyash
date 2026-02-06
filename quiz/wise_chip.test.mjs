@@ -10,14 +10,14 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("wise chip resolves anchor pairs from boundary series", async () => {
+test("wise chip resolves marker boundaries from boundary series", async () => {
   forget();
 
-  const source = "Intro section start A ... end A. Middle text. Start B ... end B. Tail.";
+  const source = "Intro start A ... end A. Middle. Start B ... end B. Tail.";
   await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
 
   await run("su name boundary proposals be series def");
-  await run('su name proposal 1 from num 1 ob ve text "start A" "end A" "Start B" "end B" be boundary ya');
+  await run('su name proposal 1 from num 1 ob ve text "start A" "Start B" be boundary ya');
   await run("prah");
 
   await run("from name text source by name boundary proposals to name text wise chips be wise chip do");
@@ -27,6 +27,6 @@ test("wise chip resolves anchor pairs from boundary series", async () => {
   assert.equal(series.be, "series");
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
   assert.equal(texts.length, 2);
-  assert.equal(texts[0], "start A ... end A");
-  assert.equal(texts[1], "Start B ... end B");
+  assert.equal(texts[0], "start A ... end A. Middle. ");
+  assert.equal(texts[1], "Start B ... end B. Tail.");
 });

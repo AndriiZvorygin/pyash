@@ -18,38 +18,40 @@ function resolveBoundarySeries(sentence, { rememberFn = remember } = {}) {
   return fact.ob.series;
 }
 
-function extractPairs(entry) {
-  const pairs = [];
+function extractMarkers(entry) {
+  const markers = [];
   const values = entry?.ob?.ve?.values;
-  if (Array.isArray(values) && values.length >= 2) {
-    for (let i = 0; i + 1 < values.length; i += 2) {
-      const start = values[i];
-      const end = values[i + 1];
-      if (typeof start === "string" && typeof end === "string") {
-        pairs.push({ start, end, chipIndex: entry?.from?.num ?? null });
-      }
+  if (Array.isArray(values)) {
+    for (const value of values) {
+      if (typeof value === "string" && value.length > 0) markers.push(value);
     }
-    return pairs;
   }
-  const start = entry?.ob?.text;
-  const end = entry?.from?.text;
-  if (typeof start === "string" && typeof end === "string") {
-    pairs.push({ start, end, chipIndex: entry?.from?.num ?? null });
+  if (typeof entry?.ob?.text === "string" && entry.ob.text.length > 0) {
+    markers.push(entry.ob.text);
   }
-  return pairs;
+  return markers;
 }
 
-function resolveWiseSlices(source, pairs) {
-  const slices = [];
+function resolveMarkerPositions(source, markers) {
+  const positions = [];
   let cursor = 0;
-  for (const pair of pairs) {
-    const startIdx = source.indexOf(pair.start, cursor);
+  for (const marker of markers) {
+    const startIdx = source.indexOf(marker, cursor);
     if (startIdx === -1) continue;
-    const endIdx = source.indexOf(pair.end, startIdx + pair.start.length);
-    if (endIdx === -1) continue;
-    const sliceEnd = endIdx + pair.end.length;
-    slices.push(source.slice(startIdx, sliceEnd));
-    cursor = sliceEnd;
+    positions.push({ start: startIdx, marker });
+    cursor = startIdx + marker.length;
+  }
+  return positions;
+}
+
+function resolveWiseSlices(source, positions) {
+  const slices = [];
+  for (let i = 0; i < positions.length; i += 1) {
+    const startIdx = positions[i].start;
+    const endIdx = positions[i + 1]?.start ?? source.length;
+    if (startIdx >= 0 && endIdx > startIdx) {
+      slices.push(source.slice(startIdx, endIdx));
+    }
   }
   return slices;
 }
@@ -75,8 +77,9 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
     });
   }
 
-  const pairs = entries.flatMap(entry => extractPairs(entry));
-  const slices = resolveWiseSlices(sourceText, pairs);
+  const markers = entries.flatMap(entry => extractMarkers(entry));
+  const positions = resolveMarkerPositions(sourceText, markers);
+  const slices = resolveWiseSlices(sourceText, positions);
   const seriesEntries = slices.map(text => ({
     mood: "ya",
     ob: { text },
@@ -104,5 +107,13 @@ export const signatures = [
   { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "name", "text", "to", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "text", "to", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "name", "text"], handler: wiseChip },
-  { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "text"], handler: wiseChip }
+  { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "text", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "text", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "name", "text", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "text", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "text"], handler: wiseChip }
 ];

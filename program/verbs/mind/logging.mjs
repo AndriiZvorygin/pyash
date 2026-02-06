@@ -33,6 +33,35 @@ function mapSentenceToDefChain(sentence) {
   return lines;
 }
 
+function seriesDefLines(name, entries) {
+  const lines = [];
+  lines.push({ mood: "def", su: { name }, be: "series" });
+  for (const entry of entries) lines.push(entry);
+  lines.push({ mood: "prah", su: { name } });
+  return lines;
+}
+
+function messageSeriesFromPayload(payload, baseName) {
+  if (!payload || typeof payload !== "object") return null;
+  const messages = Array.isArray(payload.messages) ? payload.messages : null;
+  if (!messages) return null;
+  const seriesName = `${baseName} messages`;
+  const entries = messages
+    .map((entry) => {
+      if (!entry) return null;
+      const role = entry.role ?? "assistant";
+      const content = entry.content ?? "";
+      return {
+        mood: "ya",
+        su: { name: String(role).toLowerCase() },
+        ob: { text: String(content) },
+        be: "text"
+      };
+    })
+    .filter(Boolean);
+  return { seriesName, lines: seriesDefLines(seriesName, entries) };
+}
+
 export function stripContext(obj) {
   if (!obj || typeof obj !== "object") return obj;
   const clone = Array.isArray(obj) ? [...obj] : { ...obj };
@@ -44,10 +73,17 @@ export function recordMindJson({ targetName, label, payload }) {
   const count = nextDebugCount(targetName);
   const baseName = `${targetName || "mind"} ${label} ${count}`;
   const jsonValue = payload ?? {};
-  const { sentences } = jsonToMapSentences(jsonValue, baseName);
+  const messageSeries = messageSeriesFromPayload(jsonValue, baseName);
+  const payloadForMap = messageSeries
+    ? { ...jsonValue, messages: { name: messageSeries.seriesName } }
+    : jsonValue;
+  const { sentences } = jsonToMapSentences(payloadForMap, baseName);
   for (const sentence of sentences) {
     const chain = mapSentenceToDefChain(sentence);
     for (const entry of chain) emitExchangeSentence(entry);
+  }
+  if (messageSeries) {
+    for (const entry of messageSeries.lines) emitExchangeSentence(entry);
   }
 }
 

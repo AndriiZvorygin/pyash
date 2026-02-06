@@ -1,0 +1,14 @@
+from name /workplace/module/wise_chip.pya to name wise tools be import do
+
+su name note ob text "Wise chip demo: boundary proposals over the sentence spec." be write do
+
+from filename "documentation/specifications/01-sentence-and-grammar.md" become wo text to name text source be read do
+
+su name boundary proposals be series def
+  su name proposal 1 from num 1 ob ve text "## Sentence Model" "## Moods and Memory" be boundary ya
+prah
+
+from name text source by name text boundary proposals to name text wise chips be wise chip do
+
+ob text of ob of 0 of series of ob of wise chips be write do
+ob text of ob of 1 of series of ob of wise chips be write do

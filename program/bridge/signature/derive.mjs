@@ -78,6 +78,8 @@ function caseTypeWords(value) {
   if (value.hour !== undefined) words.push("hour");
   if (value.day !== undefined) words.push("day");
   if (value.week !== undefined) words.push("week");
+  if (value.line !== undefined || value.lines !== undefined) words.push("line");
+  if (value.byte !== undefined || value.bytes !== undefined) words.push("byte");
   if (value.boolean !== undefined) words.push("bool");
   if (value.hollow) words.push("hollow");
   if (value.text !== undefined) words.push("text");
@@ -116,7 +118,9 @@ function normalizeDefinitionTypeWords(typeWords) {
       t === "minute" ||
       t === "hour" ||
       t === "day" ||
-      t === "week"
+      t === "week" ||
+      t === "line" ||
+      t === "byte"
     )];
     if (withoutTail.length === 1) {
       // default to numeric if no explicit type after name
