@@ -148,6 +148,99 @@ export async function pickLatestSessionFile(sessionDir, { datePrefix } = {}) {
   return latest ? path.join(sessionDir, latest) : null;
 }
 
+export async function findSessionFileBySystemPrompt({
+  sessionDir,
+  datePrefix,
+  systemPrompt
+} = {}) {
+  if (!systemPrompt) return null;
+  const files = await listSessionFiles(sessionDir, { datePrefix });
+  if (!files.length) return null;
+  for (const name of files) {
+    const fullPath = path.join(sessionDir, name);
+    let text = "";
+    try {
+      text = await fs.readFile(fullPath, "utf8");
+    } catch {
+      continue;
+    }
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    for (const line of lines.slice(0, 6)) {
+      let sentence = null;
+      try {
+        sentence = parse(line);
+      } catch {
+        continue;
+      }
+      if (sentence?.su?.name !== "system") continue;
+      if (sentence?.ob?.text === systemPrompt) return fullPath;
+    }
+  }
+  return null;
+}
+
+export async function updateSessionSummary({
+  agentHouse,
+  mindName,
+  backendName,
+  model,
+  ollamaHost,
+  mindDebug,
+  debugMind,
+  rememberFn,
+  callPrompt,
+  responseText
+} = {}) {
+  if (!agentHouse) return;
+  const memoryDir = path.join(agentHouse, "memory");
+  await fs.mkdir(memoryDir, { recursive: true });
+  const summaryPath = path.join(memoryDir, "SUMMARY.md");
+  let prior = "";
+  try {
+    prior = await fs.readFile(summaryPath, "utf8");
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+  }
+  const mockResponse = resolveConfigText("mind response", { rememberFn });
+  if (!mockResponse && !backendName) return;
+
+  const system = "You maintain a concise running summary of the session. Output 3-5 bullet points. Keep it short and factual.";
+  const user = [
+    "Current summary (if any):",
+    prior ? prior.trim() : "(empty)",
+    "",
+    "New turn:",
+    `USER: ${callPrompt ?? ""}`,
+    `ASSISTANT: ${responseText ?? ""}`
+  ].join("\n");
+  const requestPayload = {
+    mode: "chat",
+    model,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ],
+    stream: false,
+    options: { num_predict: 120 }
+  };
+  if (ollamaHost) requestPayload.host = ollamaHost;
+  debugMind?.("summary request", requestPayload);
+
+  let summaryText = "";
+  if (mockResponse) {
+    summaryText = String(mockResponse);
+  } else {
+    const response = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+    summaryText =
+      response?.message?.content ??
+      response?.response ??
+      response?.content ??
+      "";
+  }
+  if (!summaryText) return;
+  await fs.writeFile(summaryPath, summaryText.trim() + "\n", "utf8");
+}
+
 export async function generateSessionName({
   promptText,
   model,
@@ -187,17 +280,7 @@ export async function generateSessionName({
   return sanitizeSessionName(responseText);
 }
 
-export async function ensureSessionFile({
-  sessionDir,
-  sessionName,
-  systemPrompt,
-  model
-} = {}) {
-  await fs.mkdir(sessionDir, { recursive: true });
-  const filename = sessionFilename({ sessionName });
-  const filePath = path.join(sessionDir, filename);
-  if (fsSync.existsSync(filePath)) return filePath;
-
+function buildSessionHeaderLines({ sessionName, systemPrompt, model } = {}) {
   const headerSentence = {
     su: { name: sessionName },
     since: { date: todayDate() },
@@ -211,10 +294,35 @@ export async function ensureSessionFile({
     during: { date: nowIso() },
     mood: "ya"
   };
-  const headerLine = sentenceToPyash(headerSentence);
-  const systemLine = sentenceToPyash(systemSentence);
-  await fs.writeFile(filePath, `${headerLine}\n${systemLine}\n`, "utf8");
+  return `${sentenceToPyash(headerSentence)}\n${sentenceToPyash(systemSentence)}\n`;
+}
+
+export async function ensureSessionFile({
+  sessionDir,
+  sessionName,
+  systemPrompt,
+  model
+} = {}) {
+  await fs.mkdir(sessionDir, { recursive: true });
+  const filename = sessionFilename({ sessionName });
+  const filePath = path.join(sessionDir, filename);
+  if (fsSync.existsSync(filePath)) return filePath;
+  await fs.writeFile(filePath, buildSessionHeaderLines({ sessionName, systemPrompt, model }), "utf8");
   return filePath;
+}
+
+export async function ensureSessionFileAtPath({
+  sessionFile,
+  sessionName,
+  systemPrompt,
+  model
+} = {}) {
+  if (!sessionFile) return null;
+  if (fsSync.existsSync(sessionFile)) return sessionFile;
+  const resolvedName = sessionName || path.basename(sessionFile, path.extname(sessionFile) || ".pya");
+  await fs.mkdir(path.dirname(sessionFile), { recursive: true });
+  await fs.writeFile(sessionFile, buildSessionHeaderLines({ sessionName: resolvedName, systemPrompt, model }), "utf8");
+  return sessionFile;
 }
 
 export async function appendSessionEntry({
