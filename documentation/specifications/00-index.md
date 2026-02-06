@@ -20,6 +20,7 @@ Reading order (feature chapters):
 12. `12-web-search.md` — web search spec (draft).
 13. `13-cheat-sheet.md` — compact coding-only reference (for small models).
 14. `14-index-map.md` — quick lookup map into the full specs.
+15. `18-pyash-agent.md` — agent loop, prompt context, and memory.
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
@@ -62,4 +63,5 @@ Feature specs (optional, when blessed):
 - `10-pipelines.md`
 - `11-translation.md`
 - `11-modules.md` (v0.1)
+- `18-pyash-agent.md`
 - `documentation/whisper_initial_prompt.md` (draft)

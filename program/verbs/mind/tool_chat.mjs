@@ -8,6 +8,18 @@ import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
 import { buildToolSentence } from "./tooling.mjs";
 
+function buildPromptText(messages) {
+  if (!Array.isArray(messages)) return "";
+  const lines = [];
+  for (const msg of messages) {
+    if (!msg) continue;
+    const role = String(msg.role ?? "assistant").toUpperCase();
+    const content = msg.content ?? "";
+    lines.push(`${role}: ${content}`);
+  }
+  return lines.join("\n");
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -66,6 +78,7 @@ export async function runToolChat({
   while (turns < maxToolTurns) {
     turns += 1;
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
+    requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);

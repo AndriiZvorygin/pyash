@@ -8,6 +8,18 @@ import { recordMindAnswer } from "./series.mjs";
 import { resolveConfigText } from "../../configure/env.mjs";
 import { remember } from "../../remember/index.mjs";
 
+function buildPromptText(messages) {
+  if (!Array.isArray(messages)) return "";
+  const lines = [];
+  for (const msg of messages) {
+    if (!msg) continue;
+    const role = String(msg.role ?? "assistant").toUpperCase();
+    const content = msg.content ?? "";
+    lines.push(`${role}: ${content}`);
+  }
+  return lines.join("\n");
+}
+
 export async function runGenerate({
   sentence,
   ob,
@@ -27,25 +39,25 @@ export async function runGenerate({
   aspect,
   inputText
 } = {}) {
-  const promptParts = [];
-  if (resolvedConfigPrompt) promptParts.push(resolvedConfigPrompt);
+  const messages = [];
   const toolList = toolListFromMap(toolMapName);
-  if (toolList) promptParts.push(toolList);
-  if (historyMessages.length) {
-    const histText = historyMessages
-      .map(m => `${m.role.toUpperCase()}: ${m.content}`)
-      .join("\n");
-    promptParts.push(histText);
+  const systemParts = [];
+  if (resolvedConfigPrompt) systemParts.push(resolvedConfigPrompt);
+  if (toolList) systemParts.push(toolList);
+  if (systemParts.length) {
+    messages.push({ role: "system", content: systemParts.join("\n\n") });
   }
-  if (callPrompt) promptParts.push(callPrompt);
-  const fullPrompt = promptParts.filter(Boolean).join("\n\n") + (inputText ? "\n\n" + inputText : "");
+  if (historyMessages.length) messages.push(...historyMessages);
+  const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
+  if (userContent) messages.push({ role: "user", content: userContent });
   const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
 
   if (aspect === "stream") {
     const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
     startStreamFile(streamOutputPath);
     const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
-    const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: true };
+    const requestPayload = { mode: "chat", model, messages, stream: true };
+    requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
@@ -138,13 +150,15 @@ export async function runGenerate({
 
   let responseText = "";
   if (mockResponse) {
-    const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: false };
+    const requestPayload = { mode: "chat", model, messages, stream: false };
+    requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     responseText = mockResponse;
   } else {
-    const requestPayload = { mode: "generate", model, prompt: fullPrompt.trim(), stream: false };
+    const requestPayload = { mode: "chat", model, messages, stream: false };
+    requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
