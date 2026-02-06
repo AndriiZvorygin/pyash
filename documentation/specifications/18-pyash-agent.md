@@ -9,7 +9,7 @@ Define a minimal, deterministic agent loop for Pyash that mirrors nanobot-style 
 3. Execute tool calls and feed results back into the loop.
 4. Record outputs and memory changes deterministically.
 
-This spec focuses on loop, context, and memory first. It does not prescribe a specific UI channel.
+This spec focuses on functional parity for loop, context, memory, and orchestration. It does not require internal implementation parity.
 
 ---
 
@@ -93,6 +93,7 @@ Minimum layout under `world/house/<agent>/`:
 Optional layout:
 
 * `roles/` (task/role notes, treated similarly to skills)
+* `conduct/` (approval and scheduler policy)
 
 ---
 
@@ -162,7 +163,6 @@ Memory is stored under `memory/` in the agent house:
 
 The following verbs are recommended for managing memory:
 
-* `be remember ob text "<note>" during date YYYY-MM-DD do` appends to daily notes.
 * `be remember ob text "<note>" during date today do` appends to today's notes.
 * `be remember ob text "<note>" during date tomorrow do` appends to tomorrow's notes (future reminders).
 * `be remember ob text "<note>" during date YYYY-MM-DD do` appends to that date's notes (future reminders).
@@ -287,10 +287,28 @@ A hard limit prevents runaway loops. Default `max_iterations = 20`.
 
 Tool calls are executed in the order returned. Results are appended immediately after execution.
 
-### 7.4 Tool approval gating (note)
+### 7.4 Tool approval gating (normative)
 
-Tool approval gating MAY be layered on top of tool execution (e.g., require confirmation
-for `download` or `command`). This spec does not mandate a gating policy yet.
+Tool approval is policy-driven:
+
+* `can` mood tool entries execute immediately.
+* `propose` mood tool entries require ratification before execution.
+
+Default-tool ratification policy is loaded from:
+
+```
+world/house/<agent>/conduct/ratify.pya
+```
+
+If a proposed tool is denied or unanswered, the tool call is skipped and the loop continues.
+
+### 7.5 Heartbeat behavior (normative)
+
+Heartbeat checks are scheduler-driven and default to every 24 minutes.
+
+Overlap policy:
+
+* If a prior heartbeat tick is still running when the next tick arrives, skip the next tick.
 
 ---
 
@@ -304,7 +322,7 @@ An initial agent loop SHOULD support these tool classes:
 * Shell exec
 * Web search/fetch
 * Message send
-* Spawn subagent
+* Spawn subprocess agent
 
 ### 8.2 Context propagation
 
@@ -351,6 +369,7 @@ Recommended files to implement this spec:
 * Session persistence: `program/agent/session.mjs`
 * Agent loop: `program/agent/loop.mjs`
 * Mind integration: `program/verbs/mind/mind.mjs`
+* Scheduler + heartbeat runner: `command/heartbeat.mjs` (and future scheduler runtime)
 
 ---
 
@@ -361,6 +380,8 @@ Recommended files to implement this spec:
 * Store sessions as append-only Pyash series files.
 * Execute tool calls in a deterministic loop.
 * Record request/response artifacts.
+* Enforce approval on `propose` tools via `conduct/ratify.pya`.
+* Run heartbeat from scheduler with skip-on-overlap policy.
 
 ## 13. Agent house paths
 
@@ -376,6 +397,7 @@ Agent subpaths:
 world/house/<agent>/identity/
 world/house/<agent>/memory/
 world/house/<agent>/session/
+world/house/<agent>/conduct/
 ```
 
 Implementations MAY seed empty `identity/` directories from a template pack
@@ -386,3 +408,51 @@ such as `examples/agent-identity/agent-helper/identity/`.
 * Execute tool calls in a deterministic loop.
 * Record request/response artifacts.
 * Persist session history and memory to disk.
+
+## 14. Scheduler and load
+
+### 14.1 Real scheduler requirement
+
+The system MUST provide a real scheduler runtime (not ad-hoc sleeps in agent logic) so load can be measured and capacity can be estimated per machine.
+
+### 14.2 Schedule declaration format
+
+Schedules are declared as Pyash sentences (stored in policy/config files, typically under `conduct/`).
+
+Initial supported declaration pattern:
+
+```
+su name <job> every minute <num> ob text "<prompt>" for name <agent> with wo tools be schedule ya
+```
+
+Heartbeat default declaration:
+
+```
+su name heartbeat every minute 24 for name <agent> be schedule ya
+```
+
+### 14.3 Load telemetry
+
+Scheduler runtime SHOULD record, per job:
+
+* interval
+* run duration
+* overlap skip count
+* estimated utilization percentage (`duration / interval`)
+
+## 15. Channels and subprocess agents
+
+### 15.1 Subprocess agents
+
+Subprocess agents are treated as callable tools and MUST support deterministic invocation and result capture.
+
+### 15.2 Channels roadmap priority
+
+Matrix channel integration is a near-term priority after scheduler/approval core is stable.
+
+## 16. Open question
+
+For scheduled jobs, confirm session routing policy:
+
+* Option A: fixed session lane per job name.
+* Option B: prompt-derived session selection (same behavior as regular calls).
