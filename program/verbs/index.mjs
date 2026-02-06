@@ -58,6 +58,7 @@ import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
+import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 
 export {
   plus,
@@ -106,7 +107,8 @@ export {
   refinery,
   reporter,
   errorSieve,
-  successSieve
+  successSieve,
+  rememberPersistent
 };
 
 export const builtInSignatures = [
@@ -170,4 +172,5 @@ export const builtInSignatures = [
   ...reporterSignatures,
   ...errorSieveSignatures,
   ...successSieveSignatures,
+  ...rememberSignatures,
 ];

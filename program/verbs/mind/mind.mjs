@@ -134,6 +134,9 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     if (typeof fact?.ob?.name === "string") return fact.ob.name;
     return null;
   })();
+  if (agentEnabled) {
+    doRemember({ mood: "ya", su: { name: "agent name" }, ob: { text: mindName }, be: "text" });
+  }
 
   let { historySeriesName, historyMessages } = resolveHistoryContext({
     sentence,
