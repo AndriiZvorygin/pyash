@@ -5,7 +5,7 @@ import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { historyDialogueName, resetMindLogs as resetMindHistory, buildHistoryMessages } from "./history.mjs";
 import { resetMindDebugCounters } from "./logging.mjs";
 import { buildToolSchemas } from "./tooling.mjs";
-import { buildAgentSystemPrompt } from "../../agent/context.mjs";
+import { buildAgentSystemPrompt, buildAgentNamingPrompt } from "../../agent/context.mjs";
 import {
   resolveAgentHouse,
   ensureAgentDirs,
@@ -183,8 +183,12 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       mindName,
       configPrompt: resolvedConfigPrompt
     });
+    const namingPrompt = await buildAgentNamingPrompt({
+      agentHouse,
+      configPrompt: resolvedConfigPrompt
+    });
     if (!historySeriesName) {
-      const promptText = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
+      const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
       if (sessionNameHint) {
         const baseName = String(sessionNameHint).trim();
