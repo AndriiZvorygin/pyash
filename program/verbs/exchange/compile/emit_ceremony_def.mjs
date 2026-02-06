@@ -61,6 +61,54 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
   let hasReturn = false;
   const locals = new Set();
   const localsTypes = new Map();
+  const paramMacros = [];
+  const paramUndefs = [];
+  const addParamMacro = (slot, role) => {
+    if (!slot?.name) return;
+    const name = sanitizeName(slot.name);
+    const typeWords = Array.isArray(slot.nameTypeWords) ? slot.nameTypeWords : [];
+    const isText = typeWords.includes("text");
+    const isBool = typeWords.includes("bool") || typeWords.includes("boolean");
+    let reg = null;
+    if (role === "to") reg = isText ? "pya_to_text" : (isBool ? "pya_to_bool" : "pya_to_num");
+    if (role === "ob") reg = isText ? "pya_ob_text" : (isBool ? "pya_ob_bool" : "pya_ob_num");
+    if (role === "from") reg = "pya_from_num";
+    if (role === "by") reg = "by";
+    if (!reg) return;
+    paramMacros.push(`#define ${name} ${reg}`);
+    paramUndefs.push(`#undef ${name}`);
+    locals.add(name);
+  };
+  if (lang === "c") {
+    addParamMacro(defSentence.to, "to");
+    addParamMacro(defSentence.ob, "ob");
+    addParamMacro(defSentence.from, "from");
+    addParamMacro(defSentence.by, "by");
+
+    const rememberAliases = new Map();
+    for (const s of bodySentences) {
+      if (s?.mood !== "do" || s?.be !== "remember") continue;
+      const rawName = s.to?.name?.split(" ")[0];
+      if (!rawName) continue;
+      const chain = s.ob?.genitive?.chain;
+      if (!Array.isArray(chain) || chain[0] !== "this") continue;
+      const head = chain[1];
+      const wantsText = chain.includes("text");
+      const wantsBool = chain.includes("bool") || chain.includes("boolean");
+      let reg = null;
+      if (head === "to") reg = wantsText ? "pya_to_text" : (wantsBool ? "pya_to_bool" : "pya_to_num");
+      if (head === "ob") reg = wantsText ? "pya_ob_text" : (wantsBool ? "pya_ob_bool" : "pya_ob_num");
+      if (head === "from") reg = "pya_from_num";
+      if (head === "by") reg = "by";
+      if (reg) rememberAliases.set(rawName, reg);
+    }
+    for (const [name, reg] of rememberAliases.entries()) {
+      const safeName = sanitizeName(name);
+      paramMacros.push(`#define ${safeName} ${reg}`);
+      paramUndefs.push(`#undef ${safeName}`);
+      locals.add(safeName);
+    }
+  }
   for (const s of bodySentences) {
     const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, cHelpers, jsHelpers, cState });
     if (line) {
@@ -71,7 +119,6 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
       }
     }
   }
-
   const retLine =
     hasReturn
       ? null
@@ -81,7 +128,7 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
 
   if (lang === "c") {
     const paramList = "void";
-    const body = [...bodyLines, ...(retLine ? [retLine] : [])].map(l => `  ${l}`).join("\n");
+    const body = [...paramMacros, ...bodyLines, ...(retLine ? [retLine] : []), ...paramUndefs].map(l => `  ${l}`).join("\n");
     if (cHelpers) {
       cHelpers.usesCeremonyValue = true;
       cHelpers.usesMapGlobals = true;
