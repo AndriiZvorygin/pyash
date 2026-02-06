@@ -5,6 +5,19 @@ import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { historyDialogueName, resetMindLogs as resetMindHistory, buildHistoryMessages } from "./history.mjs";
 import { resetMindDebugCounters } from "./logging.mjs";
 import { buildToolSchemas } from "./tooling.mjs";
+import { buildAgentSystemPrompt } from "../../agent/context.mjs";
+import {
+  resolveAgentHouse,
+  ensureAgentDirs,
+  generateSessionName,
+  ensureSessionFile,
+  readSessionMessages,
+  appendSessionEntry,
+  pickLatestSessionFile,
+  buildSessionNamePrefix,
+  buildSessionNameForDate,
+  readSessionMessagesWithFallback
+} from "../../agent/session.mjs";
 import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
@@ -94,8 +107,28 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     });
   }
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
+  const agentEnabled = (() => {
+    if (!toolMapFact || toolMapFact.be !== "map") return false;
+    const entries = toolMapFact.ob?.map ?? {};
+    for (const entry of Object.values(entries)) {
+      if (!entry || entry.su?.name !== "agent") continue;
+      if (entry?.ob?.boolean === true) return true;
+      if (entry?.ob?.text && String(entry.ob.text).toLowerCase() === "truth") return true;
+    }
+    return false;
+  })();
+  const sessionNameHint = (() => {
+    if (!toolMapFact || toolMapFact.be !== "map") return null;
+    const entries = toolMapFact.ob?.map ?? {};
+    for (const entry of Object.values(entries)) {
+      if (!entry || entry.su?.name !== "session name") continue;
+      if (typeof entry?.ob?.text === "string") return entry.ob.text;
+      if (typeof entry?.ob?.name === "string") return entry.ob.name;
+    }
+    return null;
+  })();
 
-  const { historySeriesName, historyMessages } = resolveHistoryContext({
+  let { historySeriesName, historyMessages } = resolveHistoryContext({
     sentence,
     configSentence,
     historyWindow,
@@ -140,6 +173,80 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   }
 
   let responseText = "";
+  let sessionFile = null;
+  let agentSystemPrompt = resolvedConfigPrompt;
+  if (agentEnabled) {
+    const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
+    const { sessionDir } = await ensureAgentDirs(agentHouse);
+    agentSystemPrompt = await buildAgentSystemPrompt({
+      agentHouse,
+      mindName,
+      configPrompt: resolvedConfigPrompt
+    });
+    if (!historySeriesName) {
+      const promptText = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
+      const datePrefix = buildSessionNamePrefix();
+      if (sessionNameHint) {
+        const baseName = String(sessionNameHint).trim();
+        const sessionName = buildSessionNameForDate({
+          baseName,
+          dateCompact: datePrefix.replace(/-$/, "")
+        });
+        sessionFile = sessionName ? await ensureSessionFile({
+          sessionDir,
+          sessionName,
+          systemPrompt: agentSystemPrompt,
+          model
+        }) : null;
+      } else {
+        sessionFile = await pickLatestSessionFile(sessionDir, { datePrefix });
+        if (!sessionFile) {
+          const generated = await generateSessionName({
+            promptText,
+            model,
+            backendName,
+            ollamaHost,
+            mindDebug,
+            debugMind,
+            rememberFn: remember
+          });
+          const sessionName = `${datePrefix}${generated}`;
+          sessionFile = await ensureSessionFile({
+            sessionDir,
+            sessionName,
+            systemPrompt: agentSystemPrompt,
+            model
+          });
+        }
+      }
+      if (sessionFile) {
+        const sessionHistory = sessionNameHint
+          ? await readSessionMessagesWithFallback({
+            sessionDir,
+            baseName: String(sessionNameHint).trim(),
+            historyWindow
+          })
+          : await readSessionMessages({ sessionFile, historyWindow });
+        historyMessages = sessionHistory.messages;
+        if (sessionHistory.lastSystemModel && sessionHistory.lastSystemModel !== model) {
+          await appendSessionEntry({
+            sessionFile,
+            role: "system",
+            content: agentSystemPrompt,
+            model
+          });
+        }
+        if (!sessionHistory.lastSystemModel) {
+          await appendSessionEntry({
+            sessionFile,
+            role: "system",
+            content: agentSystemPrompt,
+            model
+          });
+        }
+      }
+    }
+  }
   if (toolMapName) {
     if (aspect === "stream") {
       throwErrorSentence({
@@ -157,7 +264,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       model,
       dialogue,
       callPrompt,
-      resolvedConfigPrompt,
+      resolvedConfigPrompt: agentSystemPrompt,
       historyMessages,
       toolMapName,
       toolMap,
@@ -179,7 +286,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       dialogue,
       historyMessages,
       callPrompt,
-      resolvedConfigPrompt,
+      resolvedConfigPrompt: agentSystemPrompt,
       toolMapName,
       backendName,
       ollamaHost,
@@ -192,6 +299,11 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     });
     if (stream) return stream;
     responseText = text ?? "";
+  }
+
+  if (agentEnabled && sessionFile && !historySeriesName) {
+    await appendSessionEntry({ sessionFile, role: "user", content: callPrompt || "" });
+    await appendSessionEntry({ sessionFile, role: "assistant", content: responseText || "" });
   }
 
   // Record turn so future calls have context

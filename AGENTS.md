@@ -29,6 +29,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
 - Run `vocab_suggest` for new Pyash sentence words (names, error names, verbs); quoted prompt text does not need Pyash vocabulary.
 - `vocab_suggest` applies to Pyash tokens (verbs/names/signatures/error names) and **not** to content inside quoted text.
+- Always run new or modified examples (in `examples/`) to confirm they work before asking the user to run them.
 
 ## Quiz Guidelines
 - Add quizzes for every new code path; mirror real REPL usage strings where possible.
@@ -37,6 +38,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.
 - Work red→green: write a failing quiz first, then implement the smallest change to make it pass, and keep runs fast.
 - Keep imperatives recording both the command and a result fact; update quizzes when adding verbs that should emit structured outputs.
+- Do not consider a change complete until it has run at least one real test without fixtures (no `PYA_MIND_RESPONSE`, no test-only backends).
 
 ## Commit & Pull Request Guidelines
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.
