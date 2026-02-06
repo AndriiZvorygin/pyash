@@ -188,7 +188,7 @@ su name <session name> since date YYYY-MM-DD be series def
 Entry lines (append-only):
 
 ```
-su name system ob text "<system prompt>" ya
+su name system ob text "<config prompt>" ya
 su name user ob text "<message>" ya
 su name assistant ob text "<message>" ya
 ```
@@ -196,7 +196,7 @@ su name assistant ob text "<message>" ya
 Optional timestamp:
 
 ```
-su name system ob text "<system prompt>" during date <timestamp> ya
+su name system ob text "<config prompt>" during date <timestamp> ya
 su name user ob text "<message>" during date <timestamp> ya
 su name assistant ob text "<message>" during date <timestamp> ya
 ```
@@ -204,7 +204,7 @@ su name assistant ob text "<message>" during date <timestamp> ya
 Optional model switches (as an additional case on system entries):
 
 ```
-su name system ob text "<system prompt>" as name <model> during date <timestamp> ya
+su name system ob text "<config prompt>" as name <model> during date <timestamp> ya
 ```
 
 ### 6.3 History selection

@@ -175,6 +175,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   let responseText = "";
   let sessionFile = null;
   let agentSystemPrompt = resolvedConfigPrompt;
+  const systemLogPrompt = resolvedConfigPrompt ?? "";
   if (agentEnabled) {
     const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
     const { sessionDir } = await ensureAgentDirs(agentHouse);
@@ -199,7 +200,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
         sessionFile = sessionName ? await ensureSessionFile({
           sessionDir,
           sessionName,
-          systemPrompt: agentSystemPrompt,
+          systemPrompt: systemLogPrompt,
           model
         }) : null;
       } else {
@@ -218,7 +219,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
           sessionFile = await ensureSessionFile({
             sessionDir,
             sessionName,
-            systemPrompt: agentSystemPrompt,
+            systemPrompt: systemLogPrompt,
             model
           });
         }
@@ -236,7 +237,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
           await appendSessionEntry({
             sessionFile,
             role: "system",
-            content: agentSystemPrompt,
+            content: systemLogPrompt,
             model
           });
         }
@@ -244,7 +245,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
           await appendSessionEntry({
             sessionFile,
             role: "system",
-            content: agentSystemPrompt,
+            content: systemLogPrompt,
             model
           });
         }
