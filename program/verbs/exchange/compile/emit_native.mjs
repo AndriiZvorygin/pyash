@@ -5,6 +5,8 @@ import { handleNativeList } from "./emit_native/list.mjs";
 import { handleNativeEcology } from "./emit_native/ecology.mjs";
 import { handleNativeLicense } from "./emit_native/license.mjs";
 import { handleNativeCopy } from "./emit_native/copy.mjs";
+import { handleNativeDirectory } from "./emit_native/directory.mjs";
+import { handleNativeDelete } from "./emit_native/delete.mjs";
 
 export function handleNativeSentence(context, helpers) {
   const existsResult = handleNativeExists(context, helpers);
@@ -27,6 +29,12 @@ export function handleNativeSentence(context, helpers) {
 
   const copyResult = handleNativeCopy(context, helpers);
   if (copyResult) return copyResult;
+
+  const directoryResult = handleNativeDirectory(context, helpers);
+  if (directoryResult) return directoryResult;
+
+  const deleteResult = handleNativeDelete(context, helpers);
+  if (deleteResult) return deleteResult;
 
   return null;
 }

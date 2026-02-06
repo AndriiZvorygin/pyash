@@ -60,12 +60,27 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
   }
   if (isLocalRoot) {
     const [root, ...rest] = chain;
-    if (localsTypes?.get(sanitizeName(root)) === "number") {
+    const localType = localsTypes?.get(sanitizeName(root));
+    if (localType === "number") {
       if (rest.length === 1 && rest[0] === "num") return sanitizeName(root);
       if (rest.length === 2 && rest[0] === "ob" && rest[1] === "num") {
         const base = sanitizeName(root);
         return `${base}.ob?.num ?? ${base}`;
       }
+    }
+    if (rest.length === 1) {
+      const base = sanitizeName(root);
+      if (rest[0] === "text") return `${base}.ob?.text`;
+      if (rest[0] === "name") return `${base}.ob?.name`;
+      if (rest[0] === "boolean") return `${base}.ob?.boolean ?? ${base}`;
+      if (rest[0] === "num") return `${base}.ob?.num ?? ${base}`;
+    }
+    if (rest.length === 2 && rest[0] === "ob") {
+      const base = sanitizeName(root);
+      if (rest[1] === "text") return `${base}.ob?.text`;
+      if (rest[1] === "name") return `${base}.ob?.name`;
+      if (rest[1] === "boolean") return `${base}.ob?.boolean ?? ${base}`;
+      if (rest[1] === "num") return `${base}.ob?.num ?? ${base}`;
     }
     return [sanitizeName(root), ...rest.map(part => `.${part}`)].join("");
   }
