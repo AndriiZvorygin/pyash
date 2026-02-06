@@ -14,7 +14,7 @@ su name exists be exists ob filename input can
 su name write be write ob text input to filename input can
 su name compile html be compile from filename input fromstate name markdown become name html to filename input can
 su name compile pdf be compile from filename input fromstate name markdown become name pdf to filename input can
-su name compile markdown be compile from filename input fromstate name html become name markdown to filename input can
+su name read markdown be read from filename input fromstate wo html become wo markdown to name text out can
 su name list be list can
 su name command be command ob text input to name text out can
 prah
