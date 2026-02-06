@@ -21,6 +21,7 @@ This spec focuses on loop, context, and memory first. It does not prescribe a sp
 * **session**: a named dialogue history used for context windows.
 * **memory**: persistent, human-curated notes separate from ordinary Pyash facts.
 * **tool call**: a structured request returned by the mind backend to invoke a tool.
+* **roles**: optional, task-oriented role notes that sit alongside identity and memory.
 
 ---
 
@@ -74,6 +75,18 @@ The memory context is a formatted block inserted into the system prompt:
 
 If a section is missing, it is omitted entirely.
 
+### 3.4 Agent house layout
+
+Minimum layout under `world/house/<agent>/`:
+
+* `identity/` (bootstrap files)
+* `memory/` (persistent memory files)
+* `session/` (session history)
+
+Optional layout:
+
+* `roles/` (task/role notes, treated similarly to skills)
+
 ---
 
 ## 4. Prompt context assembly
@@ -102,8 +115,16 @@ The system prompt concatenates the following blocks in order, separated by `\n\n
 
 1. Agent identity block (runtime, workspace, guidance).
 2. Bootstrap files block (combined).
-3. Memory context block.
-4. Skills summary block (optional).
+3. Roles block (optional, from `roles/`).
+4. Memory context block.
+5. Skills summary block (optional).
+6. Tool explainer block (optional).
+
+Tool explainer block SHOULD explicitly describe memory usage, for example:
+
+* Use `be remember ... during date today` for daily notes.
+* Use `be remember ... during date tomorrow` for reminders.
+* Use `be remember ... during wo always` for long-term memory.
 
 ### 4.3 History inclusion
 
@@ -152,6 +173,16 @@ A session name is generated on first prompt as:
 * `YYYYMMDD-<name>`
 
 `<name>` is produced by a short mind prompt and stored in the session file header.
+
+Session identity MAY be derived from the `from discourse` / `fromtext` config prompt:
+
+* If the config prompt matches an existing session for today, reuse it.
+* Otherwise generate a new name.
+
+Explicit overrides (config prompt):
+
+* `from discourse filename "<session path>"` to target a specific session file.
+* `fromtext session name "<name>"` to target a specific session name.
 
 Optional override (tool map config):
 
@@ -246,6 +277,11 @@ A hard limit prevents runaway loops. Default `max_iterations = 20`.
 ### 7.3 Tool execution order
 
 Tool calls are executed in the order returned. Results are appended immediately after execution.
+
+### 7.4 Tool approval gating (note)
+
+Tool approval gating MAY be layered on top of tool execution (e.g., require confirmation
+for `download` or `command`). This spec does not mandate a gating policy yet.
 
 ---
 
