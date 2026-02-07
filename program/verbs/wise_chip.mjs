@@ -19,15 +19,24 @@ function resolveBoundarySeries(sentence, { rememberFn = remember } = {}) {
 }
 
 function extractMarkers(entry) {
+  const normalizeMarker = (value) => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const quoted = trimmed.match(/^["'`“”](.*)["'`“”]$/);
+    return quoted ? quoted[1] : trimmed;
+  };
   const markers = [];
   const values = entry?.ob?.ve?.values;
   if (Array.isArray(values)) {
     for (const value of values) {
-      if (typeof value === "string" && value.length > 0) markers.push(value);
+      const marker = normalizeMarker(value);
+      if (marker) markers.push(marker);
     }
   }
-  if (typeof entry?.ob?.text === "string" && entry.ob.text.length > 0) {
-    markers.push(entry.ob.text);
+  const textMarker = normalizeMarker(entry?.ob?.text);
+  if (textMarker) {
+    markers.push(textMarker);
   }
   return markers;
 }
@@ -42,6 +51,17 @@ function resolveMarkerPositions(source, markers) {
     cursor = startIdx + marker.length;
   }
   return positions;
+}
+
+function dedupePositions(positions) {
+  const deduped = [];
+  let lastStart = -1;
+  for (const pos of positions) {
+    if (pos.start === lastStart) continue;
+    deduped.push(pos);
+    lastStart = pos.start;
+  }
+  return deduped;
 }
 
 function resolveWiseSlices(source, positions) {
@@ -78,7 +98,7 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
   }
 
   const markers = entries.flatMap(entry => extractMarkers(entry));
-  const positions = resolveMarkerPositions(sourceText, markers);
+  const positions = dedupePositions(resolveMarkerPositions(sourceText, markers));
   const slices = resolveWiseSlices(sourceText, positions);
   const seriesEntries = slices.map(text => ({
     mood: "ya",
