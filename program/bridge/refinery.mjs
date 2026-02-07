@@ -1,5 +1,5 @@
 import { surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
-import { remember } from "../remember/index.mjs";
+import { remember, doRemember } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 
 const refineryRegistry = new Map();
@@ -64,14 +64,22 @@ function normalizeRetryConfig(config = {}) {
   return { initialDelayMs, backoff, maxAttempts, maxDelayMs };
 }
 
-function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence }) {
+function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence, resultLine }) {
+  let payloadText = "";
+  try {
+    payloadText = JSON.stringify(resultSentence ?? {});
+  } catch {
+    payloadText = "";
+  }
   return {
     mood: "ya",
     be: "checkpoint",
     su: { name: platformName },
     ob: { text: hash },
     from: { name: refineryName },
-    to: { la: resultSentence }
+    to: { la: resultSentence },
+    fromtext: { text: payloadText },
+    totext: { text: String(resultLine ?? "") }
   };
 }
 
@@ -508,12 +516,16 @@ export async function runRefinery({
     if (checkpointEnabled && checkpointRecord?.hash === checkpointHash) {
       const resultSentence = checkpointRecord.resultSentence;
       const resultLine = checkpointRecord.resultLine ?? sentenceToPyash(resultSentence);
+      if (resultSentence?.mood === "ya") {
+        doRemember(resultSentence);
+      }
       results.set(nextName, resultLine);
       const checkpointSentence = buildCheckpointSentence({
         refineryName: name,
         platformName: nextName,
         hash: checkpointHash,
-        resultSentence
+        resultSentence,
+        resultLine
       });
       if (onCheckpoint) onCheckpoint(checkpointSentence);
       if (onResult) onResult(resultSentence);
@@ -560,7 +572,8 @@ export async function runRefinery({
         refineryName: name,
         platformName: nextName,
         hash: checkpointHash,
-        resultSentence: surfaced ?? platform.actionSentence
+        resultSentence: surfaced ?? platform.actionSentence,
+        resultLine
       });
       if (checkpointEnabled && onCheckpoint) onCheckpoint(checkpointSentence);
       break;
