@@ -152,6 +152,16 @@ export function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
+function parseCheckpointPayload(text) {
+  if (typeof text !== "string" || text.length === 0) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function collectSentenceNodes(root) {
   const nodes = [];
   const stack = [root];
@@ -280,9 +290,10 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     const refineryName = sentence?.from?.name;
     const platformName = sentence?.su?.name;
     const hash = sentence?.ob?.text;
-    const resultSentence = sentence?.to?.la;
+    const payloadSentence = parseCheckpointPayload(sentence?.fromtext?.text);
+    const resultSentence = payloadSentence ?? sentence?.to?.la;
     if (!refineryName || !platformName || !hash || !resultSentence) continue;
-    const resultLine = sentenceToPyash(resultSentence);
+    const resultLine = sentence?.totext?.text ?? sentenceToPyash(resultSentence);
     if (!checkpoints.has(refineryName)) checkpoints.set(refineryName, new Map());
     checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine });
   }
