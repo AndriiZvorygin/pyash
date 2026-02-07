@@ -24,6 +24,23 @@ import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 
+function renderSeriesSentence(sentence) {
+  const name = sentence?.su?.name ?? "result";
+  const entries = Array.isArray(sentence?.ob?.series) ? sentence.ob.series : [];
+  const lines = [`su name ${name} be series def`];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const normalized = entry.mood ? entry : { mood: "ya", ...entry };
+    try {
+      lines.push(sentenceToPyash(normalized));
+    } catch {
+      lines.push(JSON.stringify(normalized));
+    }
+  }
+  lines.push("prah");
+  return lines.join("\n");
+}
+
 function sentenceHasLoopRegisters(sentence) {
   return Boolean(sentence?.mood === "do" && (sentence.fromindex || sentence.toindex));
 }
@@ -471,6 +488,12 @@ async function main() {
   // If the result is a compiled artifact with a text payload, stream it directly.
   if (result?.ob?.text && !full) {
     console.log(result.ob.text);
+    return;
+  }
+
+  // Surface series payloads in block form so entry boundaries are visible.
+  if (result?.be === "series" && Array.isArray(result?.ob?.series)) {
+    console.log(renderSeriesSentence(result));
     return;
   }
 
