@@ -19,11 +19,28 @@ function resolveMapperName(sentence) {
   return sentence?.by?.name ?? sentence?.by?.text ?? sentence?.by?.wo ?? null;
 }
 
-function buildElementSentence(base, entry, index, count) {
-  const elem = {
-    mood: "do",
-    be: resolveMapperName(base)
+function resolveMapper(sentence, { rememberFn = remember } = {}) {
+  const name = resolveMapperName(sentence);
+  if (!name) return null;
+  const fact = rememberFn(name);
+  return {
+    name,
+    kind: fact?.be === "mind" ? "mind" : "verb"
   };
+}
+
+function buildElementSentence(base, entry, index, count, mapper) {
+  const elem = mapper?.kind === "mind"
+    ? {
+        mood: "do",
+        be: "write",
+        for: { name: mapper.name },
+        to: { name: "series map output", nameTypeWords: ["text"] }
+      }
+    : {
+        mood: "do",
+        be: mapper?.name
+      };
 
   if (base.as) elem.as = base.as;
   if (base.accordingto) elem.accordingto = base.accordingto;
@@ -83,8 +100,8 @@ function normalizeResult(res) {
 }
 
 export async function seriesMap(sentence, { remember: rememberFn = remember } = {}) {
-  const mapper = resolveMapperName(sentence);
-  if (!mapper) {
+  const mapper = resolveMapper(sentence, { rememberFn });
+  if (!mapper?.name) {
     throwErrorSentence({
       name: "series map defective",
       message: "series map defective: missing by name <mapper>",
@@ -109,7 +126,7 @@ export async function seriesMap(sentence, { remember: rememberFn = remember } = 
 
   for (let i = 0; i < count; i += 1) {
     const entry = series.entries[i];
-    const elemSentence = buildElementSentence(sentence, entry, i, count);
+    const elemSentence = buildElementSentence(sentence, entry, i, count, mapper);
 
     pushMemoryContext({ seedFromCurrent: true });
     const prevEvoke = state.currentEvoke;
@@ -157,5 +174,18 @@ export const signatures = [
   { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "name", "mind", "to", "name", "text"], handler: seriesMap },
   { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "name", "mind"], handler: seriesMap },
   { signatureWords: ["be", "series", "map", "by", "name", "mind", "from", "name", "series", "to", "name", "text"], handler: seriesMap },
-  { signatureWords: ["be", "series", "map", "by", "name", "mind", "from", "name", "series"], handler: seriesMap }
+  { signatureWords: ["be", "series", "map", "by", "name", "mind", "from", "name", "series"], handler: seriesMap },
+  // Derived mapper signatures may collapse `by name <mapper>` to `by <type>`.
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "text", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "text", "from", "name", "series", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "text", "from", "name", "series"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "num", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "num"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "num", "from", "name", "series", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "num", "from", "name", "series"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "mind", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "mind"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "series", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "series"], handler: seriesMap }
 ];
