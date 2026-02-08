@@ -48,3 +48,6 @@ caterer/**/build/
 caterer/whisper.cpp/
 caterer/piper/
 .ssh/
+
+# local reference checkout, do not commit
+caterer/nanobot/
