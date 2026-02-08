@@ -26,6 +26,7 @@ import mind, { signatures as mindSignatures } from "./mind/mind.mjs";
 import { giant, signatures as giantSignatures } from "./regulation/giant.mjs";
 import { tiny, signatures as tinySignatures } from "./regulation/tiny.mjs";
 import { equally, signatures as equallySignatures } from "./regulation/equally.mjs";
+import { resemble, signatures as resembleSignatures } from "./regulation/resemble.mjs";
 import vector, { signatures as vectorSignatures } from "./vector/index.mjs";
 import say, { signatures as saySignatures } from "./say.mjs";
 import piperSay, { signatures as piperSaySignatures } from "./piper_say.mjs";
@@ -59,6 +60,7 @@ import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
+import reviewLoop, { signatures as reviewLoopSignatures } from "./review_loop.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 
 export {
@@ -90,6 +92,7 @@ export {
   giant,
   tiny,
   equally,
+  resemble,
   vector,
   say,
   piperSay,
@@ -110,6 +113,7 @@ export {
   reporter,
   errorSieve,
   successSieve,
+  reviewLoop,
   rememberPersistent
 };
 
@@ -142,6 +146,7 @@ export const builtInSignatures = [
   ...giantSignatures,
   ...tinySignatures,
   ...equallySignatures,
+  ...resembleSignatures,
   ...vectorSignatures,
   ...saySignatures,
   ...piperSaySignatures,
@@ -175,5 +180,6 @@ export const builtInSignatures = [
   ...reporterSignatures,
   ...errorSieveSignatures,
   ...successSieveSignatures,
+  ...reviewLoopSignatures,
   ...rememberSignatures,
 ];
