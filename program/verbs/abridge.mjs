@@ -3,10 +3,15 @@ import { throwErrorSentence } from "../error.mjs";
 
 const DEFAULT_BUDGET_BYTES = 4000;
 const REDUNDANCY_THRESHOLD = 0.85;
+const SHORT_SENTENCE_TOKEN_CUTOFF = 6;
+const KEEP_PREFIX_RE = /\b(action|decision|todo|next|follow-up)\s*:/i;
+const NUMERIC_TOKEN_RE = /\b\d[\d,.:/-]*\b/g;
+
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have", "in", "is",
   "it", "its", "of", "on", "or", "that", "the", "to", "was", "were", "will", "with"
 ]);
+
 const CUE_BOOSTS = new Map([
   ["therefore", 0.9],
   ["summary", 0.8],
@@ -18,6 +23,10 @@ const CUE_BOOSTS = new Map([
   ["should", 0.6],
   ["important", 0.5]
 ]);
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
 function resolveSourceText(sentence, { rememberFn = remember } = {}) {
   if (typeof sentence?.ob?.text === "string") return sentence.ob.text;
@@ -44,6 +53,14 @@ function resolveBudgetBytes(sentence) {
 function splitSentencesWithOffsets(text) {
   const source = String(text ?? "");
   const candidates = [];
+  const trimRange = (from, to) => {
+    let start = from;
+    let end = to;
+    while (start < end && /\s/.test(source[start])) start += 1;
+    while (end > start && /\s/.test(source[end - 1])) end -= 1;
+    return { start, end };
+  };
+
   let start = 0;
   const length = source.length;
   for (let i = 0; i < length; i += 1) {
@@ -51,17 +68,37 @@ function splitSentencesWithOffsets(text) {
     const boundary = ch === "." || ch === "!" || ch === "?" || ch === "\n";
     if (!boundary) continue;
     const end = i + 1;
-    const segment = source.slice(start, end).trim();
-    if (segment) {
-      const rawStart = source.indexOf(segment, start);
-      candidates.push({ text: segment, start: rawStart, end: rawStart + segment.length });
+    const range = trimRange(start, end);
+    if (range.end > range.start) {
+      candidates.push({ text: source.slice(range.start, range.end), start: range.start, end: range.end });
     }
     start = end;
   }
-  const tail = source.slice(start).trim();
-  if (tail) {
-    const rawStart = source.indexOf(tail, start);
-    candidates.push({ text: tail, start: rawStart, end: rawStart + tail.length });
+
+  const tail = trimRange(start, length);
+  if (tail.end > tail.start) {
+    candidates.push({ text: source.slice(tail.start, tail.end), start: tail.start, end: tail.end });
+  }
+
+  return candidates;
+}
+
+function isHeadingSentence(text) {
+  return /^#{1,6}\s/.test(text)
+    || /^[A-Z][A-Z0-9\s\-:]{6,}$/.test(text)
+    || /^\d+(\.\d+)*\.\s/.test(text);
+}
+
+function assignSections(candidates) {
+  let sectionId = 0;
+  let sectionStartIndex = 0;
+  for (let i = 0; i < candidates.length; i += 1) {
+    if (i > 0 && isHeadingSentence(candidates[i].text)) {
+      sectionId += 1;
+      sectionStartIndex = i;
+    }
+    candidates[i].sectionId = sectionId;
+    candidates[i].isSectionFirst = i === sectionStartIndex;
   }
   return candidates;
 }
@@ -71,37 +108,48 @@ function tokenize(text) {
   return matches.filter(token => !STOPWORDS.has(token));
 }
 
-function buildDocumentFrequency(candidates) {
+function buildTfIdf(candidates) {
+  const docs = candidates.map(candidate => {
+    const counts = new Map();
+    for (const token of candidate.tokens) {
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+    return counts;
+  });
+
   const df = new Map();
-  for (const candidate of candidates) {
-    const unique = new Set(candidate.tokens);
-    for (const token of unique) {
+  for (const counts of docs) {
+    for (const token of counts.keys()) {
       df.set(token, (df.get(token) ?? 0) + 1);
     }
   }
-  return df;
+
+  return { docs, df, totalDocs: Math.max(1, candidates.length) };
 }
 
-function scoreCandidate(candidate, { index, totalCount, df }) {
+function scoreCandidate(candidate, { index, totalCount, tfidf }) {
   const tokenCount = candidate.tokens.length;
   if (tokenCount === 0) return 0;
 
-  let score = 0;
-  for (const token of candidate.tokens) {
-    const freq = df.get(token) ?? 1;
-    score += 1 / freq;
-    score += CUE_BOOSTS.get(token) ?? 0;
+  const counts = tfidf.docs[index];
+  let score = 0.0;
+  for (const [token, count] of counts.entries()) {
+    const termFrequency = count / tokenCount;
+    const docFrequency = tfidf.df.get(token) ?? 0;
+    const idf = Math.log((1 + tfidf.totalDocs) / (1 + docFrequency)) + 1;
+    score += termFrequency * idf;
+    score += (CUE_BOOSTS.get(token) ?? 0) * 0.1;
   }
 
-  if (/\d/.test(candidate.text)) score += 1.2;
-  if (index === 0) score += 0.8;
-  if (index === totalCount - 1) score += 0.2;
-  if (/^#{1,6}\s/.test(candidate.text) || /^[A-Z][A-Z0-9\s\-:]{6,}$/.test(candidate.text)) score += 0.9;
+  if (/\d/.test(candidate.text)) score += 0.25;
+  if (index === 0) score += 0.1;
+  if (index === totalCount - 1) score += 0.05;
+  if (candidate.isSectionFirst) score += 0.2;
 
   return score / Math.sqrt(tokenCount);
 }
 
-function buildNgrams(tokens, n = 3) {
+function buildNgrams(tokens, n) {
   if (tokens.length === 0) return new Set();
   if (tokens.length < n) return new Set(tokens);
   const grams = new Set();
@@ -121,41 +169,111 @@ function jaccard(a, b) {
   return union === 0 ? 0 : intersection / union;
 }
 
-function selectByBudget(candidates, budgetBytes) {
-  const ranked = [...candidates].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.start - b.start;
-  });
-  const selected = [];
-  let used = 0;
+function sameNumericSignal(a, b) {
+  const aNums = a.numericTokens;
+  const bNums = b.numericTokens;
+  if (aNums.size === 0 || bNums.size === 0) return true;
+  if (aNums.size !== bNums.size) return false;
+  for (const value of aNums) {
+    if (!bNums.has(value)) return false;
+  }
+  return true;
+}
+
+function buildCoverageFlags(scored) {
+  return scored.map(candidate => ({
+    ...candidate,
+    isCoverageKeep: candidate.isSectionFirst || KEEP_PREFIX_RE.test(candidate.text)
+  }));
+}
+
+function resolveShortlist(scored) {
+  const sentenceCount = scored.length;
+  const kTotal = clamp(Math.round(sentenceCount * 0.5), 12, 40);
+  const bySection = new Map();
+  for (const candidate of scored) {
+    if (!bySection.has(candidate.sectionId)) bySection.set(candidate.sectionId, []);
+    bySection.get(candidate.sectionId).push(candidate);
+  }
+
+  const shortlisted = new Map();
+  for (const list of bySection.values()) {
+    const proportional = Math.round((list.length / Math.max(1, sentenceCount)) * kTotal);
+    const kSection = clamp(proportional, 2, 8);
+    list.sort((a, b) => (b.score - a.score) || (a.start - b.start));
+    for (const candidate of list.slice(0, kSection)) shortlisted.set(candidate.id, candidate);
+  }
+
+  for (const candidate of scored) {
+    if (candidate.isCoverageKeep) shortlisted.set(candidate.id, candidate);
+  }
+
+  return [...shortlisted.values()];
+}
+
+function dedupeCandidates(shortlisted) {
+  const forced = shortlisted
+    .filter(candidate => candidate.isCoverageKeep)
+    .sort((a, b) => a.start - b.start);
+  const keptById = new Set(forced.map(candidate => candidate.id));
+  const kept = [...forced];
+
+  const ranked = shortlisted
+    .filter(candidate => !keptById.has(candidate.id))
+    .sort((a, b) => (b.score - a.score) || (a.start - b.start));
+
   for (const candidate of ranked) {
-    const similarity = selected.reduce((max, item) => {
+    const similarity = kept.reduce((max, item) => {
+      if (!sameNumericSignal(candidate, item)) return max;
       const sim = jaccard(candidate.ngrams, item.ngrams);
       return sim > max ? sim : max;
     }, 0);
     if (similarity >= REDUNDANCY_THRESHOLD) continue;
-    const bytes = Buffer.byteLength(candidate.text, "utf8");
-    const sepBytes = selected.length === 0 ? 0 : 1;
-    if (used + sepBytes + bytes > budgetBytes) continue;
-    selected.push(candidate);
-    used += sepBytes + bytes;
+    kept.push(candidate);
   }
-  selected.sort((a, b) => a.start - b.start);
+
+  return kept;
+}
+
+function selectByBudget(candidates, budgetBytes) {
+  const inOrder = [...candidates].sort((a, b) => a.start - b.start);
+  const selected = [];
+  let used = 0;
+  for (const candidate of inOrder) {
+    const bytes = Buffer.byteLength(candidate.text, "utf8");
+    const separatorBytes = selected.length === 0 ? 0 : 1;
+    if (used + separatorBytes + bytes > budgetBytes) continue;
+    selected.push(candidate);
+    used += separatorBytes + bytes;
+  }
   return selected.map(candidate => candidate.text).join("\n");
 }
 
 function abridgeText(source, budgetBytes) {
-  const candidates = splitSentencesWithOffsets(source).map((candidate, index, all) => {
+  const rawCandidates = assignSections(splitSentencesWithOffsets(source));
+  const candidates = rawCandidates.map((candidate, index, all) => {
     const tokens = tokenize(candidate.text);
-    return { ...candidate, index, totalCount: all.length, tokens };
+    const n = tokens.length < SHORT_SENTENCE_TOKEN_CUTOFF ? 2 : 3;
+    return {
+      ...candidate,
+      id: `${candidate.start}:${candidate.end}`,
+      index,
+      totalCount: all.length,
+      tokens,
+      ngrams: buildNgrams(tokens, n),
+      numericTokens: new Set((candidate.text.match(NUMERIC_TOKEN_RE) ?? []).map(value => value.toLowerCase()))
+    };
   });
-  const df = buildDocumentFrequency(candidates);
+
+  const tfidf = buildTfIdf(candidates);
   const scored = candidates.map(candidate => ({
     ...candidate,
-    score: scoreCandidate(candidate, { index: candidate.index, totalCount: candidate.totalCount, df }),
-    ngrams: buildNgrams(candidate.tokens)
+    score: scoreCandidate(candidate, { index: candidate.index, totalCount: candidate.totalCount, tfidf })
   }));
-  return selectByBudget(scored, budgetBytes);
+  const covered = buildCoverageFlags(scored);
+  const shortlisted = resolveShortlist(covered);
+  const deduped = dedupeCandidates(shortlisted);
+  return selectByBudget(deduped, budgetBytes);
 }
 
 export async function abridge(sentence, { remember: rememberFn = remember } = {}) {
