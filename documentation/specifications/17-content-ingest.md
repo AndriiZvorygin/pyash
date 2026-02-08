@@ -9,7 +9,7 @@ This spec is compatible with:
 * Pyash sentence shape, quoting, subordinate clauses 
 * Mind (`be write`) invocation and recording hooks 
 * Refinery pipelines (series entries as platform steps, deterministic scheduling) 
-* Canonical ordering for json maps (RFC 8785 ordering rule) 
+* Deterministic replay and checkpoint behavior in refinery runs
 
 ---
 
@@ -29,43 +29,17 @@ This spec is compatible with:
 
 1. Deterministic pipeline execution as a refinery: platform activities are normal sentences and scheduling is deterministic .
 2. Anchors are quotes copied from input text. Boundary logic relies on matching anchors, avoiding byte counting.
-3. Each stage emits structured outputs as json maps in official key order .
+3. Each stage emits structured outputs as Pyash facts (`text`, `series`, and sentence entries).
 4. Each mind call records request and response events (for replay and audits) .
 
 ---
 
-## 3. Data shapes
+## 3. Data shapes (current path)
 
-### 3.1 Segment record (json map)
-
-Each discovered segment is represented as one json map with stable keys:
-
-Keys (required):
-
-* `segment_id` (text): stable id, for example `"S00042"`.
-* `gross_chip_index` (num): 1-based index into the `gross chips` series.
-* `kind` (text): `"section" | "subsection" | "scene" | "meeting_part" | "other"`.
-* `title` (text): may be empty.
-* `start_anchor` (text): exact quote, 80–240 characters recommended.
-* `end_anchor` (text): exact quote, 80–240 characters recommended.
-* `confidence` (num): 0.0–1.0.
-
-Optional:
-
-* `notes` (text)
-* `parent_segment_id` (text)
-* `order_hint` (num): within parent
-
-Encoding in Pyash follows the existing json map def form .
-
-### 3.2 Smart chunk record (json map)
-
-Keys (required):
-
-* `segment_id` (text)
-* `text` (text): exact extracted text for the segment.
-  Optional:
-* `source_locator` (text): implementation-defined (for example “anchor-match v1”).
+* `source`: `su name source ob text "<full text>" be text ya`
+* `gross chips`: a `series` of `ob text "<chip text>"`.
+* `boundary proposals`: a `series` of `boundary` sentences, typically one boundary marker quote per entry.
+* `wise chips`: a `series` of `ob text "<wise chip text>"`.
 
 ---
 
@@ -158,62 +132,17 @@ text 1 of name gross chips
 
 ---
 
-### Stage 03: Segment proposal (LLM over each gross chip)
+### Stage 03: Segment proposal (deferred)
 
-**Purpose:** identify likely segment boundaries and return **anchors**, plus metadata.
-
-**Invocation:** use `be write` with a small local mind .
-
-#### 03.A Prompt template (per gross chip)
-
-System prompt (store once in mind config), then per call user prompt:
-
-**System prompt (mind config `from discourse`)**
-
-* You output a json map list of segment records.
-* Anchors are exact quotes from the provided text.
-* Anchors must appear exactly once inside the provided chip whenever possible.
-* Produce fewer segments if unsure.
-
-**User prompt (per chip)**
-Include:
-
-* `gross_chip_index`
-* `chip text`
-* guidance for what counts as a boundary (heading changes, scene changes, speaker changes, agenda item changes).
-
-Example user prompt text:
-
-```
-You are analysing one gross chip from a larger document.
-
-Return a JSON array of segment records.
-
-Rules:
-- Each record MUST include: segment_id, gross_chip_index, kind, title, start_anchor, end_anchor, confidence.
-- start_anchor and end_anchor are exact quotes copied from the chip text.
-- Each anchor length: 80–240 characters.
-- Prefer anchors that are unique within this chip.
-- If you find zero reliable segments, return [].
-
-gross_chip_index: 7
-chip_text:
-<<<
-...chip text...
->>>
-```
-
-#### 03.B Output handling
-
-Parse model output into a json map or series of json maps, stored as:
-
-* `su name segments proposed ob ve name ...` or a series named `segments proposed`.
+This repository currently uses the Stage 03.W wise-chip path below.
+Any richer segment-record schema is deferred until it has a concrete Pyash-first implementation.
 
 ---
 
 ### Stage 03.W: Wise chip proposal (optional, mind-guided)
 
 **Purpose:** identify section boundary anchors using a classifier + per-chip proposals, then resolve **wise chips** from boundaries.
+In current implementation, wise chips are the primary smart chunks.
 
 #### 03.W.1 Classifier (single mind call)
 
@@ -223,13 +152,14 @@ Use the first gross chip to classify:
 * section delimiter cues (heading styles, speaker labels, numbering, timestamps)
 * anchor style guidance (length, uniqueness)
 
-Output as a json map (suggested keys): `doc_kind`, `delimiter_rules`, `anchor_style`, `notes`.
+Output as plain `text` that will be reused as the per-chip boundary prompt.
+Keep this as Pyash text flow (no required external key schema).
 
 #### 03.W.2 Boundary proposal (map over gross chips)
 
 For each gross chip, call a mind with a prompt tailored by the classifier output.
 
-**Output:** a series named `boundary proposals` where each entry contains one or more **boundary marker quotes** for that chip.
+**Output:** a series named `boundary proposals` where each entry contains boundary marker quote(s) for that chip.
 
 Sentence shape (series entry):
 
@@ -243,7 +173,8 @@ su name boundary proposal
 Rules:
 
 * `from num` is the `gross_chip_index` (1-based).
-* `ob ve text` contains one or more **boundary marker** quotes in order.
+* Current simple path may emit a single marker as `ob text "<boundary marker>"`.
+* Multi-marker form `ob ve text ...` is allowed but not required.
 * Markers are exact quotes copied from the chip text.
 
 You can produce `boundary proposals` by mapping a ceremony or mind over the `gross chips` series:
@@ -263,12 +194,17 @@ Mapping options:
 
 Combine the `boundary proposals` series with the full `source` text to extract **wise chips**:
 
-1. Walk proposals in series order (or by `gross_chip_index` when present).
+1. Walk proposals in series order.
 2. For each boundary marker in order:
    * Find the first occurrence of the marker at or after the last resolved end.
    * If the marker fails to match, skip it.
-3. Emit the slice from this marker to the next matched marker (or end of source if last marker).
-4. Emit each extracted slice as a wise chip (series of text entries).
+3. Normalize wrapper quotes on markers before matching (for example `"..."` or `“...”`).
+4. Ignore duplicate markers that resolve to the same source offset.
+5. Emit the slice from this marker to the next matched marker (or end of source if last marker).
+6. Optional sizing knobs:
+   * `atmost byte <n>` splits oversized slices.
+   * `atleast byte <n>` merges undersized neighboring slices.
+7. Emit each extracted slice as a wise chip (series of text entries).
 
 Suggested output fact:
 
@@ -280,9 +216,9 @@ su name wise chips
 
 ---
 
-### Stage 04: Resolve smart chunks (anchor matching)
+### Stage 04 (deferred): Alternate smart-chunk resolver
 
-**Purpose:** convert proposals into extracted text slices.
+**Purpose:** optional richer resolver path.
 
 **Algorithm (normative, pseudocode style):**
 
@@ -370,8 +306,8 @@ Abridgement and summarising are orthogonal:
 * Prefer fewer, higher-confidence segments.
 * Use overlap in gross chips so a boundary that falls on a seam still has enough context.
 * Use anchor length 80–240 characters to reduce collision probability while staying matchable.
-* Emit structured json with stable keys to reduce parser failure.
+* Do not pad with whitespace to hit target size; size limits are by natural split/merge only.
+* Current wise-chip resolver does not add overlap between output chips.
 
 ---
-
-If you want this expressed as a concrete `.pya` module with ceremony signatures for `be ingest`, `be gross chip`, `be segment propose`, `be smart chunk`, `be abridge`, I can draft the ceremony surfaces and the json map field ordering conventions using the sentence and dispatch rules. 
+If you want this expressed as a concrete `.pya` module with ceremony signatures for `be ingest`, `be gross chip`, `be wise chip`, and `be abridge`, I can draft the ceremony surfaces using only Pyash-native records. 
