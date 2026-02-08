@@ -5,6 +5,8 @@ const DEFAULT_BUDGET_BYTES = 4000;
 const REDUNDANCY_THRESHOLD = 0.85;
 const SHORT_SENTENCE_TOKEN_CUTOFF = 6;
 const KEEP_PREFIX_RE = /\b(action|decision|todo|next|follow-up)\s*:/i;
+const SCHEDULE_LINE_RE = /^\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*,?\s*\d{1,2}:\d{2}\s*(to|-)\s*\d{1,2}:\d{2}/i;
+const COST_HEADER_RE = /^estimated costs per person:/i;
 const NUMERIC_TOKEN_RE = /\b\d[\d,.:/-]*\b/g;
 
 const STOPWORDS = new Set([
@@ -237,8 +239,15 @@ function sameNumericSignal(a, b) {
 function buildCoverageFlags(scored) {
   return scored.map(candidate => ({
     ...candidate,
-    isCoverageKeep: candidate.isSectionFirst || candidate.isStructured || KEEP_PREFIX_RE.test(candidate.text)
+    isCoverageKeep: candidate.isSectionFirst
+      || KEEP_PREFIX_RE.test(candidate.text)
+      || SCHEDULE_LINE_RE.test(candidate.text)
+      || COST_HEADER_RE.test(candidate.text)
   }));
+}
+
+function normalizeKey(text) {
+  return String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function resolveShortlist(scored) {
@@ -266,9 +275,17 @@ function resolveShortlist(scored) {
 }
 
 function dedupeCandidates(shortlisted) {
-  const forced = shortlisted
+  const forcedAll = shortlisted
     .filter(candidate => candidate.isCoverageKeep)
     .sort((a, b) => a.start - b.start);
+  const forced = [];
+  const forcedKeys = new Set();
+  for (const candidate of forcedAll) {
+    const key = normalizeKey(candidate.text);
+    if (forcedKeys.has(key)) continue;
+    forcedKeys.add(key);
+    forced.push(candidate);
+  }
   const keptById = new Set(forced.map(candidate => candidate.id));
   const kept = [...forced];
 
