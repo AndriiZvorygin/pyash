@@ -239,6 +239,24 @@ and uses `message.content` as the reply text.
 
 ---
 
+## Provider substitution
+
+Use one caller shape and swap provider by helper config:
+
+```pyash
+exists su name helper be mind as name "qwen3-vl:8b-instruct" ya
+ob text "Task." for name helper to name text output be write do
+```
+
+```pyash
+exists su name helper be mind as name "review loop" ya
+ob text "Task." for name helper to name text output be write do
+```
+
+When `as name` points to a registered refinery, `be write for name <helper>` routes to refinery execution through normal signature dispatch.
+
+---
+
 ## Discharge (module-specific)
 
 Some mind backends expose a module-level discharge ceremony. For Ollama:
@@ -249,6 +267,14 @@ ob text "qwen3-vl:8b-instruct" be mind discharge do
 ```
 
 This sends `keep_alive: 0` to Ollama to unload the model after a run.
+
+For refinery teardown (provider-level), use:
+
+```pyash
+be discharge as wo refinery ob text "review loop" do
+```
+
+This removes the refinery from the runtime registry and invalidates helper aliases bound to that provider.
 
 The same module exposes `begin` and `restart` so you can warm or cycle the model:
 

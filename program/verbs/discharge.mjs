@@ -1,4 +1,4 @@
-import { remember } from "../remember/index.mjs";
+import { remember, allRemember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { closeMcpServer } from "../motor/mcp.mjs";
@@ -32,6 +32,29 @@ function resolveMcpServerName(targetName, { rememberFn, explicitMcp }) {
     return String(fact.su.name).slice(4).trim();
   }
   return null;
+}
+
+function invalidateRefineryBoundAliases(refineryName) {
+  const names = new Set();
+  for (const sentence of allRemember()) {
+    if (!sentence?.su?.name) continue;
+    if (sentence.mood !== "ya") continue;
+    if (sentence.be !== "refinery" && sentence.be !== "mind") continue;
+    const provider = sentence?.as?.name ?? sentence?.from?.name ?? null;
+    if (provider !== refineryName) continue;
+    names.add(sentence.su.name);
+  }
+
+  for (const name of names) {
+    doRemember({
+      mood: "ya",
+      be: "discharge",
+      su: { name },
+      ob: { name: refineryName },
+      from: { name: "refinery" }
+    });
+  }
+  return names.size;
 }
 
 export async function discharge(sentence, { remember: rememberFn = remember } = {}) {
@@ -70,12 +93,14 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
     ? (fact?.as?.name ?? fact?.from?.name ?? refineryName)
     : (fact?.be === "refinery" ? (fact?.as?.name ?? fact?.from?.name ?? refineryName) : null);
   if (resolvedRefineryName && getRefinery(resolvedRefineryName)) {
+    const releasedAliases = invalidateRefineryBoundAliases(resolvedRefineryName);
     removeRefinery(resolvedRefineryName);
     return {
       mood: "ya",
       be: "discharge",
       ob: { name: resolvedRefineryName },
-      from: { name: "refinery" }
+      from: { name: "refinery" },
+      by: { num: releasedAliases }
     };
   }
   throwErrorSentence({
