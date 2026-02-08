@@ -66,3 +66,45 @@ test("wise chip normalizes wrapper quotes around boundary markers", async () => 
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
   assert.deepEqual(texts, ["## Start\\nA\\n## End\\nB\\n"]);
 });
+
+test("wise chip honors atmost byte by splitting large slices", async () => {
+  forget();
+
+  const source = "AAAAA BBBBB CCCCC DDDDD EEEEE FFFFF GGGGG";
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob text "AAAAA" be boundary ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals atmost byte 12 to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.ok(texts.length > 1);
+  for (const text of texts) {
+    assert.ok(Buffer.byteLength(text, "utf8") <= 12);
+  }
+});
+
+test("wise chip honors atleast byte by merging small slices", async () => {
+  forget();
+
+  const source = "AA..BB..CC..DD";
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "AA" "BB" "CC" "DD" be boundary ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals atleast byte 6 to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.ok(texts.length < 4);
+  for (let i = 0; i < texts.length - 1; i += 1) {
+    assert.ok(Buffer.byteLength(texts[i], "utf8") >= 6);
+  }
+});
