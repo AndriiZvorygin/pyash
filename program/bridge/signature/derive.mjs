@@ -1,5 +1,6 @@
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
+import { getRefinery } from "../refinery.mjs";
 import { makeSignatureWords, normalizeTypeWords, normalizeWords } from "./normalize.mjs";
 
 const NON_CASE_FIELDS = new Set([
@@ -251,7 +252,15 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (inferred?.be === "duty") return ["name", "duty"];
     if (inferred?.be === "stream") return ["name", "stream"];
     if (inferred?.be === "chip") return ["name", "chip"];
-    if (inferred?.be === "mind") return ["name", "mind"];
+    if (inferred?.be === "mind") {
+      const providerName = inferred?.as?.name ?? null;
+      const providerFact = providerName ? remember?.(providerName) : null;
+      const useRefineryProvider =
+        (caseKey === "for" || caseKey === "to")
+        && (providerFact?.be === "refinery" || (providerName && getRefinery(providerName)));
+      if (useRefineryProvider) return ["name", "refinery"];
+      return ["name", "mind"];
+    }
     if (inferred?.be === "refinery") return ["name", "refinery"];
     if (inferred?.be === "map") return ["name", "map"];
     if (inferred?.be === "series") return ["name", "series"];
