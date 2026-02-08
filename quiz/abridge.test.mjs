@@ -10,6 +10,15 @@ async function run(line) {
   return interpret(sentence);
 }
 
+function readTextOutput(result) {
+  return String(
+    result?.ob?.text
+    ?? result?.value?.text
+    ?? result?.text
+    ?? ""
+  );
+}
+
 test("abridge stores deterministic text output within byte budget", async () => {
   forget();
 
@@ -47,7 +56,7 @@ test("abridge keeps selected sentences in source order", async () => {
     "Action required by Friday."
   ].join(" ");
   const result = await run(`from text ${JSON.stringify(source)} atmost byte 120 be abridge do`);
-  const lines = String(result?.ob?.text ?? "").split("\n").filter(Boolean);
+  const lines = readTextOutput(result).split("\n").filter(Boolean);
   let cursor = 0;
   for (const line of lines) {
     const idx = source.indexOf(line, cursor);
@@ -66,7 +75,7 @@ test("abridge reduces duplicate n-gram sentences", async () => {
     "Decision final."
   ].join(" ");
   const result = await run(`from text ${JSON.stringify(source)} atmost byte 200 be abridge do`);
-  const output = String(result?.ob?.text ?? "");
+  const output = readTextOutput(result);
   const repeats = output.match(/Action required now\./g) ?? [];
   assert.ok(repeats.length <= 1);
 });
@@ -97,4 +106,35 @@ test("abridge maps across a series via ob text payload", async () => {
   assert.ok(texts[0].includes("Decision"));
   const repeats = texts[1].match(/Action required now\./g) ?? [];
   assert.ok(repeats.length <= 1);
+});
+
+test("abridge keeps first sentence of each heading section as coverage", async () => {
+  forget();
+
+  const source = [
+    "## Alpha",
+    "First alpha sentence.",
+    "Less important alpha details.",
+    "## Beta",
+    "First beta sentence.",
+    "Less important beta details."
+  ].join("\n");
+  const result = await run(`from text ${JSON.stringify(source)} atmost byte 120 be abridge do`);
+  const out = readTextOutput(result);
+  assert.ok(out.includes("## Alpha"));
+  assert.ok(out.includes("## Beta"));
+});
+
+test("abridge does not dedupe similar lines when numeric claims differ", async () => {
+  forget();
+
+  const source = [
+    "Decision: latency target is 120 ms.",
+    "Decision: latency target is 180 ms.",
+    "Other context."
+  ].join(" ");
+  const result = await run(`from text ${JSON.stringify(source)} atmost byte 200 be abridge do`);
+  const out = readTextOutput(result);
+  assert.ok(out.includes("120 ms."));
+  assert.ok(out.includes("180 ms."));
 });

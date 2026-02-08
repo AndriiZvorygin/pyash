@@ -243,49 +243,339 @@ su name S00042 ob text "<extracted segment text>" be text ya
 
 ---
 
-### Stage 05: Abridge (LLM over each smart chunk)
+### Stage 05: Abridge (deterministic extractive over each smart chunk)
 
-**Purpose:** reduce length while preserving voice, structure, and wording as much as possible.
+#### 05.Implementation (current code path)
 
-#### 05.A Abridgement rules (normative)
+Current built-in `be abridge` behavior in `program/verbs/abridge.mjs`:
 
-* Preserve original phrasing where possible.
-* Delete filler, repetition, tangents, low-information digressions.
-* Keep key claims, steps, decisions, names, numbers, dates.
-* Keep headings and speaker labels when present.
-* Minimal paraphrase.
+1. Read input from `from text/name text` or `ob text/name text`.
+2. Split into sentence-like spans using `.`, `?`, `!`, and newline boundaries.
+3. Detect simple sections from heading-like lines (`# ...`, all-caps heading forms, numbered heading forms).
+4. Compute deterministic TF-IDF sentence scores.
+5. Apply coverage guarantees before ranking:
+   * keep first sentence of each detected section
+   * keep action/decision style lines (`Action:`, `Decision:`, `TODO:`, `Next:`, `Follow-up:`).
+6. Build a shortlist with dynamic `k`:
+   * `k_total = clamp(round(sentence_count * 0.5), 12, 40)`
+   * per-section `k = clamp(proportional share, 2, 8)`.
+7. Dedupe shortlist with n-gram Jaccard (threshold `0.85`):
+   * 3-gram default, 2-gram for very short sentences
+   * numeric-claim guard: sentences with different numeric token sets are not deduped against each other.
+8. Stitch in source order under byte budget (`atmost byte` / `atmost num`), joined by newline.
 
-#### 05.B Recommended abridgement chunk size
-
-Smart chunks vary. For 4B or smaller:
-
-* If a smart chunk exceeds about **1,800 tokens**, split it by paragraph blocks into abridgement sub-chunks, then stitch results in order.
-
-#### 05.C Prompt template (per smart chunk)
-
-User prompt text:
-
-```
-Task: produce an abridged version of the text below.
-
-Rules:
-- Preserve voice and terminology.
-- Prefer deletion over rewriting.
-- Keep headings, lists, and speaker turns.
-- Remove repetition, rambling, and side trails.
-- Preserve all numbers, dates, and action items.
-- Output only the abridged text, no commentary.
-
-TEXT:
-<<<
-...segment text...
->>>
-```
-
-Store abridged output as:
+Current output shape:
 
 ```pyash
-su name S00042 abridged ob text "<abridged text>" be text ya
+su name <target> ob text "<abridged text>" be text ya
+```
+
+Notes:
+
+* This stage is deterministic and local (no mind call).
+* Current implementation does not yet emit a span map object.
+
+## Deterministic Abridger Spec
+
+### Purpose
+
+Produce a shorter version of an input text by selecting original spans verbatim, under a strict length budget, with repeatable results.
+
+### Hard constraints
+
+* Output text consists only of substrings copied from the input (verbatim).
+* Deterministic: same input plus same options yields identical output.
+* Output preserves original order of selected spans.
+* Output includes an auditable span map from output back to input offsets.
+
+---
+
+## Inputs
+
+### 1) `input_text: Text`
+
+Unicode text.
+
+### 2) `options: Map`
+
+Recommended fields (all optional, with defaults):
+
+#### Budget
+
+* `budget_mode: "bytes" | "chars" | "tokens_approx"`
+  Default: `"chars"`
+* `budget_value: Integer`
+  Default: `4000`
+* `tokens_approx_ratio: Map`
+  Used only when `budget_mode = "tokens_approx"`.
+  Default: `{ "chars_per_token": 4 }`
+
+#### Segmentation
+
+* `section_heading_rules: List[Rule]`
+  Each rule identifies a heading line and its level.
+  Default: Markdown-like: `#`, `##`, `###`, plus “ALL CAPS line” heuristic.
+* `sentence_split_rules: List[Rule]`
+  Default: punctuation split on `. ? !` with common abbreviations list.
+* `paragraph_split_rules: List[Rule]`
+  Default: blank-line split, plus list markers.
+
+#### Boilerplate removal
+
+* `drop_repeated_lines: Boolean` default `true`
+* `repeated_line_min_count: Integer` default `3`
+* `drop_regexes: List[Regex]` default `[]`
+  Use for footers, navigation, legal blocks, etc.
+
+#### Salience scoring
+
+* `keyword_boosts: Map[String -> Float]` default `{}`
+* `cue_phrase_boosts: Map[String -> Float]` default includes:
+
+  * “therefore”, “in summary”, “conclusion”, “decision”, “action”, “recommendation”
+* `number_date_boost: Float` default `1.0`
+* `named_entity_like_boost: Float` default `0.5`
+  Simple heuristic, capitalised sequences, email, URL, currency.
+* `position_boost_first_sentence_per_section: Float` default `0.8`
+* `position_boost_first_paragraph_per_section: Float` default `0.4`
+
+#### Diversity and redundancy
+
+* `dedupe_mode: "ngram_jaccard" | "tfidf_cosine"` default `"ngram_jaccard"`
+* `dedupe_threshold: Float` default `0.85`
+* `mmr_lambda: Float` default `0.7`
+  Higher favours relevance; lower favours diversity.
+* `max_sentences_per_section: Integer | null` default `null`
+
+#### Coverage guarantees
+
+* `keep_first_sentence_each_section: Boolean` default `true`
+* `keep_list_items_with_prefixes: List[String]` default `["Action:", "Decision:", "TODO:", "Next:", "Follow-up:"]`
+* `keep_sentences_matching_regexes: List[Regex]` default `[]`
+
+#### Formatting
+
+* `joiner_between_spans: String` default `"\n"`
+* `preserve_original_paragraph_breaks: Boolean` default `true`
+
+---
+
+## Outputs
+
+### 1) `abridged_text: Text`
+
+A concatenation of selected spans from the input.
+
+### 2) `span_map: List[SpanRecord]`
+
+Each record maps one output span to the input.
+
+`SpanRecord` fields:
+
+* `span_id: String` stable ID, derived from source offsets and a hash
+* `source_start: Integer` character offset in `input_text`
+* `source_end: Integer` character offset in `input_text` (exclusive)
+* `section_id: String`
+* `paragraph_index: Integer`
+* `sentence_index: Integer`
+* `score_total: Float`
+* `score_breakdown: Map[String -> Float]`
+* `output_start: Integer` character offset in `abridged_text`
+* `output_end: Integer` character offset in `abridged_text` (exclusive)
+
+### 3) `stats: Map`
+
+* `input_chars`
+* `output_chars`
+* `budget_used`
+* `sections_count`
+* `sentences_selected`
+* `sentences_dropped_deduped`
+
+---
+
+## Deterministic processing stages
+
+### Stage A: Normalisation
+
+Goal: stabilise the input for repeatable segmentation and scoring.
+
+Steps:
+
+1. Convert line endings to `\n`.
+2. Trim trailing spaces on each line.
+3. Collapse runs of more than 2 blank lines to 2 blank lines.
+4. If `drop_repeated_lines = true`:
+
+   * Count identical trimmed lines across the document.
+   * Drop lines whose count ≥ `repeated_line_min_count`, except headings.
+
+### Stage B: Structure detection
+
+Produce a tree: Document → Sections → Paragraphs → Sentences.
+
+Required records:
+
+* `Section { section_id, heading_text, level, start_offset, end_offset, paragraphs[] }`
+* `Paragraph { start_offset, end_offset, sentences[] }`
+* `Sentence { start_offset, end_offset, text }`
+
+Rules:
+
+* Headings split sections by `section_heading_rules`.
+* Paragraphs split by `paragraph_split_rules`.
+* Sentences split by `sentence_split_rules`.
+
+### Stage C: Feature extraction per sentence
+
+Compute a feature map per sentence, using only deterministic methods.
+
+Minimum features:
+
+* `len_chars`
+* `has_number_or_date_like`
+* `has_named_entity_like`
+* `keyword_hits_count`
+* `cue_phrase_hits_count`
+* `position_in_section` (0-based sentence index)
+* `is_first_sentence_in_section`
+* `is_in_kept_list_item` (prefix match)
+* `matches_keep_regex` (any)
+
+Optional features (still deterministic):
+
+* `tfidf_score` relative to section or document
+* `textrank_score` computed from sentence similarity graph using fixed iteration count
+
+### Stage D: Salience scoring
+
+Compute:
+
+`score_total = Σ(weight_i * feature_i)`
+
+Default weight recipe:
+
+* Base `tfidf_score` weight: `1.0`
+* Cue phrases: `0.6`
+* Keyword boosts: add `keyword_boosts[k]` per hit
+* Numbers/dates: `number_date_boost`
+* Named entity like: `named_entity_like_boost`
+* First sentence in section: `position_boost_first_sentence_per_section`
+* First paragraph in section: `position_boost_first_paragraph_per_section`
+* Keep-list-item: add `2.0`
+* Keep-regex match: add `3.0`
+
+Record `score_breakdown` for audit.
+
+### Stage E: Budget allocation across sections
+
+Compute section budgets deterministically.
+
+Default:
+
+* Compute `section_weight = sqrt(section_chars)` using section character count.
+* `section_budget = floor(budget_value * section_weight / Σ(section_weight))`
+* Apply minimum per section, example `min(200 chars, 5% of total)` if budget permits.
+* Carry remainder by distributing 1 char at a time to earliest sections.
+
+### Stage F: Selection per section
+
+Goal: pick spans under each section budget, with redundancy control.
+
+Required steps:
+
+1. **Guarantees first**
+
+   * If `keep_first_sentence_each_section`: include it.
+   * Include any sentence with keep-list-item prefixes.
+   * Include any sentence matching keep-regexes.
+2. **Candidate pool**
+   Remaining sentences become candidates.
+3. **Deduplication pre-pass**
+   Remove exact duplicates by normalised sentence text key.
+4. **MMR selection** (deterministic)
+
+   * Start set `S` with guaranteed sentences.
+   * While budget remains and candidates remain:
+
+     * For each candidate `c`, compute
+
+       * `relevance = score_total(c)`
+       * `diversity_penalty = max(sim(c, s) for s in S)` (0 if S empty)
+       * `mmr = mmr_lambda * relevance - (1 - mmr_lambda) * diversity_penalty`
+     * Select highest `mmr`.
+     * Ties break by:
+
+       1. higher `score_total`
+       2. earlier `source_start`
+       3. shorter `len_chars`
+     * Add it if similarity to any selected sentence is below `dedupe_threshold`.
+5. Enforce `max_sentences_per_section` if set.
+
+Similarity `sim(a,b)`:
+
+* For `"ngram_jaccard"`: Jaccard over 3-gram set of lowercased text.
+* For `"tfidf_cosine"`: cosine similarity using a deterministic vocabulary build.
+
+### Stage G: Global stitching
+
+Combine selected sentences from all sections.
+
+Rules:
+
+* Sort selected spans by `source_start` ascending.
+* Merge adjacent spans when gap is only whitespace and `preserve_original_paragraph_breaks = true`.
+* Join spans using `joiner_between_spans`.
+* Produce `span_map` with correct `output_start/output_end`.
+
+---
+
+## Determinism requirements
+
+* Stable sorting with explicit tie-break rules.
+* Fixed iteration counts for any graph scoring, example TextRank iterations = 20.
+* Fixed thresholds, explicit numeric defaults.
+* No randomness. If a library uses randomness internally, set seed to a constant through options, or avoid that library component.
+
+---
+
+## Validation and tests
+
+### Golden corpus tests
+
+For each sample input:
+
+* Assert `abridged_text` equals a stored golden output.
+* Assert every span in `span_map` equals the exact substring of `input_text` from `source_start:source_end`.
+* Assert `output_chars <= budget_value` (or equivalent budget mode check).
+* Assert `span_map` spans are ordered and non-overlapping in output.
+
+### Property tests
+
+* Removing a section heading changes only section boundaries and related budgets.
+* Increasing `budget_value` yields a superset of spans, unless dedupe rules filter.
+
+### Audit utilities
+
+Provide a report function that prints, per section:
+
+* selected sentences with `score_total`
+* top 5 breakdown contributors
+* dedupe rejections with similarity values
+
+---
+
+## Minimal data model for Pyash mapping
+
+Use maps and lists only:
+
+* `document = { text, sections: [section...] }`
+* `section = { id, heading, level, start, end, paragraphs: [paragraph...] }`
+* `paragraph = { start, end, sentences: [sentence...] }`
+* `sentence = { start, end, features: map, score_total, score_breakdown }`
+* `result = { abridged_text, span_map: [SpanRecord...], stats }`
+
+This spec is sufficient for Codex to implement in one pass while keeping Pyash-specific syntax and container types.
 ```
 
 ---
