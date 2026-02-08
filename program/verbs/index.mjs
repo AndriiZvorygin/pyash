@@ -11,6 +11,7 @@ import { remains, signatures as remainsSignatures } from "./mathematics/remains.
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import grossChip, { signatures as grossChipSignatures } from "./gross_chip.mjs";
 import wiseChip, { signatures as wiseChipSignatures } from "./wise_chip.mjs";
+import abridge, { signatures as abridgeSignatures } from "./abridge.mjs";
 import seriesMap, { signatures as seriesMapSignatures } from "./series_map.mjs";
 import vectorMap, { signatures as vectorMapSignatures } from "./vector_map.mjs";
 import text, { signatures as textSignatures } from "./text.mjs";
@@ -74,6 +75,7 @@ export {
   chip,
   grossChip,
   wiseChip,
+  abridge,
   seriesMap,
   vectorMap,
   text,
@@ -125,6 +127,7 @@ export const builtInSignatures = [
   ...chipSignatures,
   ...grossChipSignatures,
   ...wiseChipSignatures,
+  ...abridgeSignatures,
   ...seriesMapSignatures,
   ...vectorMapSignatures,
   ...textSignatures,
