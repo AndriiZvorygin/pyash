@@ -104,7 +104,7 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
 
 function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
-  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence"]);
+  const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "alternative"]);
   for (const [key, value] of Object.entries(sentence)) {
     if (skipKeys.has(key)) continue;
     if (!value?.genitive) continue;
@@ -390,7 +390,7 @@ export async function handleImperative({
   }
 
   // Inline conditional with consequence (e.g., "be equally ... then ...")
-  if (sentence.consequence && (be === "equally" || be === "tiny" || be === "giant" || be === "resemble")) {
+  if ((sentence.consequence || sentence.alternative) && (be === "equally" || be === "tiny" || be === "giant" || be === "resemble")) {
     if (!fn) {
       const pyash = sentenceToPyash(sentence);
       throwErrorSentence({
@@ -416,6 +416,9 @@ export async function handleImperative({
     const truth = await fn({ su: lhs, from: rhs });
     if (truth && sentence.consequence) {
       return interpret(sentence.consequence);
+    }
+    if (!truth && sentence.alternative) {
+      return interpret(sentence.alternative);
     }
     return { condition: truth };
   }

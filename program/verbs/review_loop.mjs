@@ -11,6 +11,18 @@ async function resolveIsRefinery(name) {
   return Boolean(mod.getRefinery(name));
 }
 
+async function resolveRefineryTarget(name) {
+  const mod = await import("../bridge/refinery.mjs");
+  const fact = remember(name);
+  const candidate =
+    fact?.as?.name ??
+    fact?.from?.name ??
+    (fact?.be === "refinery" ? name : null) ??
+    name;
+  if (!candidate) return null;
+  return mod.getRefinery(candidate) ? candidate : null;
+}
+
 function resolveTextFromValue(value) {
   if (!value || typeof value !== "object") return "";
   if (typeof value.text === "string") return value.text;
@@ -187,8 +199,10 @@ export async function reviewLoop(sentence) {
   const reviewerFact = remember(reviewerName);
   const generatorIsMind = generatorFact?.be === "mind";
   const reviewerIsMind = reviewerFact?.be === "mind";
-  const reviewerIsRefinery = !reviewerIsMind && await resolveIsRefinery(reviewerName);
-  const generatorIsRefinery = !generatorIsMind && await resolveIsRefinery(generatorName);
+  const generatorRefineryName = !generatorIsMind ? await resolveRefineryTarget(generatorName) : null;
+  const reviewerRefineryName = !reviewerIsMind ? await resolveRefineryTarget(reviewerName) : null;
+  const reviewerIsRefinery = !reviewerIsMind && Boolean(reviewerRefineryName ?? await resolveIsRefinery(reviewerName));
+  const generatorIsRefinery = !generatorIsMind && Boolean(generatorRefineryName ?? await resolveIsRefinery(generatorName));
 
   let latestPrompt = task;
   let finalDraft = "";
@@ -206,7 +220,7 @@ export async function reviewLoop(sentence) {
       });
     } else if (generatorIsRefinery) {
       finalDraft = await invokeRefinery({
-        refineryName: generatorName,
+        refineryName: generatorRefineryName ?? generatorName,
         prompt: latestPrompt,
         outputName: draftName
       });
@@ -237,7 +251,7 @@ export async function reviewLoop(sentence) {
       });
     } else if (reviewerIsRefinery) {
       lastReviewText = await invokeRefinery({
-        refineryName: reviewerName,
+        refineryName: reviewerRefineryName ?? reviewerName,
         prompt: reviewPrompt,
         outputName: reviewName
       });
@@ -295,6 +309,7 @@ const OB_TYPES = [
 
 const ROLE_TYPES = [
   ["name", "mind"],
+  ["name", "refinery"],
   ["text"]
 ];
 

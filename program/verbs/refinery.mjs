@@ -1,6 +1,6 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
-import { runRefinery } from "../bridge/refinery.mjs";
+import { runRefinery, getRefinery } from "../bridge/refinery.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import { surfaceErrorSentence } from "../error.mjs";
 
@@ -62,8 +62,14 @@ function resolveInputOb(ob) {
 
 async function refinery(sentence) {
   const interpret = await resolveInterpret();
+  const namedTarget = sentence?.for?.name ?? null;
+  const namedTargetFact = namedTarget ? remember(namedTarget) : null;
   const refineryName =
     sentence?.from?.name ??
+    sentence?.as?.name ??
+    namedTargetFact?.as?.name ??
+    namedTargetFact?.from?.name ??
+    (namedTarget && getRefinery(namedTarget) ? namedTarget : null) ??
     resolveConfigText("refinery name", { rememberFn: remember }) ??
     null;
   const inputOb = resolveInputOb(sentence?.ob);
@@ -105,6 +111,22 @@ async function refinery(sentence) {
 }
 
 export const signatures = [
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "text", "to", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "name", "text", "to", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "text", "ob", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "text", "to", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "name", "text", "to", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "text"], handler: refinery },
+  { signatureWords: ["be", "write", "for", "name", "refinery", "ob", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "for", "name", "refinery", "ob", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "for", "name", "refinery", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "for", "name", "refinery", "ob", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "for", "name", "refinery", "ob", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "to", "name", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "text"], handler: refinery },

@@ -66,6 +66,8 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
+  const prevLoopActive = state.loopActive;
+  const prevLoopControl = state.loopControl;
   const initialIndex = registerValue(sentence.fromindex, { state, memory });
   if (initialIndex == null) throw new Error("fromindex is required to loop");
   const untilSeed = registerValue(sentence.toindex, { state, memory });
@@ -73,7 +75,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const cloneSentence = (step) => {
     if (!step || typeof step !== "object") return step;
     const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence"];
+    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence", "alternative"];
     for (const field of fields) {
       if (step[field] && typeof step[field] === "object") {
         const next = { ...step[field] };
@@ -99,6 +101,8 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   memory.pushMemoryContext({ seedFromCurrent: true });
   state.currentEvokeRef = state.currentEvoke;
   state.executingBody = true;
+  state.loopActive = true;
+  state.loopControl = null;
   state.lastCondition = true;
 
   let sandpit = [];
@@ -109,6 +113,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     let currentUntil = untilSeed;
 
     while (true) {
+      state.loopControl = null;
       state.currentEvokeRef.fromindex = currentIndex;
       state.currentEvokeRef.toindex = currentUntil ?? state.currentEvokeRef.toindex;
       // Conditionals ("then") are a one-line control-flow mechanism; they should not leak across loop iterations.
@@ -117,6 +122,13 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
       for (const step of baseBody) {
         // Never execute the canonical definition-body objects directly; verbs can mutate targets in-place.
         lastResult = await interpret(cloneSentence(step));
+        if (state.loopControl === "depart" || state.loopControl === "continue") break;
+      }
+
+      if (state.loopControl === "depart") {
+        state.currentEvokeRef.fromindex = currentIndex;
+        state.currentEvokeRef.toindex = currentUntil;
+        break;
       }
 
       const updatedTloh = registerValue(state.currentEvokeRef.fromindex, { state, memory });
@@ -151,6 +163,8 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     recordSandpitTrace(sandpit);
     memory.popMemoryContext();
     state.executingBody = false;
+    state.loopActive = prevLoopActive;
+    state.loopControl = prevLoopControl;
   }
 
   const finalEvoke = state.currentEvokeRef || state.currentEvoke || sentence;
@@ -192,7 +206,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const cloneSentence = (step) => {
     if (!step || typeof step !== "object") return step;
     const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence"];
+    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence", "alternative"];
     for (const field of fields) {
       if (step[field] && typeof step[field] === "object") {
         const next = { ...step[field] };

@@ -64,6 +64,11 @@ import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mj
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
 import reviewLoop, { signatures as reviewLoopSignatures } from "./review_loop.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
+import lineTail, { signatures as lineTailSignatures } from "./line_tail.mjs";
+import cast, { signatures as castSignatures } from "./cast.mjs";
+import evoke, { signatures as evokeSignatures } from "./evoke.mjs";
+import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
+import depart, { signatures as loopControlSignatures } from "./loop_control.mjs";
 
 export {
   plus,
@@ -118,7 +123,12 @@ export {
   errorSieve,
   successSieve,
   reviewLoop,
-  rememberPersistent
+  rememberPersistent,
+  lineTail,
+  cast,
+  evoke,
+  guarantee,
+  depart
 };
 
 export const builtInSignatures = [
@@ -188,4 +198,9 @@ export const builtInSignatures = [
   ...successSieveSignatures,
   ...reviewLoopSignatures,
   ...rememberSignatures,
+  ...lineTailSignatures,
+  ...castSignatures,
+  ...evokeSignatures,
+  ...guaranteeSignatures,
+  ...loopControlSignatures,
 ];
