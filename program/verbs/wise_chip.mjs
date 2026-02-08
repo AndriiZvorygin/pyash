@@ -70,6 +70,9 @@ function dedupePositions(positions) {
 
 function resolveWiseSlices(source, positions) {
   const slices = [];
+  if (positions.length > 0 && positions[0].start > 0) {
+    slices.push(source.slice(0, positions[0].start));
+  }
   for (let i = 0; i < positions.length; i += 1) {
     const startIdx = positions[i].start;
     const endIdx = positions[i + 1]?.start ?? source.length;
