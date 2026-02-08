@@ -390,7 +390,7 @@ export async function handleImperative({
   }
 
   // Inline conditional with consequence (e.g., "be equally ... then ...")
-  if (sentence.consequence && (be === "equally" || be === "tiny" || be === "giant")) {
+  if (sentence.consequence && (be === "equally" || be === "tiny" || be === "giant" || be === "resemble")) {
     if (!fn) {
       const pyash = sentenceToPyash(sentence);
       throwErrorSentence({

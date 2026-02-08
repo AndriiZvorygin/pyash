@@ -11,6 +11,7 @@ import { remains, signatures as remainsSignatures } from "./mathematics/remains.
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import grossChip, { signatures as grossChipSignatures } from "./gross_chip.mjs";
 import wiseChip, { signatures as wiseChipSignatures } from "./wise_chip.mjs";
+import abridge, { signatures as abridgeSignatures } from "./abridge.mjs";
 import seriesMap, { signatures as seriesMapSignatures } from "./series_map.mjs";
 import vectorMap, { signatures as vectorMapSignatures } from "./vector_map.mjs";
 import text, { signatures as textSignatures } from "./text.mjs";
@@ -25,6 +26,7 @@ import mind, { signatures as mindSignatures } from "./mind/mind.mjs";
 import { giant, signatures as giantSignatures } from "./regulation/giant.mjs";
 import { tiny, signatures as tinySignatures } from "./regulation/tiny.mjs";
 import { equally, signatures as equallySignatures } from "./regulation/equally.mjs";
+import { resemble, signatures as resembleSignatures } from "./regulation/resemble.mjs";
 import vector, { signatures as vectorSignatures } from "./vector/index.mjs";
 import say, { signatures as saySignatures } from "./say.mjs";
 import piperSay, { signatures as piperSaySignatures } from "./piper_say.mjs";
@@ -60,6 +62,7 @@ import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
+import reviewLoop, { signatures as reviewLoopSignatures } from "./review_loop.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 
 export {
@@ -76,6 +79,7 @@ export {
   chip,
   grossChip,
   wiseChip,
+  abridge,
   seriesMap,
   vectorMap,
   text,
@@ -90,6 +94,7 @@ export {
   giant,
   tiny,
   equally,
+  resemble,
   vector,
   say,
   piperSay,
@@ -112,6 +117,7 @@ export {
   reporter,
   errorSieve,
   successSieve,
+  reviewLoop,
   rememberPersistent
 };
 
@@ -129,6 +135,7 @@ export const builtInSignatures = [
   ...chipSignatures,
   ...grossChipSignatures,
   ...wiseChipSignatures,
+  ...abridgeSignatures,
   ...seriesMapSignatures,
   ...vectorMapSignatures,
   ...textSignatures,
@@ -143,6 +150,7 @@ export const builtInSignatures = [
   ...giantSignatures,
   ...tinySignatures,
   ...equallySignatures,
+  ...resembleSignatures,
   ...vectorSignatures,
   ...saySignatures,
   ...piperSaySignatures,
@@ -178,5 +186,6 @@ export const builtInSignatures = [
   ...reporterSignatures,
   ...errorSieveSignatures,
   ...successSieveSignatures,
+  ...reviewLoopSignatures,
   ...rememberSignatures,
 ];

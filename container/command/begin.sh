@@ -32,7 +32,7 @@ vnc_enabled="truth"
 restart_container="lie"
 
 if [[ -z "${ai_host:-}" ]]; then
-  ai_host="http://host.docker.internal:11434"
+  ai_host="http://mriczo:11434"
 fi
 
 ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"
