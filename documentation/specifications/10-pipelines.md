@@ -375,6 +375,43 @@ The inline call behaves like a normal verb:
 Inline refinery execution is the canonical path; runner-level invocation exists only
 for backward compatibility.
 
+### Provider substitution (`be write for name ...`)
+
+Callers SHOULD keep one stable shape and swap providers by changing helper config:
+
+```pyash
+exists su name helper be mind as name "qwen3-vl:8b-instruct" ya
+ob text "Task." for name helper to name text output be write do
+```
+
+```pyash
+exists su name helper be mind as name "review loop" ya
+ob text "Task." for name helper to name text output be write do
+```
+
+Required behavior:
+
+* Dispatch remains signature-first.
+* If a `mind` helper has `as name <refinery>` and that refinery is registered,
+  `be write for name <helper>` MUST route to refinery execution.
+* Caller sentence shape MUST remain unchanged.
+
+### Refinery discharge
+
+`discharge` MUST support explicit refinery teardown:
+
+```pyash
+be discharge as wo refinery ob text "review loop" do
+```
+
+Required behavior:
+
+* Remove the refinery definition from the active refinery registry.
+* Invalidate helper aliases bound to that refinery provider:
+  - `be refinery as name "<refinery>"`
+  - `be mind as name "<refinery>"`
+* Return `by num <N>` where `N` is the number of invalidated aliases.
+
 ---
 
 ## 5.5 Report extraction contract (v0.1)
