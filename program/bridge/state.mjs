@@ -9,6 +9,7 @@ export const state = {
   executingBody: false,
   loopActive: false,
   loopControl: null,
+  refineryScopeStack: [],
   currentSourceFilename: null,
   currentSourceLine: null,
   currentSourceSentence: null

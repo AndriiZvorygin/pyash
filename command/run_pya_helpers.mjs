@@ -290,12 +290,16 @@ export async function loadCheckpointIndex({ runId, cwd }) {
     const refineryName = sentence?.from?.name;
     const platformName = sentence?.su?.name;
     const hash = sentence?.ob?.text;
-    const payloadSentence = parseCheckpointPayload(sentence?.fromtext?.text);
-    const resultSentence = payloadSentence ?? sentence?.to?.la;
+    const payload = parseCheckpointPayload(sentence?.fromtext?.text);
+    const resultSentence =
+      (payload && typeof payload === "object" && payload.result ? payload.result : payload)
+      ?? sentence?.to?.la;
+    const exportFacts = Array.isArray(payload?.exports) ? payload.exports : [];
+    const scopeSlots = payload?.scope && typeof payload.scope === "object" ? payload.scope : {};
     if (!refineryName || !platformName || !hash || !resultSentence) continue;
     const resultLine = sentence?.totext?.text ?? sentenceToPyash(resultSentence);
     if (!checkpoints.has(refineryName)) checkpoints.set(refineryName, new Map());
-    checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine });
+    checkpoints.get(refineryName).set(platformName, { hash, resultSentence, resultLine, exportFacts, scopeSlots });
   }
   return checkpoints;
 }
