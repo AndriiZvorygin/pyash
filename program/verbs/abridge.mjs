@@ -50,36 +50,90 @@ function resolveBudgetBytes(sentence) {
   return DEFAULT_BUDGET_BYTES;
 }
 
+function trimRange(source, from, to) {
+  let start = from;
+  let end = to;
+  while (start < end && /\s/.test(source[start])) start += 1;
+  while (end > start && /\s/.test(source[end - 1])) end -= 1;
+  return { start, end };
+}
+
+function isStructuredLine(text) {
+  const line = String(text ?? "");
+  return /^#{1,6}\s/.test(line)
+    || /^[-*+]\s/.test(line)
+    || /^\d+[.)]\s/.test(line)
+    || /^```/.test(line)
+    || line.includes("`")
+    || /^\|.*\|$/.test(line);
+}
+
+function splitProseLine(line, absoluteStart) {
+  const spans = [];
+  const abbreviations = new Set(["e.g.", "i.e.", "mr.", "mrs.", "dr.", "vs.", "etc.", "md."]);
+  let partStart = 0;
+  const length = line.length;
+
+  function pushPart(from, to) {
+    const chunk = line.slice(from, to).trim();
+    if (!chunk) return;
+    const relative = line.indexOf(chunk, from);
+    spans.push({
+      text: chunk,
+      start: absoluteStart + relative,
+      end: absoluteStart + relative + chunk.length
+    });
+  }
+
+  for (let i = 0; i < length; i += 1) {
+    const ch = line[i];
+    const punct = ch === "." || ch === "!" || ch === "?";
+    if (!punct) continue;
+
+    const prefix = line.slice(Math.max(partStart, i - 8), i + 1).toLowerCase();
+    const abbrevMatch = /([a-z]+\.)$/i.exec(prefix);
+    if (ch === "." && abbrevMatch && abbreviations.has(abbrevMatch[1])) continue;
+
+    let j = i + 1;
+    while (j < length && /\s/.test(line[j])) j += 1;
+    const next = line[j];
+    const boundary = j >= length || next === "#" || next === "-" || next === "*" || /[A-Z0-9]/.test(next);
+    if (!boundary) continue;
+
+    pushPart(partStart, i + 1);
+    partStart = i + 1;
+  }
+
+  pushPart(partStart, length);
+  return spans;
+}
+
 function splitSentencesWithOffsets(text) {
   const source = String(text ?? "");
   const candidates = [];
-  const trimRange = (from, to) => {
-    let start = from;
-    let end = to;
-    while (start < end && /\s/.test(source[start])) start += 1;
-    while (end > start && /\s/.test(source[end - 1])) end -= 1;
-    return { start, end };
-  };
 
-  let start = 0;
-  const length = source.length;
-  for (let i = 0; i < length; i += 1) {
-    const ch = source[i];
-    const boundary = ch === "." || ch === "!" || ch === "?" || ch === "\n";
-    if (!boundary) continue;
-    const end = i + 1;
-    const range = trimRange(start, end);
+  let lineStart = 0;
+  for (let i = 0; i <= source.length; i += 1) {
+    if (i < source.length && source[i] !== "\n") continue;
+    const lineEnd = i;
+    const range = trimRange(source, lineStart, lineEnd);
     if (range.end > range.start) {
-      candidates.push({ text: source.slice(range.start, range.end), start: range.start, end: range.end });
+      const line = source.slice(range.start, range.end);
+      if (isStructuredLine(line)) {
+        candidates.push({ text: line, start: range.start, end: range.end, isStructured: true });
+      } else {
+        const parts = splitProseLine(line, range.start);
+        if (parts.length > 0) {
+          for (const part of parts) {
+            candidates.push({ ...part, isStructured: false });
+          }
+        } else {
+          candidates.push({ text: line, start: range.start, end: range.end, isStructured: false });
+        }
+      }
     }
-    start = end;
+    lineStart = i + 1;
   }
-
-  const tail = trimRange(start, length);
-  if (tail.end > tail.start) {
-    candidates.push({ text: source.slice(tail.start, tail.end), start: tail.start, end: tail.end });
-  }
-
   return candidates;
 }
 
@@ -183,7 +237,7 @@ function sameNumericSignal(a, b) {
 function buildCoverageFlags(scored) {
   return scored.map(candidate => ({
     ...candidate,
-    isCoverageKeep: candidate.isSectionFirst || KEEP_PREFIX_RE.test(candidate.text)
+    isCoverageKeep: candidate.isSectionFirst || candidate.isStructured || KEEP_PREFIX_RE.test(candidate.text)
   }));
 }
 

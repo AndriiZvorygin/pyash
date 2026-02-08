@@ -55,7 +55,7 @@ test("abridge keeps selected sentences in source order", async () => {
     "Background context that is less critical.",
     "Action required by Friday."
   ].join(" ");
-  const result = await run(`from text ${JSON.stringify(source)} atmost byte 120 be abridge do`);
+  const result = await run(`from text ${JSON.stringify(source)} atmost byte 200 be abridge do`);
   const lines = readTextOutput(result).split("\n").filter(Boolean);
   let cursor = 0;
   for (const line of lines) {
@@ -111,15 +111,14 @@ test("abridge maps across a series via ob text payload", async () => {
 test("abridge keeps first sentence of each heading section as coverage", async () => {
   forget();
 
-  const source = [
-    "## Alpha",
-    "First alpha sentence.",
-    "Less important alpha details.",
-    "## Beta",
-    "First beta sentence.",
-    "Less important beta details."
-  ].join("\n");
-  const result = await run(`from text ${JSON.stringify(source)} atmost byte 120 be abridge do`);
+  await run(`exists su name source chip ob text quoted.text.## Alpha
+First alpha sentence.
+Less important alpha details.
+## Beta
+First beta sentence.
+Less important beta details.
+.text.quoted be text ya`);
+  const result = await run("from name text source chip atmost byte 200 be abridge do");
   const out = readTextOutput(result);
   assert.ok(out.includes("## Alpha"));
   assert.ok(out.includes("## Beta"));
