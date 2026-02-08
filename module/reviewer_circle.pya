@@ -35,8 +35,8 @@ ob text "" to name text sketch be text do
 ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 fromindex num 1 toindex num of ob of attempts be reviewer round do
-ob text "FAIL" to name text review loop verdict be text do
-ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob text "FAIL" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
 ob name sketch to name text output be text do
 su name output ret
 prah
@@ -50,8 +50,8 @@ ob text "" to name text sketch be text do
 ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 fromindex num 1 toindex num of ob of attempts be reviewer round do
-ob text "FAIL" to name text review loop verdict be text do
-ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob text "FAIL" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
 ob name sketch to name text output be text do
 su name output ret
 prah
@@ -65,8 +65,8 @@ ob text "" to name text sketch be text do
 ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 fromindex num 1 toindex num of ob of attempts be reviewer round do
-ob text "FAIL" to name text review loop verdict be text do
-ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob text "FAIL" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
 ob name sketch to name text output be text do
 su name output ret
 prah
@@ -80,10 +80,78 @@ ob text "" to name text sketch be text do
 ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 fromindex num 1 toindex num of ob of attempts be reviewer round do
-ob text "FAIL" to name text review loop verdict be text do
-ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob text "FAIL" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
 ob name sketch to name text output be text do
 su name output ret
+prah
+
+su name reviewer trying by name text judge target for name text generator target ob name text task to name map produce atleast num 0 atmost num 0 be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 0 to name num using tools be plus do
+ob text "" to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop decision be text do
+ob text "FAIL" to decision of produce be text do
+ob name sketch to result of produce be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to decision of produce be text do
+prah
+
+su name reviewer trying by name mind judge target for name mind generator target ob name text task to name map produce atleast num 0 atmost num 0 be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 0 to name num using tools be plus do
+ob text "" to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop decision be text do
+ob text "FAIL" to decision of produce be text do
+ob name sketch to result of produce be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to decision of produce be text do
+prah
+
+su name reviewer trying by name text judge target for name text generator target ob name text task to name map produce atleast num 0 atmost num 0 with name map be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num using tools be plus do
+ob name of with of this to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop decision be text do
+ob text "FAIL" to decision of produce be text do
+ob name sketch to result of produce be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to decision of produce be text do
+prah
+
+su name reviewer trying by name mind judge target for name mind generator target ob name text task to name map produce atleast num 0 atmost num 0 with name map be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num using tools be plus do
+ob name of with of this to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop decision be text do
+ob text "FAIL" to decision of produce be text do
+ob name sketch to result of produce be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop decision be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to decision of produce be text do
 prah
 
 exists su name reviewer trying be export ya

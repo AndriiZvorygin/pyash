@@ -1,5 +1,6 @@
 import { remember } from "../remember/index.mjs";
 import { renderSayValue } from "./say.mjs";
+import { resolveGenitiveTarget } from "./mathematics/plus_helpers.mjs";
 
 function resolveTextValue(ob = {}, { rememberFn } = {}) {
   if (typeof ob.text === "string") return ob.text;
@@ -22,6 +23,18 @@ function resolveTextValue(ob = {}, { rememberFn } = {}) {
 
 export async function text(sentence, { remember: rememberFn = remember } = {}) {
   const value = resolveTextValue(sentence.ob ?? {}, { rememberFn });
+  if (sentence.to?.genitive) {
+    const target = resolveGenitiveTarget(sentence.to.genitive, rememberFn);
+    if (target) {
+      if (target.value && typeof target.value === "object" && target.value.ob && typeof target.value.ob === "object") {
+        target.value.ob.text = value;
+      } else if (target.value && typeof target.value === "object" && !Array.isArray(target.value)) {
+        target.value.text = value;
+      } else {
+        target.parent[target.key] = { text: value };
+      }
+    }
+  }
   return { ob: { text: value }, be: "text" };
 }
 
@@ -34,8 +47,13 @@ export const signatures = [
   { signatureWords: ["be", "text", "ob", "name", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "filename"], handler: text },
   { signatureWords: ["be", "text", "ob", "text", "to", "name", "text"], handler: text },
+  { signatureWords: ["be", "text", "ob", "text", "to", "name", "num"], handler: text },
   { signatureWords: ["be", "text", "ob", "filename", "to", "name", "text"], handler: text },
+  { signatureWords: ["be", "text", "ob", "filename", "to", "name", "num"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "num", "to", "name", "text"], handler: text },
+  { signatureWords: ["be", "text", "ob", "name", "num", "to", "name", "num"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "text", "to", "name", "text"], handler: text },
-  { signatureWords: ["be", "text", "ob", "name", "filename", "to", "name", "text"], handler: text }
+  { signatureWords: ["be", "text", "ob", "name", "text", "to", "name", "num"], handler: text },
+  { signatureWords: ["be", "text", "ob", "name", "filename", "to", "name", "text"], handler: text },
+  { signatureWords: ["be", "text", "ob", "name", "filename", "to", "name", "num"], handler: text }
 ];

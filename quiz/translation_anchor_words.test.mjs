@@ -7,5 +7,5 @@ test("translation anchor words map schedule vocabulary to calendar anchor", () =
   assert.equal(resolveEnglishAlias("schedule"), "calendar");
   assert.equal(resolveEnglishAlias("scheduler"), "calendar");
   assert.equal(resolveEnglishAlias("calendar"), "calendar");
+  assert.equal(resolveEnglishAlias("verdict"), "decision");
 });
-

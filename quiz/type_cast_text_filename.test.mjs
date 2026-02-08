@@ -37,3 +37,12 @@ test("be text accepts genitive name values resolved from this cases", async () =
   await interpret(parse("ob name text task item for name text gen loop atleast num 0.8 atmost num 1 to name text out be probe do"));
   assert.equal(remember("out")?.ob?.text, "gen loop");
 });
+
+test("be text can write into map slots via to genitive", async () => {
+  forget();
+  await interpret(parse("su name produce be map def"));
+  await interpret(parse("su name result ob text \"\" ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("ob text \"hello\" to result of produce be text do"));
+  assert.equal(remember("produce")?.ob?.map?.result?.ob?.text, "hello");
+});

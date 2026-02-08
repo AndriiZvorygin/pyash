@@ -367,7 +367,8 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
           "ve",
           "bool",
           "boolean",
-          "date"
+          "date",
+          "map"
         ];
         const parts = [];
         let j = i + 1;
