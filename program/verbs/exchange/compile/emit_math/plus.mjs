@@ -199,9 +199,19 @@ export function handleMathPlus(context, helpers) {
         locals?.add(targetVar);
       }
       lines.push(`${targetVar}.ob = ${targetVar}.ob?.ob ?? ${targetVar}.ob ?? {};`);
-      const fieldPath = sentence.to?.genitive
-        ? pathFromGenitive(sentence.to.genitive, targetVar, { locals, declared }) || `${targetVar}.ob.num`
-        : `${targetVar}.ob.num`;
+      const targetChain = sentence.to?.genitive?.chain || [];
+      let fieldPath = `${targetVar}.ob.num`;
+      if (sentence.to?.genitive) {
+        const root = sanitizeName(String(targetChain[0] ?? ""));
+        const localNumericTarget =
+          root &&
+          targetChain.at(-1) === "num" &&
+          targetChain.includes("ob") &&
+          (root === targetVar || locals?.has(root) || declared?.has(root));
+        fieldPath = localNumericTarget
+          ? `${root}.ob.num`
+          : (pathFromGenitive(sentence.to.genitive, targetVar, { locals, declared }) || `${targetVar}.ob.num`);
+      }
       const newVal = `${fieldPath} ?? 0`;
       lines.push(`${fieldPath} = (${newVal}) + ${Number.isNaN(safeValue) ? 0 : safeValue};`);
       return lines.join("\n");

@@ -33,6 +33,24 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       words = tokens.slice(0, -1);
     }
   }
+
+  if (!allowMoodless && mood) {
+    const elseIndex = words.findIndex((token) => token === "else");
+    if (elseIndex > 0) {
+      const altStart = words[elseIndex + 1] === "if" ? elseIndex + 2 : elseIndex + 1;
+      const mainTokens = [...words.slice(0, elseIndex), mood];
+      const altTokens = [...words.slice(altStart), mood];
+      if (mainTokens.length > 1 && altTokens.length > 1) {
+        const primary = parseTokens(mainTokens, { allowMoodless: false, quotedText });
+        const alternative = parseTokens(altTokens, { allowMoodless: false, quotedText });
+        if (primary && alternative) {
+          primary.alternative = alternative;
+          return primary;
+        }
+      }
+    }
+  }
+
   const s = {};
   if (mood) s.mood = mood;
   let current = null;
@@ -48,7 +66,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
 
   const parseAllEnumerationBound = (startIdx) => parseAllEnumeration(words, startIdx, { ROLE_KEYS, CONTEXT_KEYS });
   const parseClauseBound = (startIdx) => parseClause(words, startIdx, { parseTokens, quotedText });
-  const boundaryTokens = new Set([...ROLE_KEYS, ...CONTEXT_KEYS, "be", "then", "ta", "ret"]);
+  const boundaryTokens = new Set([...ROLE_KEYS, ...CONTEXT_KEYS, "be", "then", "else", "ta", "ret"]);
 
   const parseGenitiveChain = (startIdx, { reverse = true } = {}) => {
     const next = words[startIdx + 1];
@@ -158,6 +176,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         CONTEXT_KEYS.includes(t) ||
         t === "be" ||
         t === "then" ||
+        t === "else" ||
         t === "ta" ||
         t === "ret";
       if (!isBoundary) {
@@ -203,7 +222,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
       if (
         next &&
         !ROLE_KEYS.includes(next) &&
-        !["be", "then", "ta"].includes(next) &&
+        !["be", "then", "else", "ta"].includes(next) &&
         !TYPE_TOKENS.includes(next) &&
         !startsGenitive
       ) {
@@ -214,7 +233,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
           if (
             nextState &&
             !ROLE_KEYS.includes(nextState) &&
-            !["be", "then", "ta"].includes(nextState) &&
+            !["be", "then", "else", "ta"].includes(nextState) &&
             !TYPE_TOKENS.includes(nextState)
           ) {
             slot.text = slot.name;
@@ -298,7 +317,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
         j < words.length &&
         !ROLE_KEYS.includes(words[j]) &&
         !CONTEXT_KEYS.includes(words[j]) &&
-        !["be", "then", "ta", "ret"].includes(words[j])
+        !["be", "then", "else", "ta", "ret"].includes(words[j])
       ) {
         const token = tokenValue(words[j]);
         if (elemType === "num" || elemType === "number") {
@@ -437,12 +456,13 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
           const parts = [];
           let j = i + 1;
           const isBoundary = (token) =>
-            ROLE_KEYS.includes(token) ||
-            CONTEXT_KEYS.includes(token) ||
-            token === "be" ||
-            token === "then" ||
-            token === "ta" ||
-            token === "ret";
+          ROLE_KEYS.includes(token) ||
+          CONTEXT_KEYS.includes(token) ||
+          token === "be" ||
+          token === "then" ||
+          token === "else" ||
+          token === "ta" ||
+          token === "ret";
           while (j < words.length) {
             const look = words[j];
             if (isBoundary(look)) break;
@@ -524,6 +544,7 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
           ROLE_KEYS.includes(look) ||
           CONTEXT_KEYS.includes(look) ||
           look === "then" ||
+          look === "else" ||
           look === "ta" ||
           look === "be"; // unlikely consecutive be, but stop
         if (isBoundary) break;

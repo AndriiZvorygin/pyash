@@ -10,7 +10,8 @@ const NON_CASE_FIELDS = new Set([
   "signature",
   "ret",
   "this",
-  "consequence"
+  "consequence",
+  "alternative"
 ]);
 
 const SEQUENCE_REGISTERS = new Set(["fromindex", "toindex", "atindex"]);
@@ -224,6 +225,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (inferred?.be === "stream") return ["name", "stream"];
     if (inferred?.be === "chip") return ["name", "chip"];
     if (inferred?.be === "mind") return ["name", "mind"];
+    if (inferred?.be === "refinery") return ["name", "refinery"];
     if (inferred?.be === "map") return ["name", "map"];
     if (inferred?.be === "series") return ["name", "series"];
     if (inferred?.be === "csv map") return ["name", "csv", "map"];

@@ -26,12 +26,15 @@ function fnv1aHex(text) {
   return hash.toString(16).padStart(8, "0");
 }
 
-function buildCheckpointHash(actionLine, depNames, depResults) {
+function buildCheckpointHash(actionLine, depNames, depResults, extraParts = []) {
   const parts = [`action:${actionLine}`];
   for (let i = 0; i < depNames.length; i += 1) {
     const name = depNames[i];
     const result = depResults[i] ?? "";
     parts.push(`dep:${name}:${result}`);
+  }
+  for (const extra of extraParts) {
+    parts.push(`extra:${String(extra ?? "")}`);
   }
   return fnv1aHex(parts.join("\n"));
 }
@@ -266,6 +269,14 @@ export function endRefinery(name) {
 
 export function getRefinery(name) {
   return refineryRegistry.get(name);
+}
+
+export function removeRefinery(name) {
+  return refineryRegistry.delete(name);
+}
+
+export function listRefineries() {
+  return [...refineryRegistry.keys()];
 }
 
 function resolveProposePrompt(sentence) {
@@ -510,7 +521,29 @@ export async function runRefinery({
     const sortedDeps = [...deps].sort(compareUtf8);
     const depResults = sortedDeps.map(dep => results.get(dep) ?? "");
     const actionLine = sentenceToPyash(platform.actionSentence);
-    const checkpointHash = buildCheckpointHash(actionLine, sortedDeps, depResults);
+    const loopCursorParts = [];
+    if (platform.actionSentence?.fromindex !== undefined) {
+      loopCursorParts.push(`fromindex:${JSON.stringify(platform.actionSentence.fromindex)}`);
+    }
+    if (platform.actionSentence?.toindex !== undefined) {
+      loopCursorParts.push(`toindex:${JSON.stringify(platform.actionSentence.toindex)}`);
+    }
+    const localSlotParts = [];
+    for (const slotName of ["trying", "sketch", "reaction", "decision"]) {
+      const slotFact = remember(slotName);
+      if (!slotFact) continue;
+      try {
+        localSlotParts.push(`${slotName}:${JSON.stringify(slotFact.ob ?? null)}`);
+      } catch {
+        localSlotParts.push(`${slotName}:unserializable`);
+      }
+    }
+    const checkpointHash = buildCheckpointHash(
+      actionLine,
+      sortedDeps,
+      depResults,
+      [...loopCursorParts, ...localSlotParts]
+    );
     const checkpointMap = checkpointIndex?.get(name);
     const checkpointRecord = checkpointEnabled ? checkpointMap?.get(nextName) : null;
     if (checkpointEnabled && checkpointRecord?.hash === checkpointHash) {

@@ -886,6 +886,154 @@ integrates with run newspaper and again mode requirements (§9–§10)
 
 ---
 
+## 13. Draft extensions for pure-Pyash review loops (v0.2 draft)
+
+This section is a forward-looking draft. It does not change v0.1 behavior.
+Goal: make reviewer/generator loops implementable as ordinary Pyash refineries.
+
+### 13.1 Loop control verbs
+
+Add two control verbs for active `fromindex`/`toindex` loops:
+
+```
+be depart do
+be continue do
+```
+
+Required behavior:
+
+* `be depart do` exits the current loop immediately.
+* `be continue do` skips remaining body sentences for the current iteration.
+* Outside an active loop, each MUST surface `be error ya` (`loop control defective`).
+
+Canonical signatures:
+
+* `["be","depart"]`
+* `["be","continue"]`
+
+### 13.2 Structured branch extension
+
+Add `else if` chain support so reviewer loops do not rely on deeply nested `then`.
+
+Canonical surface forms:
+
+```
+ob text "<a>" from text "<b>" be equally then <sentence>
+ob text "<a>" from text "<b>" be equally else if ob text "<c>" from text "<d>" be equally then <sentence>
+ob text "<a>" from text "<b>" be equally else <sentence>
+```
+
+### 13.3 Deterministic last-line extraction
+
+Add `line tail` as a first-class text primitive.
+
+Canonical surface forms:
+
+```
+ob text "<multiline>" atmost num 1 be line tail do
+ob name text <source> atmost num 1 to name text <target> be line tail do
+```
+
+Required behavior:
+
+* `atmost num N` returns the last `N` non-empty lines (default `1`).
+* Leading/trailing whitespace in each line is trimmed before emptiness checks.
+* Output joins retained lines with `\n`, preserving deterministic order.
+
+### 13.4 Deterministic numeric parse via cast
+
+Extend `cast` for bounded numeric parsing used by review verdicts.
+
+Canonical surface forms:
+
+```
+ob text "<x>" become num be cast do
+ob text "<x>" from num 0 to num 1 become num be cast do
+```
+
+Required behavior:
+
+* Parse first valid scalar numeric token from text.
+* If bounds are present (`from num`, `to num`), value MUST be in range (inclusive).
+* On parse/range failure, return `hollow` (no throw), so caller can branch.
+
+### 13.5 Dynamic target dispatch (`evoke`)
+
+Add a uniform invoke verb for typed target dispatch.
+
+Canonical surface forms:
+
+```
+ob text "<input>" for name <target> to name text <output> be evoke do
+ob text "<input>" for name <target> with name <map> to name text <output> be evoke do
+```
+
+Required behavior:
+
+* Resolve `<target>` by remembered type:
+  - `be mind` -> mind write path
+  - `be refinery` -> refinery path
+  - `be ceremony` / definition entry -> ceremony path
+* Unknown target type surfaces `be error ya` (`evoke target defective`).
+* `with name <map>` is passed through when target supports tools.
+
+### 13.6 Hard assertion verb (`guarantee`)
+
+Add a fail-fast verifier primitive.
+
+Canonical surface forms:
+
+```
+ob bool truth be guarantee do
+ob bool lie fromtext text "<message>" be guarantee do
+ob name bool <fact> fromtext text "<message>" be guarantee do
+```
+
+Required behavior:
+
+* If input is truth, return success acknowledgement.
+* If input is lie, surface `be error ya` (`guarantee defective`) with optional message.
+
+### 13.7 Refinery local scope and typed outputs
+
+Refinery runners SHOULD provide run-local scope and output contracts.
+
+Draft local slots for review loops:
+
+* `trying` (attempt index)
+* `sketch` (current generator output)
+* `reaction` (current reviewer output)
+* `decision` (pass/fail or score parse)
+
+Draft contract extension on platform series entries:
+
+```
+su name <platform> to name text <target> <activity> ya
+su name <platform> to name num <target> <activity> ya
+```
+
+Required behavior:
+
+* Platform completion validates declared output type before marking completion.
+* Type mismatch surfaces `be error ya` (`platform output defective`).
+
+### 13.8 Checkpoint/resume with loop cursor state
+
+For iterative refinery flows, checkpoint identity MUST include loop cursor and
+declared local slots that influence output.
+
+Resume token extension MUST include:
+
+* refinery name
+* platform name or index
+* loop cursor (`fromindex` and `toindex` when active)
+* serialized local slots (`trying`, `sketch`, `reaction`, `decision`) when present
+
+This ensures retry/resume returns the same next decision point and output.
+
+
+---
+
 # Re-entry cycle (draft v0.1)
 
 ## Re-entry Cycle — Why, How, What

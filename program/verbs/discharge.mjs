@@ -2,6 +2,7 @@ import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { closeMcpServer } from "../motor/mcp.mjs";
+import { getRefinery, removeRefinery } from "../bridge/refinery.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   const ob = sentence?.ob ?? {};
@@ -44,7 +45,7 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
     });
   }
   const dischargeType = resolveDischargeType(sentence);
-  if (dischargeType && dischargeType !== "mcp") {
+  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery") {
     throwErrorSentence({
       name: "discharge target defective",
       message: `discharge target defective: ${dischargeType}`,
@@ -60,6 +61,21 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
       be: "discharge",
       ob: { name: mcpName },
       from: { name: "mcp" }
+    };
+  }
+  const refineryName = String(targetName).trim();
+  const explicitRefinery = dischargeType === "refinery";
+  const fact = rememberFn(refineryName);
+  const resolvedRefineryName = explicitRefinery
+    ? (fact?.as?.name ?? fact?.from?.name ?? refineryName)
+    : (fact?.be === "refinery" ? (fact?.as?.name ?? fact?.from?.name ?? refineryName) : null);
+  if (resolvedRefineryName && getRefinery(resolvedRefineryName)) {
+    removeRefinery(resolvedRefineryName);
+    return {
+      mood: "ya",
+      be: "discharge",
+      ob: { name: resolvedRefineryName },
+      from: { name: "refinery" }
     };
   }
   throwErrorSentence({
@@ -87,5 +103,9 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "num"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "text"], handler: discharge },
-  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "map"], handler: discharge }
+  { signatureWords: ["be", "discharge", "as", "wo", "mcp", "ob", "name", "map"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "refinery", "ob", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "refinery", "ob", "name", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "refinery", "ob", "name", "num"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "refinery", "ob", "name", "map"], handler: discharge }
 ];
