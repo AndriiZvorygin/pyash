@@ -183,6 +183,7 @@ export function forget() {
   state.currentEvoke = null;
   state.currentEvokeRef = null;
   state.executingBody = false;
+  state.refineryScopeStack.length = 0;
 }
 
 export function setDefault(name, sentence) {

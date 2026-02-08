@@ -994,18 +994,35 @@ Required behavior:
 * If input is truth, return success acknowledgement.
 * If input is lie, surface `be error ya` (`guarantee defective`) with optional message.
 
-### 13.7 Refinery local scope and typed outputs
+### 13.7 Explicit export verb (`export`)
 
-Refinery runners SHOULD provide run-local scope and output contracts.
+Add a refinery-scope export marker:
 
-Draft local slots for review loops:
+```
+su name <fact> be export do
+```
+
+Required behavior:
+
+* Inside an active refinery platform scope, this marks `<fact>` for export to caller scope.
+* Outside refinery platform scope, this surfaces `be error ya` (`refinery produce defective`).
+
+Canonical signatures:
+
+* `["be","export"]`
+
+### 13.8 Refinery local scope and typed outputs
+
+Refinery runners MUST provide run-local scope for platform execution and typed output contracts.
+
+Canonical local slots for review loops:
 
 * `trying` (attempt index)
 * `sketch` (current generator output)
 * `reaction` (current reviewer output)
 * `decision` (pass/fail or score parse)
 
-Draft contract extension on platform series entries:
+Contract extension on platform series entries:
 
 ```
 su name <platform> to name text <target> <activity> ya
@@ -1014,10 +1031,20 @@ su name <platform> to name num <target> <activity> ya
 
 Required behavior:
 
-* Platform completion validates declared output type before marking completion.
-* Type mismatch surfaces `be error ya` (`platform output defective`).
+* Writes produced while evaluating a platform are local by default.
+* The platform result fact (`su name <platform> ...`) is exported automatically.
+* A platform output declared in the platform sentence (`to name <type> <target>`) is exported automatically.
+* Additional names are exported explicitly via:
 
-### 13.8 Checkpoint/resume with loop cursor state
+```
+su name <fact> be export do
+```
+
+* Platform completion validates declared output type before marking completion.
+* Type mismatch surfaces `be error ya` (`platform produce defective`).
+* Invalid export usage surfaces `be error ya` (`refinery produce defective`).
+
+### 13.9 Checkpoint/resume with loop cursor state
 
 For iterative refinery flows, checkpoint identity MUST include loop cursor and
 declared local slots that influence output.

@@ -1,9 +1,16 @@
 import { surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
-import { remember, doRemember } from "../remember/index.mjs";
+import { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import { state } from "./state.mjs";
 
 const refineryRegistry = new Map();
 const refineryStack = [];
+const REFINERY_LOCAL_SLOT_NAMES = ["trying", "sketch", "reaction", "decision"];
+
+function cloneValue(value) {
+  if (globalThis.structuredClone) return globalThis.structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
 
 function compareUtf8(a, b) {
   if (a === b) return 0;
@@ -67,10 +74,14 @@ function normalizeRetryConfig(config = {}) {
   return { initialDelayMs, backoff, maxAttempts, maxDelayMs };
 }
 
-function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence, resultLine }) {
+function buildCheckpointSentence({ refineryName, platformName, hash, resultSentence, resultLine, exportFacts = [], scopeSlots = {} }) {
   let payloadText = "";
   try {
-    payloadText = JSON.stringify(resultSentence ?? {});
+    payloadText = JSON.stringify({
+      result: resultSentence ?? {},
+      exports: exportFacts,
+      scope: scopeSlots
+    });
   } catch {
     payloadText = "";
   }
@@ -95,6 +106,126 @@ function buildRetrySentence({ refineryName, platformName, attempt, message }) {
     ob: { text: message },
     from: { name: refineryName }
   };
+}
+
+function normalizeNameTypeWord(word) {
+  const raw = String(word ?? "").trim().toLowerCase();
+  if (raw === "number") return "num";
+  if (raw === "boolean") return "bool";
+  return raw;
+}
+
+function rememberInLocalWrites(localWrites, name) {
+  for (let i = localWrites.length - 1; i >= 0; i -= 1) {
+    const entry = localWrites[i];
+    if (entry?.su?.name === name) return entry;
+  }
+  return undefined;
+}
+
+function collectExportFacts({ localWrites, autoExportNames, explicitExportNames }) {
+  const names = new Set();
+  for (const name of autoExportNames ?? []) names.add(name);
+  for (const name of explicitExportNames ?? []) names.add(name);
+  const exportFacts = [];
+  for (const name of names) {
+    const fact = rememberInLocalWrites(localWrites, name);
+    if (fact?.mood) exportFacts.push(cloneValue(fact));
+  }
+  return exportFacts;
+}
+
+function factMatchesTypeWord(fact, expectedWord) {
+  const word = normalizeNameTypeWord(expectedWord);
+  const ob = fact?.ob ?? {};
+  if (word === "text") return typeof ob.text === "string";
+  if (word === "num") return typeof ob.num === "number" && Number.isFinite(ob.num);
+  if (word === "bool") return typeof ob.boolean === "boolean";
+  if (word === "filename") return typeof ob.filename === "string";
+  if (word === "series") return Array.isArray(ob.series);
+  if (word === "map") return fact?.be === "map" || (ob.map && typeof ob.map === "object" && !Array.isArray(ob.map));
+  if (word === "json map") return fact?.be === "json map";
+  if (word === "csv map") return fact?.be === "csv map";
+  return true;
+}
+
+function validateOutputContract({ outputContract, localWrites, refineryName, platformName }) {
+  if (!outputContract) return;
+  const fact = rememberInLocalWrites(localWrites, outputContract.name);
+  if (!fact) {
+    throwErrorSentence({
+      name: "platform produce defective",
+      message: `platform produce defective: missing ${outputContract.name}`,
+      from: { name: refineryName },
+      raw: { platform: platformName, output: outputContract }
+    });
+  }
+  const normalizedWords = outputContract.typeWords.map(normalizeNameTypeWord);
+  const compositeType = normalizedWords.join(" ");
+  if (compositeType === "json map" && fact?.be !== "json map") {
+    throwErrorSentence({
+      name: "platform produce defective",
+      message: `platform produce defective: ${outputContract.name} not json map`,
+      from: { name: refineryName },
+      raw: { platform: platformName, output: outputContract, got: fact }
+    });
+  }
+  if (compositeType === "csv map" && fact?.be !== "csv map") {
+    throwErrorSentence({
+      name: "platform produce defective",
+      message: `platform produce defective: ${outputContract.name} not csv map`,
+      from: { name: refineryName },
+      raw: { platform: platformName, output: outputContract, got: fact }
+    });
+  }
+  for (const word of outputContract.typeWords) {
+    if (!factMatchesTypeWord(fact, word)) {
+      throwErrorSentence({
+        name: "platform produce defective",
+        message: `platform produce defective: ${outputContract.name} not ${word}`,
+        from: { name: refineryName },
+        raw: { platform: platformName, output: outputContract, got: fact }
+      });
+    }
+  }
+}
+
+function shouldSkipOutputContract({ outputContract, actionSentence }) {
+  if (!outputContract || !actionSentence) return false;
+  const joinedType = outputContract.typeWords.map(normalizeNameTypeWord).join(" ");
+  // Legacy mapper signatures historically used `to name text <target>` even when
+  // mapped output is a series sentence. Keep backward compatibility.
+  if (joinedType === "text" && actionSentence.be === "series map") return true;
+  return false;
+}
+
+function readLocalSlotFacts(localWrites) {
+  const slots = {};
+  for (const slotName of REFINERY_LOCAL_SLOT_NAMES) {
+    const fact = rememberInLocalWrites(localWrites, slotName);
+    if (!fact) continue;
+    slots[slotName] = cloneValue(fact);
+  }
+  return slots;
+}
+
+function restoreExportFacts(exportFacts = []) {
+  for (const fact of exportFacts) {
+    if (fact?.mood === "ya") doRemember(fact);
+  }
+}
+
+function applyScopeSnapshotToHashParts(scopeSlots = {}) {
+  const parts = [];
+  for (const slotName of REFINERY_LOCAL_SLOT_NAMES) {
+    if (!scopeSlots[slotName]) continue;
+    try {
+      parts.push(`${slotName}:${JSON.stringify(scopeSlots[slotName].ob ?? null)}`);
+    } catch {
+      parts.push(`${slotName}:unserializable`);
+    }
+  }
+  return parts;
 }
 
 async function sleepMs(delayMs) {
@@ -235,9 +366,17 @@ export function recordPlatform(sentence) {
   }
   const priorName = frame.order.length > 0 ? frame.order[frame.order.length - 1] : null;
   if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
+  const outputContract = (() => {
+    const targetName = sentence?.to?.name;
+    const targetTypeWords = Array.isArray(sentence?.to?.nameTypeWords)
+      ? sentence.to.nameTypeWords
+      : [];
+    if (!targetName || targetTypeWords.length === 0) return null;
+    return { name: String(targetName), typeWords: targetTypeWords.map(w => String(w)) };
+  })();
   actionSentence = { ...sentence };
   if (actionSentence.from?.ve?.type === "name") delete actionSentence.from;
-  frame.platforms.set(name, { deps, actionSentence });
+  frame.platforms.set(name, { deps, actionSentence, outputContract });
   frame.order.push(name);
   return { recorded: true };
 }
@@ -528,16 +667,13 @@ export async function runRefinery({
     if (platform.actionSentence?.toindex !== undefined) {
       loopCursorParts.push(`toindex:${JSON.stringify(platform.actionSentence.toindex)}`);
     }
-    const localSlotParts = [];
-    for (const slotName of ["trying", "sketch", "reaction", "decision"]) {
+    const localScopeSnapshot = {};
+    for (const slotName of REFINERY_LOCAL_SLOT_NAMES) {
       const slotFact = remember(slotName);
       if (!slotFact) continue;
-      try {
-        localSlotParts.push(`${slotName}:${JSON.stringify(slotFact.ob ?? null)}`);
-      } catch {
-        localSlotParts.push(`${slotName}:unserializable`);
-      }
+      localScopeSnapshot[slotName] = slotFact;
     }
+    const localSlotParts = applyScopeSnapshotToHashParts(localScopeSnapshot);
     const checkpointHash = buildCheckpointHash(
       actionLine,
       sortedDeps,
@@ -549,16 +685,16 @@ export async function runRefinery({
     if (checkpointEnabled && checkpointRecord?.hash === checkpointHash) {
       const resultSentence = checkpointRecord.resultSentence;
       const resultLine = checkpointRecord.resultLine ?? sentenceToPyash(resultSentence);
-      if (resultSentence?.mood === "ya") {
-        doRemember(resultSentence);
-      }
+      restoreExportFacts(checkpointRecord.exportFacts ?? []);
       results.set(nextName, resultLine);
       const checkpointSentence = buildCheckpointSentence({
         refineryName: name,
         platformName: nextName,
         hash: checkpointHash,
         resultSentence,
-        resultLine
+        resultLine,
+        exportFacts: checkpointRecord.exportFacts ?? [],
+        scopeSlots: checkpointRecord.scopeSlots ?? {}
       });
       if (onCheckpoint) onCheckpoint(checkpointSentence);
       if (onResult) onResult(resultSentence);
@@ -570,15 +706,54 @@ export async function runRefinery({
     let attempt = 0;
     let delayMs = retrySettings.initialDelayMs;
     let result;
+    let lastExportFacts = [];
+    let lastScopeSlots = {};
     while (attempt < retrySettings.maxAttempts) {
       attempt += 1;
+      let surfaced = null;
+      let exportFacts = [];
+      let scopeSlots = {};
+      pushMemoryContext({ seedFromCurrent: true });
+      const localStart = allRemember().length;
+      const scopeFrame = {
+        exports: new Set(),
+        autoExport: new Set([
+          nextName,
+          ...(platform.outputContract?.name ? [platform.outputContract.name] : [])
+        ])
+      };
+      state.refineryScopeStack.push(scopeFrame);
       try {
-        result = await interpret(platform.actionSentence);
+        try {
+          result = await interpret(platform.actionSentence);
+        } catch (err) {
+          result = surfaceErrorSentence(err?.sentence ?? err);
+        }
+        const resultSentence = resolveResultSentence(result, platform.actionSentence);
+        surfaced = surfaceErrorSentence(resultSentence);
+        const localWrites = allRemember().slice(localStart);
+        if (!(surfaced?.be === "error" && surfaced?.mood === "ya")) {
+          if (!shouldSkipOutputContract({ outputContract: platform.outputContract, actionSentence: platform.actionSentence })) {
+            validateOutputContract({
+              outputContract: platform.outputContract,
+              localWrites,
+              refineryName: name,
+              platformName: nextName
+            });
+          }
+        }
+        exportFacts = collectExportFacts({
+          localWrites,
+          autoExportNames: scopeFrame.autoExport,
+          explicitExportNames: scopeFrame.exports
+        });
+        scopeSlots = readLocalSlotFacts(localWrites);
       } catch (err) {
-        result = surfaceErrorSentence(err?.sentence ?? err);
+        surfaced = surfaceErrorSentence(err?.sentence ?? err);
+      } finally {
+        state.refineryScopeStack.pop();
+        popMemoryContext();
       }
-      const resultSentence = resolveResultSentence(result, platform.actionSentence);
-      const surfaced = surfaceErrorSentence(resultSentence);
       if (surfaced?.be === "error" && surfaced?.mood === "ya") {
         if (attempt < retrySettings.maxAttempts) {
           const retrySentence = buildRetrySentence({
@@ -595,6 +770,9 @@ export async function runRefinery({
         if (onResult) onResult(surfaced);
         return surfaced;
       }
+      restoreExportFacts(exportFacts);
+      lastExportFacts = exportFacts;
+      lastScopeSlots = scopeSlots;
       if (surfaced?.mood) {
         if (onResult) onResult(surfaced);
         lastResult = surfaced;
@@ -606,7 +784,9 @@ export async function runRefinery({
         platformName: nextName,
         hash: checkpointHash,
         resultSentence: surfaced ?? platform.actionSentence,
-        resultLine
+        resultLine,
+        exportFacts: lastExportFacts,
+        scopeSlots: lastScopeSlots
       });
       if (checkpointEnabled && onCheckpoint) onCheckpoint(checkpointSentence);
       break;
