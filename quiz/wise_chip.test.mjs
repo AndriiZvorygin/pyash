@@ -26,9 +26,28 @@ test("wise chip resolves marker boundaries from boundary series", async () => {
   assert.ok(series);
   assert.equal(series.be, "series");
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
-  assert.equal(texts.length, 2);
-  assert.equal(texts[0], "start A ... end A. Middle. ");
-  assert.equal(texts[1], "Start B ... end B. Tail.");
+  assert.equal(texts.length, 3);
+  assert.equal(texts[0], "Intro ");
+  assert.equal(texts[1], "start A ... end A. Middle. ");
+  assert.equal(texts[2], "Start B ... end B. Tail.");
+});
+
+test("wise chip includes source prefix before first boundary marker", async () => {
+  forget();
+
+  const source = "Lead in text. ## Section A\\nBody A\\n## Section B\\nBody B\\n";
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "## Section A" "## Section B" be boundary ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, ["Lead in text. ", "## Section A\\nBody A\\n", "## Section B\\nBody B\\n"]);
 });
 
 test("wise chip skips duplicate boundary markers that resolve to the same offset", async () => {
