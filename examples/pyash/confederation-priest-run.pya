@@ -1,5 +1,3 @@
-from name ../../module/reviewer_circle.pya to name reviewer circle be import do
-
 su name example meta be map def
 su name mode ob text "session" ya
 su name inputs ob ve text "/bye" ya
@@ -26,8 +24,7 @@ exists su name world root ob filename "world" be default ya
 exists su name world agent ob text "confederation-priest" be text ya
 exists su name world place ob text "workplace" be text ya
 
-exists su name priest be mind via state "qwen3-vl:8b-instruct" ya
-su name note ob text "ob text \"You are the Confederation Priest of the Confederation of Planets. Work inside the current directory. Use tools to search, download, read, write, list, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf). Retrieve at least one specific channeling script/transcript page (not just the index page) and save it locally. If you compile html/pdf, first write the source markdown files (e.g., confederation_knowledge.md) in the current directory.\" for name priest with name priest tools be session do" be text pe
+exists su name priest draft mind be mind via state "qwen3-vl:8b-instruct" ya
 exists su name priest task ob text "You are the Confederation Priest of the Confederation of Planets. Work inside the current directory. Use tools to search, download, read, write, list, exists, and command as needed. Goals: update confederation knowledge (chronology, glossary, contacts), track new items from https://www.llresearch.org/channeling and https://www.buzzsprout.com/2320595, and leave a brief maintenance note in the current directory (write it before compiling html/pdf). Retrieve at least one specific channeling script/transcript page (not just the index page) and save it locally (e.g., channeling_script.html). If a source markdown file does not exist (e.g., confederation_knowledge.md), create it before reading or compiling." be text ya
-ob name text priest task for name text priest by name text review mind long with name priest tools atleast num 0.8 atmost num 3 to name text priest out be reviewer circle reviewer trying do
+ob name text priest task for name priest draft mind by name review mind brief with name priest tools atleast num 0.8 atmost num 1 to name text priest out be review loop do
 ob name priest out be write do
