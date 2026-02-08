@@ -50,6 +50,34 @@ test("wise chip includes source prefix before first boundary marker", async () =
   assert.deepEqual(texts, ["Lead in text. ", "## Section A\\nBody A\\n", "## Section B\\nBody B\\n"]);
 });
 
+test("wise chip output is reversible by stitching chips in order", async () => {
+  forget();
+
+  const source = [
+    "Preface paragraph.",
+    "## Section One",
+    "Alpha line.",
+    "## Section Two",
+    "Beta line.",
+    "## Section Three",
+    "Gamma line."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "## Section One" "## Section Two" "## Section Three" be boundary ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals atmost byte 24 to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.ok(texts.length > 3);
+  const stitched = texts.join("");
+  assert.equal(stitched, source);
+});
+
 test("wise chip skips duplicate boundary markers that resolve to the same offset", async () => {
   forget();
 
