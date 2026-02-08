@@ -153,6 +153,10 @@ export const signatures = [
   { signatureWords: ["be", "import", "ob", "text", "to", "name", "num"], handler: importFromSentence },
   { signatureWords: ["be", "import", "ob", "name", "text", "to", "name", "num"], handler: importFromSentence },
   { signatureWords: ["be", "import", "ob", "name", "text", "to", "name", "text"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "ob", "text", "to", "name", "map"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "ob", "name", "text", "to", "name", "map"], handler: importFromSentence },
   { signatureWords: ["be", "import", "from", "filename", "to", "name", "num"], handler: importFromSentence },
-  { signatureWords: ["be", "import", "from", "text", "to", "name", "num"], handler: importFromSentence }
+  { signatureWords: ["be", "import", "from", "text", "to", "name", "num"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "from", "filename", "to", "name", "map"], handler: importFromSentence },
+  { signatureWords: ["be", "import", "from", "text", "to", "name", "map"], handler: importFromSentence }
 ];

@@ -5,6 +5,7 @@ su name calendar ob text "calendar" as wo noun ya
 su name calendar ob text "schedule" as wo verb ya
 su name calendar ob text "scheduler" as wo agentive ya
 su name containers ob text "container" as wo noun ya
+su name decision ob text "verdict" as wo noun ya
 su name reviewer ob text "review" as wo verb ya
 su name searching ob text "search" as wo verb ya
 su name places ob text "place" as wo noun ya

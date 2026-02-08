@@ -51,6 +51,18 @@ export function resolveGenitiveValue(genitive, { state, memory } = {}) {
   return null;
 }
 
+function rememberNonControl(memory, name) {
+  if (!name || !memory) return null;
+  const all = memory.allRemember();
+  for (let i = all.length - 1; i >= 0; i -= 1) {
+    const sentence = all[i];
+    if (sentence?.su?.name !== name) continue;
+    if (sentence?.mood === "do" || sentence?.mood === "ret") continue;
+    return sentence;
+  }
+  return null;
+}
+
 function registerValue(reg, { state, memory } = {}) {
   if (reg == null) return null;
   if (typeof reg === "number") return reg;
@@ -157,7 +169,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
         break;
       }
     }
-    updatedTarget = sentence.to?.name ? memory.remember(sentence.to.name) : null;
+    updatedTarget = sentence.to?.name ? rememberNonControl(memory, sentence.to.name) : null;
     sandpit = [state.currentEvokeRef, ...memory.allRemember()];
   } finally {
     recordSandpitTrace(sandpit);
@@ -202,6 +214,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
   const prevExecutingBody = state.executingBody;
+  const prevLastCondition = state.lastCondition;
   const { to } = sentence;
   const cloneSentence = (step) => {
     if (!step || typeof step !== "object") return step;
@@ -229,6 +242,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   state.executingBody = true;
   memory.pushMemoryContext({ seedFromCurrent: true });
   state.currentEvokeRef = evokeSeed;
+  state.lastCondition = true;
 
   try {
     for (const step of body) {
@@ -237,7 +251,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     }
   } finally {
     const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
-    updatedTarget = to?.name ? memory.remember(to.name) : null;
+    updatedTarget = to?.name ? rememberNonControl(memory, to.name) : null;
     recordSandpitTrace(sandpit);
     memory.popMemoryContext();
     state.executingBody = false;
@@ -245,10 +259,11 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     state.currentEvoke = prevEvoke;
     state.currentEvokeRef = prevEvokeRef;
     state.executingBody = prevExecutingBody;
+    state.lastCondition = prevLastCondition;
   }
 
   // merge updates from sandpit
-  const mainTarget = to?.name ? memory.remember(to.name) : null;
+  const mainTarget = to?.name ? rememberNonControl(memory, to.name) : null;
   const lastVal = lastResult?.value ?? lastResult?.ob;
   const returnValue =
     lastVal && typeof lastVal === "object" && lastVal.ob !== undefined ? lastVal.ob : lastVal;
@@ -257,9 +272,17 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
       ? returnValue.ob ?? undefined // evoker-like; take its ob if present
       : returnValue;
   const numericSignature = signatureImpliesNumeric(defSigWords);
-  const mergedObj = preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob;
+  const targetLooksMap =
+    updatedTarget?.be === "map" ||
+    updatedTarget?.be === "json map" ||
+    updatedTarget?.be === "csv map";
+  const mergedObj = targetLooksMap
+    ? (updatedTarget?.ob ?? mainTarget?.ob ?? preferredVal ?? evoke.ob)
+    : (preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob);
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
-  const mergedBe = evoke.be || updatedTarget?.be || "result";
+  const mergedBe = targetLooksMap
+    ? (updatedTarget?.be ?? mainTarget?.be ?? evoke.be ?? "result")
+    : (evoke.be || updatedTarget?.be || "result");
 
   if (mergedObj === undefined && preferredVal === undefined && numericSignature) {
     throw new Error(`ceremony ${sentence.be} returned no value for numeric signature`);

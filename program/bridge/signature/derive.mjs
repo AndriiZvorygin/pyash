@@ -201,6 +201,27 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     }
     const inferred = remember ? remember(value.name) : null;
     const literalTail = normalizeWords(value.name);
+    if (!inferred && typeof literalTail === "string" && literalTail.includes(" ")) {
+      const [head] = literalTail.split(" ");
+      if (
+        head === "num" ||
+        head === "text" ||
+        head === "wo" ||
+        head === "vec" ||
+        head === "ve" ||
+        head === "filename" ||
+        head === "bool" ||
+        head === "mind" ||
+        head === "refinery" ||
+        head === "map" ||
+        head === "series" ||
+        head === "stream" ||
+        head === "duty" ||
+        head === "date"
+      ) {
+        return ["name", head];
+      }
+    }
     if (!inferred && literalTail && (literalTail === "num" || literalTail === "text" || literalTail === "vec" || literalTail === "ve" || literalTail === "filename" || literalTail === "bool" || literalTail === "mind" || literalTail === "date")) {
       return ["name", literalTail];
     }

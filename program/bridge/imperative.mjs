@@ -453,7 +453,7 @@ export async function handleImperative({
   }
 
   if (!fn && defEntry) {
-    if (sigWords && !defResolvedBySignature && defEntry?.name) {
+    if (sigWords && defEntry?.name) {
       const matched = memory.getDefinitionEntryBySignature(defEntry.name, sigWords);
       if (matched) {
         defEntry = matched;
