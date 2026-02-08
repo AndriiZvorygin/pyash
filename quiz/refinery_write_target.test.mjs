@@ -39,3 +39,16 @@ test("review loop can use refinery alias fact as generator", async () => {
 
   assert.equal(remember("result")?.ob?.text, "alias refinery output");
 });
+
+test("mind fact can route write calls through refinery provider via as name", async () => {
+  forget();
+
+  await run("su name review loop be refinery def");
+  await run('su name draft ob text "provider refinery output" be text do');
+  await run("prah");
+  await run('exists su name helper be mind as name "review loop" ya');
+
+  await run('ob text "Task." for name helper to name text result be write do');
+
+  assert.equal(remember("result")?.ob?.text, "provider refinery output");
+});
