@@ -1,0 +1,34 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, remember } from "../program/remember/index.mjs";
+
+async function run(line) {
+  return interpret(parse(line));
+}
+
+async function setupRetryFixtures() {
+  await run('exists su name mind response ob text "approved\\nPASS" be text ya');
+  await run('exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext text "draft" ya');
+  await run('exists su name reviewer be mind as name "qwen3-vl:8b-instruct" fromtext text "review" ya');
+}
+
+test("pure reviewer module matches builtin output+verdict shape", async () => {
+  forget();
+  await setupRetryFixtures();
+  await run('from name ./module/reviewer_circle.pya to name reviewer circle module be import do');
+  await run('exists su name pure task ob text "Task." be text ya');
+
+  await run('ob name text pure task for name text author by name text reviewer atleast num 0.8 atmost num 3 to name text pure result be reviewer circle module reviewer trying do');
+  const pureResult = remember("pure result")?.ob?.text;
+
+  forget();
+  await setupRetryFixtures();
+  await run('ob text "Task." for name author by name reviewer atleast num 0.8 atmost num 3 to name text builtin result be review loop do');
+  const builtinResult = remember("builtin result")?.ob?.text;
+
+  assert.match(pureResult ?? "", /PASS/);
+  assert.equal(pureResult, builtinResult);
+});

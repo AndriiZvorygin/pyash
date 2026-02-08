@@ -111,6 +111,12 @@ function normalizeDefinitionTypeWords(typeWords) {
       t === "text" ||
       t === "wo" ||
       t === "vec" ||
+      t === "mind" ||
+      t === "refinery" ||
+      t === "map" ||
+      t === "series" ||
+      t === "stream" ||
+      t === "duty" ||
       t === "filename" ||
       t === "bool" ||
       t === "date" ||

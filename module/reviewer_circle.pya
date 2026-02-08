@@ -1,5 +1,89 @@
-su name trying ob name text task to name text output be ceremony def
-ob name task for name author by name reviewer atleast num 0.8 atmost num 3 to name text output be review loop do
+su name reviewer round fromindex num 0 toindex num 0 be ceremony def
+ob num of fromindex of this to name trying be plus do
+
+ob name trying from num 1 be equally then ob name task to name text draft prompt be text do
+ob name trying from num 1 be giant then ob text "Revise the candidate using reviewer feedback." to name text draft prompt be text do
+ob name trying from num 1 be giant then ob text "\n\nTASK:\n" to name text draft prompt be plus do
+ob name trying from num 1 be giant then ob name task to name text draft prompt be plus do
+ob name trying from num 1 be giant then ob text "\n\nPRIOR CANDIDATE:\n" to name text draft prompt be plus do
+ob name trying from num 1 be giant then ob name sketch to name text draft prompt be plus do
+ob name trying from num 1 be giant then ob text "\n\nREVIEW FEEDBACK:\n" to name text draft prompt be plus do
+ob name trying from num 1 be giant then ob name reaction to name text draft prompt be plus do
+
+ob name using tools from num 1 be equally then ob text of ob of draft prompt for name author with name tools map to name text sketch be evoke do
+ob name using tools from num 1 be tiny then ob text of ob of draft prompt for name author to name text sketch be evoke do
+
+ob text "Review factual grounding and constraint fit. Return concise reasoning. Last non-empty line must be PASS or FAIL only." to name text review prompt be text do
+ob text "\n\nTASK:\n" to name text review prompt be plus do
+ob name task to name text review prompt be plus do
+ob text "\n\nCANDIDATE:\n" to name text review prompt be plus do
+ob name sketch to name text review prompt be plus do
+
+ob name using tools from num 1 be equally then ob text of ob of review prompt for name reviewer with name tools map to name text reaction be evoke do
+ob name using tools from num 1 be tiny then ob text of ob of review prompt for name reviewer to name text reaction be evoke do
+
+ob name reaction atmost num 1 to name text decision line be line tail do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then be depart do
 prah
 
-exists su name trying be export ya
+su name reviewer trying by name text judge target for name text generator target ob name text task to name text output atleast num 0 atmost num 0 be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 0 to name num using tools be plus do
+ob text "" to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop verdict be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob name sketch to name text output be text do
+su name output ret
+prah
+
+su name reviewer trying by name mind judge target for name mind generator target ob name text task to name text output atleast num 0 atmost num 0 be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 0 to name num using tools be plus do
+ob text "" to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop verdict be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob name sketch to name text output be text do
+su name output ret
+prah
+
+su name reviewer trying by name text judge target for name text generator target ob name text task to name text output atleast num 0 atmost num 0 with name map be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num using tools be plus do
+ob name of with of this to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop verdict be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob name sketch to name text output be text do
+su name output ret
+prah
+
+su name reviewer trying by name mind judge target for name mind generator target ob name text task to name text output atleast num 0 atmost num 0 with name map be ceremony def
+ob name task to name text task be text do
+ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num using tools be plus do
+ob name of with of this to name text tools map be text do
+ob text "" to name text sketch be text do
+ob text "" to name text reaction be text do
+ob text "" to name text decision line be text do
+fromindex num 1 toindex num of ob of attempts be reviewer round do
+ob text "FAIL" to name text review loop verdict be text do
+ob name decision line from text "/^\\s*PASS\\b/i" be resemble then ob text "PASS" to name text review loop verdict be text do
+ob name sketch to name text output be text do
+su name output ret
+prah
+
+exists su name reviewer trying be export ya

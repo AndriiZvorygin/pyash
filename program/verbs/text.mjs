@@ -30,10 +30,12 @@ export default text;
 export const signatures = [
   { signatureWords: ["be", "text", "ob", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "filename"], handler: text },
+  { signatureWords: ["be", "text", "ob", "name", "num"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "filename"], handler: text },
   { signatureWords: ["be", "text", "ob", "text", "to", "name", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "filename", "to", "name", "text"], handler: text },
+  { signatureWords: ["be", "text", "ob", "name", "num", "to", "name", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "text", "to", "name", "text"], handler: text },
   { signatureWords: ["be", "text", "ob", "name", "filename", "to", "name", "text"], handler: text }
 ];
