@@ -1,0 +1,14 @@
+from name ../../module/reviewer_circle.pya to name reviewer circle be import do
+
+su name example meta be map def
+su name required ob ve text "OLLAMA_HOST" ya
+prah
+
+exists su name author prompter ob text "Draft one short answer for TASK. Keep it factual and concise." be text ya
+exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
+exists su name reviewer be mind as name "bespoke-minicheck:latest" ya
+
+exists su name input ob text "Say hello in one line." be text ya
+
+ob name text input for name text author by name text reviewer atleast num 0.8 atmost num 2 to name text output be reviewer circle reviewer trying do
+ob name output be write do

@@ -1,1 +1,2 @@
 exists su name ollama host ob text "http://mriczo:11434" be default ya
+exists su name web search motor ob filename "http://searxng:8080/" be default ya

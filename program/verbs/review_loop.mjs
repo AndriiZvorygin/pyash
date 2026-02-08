@@ -246,8 +246,7 @@ export async function reviewLoop(sentence) {
       lastReviewText = await invokeMind({
         mindName: reviewerName,
         prompt: reviewPrompt,
-        outputName: reviewName,
-        toolMapName
+        outputName: reviewName
       });
     } else if (reviewerIsRefinery) {
       lastReviewText = await invokeRefinery({
