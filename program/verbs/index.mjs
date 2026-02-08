@@ -35,6 +35,8 @@ import interpret, { signatures as interpretSignatures } from "./interpret.mjs";
 import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
 import begin, { signatures as beginSignatures } from "./begin.mjs";
 import restart, { signatures as restartSignatures } from "./restart.mjs";
+import stop, { signatures as stopSignatures } from "./stop.mjs";
+import health, { signatures as healthSignatures } from "./health.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
@@ -98,6 +100,8 @@ export {
   discharge,
   begin,
   restart,
+  stop,
+  health,
   go,
   copy,
   sleep,
@@ -149,6 +153,8 @@ export const builtInSignatures = [
   ...dischargeSignatures,
   ...beginSignatures,
   ...restartSignatures,
+  ...stopSignatures,
+  ...healthSignatures,
   ...goSignatures,
   ...copySignatures,
   ...directorySignatures,

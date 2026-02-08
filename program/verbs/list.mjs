@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
-import { appendWorldActivity, derivePresence, ensureWorldDir, isWorldToolsActive, readActivityTail, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../library/world.mjs";
+import { appendWorldActivity, derivePresence, ensureWorldDir, isWorldToolsActive, readActivityTail, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir, resolveWorldRoot } from "../library/world.mjs";
+import { schedulerList } from "../agent/scheduler_control.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -60,7 +61,30 @@ function normalizeFilter(value) {
   return "all";
 }
 
+function isCalendarScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "calendar";
+}
+
+function resolveSchedulerTarget(sentence) {
+  if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
+  if (typeof sentence?.to?.name === "string" && sentence.to.name.trim()) return sentence.to.name.trim();
+  return "";
+}
+
 export async function list(sentence, { remember: rememberFn = remember } = {}) {
+  if (isCalendarScope(sentence)) {
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await schedulerList({ worldRoot });
+    const target = resolveSchedulerTarget(sentence).toLowerCase();
+    if (target && target !== "scheduler" && target !== "scheduler daemon") {
+      const hit = result.services.filter(name => String(name).toLowerCase() === target);
+      return { ob: { ve: { type: "text", values: hit } }, be: "list" };
+    }
+    return { ob: { ve: { type: "text", values: result.services } }, be: "list" };
+  }
+
   const worldMode = isWorldToolsActive({ rememberFn });
   const rootRaw = resolveFilename(sentence?.from, { rememberFn }) || ".";
   const root = worldMode
@@ -168,6 +192,7 @@ export default list;
 
 export const signatures = [
   { signatureWords: ["be", "list"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "calendar"], handler: list },
   { signatureWords: ["be", "list", "from", "filename"], handler: list },
   { signatureWords: ["be", "list", "from", "name", "filename"], handler: list },
   { signatureWords: ["be", "list", "with", "name", "hidden"], handler: list },

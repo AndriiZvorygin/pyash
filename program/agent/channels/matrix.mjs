@@ -1,0 +1,181 @@
+function toBaseUrl(raw) {
+  return String(raw ?? "").replace(/\/+$/g, "");
+}
+
+function pickTextEventBody(event) {
+  const body = event?.content?.body;
+  if (typeof body !== "string" || !body.trim()) return null;
+  return body;
+}
+
+function buildRoomLaneMap(rooms = []) {
+  const map = new Map();
+  for (const room of rooms) {
+    if (!room?.id) continue;
+    map.set(room.id, room.lane ?? null);
+  }
+  return map;
+}
+
+async function fetchJoinedRooms({ homeserver, token, fetchImpl }) {
+  const url = `${homeserver}/_matrix/client/v3/joined_rooms`;
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) return { ok: false, status: response.status, rooms: [] };
+  const payload = await response.json().catch(() => ({}));
+  const rooms = Array.isArray(payload?.joined_rooms) ? payload.joined_rooms.map(String) : [];
+  return { ok: true, status: response.status, rooms };
+}
+
+async function ensureJoinedRooms({ homeserver, token, rooms, fetchImpl }) {
+  const diagnostics = [];
+  for (const room of rooms) {
+    const roomIdOrAlias = room?.id;
+    if (!roomIdOrAlias) continue;
+    const encoded = encodeURIComponent(String(roomIdOrAlias));
+    const joinUrl = `${homeserver}/_matrix/client/v3/join/${encoded}`;
+    const response = await fetchImpl(joinUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: "{}"
+    });
+    // Ignore join failures so polling can continue for already-joined rooms.
+    // Typical non-fatal cases: already joined, invite-only without invite.
+    const status = response.status;
+    const ok = response.ok || status === 403 || status === 404;
+    diagnostics.push({ room: String(roomIdOrAlias), status, ok });
+    if (!ok) throw new Error(`matrix join failed: room=${roomIdOrAlias} status=${response.status}`);
+  }
+  return diagnostics;
+}
+
+function normalizeMatrixEvent(event, { roomId }) {
+  const text = pickTextEventBody(event);
+  if (!text) return null;
+  const eventId = event?.event_id;
+  const sender = event?.sender;
+  const timestampNum = Number(event?.origin_server_ts);
+  if (!eventId || !sender) return null;
+  const relatesTo = event?.content?.["m.relates_to"] ?? {};
+  const relType = relatesTo?.rel_type;
+  const relEventId = relatesTo?.event_id ?? null;
+  const inReplyToEventId = relatesTo?.["m.in_reply_to"]?.event_id ?? null;
+  return {
+    channelType: "matrix",
+    channelId: roomId,
+    threadId: relType === "m.thread" ? relEventId : null,
+    inReplyToEventId: inReplyToEventId ? String(inReplyToEventId) : null,
+    eventId: String(eventId),
+    sender: String(sender),
+    text: String(text),
+    timestamp: Number.isFinite(timestampNum) ? new Date(timestampNum).toISOString() : new Date().toISOString()
+  };
+}
+
+export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
+  if (typeof fetchImpl !== "function") throw new Error("matrix adapter requires fetch");
+
+  return {
+    type: "matrix",
+    async receive({ config, checkpoint }) {
+      const homeserver = toBaseUrl(config?.homeserver);
+      const token = config?.token;
+      const rooms = Array.isArray(config?.rooms) ? config.rooms : [];
+      if (!homeserver || !token || rooms.length === 0) {
+        return {
+          events: [],
+          checkpoint: checkpoint ?? null,
+          diagnostics: {
+            homeserver: Boolean(homeserver),
+            token: Boolean(token),
+            configuredRooms: rooms.length
+          }
+        };
+      }
+
+      const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, rooms, fetchImpl });
+
+      const params = new URLSearchParams();
+      params.set("timeout", "0");
+      if (checkpoint?.nextBatch) params.set("since", checkpoint.nextBatch);
+      const syncUrl = `${homeserver}/_matrix/client/v3/sync?${params.toString()}`;
+      const syncRes = await fetchImpl(syncUrl, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!syncRes.ok) {
+        throw new Error(`matrix sync failed: status=${syncRes.status}`);
+      }
+      const payload = await syncRes.json();
+      const joined = payload?.rooms?.join ?? {};
+      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, fetchImpl });
+      const eventTypeCounts = {};
+      const joinedRoomIds = Object.keys(joined);
+      const roomLane = buildRoomLaneMap(rooms);
+      const events = [];
+      for (const room of rooms) {
+        const roomId = room?.id;
+        if (!roomId) continue;
+        const timelineEvents = joined?.[roomId]?.timeline?.events;
+        if (!Array.isArray(timelineEvents)) continue;
+        for (const event of timelineEvents) {
+          const eventType = String(event?.type ?? "unknown");
+          eventTypeCounts[eventType] = (eventTypeCounts[eventType] ?? 0) + 1;
+          if (event?.type !== "m.room.message") continue;
+          const normalized = normalizeMatrixEvent(event, { roomId });
+          if (!normalized) continue;
+          normalized.laneName = roomLane.get(roomId) ?? null;
+          events.push(normalized);
+        }
+      }
+      return {
+        events,
+        checkpoint: { nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null },
+        diagnostics: {
+          since: checkpoint?.nextBatch ?? null,
+          nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null,
+          configuredRooms: rooms.map(room => room?.id).filter(Boolean),
+          joinDiagnostics,
+          joinedRoomsSnapshot: joinedRoomSnapshot,
+          joinedRooms: joinedRoomIds,
+          eventTypeCounts
+        }
+      };
+    },
+
+    async send({ config, event, content }) {
+      const homeserver = toBaseUrl(config?.homeserver);
+      const token = config?.token;
+      const roomId = event?.channelId;
+      if (!homeserver || !token || !roomId) {
+        throw new Error("matrix send missing homeserver/token/room");
+      }
+      const txnId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const encodedRoomId = encodeURIComponent(String(roomId));
+      const encodedTxnId = encodeURIComponent(txnId);
+      const sendUrl = `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/send/m.room.message/${encodedTxnId}`;
+      const body = {
+        msgtype: "m.text",
+        body: String(content ?? "")
+      };
+      const sendRes = await fetchImpl(sendUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+      if (!sendRes.ok) {
+        throw new Error(`matrix send failed: status=${sendRes.status}`);
+      }
+      const payload = await sendRes.json().catch(() => ({}));
+      return { eventId: payload?.event_id ?? null };
+    }
+  };
+}

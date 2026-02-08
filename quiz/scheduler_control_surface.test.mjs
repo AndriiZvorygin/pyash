@@ -1,0 +1,115 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, doRemember } from "../program/remember/index.mjs";
+
+test("scheduler control surface supports begin health restart stop", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-control-"));
+  const worldRoot = path.join(root, "world");
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
+    [
+      "su name heartbeat for name helper with wo tools vyah habit during minute 24 be calendar ya",
+      "su name matrix probe for name helper with wo tools vyah habit during minute 1 be calendar ya"
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "world tools" },
+    be: "bool",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "world root" },
+    be: "filename",
+    ob: { filename: worldRoot }
+  });
+
+  const beginRes = await interpret(parse('be begin ob text "scheduler" as wo scheduler do'));
+  assert.equal(beginRes?.value?.boolean, true);
+
+  const healthRes = await interpret(parse('be health ob text "scheduler" as wo scheduler do'));
+  assert.equal(typeof healthRes?.value?.boolean, "boolean");
+
+  const restartRes = await interpret(parse('be restart ob text "scheduler" as wo scheduler do'));
+  assert.equal(restartRes?.value?.boolean, true);
+
+  const stopRes = await interpret(parse('be stop ob text "scheduler" as wo scheduler do'));
+  assert.equal(stopRes?.value?.boolean, true);
+});
+
+test("scheduler control surface supports from wo calendar forms", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-control-calendar-"));
+  const worldRoot = path.join(root, "world");
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
+    [
+      "su name heartbeat for name helper with wo tools vyah habit during minute 24 be calendar ya",
+      "su name matrix probe for name helper with wo tools vyah habit during minute 1 be calendar ya"
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "world tools" },
+    be: "bool",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "world root" },
+    be: "filename",
+    ob: { filename: worldRoot }
+  });
+
+  const beginRes = await interpret(parse("from wo calendar su name scheduler be begin do"));
+  assert.equal(beginRes?.value?.boolean, true);
+
+  const listRes = await interpret(parse("from wo calendar su name scheduler be list do"));
+  assert.deepEqual(listRes?.value?.ve?.values?.slice().sort(), ["heartbeat", "matrix probe"]);
+
+  const healthRes = await interpret(parse("from wo calendar su name scheduler be health do"));
+  assert.equal(typeof healthRes?.value?.boolean, "boolean");
+
+  const healthProbeRes = await interpret(parse("from wo calendar su name scheduler be health probe do"));
+  assert.equal(typeof healthProbeRes?.value?.boolean, "boolean");
+
+  const serviceHealthStart = await interpret(parse("from wo calendar su name matrix probe be health do"));
+  assert.equal(serviceHealthStart?.value?.boolean, true);
+
+  const serviceStop = await interpret(parse("from wo calendar su name matrix probe be stop do"));
+  assert.equal(serviceStop?.value?.boolean, true);
+
+  const serviceHealthStopped = await interpret(parse("from wo calendar su name matrix probe be health do"));
+  assert.equal(serviceHealthStopped?.value?.boolean, false);
+
+  const serviceBegin = await interpret(parse("from wo calendar su name matrix probe be begin do"));
+  assert.equal(serviceBegin?.value?.boolean, true);
+
+  const serviceHealthResumed = await interpret(parse("from wo calendar su name matrix probe be health do"));
+  assert.equal(serviceHealthResumed?.value?.boolean, true);
+
+  const serviceRestart = await interpret(parse("from wo calendar su name matrix probe be restart do"));
+  assert.equal(serviceRestart?.value?.boolean, true);
+
+  const restartRes = await interpret(parse("from wo calendar su name scheduler be restart do"));
+  assert.equal(restartRes?.value?.boolean, true);
+
+  const stopRes = await interpret(parse("from wo calendar su name scheduler be stop do"));
+  assert.equal(stopRes?.value?.boolean, true);
+});

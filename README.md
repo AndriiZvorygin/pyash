@@ -83,3 +83,6 @@ Still evolving / fragile:
 - `command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` (from `que`) and final `result` (`--full` to show program; `--gross` for JSON).
 
 See `documentation/handoff.md` for the Fresh Codex Primer, and `documentation/roadmap.md` for the living plan. Examples live in `examples/`.
+
+Operations recipe:
+- `documentation/recipes/agent-operations.md` (scheduler, channels, health, ratify policy, log paths)

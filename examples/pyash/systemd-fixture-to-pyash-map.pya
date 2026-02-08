@@ -1,0 +1,7 @@
+be directory ob filename "examples/out/systemd-bridge" do
+
+from filename "quiz/fixtures/systemd.ini" fromstate wo systemd to name roundtrip_demo be read do
+
+ob name roundtrip_demo to filename "examples/out/systemd-bridge/systemd-fixture.maps.pya" be write do
+
+from filename "examples/out/systemd-bridge/systemd-fixture.maps.pya" become wo text be read do

@@ -11,6 +11,7 @@ import { read_fromstate_csv } from "./read_csv.mjs";
 import { read_fromstate_json } from "./read_json.mjs";
 import { read_fromstate_yaml } from "./read_yaml.mjs";
 import { read_fromstate_lobster } from "./read_lobster.mjs";
+import { read_fromstate_systemd } from "./read_systemd.mjs";
 import { isWorldToolsActive, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { resolveAgentPath } from "../../library/agent_cwd.mjs";
 
@@ -282,6 +283,14 @@ export const signatures = [
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromtext", "text", "fromstate", "name", "lobster", "to", "name", "num"], handler: read_fromstate_lobster },
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "text"], handler: read_fromstate_lobster },
   { signatureWords: ["be", "read", "become", "wo", "pyash", "fromstate", "name", "lobster", "ob", "text", "to", "name", "num"], handler: read_fromstate_lobster },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "systemd", "to", "name"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "name", "systemd", "to", "name", "num"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "fromstate", "name", "systemd", "ob", "text", "to", "name"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "fromstate", "name", "systemd", "ob", "text", "to", "name", "num"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "systemd", "to", "name"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "systemd", "to", "name", "num"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "fromstate", "wo", "systemd", "ob", "text", "to", "name"], handler: read_fromstate_systemd },
+  { signatureWords: ["be", "read", "fromstate", "wo", "systemd", "ob", "text", "to", "name", "num"], handler: read_fromstate_systemd },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "html", "become", "wo", "markdown"], handler: read_fromstate_html },
   { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html }
 ];

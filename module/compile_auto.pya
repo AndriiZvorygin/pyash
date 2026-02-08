@@ -1,0 +1,70 @@
+su name compile auto from filename input to filename output be ceremony def
+  ob filename of from of this to name text input be text do
+  ob filename of to of this to name text output be text do
+
+  exists su name input ext command ob text "f=\"" be text ya
+  ob name input to name input ext command be plus do
+  ob text "\"; n=${f##*/}; case \"$n\" in *.*) e=${n##*.} ;; *) e=\"\" ;; esac; printf \"%s\" \"$e\" | tr '[:upper:]' '[:lower:]'" to name input ext command be plus do
+  ob text of input ext command to name text input ext be command do
+
+  exists su name output ext command ob text "f=\"" be text ya
+  ob name output to name output ext command be plus do
+  ob text "\"; n=${f##*/}; case \"$n\" in *.*) e=${n##*.} ;; *) e=\"\" ;; esac; printf \"%s\" \"$e\" | tr '[:upper:]' '[:lower:]'" to name output ext command be plus do
+  ob text of output ext command to name text output ext be command do
+
+  exists su name ext pair ob text "" be text ya
+  ob name input ext to name ext pair be plus do
+  ob text ":" to name ext pair be plus do
+  ob name output ext to name ext pair be plus do
+
+  exists su name handled ob num 0 be number ya
+
+  ob name ext pair be equally from text "md:html" then from filename of from of this fromstate wo markdown become wo html to filename of to of this be compile do
+  ob name ext pair be equally from text "md:html" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "markdown:html" then from filename of from of this fromstate wo markdown become wo html to filename of to of this be compile do
+  ob name ext pair be equally from text "markdown:html" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "md:pdf" then from filename of from of this fromstate wo markdown become wo pdf to filename of to of this be compile do
+  ob name ext pair be equally from text "md:pdf" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "markdown:pdf" then from filename of from of this fromstate wo markdown become wo pdf to filename of to of this be compile do
+  ob name ext pair be equally from text "markdown:pdf" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "json:pya" then from filename of from of this fromstate wo json tostate wo pyash to filename of to of this be compile do
+  ob name ext pair be equally from text "json:pya" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "json:pyash" then from filename of from of this fromstate wo json tostate wo pyash to filename of to of this be compile do
+  ob name ext pair be equally from text "json:pyash" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pya:js" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "pya:js" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pya:mjs" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "pya:mjs" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pya:c" then from filename of from of this fromstate wo pyash tostate wo c to filename of to of this be compile do
+  ob name ext pair be equally from text "pya:c" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pyash:js" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "pyash:js" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pyash:mjs" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "pyash:mjs" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "pyash:c" then from filename of from of this fromstate wo pyash tostate wo c to filename of to of this be compile do
+  ob name ext pair be equally from text "pyash:c" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "txt:js" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "txt:js" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "txt:mjs" then from filename of from of this fromstate wo pyash tostate wo javascript to filename of to of this be compile do
+  ob name ext pair be equally from text "txt:mjs" then ob num 1 to name handled be plus do
+
+  ob name ext pair be equally from text "txt:c" then from filename of from of this fromstate wo pyash tostate wo c to filename of to of this be compile do
+  ob name ext pair be equally from text "txt:c" then ob num 1 to name handled be plus do
+
+  ob name handled be equally from num 0 then from filename of from of this to filename of to of this be compile do
+prah
+
+exists su name compile auto be export ya

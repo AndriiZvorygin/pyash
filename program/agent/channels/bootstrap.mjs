@@ -1,0 +1,262 @@
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+function toBaseUrl(raw) {
+  return String(raw ?? "").replace(/\/+$/g, "");
+}
+
+function randomSuffix() {
+  return crypto.randomBytes(4).toString("hex");
+}
+
+function sanitizeUsernamePart(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._=-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "") || "agent";
+}
+
+function parseLocalpartFromUserId(user) {
+  const text = String(user ?? "").trim();
+  if (!text.startsWith("@")) return null;
+  const idx = text.indexOf(":");
+  if (idx === -1) return sanitizeUsernamePart(text.slice(1));
+  return sanitizeUsernamePart(text.slice(1, idx));
+}
+
+function generateCredentials({ agentName, localpart, withSuffix = false }) {
+  const userBase = sanitizeUsernamePart(localpart || agentName);
+  const resolved = withSuffix ? `${userBase}_${randomSuffix()}` : userBase;
+  const password = crypto.randomBytes(18).toString("base64url");
+  return { localpart: resolved, password };
+}
+
+async function readJsonFile(filePath, fallback) {
+  try {
+    const text = await fs.readFile(filePath, "utf8");
+    return JSON.parse(text);
+  } catch (err) {
+    if (err?.code === "ENOENT") return fallback;
+    throw err;
+  }
+}
+
+async function writeJsonFile(filePath, value) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+}
+
+function authPath(agentHouse) {
+  return path.join(agentHouse, "conduct", "matrix-auth.json");
+}
+
+async function registerWithSharedSecret({
+  homeserver,
+  sharedSecret,
+  localpart,
+  password,
+  fetchImpl
+}) {
+  const nonceRes = await fetchImpl(`${homeserver}/_synapse/admin/v1/register`, { method: "GET" });
+  if (!nonceRes.ok) {
+    throw new Error(`matrix register nonce failed: status=${nonceRes.status}`);
+  }
+  const noncePayload = await nonceRes.json();
+  const nonce = noncePayload?.nonce;
+  if (!nonce) throw new Error("matrix register nonce missing");
+
+  const mac = crypto
+    .createHmac("sha1", String(sharedSecret))
+    .update(String(nonce))
+    .update("\0")
+    .update(String(localpart))
+    .update("\0")
+    .update(String(password))
+    .update("\0")
+    .update("notadmin")
+    .digest("hex");
+
+  const regRes = await fetchImpl(`${homeserver}/_synapse/admin/v1/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nonce,
+      username: localpart,
+      password,
+      admin: false,
+      mac
+    })
+  });
+  if (!regRes.ok) {
+    const errorPayload = await regRes.json().catch(() => ({}));
+    return {
+      ok: false,
+      status: regRes.status,
+      code: String(errorPayload?.errcode ?? ""),
+      error: String(errorPayload?.error ?? "")
+    };
+  }
+  const payload = await regRes.json().catch(() => ({}));
+  return { ok: true, payload };
+}
+
+async function loginPassword({
+  homeserver,
+  user,
+  password,
+  fetchImpl
+}) {
+  const response = await fetchImpl(`${homeserver}/_matrix/client/v3/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "m.login.password",
+      identifier: {
+        type: "m.id.user",
+        user
+      },
+      password
+    })
+  });
+  if (!response.ok) {
+    throw new Error(`matrix login failed: status=${response.status}`);
+  }
+  return response.json();
+}
+
+function envSharedSecret() {
+  return process.env.MATRIX_REGISTRATION_SHARED_SECRET ?? process.env.PYA_MATRIX_REGISTRATION_SHARED_SECRET ?? null;
+}
+
+function envAdminToken() {
+  return process.env.MATRIX_ADMIN_TOKEN ?? process.env.PYA_MATRIX_ADMIN_TOKEN ?? null;
+}
+
+function envHomeserver() {
+  return process.env.MATRIX_HOMESERVER ?? process.env.PYA_MATRIX_HOMESERVER ?? null;
+}
+
+export async function ensureMatrixCredentials({
+  agentName,
+  agentHouse,
+  config,
+  fetchImpl = globalThis.fetch
+}) {
+  if (!agentName) throw new Error("ensureMatrixCredentials requires agentName");
+  if (!agentHouse) throw new Error("ensureMatrixCredentials requires agentHouse");
+  if (typeof fetchImpl !== "function") throw new Error("ensureMatrixCredentials requires fetch");
+
+  const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
+  if (!homeserver) throw new Error("matrix homeserver missing");
+
+  const cached = await readJsonFile(authPath(agentHouse), null);
+  const desiredUserFromConfig = config?.user ? String(config.user) : null;
+  if (cached?.accessToken && cached?.user && (!desiredUserFromConfig || cached.user === desiredUserFromConfig)) {
+    return {
+      homeserver,
+      token: cached.accessToken,
+      user: cached.user,
+      localpart: cached.localpart ?? null
+    };
+  }
+
+  if (config?.token) {
+    return {
+      homeserver,
+      token: config.token,
+      user: config.user ?? null,
+      localpart: null
+    };
+  }
+
+  const sharedSecret = config?.registrationSharedSecret ?? envSharedSecret();
+  const _adminToken = config?.adminToken ?? envAdminToken();
+  const userFromConfig = desiredUserFromConfig;
+
+  let localpart = parseLocalpartFromUserId(userFromConfig) ?? sanitizeUsernamePart(userFromConfig ?? agentName);
+  let password = null;
+  if (cached?.localpart && cached?.password) {
+    if (!userFromConfig || cached.user === userFromConfig || cached.localpart === localpart) {
+      localpart = cached.localpart;
+      password = cached.password;
+    }
+  }
+  if (!password) {
+    const generated = generateCredentials({ agentName, localpart, withSuffix: false });
+    localpart = generated.localpart;
+    password = generated.password;
+  }
+
+  if (sharedSecret) {
+    let registerResult = await registerWithSharedSecret({
+      homeserver,
+      sharedSecret,
+      localpart,
+      password,
+      fetchImpl
+    });
+    if (!registerResult.ok && (
+      registerResult.status === 409 ||
+      registerResult.code === "M_USER_IN_USE" ||
+      /in use/i.test(registerResult.error)
+    )) {
+      const generated = generateCredentials({ agentName, localpart, withSuffix: true });
+      localpart = generated.localpart;
+      password = generated.password;
+      const retryUser = userFromConfig && userFromConfig.startsWith("@")
+        ? `@${localpart}:${String(userFromConfig).split(":").slice(1).join(":") || ""}`
+        : localpart;
+      registerResult = await registerWithSharedSecret({
+        homeserver,
+        sharedSecret,
+        localpart,
+        password,
+        fetchImpl
+      });
+      if (!registerResult.ok) {
+        throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
+      }
+      if (!userFromConfig || !userFromConfig.startsWith("@")) {
+        // localpart login below uses updated localpart
+      } else {
+        // keep deterministic updated user id after retry suffix
+        // eslint-disable-next-line no-unused-vars
+        const _ = retryUser;
+      }
+    } else if (!registerResult.ok) {
+      throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
+    }
+  }
+  const resolvedLoginUser = (userFromConfig && userFromConfig.startsWith("@"))
+    ? (parseLocalpartFromUserId(userFromConfig) === localpart
+      ? userFromConfig
+      : `@${localpart}:${String(userFromConfig).split(":").slice(1).join(":") || homeserver.replace(/^https?:\/\//, "")}`)
+    : localpart;
+
+  const loginPayload = await loginPassword({
+    homeserver,
+    user: resolvedLoginUser,
+    password,
+    fetchImpl
+  });
+  const accessToken = loginPayload?.access_token;
+  if (!accessToken) throw new Error("matrix login missing access token");
+  const resolvedUser = loginPayload?.user_id ?? resolvedLoginUser;
+  const record = {
+    homeserver,
+    user: resolvedUser,
+    localpart,
+    password,
+    accessToken,
+    deviceId: loginPayload?.device_id ?? null
+  };
+  await writeJsonFile(authPath(agentHouse), record);
+  return {
+    homeserver,
+    token: accessToken,
+    user: resolvedUser,
+    localpart
+  };
+}

@@ -69,11 +69,14 @@ export async function ensureAgentDirs(agentHouse) {
   const identityDir = path.join(agentHouse, "identity");
   const memoryDir = path.join(agentHouse, "memory");
   const sessionDir = path.join(agentHouse, "session");
+  const conductDir = path.join(agentHouse, "conduct");
   await fs.mkdir(identityDir, { recursive: true });
   await fs.mkdir(memoryDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
+  await fs.mkdir(conductDir, { recursive: true });
   await maybeSeedIdentity(identityDir);
-  return { identityDir, memoryDir, sessionDir };
+  await maybeSeedConduct(conductDir);
+  return { identityDir, memoryDir, sessionDir, conductDir };
 }
 
 async function dirIsEmpty(dir) {
@@ -111,6 +114,27 @@ async function maybeSeedIdentity(identityDir) {
     return;
   }
   await copyIdentityTemplate(templateDir, identityDir);
+}
+
+async function maybeSeedConduct(conductDir) {
+  const calendarPath = path.join(conductDir, "calendar.pya");
+  const channelsPath = path.join(conductDir, "channels.pya");
+  try {
+    await fs.access(calendarPath);
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+    const seed = [
+      "su name heartbeat with wo tools vyah habit during minute 24 be calendar ya",
+      'su name heartbeat lane ob text "heartbeat" ya'
+    ].join("\n") + "\n";
+    await fs.writeFile(calendarPath, seed, "utf8");
+  }
+  try {
+    await fs.access(channelsPath);
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+    await fs.writeFile(channelsPath, "", "utf8");
+  }
 }
 
 export async function listSessionFiles(sessionDir, { datePrefix } = {}) {

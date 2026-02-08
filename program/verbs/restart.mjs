@@ -2,14 +2,24 @@ import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { ensureMcpServer, closeMcpServer } from "../motor/mcp.mjs";
+import path from "node:path";
+import { resolveWorldRoot } from "../library/world.mjs";
+import { schedulerRestart, schedulerServiceRestart } from "../agent/scheduler_control.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
+  if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
   const ob = sentence?.ob ?? {};
   if (typeof ob.name === "string" && ob.name.trim()) return ob.name.trim();
   if (typeof ob.text === "string" && ob.text.trim()) return ob.text.trim();
   const raw = renderSayValue(ob, { rememberFn });
   const text = String(raw ?? "").trim();
   return text || null;
+}
+
+function isCalendarScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "calendar";
 }
 
 function resolveRestartType(sentence) {
@@ -33,24 +43,55 @@ function resolveMcpServerName(targetName, { rememberFn, explicitMcp }) {
   return null;
 }
 
+function isSchedulerTarget(targetName, restartType) {
+  if (restartType === "scheduler") return true;
+  const text = String(targetName ?? "").trim().toLowerCase();
+  return text === "scheduler" || text === "scheduler daemon";
+}
+
 export async function restart(sentence, { remember: rememberFn = remember } = {}) {
-  const targetName = resolveTargetName(sentence, { rememberFn });
-  if (!targetName) {
-    throwErrorSentence({
-      name: "restart target missing",
-      message: "restart target missing",
-      from: { name: "restart" },
-      raw: { sentence }
-    });
-  }
   const restartType = resolveRestartType(sentence);
+  const targetName = resolveTargetName(sentence, { rememberFn });
+  const calendarScope = isCalendarScope(sentence);
+  if (!targetName && restartType !== "scheduler") {
+    if (!calendarScope) {
+      throwErrorSentence({
+        name: "restart target missing",
+        message: "restart target missing",
+        from: { name: "restart" },
+        raw: { sentence }
+      });
+    }
+  }
   if (restartType && restartType !== "mcp") {
-    throwErrorSentence({
-      name: "restart target defective",
-      message: `restart target defective: ${restartType}`,
-      from: { name: "restart" },
-      raw: { sentence }
-    });
+    if (restartType !== "scheduler") {
+      throwErrorSentence({
+        name: "restart target defective",
+        message: `restart target defective: ${restartType}`,
+        from: { name: "restart" },
+        raw: { sentence }
+      });
+    }
+  }
+  if (calendarScope && targetName && !isSchedulerTarget(targetName, restartType)) {
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await schedulerServiceRestart({ worldRoot, serviceName: targetName });
+    return {
+      mood: "ya",
+      be: "restart",
+      from: { name: String(targetName ?? "") },
+      ob: { boolean: result?.enabled === true }
+    };
+  }
+  if (calendarScope || isSchedulerTarget(targetName, restartType)) {
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await schedulerRestart({ worldRoot });
+    return {
+      mood: "ya",
+      be: "restart",
+      from: { name: "scheduler" },
+      ob: { boolean: result?.running === true }
+    };
   }
   const mcpName = resolveMcpServerName(targetName, { rememberFn, explicitMcp: restartType === "mcp" });
   if (mcpName) {
@@ -85,6 +126,14 @@ export const signatures = [
   { signatureWords: ["be", "restart", "as", "wo", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "ob", "name", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "ob", "name", "map"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "scheduler"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "text"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "num"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "map"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "calendar"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "text"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "name", "num"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "name", "map"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "name", "text"], handler: restart },

@@ -1,0 +1,7 @@
+be directory ob filename "examples/out/systemd-bridge" do
+
+ob text "su name my service since name network-online.target fromperson name network-online.target as text \"simple\" ob filename \"/usr/local/bin/my-service\" for name multi-user.target onto text \"on-failure\" be service ya" to filename "examples/out/systemd-bridge/my-service.sentence.pya" be write do
+
+ob text "node command/systemd_bridge.mjs --action sentence-to-ini --input examples/out/systemd-bridge/my-service.sentence.pya --output examples/out/systemd-bridge/my-service.service" be command do
+
+from filename "examples/out/systemd-bridge/my-service.service" become wo text be read do

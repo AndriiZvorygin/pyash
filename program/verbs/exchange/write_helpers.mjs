@@ -6,6 +6,7 @@ import { jsonObjectFromMapSentence } from "./json_map_export.mjs";
 import { csvTextFromMapName } from "./write_csv.mjs";
 import { canonicalJsonStringify, canonicalizeJsonValue, jsonObjectFromPyash } from "./write_json.mjs";
 import YAML from "yaml";
+import { emitSystemdIniFromMap, emitSystemdIniFromSections } from "../../agent/service_definition.mjs";
 
 function vectorLiteral(values = [], type = "num") {
   const parts = ["ve", type];
@@ -78,6 +79,7 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
     if (!fact || (fact.be !== "json map" && fact.be !== "map" && fact.be !== "csv map")) return;
     const entries = fact?.ob?.map ?? {};
     for (const value of Object.values(entries)) {
+      if (value?.ob?.name) visit(value.ob.name);
       if (value?.name) visit(value.name);
       if (value?.ve?.type === "name") {
         for (const child of value.ve.values || []) {
@@ -91,6 +93,49 @@ function mapDefChainFromName(name, { rememberFn } = {}) {
   visit(name);
   if (defs.length === 0) return "";
   return defs.map(mapSentenceToPyash).join("\n\n");
+}
+
+function readScalarAsText(value = {}) {
+  if (typeof value?.text === "string") return value.text;
+  if (typeof value?.num === "number") return String(value.num);
+  if (typeof value?.boolean === "boolean") return value.boolean ? "truth" : "lie";
+  if (value?.hollow) return "";
+  return "";
+}
+
+function sectionValuesFromJsonMap(name, { rememberFn } = {}) {
+  const fact = rememberFn ? rememberFn(name) : null;
+  if (!fact || fact.be !== "json map") return {};
+  const out = {};
+  const entries = fact?.ob?.map ?? {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (Array.isArray(value?.ve?.values)) {
+      out[key] = value.ve.values.map(v => String(v ?? ""));
+      continue;
+    }
+    out[key] = [readScalarAsText(value)];
+  }
+  return out;
+}
+
+function systemdTextFromMapName(name, { rememberFn } = {}) {
+  const fact = rememberFn ? rememberFn(name) : null;
+  if (!fact) return "";
+  if (fact.be === "json map") {
+    const json = jsonObjectFromMapSentence(fact, { remember: rememberFn, seen: new Set(), sourceName: "write", allowHollowVector: true });
+    return emitSystemdIniFromMap(json);
+  }
+  if (fact.be !== "map") return "";
+  const map = fact?.ob?.map ?? {};
+  const unitName = map?.unit?.ob?.name ?? map?.unit?.name ?? "";
+  const serviceName = map?.service?.ob?.name ?? map?.service?.name ?? "";
+  const installName = map?.install?.ob?.name ?? map?.install?.name ?? "";
+  const sections = {
+    Unit: sectionValuesFromJsonMap(unitName, { rememberFn }),
+    Service: sectionValuesFromJsonMap(serviceName, { rememberFn }),
+    Install: sectionValuesFromJsonMap(installName, { rememberFn })
+  };
+  return emitSystemdIniFromSections(sections);
 }
 
 function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
@@ -122,6 +167,9 @@ function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
   if (ob.la) return `la ${sentenceToPyash(ob.la)} ko`;
   if (format === "csv" && ob.name && rememberFn) {
     return csvTextFromMapName(ob.name, { rememberFn });
+  }
+  if (format === "systemd" && ob.name && rememberFn) {
+    return systemdTextFromMapName(ob.name, { rememberFn });
   }
   if (ob.genitive) {
     const v = resolveGenitive(ob.genitive, { rememberFn });

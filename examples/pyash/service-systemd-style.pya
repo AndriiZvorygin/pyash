@@ -1,0 +1,12 @@
+exists su name world root ob filename "examples/out/service-world" be default ya
+
+be directory ob filename "examples/out/service-world/conduct/service" do
+
+ob text "su name exec tick for name helper vyah habit during minute 24 be calendar ya" to filename "examples/out/service-world/conduct/calendar.pya" be write do
+
+ob text "su name exec tick since name network-online.target fromperson name network-online.target as text \"simple\" ob filename \"true\" for name multi-user.target onto text \"on-failure\" be service ya" to filename "examples/out/service-world/conduct/service/exec_tick.pya" be write do
+
+from wo calendar su name scheduler be begin do
+from wo calendar su name scheduler be list do
+from wo calendar su name exec tick be health do
+from wo calendar su name scheduler be stop do
