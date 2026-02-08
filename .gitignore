@@ -20,6 +20,7 @@ world/
 *.log
 newspaper/
 quiz/sandpit/
+documentation/parity/
 configure/secret.pya
 configure/workplace.pya
 container/building/compose.override.yaml
