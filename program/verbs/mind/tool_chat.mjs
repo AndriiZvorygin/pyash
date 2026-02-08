@@ -7,6 +7,8 @@ import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
 import { buildToolSentence } from "./tooling.mjs";
+import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
+import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
@@ -75,6 +77,15 @@ export async function runToolChat({
   let lastResponse = null;
   let lastToolText = "";
 
+  const buildRatifySentence = ({ capability, toolName, decision, raw, matchedKey }) => ({
+    mood: "ya",
+    be: "ratify",
+    su: { name: capability?.su?.name ?? toolName ?? "tool approval" },
+    ob: { boolean: decision === "truth" },
+    totext: { text: raw ?? decision },
+    fromtext: { text: matchedKey ? `policy ${matchedKey}` : "policy unanswered" }
+  });
+
   while (turns < maxToolTurns) {
     turns += 1;
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
@@ -140,6 +151,8 @@ export async function runToolChat({
         capability,
         args: call?.function?.arguments ?? call?.arguments
       });
+      const toolSignatureWords = deriveSignatureFromCall(capability, { remember });
+      const toolSignature = joinSignatureWords(toolSignatureWords);
       if (typeof onToolCall === "function") {
         onToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
       }
@@ -147,8 +160,35 @@ export async function runToolChat({
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
       let toolResult = null;
+      if (capability?.mood === "propose") {
+        const ratify = await resolveRatifyDecision({
+          mindName,
+          toolName,
+          toolSignature,
+          subjectName: capability?.su?.name,
+          rememberFn: remember
+        });
+        const decision = ratify?.decision ?? "lie";
+        const raw = ratify?.raw ?? "unanswered";
+        const matchedKey = ratify?.matchedKey ?? "default";
+        const ratifySentence = buildRatifySentence({
+          capability,
+          toolName,
+          decision,
+          raw,
+          matchedKey
+        });
+        if (typeof onToolCall === "function") {
+          onToolCall({ stage: "ratify", toolName, toolSentence, toolCall: call, ratifySentence });
+        }
+        if (decision !== "truth") {
+          toolResult = ratifySentence;
+        }
+      }
       try {
-        toolResult = await interpret(toolSentence);
+        if (!toolResult) {
+          toolResult = await interpret(toolSentence);
+        }
       } catch (err) {
         const surfaced = surfaceErrorSentence(err);
         if (surfaced?.mood && surfaced?.be) {

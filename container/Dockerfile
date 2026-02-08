@@ -26,6 +26,7 @@ RUN apt-get update \
     texlive-latex-recommended \
     texlive-fonts-recommended \
     texlive-plain-generic \
+    lmodern \
     poppler-utils \
     python3 \
     python3-pip \

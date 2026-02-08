@@ -90,6 +90,13 @@ test("agent tools runtime (fixtures ok)", async () => {
     process.env.PYA_WEB_SEARCH_FIXTURE = searchFixturePath;
     const searchRes = await interpret(parse('be search ob text "example" fromstate wo web from filename "https://search.example" by num 1 do'));
     assert.ok(searchRes?.value?.map?.metadata);
+
+    // compile from filename -> filename
+    const compileInput = path.resolve("examples/pyash/compile-write.txt");
+    const compileOutput = path.join(tmpRoot, "compile-output.js");
+    await interpret(parse(`be compile from filename "${compileInput}" to filename "compile-output.js" do`));
+    const compiledJs = await readText(compileOutput);
+    assert.match(compiledJs, /console\.log\("hello"\)/);
   } finally {
     delete process.env.PYA_COMMAND_RESPONSE;
     delete process.env.PYA_COMMAND_DEBUG;

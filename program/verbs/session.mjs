@@ -17,11 +17,17 @@ function normalizeInputs(values) {
 }
 
 function buildToolCallLogger() {
-  return ({ stage, toolName, toolSentence, toolText }) => {
+  return ({ stage, toolName, toolSentence, toolText, ratifySentence }) => {
     if (stage === "call") {
       const rendered = sentenceToPyash(toolSentence);
       // eslint-disable-next-line no-console
       console.error(`[tool ${toolName}] ${rendered}`);
+      return;
+    }
+    if (stage === "ratify") {
+      const rendered = sentenceToPyash(ratifySentence);
+      // eslint-disable-next-line no-console
+      console.error(`[tool ${toolName} ratify] ${rendered}`);
       return;
     }
     if (stage === "result") {

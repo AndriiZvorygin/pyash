@@ -5,6 +5,7 @@ Merged specification file. Original sources:
 - `31-csv.md`
 - `32-yaml.md`
 - `33-json.md`
+- `34-ini.md`
 
 ---
 
@@ -1026,3 +1027,103 @@ Errors are raised only for structural violations.
 * `quiz/import_json_map.test.mjs`
 * `quiz/compile_json_to_pyash.test.mjs`
 * `quiz/json_map_enumeration.test.mjs`
+
+
+---
+
+## `34-ini.md`
+
+**Status:** draft v0.1 (service-focused)
+
+## 1. Purpose
+
+Define INI interop for Pyash using canonical map representation.
+
+Primary target in v0.1:
+
+* system service blocks (`[Unit]`, `[Service]`, `[Install]`)
+
+INI support is map-first:
+
+* INI text -> canonical map
+* canonical map -> INI text
+
+This keeps conversion deterministic and aligns with existing json/yaml/csv map flows.
+
+---
+
+## 2. Canonical map keys (service profile)
+
+For service blocks, implementations SHOULD use these keys:
+
+* `unit_after`
+* `unit_wants`
+* `service_type`
+* `service_exec_start`
+* `service_restart`
+* `install_wanted_by`
+
+---
+
+## 3. Service sentence equivalence
+
+Convenience sentence:
+
+```pyash
+su name my service since name network-online.target fromperson name network-online.target as text "simple" ob filename "/usr/local/bin/my-service" for name multi-user.target onto text "on-failure" be service ya
+```
+
+Canonical map:
+
+```pyash
+su name my service be json map def
+su name unit_after ob text "network-online.target" ya
+su name unit_wants ob text "network-online.target" ya
+su name service_type ob text "simple" ya
+su name service_exec_start ob text "/usr/local/bin/my-service" ya
+su name service_restart ob text "on-failure" ya
+su name install_wanted_by ob text "multi-user.target" ya
+prah
+```
+
+Equivalent INI:
+
+```ini
+[Unit]
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/my-service
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## 4. Normative mapping
+
+* `since name` <-> `[Unit] After=`
+* `fromperson name` <-> `[Unit] Wants=`
+* `as text` <-> `[Service] Type=`
+* `ob filename` <-> `[Service] ExecStart=`
+* `onto text` <-> `[Service] Restart=`
+* `for name` <-> `[Install] WantedBy=`
+
+---
+
+## 5. Determinism and scope
+
+v0.1 scope:
+
+* parse and emit simple key/value INI lines for the service profile above
+* ignore comments and blank lines during parse
+* preserve semantic fields through INI <-> map <-> sentence round-trip
+
+Out of scope for v0.1:
+
+* arbitrary INI dialect features beyond the service profile
+* duplicate key policy beyond last-write-wins mapping

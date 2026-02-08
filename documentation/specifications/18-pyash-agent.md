@@ -11,6 +11,8 @@ Define a minimal, deterministic agent loop for Pyash that mirrors nanobot-style 
 
 This spec focuses on functional parity for loop, context, memory, and orchestration. It does not require internal implementation parity.
 
+Operational companion (non-normative): `documentation/recipes/agent-operations.md`.
+
 ---
 
 ## 1. Terms
@@ -302,6 +304,11 @@ world/house/<agent>/conduct/ratify.pya
 
 If a proposed tool is denied or unanswered, the tool call is skipped and the loop continues.
 
+Ratification decisions in non-interactive runs (scheduler/channel) are resolved from
+`conduct/ratify.pya` and emitted as `be ratify ya` decision sentences before
+the loop continues. Implementations SHOULD preserve the matched policy key/value
+as decision text so audits can reconstruct why a proposed tool was allowed or denied.
+
 ### 7.5 Heartbeat behavior (normative)
 
 Heartbeat checks are scheduler-driven and default to every 24 minutes.
@@ -419,16 +426,18 @@ The system MUST provide a real scheduler runtime (not ad-hoc sleeps in agent log
 
 Schedules are declared as Pyash sentences (stored in policy/config files, typically under `conduct/`).
 
-Initial supported declaration pattern:
+Canonical calendar declaration pattern:
 
 ```
-su name <job> every minute <num> ob text "<prompt>" for name <agent> with wo tools be schedule ya
+su name <job> for name <agent> with wo tools vyah habit during minute <num> be calendar ya
 ```
 
-Heartbeat default declaration:
+Examples:
 
 ```
-su name heartbeat every minute 24 for name <agent> be schedule ya
+su name priest heartbeat for name confederation-priest with wo tools vyah habit during minute 24 be calendar ya
+su name helper heartbeat for name agent-helper with wo tools vyah habit during minute 24 be calendar ya
+su name matrix probe for name channel-postmaster with wo tools vyah habit during minute 1 be calendar ya
 ```
 
 ### 14.3 Load telemetry
@@ -439,6 +448,7 @@ Scheduler runtime SHOULD record, per job:
 * run duration
 * overlap skip count
 * estimated utilization percentage (`duration / interval`)
+* storage path: `world/newspaper/YYYYMMDD-scheduler.pya`
 
 ### 14.4 Scheduled job session routing (normative)
 
@@ -458,13 +468,295 @@ Routing rules:
 * If a scheduled job provides a lane sentence, use that lane name.
 * If no lane sentence is provided, use the job name as the lane name.
 * Scheduled session files use the existing daily prefix format: `YYYYMMDD-<lane name>.pya`.
+* Lane semantics are equivalent to scheduler-side `from discourse name "<session name>"`.
 
-## 15. Channels and subprocess agents
+### 14.5 Single scheduler daemon (normative)
 
-### 15.1 Subprocess agents
+The system MUST provide a single scheduler daemon runtime per machine/workspace
+that manages scheduled work for all agents.
 
-Subprocess agents are treated as callable tools and MUST support deterministic invocation and result capture.
+Scheduler daemon responsibilities:
 
-### 15.2 Channels roadmap priority
+1. discover schedule declarations from policy files,
+2. run due jobs with overlap policy (`skip next tick`),
+3. emit scheduler telemetry,
+4. expose status and control actions.
 
-Matrix channel integration is a near-term priority after scheduler/approval core is stable.
+Initial schedule discovery roots:
+
+* global: `world/conduct/calendar.pya` (fallback: `schedule.pya`)
+* agent-local: `world/house/<agent>/conduct/calendar.pya` (fallback: `schedule.pya`)
+
+If both global and agent-local schedules define the same `job` for the same
+`agent`, the agent-local declaration MUST take precedence.
+
+### 14.6 Pyash schedule control surface (normative)
+
+Schedule daemon control MUST be callable through Pyash sentences (not only Node CLI).
+
+Control namespace:
+
+* Calendar control MUST be scoped with `from wo calendar` to avoid global name collisions.
+
+Canonical control sentence shape:
+
+```pyash
+from wo calendar su name <service> be <action> do
+```
+
+Minimum control actions:
+
+* `begin`
+* `stop`
+* `restart`
+* `health`
+* `health probe` (explicit probe form; equivalent intent to `health`)
+
+Canonical examples:
+
+```pyash
+from wo calendar su name scheduler be begin do
+from wo calendar su name scheduler be stop do
+from wo calendar su name scheduler be restart do
+from wo calendar su name scheduler be health do
+from wo calendar su name scheduler be health probe do
+from wo calendar su name matrix probe be health do
+```
+
+Implementation may map these intents to concrete verbs/ceremonies, but they MUST remain callable from Pyash programs and sessions.
+
+### 14.7 Daemon status shape (recommended)
+
+Scheduler status SHOULD include:
+
+* daemon running state
+* loaded jobs (agent + job name + interval)
+* last run timestamp per job
+* overlap skip count per job
+* utilization estimate per job
+
+### 14.8 Service definitions and system block bridge (normative)
+
+Calendar entries define only timing/scope.
+Execution/service policy linkage lives in service definition files.
+
+Service definition root:
+
+* `world/conduct/service/<service-name>.pya`
+
+Name mapping:
+
+* service name from calendar (`su name <service> ... be calendar ya`)
+* filename slug: lowercase, spaces/non-alnum collapsed to `_`
+* example: `matrix probe` -> `world/conduct/service/matrix_probe.pya`
+
+Canonical convenience sentence (single sentence, declarative):
+
+```pyash
+su name <service>
+since name <after-target>
+fromperson name <wants-target>
+as text "<service-type>"
+ob filename "<exec-start>"
+for name <wanted-by-target>
+onto text "<restart-policy>"
+be service ya
+```
+
+Systemd equivalence:
+
+* `since name` -> `[Unit] After=`
+* `fromperson name` -> `[Unit] Wants=`
+* `as text` -> `[Service] Type=`
+* `ob filename` -> `[Service] ExecStart=`
+* `onto text` -> `[Service] Restart=`
+* `for name` -> `[Install] WantedBy=`
+
+`ob filename` is the canonical execution linkup (`ExecStart` equivalent). If the executable is a Pyash runner, that command may in turn call module/ceremony code.
+
+Service definitions MAY also be represented as a canonical map for format conversion and round-trip.
+Implementations SHOULD support conversions:
+
+* systemd INI -> canonical map -> convenience sentence
+* convenience sentence -> canonical map -> systemd INI
+
+Recommended canonical map keys:
+
+* `unit_after`
+* `unit_wants`
+* `service_type`
+* `service_exec_start`
+* `service_restart`
+* `install_wanted_by`
+
+This bridge SHOULD share parsing/emission infrastructure with existing structured format support (json/yaml/csv map flows).
+
+Example:
+
+`world/conduct/calendar.pya`
+```pyash
+su name priest heartbeat for name confederation-priest vyah habit during minute 24 be calendar ya
+```
+
+`world/conduct/service/priest_heartbeat.pya`
+```pyash
+su name priest heartbeat since name network-online.target fromperson name network-online.target as text "simple" ob filename "/usr/local/bin/my-service" for name multi-user.target onto text "on failure" be service ya
+```
+
+## 15. Channels
+
+### 15.1 Channel runtime contract (normative)
+
+Each channel adapter MUST implement:
+
+1. `receive`:
+   * input: adapter config + prior checkpoint
+   * output: ordered inbound events + next checkpoint candidate
+2. `send`:
+   * input: outbound event payload
+   * output: delivery acknowledgment (or error)
+3. checkpoint load/save
+4. event identity (`channel type`, `channel id`)
+
+### 15.2 Channel event envelope (normative)
+
+Inbound channel events MUST be normalized before agent-loop handling.
+
+Required fields:
+
+* `channelType`
+* `channelId`
+* `eventId`
+* `sender`
+* `text`
+* `timestamp`
+
+Optional fields:
+
+* `threadId`
+* `inReplyToEventId`
+
+### 15.3 Channel schedule orchestration
+
+Channel polling MUST run under the single scheduler daemon defined in section 14.
+
+Continuous operation MUST be daemon-managed; per-agent/per-channel CLI processes are debug/bootstrap helpers only.
+
+### 15.4 Channel policy roots and precedence
+
+Channel policy is resolved from:
+
+1. global: `world/conduct/channels.pya`
+2. agent-local: `world/house/<agent>/conduct/channels.pya`
+
+Agent-local policy overrides global for overlapping keys.
+
+### 15.5 Channel schedule roots and precedence
+
+Channel polling schedules are resolved from:
+
+1. global: `world/conduct/calendar.pya` (fallback: `schedule.pya`)
+2. agent-local: `world/house/<agent>/conduct/calendar.pya` (fallback: `schedule.pya`)
+
+For duplicate `<agent> + <job>` schedule definitions, agent-local takes precedence.
+
+### 15.6 Session lane routing for channel runs
+
+Default channel lane:
+
+* `<channelType>_<channelId>`
+
+After sanitation:
+
+* lowercase
+* spaces to `_`
+* non-alphanumeric to `_`
+
+Policy MAY override via lane sentences in `channels.pya`.
+
+### 15.7 Checkpoint and dedup
+
+Channel runtimes MUST persist:
+
+* checkpoint state (`conduct/checkpoint-<channel>.json`)
+* dedup state keyed by `eventId` (bounded retention)
+
+Dedup MUST run before mind-loop invocation.
+
+### 15.8 Mention gate policy
+
+Channel policy MAY enable mention gating for shared rooms.
+
+When enabled:
+
+* non-DM/shared rooms handle messages only if agent mention is present
+* DM-designated rooms MAY bypass mention gating
+
+### 15.9 Approval and tool safety
+
+Approval policy from section 7.4 applies unchanged to channel-triggered runs:
+
+* `can` tools execute immediately
+* `propose` tools require `conduct/ratify.pya`
+
+### 15.10 Channel telemetry
+
+Channel runtime SHOULD record:
+
+* polling duration
+* received count
+* handled count
+* sent count
+* dedup skips
+* mention-gate skips
+* self-message skips
+
+Suggested path:
+
+* `world/newspaper/YYYYMMDD-channel-<channel>-<agent>.pya`
+
+## 16. Subprocess agents
+
+Subprocess agents are treated as callable tools and MUST support:
+
+1. deterministic invocation
+2. deterministic result capture
+3. explicit session lane selection
+
+## 17. Matrix MVP profile
+
+### 17.1 Scope in
+
+1. room polling/sync
+2. plain-text inbound handling
+3. plain-text outbound replies
+4. event-id dedup
+5. checkpoint resume
+6. lane routing via section 15.6
+
+### 17.2 Scope out (follow-up)
+
+1. end-to-end encryption
+2. media/file upload
+3. reactions/edits/redactions
+4. advanced thread semantics beyond basic `threadId` carriage
+
+### 17.3 Minimum policy examples
+
+Global `world/conduct/channels.pya`:
+
+```pyash
+su name matrix channel ob bool truth ya
+su name matrix mention gate ob bool truth ya
+su name matrix homeserver ob text "https://matrix.example.org" ya
+su name matrix room ob text "!roomid:example.org" ya
+su name matrix room lane ob text "matrix_main" ya
+```
+
+Global `world/conduct/calendar.pya`:
+
+```pyash
+su name priest heartbeat for name confederation-priest with wo tools vyah habit during minute 24 be calendar ya
+su name helper heartbeat for name agent-helper with wo tools vyah habit during minute 24 be calendar ya
+su name matrix probe for name channel-postmaster with wo tools vyah habit during minute 1 be calendar ya
+```

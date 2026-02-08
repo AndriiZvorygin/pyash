@@ -5,7 +5,8 @@ export const MOODS = ["ya", "do", "def", "prah", "que", "then", "ret", "can", "p
 export const COMPOSITIONAL_ALIASES = {
   inside: "in",
   along: "on",
-  tostate: "become"
+  tostate: "become",
+  every: "per"
 };
 
 const EXTRA_CONTEXT_KEYWORDS = {

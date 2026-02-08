@@ -129,7 +129,7 @@ export function buildToolSchemas(toolMapName) {
   const entries = fact.ob?.map ?? {};
   const caps = [];
   for (const entry of Object.values(entries)) {
-    if (entry?.mood !== "can" || !entry?.be) continue;
+    if ((entry?.mood !== "can" && entry?.mood !== "propose") || !entry?.be) continue;
     const canonical = sentenceToPyash(entry);
     caps.push({ sentence: entry, canonical });
   }

@@ -68,6 +68,8 @@ export default async function write(sentence, { remember: rememberFn = remember 
     format = "json";
   } else if (formatRaw.includes("yaml")) {
     format = "yaml";
+  } else if (formatRaw.includes("systemd")) {
+    format = "systemd";
   } else if (formatRaw.includes("csv")) {
     format = "csv";
   }
@@ -268,6 +270,10 @@ export const signatures = [
   { signatureWords: ["be", "write", "from", "name", "filename", "to", "wo", "keyboard", "vyah", "stream"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "systemd", "ob", "name", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "systemd", "ob", "name", "json", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "wo", "systemd", "ob", "name", "map"], handler: write },
+  { signatureWords: ["be", "write", "become", "wo", "systemd", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "text"], handler: write },
@@ -315,6 +321,10 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "bool", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "hollow", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "json", "ob", "name", "json", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "systemd", "ob", "name", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "name", "systemd", "ob", "name", "json", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "wo", "systemd", "ob", "name", "map", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "become", "wo", "systemd", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "csv", "ob", "name", "csv", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "name", "json", "map", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "become", "name", "yaml", "ob", "text", "to", "filename"], handler: write },

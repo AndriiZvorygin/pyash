@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget } from "../program/remember/index.mjs";
+import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
@@ -148,6 +151,106 @@ test("mind tool adapter loads default tools for with wo tools", async () => {
     const names = capturedTools.map(tool => tool?.function?.name).filter(Boolean);
     assert.ok(names.includes("be_read_from_filename"), "default tools should include read");
     assert.ok(names.includes("be_write_ob_text_to_filename"), "default tools should include write");
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("mind tool adapter includes propose tools and skips denied proposals via ratify policy", async () => {
+  forget();
+  resetMindLogs();
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ratify-deny-"));
+  const worldRoot = path.join(tmp, "world");
+  const conductDir = path.join(worldRoot, "house", "helper", "conduct");
+  await fs.mkdir(conductDir, { recursive: true });
+  await fs.writeFile(path.join(conductDir, "ratify.pya"), "su name be_command_ob_text ob bool lie ya\n", "utf8");
+  doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+
+  const deniedPath = path.join(tmp, "denied.txt");
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    {
+      message: {
+        content: "",
+        tool_calls: [
+          {
+            id: "call-1",
+            function: {
+              name: "be_command_ob_text",
+              arguments: JSON.stringify({ ob: `printf denied > "${deniedPath}"` })
+            }
+          }
+        ]
+      }
+    },
+    { message: { content: "done" } }
+  ]);
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name run shell be command ob text input propose"));
+    await interpret(parse("prah"));
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+    const res = await interpret(parse("ob text \"do it\" for name helper to name text helper-out with name tools be write do"));
+    assert.equal(res?.ob?.text, "done");
+
+    const payload = decodeMindPayload(records, "helper");
+    const names = (payload.tools ?? []).map(tool => tool?.function?.name).filter(Boolean);
+    assert.ok(names.includes("be_command_ob_text"), "propose tool should be exported to tools list");
+    assert.match(String(payload.prompt ?? ""), /be ratify ya/, "denied proposal should be surfaced as ratify tool result");
+
+    await assert.rejects(fs.access(deniedPath), { code: "ENOENT" });
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("mind tool adapter executes propose tools when ratify policy allows", async () => {
+  forget();
+  resetMindLogs();
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ratify-allow-"));
+  const worldRoot = path.join(tmp, "world");
+  const conductDir = path.join(worldRoot, "house", "helper", "conduct");
+  await fs.mkdir(conductDir, { recursive: true });
+  await fs.writeFile(path.join(conductDir, "ratify.pya"), "su name be_command_ob_text ob bool truth ya\n", "utf8");
+  doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+
+  const allowedPath = path.join(tmp, "allowed.txt");
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    {
+      message: {
+        content: "",
+        tool_calls: [
+          {
+            id: "call-1",
+            function: {
+              name: "be_command_ob_text",
+              arguments: JSON.stringify({ ob: `printf allowed > "${allowedPath}"` })
+            }
+          }
+        ]
+      }
+    },
+    { message: { content: "done" } }
+  ]);
+  setExchangeRecorder({ record: () => {} });
+
+  try {
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name run shell be command ob text input propose"));
+    await interpret(parse("prah"));
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+    const res = await interpret(parse("ob text \"do it\" for name helper to name text helper-out with name tools be write do"));
+    assert.equal(res?.ob?.text, "done");
+    const content = await fs.readFile(allowedPath, "utf8");
+    assert.equal(content, "allowed");
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;

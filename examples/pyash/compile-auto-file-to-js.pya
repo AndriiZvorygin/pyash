@@ -1,0 +1,5 @@
+be directory ob filename "examples/out/compile-auto" do
+from filename "../../module/compile_auto.pya" ob name compile auto to name compile auto be import do
+
+from filename "examples/pyash/compile-write.txt" to filename "examples/out/compile-auto/compile-write.js" be compile auto do
+from filename "examples/out/compile-auto/compile-write.js" become wo text to name text output be read do

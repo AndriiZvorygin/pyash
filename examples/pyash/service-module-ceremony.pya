@@ -1,0 +1,23 @@
+exists su name world root ob filename "examples/out/service-world-module" be default ya
+
+be directory ob filename "examples/out/service-world-module/conduct/service" do
+
+ob text "su name custom tick for name helper vyah habit during minute 24 be calendar ya" to filename "examples/out/service-world-module/conduct/calendar.pya" be write do
+
+ob text quoted.text.
+su name runner ob text "ceremony" ya
+su name module ob filename "./service_tick_module.pya" ya
+su name ceremony ob text "service tick" ya
+.text.quoted to filename "examples/out/service-world-module/conduct/service/custom_tick.pya" be write do
+
+ob text quoted.text.
+su name service tick be ceremony def
+ob text "tick-ok" to filename "examples/out/service-world-module/service-marker.txt" be write do
+su name service tick be ceremony prah
+.text.quoted to filename "examples/out/service-world-module/conduct/service/service_tick_module.pya" be write do
+
+from wo calendar su name scheduler be begin do
+from wo calendar su name custom tick be health do
+from wo calendar su name custom tick be stop do
+from wo calendar su name custom tick be begin do
+from wo calendar su name scheduler be stop do

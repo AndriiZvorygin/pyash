@@ -1,0 +1,19 @@
+be directory ob filename "examples/out/systemd-bridge" do
+
+ob text quoted.text.
+[Unit]
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/my-service
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+.text.quoted to filename "examples/out/systemd-bridge/my-service.service" be write do
+
+ob text "node command/systemd_bridge.mjs --action ini-to-pyash-map --input examples/out/systemd-bridge/my-service.service --output examples/out/systemd-bridge/my-service.map.pya --service-name \"my service\"" be command do
+
+from filename "examples/out/systemd-bridge/my-service.map.pya" become wo text be read do

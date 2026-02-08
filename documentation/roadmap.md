@@ -14,9 +14,47 @@
 Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.
 
 Must-have:
+* Stable agent session loop with append-only session files.
+* Default tools map (`with wo tools`) validated by runtime quizzes.
+* Deterministic tool-call loop with clear error surfacing in-session.
+
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
 * Helper examples: review loop, code edit loop.
+
+## Next milestone: Product alpha launch (first users)
+
+Goal: ship a narrow but reliable multi-agent runtime for real users (single workspace, scheduler + Matrix + file/tool workflows).
+
+Must-have:
+* Single scheduler daemon running calendar jobs for all agents.
+* Pyash control surface for scheduler/services:
+* `from wo calendar su name scheduler be begin do`
+* `from wo calendar su name scheduler be stop do`
+* `from wo calendar su name scheduler be restart do`
+* `from wo calendar su name scheduler be health do`
+* `from wo calendar su name scheduler be list do`
+* Channel runtime stable on Matrix:
+* mention gate policy and dedup/checkpoint behavior proven in real runs.
+* channel polling routed through scheduler (no per-agent manual polling required in normal ops).
+* Logging and observability:
+* scheduler/channel runtime logs in `world/newspaper/YYYYMMDD-<name>.pya`.
+* actionable `health` output for daemon + services.
+* Approval safety baseline:
+* `propose` tool paths gate through ratify policy (`conduct/ratify.pya`) in scheduler/channel-triggered runs.
+* Launch docs:
+* one operator runbook (bootstrap, start, stop, restart, health, logs).
+* one user runbook (how to interact with agents in Matrix and expected response model).
+
+Nice-to-have:
+* matrix DM + shared-room routing presets and templates.
+* service-definition helpers (sentence <-> map <-> systemd INI) with cookbook examples.
+* lightweight load dashboard derived from scheduler telemetry.
+
+Exit criteria (alpha):
+* 7-day soak with scheduler + Matrix polling and no manual restarts.
+* At least 3 real tasks completed end-to-end by confederation-priest (no fixtures).
+* All scheduler/channel/agent quizzes green in CI and one daily real-backend smoke run green.
 
 ## Jan 29, 2026: Recent maintenance (not a roadmap milestone)
 
