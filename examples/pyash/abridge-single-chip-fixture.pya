@@ -1,0 +1,34 @@
+exists su name chip fixture ob text quoted.text.# `01-sentence-and-grammar.md` (merged)
+
+Merged specification file. Original sources:
+- `01-sentence-model.md`
+- `02-moods-and-memory.md`
+- `07-compositional-cases.md`
+- `10-subordinate-clauses.md`
+
+---
+
+## Sentence Model
+
+## 1. Purpose
+Define the shape of a sentence and how cases/genitives/quoting are represented.
+
+## 2. Terms
+- sentence: a structured object with mood, verb, and cases.
+- case: keyworded role like `su`, `ob`, `to`, `from`, `by`.
+- genitive: a field chain such as `this ti ob ti num`.
+
+## 3. Rules (normative)
+- A sentence has `mood`, `be`, and any number of cases.
+- Cases are keyworded fields (`su`, `ob`, `to`, `from`, `by`, `fromindex`, `toindex`, `atindex`).
+- `su name <x>` identifies a subject name; `ob num <n>` / `ob text <t>` / `ob date <d>` are typed payloads.
+- Typed name references use `name <type> <literal>` (e.g., `to name num counter`, `to name text line`).
+- Type casts are explicit verbs and return typed values.
+
+## 4. Dynamic defaults
+Dynamic defaults let configuration attach missing cases to matching sentences without custom code.
+.text.quoted be text ya
+
+su name show source fixture ob text of ob of chip fixture be write do
+atmost byte 1600 from name text chip fixture to name text abridged fixture be abridge do
+su name show abridged fixture ob text of ob of abridged fixture be write do

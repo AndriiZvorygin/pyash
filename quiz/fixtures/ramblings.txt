@@ -1,0 +1,84 @@
+TITLE: Community Workshop Plan and Notes (Fixture)
+
+## Overview
+This document is a draft. It includes repetition, tangents, and near-duplicate statements on purpose. The abridger should reduce it while keeping the core plan. This document is a draft. It includes repetition, tangents, and near-duplicate statements on purpose.
+
+We want a community workshop in Owen Sound. The goal is a community workshop. The goal is a community workshop that helps people learn tools safely and build useful things for their homes. We want people to feel welcome.
+
+## Objectives
+1) Teach safe use of tools, especially the laser cutter and the CNC mill.
+2) Help people build one practical object they can take home.
+3) Keep costs low and keep the workshop accessible.
+
+We want to keep costs low. Keeping costs low matters because people are stretched. People are stretched. People are stretched and time is tight. We should keep costs low.
+
+## Proposed schedule
+Saturday, 10:00 to 14:00
+- 10:00 Introduction, safety briefing
+- 10:20 Tour of the space
+- 10:45 Short demo: laser cutter
+- 11:15 Short demo: CNC mill
+- 11:45 Build session
+- 13:30 Share-out and cleanup
+- 14:00 End
+
+Saturday, 10:00 to 14:00
+- 10:00 Introduction, safety briefing
+- 10:20 Tour of the space
+- 10:45 Short demo: laser cutter
+- 11:15 Short demo: CNC mill
+- 11:45 Build session
+- 13:30 Share-out and cleanup
+- 14:00 End
+
+## Materials and costs
+We need plywood. We need plywood for the projects. We also need sandpaper. We need sandpaper, glue, and finish. The finish could be oil or wax.
+
+Estimated costs per person:
+- Plywood: $8
+- Sandpaper: $2
+- Glue: $1
+- Finish: $2
+Total: $13 per person
+
+Estimated costs per person:
+- Plywood: $8
+- Sandpaper: $2
+- Glue: $1
+- Finish: $2
+Total: $13 per person
+
+## Risks and mitigations
+Safety is critical. Safety is critical. Safety is critical and we should repeat it. We should repeat it. We should repeat it and make sure people listen.
+
+The laser cutter has a risk of fire if someone uses the wrong material. The laser cutter has a risk of fire if someone uses the wrong material. The risk is fire. Fire is a risk.
+
+Mitigation: only approved materials, and a trained operator present at all times.
+
+The CNC mill can throw chips. The CNC mill can throw chips and make a mess. The CNC mill can throw chips. It can throw chips.
+
+Mitigation: safety glasses required, and chip shields.
+
+## Decisions and actions
+Decision: Limit attendance to 12 people.
+Decision: Limit attendance to 12 people.
+
+Action: Print 20 copies of the safety checklist.
+Action: Prepare a sign-up form with name, email, and emergency contact.
+Action: Order 10 sheets of 6 mm plywood by February 20, 2026.
+Action: Order 10 sheets of 6 mm plywood by February 20, 2026.
+Action: Assign one volunteer to each machine station.
+
+## Notes and rambling
+I think the workshop is a good idea. It is a good idea. It is a good idea because people want to learn. People want to learn. They want to learn and they want to build things and feel capable. We want them to feel capable.
+
+Some people will ask what they can build. They can build a small shelf. They can build a small shelf, or a phone stand, or a small box. A box is good. A small box is good. A box is good.
+
+We should make the workshop friendly. Friendly matters. Friendly matters because people are nervous. People are nervous. People are nervous around power tools.
+
+We should keep time for questions. Time for questions is important. Time for questions is important.
+
+Also, someone mentioned we should have snacks. Snacks are good. Snacks are good. Snacks are good, but allergies exist. Allergies exist and we should label ingredients. Label ingredients. Label ingredients.
+
+## Appendix: repeated disclaimer
+This is a draft. This is a draft. This is a draft. This is a draft.
