@@ -26,3 +26,14 @@ test("be filename casts text and name values into filename", async () => {
   await interpret(parse("ob name source to name filename output be filename do"));
   assert.equal(remember("output")?.ob?.filename, "/tmp/source.txt");
 });
+
+test("be text accepts genitive name values resolved from this cases", async () => {
+  forget();
+  await interpret(parse("su name probe for name text author ob name text task to name text output atleast num 0 atmost num 0 be ceremony def"));
+  await interpret(parse("ob name of for of this to name text output be text do"));
+  await interpret(parse("su name output ret"));
+  await interpret(parse("prah"));
+  await interpret(parse("exists su name task item ob text \"task\" be text ya"));
+  await interpret(parse("ob name text task item for name text gen loop atleast num 0.8 atmost num 1 to name text out be probe do"));
+  assert.equal(remember("out")?.ob?.text, "gen loop");
+});

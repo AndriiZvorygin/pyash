@@ -1,8 +1,9 @@
+from name ../../module/reviewer_circle.pya to name reviewer circle be import do
+
 exists su name author prompter ob text "Draft a concise answer for TASK. If review feedback is present, apply it exactly and fix factual issues." be text ya
 exists su name author be mind as name "qwen3-vl:8b-instruct" fromtext name author prompter ya
 
 exists su name input ob text "Write a short greeting." be text ya
 
-ob name input for name author by name review mind brief with wo tools atleast num 0.8 atmost num 3 to name text output be review loop do
+ob name text input for name text author by name text review mind brief atleast num 0.8 atmost num 3 to name text output be reviewer circle reviewer trying do
 ob name output be write do
-ob name review loop verdict be write do
