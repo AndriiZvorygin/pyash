@@ -1,0 +1,24 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" ya
+prah
+
+su name coding tools be map def
+su name command be command ob text input to name text out can
+su name repair be repair ob text input to name map outcome can
+prah
+
+ob text "mkdir -p examples/out && cat <<'JS' > examples/out/gptoss-repair-autonomous.js
+console.log(41);
+JS" be command do
+
+exists su name helper system ob text "You are a coding assistant. Available tools are command(ob text input -> to name text out) and repair(ob text input -> to name map outcome). First inspect the file with command. Then fix it using repair with unified diff patch text. Then verify with command. Return only the final stdout text." ya
+exists su name helper be mind as name "gpt-oss:latest" fromtext name helper system ya
+
+ob text quoted.text.Target file: examples/out/gptoss-repair-autonomous.js
+Goal: running `node examples/out/gptoss-repair-autonomous.js` must print 42.
+Rules:
+- Use command to inspect current file content.
+- Use repair to apply a unified diff patch.
+- Use command again to verify result.
+- Reply with only the verified stdout text..text.quoted for name helper to name text output with name coding tools be write do
+ob name output be write do

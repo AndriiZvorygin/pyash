@@ -1,5 +1,6 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveConfigMapNum, resolveConfigMapText } from "../configure/env.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -56,6 +57,19 @@ function extractScore(line) {
   return score;
 }
 
+function shellEscapeSingle(value) {
+  return `'${String(value ?? "").replace(/'/gu, `'\"'\"'`)}'`;
+}
+
+function applyTemplate(template, values) {
+  let out = String(template ?? "");
+  for (const [key, value] of Object.entries(values ?? {})) {
+    const token = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gu");
+    out = out.replace(token, String(value ?? ""));
+  }
+  return out;
+}
+
 function parseVerdictFromLastLine(reviewText, threshold) {
   const lastLine = extractLastNonEmptyLine(reviewText);
   const upper = lastLine.toUpperCase();
@@ -68,19 +82,19 @@ function parseVerdictFromLastLine(reviewText, threshold) {
   return { pass: false, score: null, lastLine };
 }
 
-function formatSeriesTranscript(seriesName) {
+function formatSeriesTranscript(seriesName, maxLines = 40) {
   if (!seriesName) return "";
   const fact = remember(seriesName);
   if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return "";
-  return fact.ob.series
+  const lines = fact.ob.series
     .map((entry) => {
       const role = String(entry?.su?.name ?? entry?.role ?? "assistant").toUpperCase();
       const content = String(entry?.ob?.text ?? entry?.content ?? "");
       if (!content.trim()) return "";
       return `${role}: ${content}`;
     })
-    .filter(Boolean)
-    .join("\n");
+    .filter(Boolean);
+  return lines.slice(Math.max(0, lines.length - Math.max(1, Math.trunc(maxLines)))).join("\n");
 }
 
 async function invokeMind({ mindName, prompt, outputName, toolMapName }) {
@@ -124,10 +138,40 @@ async function invokeCeremony({ ceremonyName, prompt, outputName }) {
   return resolveFactText(outputName);
 }
 
-function buildReviewerPrompt({ task, draft, transcript, threshold }) {
+async function invokeGuaranteeCommand({ commandText, outputName }) {
+  const interpret = await resolveInterpret();
+  try {
+    await interpret({
+      mood: "do",
+      be: "command",
+      ob: { text: String(commandText ?? "") },
+      to: { name: outputName, nameTypeWords: ["text"] }
+    });
+    return {
+      ok: true,
+      output: resolveFactText(outputName),
+      error: ""
+    };
+  } catch (err) {
+    const message = String(
+      err?.sentence?.ob?.text ??
+      err?.message ??
+      "command guarantee failed"
+    );
+    return {
+      ok: false,
+      output: "",
+      error: message
+    };
+  }
+}
+
+function buildReviewerPrompt({ task, draft, transcript, threshold, includeTranscript }) {
   const pieces = [
     "Review the candidate for factual grounding, constraint fit, and contradictions.",
-    "Use the flow transcript to check whether claims match tool outputs and prior steps.",
+    includeTranscript
+      ? "Use the flow transcript to check whether claims match tool outputs and prior steps."
+      : "Focus on task fit and factual consistency from the candidate text.",
     "Return concise reasoning, then put only PASS, FAIL, or a 0..1 confidence score on the last non-empty line.",
     `Pass threshold is ${threshold}.`,
     "",
@@ -137,13 +181,13 @@ function buildReviewerPrompt({ task, draft, transcript, threshold }) {
     "CANDIDATE:",
     draft
   ];
-  if (transcript) {
+  if (includeTranscript && transcript) {
     pieces.push("", "FLOW TRANSCRIPT:", transcript);
   }
   return pieces.join("\n");
 }
 
-function buildRepairPrompt({ task, draft, reviewText }) {
+function buildRepairPrompt({ task, draft, reviewText, guaranteeText }) {
   return [
     "Revise the candidate to fix all reviewer issues while preserving supported facts.",
     "Keep the result concise.",
@@ -155,8 +199,38 @@ function buildRepairPrompt({ task, draft, reviewText }) {
     draft,
     "",
     "REVIEW FEEDBACK:",
-    reviewText
+    reviewText || "none",
+    "",
+    "GUARANTEE FEEDBACK:",
+    guaranteeText || "none"
   ].join("\n");
+}
+
+function rememberText(name, text) {
+  doRemember({
+    mood: "ya",
+    su: { name },
+    ob: { text: String(text ?? "") },
+    be: "text"
+  });
+}
+
+function rememberNum(name, value) {
+  doRemember({
+    mood: "ya",
+    su: { name },
+    ob: { num: Number(value ?? 0) },
+    be: "number"
+  });
+}
+
+function rememberMap(name, map) {
+  doRemember({
+    mood: "ya",
+    su: { name },
+    ob: { map: map ?? {} },
+    be: "map"
+  });
 }
 
 export async function reviewLoop(sentence) {
@@ -165,10 +239,25 @@ export async function reviewLoop(sentence) {
   const reviewerName = sentence?.by?.name ?? null;
   const toolMapName = sentence?.with?.name ?? (sentence?.with?.wo === "tools" ? "agent tools" : null);
   const outputName = sentence?.to?.name ?? null;
-  const maxAttempts = Math.max(1, Math.trunc(Number(sentence?.atmost?.num ?? 3)));
+  const configMaxAttempts = resolveConfigMapNum("review loop configure", "max attempts");
+  const configThreshold = resolveConfigMapNum("review loop configure", "threshold");
+  const maxAttempts = Math.max(1, Math.trunc(Number(sentence?.atmost?.num ?? configMaxAttempts ?? 3)));
   const threshold = Number.isFinite(Number(sentence?.atleast?.num))
     ? Number(sentence.atleast.num)
-    : 0.8;
+    : (Number.isFinite(Number(configThreshold)) ? Number(configThreshold) : 0.8);
+  const transcriptMaxLines = Math.max(1, Math.trunc(Number(
+    resolveConfigMapNum("review loop configure", "transcript max lines") ?? 40
+  )));
+  const includeTranscript = resolveConfigMapText("review loop configure", "include transcript") !== "lie";
+  const guaranteeCommandTemplate =
+    resolveConfigMapText("review loop configure", "guarantee command")
+    ?? resolveConfigMapText("review loop configure", "verifier command")
+    ?? "";
+  const guaranteeExpectRegex =
+    resolveConfigMapText("review loop configure", "guarantee expect regex")
+    ?? resolveConfigMapText("review loop configure", "verifier expect regex")
+    ?? "";
+  const guaranteeDraftRegex = resolveConfigMapText("review loop configure", "guarantee draft regex") ?? "";
 
   if (!task) {
     throwErrorSentence({
@@ -186,30 +275,42 @@ export async function reviewLoop(sentence) {
       raw: { sentence }
     });
   }
-  if (!reviewerName) {
+  if (!reviewerName && !guaranteeCommandTemplate && !guaranteeDraftRegex) {
     throwErrorSentence({
       name: "review loop defective",
-      message: "review loop defective: missing reviewer name",
+      message: "review loop defective: missing reviewer and guarantee",
       from: { name: "review loop" },
       raw: { sentence }
     });
   }
 
   const generatorFact = remember(generatorName);
-  const reviewerFact = remember(reviewerName);
+  const reviewerFact = reviewerName ? remember(reviewerName) : null;
   const generatorIsMind = generatorFact?.be === "mind";
   const reviewerIsMind = reviewerFact?.be === "mind";
   const generatorRefineryName = !generatorIsMind ? await resolveRefineryTarget(generatorName) : null;
-  const reviewerRefineryName = !reviewerIsMind ? await resolveRefineryTarget(reviewerName) : null;
-  const reviewerIsRefinery = !reviewerIsMind && Boolean(reviewerRefineryName ?? await resolveIsRefinery(reviewerName));
+  const reviewerRefineryName = reviewerName && !reviewerIsMind ? await resolveRefineryTarget(reviewerName) : null;
+  const reviewerIsRefinery = reviewerName && !reviewerIsMind
+    ? Boolean(reviewerRefineryName ?? await resolveIsRefinery(reviewerName))
+    : false;
   const generatorIsRefinery = !generatorIsMind && Boolean(generatorRefineryName ?? await resolveIsRefinery(generatorName));
 
   let latestPrompt = task;
   let finalDraft = "";
   let lastReviewText = "";
   let lastVerdict = { pass: false, score: null, lastLine: "" };
+  let lastGuaranteeText = "not run";
+  let lastGuaranteePass = (guaranteeCommandTemplate || guaranteeDraftRegex) ? false : true;
+  let attemptsUsed = 0;
+  let stopReason = "max attempts";
+  let previousFailedDraft = "";
+  let lastFailureBundle = null;
+  let lastSuccessBundle = null;
+
+  rememberText("review loop seed task", task);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    attemptsUsed = attempt;
     const draftName = `review loop draft ${attempt}`;
     if (generatorIsMind) {
       finalDraft = await invokeMind({
@@ -232,70 +333,143 @@ export async function reviewLoop(sentence) {
       });
     }
 
-    const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
-    const transcript = formatSeriesTranscript(flowSeriesName);
-    const reviewPrompt = buildReviewerPrompt({
-      task,
-      draft: finalDraft,
-      transcript,
-      threshold
-    });
-
-    const reviewName = `review loop feedback ${attempt}`;
-    if (reviewerIsMind) {
-      lastReviewText = await invokeMind({
-        mindName: reviewerName,
-        prompt: reviewPrompt,
-        outputName: reviewName
+    lastGuaranteeText = "not run";
+    lastGuaranteePass = true;
+    if (guaranteeDraftRegex) {
+      let matched = false;
+      try {
+        matched = new RegExp(guaranteeDraftRegex, "u").test(String(finalDraft ?? ""));
+      } catch {
+        matched = false;
+      }
+      lastGuaranteePass = lastGuaranteePass && matched;
+      lastGuaranteeText = `draft regex=${matched ? "match" : "mismatch"}`;
+    }
+    if (guaranteeCommandTemplate) {
+      const guaranteeCommand = applyTemplate(guaranteeCommandTemplate, {
+        draft: shellEscapeSingle(finalDraft),
+        task: shellEscapeSingle(task)
       });
-    } else if (reviewerIsRefinery) {
-      lastReviewText = await invokeRefinery({
-        refineryName: reviewerRefineryName ?? reviewerName,
-        prompt: reviewPrompt,
-        outputName: reviewName
+      const guaranteeName = `review loop guarantee ${attempt}`;
+      const guarantee = await invokeGuaranteeCommand({
+        commandText: guaranteeCommand,
+        outputName: guaranteeName
       });
-    } else {
-      lastReviewText = await invokeCeremony({
-        ceremonyName: reviewerName,
-        prompt: reviewPrompt,
-        outputName: reviewName
-      });
+      const regexOk = guaranteeExpectRegex
+        ? (() => {
+            try {
+              return new RegExp(guaranteeExpectRegex, "u").test(String(guarantee.output ?? ""));
+            } catch {
+              return false;
+            }
+          })()
+        : true;
+      const commandPass = guarantee.ok && regexOk;
+      lastGuaranteePass = lastGuaranteePass && commandPass;
+      if (guarantee.ok) {
+        lastGuaranteeText = guaranteeExpectRegex
+          ? `ok: command status=0 regex=${regexOk ? "match" : "mismatch"} output=${guarantee.output}`
+          : `ok: command status=0 output=${guarantee.output}`;
+      } else {
+        lastGuaranteeText = `fail: ${guarantee.error}`;
+      }
     }
 
-    lastVerdict = parseVerdictFromLastLine(lastReviewText, threshold);
-    if (lastVerdict.pass) break;
+    if (!lastGuaranteePass) {
+      lastReviewText = "skipped reviewer (guarantee failed)";
+      lastVerdict = { pass: false, score: 0, lastLine: "FAIL (guarantee)" };
+    } else if (reviewerName) {
+      const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
+      const transcript = formatSeriesTranscript(flowSeriesName, transcriptMaxLines);
+      const reviewPrompt = buildReviewerPrompt({
+        task,
+        draft: finalDraft,
+        transcript,
+        threshold,
+        includeTranscript
+      });
+
+      const reviewName = `review loop feedback ${attempt}`;
+      if (reviewerIsMind) {
+        lastReviewText = await invokeMind({
+          mindName: reviewerName,
+          prompt: reviewPrompt,
+          outputName: reviewName
+        });
+      } else if (reviewerIsRefinery) {
+        lastReviewText = await invokeRefinery({
+          refineryName: reviewerRefineryName ?? reviewerName,
+          prompt: reviewPrompt,
+          outputName: reviewName
+        });
+      } else {
+        lastReviewText = await invokeCeremony({
+          ceremonyName: reviewerName,
+          prompt: reviewPrompt,
+          outputName: reviewName
+        });
+      }
+      lastVerdict = parseVerdictFromLastLine(lastReviewText, threshold);
+    } else {
+      lastReviewText = "skipped reviewer";
+      lastVerdict = { pass: true, score: 1, lastLine: "PASS (guarantee)" };
+    }
+
+    if (lastVerdict.pass && lastGuaranteePass) {
+      stopReason = "pass";
+      lastSuccessBundle = {
+        attempt: { num: attempt },
+        draft: { text: finalDraft },
+        review: { text: lastReviewText },
+        verdict: { text: lastVerdict.lastLine || "PASS" },
+        guarantee: { text: lastGuaranteeText }
+      };
+      break;
+    }
+
+    if (previousFailedDraft && previousFailedDraft === finalDraft) {
+      stopReason = "unchanged draft";
+      lastFailureBundle = {
+        attempt: { num: attempt },
+        draft: { text: finalDraft },
+        review: { text: lastReviewText },
+        verdict: { text: lastVerdict.lastLine || "FAIL" },
+        guarantee: { text: lastGuaranteeText }
+      };
+      break;
+    }
+    previousFailedDraft = finalDraft;
+    lastFailureBundle = {
+      attempt: { num: attempt },
+      draft: { text: finalDraft },
+      review: { text: lastReviewText },
+      verdict: { text: lastVerdict.lastLine || "FAIL" },
+      guarantee: { text: lastGuaranteeText }
+    };
+    stopReason = attempt >= maxAttempts ? "max attempts" : stopReason;
 
     latestPrompt = buildRepairPrompt({
       task,
       draft: finalDraft,
-      reviewText: lastReviewText
+      reviewText: lastReviewText,
+      guaranteeText: lastGuaranteeText
     });
   }
 
   const resultText = finalDraft;
   if (outputName) {
-    doRemember({
-      mood: "ya",
-      su: { name: outputName },
-      ob: { text: resultText },
-      be: "text"
-    });
+    rememberText(outputName, resultText);
   }
-  doRemember({
-    mood: "ya",
-    su: { name: "review loop verdict" },
-    ob: {
-      text: lastVerdict.lastLine || (lastVerdict.pass ? "PASS" : "FAIL")
-    },
-    be: "text"
-  });
+  rememberText("review loop verdict", lastVerdict.lastLine || (lastVerdict.pass ? "PASS" : "FAIL"));
+  rememberText("review loop guarantee", lastGuaranteeText);
+  rememberText("review loop verifier", lastGuaranteeText);
+  rememberNum("review loop attempts used", attemptsUsed);
+  rememberText("review loop stop reason", stopReason);
+  rememberText("review loop summary", `attempts=${attemptsUsed}; stop=${stopReason}; verdict=${lastVerdict.lastLine || "FAIL"}; guarantee=${lastGuaranteeText}`);
+  if (lastFailureBundle) rememberMap("review loop last failure", lastFailureBundle);
+  if (lastSuccessBundle) rememberMap("review loop last success", lastSuccessBundle);
   if (typeof lastVerdict.score === "number") {
-    doRemember({
-      mood: "ya",
-      su: { name: "review loop score" },
-      ob: { num: lastVerdict.score },
-      be: "number"
-    });
+    rememberNum("review loop score", lastVerdict.score);
   }
 
   return { ob: { text: resultText }, be: "text" };
@@ -322,7 +496,7 @@ function buildReviewSignature({ obType, forType, byType, withType, includeLimits
   const words = ["be", "review", "loop"];
   // Signatures are sorted by case key: atleast, atmost, by, for, ob, to, with
   if (includeLimits) words.push("atleast", "num", "atmost", "num");
-  words.push("by", ...byType);
+  if (byType) words.push("by", ...byType);
   words.push("for", ...forType);
   words.push("ob", ...obType);
   words.push("to", "name", "text");
@@ -338,11 +512,13 @@ for (const obType of OB_TYPES) {
     for (const byType of ROLE_TYPES) {
       for (const withType of WITH_TYPES) {
         for (const includeLimits of [false, true]) {
-          const words = buildReviewSignature({ obType, forType, byType, withType, includeLimits });
-          const key = words.join(" ");
-          if (signatureSet.has(key)) continue;
-          signatureSet.add(key);
-          signatureEntries.push({ signatureWords: words, handler: reviewLoop });
+          for (const useReviewer of [true, false]) {
+            const words = buildReviewSignature({ obType, forType, byType: useReviewer ? byType : null, withType, includeLimits });
+            const key = words.join(" ");
+            if (signatureSet.has(key)) continue;
+            signatureSet.add(key);
+            signatureEntries.push({ signatureWords: words, handler: reviewLoop });
+          }
         }
       }
     }
