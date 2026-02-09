@@ -207,3 +207,28 @@ Full v0.2 conformance additionally requires:
 2. Validate tool execution context against declared limits.
 3. Add parity quizzes for deny/ask/allow + audit records.
 
+---
+
+## 12. Pyash configuration shape
+
+Command safety configuration SHOULD be grouped as two map subjects:
+
+- `su name command configure be map def`
+- `su name sandbox configure be map def`
+
+Recommended `command configure` keys:
+
+- `policy mode` (`wo deny|ask|allow`)
+- `tool policy mode` (`wo deny|ask|allow`)
+- `mcp policy mode` (`wo deny|ask|allow`)
+- `classifier enabled` (`bool`)
+- `audit security lane` (`filename`)
+
+Recommended `sandbox configure` keys:
+
+- `network` (`bool`)
+- `writable roots` (`ve filename ...`)
+- `timeout ms` (`num`)
+
+Container or local overrides MAY replace either map in later config files
+(`configure/container.pya`, `configure/secret.pya`, `configure/workplace.pya`).
