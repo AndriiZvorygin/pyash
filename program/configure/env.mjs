@@ -168,3 +168,22 @@ export function resolveConfigMapText(name, key, { rememberFn = remember } = {}) 
   if (!ob) return undefined;
   return parseMapText(ob);
 }
+
+function parseSeriesValues(ob = {}) {
+  const values = ob?.ve?.values;
+  if (!Array.isArray(values)) return undefined;
+  return values.map((value) => String(value ?? ""));
+}
+
+export function resolveConfigSeries(name, { rememberFn = remember } = {}) {
+  const fact = rememberFn?.(name);
+  const ob = fact?.ob;
+  if (!ob || typeof ob !== "object") return undefined;
+  return parseSeriesValues(ob);
+}
+
+export function resolveConfigMapSeries(name, key, { rememberFn = remember } = {}) {
+  const ob = resolveConfigMapOb(name, key, { rememberFn });
+  if (!ob) return undefined;
+  return parseSeriesValues(ob);
+}

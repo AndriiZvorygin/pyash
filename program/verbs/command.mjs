@@ -10,8 +10,10 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import {
   resolveConfigBool,
   resolveConfigMapBool,
+  resolveConfigMapSeries,
   resolveConfigMapNum,
   resolveConfigMapText,
+  resolveConfigSeries,
   resolveConfigText
 } from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
@@ -115,15 +117,23 @@ export function classifyCommandText(commandText) {
 }
 
 export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember } = {}) {
-  const baseMode = normalizePolicyMode(
-    resolveConfigMapText("command configure", "policy mode", { rememberFn })
-      ?? resolveConfigText("command policy mode", { rememberFn }),
-    "ask"
-  );
-  const classifierEnabled =
+  const sessionMode = resolveConfigMapText("session command configure", "policy mode", { rememberFn })
+    ?? resolveConfigText("session command policy mode", { rememberFn });
+  const agentMode = resolveConfigMapText("agent command configure", "policy mode", { rememberFn })
+    ?? resolveConfigText("agent command policy mode", { rememberFn });
+  const globalMode = resolveConfigMapText("command configure", "policy mode", { rememberFn })
+    ?? resolveConfigText("command policy mode", { rememberFn });
+  const baseMode = normalizePolicyMode(sessionMode ?? agentMode ?? globalMode, "ask");
+
+  const sessionClassifier = resolveConfigMapBool("session command configure", "classifier enabled", { rememberFn });
+  const agentClassifier = resolveConfigMapBool("agent command configure", "classifier enabled", { rememberFn });
+  const globalClassifier =
     resolveConfigMapBool("command configure", "classifier enabled", { rememberFn })
-    ?? resolveConfigBool("command classifier enabled", { rememberFn })
-    ?? true;
+    ?? resolveConfigBool("command classifier enabled", { rememberFn });
+  const classifierEnabled = sessionClassifier ?? agentClassifier ?? globalClassifier ?? true;
+  const source = sessionMode !== undefined ? "session command configure"
+    : agentMode !== undefined ? "agent command configure"
+      : "command configure";
 
   let mode = baseMode;
   if (sentence?.mood === "propose") mode = "ask";
@@ -133,20 +143,31 @@ export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember
       mode,
       classifierEnabled: false,
       class: "unknown",
-      source: "command configure"
+      source
     };
   }
   return {
     mode,
     classifierEnabled: true,
     class: cmdClass ?? "unknown",
-    source: "command configure"
+    source
   };
 }
 
 const commandStreamProcesses = new Map();
 const STREAM_END_TOKEN = "[PYA_STREAM_END]";
 let commandAuditCounter = 0;
+const DEFAULT_ENV_ALLOWLIST = [
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "PATH",
+  "PWD",
+  "SHELL",
+  "TERM",
+  "TMPDIR",
+  "USER"
+];
 
 function nextAuditId() {
   commandAuditCounter += 1;
@@ -154,6 +175,7 @@ function nextAuditId() {
 }
 
 function buildCommandAudit({
+  requestId,
   stage,
   commandClass,
   policy,
@@ -163,11 +185,13 @@ function buildCommandAudit({
   rememberFn = remember
 } = {}) {
   const lane = resolveConfigMapText("command configure", "audit security lane", { rememberFn });
+  const id = requestId ?? nextAuditId();
   const audit = {
     mood: "ya",
     exists: true,
     be: "command audit",
-    su: { name: `command audit ${nextAuditId()}` },
+    su: { name: `command audit ${id}` },
+    to: { name: `command request ${id}` },
     as: { name: stage || "policy" },
     from: { name: policy?.source ?? "command configure" },
     accordingto: { name: decision ?? policy?.mode ?? "allow" },
@@ -184,6 +208,132 @@ function emitCommandAudit(payload) {
   emitExchangeSentence(buildCommandAudit(payload));
 }
 
+function normalizeRoots(roots = []) {
+  const normalized = [];
+  for (const root of roots) {
+    const raw = String(root ?? "").trim();
+    if (!raw) continue;
+    const resolved = path.resolve(raw);
+    if (!normalized.includes(resolved)) normalized.push(resolved);
+  }
+  return normalized;
+}
+
+function isPathWithinRoots(targetPath, roots = []) {
+  const resolvedTarget = path.resolve(targetPath);
+  for (const root of roots) {
+    const resolvedRoot = path.resolve(root);
+    if (resolvedTarget === resolvedRoot) return true;
+    if (resolvedTarget.startsWith(`${resolvedRoot}${path.sep}`)) return true;
+  }
+  return false;
+}
+
+function parseAbsolutePathTokens(commandText = "") {
+  const text = String(commandText ?? "");
+  const tokens = [];
+  for (const token of text.split(/\s+/)) {
+    const cleaned = token.replace(/[;,]+$/g, "").trim();
+    if (!cleaned.startsWith("/")) continue;
+    tokens.push(cleaned);
+  }
+  return tokens;
+}
+
+function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
+  const writableRoots = normalizeRoots(
+    resolveConfigMapSeries("sandbox configure", "writable roots", { rememberFn })
+    ?? resolveConfigSeries("command sandbox writable roots", { rememberFn })
+    ?? [process.cwd()]
+  );
+  const configuredCwd =
+    resolveConfigMapText("sandbox configure", "cwd", { rememberFn })
+    ?? resolveConfigMapText("command configure", "sandbox cwd", { rememberFn })
+    ?? process.cwd();
+  const cwd = path.resolve(String(configuredCwd ?? process.cwd()));
+  const networkAllowed =
+    resolveConfigMapBool("sandbox configure", "network", { rememberFn })
+    ?? resolveConfigBool("command sandbox network", { rememberFn })
+    ?? true;
+  const timeoutMs =
+    resolveConfigMapNum("sandbox configure", "timeout ms", { rememberFn })
+    ?? resolveConfigMapNum("command configure", "sandbox timeout ms", { rememberFn })
+    ?? 30000;
+  const maxOutputBytes =
+    resolveConfigMapNum("sandbox configure", "max output bytes", { rememberFn })
+    ?? resolveConfigMapNum("command configure", "sandbox max output bytes", { rememberFn })
+    ?? 1024 * 1024;
+  const envAllowlist = resolveConfigMapSeries("sandbox configure", "command env allowlist", { rememberFn })
+    ?? resolveConfigMapSeries("sandbox configure", "env allowlist", { rememberFn })
+    ?? resolveConfigSeries("command env allowlist", { rememberFn })
+    ?? DEFAULT_ENV_ALLOWLIST;
+  return {
+    cwd,
+    writableRoots,
+    networkAllowed,
+    timeoutMs,
+    maxOutputBytes,
+    envAllowlist
+  };
+}
+
+function buildAllowedEnv({ allowlist = [], cwd } = {}) {
+  const env = {};
+  for (const key of Object.keys(process.env)) {
+    if (!key.startsWith("PYA_")) continue;
+    env[key] = process.env[key];
+  }
+  for (const key of allowlist) {
+    if (!key) continue;
+    if (Object.prototype.hasOwnProperty.call(process.env, key)) {
+      env[key] = process.env[key];
+    }
+  }
+  if (process.env.OLLAMA_HOST) env.OLLAMA_HOST = process.env.OLLAMA_HOST;
+  if (process.env.OPENAI_BASE_URL) env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
+  if (process.env.AI_HOST) env.AI_HOST = process.env.AI_HOST;
+  if (!env.PATH && process.env.PATH) env.PATH = process.env.PATH;
+  if (!env.HOME && process.env.HOME) env.HOME = process.env.HOME;
+  env.PWD = cwd;
+  return env;
+}
+
+function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandbox } = {}) {
+  if (!Array.isArray(sandbox?.writableRoots) || sandbox.writableRoots.length === 0) {
+    throwErrorSentence({
+      name: "command sandbox defective",
+      message: "command sandbox defective: writable roots missing",
+      from: { la: sentence },
+      raw: { sandbox }
+    });
+  }
+  if (!isPathWithinRoots(sandbox.cwd, sandbox.writableRoots)) {
+    throwErrorSentence({
+      name: "command sandbox defective",
+      message: `command sandbox defective: cwd outside writable roots (${sandbox.cwd})`,
+      from: { la: sentence },
+      raw: { cwd: sandbox.cwd, writableRoots: sandbox.writableRoots }
+    });
+  }
+  if (sentence?.to?.filename && !isPathWithinRoots(sentence.to.filename, sandbox.writableRoots)) {
+    throwErrorSentence({
+      name: "command sandbox defective",
+      message: `command sandbox defective: write target outside writable roots (${sentence.to.filename})`,
+      from: { la: sentence },
+      raw: { target: sentence.to.filename, writableRoots: sandbox.writableRoots }
+    });
+  }
+  if (commandClass !== "write_local" && commandClass !== "destructive") return;
+  const outsideRoots = parseAbsolutePathTokens(commandText).filter((candidate) => !isPathWithinRoots(candidate, sandbox.writableRoots));
+  if (outsideRoots.length === 0) return;
+  throwErrorSentence({
+    name: "command sandbox defective",
+    message: `command sandbox defective: command path outside writable roots (${outsideRoots[0]})`,
+    from: { la: sentence },
+    raw: { class: commandClass, outsideRoots, writableRoots: sandbox.writableRoots }
+  });
+}
+
 function shouldRequireRatify({ sentence, policy, commandClass } = {}) {
   if (sentence?.accordingto?.name === "ratify decision" && sentence?.totext?.text === "truth") return false;
   if (policy?.mode !== "ask") return false;
@@ -197,12 +347,8 @@ function shouldDeny({ sentence, policy, commandClass } = {}) {
   return commandClass === "destructive";
 }
 
-function isNetworkDenied({ commandClass, rememberFn = remember } = {}) {
-  const networkAllowed =
-    resolveConfigMapBool("sandbox configure", "network", { rememberFn })
-    ?? resolveConfigBool("command sandbox network", { rememberFn })
-    ?? true;
-  return commandClass === "network" && networkAllowed === false;
+function isNetworkDenied({ commandClass, sandbox } = {}) {
+  return commandClass === "network" && sandbox?.networkAllowed === false;
 }
 
 function buildCommandResumeToken({ sentence, commandClass, commandText }) {
@@ -246,26 +392,47 @@ function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-async function runCommandText(cmd, { input, timeoutMs } = {}) {
+async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes } = {}) {
   return new Promise((resolve, reject) => {
     let proc;
+    const spawnOptions = {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd,
+      env
+    };
     if (canRunDirect(cmd)) {
       const parts = splitCommand(cmd);
-      proc = spawn(parts[0], parts.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
+      proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { shell: true, stdio: ["pipe", "pipe", "pipe"] });
+      proc = spawn(String(cmd), { ...spawnOptions, shell: true });
     }
     let stdout = "";
     let stderr = "";
+    let exceededOutputLimit = false;
     let timeoutHandle = null;
-    proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
-    proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
+    const checkOutputLimit = () => {
+      if (!(typeof maxOutputBytes === "number" && maxOutputBytes > 0)) return;
+      if ((Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8")) <= maxOutputBytes) return;
+      exceededOutputLimit = true;
+      proc.kill("SIGKILL");
+    };
+    proc.stdout.on("data", data => {
+      stdout += data.toString("utf8");
+      checkOutputLimit();
+    });
+    proc.stderr.on("data", data => {
+      stderr += data.toString("utf8");
+      checkOutputLimit();
+    });
     proc.on("error", (err) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       reject(err);
     });
     proc.on("close", status => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (exceededOutputLimit) {
+        stderr += `output exceeded ${maxOutputBytes} bytes`;
+      }
       resolve({ status, stdout, stderr });
     });
     if (typeof timeoutMs === "number" && timeoutMs > 0) {
@@ -350,8 +517,11 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   }
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
+  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
+  const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd });
+  const requestId = nextAuditId();
   if (shouldDeny({ sentence, policy, commandClass })) {
-    emitCommandAudit({ stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
+    emitCommandAudit({ requestId, stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command policy defective",
       message: `command policy defective: denied class=${commandClass}`,
@@ -371,6 +541,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       fromtext: { text: resumeToken }
     };
     emitCommandAudit({
+      requestId,
       stage: "policy",
       commandClass,
       policy,
@@ -381,8 +552,8 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
     return ratifySentence;
   }
-  if (isNetworkDenied({ commandClass, rememberFn })) {
-    emitCommandAudit({ stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
+  if (isNetworkDenied({ commandClass, sandbox })) {
+    emitCommandAudit({ requestId, stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
       name: "command sandbox defective",
       message: "command sandbox defective: network disabled",
@@ -390,7 +561,8 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       raw: { class: commandClass, network: false }
     });
   }
-  emitCommandAudit({ stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
+  validateSandboxWritePolicy({ sentence, commandText: cmd, commandClass, sandbox });
+  emitCommandAudit({ requestId, stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
 
   let input = null;
   if (sentence.from?.filename) {
@@ -421,11 +593,16 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     fsSync.writeFileSync(streamPath, "");
     const outStream = fsSync.createWriteStream(streamPath, { flags: "a" });
     let proc;
+    const spawnOptions = {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: sandbox.cwd,
+      env: commandEnv
+    };
     if (canRunDirect(cmd)) {
       const parts = splitCommand(cmd);
-      proc = spawn(parts[0], parts.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
+      proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { shell: true, stdio: ["pipe", "pipe", "pipe"] });
+      proc = spawn(String(cmd), { ...spawnOptions, shell: true });
     }
     let stderr = "";
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
@@ -498,11 +675,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: outputText }, be: "command" };
   }
 
-  const timeoutMs =
-    resolveConfigMapNum("sandbox configure", "timeout ms", { rememberFn })
-    ?? resolveConfigMapNum("command configure", "sandbox timeout ms", { rememberFn })
-    ?? 30000;
-  const res = await runCommandText(cmd, { input, timeoutMs });
+  const res = await runCommandText(cmd, {
+    input,
+    timeoutMs: sandbox.timeoutMs,
+    cwd: sandbox.cwd,
+    env: commandEnv,
+    maxOutputBytes: sandbox.maxOutputBytes
+  });
   if (debug) {
     const stdout = String(res.stdout ?? "");
     const stderr = String(res.stderr ?? "");
@@ -520,6 +699,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   }
   if (res.status) {
     emitCommandAudit({
+      requestId,
       stage: "result",
       commandClass,
       policy,
@@ -544,6 +724,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     doRemember(fact);
   }
   emitCommandAudit({
+    requestId,
     stage: "result",
     commandClass,
     policy,

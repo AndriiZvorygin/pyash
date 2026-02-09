@@ -1,6 +1,6 @@
 # `20-command-safety.md`
 
-Status: draft v0.1
+Status: draft v0.2
 
 Purpose: define command/tool execution safety requirements for agent and refinery workloads.
 
@@ -24,7 +24,7 @@ It applies to:
 
 ---
 
-## 2. Safety model (v0.1 baseline)
+## 2. Safety model (current)
 
 1. Default deny for privileged actions.
 2. Deterministic policy resolution.
@@ -45,19 +45,32 @@ It applies to:
   - environment allowlist
   - time/memory limits
 
-### 3.2 Current parity
+### 3.2 Implemented now
 
-- Agent path scoping exists for filesystem verbs via `agent sandbox` + `agent cwd`.
-- World-root scoping exists via `world tools` + `world root`.
-- `be command` currently has no OS-level sandbox boundary.
+- `be command` reads `sandbox configure` map:
+  - `network` (`bool`)
+  - `cwd` (`filename|text`)
+  - `writable roots` (`ve filename ...`)
+  - `timeout ms` (`num`)
+  - `max output bytes` (`num`)
+  - `command env allowlist` (`ve text ...`) or `env allowlist`
+- Command runtime uses:
+  - subprocess `cwd` from map (default: process cwd)
+  - allowlisted environment only
+  - timeout kill
+  - output-size kill (stdout+stderr bytes)
+- Write-scope enforcement:
+  - denies `to filename` writes outside writable roots
+  - denies configured `cwd` outside writable roots
+  - for `write_local`/`destructive` classes, denies absolute path tokens outside roots
+- Network scope enforcement:
+  - class `network` denied when `network` is `lie`
 
-### 3.3 Required upgrade
+### 3.3 Remaining gaps
 
-- `be command` MUST support an isolated runtime profile:
-  - read-only root by default
-  - explicit writable roots
-  - optional network deny
-  - bounded resources
+- No kernel/container OS sandbox is applied yet.
+- Relative-path writes inside a permitted `cwd` are allowed.
+- Shell-script internals are not fully statically analyzed.
 
 ---
 
@@ -94,11 +107,13 @@ Classification MUST be deterministic for identical input.
 
 Policy resolution may use class + subject + signature keys.
 
+Current class detector is pattern-based and deterministic over command text.
+
 ---
 
 ## 6. Approval surface
 
-### 6.1 Required decision payload
+### 6.1 Decision payload
 
 An approval request MUST include:
 - normalized command/tool sentence
@@ -115,14 +130,19 @@ Decision sentence shape:
 - resume token binding
 - optional rationale text
 
+`be command` ask-gate emits:
+- `from name "command"`
+- `accordingto name "resume token"`
+- `fromtext text "<json token>"`
+
 ---
 
 ## 7. Audit logs
 
-### 7.1 Minimum audit record
+### 7.1 Audit record
 
 For each restricted action, record:
-- request id
+- request id (`to name "command request <id>"`)
 - classifier class
 - decision source (policy key / interactive)
 - decision value
@@ -135,6 +155,19 @@ For each restricted action, record:
 - MUST be append-only.
 - MUST be emitted to run newspaper when enabled.
 - SHOULD support a dedicated security lane (`world/newspaper/...-security.pya`).
+
+Implemented sentence shape:
+- `be command audit`
+- `su name "command audit <id>"`
+- `to name "command request <id>"`
+- `as name <stage>`
+- `from name <policy source>`
+- `accordingto name <decision>`
+- `by <class>`
+- `ob text <evoked sentence>`
+- `totext text <result sentence>` (when available)
+- `fromtext text <iso time>`
+- optional `at filename <lane>`
 
 ---
 
@@ -168,40 +201,39 @@ Recommended stable names:
 
 ---
 
-## 10. Conformance (v0.1)
+## 10. Conformance (v0.2 draft)
 
-An implementation conforms when it:
+An implementation currently conforms when it:
 
-1. enforces filesystem scope for non-command file verbs,
-2. enforces ratify behavior for proposed tools,
-3. records tool/ratify events in newspaper,
-4. applies MCP allowlist/denylist and schema checks.
+1. enforces ratify behavior for command `ask`/`propose`,
+2. enforces deterministic command classifier + policy binding,
+3. enforces command sandbox map checks (network/cwd/writable roots/timeout/output limit/env allowlist),
+4. emits structured command audit records.
 
-Full v0.2 conformance additionally requires:
+Next-step conformance adds:
 
-1. OS-level sandbox for `be command`,
-2. centralized approval mode hierarchy,
-3. deterministic classifier with policy binding,
-4. structured security audit stream.
+1. OS-level command sandbox backend,
+2. fuller path analysis for shell writes,
+3. tool/MCP permission maps bound through same policy hierarchy.
 
 ---
 
 ## 11. Implementation plan
 
-### Phase 1 (hardening now)
+### Phase 1 (done)
 
 1. Add command classifier helper (`read_only/write_local/network/destructive/unknown`).
 2. Add policy resolution (`deny/ask/allow`) with agent/session overrides.
 3. Route `be command` through ratify when policy requires `ask`.
 4. Emit explicit approval audit sentences into newspaper.
 
-### Phase 2 (sandbox)
+### Phase 2 (partial)
 
 1. Add sandbox runner for command execution.
 2. Enforce writable roots + optional network deny.
 3. Add resource limits and timeout defaults.
 
-### Phase 3 (tool permissions)
+### Phase 3 (next)
 
 1. Extend tool map entries with optional permission map.
 2. Validate tool execution context against declared limits.
@@ -227,8 +259,17 @@ Recommended `command configure` keys:
 Recommended `sandbox configure` keys:
 
 - `network` (`bool`)
+- `cwd` (`filename|text`)
 - `writable roots` (`ve filename ...`)
 - `timeout ms` (`num`)
+- `max output bytes` (`num`)
+- `command env allowlist` (`ve text ...`)
+
+Policy precedence for `policy mode` is:
+- `session command configure`
+- `agent command configure`
+- `command configure`
+- legacy single-subject keys (`session command policy mode`, `agent command policy mode`, `command policy mode`)
 
 Container or local overrides MAY replace either map in later config files
 (`configure/container.pya`, `configure/secret.pya`, `configure/workplace.pya`).

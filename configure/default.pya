@@ -51,8 +51,11 @@ su name command configure be map def
 prah
 su name sandbox configure be map def
   su name network ob bool lie ya
+  su name cwd ob filename "/workplace" ya
   su name writable roots ob ve filename "/workplace" "/tmp" ya
   su name timeout ms ob num 30000 ya
+  su name max output bytes ob num 1048576 ya
+  su name command env allowlist ob ve text "HOME" "LANG" "LC_ALL" "PATH" "PWD" "SHELL" "TERM" "TMPDIR" "USER" ya
 prah
 exists su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
 exists su name review brief prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
