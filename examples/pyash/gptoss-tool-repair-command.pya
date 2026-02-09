@@ -1,0 +1,26 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" ya
+prah
+
+su name coding tools be map def
+su name command be command ob text input to name text out can
+su name repair be repair ob text input to name map outcome can
+prah
+
+ob text "mkdir -p examples/out && cat <<'JS' > examples/out/gptoss-repair-target.js
+console.log(41);
+JS" be command do
+
+exists su name helper system ob text "You are a coding assistant. Use only these tools: command(ob text input -> to name text out), repair(ob text input -> to name map outcome). For file edits use repair. For execution use command. Do not call read/write/list tools." ya
+exists su name helper be mind as name "gpt-oss:latest" fromtext name helper system ya
+
+ob text quoted.text.Use tools in this order:
+1) Call repair with this exact patch text:
+--- a/examples/out/gptoss-repair-target.js
++++ b/examples/out/gptoss-repair-target.js
+@@ -1,1 +1,1 @@
+-console.log(41);
++console.log(42);
+2) Call command with ob text set to: node examples/out/gptoss-repair-target.js
+Reply with only the final stdout text..text.quoted for name helper to name text output with name coding tools be write do
+ob name output be write do

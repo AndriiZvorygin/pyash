@@ -90,3 +90,102 @@ PASS
 
   assert.equal(remember("result")?.ob?.text, "tool aware draft");
 });
+
+test("review loop stops early when failed draft is unchanged", async () => {
+  forget();
+
+  await run('su name stale gen ob text input to name text output be ceremony def');
+  await run('ob text "same draft" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+
+  await run('su name strict reviewer ob text input to name text output be ceremony def');
+  await run('ob text "needs fixes\\n0.2" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+
+  await run('ob text "Task." for name stale gen by name strict reviewer atleast num 0.8 atmost num 5 to name text result be review loop do');
+
+  assert.equal(remember("result")?.ob?.text, "same draft");
+  assert.equal(remember("review loop attempts used")?.ob?.num, 2);
+  assert.equal(remember("review loop stop reason")?.ob?.text, "unchanged draft");
+  assert.match(String(remember("review loop summary")?.ob?.text ?? ""), /stop=unchanged draft/);
+  const failure = remember("review loop last failure")?.ob?.map ?? {};
+  assert.equal(failure?.attempt?.num, 2);
+  assert.equal(failure?.draft?.text, "same draft");
+});
+
+test("review loop guarantee draft regex failure triggers retry and stores success bundle", async () => {
+  forget();
+
+  await run('exists su name gen count ob num 0 be number ya');
+  await run('su name verify gen ob text input to name text output be ceremony def');
+  await run('ob num 1 to name gen count be plus do');
+  await run('ob name gen count from num 1 be equally then ob text "draft_missing_token" to name text output be text do');
+  await run('ob name gen count from num 2 be equally then ob text "draft_ok_token" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+
+  await run('su name review loop configure be map def');
+  await run('su name guarantee draft regex ob text "draft_ok_token" ya');
+  await run('prah');
+
+  await run('ob text "Task." for name verify gen atleast num 0.8 atmost num 3 to name text result be review loop do');
+
+  assert.equal(remember("result")?.ob?.text, "draft_ok_token");
+  assert.equal(remember("review loop stop reason")?.ob?.text, "pass");
+  assert.equal(remember("review loop verdict")?.ob?.text, "PASS (guarantee)");
+  assert.equal(remember("review loop attempts used")?.ob?.num, 2);
+  assert.match(String(remember("review loop guarantee")?.ob?.text ?? ""), /draft regex=match/);
+  const success = remember("review loop last success")?.ob?.map ?? {};
+  assert.equal(success?.attempt?.num, 2);
+  assert.equal(success?.draft?.text, "draft_ok_token");
+  assert.match(String(success?.guarantee?.text ?? ""), /draft regex=match/);
+});
+
+test("review loop can run with guarantee only and no reviewer", async () => {
+  forget();
+
+  await run('exists su name gen count ob num 0 be number ya');
+  await run('su name guarantee only gen ob text input to name text output be ceremony def');
+  await run('ob num 1 to name gen count be plus do');
+  await run('ob name gen count from num 1 be equally then ob text "draft_bad" to name text output be text do');
+  await run('ob name gen count from num 2 be equally then ob text "draft_ok" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+
+  await run('su name review loop configure be map def');
+  await run('su name guarantee draft regex ob text "draft_ok" ya');
+  await run('prah');
+
+  await run('ob text "Task." for name guarantee only gen atleast num 0.8 atmost num 3 to name text result be review loop do');
+
+  assert.equal(remember("result")?.ob?.text, "draft_ok");
+  assert.equal(remember("review loop verdict")?.ob?.text, "PASS (guarantee)");
+  assert.equal(remember("review loop attempts used")?.ob?.num, 2);
+  assert.equal(remember("review loop stop reason")?.ob?.text, "pass");
+});
+
+test("review loop guarantee command can gate retries", async () => {
+  forget();
+
+  await run('exists su name gen count ob num 0 be number ya');
+  await run('su name command guarantee gen ob text input to name text output be ceremony def');
+  await run('ob num 1 to name gen count be plus do');
+  await run('ob name gen count from num 1 be equally then ob text "draft_fail" to name text output be text do');
+  await run('ob name gen count from num 2 be equally then ob text "draft_ok" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+
+  await run('su name review loop configure be map def');
+  await run(`su name guarantee command ob text quoted.text.printf %s {{draft}} | grep -q draft_ok && printf good.text.quoted ya`);
+  await run('su name guarantee expect regex ob text "^good$" ya');
+  await run('prah');
+
+  await run('ob text "Task." for name command guarantee gen atleast num 0.8 atmost num 3 to name text result be review loop do');
+
+  assert.equal(remember("result")?.ob?.text, "draft_ok");
+  assert.equal(remember("review loop attempts used")?.ob?.num, 2);
+  assert.equal(remember("review loop verdict")?.ob?.text, "PASS (guarantee)");
+  assert.match(String(remember("review loop guarantee")?.ob?.text ?? ""), /regex=match/);
+});

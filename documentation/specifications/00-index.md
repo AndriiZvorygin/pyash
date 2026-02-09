@@ -23,6 +23,7 @@ Reading order (feature chapters):
 15. `18-pyash-agent.md` — agent loop, prompt context, and memory.
 16. `19-repair.md` — deterministic patch/repair verb (`be repair`).
 17. `20-command-safety.md` — sandbox, approvals, classification, audit, and tool/MCP permissions.
+18. `21-coding-saddle-readiness.md` — local-tool-first coding harness profile (`software` saddle).
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
