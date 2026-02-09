@@ -1228,6 +1228,28 @@ These can live in `configure/default.pya` for global defaults or inline in a spe
 To keep each stage strictly pipeline-based (no dialogue carryover), set a history window of zero
 via `by num 0` on the mind calls (see the attempt example below).
 
+### Context retention for review loops (normative)
+
+To prevent context overruns in retry-heavy reviewer/generator loops, prompt history
+for each new attempt MUST be compacted to a golden subset:
+
+1. the original user task/prompt (immutable),
+2. the latest accepted success pair, when present:
+   - generator output,
+   - verifier output that accepted that output.
+
+Older failed retries MUST NOT be included in the next attempt prompt context by default.
+They MAY remain in run newspaper/artifacts for audit and replay, but they are not prompt context.
+
+If no success pair exists yet, the loop SHOULD include only:
+
+1. the original user task/prompt,
+2. the immediate prior attempt output,
+3. the immediate prior verifier feedback.
+
+When a new success is accepted, that success pair replaces the previous success pair.
+This makes session context a compact source of gold examples while keeping deterministic behavior.
+
 ---
 
 ---
