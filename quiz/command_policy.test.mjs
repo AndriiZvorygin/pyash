@@ -42,6 +42,23 @@ test("command policy resolver reads command configure map", async () => {
   assert.equal(proposeSentence.mode, "ask");
 });
 
+test("command policy resolver prefers session map over global map", async () => {
+  forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo deny ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("su name session command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("prah"));
+
+  const resolved = resolveCommandPolicy({
+    sentence: { mood: "do" },
+    cmdClass: "destructive"
+  });
+  assert.equal(resolved.mode, "allow");
+  assert.equal(resolved.source, "session command configure");
+});
+
 test("command ask policy returns ratify for propose mood", async () => {
   forget();
   await interpret(parse("su name command configure be map def"));
@@ -113,6 +130,56 @@ test("command sandbox blocks explicit network commands when disabled", async () 
 
   await assert.rejects(
     () => interpret(parse('be command ob text "curl -s https://example.com" do')),
+    (err) => {
+      const surfaced = err?.sentence;
+      assert.equal(surfaced?.su?.name, "command sandbox defective");
+      return true;
+    }
+  );
+});
+
+test("command sandbox blocks write target outside writable roots", async () => {
+  forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("su name sandbox configure be map def"));
+  await interpret(parse('su name writable roots ob ve filename "/tmp" ya'));
+  await interpret(parse("prah"));
+
+  await assert.rejects(
+    () => command({
+      mood: "do",
+      be: "command",
+      ob: { text: "echo hi" },
+      to: { filename: "/workplace/blocked.txt" }
+    }),
+    (err) => {
+      const surfaced = err?.sentence;
+      assert.equal(surfaced?.su?.name, "command sandbox defective");
+      return true;
+    }
+  );
+});
+
+test("command sandbox blocks cwd outside writable roots", async () => {
+  forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("su name sandbox configure be map def"));
+  await interpret(parse('su name writable roots ob ve filename "/tmp" ya'));
+  await interpret(parse('su name cwd ob filename "/workplace" ya'));
+  await interpret(parse("prah"));
+
+  await assert.rejects(
+    () => command({
+      mood: "do",
+      be: "command",
+      ob: { text: "pwd" }
+    }),
     (err) => {
       const surfaced = err?.sentence;
       assert.equal(surfaced?.su?.name, "command sandbox defective");
