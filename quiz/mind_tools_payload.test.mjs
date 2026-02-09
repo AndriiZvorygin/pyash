@@ -151,6 +151,8 @@ test("mind tool adapter loads default tools for with wo tools", async () => {
     const names = capturedTools.map(tool => tool?.function?.name).filter(Boolean);
     assert.ok(names.includes("be_read_from_filename"), "default tools should include read");
     assert.ok(names.includes("be_write_ob_text_to_filename"), "default tools should include write");
+    assert.ok(names.includes("be_repair_ob_text_to_name_map"), "default tools should include repair");
+    assert.ok(names.includes("be_repair_as_wo_check_ob_text_to_name_map"), "default tools should include repair check");
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
