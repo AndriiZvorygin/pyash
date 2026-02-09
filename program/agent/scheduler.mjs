@@ -235,11 +235,15 @@ function createStats(job) {
     lastDurationMs: 0,
     avgDurationMs: 0,
     utilizationPct: 0,
+    overlapPct: 0,
+    errorCount: 0,
+    consecutiveErrors: 0,
     enabled: true,
     running: false,
     lastStart: null,
     lastEnd: null,
-    lastError: null
+    lastError: null,
+    lastStatus: null
   };
 }
 
@@ -299,12 +303,17 @@ export function createScheduler({
     }
     if (stats.running) {
       stats.skips += 1;
+      const attempts = stats.runs + stats.skips;
+      stats.overlapPct = attempts > 0
+        ? Number(((stats.skips / attempts) * 100).toFixed(2))
+        : 0;
       const skipped = {
         ts: new Date(now()).toISOString(),
         job: job.jobName,
         lane: job.laneName,
         event: "skip_overlap",
-        skips: stats.skips
+        skips: stats.skips,
+        overlapPct: stats.overlapPct
       };
       const task = appendTelemetryLine(telemetryPath, skipped).catch((err) => {
         if (onError) onError(err);
@@ -328,7 +337,13 @@ export function createScheduler({
       stats.utilizationPct = job.intervalMs > 0
         ? Number(((stats.avgDurationMs / job.intervalMs) * 100).toFixed(2))
         : 0;
+      const attempts = stats.runs + stats.skips;
+      stats.overlapPct = attempts > 0
+        ? Number(((stats.skips / attempts) * 100).toFixed(2))
+        : 0;
       stats.lastEnd = new Date(endedAt).toISOString();
+      stats.consecutiveErrors = 0;
+      stats.lastStatus = result?.status ?? "ok";
       const completed = {
         ts: stats.lastEnd,
         job: job.jobName,
@@ -338,7 +353,10 @@ export function createScheduler({
         runs: stats.runs,
         skips: stats.skips,
         utilizationPct: stats.utilizationPct,
-        status: result?.status ?? "ok"
+        overlapPct: stats.overlapPct,
+        errorCount: stats.errorCount,
+        consecutiveErrors: stats.consecutiveErrors,
+        status: stats.lastStatus
       };
       const task = appendTelemetryLine(telemetryPath, completed).catch((err) => {
         if (onError) onError(err);
@@ -347,13 +365,18 @@ export function createScheduler({
       task.finally(() => tasks.delete(task));
       return { skipped: false, durationMs, result };
     } catch (err) {
+      stats.errorCount += 1;
+      stats.consecutiveErrors += 1;
+      stats.lastStatus = "error";
       stats.lastError = String(err?.message ?? err);
       const failed = {
         ts: new Date(now()).toISOString(),
         job: job.jobName,
         lane: job.laneName,
         event: "error",
-        message: stats.lastError
+        message: stats.lastError,
+        errorCount: stats.errorCount,
+        consecutiveErrors: stats.consecutiveErrors
       };
       const task = appendTelemetryLine(telemetryPath, failed).catch((ioErr) => {
         if (onError) onError(ioErr);
@@ -411,8 +434,12 @@ export function createScheduler({
         lastDurationMs: stats?.lastDurationMs ?? 0,
         avgDurationMs: stats?.avgDurationMs ?? 0,
         utilizationPct: stats?.utilizationPct ?? 0,
+        overlapPct: stats?.overlapPct ?? 0,
+        errorCount: stats?.errorCount ?? 0,
+        consecutiveErrors: stats?.consecutiveErrors ?? 0,
         enabled: stats?.enabled !== false,
         running: !!stats?.running,
+        lastStatus: stats?.lastStatus ?? null,
         lastError: stats?.lastError ?? null
       };
     });

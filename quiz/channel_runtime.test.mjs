@@ -179,6 +179,60 @@ test("channel runtime fans out to configured listeners and routes mention to nam
   assert.equal(calls[0]?.for?.name, "confederation-priest");
 });
 
+test("channel runtime shared fanout dispatches one event to multiple listeners in one poll cycle", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-shared-fanout-"));
+  const agentHouse = path.join(root, "world", "house", "postmaster");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCalls = 0;
+  const sent = [];
+  const listeners = [];
+  const adapter = {
+    async receive() {
+      receiveCalls += 1;
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$fanout-1",
+            sender: "@u:server",
+            text: "status?"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-fanout" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: `$out-${sent.length}` };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "channel-postmaster",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@channel-postmaster:server",
+      mentionGate: false,
+      listeners: ["confederation-priest", "agent-helper"],
+      roomListeners: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn: async (sentence) => {
+      listeners.push(sentence?.for?.name);
+      return { ob: { text: `reply from ${sentence?.for?.name}` } };
+    },
+    agentHouse
+  });
+  assert.equal(receiveCalls, 1);
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 2);
+  assert.equal(result.sent, 2);
+  assert.deepEqual(listeners.slice().sort(), ["agent-helper", "confederation-priest"]);
+});
+
 test("channel sentence builder uses default tools and lane from event", () => {
   const sentence = buildChannelMindSentence({
     agentName: "helper",
@@ -294,6 +348,64 @@ test("channel mention gate allows replies to self messages without explicit ment
   assert.equal(result.handled, 1);
   assert.equal(callCount, 1);
   assert.equal(result.sent, 1);
+});
+
+test("channel mention matching uses token boundaries and avoids substring false positives", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-boundary-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$boundary-1",
+            sender: "@u:server",
+            text: "the helpering process failed"
+          },
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$boundary-2",
+            sender: "@u:server",
+            text: "@helper, can you check this?"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-boundary" }
+      };
+    },
+    async send() {
+      return { eventId: "$out-boundary" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: true,
+      dmRooms: [],
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async (sentence) => {
+      calls.push(sentence);
+      return { ob: { text: "reply" } };
+    },
+    agentHouse
+  });
+
+  assert.equal(result.received, 2);
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(result.skippedMention, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.for?.name, "helper");
 });
 
 test("channel runtime enforces ratify policy for propose tools (deny then allow)", async () => {

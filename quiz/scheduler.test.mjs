@@ -146,10 +146,14 @@ test("scheduler skips overlapping ticks and records telemetry", async () => {
   assert.equal(snap.length, 1);
   assert.equal(snap[0]?.runs, 1);
   assert.equal(snap[0]?.skips, 1);
+  assert.equal(typeof snap[0]?.overlapPct, "number");
+  assert.equal(snap[0]?.errorCount, 0);
+  assert.equal(snap[0]?.lastStatus, "ok");
 
   const telemetry = await fs.readFile(telemetryPath, "utf8");
   assert.match(telemetry, /as name skip_overlap/);
   assert.match(telemetry, /as name run/);
+  assert.match(telemetry, /\\"overlapPct\\":/);
 });
 
 test("scheduler skips disabled services", async () => {
@@ -180,6 +184,38 @@ test("scheduler skips disabled services", async () => {
   assert.equal(snap[0]?.enabled, false);
   const telemetry = await fs.readFile(telemetryPath, "utf8");
   assert.match(telemetry, /as name skip_disabled/);
+});
+
+test("scheduler records error counters and last status on run failures", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-error-"));
+  const telemetryPath = path.join(root, "scheduler.pya");
+  const scheduler = createScheduler({
+    jobs: [{
+      jobName: "unstable",
+      laneName: "unstable",
+      intervalMs: 1000,
+      agentName: "helper",
+      prompt: "",
+      withCase: { wo: "tools" }
+    }],
+    telemetryPath,
+    runJob: async () => {
+      throw new Error("boom");
+    }
+  });
+
+  await scheduler.runNow();
+  await scheduler.flushTelemetry();
+  const snap = scheduler.snapshot();
+  assert.equal(snap[0]?.runs, 0);
+  assert.equal(snap[0]?.errorCount, 1);
+  assert.equal(snap[0]?.consecutiveErrors, 1);
+  assert.equal(snap[0]?.lastStatus, "error");
+  assert.match(String(snap[0]?.lastError), /boom/);
+
+  const telemetry = await fs.readFile(telemetryPath, "utf8");
+  assert.match(telemetry, /as name error/);
+  assert.match(telemetry, /\\"errorCount\\":1/);
 });
 
 test("global schedule loads and agent-local overrides by agent+job", async () => {
