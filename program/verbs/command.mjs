@@ -7,7 +7,12 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
-import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import {
+  resolveConfigBool,
+  resolveConfigMapBool,
+  resolveConfigMapText,
+  resolveConfigText
+} from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 
@@ -23,6 +28,118 @@ function canRunDirect(cmd) {
 
 function splitCommand(cmd) {
   return String(cmd).trim().split(/\s+/).filter(Boolean);
+}
+
+const POLICY_MODES = new Set(["deny", "ask", "allow"]);
+const DESTRUCTIVE_PATTERNS = [
+  /\brm\s+-rf\b/i,
+  /\brm\s+-fr\b/i,
+  /\bmkfs\b/i,
+  /\bdd\b/i,
+  /\bshred\b/i,
+  /\b:\(\)\s*\{\s*:\|:\s*&\s*\};:/,
+  /\bformat\b/i
+];
+const NETWORK_PATTERNS = [
+  /\bcurl\b/i,
+  /\bwget\b/i,
+  /\bhttp(s)?:\/\//i,
+  /\bssh\b/i,
+  /\bnc\b/i,
+  /\bscp\b/i,
+  /\brsync\b/i,
+  /\bping\b/i
+];
+const PROCESS_CONTROL_PATTERNS = [
+  /\bkill(all)?\b/i,
+  /\bpkill\b/i,
+  /\bsystemctl\b/i,
+  /\bservice\b/i,
+  /\bnohup\b/i,
+  /\bdocker\b/i,
+  /\bkubectl\b/i
+];
+const WRITE_LOCAL_PATTERNS = [
+  /\btee\b/i,
+  /\btouch\b/i,
+  /\bmkdir\b/i,
+  /\bmv\b/i,
+  /\bcp\b/i,
+  /\bchmod\b/i,
+  /\bchown\b/i,
+  /\btruncate\b/i,
+  /\binstall\b/i,
+  />>?/,
+  /\bcat\b.*?>/
+];
+const READ_ONLY_PATTERNS = [
+  /\bcat\b/i,
+  /\bls\b/i,
+  /\bfind\b/i,
+  /\bhead\b/i,
+  /\btail\b/i,
+  /\bgrep\b/i,
+  /\brg\b/i,
+  /\bwc\b/i,
+  /\bsed\b/i,
+  /\bawk\b/i,
+  /\becho\b/i,
+  /\bprintf\b/i,
+  /\bnode\s+--version\b/i,
+  /\buname\b/i,
+  /\bpwd\b/i,
+  /\bwhoami\b/i
+];
+
+function normalizePolicyMode(value, fallback = "ask") {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (POLICY_MODES.has(raw)) return raw;
+  return fallback;
+}
+
+function hasPattern(patterns, text) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+export function classifyCommandText(commandText) {
+  const cmd = String(commandText ?? "").trim();
+  if (!cmd) return "unknown";
+  if (hasPattern(DESTRUCTIVE_PATTERNS, cmd)) return "destructive";
+  if (hasPattern(NETWORK_PATTERNS, cmd)) return "network";
+  if (hasPattern(PROCESS_CONTROL_PATTERNS, cmd)) return "process_control";
+  if (hasPattern(WRITE_LOCAL_PATTERNS, cmd)) return "write_local";
+  if (hasPattern(READ_ONLY_PATTERNS, cmd)) return "read_only";
+  return "unknown";
+}
+
+export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember } = {}) {
+  const baseMode = normalizePolicyMode(
+    resolveConfigMapText("command configure", "policy mode", { rememberFn })
+      ?? resolveConfigText("command policy mode", { rememberFn }),
+    "ask"
+  );
+  const classifierEnabled =
+    resolveConfigMapBool("command configure", "classifier enabled", { rememberFn })
+    ?? resolveConfigBool("command classifier enabled", { rememberFn })
+    ?? true;
+
+  let mode = baseMode;
+  if (sentence?.mood === "propose") mode = "ask";
+  if (sentence?.mood === "can" && mode !== "deny") mode = "allow";
+  if (!classifierEnabled) {
+    return {
+      mode,
+      classifierEnabled: false,
+      class: "unknown",
+      source: "command configure"
+    };
+  }
+  return {
+    mode,
+    classifierEnabled: true,
+    class: cmdClass ?? "unknown",
+    source: "command configure"
+  };
 }
 
 const commandStreamProcesses = new Map();
@@ -148,6 +265,9 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       raw: { cmd }
     });
   }
+  const commandClass = classifyCommandText(cmd);
+  const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
+
   let input = null;
   if (sentence.from?.filename) {
     input = await fs.readFile(sentence.from.filename, "utf8");
@@ -259,7 +379,16 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     const stdout = String(res.stdout ?? "");
     const stderr = String(res.stderr ?? "");
     // eslint-disable-next-line no-console
-    console.error(`[command debug] ${JSON.stringify({ cmd, status: res.status ?? 0, stdoutLength: stdout.length, stderrLength: stderr.length, stderr: stderr.slice(0, 200) })}`);
+    console.error(`[command debug] ${JSON.stringify({
+      cmd,
+      class: commandClass,
+      policyMode: policy.mode,
+      policySource: policy.source,
+      status: res.status ?? 0,
+      stdoutLength: stdout.length,
+      stderrLength: stderr.length,
+      stderr: stderr.slice(0, 200)
+    })}`);
   }
   if (res.status) {
     throwErrorSentence({
