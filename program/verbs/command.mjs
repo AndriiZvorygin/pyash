@@ -185,6 +185,7 @@ function emitCommandAudit(payload) {
 }
 
 function shouldRequireRatify({ sentence, policy, commandClass } = {}) {
+  if (sentence?.accordingto?.name === "ratify decision" && sentence?.totext?.text === "truth") return false;
   if (policy?.mode !== "ask") return false;
   if (sentence?.mood === "propose") return true;
   return commandClass === "destructive";
@@ -202,6 +203,16 @@ function isNetworkDenied({ commandClass, rememberFn = remember } = {}) {
     ?? resolveConfigBool("command sandbox network", { rememberFn })
     ?? true;
   return commandClass === "network" && networkAllowed === false;
+}
+
+function buildCommandResumeToken({ sentence, commandClass, commandText }) {
+  return JSON.stringify({
+    kind: "command",
+    issuedAt: new Date().toISOString(),
+    class: commandClass ?? "unknown",
+    text: String(commandText ?? ""),
+    sentence: sentence && typeof sentence === "object" ? sentence : {}
+  });
 }
 
 function resolveStreamOutputPath(sentence) {
@@ -349,12 +360,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     });
   }
   if (shouldRequireRatify({ sentence, policy, commandClass })) {
+    const resumeToken = buildCommandResumeToken({ sentence, commandClass, commandText: cmd });
     const ratifySentence = {
-      mood: "ya",
+      mood: "do",
       be: "ratify",
       su: { name: sentence?.su?.name ?? "command approval" },
       ob: { text: `approve command (${commandClass}): ${cmd}` },
-      fromtext: { text: "policy ask" }
+      from: { name: "command" },
+      accordingto: { name: "resume token" },
+      fromtext: { text: resumeToken }
     };
     emitCommandAudit({
       stage: "policy",
