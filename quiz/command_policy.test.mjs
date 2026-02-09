@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
-import { classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
+import { command, classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
 
 test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("cat README.md"), "read_only");
@@ -42,3 +42,35 @@ test("command policy resolver reads command configure map", async () => {
   assert.equal(proposeSentence.mode, "ask");
 });
 
+test("command ask policy returns ratify for propose mood", async () => {
+  forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo ask ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+
+  const result = await command({
+    mood: "propose",
+    be: "command",
+    su: { name: "run" },
+    ob: { text: "echo hi" }
+  });
+  assert.equal(result?.be, "ratify");
+  assert.match(String(result?.ob?.text ?? ""), /approve command/i);
+});
+
+test("command sandbox blocks explicit network commands when disabled", async () => {
+  forget();
+  await interpret(parse("su name sandbox configure be map def"));
+  await interpret(parse("su name network ob bool lie ya"));
+  await interpret(parse("prah"));
+
+  await assert.rejects(
+    () => interpret(parse('be command ob text "curl -s https://example.com" do')),
+    (err) => {
+      const surfaced = err?.sentence;
+      assert.equal(surfaced?.su?.name, "command sandbox defective");
+      return true;
+    }
+  );
+});
