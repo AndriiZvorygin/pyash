@@ -96,3 +96,49 @@ test("download supports ob wo all during months for yt-dlp", async () => {
     else process.env.PYA_DOWNLOAD_RESPONSE = original;
   }
 });
+
+test("download http uses library fresh cache by default", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-cache-"));
+  const worldRoot = path.join(tmpDir, "world");
+  const out1 = path.join(tmpDir, "first.txt");
+  const out2 = path.join(tmpDir, "second.txt");
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  try {
+    await interpret(parse(`exists su name world root ob filename "${worldRoot}" be default ya`));
+    process.env.PYA_DOWNLOAD_RESPONSE = "cached";
+    await interpret(parse(`be download from filename "https://example.com/cached.txt" as wo web to filename "${out1}" do`));
+    delete process.env.PYA_DOWNLOAD_RESPONSE;
+    await interpret(parse(`be download from filename "https://example.com/cached.txt" as wo web to filename "${out2}" do`));
+    assert.equal(await fs.readFile(out1, "utf8"), "cached");
+    assert.equal(await fs.readFile(out2, "utf8"), "cached");
+    const cacheDir = path.join(worldRoot, "library", "fresh");
+    const entries = await fs.readdir(cacheDir);
+    assert.ok(entries.length >= 1);
+  } finally {
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});
+
+test("download no cache override bypasses fresh cache", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-nocache-"));
+  const worldRoot = path.join(tmpDir, "world");
+  const out1 = path.join(tmpDir, "first.txt");
+  const out2 = path.join(tmpDir, "second.txt");
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  try {
+    await interpret(parse(`exists su name world root ob filename "${worldRoot}" be default ya`));
+    process.env.PYA_DOWNLOAD_RESPONSE = "first";
+    await interpret(parse(`be download from filename "https://example.com/nocache.txt" as wo web to filename "${out1}" do`));
+    await interpret(parse("exists su name download no cache ob bool truth be default ya"));
+    process.env.PYA_DOWNLOAD_RESPONSE = "second";
+    await interpret(parse(`be download from filename "https://example.com/nocache.txt" as wo web to filename "${out2}" do`));
+    assert.equal(await fs.readFile(out1, "utf8"), "first");
+    assert.equal(await fs.readFile(out2, "utf8"), "second");
+  } finally {
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+  }
+});

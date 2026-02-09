@@ -10,6 +10,20 @@ import { resolveConfigText } from "../configure/env.mjs";
 
 const SESSION_ROLE_NAMES = new Set(["user", "assistant", "tool"]);
 
+export function normalizeHistoryWindow(historyWindow, {
+  defaultPairs = 50,
+  minPairs = 1,
+  maxPairs = 200
+} = {}) {
+  const numeric = Number(historyWindow);
+  const fallback = Number.isFinite(Number(defaultPairs)) ? Number(defaultPairs) : 50;
+  const min = Math.max(1, Math.trunc(Number(minPairs) || 1));
+  const max = Math.max(min, Math.trunc(Number(maxPairs) || 200));
+  const base = Number.isFinite(numeric) ? numeric : fallback;
+  const clamped = Math.max(min, Math.min(max, Math.trunc(base)));
+  return clamped;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -395,7 +409,7 @@ export async function readSessionMessages({ sessionFile, historyWindow = 50 } = 
     const content = sentence?.ob?.text ?? "";
     messages.push({ role, content: String(content) });
   }
-  const maxMessages = historyWindow > 0 ? historyWindow * 2 : 0;
+  const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
   if (maxMessages > 0 && messages.length > maxMessages) {
     return {
       messages: messages.slice(-maxMessages),
@@ -421,7 +435,7 @@ export async function readSessionMessagesWithFallback({
   historyWindow = 50
 } = {}) {
   if (!sessionDir || !baseName) return { messages: [], lastSystemModel: null };
-  const maxMessages = historyWindow > 0 ? historyWindow * 2 : 0;
+  const maxMessages = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 }) * 2;
   const todayKey = formatCompactDate(new Date());
   const todayName = buildSessionNameForDate({ baseName, dateCompact: todayKey });
   const todayFile = path.join(sessionDir, sessionFilename({ sessionName: todayName }));

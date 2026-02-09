@@ -688,6 +688,26 @@ Requests are POSTed to `http://<ollama host>/v1/chat/completions` (OpenAI-compat
 
 For offline testing, set `PYA_SEE_VL_FIXTURE` to a fixed string before invoking `see`. When that environment variable is present, `command/see_vl_runner.mjs` bypasses Ollama and simply echoes the fixture string.
 
+## Evidential tagging for `see`/`hear` outputs (draft v0.2)
+
+This section defines default evidential semantics for perceptual tools.
+
+Rules:
+
+1. `see` outputs SHOULD carry an optical/direct evidential shell by default.
+2. `hear` outputs SHOULD carry an audio/direct evidential shell by default.
+3. If the source is a news report or secondary retelling, outputs SHOULD use reported/news evidential.
+4. If the source is an authoritative primary document (for example a research paper, official spec, or original record), outputs SHOULD use direct evidential.
+5. If a claim is corroborated by multiple independent sources, outputs MAY be promoted to factive evidential.
+
+Source-strength policy:
+
+* primary/authoritative source -> direct evidential
+* secondary/reporting source -> reported/news evidential
+* multi-source corroboration -> factive evidential (promotion step, not default)
+
+Implementations SHOULD record source anchors and provenance fields alongside evidential tagging so promotions are auditable.
+
 
 ---
 

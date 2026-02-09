@@ -13,14 +13,8 @@
 
 Goal: runnable agent loop with search, download, read-to-markdown, tool-calling minds, and project command execution.
 
-Must-have:
-* Stable agent session loop with append-only session files.
-* Default tools map (`with wo tools`) validated by runtime quizzes.
-* Deterministic tool-call loop with clear error surfacing in-session.
-
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).
-* Helper examples: review loop, code edit loop.
 
 ## Next milestone: Product alpha launch (first users)
 
@@ -28,12 +22,6 @@ Goal: ship a narrow but reliable multi-agent runtime for real users (single work
 
 Must-have:
 * Single scheduler daemon running calendar jobs for all agents.
-* Pyash control surface for scheduler/services:
-* `from wo calendar su name scheduler be begin do`
-* `from wo calendar su name scheduler be stop do`
-* `from wo calendar su name scheduler be restart do`
-* `from wo calendar su name scheduler be health do`
-* `from wo calendar su name scheduler be list do`
 * Channel runtime stable on Matrix:
 * mention gate policy and dedup/checkpoint behavior proven in real runs.
 * channel polling routed through scheduler (no per-agent manual polling required in normal ops).
@@ -293,34 +281,53 @@ None (Week 3 complete).
 
 **Jan 25 → Feb 14, 2026 (extended)**
 
+Status markers:
+* `[partial]` implemented in part (spec and/or runtime), prioritize next.
+
 ### Ship
 
-* **Error sieve**
+Execution order (dependency-first):
 
-  * produce minimal repro `.pya` deterministically
-* **Success sieve**
+1. **Priority queue (partial items first, highest value + prerequisites)**
+  * **Review-loop context compaction (golden context)** `[partial]`
+    * next-attempt prompt keeps only original task + latest accepted success pair
+    * failed retry chains stay in newspaper/artifacts, not in live prompt context
+  * **Session behavior hardening for long runs** `[partial]`
+    * compact context + stable session records
+  * **Mind call caching via artefacts** `[partial]`
+    * content-hash keys
+    * deterministic cache-hit records and stable outputs
+  * **Session gold emission/export** `[partial]`
+    * emit accepted generator+verifier pairs into `world/house/<agent>/gold/`
+    * deterministic dedup + nightly export contract for LoRA/SFT dataset builds
+  * **Library refinement cache model** `[partial]`
+    * staged directories: `world/library/fresh/`, `world/library/text/`, `world/library/abridged/`, `world/library/summarized/`
+    * download defaults to cache-first with explicit `no cache` override
+    * when fresh hash is unchanged, skip heavy refinement/mind-call stages and reuse latest staged outputs
+  * **House-root security model completion** `[partial]`
+    * agent home at `world/house/<agent>/`
+    * explicit shared roots for collaboration (`world/workplace/<project>/`)
+    * explicit processing roots for shared transformed downloads (`world/library/processed/`)
+  * **Sleep-mode pipeline** `[partial]`
+    * deterministic context compaction by default
+    * optional background dataset export/training jobs when resources permit
+  * **Perception evidentials** `[partial]`
+    * `see` defaults to optical/direct evidential tagging
+    * `hear` defaults to audio/direct evidential tagging
+    * reported/news and factive promotion rules based on source quality and corroboration
+  * **Playwright support** `[partial]`
 
-  * minimize passing programs for code-bloat reduction
-* **Resolution chain for lost signatures**
-
-  * search project modules + stdlib namespaces
-  * policy-driven fallback (including mind, where enabled) with deterministic journaling
-* **Mind call caching via artefacts**
-
-  * content-hash keys
-  * deterministic cache-hit records and stable outputs
-* **Review-loop context compaction (golden context)**
-
-  * next-attempt prompt keeps only original task + latest accepted success pair
-  * failed retry chains stay in newspaper/artifacts, not in live prompt context
-* **Session gold emission/export**
-
-  * emit accepted generator+verifier pairs into `world/house/<agent>/gold/`
-  * deterministic dedup + nightly export contract for LoRA/SFT dataset builds
-* **Web search support**
-* **RAG support**
-* **Puppeteer support**
-* **Mind long-term memory tooling**
+2. **Follow-on work (after priority partials)**
+  * **Resolution chain for lost signatures**
+    * search project modules + stdlib namespaces
+    * policy-driven fallback (including mind, where enabled) with deterministic journaling
+  * **Error sieve**
+    * produce minimal repro `.pya` deterministically
+  * **Success sieve**
+    * minimize passing programs for code-bloat reduction
+  * **Mind long-term memory tooling**
+  * **Web search support**
+  * **RAG support**
 
 ### Add: Pipeline Workload Pack (golden scenario)
 
@@ -339,10 +346,38 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ### Parallel track: Agent integration (in-flight)
 
-* Review-loop rollout in real agents (including confederation-priest path)
-* Tool-routing hardening: generator gets tools; reviewer is context-only
-* Session behavior hardening for long runs (compact context + stable session records)
-* Add focused agent examples/quizzes for mind vs review-loop parity
+Ordered integration path:
+
+1. **Loop behavior parity**
+  * Session behavior hardening for long runs (compact context + stable session records) `[partial]`
+  * Review-loop context compaction + stable retry context policies `[partial]`
+
+2. **Agent administration and boundaries**
+  * Agent administration utilities:
+    * list/create/modify agents
+    * start/resume sessions
+    * trigger sleep/compaction
+  * House-root security model:
+    * agent home at `world/house/<agent>/` `[partial]`
+    * explicit shared roots for collaboration (`world/workplace/<project>/`)
+    * explicit processing roots for shared transformed downloads (`world/library/processed/`)
+
+3. **Data/refinement pipeline**
+  * Library refinement cache model: `[partial]`
+    * staged directories: `world/library/fresh/`, `world/library/text/`, `world/library/abridged/`, `world/library/summarized/`
+    * download defaults to cache-first with explicit `no cache` override
+    * when fresh hash is unchanged, skip heavy refinement/mind-call stages and reuse latest staged outputs
+  * Session gold emission/export pipeline `[partial]`
+    * deterministic dedup and export contract for LoRA/SFT dataset builds
+  * Sleep-mode pipeline: `[partial]`
+    * deterministic context compaction by default
+    * optional background dataset export/training jobs when resources permit
+
+4. **Evidence quality layer**
+  * Perception evidentials: `[partial]`
+    * `see` defaults to optical/direct evidential tagging
+    * `hear` defaults to audio/direct evidential tagging
+    * reported/news and factive promotion rules based on source quality and corroboration
 
 ### Spec drops (freeze v0.45)
 

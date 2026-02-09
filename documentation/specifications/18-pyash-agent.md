@@ -96,6 +96,20 @@ Optional layout:
 
 * `roles/` (task/role notes, treated similarly to skills)
 * `conduct/` (approval and scheduler policy)
+* `gold/accepted/` and `gold/rejected/` (training signal emission)
+
+### 3.5 Base house inheritance
+
+Agent identity context MAY inherit from:
+
+* `world/house/base/identity/`
+
+When present, bootstrap files are merged in deterministic order:
+
+1. base file content
+2. agent file content
+
+This keeps shared identity/tool guidance DRY while allowing agent-specific deltas.
 
 ---
 
@@ -118,6 +132,45 @@ Each file is injected as:
 
 <file contents>
 ```
+
+### 4.1.1 House/world orientation block (normative)
+
+Agent identity SHOULD explain:
+
+1. what folders/files exist inside `world/house/<agent>/` (home scope),
+2. what shared collaboration areas exist outside home (for example `world/workplace/<project>/`),
+3. which locations are writable vs read-only under current conduct policy,
+4. assigned project roots (for example `world/workplace/<project>/`) and shared processing roots (for example `world/library/processed/`).
+
+This orientation MUST be explicit in identity files (`IDENTITY.md` and/or `TOOLS.md`) so agents can reason about safe collaboration paths.
+
+---
+
+### 4.1.2 Agent administration utilities (normative surface)
+
+Implementations SHOULD expose an administration surface (CLI and/or verbs) for:
+
+* list agents
+* create agent from base template
+* modify agent identity/conduct files
+* start/resume agent session
+* trigger agent sleep/compaction
+
+Recommended deterministic backing store is the world filesystem (no hidden DB):
+
+* `world/house/<agent>/identity/*`
+* `world/house/<agent>/conduct/*`
+* `world/house/<agent>/session/*`
+* `world/house/<agent>/memory/*`
+
+Agent creation MUST initialize at least:
+
+* `identity/`
+* `memory/`
+* `session/`
+* `conduct/`
+
+and SHOULD seed identity from `world/house/base/identity/`.
 
 ### 4.2 System prompt order
 
@@ -274,14 +327,94 @@ golden compact set instead of raw retry history:
 
 1. original prompt/task,
 2. latest successful generator output (if any),
-3. verifier output for that successful generator output (if any).
+3. guarantee output for that successful generator output (if any).
 
 Failed retry chains MUST NOT be replayed into prompt context by default.
 They remain persisted in session/newspaper/artifacts for audit, but are excluded
 from the next attempt context bundle unless explicitly requested.
 
 If no success exists yet, include only the immediate prior attempt and its
-verifier response alongside the original prompt.
+guarantee response alongside the original prompt.
+
+### 6.5 Session gold collection (normative)
+
+Each agent session MAY emit training gold records, but collection MUST be deterministic.
+
+Gold labels:
+
+1. `gold_positive` — user explicitly confirms quality (for example: `good`, `great`, `perfect`, `works`, `thanks`).
+2. `gold_negative` — user explicitly rejects quality (for example: `wrong`, `bad`, `not working`, `broken`, `hate`).
+3. `gold_neutral` — no clear quality signal.
+
+Default classifier rule:
+
+* Use deterministic regex/keyword matching on the latest user response.
+* Do not require embeddings for baseline collection.
+* If both positive and negative markers appear, classify as `gold_negative`.
+
+Storage layout:
+
+* accepted records:
+  * `world/house/<agent>/gold/accepted/<date>.pya`
+* rejected records:
+  * `world/house/<agent>/gold/rejected/<date>.pya`
+
+Record shape (append-only):
+
+```
+su name gold label ob text "gold_positive|gold_negative|gold_neutral" during date <timestamp> ya
+su name gold task ob text "<original task>" during date <timestamp> ya
+su name gold output ob text "<final assistant output>" during date <timestamp> ya
+su name gold guarantee ob text "<guarantee summary>" during date <timestamp> ya
+```
+
+Retention rule:
+
+* `gold_positive` SHOULD be written to `accepted`.
+* `gold_negative` SHOULD be written to `rejected`.
+* `gold_neutral` MAY be skipped by default.
+
+Optional extension:
+
+* Implementations MAY add embedding-based sentiment or preference scoring as a second-stage classifier.
+* The second stage MUST NOT overwrite baseline deterministic labels; it may only add supplementary fields.
+
+### 6.6 LoRA training usage (brief)
+
+Gold records are intended for two complementary training objectives:
+
+1. Supervised fine-tuning (SFT)
+* Use `gold_positive` records as direct instruction-response targets.
+* This teaches the model what good outputs look like.
+
+2. Preference training
+* Use paired `chosen` vs `rejected` outputs for the same prompt/context:
+  * `chosen` <- `gold_positive`
+  * `rejected` <- `gold_negative`
+* Train with a preference objective (for example DPO, ORPO, or KTO).
+* This teaches ranking behavior: prefer accepted outputs and avoid rejected patterns.
+
+Guideline:
+
+* `gold_negative` SHOULD NOT be used as direct SFT targets.
+* `gold_negative` SHOULD be used for preference/rejection objectives or evaluation-only guard sets.
+
+### 6.7 Sleep mode (context compaction)
+
+Agents MAY enter sleep mode when context pressure is high.
+
+Sleep mode SHOULD perform deterministic compaction:
+
+1. keep original task,
+2. keep latest successful bundle (draft + guarantee + optional reviewer),
+3. keep latest failed bundle,
+4. write/update session summary,
+5. archive excess retry chatter outside active prompt context.
+
+Optional heavy mode:
+
+* If host resources allow, sleep mode MAY trigger background export jobs for LoRA/SFT/preference datasets.
+* Training/export work MUST be decoupled from foreground interactive latency.
 
 ---
 
@@ -380,6 +513,11 @@ A loop trace is a structured log of each iteration:
 2. Shell execution can be disabled or sandboxed.
 3. Web tools may require API keys.
 4. Memory files must never contain secrets by default.
+5. Agents SHOULD be sandboxed to an effective house root:
+   * home root: `world/house/<agent>/`
+   * shared collaboration roots: explicit allowlist entries (for example assigned `world/workplace/<project>/`)
+   * shared processing roots: explicit allowlist entries (for example `world/library/processed/`)
+6. Access outside house root and shared allowlist roots MUST be denied by default unless explicitly configured in conduct policy.
 
 ---
 
