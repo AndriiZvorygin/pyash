@@ -106,3 +106,65 @@ export function resolveConfigText(name, { rememberFn = remember } = {}) {
   if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
   return undefined;
 }
+
+function normalizeMapEntryOb(entry) {
+  if (!entry || typeof entry !== "object") return undefined;
+  if (entry.ob && typeof entry.ob === "object") return entry.ob;
+  return entry;
+}
+
+function parseMapBoolean(ob = {}) {
+  if (typeof ob.boolean === "boolean") return ob.boolean;
+  if (typeof ob.num === "number") return ob.num !== 0;
+  if (typeof ob.text === "string") return parseBoolean(ob.text);
+  if (typeof ob.wo === "string") return parseBoolean(ob.wo);
+  return undefined;
+}
+
+function parseMapNumber(ob = {}) {
+  if (typeof ob.num === "number") return ob.num;
+  if (typeof ob.text === "string") return parseNumber(ob.text);
+  if (typeof ob.wo === "string") return parseNumber(ob.wo);
+  if (typeof ob.boolean === "boolean") return ob.boolean ? 1 : 0;
+  return undefined;
+}
+
+function parseMapText(ob = {}) {
+  if (typeof ob.text === "string") return ob.text;
+  if (typeof ob.wo === "string") return ob.wo;
+  if (typeof ob.name === "string") return ob.name;
+  if (typeof ob.filename === "string") return ob.filename;
+  if (typeof ob.num === "number") return String(ob.num);
+  if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
+  return undefined;
+}
+
+export function resolveConfigMap(name, { rememberFn = remember } = {}) {
+  const fact = rememberFn?.(name);
+  const map = fact?.ob?.map;
+  return map && typeof map === "object" && !Array.isArray(map) ? map : undefined;
+}
+
+export function resolveConfigMapOb(name, key, { rememberFn = remember } = {}) {
+  const map = resolveConfigMap(name, { rememberFn });
+  if (!map || !key || !Object.prototype.hasOwnProperty.call(map, key)) return undefined;
+  return normalizeMapEntryOb(map[key]);
+}
+
+export function resolveConfigMapBool(name, key, { rememberFn = remember } = {}) {
+  const ob = resolveConfigMapOb(name, key, { rememberFn });
+  if (!ob) return undefined;
+  return parseMapBoolean(ob);
+}
+
+export function resolveConfigMapNum(name, key, { rememberFn = remember } = {}) {
+  const ob = resolveConfigMapOb(name, key, { rememberFn });
+  if (!ob) return undefined;
+  return parseMapNumber(ob);
+}
+
+export function resolveConfigMapText(name, key, { rememberFn = remember } = {}) {
+  const ob = resolveConfigMapOb(name, key, { rememberFn });
+  if (!ob) return undefined;
+  return parseMapText(ob);
+}
