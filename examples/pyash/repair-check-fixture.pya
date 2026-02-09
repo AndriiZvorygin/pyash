@@ -1,0 +1,5 @@
+exists su name iteration ob text "--- /dev/null\n+++ b/examples/out/repair-demo.txt\n@@ -0,0 +1,1 @@\n+demo\n" be text ya
+
+ob name text iteration as wo check to name map consequence be repair do
+
+ob name map consequence be write do

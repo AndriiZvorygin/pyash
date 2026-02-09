@@ -21,6 +21,7 @@ Reading order (feature chapters):
 13. `13-cheat-sheet.md` — compact coding-only reference (for small models).
 14. `14-index-map.md` — quick lookup map into the full specs.
 15. `18-pyash-agent.md` — agent loop, prompt context, and memory.
+16. `19-repair.md` — deterministic patch/repair verb (`be repair`).
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.

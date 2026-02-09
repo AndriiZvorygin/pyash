@@ -70,6 +70,7 @@ import evoke, { signatures as evokeSignatures } from "./evoke.mjs";
 import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
 import depart, { signatures as loopControlSignatures } from "./loop_control.mjs";
 import exportFact, { signatures as exportSignatures } from "./export.mjs";
+import repair, { signatures as repairSignatures } from "./repair.mjs";
 
 export {
   plus,
@@ -130,7 +131,8 @@ export {
   evoke,
   guarantee,
   depart,
-  exportFact
+  exportFact,
+  repair
 };
 
 export const builtInSignatures = [
@@ -206,4 +208,5 @@ export const builtInSignatures = [
   ...guaranteeSignatures,
   ...loopControlSignatures,
   ...exportSignatures,
+  ...repairSignatures,
 ];
