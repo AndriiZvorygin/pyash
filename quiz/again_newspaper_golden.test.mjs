@@ -11,9 +11,11 @@ test("again can replay from newspaper", async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-again-newspaper-"));
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   const replayPath = path.join(repoRoot, "command", "replay_newspaper.mjs");
-  const programPath = path.join(repoRoot, "examples", "pyash", "again-newspaper.pya");
+  const programPath = path.join(tmpDir, "examples", "pyash", "again-newspaper.pya");
   const runId = "again-newspaper";
   await fs.mkdir(path.join(tmpDir, "examples", "out"), { recursive: true });
+  await fs.mkdir(path.join(tmpDir, "examples", "pyash"), { recursive: true });
+  await fs.writeFile(programPath, 'ob text "again newspaper" be write do\n', "utf8");
 
   const runScript = async (scriptPath, args) => {
     const originalArgv = process.argv;
