@@ -267,6 +267,22 @@ If a `session name` override is present and today’s file does not provide enou
 history, the previous day’s file with the same name may be used to fill the
 window.
 
+### 6.4 Iterative review-loop compaction (normative)
+
+For sessions running reviewer/generator retries, context assembly MUST prefer a
+golden compact set instead of raw retry history:
+
+1. original prompt/task,
+2. latest successful generator output (if any),
+3. verifier output for that successful generator output (if any).
+
+Failed retry chains MUST NOT be replayed into prompt context by default.
+They remain persisted in session/newspaper/artifacts for audit, but are excluded
+from the next attempt context bundle unless explicitly requested.
+
+If no success exists yet, include only the immediate prior attempt and its
+verifier response alongside the original prompt.
+
 ---
 
 ## 7. Agent loop
