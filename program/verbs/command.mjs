@@ -259,6 +259,41 @@ function normalizeRoots(roots = []) {
   return normalized;
 }
 
+function resolveWorldRoot({ rememberFn = remember } = {}) {
+  const root = rememberFn("world root")?.ob?.filename;
+  if (root) return path.resolve(String(root));
+  return path.resolve("world");
+}
+
+function resolveAgentSandboxRoots({ rememberFn = remember } = {}) {
+  const sandboxEnabled = rememberFn("agent sandbox")?.ob?.boolean === true;
+  if (!sandboxEnabled) return null;
+  const cwdRaw =
+    rememberFn("agent cwd")?.ob?.filename
+    ?? rememberFn("agent cwd")?.ob?.text
+    ?? rememberFn("agent cwd")?.ob?.name
+    ?? null;
+  if (!cwdRaw) return null;
+  const cwd = path.resolve(String(cwdRaw));
+  const worldRoot = resolveWorldRoot({ rememberFn });
+  const sharedRoots = resolveConfigMapSeries("agent command configure", "shared roots", { rememberFn })
+    ?? resolveConfigSeries("agent shared roots", { rememberFn })
+    ?? [];
+  const projectRoots = resolveConfigMapSeries("agent command configure", "project roots", { rememberFn })
+    ?? resolveConfigSeries("agent project roots", { rememberFn })
+    ?? [];
+  const processedRoot =
+    resolveConfigMapText("agent command configure", "library processed root", { rememberFn })
+    ?? path.join(worldRoot, "library", "processed");
+  const expanded = [cwd, ...sharedRoots, ...projectRoots, processedRoot].map((entry) => {
+    const raw = String(entry ?? "").trim();
+    if (!raw) return "";
+    if (path.isAbsolute(raw)) return raw;
+    return path.resolve(raw);
+  }).filter(Boolean);
+  return { cwd, roots: expanded };
+}
+
 function isPathWithinRoots(targetPath, roots = []) {
   const resolvedTarget = path.resolve(targetPath);
   for (const root of roots) {
@@ -281,14 +316,15 @@ function parseAbsolutePathTokens(commandText = "") {
 }
 
 function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
-  const writableRoots = normalizeRoots(
+  const agentDerived = resolveAgentSandboxRoots({ rememberFn });
+  const configuredWritableRoots =
     resolveConfigMapSeries("sandbox configure", "writable roots", { rememberFn })
-    ?? resolveConfigSeries("command sandbox writable roots", { rememberFn })
-    ?? [process.cwd()]
-  );
+    ?? resolveConfigSeries("command sandbox writable roots", { rememberFn });
+  const writableRoots = normalizeRoots(configuredWritableRoots ?? agentDerived?.roots ?? [process.cwd()]);
   const configuredCwd =
     resolveConfigMapText("sandbox configure", "cwd", { rememberFn })
     ?? resolveConfigMapText("command configure", "sandbox cwd", { rememberFn })
+    ?? agentDerived?.cwd
     ?? process.cwd();
   const cwd = path.resolve(String(configuredCwd ?? process.cwd()));
   const networkAllowed =
@@ -355,13 +391,17 @@ function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandb
       raw: { cwd: sandbox.cwd, writableRoots: sandbox.writableRoots }
     });
   }
-  if (sentence?.to?.filename && !isPathWithinRoots(sentence.to.filename, sandbox.writableRoots)) {
-    throwErrorSentence({
-      name: "command sandbox defective",
-      message: `command sandbox defective: write target outside writable roots (${sentence.to.filename})`,
-      from: { la: sentence },
-      raw: { target: sentence.to.filename, writableRoots: sandbox.writableRoots }
-    });
+  if (sentence?.to?.filename) {
+    const rawTarget = String(sentence.to.filename);
+    const resolvedTarget = path.isAbsolute(rawTarget) ? rawTarget : path.resolve(sandbox.cwd, rawTarget);
+    if (!isPathWithinRoots(resolvedTarget, sandbox.writableRoots)) {
+      throwErrorSentence({
+        name: "command sandbox defective",
+        message: `command sandbox defective: write target outside writable roots (${sentence.to.filename})`,
+        from: { la: sentence },
+        raw: { target: sentence.to.filename, resolvedTarget, writableRoots: sandbox.writableRoots }
+      });
+    }
   }
   if (commandClass !== "write_local" && commandClass !== "destructive") return;
   const outsideRoots = parseAbsolutePathTokens(commandText).filter((candidate) => !isPathWithinRoots(candidate, sandbox.writableRoots));

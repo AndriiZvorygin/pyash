@@ -21,9 +21,10 @@ import {
   buildSessionNamePrefix,
   buildSessionNameForDate,
   readSessionMessagesWithFallback,
-  updateSessionSummary
+  updateSessionSummary,
+  normalizeHistoryWindow
 } from "../../agent/session.mjs";
-import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
@@ -88,15 +89,22 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     : (Array.isArray(configSentence?.vyah?.ve?.values) ? configSentence.vyah.ve.values : []);
   const aspect = getEffectiveVyahAspect(vyahValues, { verb: "mind", caseKey: "vyah" });
   const dialogue = historyDialogueName({ callSentence: sentence, configSentence, targetName: mindName });
+  const configSessionHistoryWindow =
+    resolveConfigMapNum("session configure", "history window", { rememberFn: remember })
+    ?? resolveConfigMapNum("agent configure", "session history window", { rememberFn: remember });
   const historyWindow =
-    sentence?.by?.num ??
+    normalizeHistoryWindow(
+      sentence?.by?.num ??
     sentence?.by?.quantity?.num ??
     configSentence?.ob?.window?.num ??
     configSentence?.ob?.historyWindow?.num ??
     configSentence?.window ??
     configSentence?.historyWindow ??
     ob?.window?.num ??
-    8;
+    configSessionHistoryWindow ??
+    8,
+      { defaultPairs: 8, maxPairs: 200 }
+    );
 
   // Model resolution: explicit on call or from config via state (keyword "as")
   const explicitModel = sentence?.ob?.model ?? ob?.model ?? null;

@@ -384,6 +384,12 @@ Tools appear via place listing.
 * artifacts hold bulk output
 * write remains short
 * library artifacts include sources
+* library refinement stages SHOULD use:
+  * `world/library/fresh/` (raw download cache)
+  * `world/library/text/` (normalized text extraction)
+  * `world/library/abridged/` (deterministic reduction output)
+  * `world/library/summarized/` (summary/distillation output)
+* when fresh content hash matches latest cached hash, heavy refinement steps MAY be skipped and prior staged outputs reused
 
 **MVP:** one full tool loop
 
@@ -420,6 +426,8 @@ Practice tasks are written to bedroom and optionally shared to workplace.
 * Workplace: bounded change with outcome
 * Tools: intent before use, interpretation after
 * Library: curated promotion from workplace artifacts
+* Library: stage outputs by refinement level (`fresh`, `text`, `abridged`, `summarized`)
+* Library: download defaults to cache-first behavior; `no cache` override SHOULD force refresh
 
 Conduct is enforced by itinerary and review, not by syntax.
 

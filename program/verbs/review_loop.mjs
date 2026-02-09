@@ -1,6 +1,7 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigMapNum, resolveConfigMapText } from "../configure/env.mjs";
+import { emitSessionGold } from "../agent/gold.mjs";
 
 async function resolveInterpret() {
   const mod = await import("../bridge/index.mjs");
@@ -82,11 +83,20 @@ function parseVerdictFromLastLine(reviewText, threshold) {
   return { pass: false, score: null, lastLine };
 }
 
-function formatSeriesTranscript(seriesName, maxLines = 40) {
+function seriesEntryCount(seriesName) {
+  if (!seriesName) return 0;
+  const fact = remember(seriesName);
+  if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return 0;
+  return fact.ob.series.length;
+}
+
+function formatSeriesTranscript(seriesName, { maxLines = 40, fromIndex = 0 } = {}) {
   if (!seriesName) return "";
   const fact = remember(seriesName);
   if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return "";
+  const start = Math.max(0, Math.trunc(Number(fromIndex) || 0));
   const lines = fact.ob.series
+    .slice(start)
     .map((entry) => {
       const role = String(entry?.su?.name ?? entry?.role ?? "assistant").toUpperCase();
       const content = String(entry?.ob?.text ?? entry?.content ?? "");
@@ -187,23 +197,35 @@ function buildReviewerPrompt({ task, draft, transcript, threshold, includeTransc
   return pieces.join("\n");
 }
 
-function buildRepairPrompt({ task, draft, reviewText, guaranteeText }) {
-  return [
+function buildRetryPrompt({ task, acceptedBundle, draft, reviewText, guaranteeText }) {
+  const lines = [
     "Revise the candidate to fix all reviewer issues while preserving supported facts.",
     "Keep the result concise.",
     "",
     "TASK:",
-    task,
+    task
+  ];
+  if (acceptedBundle?.draft || acceptedBundle?.review || acceptedBundle?.guarantee) {
+    lines.push(
+      "",
+      "LATEST ACCEPTED REFERENCE:",
+      `draft: ${acceptedBundle?.draft || "none"}`,
+      `review: ${acceptedBundle?.review || "none"}`,
+      `guarantee: ${acceptedBundle?.guarantee || "none"}`
+    );
+  }
+  lines.push(
     "",
-    "PRIOR CANDIDATE:",
+    "LATEST FAILED CANDIDATE:",
     draft,
     "",
-    "REVIEW FEEDBACK:",
+    "LATEST REVIEW FEEDBACK:",
     reviewText || "none",
     "",
-    "GUARANTEE FEEDBACK:",
+    "LATEST GUARANTEE FEEDBACK:",
     guaranteeText || "none"
-  ].join("\n");
+  );
+  return lines.join("\n");
 }
 
 function rememberText(name, text) {
@@ -295,6 +317,12 @@ export async function reviewLoop(sentence) {
     : false;
   const generatorIsRefinery = !generatorIsMind && Boolean(generatorRefineryName ?? await resolveIsRefinery(generatorName));
 
+  const priorSuccess = remember("review loop last success")?.ob?.map ?? {};
+  const acceptedReference = {
+    draft: String(priorSuccess?.draft?.text ?? ""),
+    review: String(priorSuccess?.review?.text ?? ""),
+    guarantee: String(priorSuccess?.guarantee?.text ?? "")
+  };
   let latestPrompt = task;
   let finalDraft = "";
   let lastReviewText = "";
@@ -312,6 +340,8 @@ export async function reviewLoop(sentence) {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     attemptsUsed = attempt;
     const draftName = `review loop draft ${attempt}`;
+    const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
+    const flowStart = seriesEntryCount(flowSeriesName);
     if (generatorIsMind) {
       finalDraft = await invokeMind({
         mindName: generatorName,
@@ -379,8 +409,10 @@ export async function reviewLoop(sentence) {
       lastReviewText = "skipped reviewer (guarantee failed)";
       lastVerdict = { pass: false, score: 0, lastLine: "FAIL (guarantee)" };
     } else if (reviewerName) {
-      const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
-      const transcript = formatSeriesTranscript(flowSeriesName, transcriptMaxLines);
+      const transcript = formatSeriesTranscript(flowSeriesName, {
+        maxLines: transcriptMaxLines,
+        fromIndex: flowStart
+      });
       const reviewPrompt = buildReviewerPrompt({
         task,
         draft: finalDraft,
@@ -448,8 +480,9 @@ export async function reviewLoop(sentence) {
     };
     stopReason = attempt >= maxAttempts ? "max attempts" : stopReason;
 
-    latestPrompt = buildRepairPrompt({
+    latestPrompt = buildRetryPrompt({
       task,
+      acceptedBundle: acceptedReference,
       draft: finalDraft,
       reviewText: lastReviewText,
       guaranteeText: lastGuaranteeText
@@ -470,6 +503,24 @@ export async function reviewLoop(sentence) {
   if (lastSuccessBundle) rememberMap("review loop last success", lastSuccessBundle);
   if (typeof lastVerdict.score === "number") {
     rememberNum("review loop score", lastVerdict.score);
+  }
+  try {
+    const label = lastVerdict.pass ? "gold_positive" : "gold_negative";
+    const bundle = lastVerdict.pass ? (lastSuccessBundle ?? {}) : (lastFailureBundle ?? {});
+    const gold = await emitSessionGold({
+      rememberFn: remember,
+      generatorName,
+      label,
+      task,
+      draft: resultText,
+      review: bundle?.review?.text ?? lastReviewText,
+      guarantee: bundle?.guarantee?.text ?? lastGuaranteeText
+    });
+    rememberText("review loop gold label", label);
+    rememberText("review loop gold key", gold?.key ?? "");
+    rememberText("review loop gold file", gold?.file ?? "");
+  } catch (err) {
+    rememberText("review loop gold error", String(err?.message ?? err ?? ""));
   }
 
   return { ob: { text: resultText }, be: "text" };

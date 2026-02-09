@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -179,6 +182,31 @@ test("command sandbox blocks cwd outside writable roots", async () => {
       mood: "do",
       be: "command",
       ob: { text: "pwd" }
+    }),
+    (err) => {
+      const surfaced = err?.sentence;
+      assert.equal(surfaced?.su?.name, "command sandbox defective");
+      return true;
+    }
+  );
+});
+
+test("command sandbox defaults to agent cwd roots when agent sandbox is enabled", async () => {
+  forget();
+  const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-cmd-"));
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse("exists su name agent sandbox ob bool truth be default ya"));
+  await interpret(parse(`exists su name agent cwd ob filename "${agentDir}" be default ya`));
+
+  await assert.rejects(
+    () => command({
+      mood: "do",
+      be: "command",
+      ob: { text: "echo hi" },
+      to: { filename: "../outside.txt" }
     }),
     (err) => {
       const surfaced = err?.sentence;

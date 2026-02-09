@@ -19,6 +19,13 @@ const hearStreamProcesses = new Map();
 
 export { resolveHearInputPath };
 
+function classifyEvidentialFromSource(sentence) {
+  const source = sentence?.from?.filename ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const lower = String(source).toLowerCase();
+  if (/\b(news|report|reported|article)\b/u.test(lower)) return "reported";
+  return "direct";
+}
+
 export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "hear", caseKey: "vyah" });
@@ -280,10 +287,15 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     kind: "metadata"
   });
 
-  if (artifact?.su?.name) {
-    return { ob: { text: transcript }, be: "hear" };
-  }
-  return { ob: { text: transcript }, be: "hear" };
+  const evidential = classifyEvidentialFromSource(sentence);
+  const result = {
+    ob: { text: transcript },
+    be: "hear",
+    fromstate: { wo: "audio" },
+    accordingto: { wo: evidential }
+  };
+  if (artifact?.su?.name) return result;
+  return result;
 }
 
 export default hear;

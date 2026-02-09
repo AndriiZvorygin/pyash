@@ -1,14 +1,50 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import { remember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { resolveConfigMapText } from "../../configure/env.mjs";
 import { resolveUrl, resolveOutput, resolveExtraArgs, parseMonthWindow, isMultiDownload } from "./helpers.mjs";
 import { missingBackend, recordDownloadArtifact, runCurl, runYtDlp } from "./runners.mjs";
+
+function resolveWorldRoot({ rememberFn = remember } = {}) {
+  const root = rememberFn("world root")?.ob?.filename;
+  if (root) return path.resolve(String(root));
+  return path.resolve("world");
+}
+
+function resolveFreshCacheRoot({ rememberFn = remember } = {}) {
+  const configured = resolveConfigMapText("library configure", "fresh root", { rememberFn });
+  if (configured) return path.resolve(String(configured));
+  return path.join(resolveWorldRoot({ rememberFn }), "library", "fresh");
+}
+
+function isNoCache(sentence, { rememberFn = remember } = {}) {
+  const marker = sentence?.with?.wo
+    ?? sentence?.with?.text
+    ?? sentence?.with?.name
+    ?? sentence?.accordingto?.wo
+    ?? sentence?.accordingto?.text
+    ?? sentence?.accordingto?.name
+    ?? "";
+  if (String(marker).trim().toLowerCase() === "no cache") return true;
+  const fact = rememberFn("download no cache");
+  return fact?.ob?.boolean === true || String(fact?.ob?.text ?? "").toLowerCase() === "truth";
+}
+
+function cacheKey({ url, intent, scheme }) {
+  const text = `${String(scheme ?? "")}|${String(intent ?? "")}|${String(url ?? "")}`;
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
 
 export async function download_http(sentence, { scheme, intent, remember: rememberFn = remember } = {}) {
   const url = resolveUrl(sentence, { rememberFn });
   const dest = resolveOutput(sentence, { rememberFn });
+  const noCache = isNoCache(sentence, { rememberFn });
+  const cacheRoot = resolveFreshCacheRoot({ rememberFn });
+  const key = cacheKey({ url, intent, scheme });
+  const cachePath = path.join(cacheRoot, `${key}.bin`);
   const agentCwd = resolveAgentCwd({ rememberFn });
   if (!url) {
     throwErrorSentence({
@@ -42,11 +78,24 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
       }
     })();
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
+  await fs.mkdir(path.dirname(cachePath), { recursive: true });
 
   const mock = process.env.PYA_DOWNLOAD_RESPONSE;
   if (mock !== undefined) {
     await fs.writeFile(resolvedDest, String(mock ?? ""), "utf8");
+    await fs.writeFile(cachePath, String(mock ?? ""), "utf8");
     return { ob: { filename: resolvedDest }, be: "download" };
+  }
+
+  if (!noCache) {
+    try {
+      await fs.access(cachePath);
+      if (resolvedDest !== cachePath) {
+        await fs.copyFile(cachePath, resolvedDest);
+      }
+      await recordDownloadArtifact(resolvedDest);
+      return { ob: { filename: resolvedDest }, be: "download" };
+    } catch {}
   }
 
   const extraArgs = resolveExtraArgs(sentence, { rememberFn });
@@ -58,6 +107,9 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
       from: { name: "download" },
       raw: { url, scheme, intent }
     });
+  }
+  if (resolvedDest !== cachePath) {
+    await fs.copyFile(resolvedDest, cachePath);
   }
   await recordDownloadArtifact(resolvedDest);
   return { ob: { filename: resolvedDest }, be: "download" };

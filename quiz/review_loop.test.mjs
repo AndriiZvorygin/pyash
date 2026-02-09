@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -188,4 +191,35 @@ test("review loop guarantee command can gate retries", async () => {
   assert.equal(remember("review loop attempts used")?.ob?.num, 2);
   assert.equal(remember("review loop verdict")?.ob?.text, "PASS (guarantee)");
   assert.match(String(remember("review loop guarantee")?.ob?.text ?? ""), /regex=match/);
+});
+
+test("review loop emits deterministic session gold record", async () => {
+  forget();
+
+  const worldRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gold-world-"));
+  await run(`exists su name world root ob filename "${worldRoot}" be default ya`);
+
+  await run('su name gold gen ob text input to name text output be ceremony def');
+  await run('ob text "final draft" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+  await run('su name review loop configure be map def');
+  await run('su name guarantee draft regex ob text "final draft" ya');
+  await run('prah');
+
+  await run('ob text "Task." for name gold gen atleast num 0.8 atmost num 2 to name text result be review loop do');
+  const firstFile = String(remember("review loop gold file")?.ob?.text ?? "");
+  const firstKey = String(remember("review loop gold key")?.ob?.text ?? "");
+  assert.equal(remember("review loop gold label")?.ob?.text, "gold_positive");
+  assert.ok(firstFile.includes("/gold/accepted/"));
+  assert.ok(firstKey.length >= 12);
+
+  const firstText = await fs.readFile(firstFile, "utf8");
+  assert.match(firstText, /su name gold label ob text "gold_positive"/);
+
+  await run('ob text "Task." for name gold gen atleast num 0.8 atmost num 2 to name text result be review loop do');
+  const secondFile = String(remember("review loop gold file")?.ob?.text ?? "");
+  const secondKey = String(remember("review loop gold key")?.ob?.text ?? "");
+  assert.equal(secondFile, firstFile);
+  assert.equal(secondKey, firstKey);
 });

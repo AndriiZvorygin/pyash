@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveConfigMapSeries, resolveConfigMapText, resolveConfigSeries } from "../configure/env.mjs";
 
 function throwRepairError(name, message, raw) {
   throwErrorSentence({
@@ -154,7 +155,69 @@ function isWithin(root, candidate) {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
-function resolveSafePath(targetPath, { workspaceRoot, workspaceReal }) {
+function normalizeRoots(roots = []) {
+  const out = [];
+  for (const root of roots) {
+    const raw = String(root ?? "").trim();
+    if (!raw) continue;
+    const resolved = path.resolve(raw);
+    if (!out.includes(resolved)) out.push(resolved);
+  }
+  return out;
+}
+
+function resolveWorldRoot({ rememberFn = remember } = {}) {
+  const fact = rememberFn("world root")?.ob?.filename;
+  if (fact) return path.resolve(String(fact));
+  return path.resolve("world");
+}
+
+function resolveRepairRoots({ rememberFn = remember } = {}) {
+  const configuredRoots =
+    resolveConfigMapSeries("repair configure", "writable roots", { rememberFn })
+    ?? resolveConfigMapSeries("sandbox configure", "writable roots", { rememberFn })
+    ?? resolveConfigSeries("repair writable roots", { rememberFn })
+    ?? null;
+  const configuredCwd =
+    resolveConfigMapText("repair configure", "cwd", { rememberFn })
+    ?? resolveConfigMapText("sandbox configure", "cwd", { rememberFn })
+    ?? null;
+  if (configuredRoots) {
+    return {
+      baseRoot: path.resolve(String(configuredCwd ?? process.cwd())),
+      roots: normalizeRoots(configuredRoots)
+    };
+  }
+
+  const sandboxEnabled = rememberFn("agent sandbox")?.ob?.boolean === true;
+  const agentCwd =
+    rememberFn("agent cwd")?.ob?.filename
+    ?? rememberFn("agent cwd")?.ob?.text
+    ?? null;
+  if (sandboxEnabled && agentCwd) {
+    const worldRoot = resolveWorldRoot({ rememberFn });
+    const sharedRoots = resolveConfigMapSeries("agent command configure", "shared roots", { rememberFn })
+      ?? resolveConfigSeries("agent shared roots", { rememberFn })
+      ?? [];
+    const projectRoots = resolveConfigMapSeries("agent command configure", "project roots", { rememberFn })
+      ?? resolveConfigSeries("agent project roots", { rememberFn })
+      ?? [];
+    const processedRoot =
+      resolveConfigMapText("agent command configure", "library processed root", { rememberFn })
+      ?? path.join(worldRoot, "library", "processed");
+    return {
+      baseRoot: path.resolve(String(agentCwd)),
+      roots: normalizeRoots([agentCwd, ...sharedRoots, ...projectRoots, processedRoot])
+    };
+  }
+
+  return {
+    baseRoot: process.cwd(),
+    roots: normalizeRoots([process.cwd()])
+  };
+}
+
+function resolveSafePath(targetPath, { baseRoot, allowedRoots, realRoots }) {
   if (!targetPath || typeof targetPath !== "string") {
     throwRepairError("repair path defective", "repair path defective: missing target path", { targetPath });
   }
@@ -162,14 +225,16 @@ function resolveSafePath(targetPath, { workspaceRoot, workspaceReal }) {
     throwRepairError("repair path defective", "repair path defective: invalid target path", { targetPath });
   }
 
-  const absolute = path.resolve(workspaceRoot, targetPath);
-  if (!isWithin(workspaceRoot, absolute)) {
+  const absolute = path.resolve(baseRoot, targetPath);
+  const inAllowed = (allowedRoots ?? []).some((root) => isWithin(root, absolute));
+  if (!inAllowed) {
     throwRepairError("repair path defective", `repair path defective: outside workspace (${targetPath})`, { targetPath });
   }
 
   if (fs.existsSync(absolute)) {
     const real = fs.realpathSync(absolute);
-    if (!isWithin(workspaceReal, real)) {
+    const realAllowed = (realRoots ?? []).some((root) => isWithin(root, real));
+    if (!realAllowed) {
       throwRepairError("repair path defective", `repair path defective: symlink escape (${targetPath})`, { targetPath });
     }
     return absolute;
@@ -182,12 +247,12 @@ function resolveSafePath(targetPath, { workspaceRoot, workspaceReal }) {
     probe = parent;
   }
   const realProbe = fs.realpathSync(probe);
-  if (!isWithin(workspaceReal, realProbe)) {
+  if (!(realRoots ?? []).some((root) => isWithin(root, realProbe))) {
     throwRepairError("repair path defective", `repair path defective: parent outside workspace (${targetPath})`, { targetPath });
   }
   const suffix = path.relative(probe, absolute);
   const resolvedFromRealParent = path.resolve(realProbe, suffix);
-  if (!isWithin(workspaceReal, resolvedFromRealParent)) {
+  if (!(realRoots ?? []).some((root) => isWithin(root, resolvedFromRealParent))) {
     throwRepairError("repair path defective", `repair path defective: symlink escape (${targetPath})`, { targetPath });
   }
 
@@ -260,9 +325,9 @@ function resolveFileIntent(filePatch) {
   return { targetPath: newPath, mode: "updated" };
 }
 
-async function planFilePatch(filePatch, { workspaceRoot, workspaceReal }) {
+async function planFilePatch(filePatch, { baseRoot, allowedRoots, realRoots }) {
   const intent = resolveFileIntent(filePatch);
-  const safePath = resolveSafePath(intent.targetPath, { workspaceRoot, workspaceReal });
+  const safePath = resolveSafePath(intent.targetPath, { baseRoot, allowedRoots, realRoots });
   const exists = fs.existsSync(safePath);
 
   if ((intent.mode === "updated" || intent.mode === "deleted") && !exists) {
@@ -345,12 +410,29 @@ export async function repair(sentence, { remember: rememberFn = remember } = {})
   const mode = checkMode ? "check" : "apply";
 
   const patches = parseUnifiedPatch(normalizePatchText(patchText));
-  const workspaceRoot = process.cwd();
-  const workspaceReal = fs.realpathSync(workspaceRoot);
+  const roots = resolveRepairRoots({ rememberFn });
+  const baseRoot = path.resolve(String(roots.baseRoot ?? process.cwd()));
+  const allowedRoots = Array.isArray(roots.roots) && roots.roots.length
+    ? roots.roots
+    : [process.cwd()];
+  const realRoots = allowedRoots.map((root) => {
+    try {
+      return fs.realpathSync(root);
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+  if (!allowedRoots.some((root) => isWithin(root, baseRoot))) {
+    throwRepairError(
+      "repair path defective",
+      `repair path defective: cwd outside writable roots (${baseRoot})`,
+      { baseRoot, allowedRoots }
+    );
+  }
 
   const records = [];
   for (const patchFile of patches) {
-    records.push(await planFilePatch(patchFile, { workspaceRoot, workspaceReal }));
+    records.push(await planFilePatch(patchFile, { baseRoot, allowedRoots, realRoots }));
   }
 
   if (!checkMode) {

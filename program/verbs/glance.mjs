@@ -84,6 +84,12 @@ function mapNameForPath(resolved) {
   return `glance ${hash}`;
 }
 
+function classifyEvidentialFromPath(resolved) {
+  const lower = String(resolved ?? "").toLowerCase();
+  if (/\b(news|report|article)\b/u.test(lower)) return "reported";
+  return "direct";
+}
+
 export async function glance(sentence, { remember: rememberFn = remember } = {}) {
   const target = resolveFilename(sentence?.ob, { rememberFn });
   if (!target) {
@@ -138,7 +144,12 @@ export async function glance(sentence, { remember: rememberFn = remember } = {})
   }
   const mapName = mapNameForPath(resolved);
   doRemember({ mood: "ya", su: { name: mapName }, be: "map", ob: { map, filename: resolved } });
-  return { ob: { name: mapName }, be: "glance" };
+  return {
+    ob: { name: mapName },
+    be: "glance",
+    fromstate: { wo: "optical" },
+    accordingto: { wo: classifyEvidentialFromPath(resolved) }
+  };
 }
 
 export default glance;
