@@ -7,12 +7,13 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
+import { resolveConfigMapText } from "../program/configure/env.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
 import { runChannelOnce } from "../program/agent/channels/index.mjs";
 import { createMatrixAdapter } from "../program/agent/channels/matrix.mjs";
 import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/scheduler.mjs";
-import { ensureMatrixCredentials } from "../program/agent/channels/bootstrap.mjs";
+import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 
 const DEFAULT_INTERVAL_MS = 60 * 1000;
@@ -30,24 +31,39 @@ function readRememberText(name) {
 }
 
 function resolveMatrixConfigWithRemember(rawConfig = {}) {
+  const mapName = "matrix channel";
+  const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
+  const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
+  const mapAdminToken = resolveConfigMapText(mapName, "admin token");
+  const mapToken = resolveConfigMapText(mapName, "token");
+  const mapExecutive = resolveConfigMapText(mapName, "executive username");
   return {
     ...rawConfig,
     homeserver:
+      mapHomeserver ??
       rawConfig.homeserver ??
       readRememberText("matrix homeserver") ??
       readRememberText("matrix server") ??
       null,
     registrationSharedSecret:
+      mapSharedSecret ??
       rawConfig.registrationSharedSecret ??
       readRememberText("matrix registration shared secret") ??
       null,
     adminToken:
+      mapAdminToken ??
       rawConfig.adminToken ??
       readRememberText("matrix admin token") ??
       null,
     token:
+      mapToken ??
       rawConfig.token ??
       readRememberText("matrix access token") ??
+      null,
+    executiveUsername:
+      mapExecutive ??
+      rawConfig.executiveUsername ??
+      readRememberText("matrix executive username") ??
       null
   };
 }
@@ -149,6 +165,30 @@ async function main() {
       token: credentials.token,
       user: channelConfig.user ?? credentials.user
     };
+    const executiveRoom = await ensureMatrixExecutiveDmRoom({
+      agentHouse,
+      homeserver: channelConfig.homeserver,
+      token: channelConfig.token,
+      user: channelConfig.user,
+      executiveUser: channelConfig.executiveUsername
+    });
+    if (executiveRoom) {
+      const hasRoom = Array.isArray(channelConfig.rooms) && channelConfig.rooms.some(room => room?.id === executiveRoom);
+      const nextRooms = Array.isArray(channelConfig.rooms) ? [...channelConfig.rooms] : [];
+      if (!hasRoom) {
+        nextRooms.push({
+          id: executiveRoom,
+          lane: "matrix_executive_dm"
+        });
+      }
+      const nextDmRooms = new Set(Array.isArray(channelConfig.dmRooms) ? channelConfig.dmRooms : []);
+      nextDmRooms.add(executiveRoom);
+      channelConfig = {
+        ...channelConfig,
+        rooms: nextRooms,
+        dmRooms: Array.from(nextDmRooms)
+      };
+    }
   }
   const adapter = createAdapter(channelType);
   const runTick = () => runChannelOnce({
