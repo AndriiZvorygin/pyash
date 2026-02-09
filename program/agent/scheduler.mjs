@@ -21,6 +21,8 @@ function sanitizeLaneName(raw) {
 
 function parseIntervalFromDuring(duringCase) {
   if (!duringCase || typeof duringCase !== "object") return null;
+  const weekRaw = duringCase.week;
+  if (Number.isFinite(weekRaw) && weekRaw > 0) return Math.floor(weekRaw) * 7 * 24 * 60 * 60 * 1000;
   const minuteRaw = duringCase.minute;
   if (Number.isFinite(minuteRaw) && minuteRaw > 0) return Math.floor(minuteRaw) * 60 * 1000;
   const secondRaw = duringCase.second;
@@ -29,6 +31,8 @@ function parseIntervalFromDuring(duringCase) {
   if (Number.isFinite(hourRaw) && hourRaw > 0) return Math.floor(hourRaw) * 60 * 60 * 1000;
   const dayRaw = duringCase.day;
   if (Number.isFinite(dayRaw) && dayRaw > 0) return Math.floor(dayRaw) * 24 * 60 * 60 * 1000;
+  const weekText = Number(String(duringCase.week ?? "").trim());
+  if (Number.isFinite(weekText) && weekText > 0) return Math.floor(weekText) * 7 * 24 * 60 * 60 * 1000;
   const minuteText = Number(String(duringCase.minute ?? "").trim());
   if (Number.isFinite(minuteText) && minuteText > 0) return Math.floor(minuteText) * 60 * 1000;
   const secondText = Number(String(duringCase.second ?? "").trim());
