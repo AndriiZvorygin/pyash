@@ -34,6 +34,12 @@ function splitCommand(cmd) {
   return String(cmd).trim().split(/\s+/).filter(Boolean);
 }
 
+function resolveShellCommand() {
+  const configured = String(process.env.SHELL ?? "").trim();
+  if (configured) return configured;
+  return "sh";
+}
+
 const POLICY_MODES = new Set(["deny", "ask", "allow"]);
 const DESTRUCTIVE_PATTERNS = [
   /\brm\s+-rf\b/i,
@@ -404,7 +410,7 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
       const parts = splitCommand(cmd);
       proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { ...spawnOptions, shell: true });
+      proc = spawn(String(cmd), { ...spawnOptions, shell: resolveShellCommand() });
     }
     let stdout = "";
     let stderr = "";
@@ -602,7 +608,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       const parts = splitCommand(cmd);
       proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { ...spawnOptions, shell: true });
+      proc = spawn(String(cmd), { ...spawnOptions, shell: resolveShellCommand() });
     }
     let stderr = "";
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
