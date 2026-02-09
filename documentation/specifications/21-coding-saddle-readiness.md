@@ -66,3 +66,47 @@ Reference quizzes:
 
 - `quiz/saddle_tools_signatures.test.mjs`
 - `quiz/saddle_tool_flow.test.mjs`
+
+---
+
+## 5. Guarantee-first coding loop
+
+For coding tasks, the preferred reliability pattern is:
+
+1. generator writes a candidate,
+2. deterministic `guarantee` gate validates it,
+3. optional reviewer runs only after guarantee passes.
+
+`review loop` supports this directly.
+
+### 5.1 Configure deterministic guarantees
+
+Use `review loop configure` map keys:
+
+- `guarantee command` — shell command template. `{{draft}}` and `{{task}}` are available placeholders.
+- `guarantee expect regex` — optional regex that must match guarantee command stdout.
+- `guarantee draft regex` — optional regex that must match draft text directly.
+
+Backward-compatibility aliases:
+
+- `verifier command` -> `guarantee command`
+- `verifier expect regex` -> `guarantee expect regex`
+
+### 5.2 Stop conditions and compact state
+
+`review loop` records deterministic control facts:
+
+- `review loop attempts used`
+- `review loop stop reason` (`pass`, `max attempts`, `unchanged draft`)
+- `review loop seed task`
+- `review loop last failure`
+- `review loop last success`
+- `review loop summary`
+
+### 5.3 Canonical example
+
+Reference:
+
+- `examples/pyash/coding-loop-guarantee.pya`
+
+This example runs a coding loop with `saddle tools` and a guarantee command gate, without a reviewer mind.

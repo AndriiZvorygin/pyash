@@ -13,17 +13,28 @@ async function readFileIfExists(filePath) {
   }
 }
 
+function resolveBaseIdentityDir(agentHouse) {
+  if (!agentHouse) return "";
+  const houseDir = path.dirname(agentHouse);
+  const houseName = path.basename(agentHouse);
+  if (!houseDir || houseName === "base") return "";
+  return path.join(houseDir, "base", "identity");
+}
+
 function formatSection(title, content) {
   if (!content) return "";
   return `## ${title}\n\n${content}`;
 }
 
-async function loadBootstrapFiles(identityDir) {
+async function loadBootstrapFiles(identityDir, { baseIdentityDir = "" } = {}) {
   const parts = [];
   for (const filename of BOOTSTRAP_FILES) {
+    const basePath = baseIdentityDir ? path.join(baseIdentityDir, filename) : "";
     const filePath = path.join(identityDir, filename);
+    const baseContent = basePath ? await readFileIfExists(basePath) : "";
     const content = await readFileIfExists(filePath);
-    if (content) parts.push(formatSection(filename, content));
+    const merged = [baseContent, content].filter(Boolean).join("\n\n");
+    if (merged) parts.push(formatSection(filename, merged));
   }
   return parts.join("\n\n");
 }
@@ -118,7 +129,8 @@ export async function buildAgentSystemPrompt({
   }
   if (agentHouse) {
     const identityDir = path.join(agentHouse, "identity");
-    const bootstrap = await loadBootstrapFiles(identityDir);
+    const baseIdentityDir = resolveBaseIdentityDir(agentHouse);
+    const bootstrap = await loadBootstrapFiles(identityDir, { baseIdentityDir });
     if (bootstrap) parts.push(bootstrap);
   }
   if (includeRoles && agentHouse) {
@@ -146,7 +158,8 @@ export async function buildAgentNamingPrompt({ agentHouse, configPrompt } = {}) 
   if (configPrompt) parts.push(String(configPrompt));
   if (agentHouse) {
     const identityDir = path.join(agentHouse, "identity");
-    const bootstrap = await loadBootstrapFiles(identityDir);
+    const baseIdentityDir = resolveBaseIdentityDir(agentHouse);
+    const bootstrap = await loadBootstrapFiles(identityDir, { baseIdentityDir });
     if (bootstrap) parts.push(bootstrap);
   }
   return parts.filter(Boolean).join("\n\n---\n\n");

@@ -1,0 +1,10 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" ya
+prah
+
+from filename "../../module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do
+
+exists su name helper be mind as name "gpt-oss:latest" fromtext text "You may call tools. Call list files exactly once before answering." ya
+
+ob text "Use the list files tool on examples/pyash and then reply with only one filename from that directory." for name helper to name text output with name saddle tools be write do
+ob name output be write do

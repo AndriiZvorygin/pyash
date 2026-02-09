@@ -1,0 +1,17 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" ya
+prah
+
+from filename "../../module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do
+
+exists su name coding loop system ob text "You are a local coding assistant. Use command and repair tools. Keep output concise." ya
+exists su name coding loop be mind as name "gpt-oss:latest" fromtext name coding loop system ya
+
+su name review loop configure be map def
+su name guarantee command ob text quoted.text.printf %s {{draft}} | grep -q examples/out/coding-loop-guarantee.js && printf ok.text.quoted ya
+su name guarantee expect regex ob text "^ok$" ya
+prah
+
+ob text "Create examples/out/coding-loop-guarantee.js that prints 42. Use command to run node on it and ensure output is 42. If needed, use repair. Reply with only the final file path." for name coding loop with name saddle tools atleast num 0.8 atmost num 3 to name text output be review loop do
+
+ob name output be write do

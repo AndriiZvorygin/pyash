@@ -1,0 +1,8 @@
+su name example meta be map def
+su name required ob ve text "OLLAMA_HOST" ya
+prah
+
+exists su name helper be mind as name "gpt-oss:latest" ya
+
+ob text "Say exactly: hello from gpt-oss." for name helper to name text output be write do
+ob name output be write do

@@ -26,6 +26,8 @@ test("agent tools map exposes standard tool signatures", async () => {
     "su name download be download from filename input as wo web to filename input can",
     "su name compile be compile from filename input to filename output can",
     "su name command be command ob text input to name text out can",
+    "su name repair be repair ob text input to name map outcome can",
+    "su name repair check be repair as wo check ob text input to name map outcome can",
     "su name exists be exists ob filename input can",
     "prah"
   ];
