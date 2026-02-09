@@ -1,0 +1,16 @@
+su name example meta be map def
+su name required ob ve text "PYA_MIND_TOOL" "OLLAMA_HOST" "PYA_LIVE_SADDLE_TEST" ya
+prah
+
+from filename "../../module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do
+
+su name software be saddle def
+su name tools ob name saddle tools ya
+su name model ob text "gpt-oss:latest" ya
+prah
+
+exists su name coding saddle system ob text "You are a coding saddle using Pyash tools. You must use tool calls only when needed. Available tools include command and repair. Prefer local filesystem writes under examples/out or artifacts. Task policy: write small code, verify with command, and if edits are needed apply repair with unified diff text. Keep responses concise and factual." ya
+exists su name coding saddle be mind as name "gpt-oss:latest" fromtext name coding saddle system ya
+
+ob text "Create examples/out/saddle-live-hello.js with JavaScript that prints 6*7. Use command to run node on that file and confirm output. If the first file content is wrong, fix it using repair. Return only the final file path." for name coding saddle to name text saddle live output with name saddle tools be write do
+be write from name text saddle live output do
