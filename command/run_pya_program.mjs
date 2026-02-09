@@ -283,6 +283,16 @@ async function main() {
     return decisionSentence;
   };
 
+  const parseResumeToken = (tokenText) => {
+    if (!tokenText) return null;
+    try {
+      const parsed = JSON.parse(String(tokenText));
+      return (parsed && typeof parsed === "object") ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
   const runRefineryWithCallbacks = async ({ resume, nameOverride } = {}) => runRefinery({
     name: nameOverride ?? refineryName,
     interpret,
@@ -359,6 +369,38 @@ async function main() {
         if (decision !== "truth") {
           const decisionSentence = buildRatifyDecisionSentence({ surfaced, decision, decisionRaw });
           if (decisionSentence) pushNewspaper(sentenceToPyash(decisionSentence));
+        } else if (resumeRefinery === "command") {
+          const resumeTokenText = surfaced?.fromtext?.text ?? null;
+          const resumeToken = parseResumeToken(resumeTokenText);
+          const resumeSentence = (resumeToken?.kind === "command" && resumeToken?.sentence && typeof resumeToken.sentence === "object")
+            ? { ...resumeToken.sentence }
+            : null;
+          if (!resumeSentence) {
+            const badToken = surfaceErrorSentence({
+              mood: "do",
+              be: "error",
+              su: { name: "resume defective" },
+              ob: { text: "resume token must contain command sentence" }
+            });
+            if (badToken?.mood) pushNewspaper(sentenceToPyash(badToken));
+            runError = { sentence: badToken };
+            break;
+          }
+          resumeSentence.accordingto = { name: "ratify decision" };
+          resumeSentence.totext = { text: "truth" };
+          try {
+            const resumed = await interpret(resumeSentence);
+            const resumedSentence = toResultSentence(resumed, resumeSentence);
+            if (resumedSentence?.mood) {
+              const resumedSurfaced = surfaceErrorSentence(resumedSentence);
+              pushNewspaper(sentenceToPyash(resumedSurfaced));
+            }
+          } catch (err) {
+            const resumed = surfaceErrorSentence(err?.sentence ?? err);
+            if (resumed?.mood) pushNewspaper(sentenceToPyash(resumed));
+            runError = err;
+            break;
+          }
         } else if (resumeRefinery) {
           const resumeToken = surfaced?.fromtext?.text ?? null;
           try {
