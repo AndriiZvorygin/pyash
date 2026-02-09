@@ -34,10 +34,44 @@ function splitCommand(cmd) {
   return String(cmd).trim().split(/\s+/).filter(Boolean);
 }
 
+function isExecutablePath(filename) {
+  try {
+    return fsSync.existsSync(filename) && fsSync.statSync(filename).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function resolveExecutableFromPath(name) {
+  const envPath = String(process.env.PATH ?? "");
+  const dirs = envPath.split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    const candidate = path.join(dir, name);
+    if (isExecutablePath(candidate)) return candidate;
+  }
+  return null;
+}
+
 function resolveShellCommand() {
   const configured = String(process.env.SHELL ?? "").trim();
-  if (configured) return configured;
-  return "sh";
+  const candidates = [];
+  if (configured) candidates.push(configured);
+  if (configured && configured.includes(path.sep)) {
+    const base = path.basename(configured);
+    if (base) candidates.push(base);
+  }
+  candidates.push("sh", "bash", "/bin/sh", "/bin/bash", "/usr/bin/sh", "/usr/bin/bash");
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (candidate.includes(path.sep)) {
+      if (isExecutablePath(candidate)) return candidate;
+      continue;
+    }
+    const resolved = resolveExecutableFromPath(candidate);
+    if (resolved) return resolved;
+  }
+  return null;
 }
 
 const POLICY_MODES = new Set(["deny", "ask", "allow"]);
@@ -410,7 +444,12 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
       const parts = splitCommand(cmd);
       proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { ...spawnOptions, shell: resolveShellCommand() });
+      const shell = resolveShellCommand();
+      if (!shell) {
+        reject(new Error("command shell defective: no shell executable found"));
+        return;
+      }
+      proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
     }
     let stdout = "";
     let stderr = "";
@@ -608,7 +647,16 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       const parts = splitCommand(cmd);
       proc = spawn(parts[0], parts.slice(1), spawnOptions);
     } else {
-      proc = spawn(String(cmd), { ...spawnOptions, shell: resolveShellCommand() });
+      const shell = resolveShellCommand();
+      if (!shell) {
+        throwErrorSentence({
+          name: "command defective",
+          message: "command defective: no shell executable found",
+          from: { la: sentence },
+          raw: { cmd }
+        });
+      }
+      proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
     }
     let stderr = "";
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
