@@ -52,6 +52,14 @@ function authPath(agentHouse) {
   return path.join(agentHouse, "conduct", "matrix-auth.json");
 }
 
+function sanitizeUserId(raw, homeserver) {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  if (text.startsWith("@")) return text;
+  if (!text.includes(":")) return `@${text}:${homeserver.replace(/^https?:\/\//, "")}`;
+  return `@${text}`;
+}
+
 async function registerWithSharedSecret({
   homeserver,
   sharedSecret,
@@ -124,6 +132,57 @@ async function loginPassword({
     throw new Error(`matrix login failed: status=${response.status}`);
   }
   return response.json();
+}
+
+async function readDirectRoomFromAccountData({
+  homeserver,
+  token,
+  userId,
+  executiveUserId,
+  fetchImpl
+}) {
+  if (!userId || !executiveUserId) return null;
+  const encodedUser = encodeURIComponent(String(userId));
+  const url = `${homeserver}/_matrix/client/v3/user/${encodedUser}/account_data/m.direct`;
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => ({}));
+  const roomIds = payload?.[executiveUserId];
+  if (!Array.isArray(roomIds) || roomIds.length === 0) return null;
+  const roomId = roomIds.find((id) => typeof id === "string" && id.startsWith("!"));
+  return roomId ?? null;
+}
+
+async function createDirectRoom({
+  homeserver,
+  token,
+  executiveUserId,
+  fetchImpl
+}) {
+  const url = `${homeserver}/_matrix/client/v3/createRoom`;
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      is_direct: true,
+      invite: [executiveUserId],
+      preset: "trusted_private_chat"
+    })
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(`matrix create direct room failed: status=${response.status} code=${payload?.errcode ?? ""} error=${payload?.error ?? ""}`);
+  }
+  const payload = await response.json().catch(() => ({}));
+  const roomId = payload?.room_id;
+  if (!roomId) throw new Error("matrix create direct room missing room_id");
+  return String(roomId);
 }
 
 function envSharedSecret() {
@@ -259,4 +318,65 @@ export async function ensureMatrixCredentials({
     user: resolvedUser,
     localpart
   };
+}
+
+export async function ensureMatrixExecutiveDmRoom({
+  agentHouse,
+  homeserver,
+  token,
+  user,
+  executiveUser,
+  fetchImpl = globalThis.fetch
+}) {
+  if (!agentHouse) throw new Error("ensureMatrixExecutiveDmRoom requires agentHouse");
+  if (!homeserver || !token) throw new Error("ensureMatrixExecutiveDmRoom requires homeserver/token");
+  if (typeof fetchImpl !== "function") throw new Error("ensureMatrixExecutiveDmRoom requires fetch");
+
+  const executiveUserId = sanitizeUserId(executiveUser, homeserver);
+  if (!executiveUserId) return null;
+
+  const cached = await readJsonFile(authPath(agentHouse), null);
+  const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
+  if (typeof cachedRoom === "string" && cachedRoom.startsWith("!")) return cachedRoom;
+
+  const directRoom = await readDirectRoomFromAccountData({
+    homeserver,
+    token,
+    userId: user,
+    executiveUserId,
+    fetchImpl
+  });
+  if (directRoom) {
+    const next = {
+      ...(cached ?? {}),
+      homeserver,
+      user,
+      accessToken: token,
+      executiveDmRooms: {
+        ...(cached?.executiveDmRooms ?? {}),
+        [executiveUserId]: directRoom
+      }
+    };
+    await writeJsonFile(authPath(agentHouse), next);
+    return directRoom;
+  }
+
+  const createdRoom = await createDirectRoom({
+    homeserver,
+    token,
+    executiveUserId,
+    fetchImpl
+  });
+  const next = {
+    ...(cached ?? {}),
+    homeserver,
+    user,
+    accessToken: token,
+    executiveDmRooms: {
+      ...(cached?.executiveDmRooms ?? {}),
+      [executiveUserId]: createdRoom
+    }
+  };
+  await writeJsonFile(authPath(agentHouse), next);
+  return createdRoom;
 }

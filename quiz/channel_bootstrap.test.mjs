@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { ensureMatrixCredentials } from "../program/agent/channels/bootstrap.mjs";
+import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
 
 test("matrix bootstrap registers, logs in, and caches token", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-"));
@@ -58,3 +58,78 @@ test("matrix bootstrap registers, logs in, and caches token", async () => {
   assert.equal(callsAfterCache.length, 0);
 });
 
+test("matrix executive dm bootstrap reuses m.direct room when present", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-existing-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const roomId = "!dmexisting:example.org";
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            "@admin:matrix.liberit.ca": [roomId]
+          };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixExecutiveDmRoom({
+    agentHouse,
+    homeserver: "https://matrix.liberit.ca",
+    token: "tok",
+    user: "@helper:matrix.liberit.ca",
+    executiveUser: "@admin:matrix.liberit.ca",
+    fetchImpl
+  });
+  assert.equal(resolved, roomId);
+  assert.equal(calls.length, 1);
+});
+
+test("matrix executive dm bootstrap creates room and normalizes executive username", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-create-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        async json() {
+          return {};
+        }
+      };
+    }
+    if (url.endsWith("/_matrix/client/v3/createRoom")) {
+      const payload = JSON.parse(String(opts.body ?? "{}"));
+      assert.deepEqual(payload.invite, ["@xr12p:matrix.liberit.ca"]);
+      assert.equal(payload.is_direct, true);
+      return {
+        ok: true,
+        async json() {
+          return { room_id: "!newdm:matrix.liberit.ca" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixExecutiveDmRoom({
+    agentHouse,
+    homeserver: "https://matrix.liberit.ca",
+    token: "tok",
+    user: "@helper:matrix.liberit.ca",
+    executiveUser: "xr12p:matrix.liberit.ca",
+    fetchImpl
+  });
+  assert.equal(resolved, "!newdm:matrix.liberit.ca");
+  assert.equal(calls.length, 2);
+});
