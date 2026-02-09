@@ -10,11 +10,13 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import {
   resolveConfigBool,
   resolveConfigMapBool,
+  resolveConfigMapNum,
   resolveConfigMapText,
   resolveConfigText
 } from "../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
+import { emitExchangeSentence } from "../bridge/exchange.mjs";
 
 function resolveCommandText(ob = {}, { rememberFn } = {}) {
   if (typeof ob.wo === "string") return ob.wo;
@@ -144,6 +146,63 @@ export function resolveCommandPolicy({ sentence, cmdClass, rememberFn = remember
 
 const commandStreamProcesses = new Map();
 const STREAM_END_TOKEN = "[PYA_STREAM_END]";
+let commandAuditCounter = 0;
+
+function nextAuditId() {
+  commandAuditCounter += 1;
+  return String(commandAuditCounter).padStart(6, "0");
+}
+
+function buildCommandAudit({
+  stage,
+  commandClass,
+  policy,
+  decision,
+  sentence,
+  resultSentence,
+  rememberFn = remember
+} = {}) {
+  const lane = resolveConfigMapText("command configure", "audit security lane", { rememberFn });
+  const audit = {
+    mood: "ya",
+    exists: true,
+    be: "command audit",
+    su: { name: `command audit ${nextAuditId()}` },
+    as: { name: stage || "policy" },
+    from: { name: policy?.source ?? "command configure" },
+    accordingto: { name: decision ?? policy?.mode ?? "allow" },
+    by: { name: commandClass ?? "unknown" },
+    ob: { text: sentenceToPyash(sentence ?? {}) },
+    fromtext: { text: new Date().toISOString() }
+  };
+  if (resultSentence) audit.totext = { text: sentenceToPyash(resultSentence) };
+  if (lane) audit.at = { filename: lane };
+  return audit;
+}
+
+function emitCommandAudit(payload) {
+  emitExchangeSentence(buildCommandAudit(payload));
+}
+
+function shouldRequireRatify({ sentence, policy, commandClass } = {}) {
+  if (policy?.mode !== "ask") return false;
+  if (sentence?.mood === "propose") return true;
+  return commandClass === "destructive";
+}
+
+function shouldDeny({ sentence, policy, commandClass } = {}) {
+  if (policy?.mode !== "deny") return false;
+  if (sentence?.mood === "propose") return true;
+  return commandClass === "destructive";
+}
+
+function isNetworkDenied({ commandClass, rememberFn = remember } = {}) {
+  const networkAllowed =
+    resolveConfigMapBool("sandbox configure", "network", { rememberFn })
+    ?? resolveConfigBool("command sandbox network", { rememberFn })
+    ?? true;
+  return commandClass === "network" && networkAllowed === false;
+}
 
 function resolveStreamOutputPath(sentence) {
   const base = sentence?.su?.name ?? `command-${Date.now()}`;
@@ -176,7 +235,7 @@ function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-async function runCommandText(cmd, { input } = {}) {
+async function runCommandText(cmd, { input, timeoutMs } = {}) {
   return new Promise((resolve, reject) => {
     let proc;
     if (canRunDirect(cmd)) {
@@ -187,10 +246,23 @@ async function runCommandText(cmd, { input } = {}) {
     }
     let stdout = "";
     let stderr = "";
+    let timeoutHandle = null;
     proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
-    proc.on("error", reject);
-    proc.on("close", status => resolve({ status, stdout, stderr }));
+    proc.on("error", (err) => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      reject(err);
+    });
+    proc.on("close", status => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      resolve({ status, stdout, stderr });
+    });
+    if (typeof timeoutMs === "number" && timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        proc.kill("SIGKILL");
+        stderr += `timeout after ${timeoutMs}ms`;
+      }, timeoutMs);
+    }
     if (input !== null && input !== undefined) {
       proc.stdin.end(Buffer.from(String(input), "utf8"));
     } else {
@@ -267,6 +339,44 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   }
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
+  if (shouldDeny({ sentence, policy, commandClass })) {
+    emitCommandAudit({ stage: "policy", commandClass, policy, decision: "deny", sentence, rememberFn });
+    throwErrorSentence({
+      name: "command policy defective",
+      message: `command policy defective: denied class=${commandClass}`,
+      from: { la: sentence },
+      raw: { class: commandClass, mode: policy.mode }
+    });
+  }
+  if (shouldRequireRatify({ sentence, policy, commandClass })) {
+    const ratifySentence = {
+      mood: "ya",
+      be: "ratify",
+      su: { name: sentence?.su?.name ?? "command approval" },
+      ob: { text: `approve command (${commandClass}): ${cmd}` },
+      fromtext: { text: "policy ask" }
+    };
+    emitCommandAudit({
+      stage: "policy",
+      commandClass,
+      policy,
+      decision: "ask",
+      sentence,
+      resultSentence: ratifySentence,
+      rememberFn
+    });
+    return ratifySentence;
+  }
+  if (isNetworkDenied({ commandClass, rememberFn })) {
+    emitCommandAudit({ stage: "sandbox", commandClass, policy, decision: "deny", sentence, rememberFn });
+    throwErrorSentence({
+      name: "command sandbox defective",
+      message: "command sandbox defective: network disabled",
+      from: { la: sentence },
+      raw: { class: commandClass, network: false }
+    });
+  }
+  emitCommandAudit({ stage: "policy", commandClass, policy, decision: "allow", sentence, rememberFn });
 
   let input = null;
   if (sentence.from?.filename) {
@@ -374,7 +484,11 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: outputText }, be: "command" };
   }
 
-  const res = await runCommandText(cmd, { input });
+  const timeoutMs =
+    resolveConfigMapNum("sandbox configure", "timeout ms", { rememberFn })
+    ?? resolveConfigMapNum("command configure", "sandbox timeout ms", { rememberFn })
+    ?? 30000;
+  const res = await runCommandText(cmd, { input, timeoutMs });
   if (debug) {
     const stdout = String(res.stdout ?? "");
     const stderr = String(res.stderr ?? "");
@@ -391,6 +505,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     })}`);
   }
   if (res.status) {
+    emitCommandAudit({
+      stage: "result",
+      commandClass,
+      policy,
+      decision: "error",
+      sentence,
+      resultSentence: { mood: "do", be: "error", su: { name: "command defective" }, ob: { text: `status=${res.status ?? 0}` } },
+      rememberFn
+    });
     throwErrorSentence({
       name: "command defective",
       message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
@@ -406,6 +529,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     const fact = { mood: "ya", be: "text", su: { name: sentence.to.name }, ob: { text: output } };
     doRemember(fact);
   }
+  emitCommandAudit({
+    stage: "result",
+    commandClass,
+    policy,
+    decision: "allow",
+    sentence,
+    resultSentence: { mood: "ya", be: "command", ob: { text: output } },
+    rememberFn
+  });
   return { ob: { text: output }, be: "command" };
 }
 
