@@ -291,7 +291,7 @@ None (Week 3 complete).
 
 ## Week 4: Minimal agent loop v0.45 + Pipeline Workload Pack
 
-**Jan 25 → Jan 31, 2026**
+**Jan 25 → Feb 14, 2026 (extended)**
 
 ### Ship
 
@@ -309,6 +309,14 @@ None (Week 3 complete).
 
   * content-hash keys
   * deterministic cache-hit records and stable outputs
+* **Review-loop context compaction (golden context)**
+
+  * next-attempt prompt keeps only original task + latest accepted success pair
+  * failed retry chains stay in newspaper/artifacts, not in live prompt context
+* **Session gold emission/export**
+
+  * emit accepted generator+verifier pairs into `world/house/<agent>/gold/`
+  * deterministic dedup + nightly export contract for LoRA/SFT dataset builds
 * **Web search support**
 * **RAG support**
 * **Puppeteer support**
@@ -329,6 +337,13 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 (Week 4 focuses on: **reports, repros, caching, determinism**, not concurrency scheduling pressure.)
 
+### Parallel track: Agent integration (in-flight)
+
+* Review-loop rollout in real agents (including confederation-priest path)
+* Tool-routing hardening: generator gets tools; reviewer is context-only
+* Session behavior hardening for long runs (compact context + stable session records)
+* Add focused agent examples/quizzes for mind vs review-loop parity
+
 ### Spec drops (freeze v0.45)
 
 * **Patch bundle schema v0.1** (diff layout, tests, provenance)
@@ -347,7 +362,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 5: Concurrency v0.7 (ready queue, cancellation, backpressure, simulation)
 
-**Feb 1 → Feb 7, 2026**
+**Feb 15 → Feb 21, 2026**
 
 ### Anchor workloads
 
@@ -406,7 +421,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 6: Genetic programming harness v0.5
 
-**Feb 8 → Feb 14, 2026**
+**Feb 22 → Feb 28, 2026**
 
 ### Ship
 
@@ -433,7 +448,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 7: Packaging + human usability v0.8
 
-**Feb 15 → Feb 21, 2026**
+**Mar 1 → Mar 7, 2026**
 
 ### Ship
 
@@ -463,7 +478,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 8: Intent compiler v0.85
 
-**Feb 22 → Feb 28, 2026**
+**Mar 8 → Mar 14, 2026**
 
 ### Ship
 
@@ -488,7 +503,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 9: Knowledge core v0.9 (claim identity, evidence shell, KB layout)
 
-**Mar 1 → Mar 7, 2026**
+**Mar 15 → Mar 21, 2026**
 
 ### Ship
 
@@ -547,7 +562,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 10: Document digestion v0.92 (policy ingest to sentences, segmentation, draft extraction)
 
-**Mar 8 → Mar 14, 2026**
+**Mar 22 → Mar 28, 2026**
 
 ### Ship
 
@@ -600,7 +615,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 11: Conflict cases + adjudication harness v0.95 (proposer, defence, prosecution, judge)
 
-**Mar 15 → Mar 21, 2026**
+**Mar 29 → Apr 4, 2026**
 
 ### Ship
 
@@ -656,7 +671,7 @@ Introduce and grow a real pipeline pack used to prove verifier/reducer/report de
 
 ## Week 12: Resurrection + encyclopedia seed pack v1.0 (small world KB, revision over time)
 
-**Mar 22 → Mar 28, 2026**
+**Apr 5 → Apr 11, 2026**
 
 ### Ship
 
