@@ -93,17 +93,17 @@ EOF
 done
 
 if ! pya_container_has_docker; then
-  echo "error: docker is not installed or not on PATH" >&2
+  echo "error: $(pya_container_missing_docker_message)" >&2
   exit 2
 fi
 
 if ! pya_container_daemon_running; then
-  echo "error: docker daemon is not running" >&2
+  echo "error: $(pya_container_daemon_not_running_message)" >&2
   exit 2
 fi
 
 if ! pya_container_has_compose; then
-  echo "error: docker compose plugin is not available" >&2
+  echo "error: $(pya_container_missing_compose_message)" >&2
   exit 2
 fi
 
@@ -113,7 +113,8 @@ if [[ "$use_buildx" == true ]] && ! pya_container_has_buildx; then
 fi
 
 if [[ "$use_buildx" != true ]] && [[ -n "$platform" ]]; then
-  echo "error: --platform requires buildx. Install buildx or remove --platform." >&2
+  echo "error: --platform requires buildx. Remove --platform or install buildx." >&2
+  echo "hint: $(pya_container_missing_buildx_message)" >&2
   exit 2
 fi
 

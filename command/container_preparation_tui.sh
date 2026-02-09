@@ -136,12 +136,21 @@ prompt_yes_no() {
 }
 
 if ! pya_container_has_docker; then
-  dialog_msg "$(get_text docker_missing)"
+  dialog_msg "$(get_text docker_missing)
+
+$(pya_container_missing_docker_message)"
   exit 1
 fi
 
 if ! pya_container_daemon_running; then
-  dialog_msg "$(get_text docker_not_running)"
+  dialog_msg "$(get_text docker_not_running)
+
+$(pya_container_daemon_not_running_message)"
+  exit 1
+fi
+
+if ! pya_container_has_compose; then
+  dialog_msg "$(pya_container_missing_compose_message)"
   exit 1
 fi
 
