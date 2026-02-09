@@ -45,6 +45,25 @@ test("parse schedule policy extracts jobs, intervals, tools, and lane overrides"
   assert.equal(archive.intervalMs, 24 * 60 * 60 * 1000);
 });
 
+test("parse schedule policy locks recurrence grammar across per/every/during forms", () => {
+  const text = [
+    "su name minute canonical for name priest with wo tools vyah habit per minute 3 be calendar ya",
+    "su name hour alias for name priest with wo tools vyah habit every hour 2 be calendar ya",
+    "su name week legacy for name priest with wo tools vyah habit during week 1 be calendar ya"
+  ].join("\n");
+  const jobs = parseSchedulePolicyText(text, { defaultAgentName: "fallback" });
+  assert.equal(jobs.length, 3);
+
+  const minuteCanonical = jobs.find(job => job.jobName === "minute canonical");
+  assert.equal(minuteCanonical?.intervalMs, 3 * 60 * 1000);
+
+  const hourAlias = jobs.find(job => job.jobName === "hour alias");
+  assert.equal(hourAlias?.intervalMs, 2 * 60 * 60 * 1000);
+
+  const weekLegacy = jobs.find(job => job.jobName === "week legacy");
+  assert.equal(weekLegacy?.intervalMs, 7 * 24 * 60 * 60 * 1000);
+});
+
 test("load schedule policy reads conduct/calendar.pya", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-schedule-"));
   const agentHouse = path.join(root, "world", "house", "helper");
