@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/container/service/pyash.yaml"
+source "$ROOT_DIR/command/container_preflight.sh"
 
 build_args=()
 platform=""
@@ -65,6 +66,7 @@ Builds the pyash container, then restarts via begin.sh.
 
 Notes:
   - Buildx is the default (cached). Use --no-buildx to fall back to docker compose build.
+  - If buildx is unavailable, this command auto-falls back to docker compose build.
   - Use --no-restart to skip docker compose down/begin when using compose builds.
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
@@ -90,7 +92,32 @@ EOF
   esac
 done
 
-if [[ -n "$platform" || "$use_buildx" == true ]]; then
+if ! pya_container_has_docker; then
+  echo "error: docker is not installed or not on PATH" >&2
+  exit 2
+fi
+
+if ! pya_container_daemon_running; then
+  echo "error: docker daemon is not running" >&2
+  exit 2
+fi
+
+if ! pya_container_has_compose; then
+  echo "error: docker compose plugin is not available" >&2
+  exit 2
+fi
+
+if [[ "$use_buildx" == true ]] && ! pya_container_has_buildx; then
+  echo "warn: docker buildx is unavailable; falling back to docker compose build (same as --no-buildx)." >&2
+  use_buildx=false
+fi
+
+if [[ "$use_buildx" != true ]] && [[ -n "$platform" ]]; then
+  echo "error: --platform requires buildx. Install buildx or remove --platform." >&2
+  exit 2
+fi
+
+if [[ "$use_buildx" == true ]]; then
   # Auto-detect platform if not specified
   if [[ -z "$platform" ]]; then
     arch="$(docker info -f '{{.Architecture}}' 2>/dev/null || true)"

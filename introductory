@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT_DIR/command/container_preflight.sh"
 
 has_dialog="no"
 if [[ "${PYA_USE_DIALOG:-}" == "1" && "${PYA_NO_DIALOG:-}" != "1" ]] && command -v dialog >/dev/null 2>&1; then
@@ -9,10 +10,15 @@ if [[ "${PYA_USE_DIALOG:-}" == "1" && "${PYA_NO_DIALOG:-}" != "1" ]] && command 
 fi
 
 container_running="no"
-if command -v docker >/dev/null 2>&1; then
+if pya_container_has_docker; then
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
     container_running="yes"
   fi
+fi
+
+buildx_available="no"
+if pya_container_has_docker && pya_container_has_buildx; then
+  buildx_available="yes"
 fi
 
 if [[ "$has_dialog" == "yes" ]]; then
@@ -30,6 +36,9 @@ if [[ "$has_dialog" == "yes" ]]; then
   fi
 else
   echo "Pyash introduction"
+  if [[ "$buildx_available" != "yes" ]]; then
+    echo "Build note: docker buildx is not available; use ./container/build.sh --no-buildx"
+  fi
   if [[ "$container_running" == "yes" ]]; then
     echo "1) Enter running container (pyash)"
     echo "2) Container preparation (Docker)"
@@ -47,6 +56,9 @@ case "$CHOICE" in
     exec "$ROOT_DIR/container/command/begin.sh"
     ;;
   2)
+    if [[ "$buildx_available" != "yes" ]]; then
+      echo "Buildx not detected. If you use ./container/build.sh, run: ./container/build.sh --no-buildx"
+    fi
     exec "$ROOT_DIR/command/container_preparation_tui.sh"
     ;;
   3)
