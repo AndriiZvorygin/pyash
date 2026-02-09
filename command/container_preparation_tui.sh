@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STRINGS_FILE="$ROOT_DIR/command/container_preparation_text.pya"
 WORKPLACE_CONFIG="$ROOT_DIR/configure/workplace.pya"
+source "$ROOT_DIR/command/container_preflight.sh"
 
 if [[ ! -f "$STRINGS_FILE" ]]; then
   echo "missing strings file: $STRINGS_FILE" >&2
@@ -134,12 +135,12 @@ prompt_yes_no() {
   done
 }
 
-if ! command -v docker >/dev/null 2>&1; then
+if ! pya_container_has_docker; then
   dialog_msg "$(get_text docker_missing)"
   exit 1
 fi
 
-if ! docker info >/dev/null 2>&1; then
+if ! pya_container_daemon_running; then
   dialog_msg "$(get_text docker_not_running)"
   exit 1
 fi
