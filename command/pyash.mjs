@@ -1918,22 +1918,24 @@ async function configureAgent({ args }) {
 async function configureIntro({ args }) {
   const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
   const json = hasFlag(args, "--json");
-  const orchestrator = await loadOrchestratorConfigFromSecret(rootDir);
-  const channel = await loadMatrixConfigFromSecret(rootDir);
-  const mind = await loadMindConfigFromSecret(rootDir);
-  let agentConfigured = false;
-  try {
-    const houseDir = path.join(rootDir, "world", "house");
-    const entries = await fs.readdir(houseDir, { withFileTypes: true });
-    agentConfigured = entries.some((entry) => entry.isDirectory() && entry.name !== "base");
-  } catch {}
-
-  const status = {
-    orchestrator: Boolean(orchestrator.mode && orchestrator.host && orchestrator.port),
-    channel: Boolean(channel.homeserver && channel.room),
-    mind: Boolean(mind.backend && mind.host && mind.model),
-    agent: agentConfigured
+  const loadStatus = async () => {
+    const orchestrator = await loadOrchestratorConfigFromSecret(rootDir);
+    const channel = await loadMatrixConfigFromSecret(rootDir);
+    const mind = await loadMindConfigFromSecret(rootDir);
+    let agentConfigured = false;
+    try {
+      const houseDir = path.join(rootDir, "world", "house");
+      const entries = await fs.readdir(houseDir, { withFileTypes: true });
+      agentConfigured = entries.some((entry) => entry.isDirectory() && entry.name !== "base");
+    } catch {}
+    return {
+      orchestrator: Boolean(orchestrator.mode && orchestrator.host && orchestrator.port),
+      channel: Boolean(channel.homeserver && channel.room),
+      mind: Boolean(mind.backend && mind.host && mind.model),
+      agent: agentConfigured
+    };
   };
+  const status = await loadStatus();
 
   if (json) {
     jsonOut({ ok: true, route: "configure intro", rootDir, status });
@@ -1941,38 +1943,44 @@ async function configureIntro({ args }) {
   }
 
   while (true) {
+    const current = await loadStatus();
+    const defaultChoice = !current.orchestrator ? "1"
+      : !current.channel ? "2"
+        : !current.mind ? "3"
+          : !current.agent ? "4"
+            : "5";
     let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     try {
       textOut("Pyash Configure Intro");
-      textOut(`1. orchestrator ${status.orchestrator ? "(configured)" : "(pending)"}`);
-      textOut(`2. channel ${status.channel ? "(configured)" : "(pending)"}`);
-      textOut(`3. mind ${status.mind ? "(configured)" : "(pending)"}`);
-      textOut(`4. agent ${status.agent ? "(configured)" : "(pending)"}`);
+      textOut(`1. orchestrator ${current.orchestrator ? "(configured)" : "(pending)"}`);
+      textOut(`2. channel ${current.channel ? "(configured)" : "(pending)"}`);
+      textOut(`3. mind ${current.mind ? "(configured)" : "(pending)"}`);
+      textOut(`4. agent ${current.agent ? "(configured)" : "(pending)"}`);
       textOut("5. exit");
-      const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
+      const choice = (await rl.question(`Choose option [${defaultChoice}]: `)).trim() || defaultChoice;
       if (choice === "1") {
         rl.close();
         rl = null;
         await configureOrchestrator({ args: [] });
-        return;
+        continue;
       }
       if (choice === "2") {
         rl.close();
         rl = null;
         await configureChannel([]);
-        return;
+        continue;
       }
       if (choice === "3") {
         rl.close();
         rl = null;
         await configureMind({ args: [] });
-        return;
+        continue;
       }
       if (choice === "4") {
         rl.close();
         rl = null;
         await configureAgent({ args: [] });
-        return;
+        continue;
       }
       textOut("No changes made.");
       return;
