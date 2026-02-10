@@ -5,6 +5,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { appendWorldActivity, derivePresence, ensureWorldDir, isWorldToolsActive, readActivityTail, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir, resolveWorldRoot } from "../library/world.mjs";
 import { schedulerList } from "../agent/scheduler_control.mjs";
+import { listAgents } from "../agent/admin.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -67,6 +68,12 @@ function isCalendarScope(sentence) {
   return text === "calendar";
 }
 
+function isHouseScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "house";
+}
+
 function resolveSchedulerTarget(sentence) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
   if (typeof sentence?.to?.name === "string" && sentence.to.name.trim()) return sentence.to.name.trim();
@@ -74,6 +81,17 @@ function resolveSchedulerTarget(sentence) {
 }
 
 export async function list(sentence, { remember: rememberFn = remember } = {}) {
+  if (isHouseScope(sentence)) {
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const includeBase = String(sentence?.with?.wo ?? sentence?.with?.name ?? sentence?.with?.text ?? "").trim().toLowerCase() === "base";
+    const names = await listAgents({ worldRoot, includeBase });
+    const target = resolveSchedulerTarget(sentence).toLowerCase();
+    if (target) {
+      const hit = names.filter(name => String(name).toLowerCase() === target);
+      return { ob: { ve: { type: "text", values: hit } }, be: "list" };
+    }
+    return { ob: { ve: { type: "text", values: names } }, be: "list" };
+  }
   if (isCalendarScope(sentence)) {
     const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
     const result = await schedulerList({ worldRoot });
@@ -192,6 +210,11 @@ export default list;
 
 export const signatures = [
   { signatureWords: ["be", "list"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "house"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "house", "with", "wo", "base"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "house", "to", "name", "num"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "house", "to", "name", "text"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "house", "to", "name", "map"], handler: list },
   { signatureWords: ["be", "list", "from", "wo", "calendar"], handler: list },
   { signatureWords: ["be", "list", "from", "filename"], handler: list },
   { signatureWords: ["be", "list", "from", "name", "filename"], handler: list },

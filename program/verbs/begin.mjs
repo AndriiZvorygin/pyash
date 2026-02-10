@@ -4,6 +4,7 @@ import { renderSayValue } from "./say.mjs";
 import { ensureMcpServer } from "../motor/mcp.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerBegin, schedulerServiceBegin } from "../agent/scheduler_control.mjs";
+import { beginAgent } from "../agent/admin.mjs";
 import path from "node:path";
 
 function resolveTargetName(sentence, { rememberFn }) {
@@ -20,6 +21,12 @@ function isCalendarScope(sentence) {
   const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
   const text = String(raw ?? "").trim().toLowerCase();
   return text === "calendar";
+}
+
+function isHouseScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "house";
 }
 
 function resolveBeginType(sentence) {
@@ -53,6 +60,7 @@ export async function begin(sentence, { remember: rememberFn = remember } = {}) 
   const beginType = resolveBeginType(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
+  const houseScope = isHouseScope(sentence);
   if (!targetName && beginType !== "scheduler") {
     if (!calendarScope) {
       throwErrorSentence({
@@ -72,6 +80,24 @@ export async function begin(sentence, { remember: rememberFn = remember } = {}) 
         raw: { sentence }
       });
     }
+  }
+  if (houseScope) {
+    if (!targetName) {
+      throwErrorSentence({
+        name: "begin target missing",
+        message: "begin target missing",
+        from: { name: "begin" },
+        raw: { sentence }
+      });
+    }
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await beginAgent({ worldRoot, agentName: targetName, startScheduler: false });
+    return {
+      mood: "ya",
+      be: "begin",
+      from: { name: String(targetName ?? "") },
+      ob: { boolean: Array.isArray(result?.enabledServices) && result.enabledServices.length > 0 }
+    };
   }
   if (calendarScope && targetName && !isSchedulerTarget(targetName, beginType)) {
     const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
@@ -130,9 +156,13 @@ export const signatures = [
   { signatureWords: ["be", "begin", "as", "wo", "scheduler", "ob", "name", "num"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "scheduler", "ob", "name", "map"], handler: begin },
   { signatureWords: ["be", "begin", "from", "wo", "calendar"], handler: begin },
+  { signatureWords: ["be", "begin", "from", "wo", "house"], handler: begin },
   { signatureWords: ["be", "begin", "from", "wo", "calendar", "ob", "text"], handler: begin },
   { signatureWords: ["be", "begin", "from", "wo", "calendar", "ob", "name", "num"], handler: begin },
   { signatureWords: ["be", "begin", "from", "wo", "calendar", "ob", "name", "map"], handler: begin },
+  { signatureWords: ["be", "begin", "from", "wo", "house", "ob", "text"], handler: begin },
+  { signatureWords: ["be", "begin", "from", "wo", "house", "ob", "name", "num"], handler: begin },
+  { signatureWords: ["be", "begin", "from", "wo", "house", "ob", "name", "map"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "mcp", "ob", "text"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "mcp", "ob", "name", "num"], handler: begin },
   { signatureWords: ["be", "begin", "as", "wo", "mcp", "ob", "name", "text"], handler: begin },

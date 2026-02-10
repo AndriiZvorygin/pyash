@@ -5,6 +5,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerStop, schedulerServiceStop } from "../agent/scheduler_control.mjs";
+import { stopAgent } from "../agent/admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
@@ -20,6 +21,12 @@ function isCalendarScope(sentence) {
   const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
   const text = String(raw ?? "").trim().toLowerCase();
   return text === "calendar";
+}
+
+function isHouseScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "house";
 }
 
 function resolveStopType(sentence) {
@@ -38,13 +45,32 @@ export async function stop(sentence, { remember: rememberFn = remember } = {}) {
   const stopType = resolveStopType(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
-  if (!(calendarScope || isSchedulerTarget(targetName, stopType))) {
+  const houseScope = isHouseScope(sentence);
+  if (!(calendarScope || houseScope || isSchedulerTarget(targetName, stopType))) {
     throwErrorSentence({
       name: "stop target unknown",
       message: "stop target unknown",
       from: { name: "stop" },
       raw: { targetName, stopType }
     });
+  }
+  if (houseScope) {
+    if (!targetName) {
+      throwErrorSentence({
+        name: "stop target missing",
+        message: "stop target missing",
+        from: { name: "stop" },
+        raw: { sentence }
+      });
+    }
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await stopAgent({ worldRoot, agentName: targetName });
+    return {
+      mood: "ya",
+      be: "stop",
+      from: { name: String(targetName ?? "") },
+      ob: { boolean: Array.isArray(result?.disabledServices) }
+    };
   }
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
   if (calendarScope && targetName && !isSchedulerTarget(targetName, stopType)) {
@@ -79,7 +105,11 @@ export const signatures = [
   { signatureWords: ["be", "stop", "as", "wo", "scheduler", "ob", "name", "num"], handler: stop },
   { signatureWords: ["be", "stop", "as", "wo", "scheduler", "ob", "name", "map"], handler: stop },
   { signatureWords: ["be", "stop", "from", "wo", "calendar"], handler: stop },
+  { signatureWords: ["be", "stop", "from", "wo", "house"], handler: stop },
   { signatureWords: ["be", "stop", "from", "wo", "calendar", "ob", "text"], handler: stop },
   { signatureWords: ["be", "stop", "from", "wo", "calendar", "ob", "name", "num"], handler: stop },
-  { signatureWords: ["be", "stop", "from", "wo", "calendar", "ob", "name", "map"], handler: stop }
+  { signatureWords: ["be", "stop", "from", "wo", "calendar", "ob", "name", "map"], handler: stop },
+  { signatureWords: ["be", "stop", "from", "wo", "house", "ob", "text"], handler: stop },
+  { signatureWords: ["be", "stop", "from", "wo", "house", "ob", "name", "num"], handler: stop },
+  { signatureWords: ["be", "stop", "from", "wo", "house", "ob", "name", "map"], handler: stop }
 ];
