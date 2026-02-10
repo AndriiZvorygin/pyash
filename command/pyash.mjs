@@ -7,6 +7,7 @@ import readline from "node:readline/promises";
 import { Writable } from "node:stream";
 import { ensureMatrixCredentials } from "../program/agent/channels/bootstrap.mjs";
 import { establishAgent, beginAgent, stopAgent } from "../program/agent/admin.mjs";
+import { schedulerBegin, schedulerStop } from "../program/agent/scheduler_control.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..");
@@ -1402,6 +1403,7 @@ async function createOrchestratorWritePlan({ rootDir, cfg }) {
 
 async function configureOrchestrator({ args }) {
   const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
@@ -1424,15 +1426,23 @@ async function configureOrchestrator({ args }) {
 
   const plan = await createOrchestratorWritePlan({ rootDir, cfg });
   if (!dryRun) await applyWritePlan(plan);
+  let runtime = null;
+  if (!dryRun) {
+    runtime = cfg.autostart
+      ? await schedulerBegin({ worldRoot })
+      : await schedulerStop({ worldRoot });
+  }
 
   const out = {
     ok: true,
     route: "configure orchestrator",
     rootDir,
+    worldRoot,
     dryRun,
     changed: plan.changed,
     writes: writePlanSummary(plan),
     verification,
+    runtime,
     config: cfg
   };
   if (json) {
@@ -1442,6 +1452,9 @@ async function configureOrchestrator({ args }) {
   textOut("configure orchestrator complete");
   for (const w of out.writes) {
     textOut(`- ${w.path} (${w.changed ? "changed" : "unchanged"}, ${w.action})`);
+  }
+  if (runtime) {
+    textOut(`- scheduler ${runtime.running ? "running" : "stopped"}`);
   }
   if (print) {
     textOut("");
