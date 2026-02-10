@@ -5,6 +5,7 @@ import { ensureMcpServer, closeMcpServer } from "../motor/mcp.mjs";
 import path from "node:path";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerRestart, schedulerServiceRestart } from "../agent/scheduler_control.mjs";
+import { restartAgent } from "../agent/admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
@@ -20,6 +21,12 @@ function isCalendarScope(sentence) {
   const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
   const text = String(raw ?? "").trim().toLowerCase();
   return text === "calendar";
+}
+
+function isHouseScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "house";
 }
 
 function resolveRestartType(sentence) {
@@ -53,6 +60,7 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
   const restartType = resolveRestartType(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
+  const houseScope = isHouseScope(sentence);
   if (!targetName && restartType !== "scheduler") {
     if (!calendarScope) {
       throwErrorSentence({
@@ -72,6 +80,24 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
         raw: { sentence }
       });
     }
+  }
+  if (houseScope) {
+    if (!targetName) {
+      throwErrorSentence({
+        name: "restart target missing",
+        message: "restart target missing",
+        from: { name: "restart" },
+        raw: { sentence }
+      });
+    }
+    const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
+    const result = await restartAgent({ worldRoot, agentName: targetName, startScheduler: false });
+    return {
+      mood: "ya",
+      be: "restart",
+      from: { name: String(targetName ?? "") },
+      ob: { boolean: Array.isArray(result?.enabledServices) }
+    };
   }
   if (calendarScope && targetName && !isSchedulerTarget(targetName, restartType)) {
     const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
@@ -131,9 +157,13 @@ export const signatures = [
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "map"], handler: restart },
   { signatureWords: ["be", "restart", "from", "wo", "calendar"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "house"], handler: restart },
   { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "from", "wo", "calendar", "ob", "name", "map"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "house", "ob", "text"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "house", "ob", "name", "num"], handler: restart },
+  { signatureWords: ["be", "restart", "from", "wo", "house", "ob", "name", "map"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "mcp", "ob", "name", "text"], handler: restart },

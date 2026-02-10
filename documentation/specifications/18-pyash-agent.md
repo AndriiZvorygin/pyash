@@ -1,4 +1,4 @@
-## Pyash-compatible spec: agent loop, prompt context, and memory
+## Pyash-compatible spec: agent loop, prompt context, and memory integration
 
 ### 0. Purpose
 
@@ -9,7 +9,11 @@ Define a minimal, deterministic agent loop for Pyash that mirrors nanobot-style 
 3. Execute tool calls and feed results back into the loop.
 4. Record outputs and memory changes deterministically.
 
-This spec focuses on functional parity for loop, context, memory, and orchestration. It does not require internal implementation parity.
+This spec focuses on functional parity for loop, context, memory integration, and orchestration. It does not require internal implementation parity.
+
+Canonical memory lifecycle, retention, retrieval, and replay rules are specified in:
+
+* `documentation/specifications/22-memory-and-remember.md`
 
 Operational companion (non-normative): `documentation/recipes/agent-operations.md`.
 
@@ -91,11 +95,13 @@ Minimum layout under `world/house/<agent>/`:
 * `identity/` (bootstrap files)
 * `memory/` (persistent memory files)
 * `session/` (session history)
+* `conduct/` (policy, calendar, managed state)
+* `program/` (agent-local automation/helpers)
+* `artifacts/` (run-scoped artifacts)
 
 Optional layout:
 
 * `roles/` (task/role notes, treated similarly to skills)
-* `conduct/` (approval and scheduler policy)
 * `gold/accepted/` and `gold/rejected/` (training signal emission)
 
 ### 3.5 Base house inheritance
@@ -162,6 +168,8 @@ Recommended deterministic backing store is the world filesystem (no hidden DB):
 * `world/house/<agent>/conduct/*`
 * `world/house/<agent>/session/*`
 * `world/house/<agent>/memory/*`
+* `world/house/<agent>/program/*`
+* `world/house/<agent>/artifacts/*`
 
 Agent creation MUST initialize at least:
 
@@ -169,8 +177,60 @@ Agent creation MUST initialize at least:
 * `memory/`
 * `session/`
 * `conduct/`
+* `artifacts/`
 
 and SHOULD seed identity from `world/house/base/identity/`.
+
+### 4.1.3 Idempotent house establish and improve (normative)
+
+The administration surface MUST support idempotent reconcile for agent house creation and updates.
+
+Canonical Pyash surface:
+
+```pyash
+su name <agent> ob text "<purpose>" be establish do
+su name <agent> ob text "<note>" be improve do
+be list from wo house do
+su name <agent> be begin from wo house do
+su name <agent> be stop from wo house do
+su name <agent> be restart from wo house do
+```
+
+Canonical CLI parity surface:
+
+* `node command/agent_admin.mjs ensure-base`
+* `node command/agent_admin.mjs list`
+* `node command/agent_admin.mjs establish --name <agent> --purpose "<purpose>" [--interval-minutes <n>] [--begin]`
+* `node command/agent_admin.mjs establish-interactive`
+* `node command/agent_admin.mjs improve --name <agent> --note "<note>"`
+* `node command/agent_admin.mjs begin --name <agent>`
+* `node command/agent_admin.mjs stop --name <agent>`
+* `node command/agent_admin.mjs restart --name <agent>`
+
+Establish reconcile result MUST report:
+
+* `status`: one of `created`, `updated`, `unchanged`
+* `changed`: boolean
+* `changes`: deterministic list of updated areas
+
+Managed reconcile metadata MUST be persisted at:
+
+* `world/house/<agent>/conduct/managed.pya`
+
+with a deterministic desired-state hash so repeated identical establish calls produce `unchanged`.
+
+Managed-purpose identity block:
+
+* Purpose text in `world/house/<agent>/identity/IDENTITY.md` SHOULD be bounded by markers:
+  * `<!-- managed-purpose:start -->`
+  * `<!-- managed-purpose:end -->`
+* Reconcile updates this bounded section in place instead of appending duplicates.
+
+Managed calendar policy:
+
+* Reconcile MAY write `world/house/<agent>/conduct/calendar.pya` when missing.
+* Reconcile MAY update that file only when it is managed (`# managed by agent_admin`) or absent.
+* Unmanaged calendar files MUST remain unchanged.
 
 ### 4.2 System prompt order
 
@@ -200,6 +260,11 @@ The current user input is appended last as a `user` role message.
 ---
 
 ## 5. Memory storage
+
+This section defines agent-local memory files used for prompt context assembly.
+For canonical memcube lifecycle and `be remember do` retrieval semantics, see:
+
+* `documentation/specifications/22-memory-and-remember.md`
 
 ### 5.1 Files
 
@@ -495,7 +560,20 @@ Every mind call records:
 * request payload
 * response payload
 
-Storage location is implementation-defined, but defaults to `artifacts/mind/`.
+Storage location defaults to the agent house run scope:
+
+* `world/house/<agent>/artifacts/<run-id>/mind/`
+
+For parity/autofix style jobs, implementations SHOULD keep all per-run diagnostics
+under the same run root, for example:
+
+* `world/house/<agent>/artifacts/<run-id>/status-before.json`
+* `world/house/<agent>/artifacts/<run-id>/status-after.json`
+* `world/house/<agent>/artifacts/<run-id>/delta.json`
+* `world/house/<agent>/artifacts/<run-id>/fix-log/*.log`
+* `world/house/<agent>/artifacts/<run-id>/summary.pya`
+
+Global newspapers remain outside agent control under world-level logs.
 
 ### 9.2 Loop traces
 
@@ -623,6 +701,26 @@ Routing rules:
 * If no lane sentence is provided, use the job name as the lane name.
 * Scheduled session files use the existing daily prefix format: `YYYYMMDD-<lane name>.pya`.
 * Lane semantics are equivalent to scheduler-side `from discourse name "<session name>"`.
+
+### 14.4.1 Presence updates for scheduled runs (normative)
+
+Scheduler-driven agent runs SHOULD refresh a presence marker file:
+
+* `world/house/<agent>/.presence.pya`
+
+Canonical sentence shape:
+
+```pyash
+su name <agent> be present since date "<start-iso>" during date "<latest-iso>" with ve filename "<path-1>" "<path-2>" ya
+```
+
+Rules:
+
+1. `since` is the start timestamp of the active scheduled work window.
+2. `during` is updated at run start and run end.
+3. `with ve filename ...` contains touched/owned files for the active window when available.
+4. Presence emission must be deterministic and safe to rewrite.
+5. Scheduler overlap/skip policy does not create duplicate active windows.
 
 ### 14.5 Single scheduler daemon (normative)
 
@@ -906,6 +1004,26 @@ su name matrix homeserver ob text "https://matrix.example.org" ya
 su name matrix room ob text "!roomid:example.org" ya
 su name matrix room lane ob text "matrix_main" ya
 ```
+
+Recommended runtime config map (loaded from `configure/default.pya` / `configure/secret.pya`):
+
+```pyash
+su name matrix channel be map def
+su name homeserver ob text "https://matrix.example.org" ya
+su name room ob text "!roomid:example.org" ya
+su name executive username ob text "@executive:example.org" ya
+su name token ob text "<access-token>" ya
+prah
+```
+
+Config precedence (normative):
+1. `matrix channel` config map values
+2. channel policy files (`world/conduct/channels.pya`, then agent-local override)
+3. legacy remembered scalar facts (`matrix homeserver`, `matrix access token`, etc.)
+
+Bootstrap auth rule:
+* if `token` is available, runtimes SHOULD use it directly;
+* otherwise runtimes MAY bootstrap credentials using registration/admin policy.
 
 Global `world/conduct/calendar.pya`:
 

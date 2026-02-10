@@ -71,6 +71,8 @@ import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
 import depart, { signatures as loopControlSignatures } from "./loop_control.mjs";
 import exportFact, { signatures as exportSignatures } from "./export.mjs";
 import repair, { signatures as repairSignatures } from "./repair.mjs";
+import establish, { signatures as establishSignatures } from "./establish.mjs";
+import improve, { signatures as improveSignatures } from "./improve.mjs";
 
 export {
   plus,
@@ -132,7 +134,9 @@ export {
   guarantee,
   depart,
   exportFact,
-  repair
+  repair,
+  establish,
+  improve
 };
 
 export const builtInSignatures = [
@@ -209,4 +213,6 @@ export const builtInSignatures = [
   ...loopControlSignatures,
   ...exportSignatures,
   ...repairSignatures,
+  ...establishSignatures,
+  ...improveSignatures,
 ];

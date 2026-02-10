@@ -117,6 +117,11 @@ Subspaces:
 
 **MVP:** `bedroom`, `ingredients`, `roles`
 
+Pyash agent runtime compatibility:
+
+* For deployable agent runtime layout and administration/reconcile semantics, implementations SHOULD follow `documentation/specifications/18-pyash-agent.md`.
+* In practice this includes agent-local `identity/`, `session/`, `conduct/`, `program/`, and `artifacts/` roots plus optional `gold/`.
+
 ---
 
 ### 3.3 Programs (communal)
@@ -274,6 +279,31 @@ Presence is derived from activity facts produced by:
 Expiry is enforced by itinerary policy. **Default MVP window:** last **30 minutes** or last **20 activity facts**, whichever is shorter (configurable).
 
 **MVP:** derived presence with expiry
+
+### 5.4 Presence file (optional runtime contract)
+
+Implementations MAY also materialize presence as a file marker in active work roots:
+
+* `.presence.pya`
+* canonical house path: `world/house/<agent>/.presence.pya`
+
+Canonical sentence shape:
+
+```text
+su name <agent> be present
+since date "<start-iso>"
+during date "<latest-iso>"
+with ve filename "<touched-file-1>" "<touched-file-2>"
+ya
+```
+
+Rules:
+
+1. `since` records the start time of the current active work window.
+2. `during` records the latest heartbeat/update time.
+3. `with ve filename ...` lists currently touched or owned files for this window.
+4. Presence file updates are append-or-rewrite per runtime policy, but MUST remain deterministic.
+5. Presence expiry still follows itinerary policy; stale markers are ignored after expiry window.
 
 ---
 
