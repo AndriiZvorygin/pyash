@@ -699,6 +699,7 @@ Rules:
 3. If the source is a news report or secondary retelling, outputs SHOULD use reported/news evidential.
 4. If the source is an authoritative primary document (for example a research paper, official spec, or original record), outputs SHOULD use direct evidential.
 5. If a claim is corroborated by multiple independent sources, outputs MAY be promoted to factive evidential.
+6. Memory records written from perceptual outputs SHOULD preserve these evidential tags; memory lifecycle/retrieval rules are defined in `22-memory-and-remember.md`.
 
 Source-strength policy:
 
