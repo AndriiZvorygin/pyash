@@ -7,6 +7,23 @@ Three convenience scripts live at the repo root:
 - `./run <file.pya>` executes a Pyash program file through the interpreter (same as `node command/run_pya_program.mjs file.pya`).
 - `./compile` wraps common compile flows.
 
+Global CLI (recommended):
+
+- `pyash run <file.pya>` — same runtime as `./run`.
+- `pyash repl` — same as `./interpret`.
+- `pyash configure` — interactive setup menu.
+- `pyash configure channel` — interactive channel setup menu.
+- `pyash configure channel list` — list available channel caterers.
+- `pyash configure channel matrix` — matrix channel wizard.
+- `pyash configure channel matrix test` — run matrix connectivity/auth checks.
+- `pyash configure channel matrix doctor` — diagnose stored matrix setup.
+
+Install globally:
+
+```bash
+npm link
+```
+
 `./compile` usage
 -----------------
 
