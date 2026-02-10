@@ -14,6 +14,7 @@ export async function loadConfigFile({ configPath, interpretFn }) {
     for (const entry of lines) {
       const trimmed = entry.text.trim();
       if (!trimmed) continue;
+      if (trimmed.startsWith("#")) continue;
       state.currentSourceFilename = configPath;
       state.currentSourceLine = entry.line;
       const sentence = parse(trimmed);

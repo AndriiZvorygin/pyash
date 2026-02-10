@@ -4,6 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
+import { Writable } from "node:stream";
+import { ensureMatrixCredentials } from "../program/agent/channels/bootstrap.mjs";
+import { establishAgent, beginAgent, stopAgent } from "../program/agent/admin.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..");
@@ -39,9 +42,10 @@ function usage() {
     "  pyash configure",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
+    "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
     "",
     "Notes:",
     "  - Canonical configure route is: pyash configure channel <caterer>",
@@ -86,7 +90,10 @@ async function ensureDirForFile(filePath) {
 }
 
 function normalizeHomeserver(raw) {
-  return String(raw ?? "").trim().replace(/\/+$/g, "");
+  const text = String(raw ?? "").trim().replace(/\/+$/g, "");
+  if (!text) return "";
+  if (!/^https?:\/\//i.test(text)) return `https://${text}`;
+  return text;
 }
 
 function homeserverHost(homeserver) {
@@ -94,6 +101,12 @@ function homeserverHost(homeserver) {
   if (!text) return "";
   const withoutProto = text.replace(/^https?:\/\//i, "");
   return withoutProto.replace(/\/.*$/g, "").trim().toLowerCase();
+}
+
+function matrixSupportsSharedSecret(homeserver) {
+  const host = homeserverHost(homeserver);
+  // matrix.org is not a self-hosted Synapse admin endpoint for shared-secret registration.
+  return host !== "matrix.org";
 }
 
 function matrixServerFromId(value) {
@@ -110,6 +123,16 @@ function ensureMatrixIdServer(value, host) {
   if (!text.startsWith("#") && !text.startsWith("!")) return text;
   if (matrixServerFromId(text)) return text;
   return `${text}:${trimmedHost}`;
+}
+
+function rewriteMatrixIdServer(value, host) {
+  const text = String(value ?? "").trim();
+  const trimmedHost = String(host ?? "").trim().toLowerCase();
+  if (!text || !trimmedHost) return text;
+  if (!text.startsWith("#") && !text.startsWith("!")) return text;
+  if (!matrixServerFromId(text)) return `${text}:${trimmedHost}`;
+  const local = text.slice(0, text.lastIndexOf(":"));
+  return `${local}:${trimmedHost}`;
 }
 
 function ensureMatrixUserServer(value, host) {
@@ -155,6 +178,19 @@ function sectionPrinter() {
       textOut("");
     }
   };
+}
+
+class MuteWritable extends Writable {
+  constructor(target) {
+    super();
+    this.target = target;
+    this.muted = false;
+  }
+
+  _write(chunk, encoding, callback) {
+    if (!this.muted) this.target.write(chunk, encoding);
+    callback();
+  }
 }
 
 async function runNodeScript(scriptPath, args, { cwd = process.cwd() } = {}) {
@@ -293,6 +329,30 @@ function buildChannelConductBlock({ homeserver, room, mentionGate = false }) {
   ].join("\n");
 }
 
+function buildMatrixPollCalendarBlock({ agentName, intervalMinutes = 1 }) {
+  const interval = Math.max(1, Math.floor(Number(intervalMinutes) || 1));
+  return [
+    `su name matrix poll for name ${agentName} with wo tools vyah habit during minute ${interval} be calendar ya`,
+    "su name matrix poll lane ob text \"matrix_poll\" ya"
+  ].join("\n");
+}
+
+function upsertMatrixPollCalendarText({ existing, agentName, intervalMinutes = 1 }) {
+  const pollLines = buildMatrixPollCalendarBlock({ agentName, intervalMinutes }).split("\n");
+  const lines = String(existing ?? "").split("\n");
+  const pollPattern = /^su name matrix poll for name .* be calendar ya$/i;
+  const lanePattern = /^su name matrix poll lane ob text "matrix_poll" ya$/i;
+  const kept = lines.filter((line) => !pollPattern.test(line.trim()) && !lanePattern.test(line.trim()));
+  const body = kept.join("\n").trim();
+  const block = pollLines.join("\n");
+  const nextText = body ? `${body}\n${block}\n` : `${block}\n`;
+  return {
+    changed: nextText !== existing,
+    action: String(existing || "").trim() ? "append" : "create",
+    nextText
+  };
+}
+
 async function loginMatrixWithPassword({ homeserver, userId, password }) {
   const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/login`;
   const response = await fetch(endpoint, {
@@ -366,6 +426,12 @@ function matrixVerification(cfg) {
   if (!["password", "token", "shared-secret"].includes(authMode)) {
     errors.push({ code: "invalid_auth_mode", message: "auth mode must be password, token, or shared-secret" });
   }
+  if (authMode === "shared-secret" && !matrixSupportsSharedSecret(homeserver)) {
+    errors.push({
+      code: "invalid_auth_mode_for_homeserver",
+      message: "shared-secret mode is not supported for matrix.org; use password or token"
+    });
+  }
 
   if (authMode === "password") {
     if (!cfg.userId) errors.push({ code: "missing_user", message: "agent user id is required for password mode" });
@@ -411,11 +477,6 @@ async function matrixLiveTest(cfg) {
     return { ok: false, checks };
   }
 
-  if (cfg.authMode === "shared-secret") {
-    checks.push({ name: "auth verification", ok: true, note: "shared-secret mode not live-auth-verified in test path" });
-    return { ok: true, checks };
-  }
-
   let token = cfg.token;
   if (!token && cfg.authMode === "password" && cfg.userId && cfg.password) {
     try {
@@ -448,6 +509,143 @@ async function matrixLiveTest(cfg) {
   return { ok: true, checks };
 }
 
+async function ensureSharedSecretToken({ cfg, rootDir }) {
+  if (cfg.authMode !== "shared-secret" || cfg.token) return cfg;
+  const agentName = String(cfg.agentName || "parity coder").trim() || "parity coder";
+  const agentHouse = path.join(rootDir, "world", "house", agentName);
+  const credentials = await ensureMatrixCredentials({
+    agentName,
+    agentHouse,
+    config: {
+      homeserver: cfg.homeserver,
+      user: cfg.userId || null,
+      token: cfg.token || null,
+      registrationSharedSecret: cfg.registrationSharedSecret || null,
+      adminToken: cfg.adminToken || null
+    }
+  });
+  return {
+    ...cfg,
+    token: credentials.token || cfg.token,
+    userId: cfg.userId || credentials.user || ""
+  };
+}
+
+async function matrixJoinRoom({ homeserver, token, room }) {
+  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/join/${encodeURIComponent(room)}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
+    const message = payload?.error ? ` error=${payload.error}` : "";
+    throw new Error(`matrix join failed: status=${response.status}${code}${message}`);
+  }
+  return String(payload?.room_id || room);
+}
+
+async function matrixSendRoomMessage({ homeserver, token, roomId, content }) {
+  const txnId = `pyash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`;
+  const response = await fetch(endpoint, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      msgtype: "m.text",
+      body: String(content ?? "")
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
+    const message = payload?.error ? ` error=${payload.error}` : "";
+    throw new Error(`matrix send failed: status=${response.status}${code}${message}`);
+  }
+  return String(payload?.event_id || "");
+}
+
+async function matrixCreateDirectRoom({ homeserver, token, executiveUsername }) {
+  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/createRoom`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      is_direct: true,
+      invite: [String(executiveUsername ?? "")],
+      preset: "trusted_private_chat"
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
+    const message = payload?.error ? ` error=${payload.error}` : "";
+    throw new Error(`matrix createRoom failed: status=${response.status}${code}${message}`);
+  }
+  const roomId = String(payload?.room_id || "");
+  if (!roomId) throw new Error("matrix createRoom missing room_id");
+  return roomId;
+}
+
+async function matrixPostSetupTest(cfg) {
+  const checks = [];
+  const live = await matrixLiveTest(cfg);
+  checks.push(...(live.checks || []));
+  if (!live.ok) return { ok: false, checks };
+
+  if (!cfg.token) {
+    checks.push({ name: "room join + greeting", ok: true, note: "skipped: no token available" });
+    if (cfg.executiveUsername) {
+      checks.push({ name: "executive dm greeting", ok: true, note: "skipped: no token available" });
+    }
+    return { ok: true, checks };
+  }
+
+  try {
+    const joinedRoomId = await matrixJoinRoom({
+      homeserver: cfg.homeserver,
+      token: cfg.token,
+      room: cfg.room
+    });
+    checks.push({ name: "join room", ok: true, roomId: joinedRoomId });
+    const roomEventId = await matrixSendRoomMessage({
+      homeserver: cfg.homeserver,
+      token: cfg.token,
+      roomId: joinedRoomId,
+      content: "Pyash configure test greeting. If you can read this, channel setup works."
+    });
+    checks.push({ name: "send room greeting", ok: true, eventId: roomEventId });
+  } catch (err) {
+    checks.push({ name: "room join + greeting", ok: false, error: String(err?.message || err) });
+    return { ok: false, checks };
+  }
+
+  if (cfg.executiveUsername) {
+    try {
+      const dmRoomId = await matrixCreateDirectRoom({
+        homeserver: cfg.homeserver,
+        token: cfg.token,
+        executiveUsername: cfg.executiveUsername
+      });
+      checks.push({ name: "create executive dm room", ok: true, roomId: dmRoomId });
+      const dmEventId = await matrixSendRoomMessage({
+        homeserver: cfg.homeserver,
+        token: cfg.token,
+        roomId: dmRoomId,
+        content: "Pyash configure DM test greeting. Executive messaging is working."
+      });
+      checks.push({ name: "send executive dm greeting", ok: true, eventId: dmEventId });
+    } catch (err) {
+      checks.push({ name: "executive dm greeting", ok: false, error: String(err?.message || err) });
+      return { ok: false, checks };
+    }
+  }
+
+  return { ok: true, checks };
+}
+
 async function matrixDoctor({ rootDir }) {
   const loaded = await loadMatrixConfigFromSecret(rootDir);
   const configExists = Boolean(loaded.homeserver || loaded.room || loaded.token || loaded.userId || loaded.authMode || loaded.registrationSharedSecret);
@@ -459,14 +657,15 @@ async function matrixDoctor({ rootDir }) {
     };
   }
 
-  const verification = matrixVerification(loaded);
+  const resolved = await ensureSharedSecretToken({ cfg: { ...loaded, agentName: "parity coder" }, rootDir });
+  const verification = matrixVerification(resolved);
   const issues = [];
   for (const err of verification.errors) issues.push({ code: err.code, kind: "invalid", message: err.message });
   for (const warn of verification.warnings) issues.push({ code: warn.code, kind: "warning", message: warn.message });
 
   let live = null;
   if (verification.ok) {
-    live = await matrixLiveTest(loaded);
+    live = await matrixLiveTest(resolved);
     if (!live.ok) {
       issues.push({ code: "live_check_failed", kind: "unreachable", message: "live check failed; inspect checks for details" });
     }
@@ -485,7 +684,7 @@ async function matrixDoctor({ rootDir }) {
 
   return {
     ok: verification.ok && (!live || live.ok),
-    config: redactMatrixConfig(loaded),
+    config: redactMatrixConfig(resolved),
     issues,
     live,
     remedies
@@ -495,7 +694,10 @@ async function matrixDoctor({ rootDir }) {
 function collectMatrixFromFlags({ args, prior }) {
   const homeserver = normalizeHomeserver(parseArgValue(args, "--homeserver") ?? prior.homeserver ?? "");
   const host = homeserverHost(homeserver);
-  const room = ensureMatrixIdServer(parseArgValue(args, "--room") ?? prior.room ?? "", host);
+  const providedRoom = parseArgValue(args, "--room");
+  const room = providedRoom
+    ? ensureMatrixIdServer(providedRoom, host)
+    : rewriteMatrixIdServer(prior.room ?? "", host);
   const executiveUsername = ensureMatrixUserServer(parseArgValue(args, "--executive") ?? prior.executiveUsername ?? "", host);
   const userId = ensureMatrixUserServer(parseArgValue(args, "--agent-user-id") ?? prior.userId ?? "", host);
   const authMode = String(parseArgValue(args, "--auth-mode") ?? prior.authMode ?? "password").trim().toLowerCase();
@@ -504,7 +706,7 @@ function collectMatrixFromFlags({ args, prior }) {
   const registrationSharedSecret = parseArgValue(args, "--registration-shared-secret") ?? prior.registrationSharedSecret ?? "";
   const adminToken = parseArgValue(args, "--admin-token") ?? prior.adminToken ?? "";
   const agentName = parseArgValue(args, "--agent") ?? "parity coder";
-  const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), false);
+  const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
   const mentionGate = parseTruthy(parseArgValue(args, "--mention-gate"), false);
 
   return {
@@ -523,87 +725,237 @@ function collectMatrixFromFlags({ args, prior }) {
   };
 }
 
-async function collectMatrixInteractive({ prior, mode }) {
+async function collectMatrixInteractive({ prior, mode, rootDir }) {
   const quickstart = mode !== "advanced";
   const printer = sectionPrinter();
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const muteOutput = new MuteWritable(process.stdout);
+  const rl = readline.createInterface({ input: process.stdin, output: muteOutput, terminal: true });
   try {
     const ask = async (label, fallback = "") => {
+      muteOutput.muted = false;
       const shown = fallback ? ` [${fallback}]` : "";
       const v = (await rl.question(`${label}${shown}: `)).trim();
       return v || fallback;
     };
     const askYesNo = async (label, fallback = true) => {
+      muteOutput.muted = false;
       const shown = fallback ? "Y/n" : "y/N";
       const v = (await rl.question(`${label} [${shown}]: `)).trim().toLowerCase();
       if (!v) return fallback;
       return v === "y" || v === "yes";
     };
+    const askSecret = async (label, fallback = "") => {
+      const shown = fallback ? " [set]" : "";
+      muteOutput.muted = false;
+      process.stdout.write(`${label}${shown}: `);
+      muteOutput.muted = true;
+      const v = (await rl.question("")).trim();
+      muteOutput.muted = false;
+      process.stdout.write("\n");
+      return v || fallback;
+    };
+    const validateHomeserverUrl = (value) => {
+      try {
+        const url = new URL(value);
+        if (!/^https?:$/i.test(url.protocol)) {
+          return "homeserver must use http or https";
+        }
+        return "";
+      } catch {
+        return "homeserver must be a valid URL or hostname";
+      }
+    };
 
-    printer.header("A.1 Channel Route");
-    printer.why("Messages must be routed to the right homeserver and room.");
-    printer.how("Use your homeserver URL and a room id (!...) or alias (#...).");
-    printer.examples("homeserver=https://matrix.org, room=#pyash:matrix.org");
-    const homeserver = normalizeHomeserver(await ask("Matrix homeserver", prior.homeserver || "https://matrix.org"));
+    printer.header("A.1 Homeserver");
+    printer.why("All channel and auth operations depend on the homeserver endpoint.");
+    printer.how("Enter server host or full URL. If protocol is omitted, https:// is assumed.");
+    printer.examples("matrix.org | https://matrix.liberit.ca");
+    let homeserver = "";
+    while (!homeserver) {
+      const entered = await ask("Matrix homeserver", prior.homeserver || "https://matrix.org");
+      const normalized = normalizeHomeserver(entered);
+      const issue = validateHomeserverUrl(normalized);
+      if (issue) {
+        textOut(`- invalid: ${issue}`);
+        continue;
+      }
+      let reachable = false;
+      try {
+        await matrixVersions({ homeserver: normalized });
+        reachable = true;
+        textOut("- check: homeserver reachable");
+      } catch (err) {
+        textOut(`- warning: homeserver check failed (${String(err?.message || err)})`);
+      }
+      if (!reachable) {
+        const keep = await askYesNo("Keep this homeserver anyway", false);
+        if (!keep) continue;
+      }
+      homeserver = normalized;
+      textOut(`- server set to ${homeserver}`);
+      textOut(`- server check ${reachable ? "passed" : "not verified"}`);
+    }
     const host = homeserverHost(homeserver);
-    const room = ensureMatrixIdServer(await ask("Room id or alias (!room:server or #alias:server)", ensureMatrixIdServer(prior.room || "#pyash", host)), host);
 
     printer.header("B.1 Matrix Auth");
     printer.why("The caterer needs credentials to verify and send.");
-    printer.how("Choose password for easiest setup, token for existing access token, shared-secret for self-hosted Synapse.");
-    printer.examples("password | token | shared-secret");
-    let authMode = String(await ask("Auth mode", prior.authMode || "password")).trim().toLowerCase();
-    if (!["password", "token", "shared-secret"].includes(authMode)) authMode = "password";
+    const supportsSharedSecret = matrixSupportsSharedSecret(homeserver);
+    const allowedAuthModes = supportsSharedSecret
+      ? ["password", "token", "shared-secret"]
+      : ["password", "token"];
+    printer.how(supportsSharedSecret
+      ? "Choose password for easiest setup, token for existing access token, shared-secret for self-hosted Synapse."
+      : "Choose password for easiest setup, or token for existing access token.");
+    printer.examples(allowedAuthModes.join(" | "));
+    let authMode = "";
+    while (!authMode) {
+      const defaultAuth = allowedAuthModes.includes(String(prior.authMode || "").trim().toLowerCase())
+        ? String(prior.authMode || "").trim().toLowerCase()
+        : "password";
+      const picked = String(await ask("Auth mode", defaultAuth)).trim().toLowerCase();
+      if (!allowedAuthModes.includes(picked)) {
+        textOut(`- invalid: auth mode must be ${allowedAuthModes.join(", ")}`);
+        continue;
+      }
+      authMode = picked;
+    }
 
     let userId = ensureMatrixUserServer(prior.userId || "", host);
     let token = prior.token || "";
     let password = "";
     let registrationSharedSecret = prior.registrationSharedSecret || "";
     let adminToken = prior.adminToken || "";
+    let authOk = false;
+    while (!authOk) {
+      if (authMode === "password") {
+        printer.header("B.2 Password Flow");
+        printer.why("Password can be exchanged for token automatically.");
+        printer.how("Use your bot/service account user id and password.");
+        printer.examples("@pyash-agent:matrix.org");
+        userId = ensureMatrixUserServer(await ask("Agent Matrix user id", userId || "@pyash-agent"), host);
+        password = "";
+        while (!password) {
+          password = await askSecret("Matrix password");
+          if (!password) textOut("- invalid: password is required for password mode");
+        }
+        token = "";
+        registrationSharedSecret = "";
+        adminToken = "";
+      } else if (authMode === "token") {
+        printer.header("B.2 Token Flow");
+        printer.why("Use existing access token without password exchange.");
+        printer.how("Get from Matrix client session export or login API response.");
+        printer.examples("POST /_matrix/client/v3/login and copy access_token");
+        token = "";
+        while (!token) {
+          token = await askSecret("Access token", token);
+          if (!token) textOut("- invalid: access token is required for token mode");
+        }
+        userId = ensureMatrixUserServer(await ask("Agent Matrix user id (optional)", userId), host);
+        registrationSharedSecret = "";
+        adminToken = "";
+      } else {
+        printer.header("B.2 Shared-Secret Flow");
+        printer.why("Self-hosted Synapse bootstrap can register agents via shared secret.");
+        printer.how("Read registration_shared_secret from homeserver.yaml (Synapse).");
+        printer.examples("registration_shared_secret: <value>");
+        textOut("This step configures the default agent account for this channel setup.");
+        textOut("Other agents should use their own Matrix user identities in their own setup flows.");
+        registrationSharedSecret = "";
+        while (!registrationSharedSecret) {
+          registrationSharedSecret = await askSecret("Registration shared secret", registrationSharedSecret);
+          if (!registrationSharedSecret) textOut("- invalid: registration shared secret is required for shared-secret mode");
+        }
+        userId = ensureMatrixUserServer(await ask("Default agent Matrix user id", userId || "@pyash-agent"), host);
+        adminToken = "";
+        token = "";
+        password = "";
+      }
 
-    if (authMode === "password") {
-      printer.header("B.2 Password Flow");
-      printer.why("Password can be exchanged for token automatically.");
-      printer.how("Use your bot/service account user id and password.");
-      printer.examples("@pyash-agent:matrix.org");
-      userId = ensureMatrixUserServer(await ask("Agent Matrix user id", userId || "@pyash-agent"), host);
-      password = await ask("Matrix password (visible input)", "");
-      token = "";
-      registrationSharedSecret = "";
-      adminToken = "";
-    } else if (authMode === "token") {
-      printer.header("B.2 Token Flow");
-      printer.why("Use existing access token without password exchange.");
-      printer.how("Get from Matrix client session export or login API response.");
-      printer.examples("POST /_matrix/client/v3/login and copy access_token");
-      token = await ask("Access token", token);
-      userId = ensureMatrixUserServer(await ask("Agent Matrix user id (optional)", userId), host);
-      registrationSharedSecret = "";
-      adminToken = "";
-    } else {
-      printer.header("B.2 Shared-Secret Flow");
-      printer.why("Self-hosted Synapse bootstrap can register agents via shared secret.");
-      printer.how("Read registration_shared_secret from homeserver.yaml (Synapse).");
-      printer.examples("registration_shared_secret: <value>");
-      userId = ensureMatrixUserServer(await ask("Agent Matrix user id", userId || "@pyash-agent"), host);
-      registrationSharedSecret = await ask("Registration shared secret", registrationSharedSecret);
-      adminToken = await ask("Admin token (optional)", adminToken);
-      token = "";
-      password = "";
+      try {
+        let authCfg = {
+          homeserver,
+          userId,
+          authMode,
+          token,
+          password,
+          registrationSharedSecret,
+          adminToken,
+          agentName: "parity coder"
+        };
+        if (authMode === "password" && !authCfg.token && authCfg.userId && authCfg.password) {
+          const login = await loginMatrixWithPassword({
+            homeserver: authCfg.homeserver,
+            userId: authCfg.userId,
+            password: authCfg.password
+          });
+          authCfg = { ...authCfg, token: login.token, userId: login.userId || authCfg.userId };
+        }
+        authCfg = await ensureSharedSecretToken({ cfg: authCfg, rootDir });
+        const live = await matrixLiveTest(authCfg);
+        if (!live.ok) throw new Error((live.checks || []).filter((c) => !c.ok).map((c) => c.error || c.name).join("; ") || "auth check failed");
+        token = authCfg.token;
+        userId = authCfg.userId || userId;
+        textOut("- auth check passed");
+        authOk = true;
+      } catch (err) {
+        textOut(`- auth check failed (${String(err?.message || err)})`);
+        const retry = await askYesNo("Retry authentication step", true);
+        if (!retry) throw err;
+      }
+    }
+
+    printer.header("C.1 Channel");
+    printer.why("The agent should join a target room and send a greeting test.");
+    printer.how("Use room id (!...) for reliability, alias (#...) is acceptable.");
+    printer.examples("!roomid:matrix.liberit.ca | #pyash:matrix.liberit.ca");
+    let room = "";
+    while (!room) {
+      const roomDefault = rewriteMatrixIdServer(prior.room || "#pyash", host);
+      const enteredRoom = await ask("Room id or alias (!room:server or #alias:server)", roomDefault);
+      const normalizedRoom = ensureMatrixIdServer(enteredRoom, host);
+      if (!normalizedRoom.startsWith("#") && !normalizedRoom.startsWith("!")) {
+        textOut("- invalid: room must start with # or !");
+        continue;
+      }
+      room = normalizedRoom;
     }
 
     let executiveUsername = ensureMatrixUserServer(prior.executiveUsername || "", host);
-    let writeAgentPolicy = false;
+    let writeAgentPolicy = true;
     let agentName = "parity coder";
     let mentionGate = false;
 
+    printer.header("D.1 Executive Test");
+    printer.why("Optional executive user can receive a DM greeting test.");
+    printer.how("Set a user id to test direct messaging; leave blank to skip.");
+    printer.examples("@andrii:matrix.liberit.ca");
+    executiveUsername = ensureMatrixUserServer(await ask("Executive user (optional DM target)", executiveUsername), host);
+    if (executiveUsername) {
+      try {
+        const dmRoomId = await matrixCreateDirectRoom({
+          homeserver,
+          token,
+          executiveUsername
+        });
+        await matrixSendRoomMessage({
+          homeserver,
+          token,
+          roomId: dmRoomId,
+          content: "Pyash configure DM test greeting. Executive messaging is working."
+        });
+        textOut("- executive DM test passed");
+      } catch (err) {
+        textOut(`- executive DM test failed (${String(err?.message || err)})`);
+      }
+    }
+
     if (!quickstart) {
-      printer.header("C.1 Agent Conduct Files");
+      printer.header("E.1 Agent Conduct Files");
       printer.why("Optional local channel conduct file can be generated per agent.");
       printer.how("Enable when you want world/house/<agent>/conduct/channels.pya written.");
       printer.examples("agent=parity coder, mention gate=lie");
-      executiveUsername = ensureMatrixUserServer(await ask("Executive user (optional DM target)", executiveUsername), host);
-      writeAgentPolicy = await askYesNo("Write agent channel conduct file", false);
+      writeAgentPolicy = await askYesNo("Write agent channel conduct file", true);
       if (writeAgentPolicy) {
         agentName = await ask("Agent name", agentName);
         mentionGate = parseTruthy(await ask("Mention gate (truth/lie)", mentionGate ? "truth" : "lie"), mentionGate);
@@ -687,6 +1039,21 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       preview: [MATRIX_POLICY_BLOCK_NAME],
       nextText: policyPlan.nextText
     });
+
+    const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
+    const calendarExisting = await readText(calendarPath);
+    const calendarPlan = upsertMatrixPollCalendarText({
+      existing: calendarExisting,
+      agentName: cfg.agentName,
+      intervalMinutes: 1
+    });
+    writes.push({
+      path: calendarPath,
+      changed: calendarPlan.changed,
+      action: calendarPlan.action,
+      preview: ["matrix poll calendar"],
+      nextText: calendarPlan.nextText
+    });
   }
 
   return {
@@ -734,11 +1101,12 @@ async function configureMatrix({ args }) {
   const dryRun = hasFlag(args, "--dry-run");
   const nonInteractive = hasFlag(args, "--non-interactive");
   const mode = hasFlag(args, "--advanced") ? "advanced" : "quickstart";
+  const testNowFlag = parseArgValue(args, "--test-now");
 
   const prior = await loadMatrixConfigFromSecret(rootDir);
   const collected = nonInteractive
     ? collectMatrixFromFlags({ args, prior })
-    : await collectMatrixInteractive({ prior, mode });
+    : await collectMatrixInteractive({ prior, mode, rootDir });
 
   let cfg = normalizeMatrixCollected(collected);
 
@@ -767,6 +1135,13 @@ async function configureMatrix({ args }) {
     });
     cfg = { ...cfg, token: login.token, userId: login.userId || cfg.userId };
   }
+  cfg = await ensureSharedSecretToken({ cfg, rootDir });
+
+  const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
+  let live = null;
+  if (runTestNow) {
+    live = await matrixPostSetupTest(cfg);
+  }
 
   const plan = await createMatrixWritePlan({ rootDir, cfg });
   if (!dryRun) {
@@ -782,6 +1157,7 @@ async function configureMatrix({ args }) {
     changed: plan.changed,
     writes: writePlanSummary(plan),
     verification,
+    live,
     config: redactMatrixConfig(cfg)
   };
 
@@ -793,6 +1169,12 @@ async function configureMatrix({ args }) {
   textOut("configure channel matrix complete");
   for (const w of out.writes) {
     textOut(`- ${w.path} (${w.changed ? "changed" : "unchanged"}, ${w.action})`);
+  }
+  if (runTestNow) {
+    textOut(`post-config test ${live?.ok ? "passed" : "failed"}`);
+    for (const check of live?.checks || []) {
+      textOut(`- ${check.ok ? "ok" : "fail"}: ${check.name}${check.error ? ` (${check.error})` : ""}`);
+    }
   }
   if (print) {
     textOut("");
@@ -814,10 +1196,12 @@ function renderShortPreview(text) {
 async function configureMatrixTest({ args }) {
   const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
   const json = hasFlag(args, "--json");
+  const agentName = parseArgValue(args, "--agent") ?? "parity coder";
   const loaded = await loadMatrixConfigFromSecret(rootDir);
-  const verification = matrixVerification(loaded);
+  const resolved = await ensureSharedSecretToken({ cfg: { ...loaded, agentName }, rootDir });
+  const verification = matrixVerification(resolved);
   if (!verification.ok) {
-    const payload = { ok: false, stage: "verification", verification, config: redactMatrixConfig(loaded) };
+    const payload = { ok: false, stage: "verification", verification, config: redactMatrixConfig(resolved) };
     if (json) jsonOut(payload);
     else {
       textOut("matrix test failed (verification):");
@@ -826,12 +1210,12 @@ async function configureMatrixTest({ args }) {
     process.exit(1);
   }
 
-  const live = await matrixLiveTest(loaded);
+  const live = await matrixPostSetupTest(resolved);
   const payload = {
     ok: live.ok,
     route: "configure channel matrix test",
     checks: live.checks,
-    config: redactMatrixConfig(loaded)
+    config: redactMatrixConfig(resolved)
   };
   if (json) jsonOut(payload);
   else {
@@ -864,28 +1248,314 @@ async function configureMatrixDoctor({ args }) {
   if (!report.ok) process.exit(1);
 }
 
+function normalizeIntervalMinutes(raw, fallback = 24) {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
+}
+
+function buildAgentRuntimeBlock({ backend, model, toolsMap }) {
+  return [
+    "su name agent runtime be map def",
+    `  su name backend ob text ${quoteText(backend)} ya`,
+    `  su name model ob text ${quoteText(model)} ya`,
+    `  su name tools map ob text ${quoteText(toolsMap)} ya`,
+    "prah"
+  ].join("\n");
+}
+
+async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsMap, dryRun = false }) {
+  const runtimePath = path.join(worldRoot, "house", agentName, "conduct", "runtime.pya");
+  const existing = await readText(runtimePath);
+  const plan = planManagedUpsert({
+    existing,
+    blockName: "agent runtime",
+    content: buildAgentRuntimeBlock({ backend, model, toolsMap })
+  });
+  if (!dryRun && plan.changed) {
+    await ensureDirForFile(runtimePath);
+    await fs.writeFile(runtimePath, plan.nextText, "utf8");
+  }
+  return {
+    path: runtimePath,
+    changed: plan.changed,
+    action: plan.action
+  };
+}
+
+async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentionGate = false, dryRun = false }) {
+  const matrix = await loadMatrixConfigFromSecret(rootDir);
+  if (!matrix?.homeserver || !matrix?.room) {
+    return {
+      ok: false,
+      reason: "missing channel configure",
+      path: null,
+      changed: false,
+      action: "none"
+    };
+  }
+  const channelPath = path.join(worldRoot, "house", agentName, "conduct", "channels.pya");
+  const existing = await readText(channelPath);
+  const plan = planManagedUpsert({
+    existing,
+    blockName: MATRIX_POLICY_BLOCK_NAME,
+    content: buildChannelConductBlock({
+      homeserver: matrix.homeserver,
+      room: matrix.room,
+      mentionGate
+    })
+  });
+  if (!dryRun && plan.changed) {
+    await ensureDirForFile(channelPath);
+    await fs.writeFile(channelPath, plan.nextText, "utf8");
+  }
+  return {
+    ok: true,
+    path: channelPath,
+    changed: plan.changed,
+    action: plan.action,
+    homeserver: matrix.homeserver,
+    room: matrix.room
+  };
+}
+
+function collectAgentFromFlags({ args }) {
+  const agentName = String(parseArgValue(args, "--agent") ?? "parity coder").trim();
+  const purpose = String(parseArgValue(args, "--purpose") ?? "Assist with scheduled automation tasks.").trim();
+  const intervalMinutes = normalizeIntervalMinutes(parseArgValue(args, "--interval-minutes") ?? 24, 24);
+  const backend = String(parseArgValue(args, "--backend") ?? "ollama").trim();
+  const model = String(parseArgValue(args, "--model") ?? "gpt-oss:latest").trim();
+  const toolsMap = String(parseArgValue(args, "--tools-map") ?? "tools").trim();
+  const bindChannel = parseTruthy(parseArgValue(args, "--bind-channel"), true);
+  const smokeTest = parseTruthy(parseArgValue(args, "--smoke-test"), true);
+  return {
+    agentName,
+    purpose,
+    intervalMinutes,
+    backend,
+    model,
+    toolsMap,
+    bindChannel,
+    smokeTest
+  };
+}
+
+async function collectAgentInteractive({ worldRoot }) {
+  const printer = sectionPrinter();
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const ask = async (label, fallback = "") => {
+      const shown = fallback ? ` [${fallback}]` : "";
+      const v = (await rl.question(`${label}${shown}: `)).trim();
+      return v || fallback;
+    };
+    const askYesNo = async (label, fallback = true) => {
+      const shown = fallback ? "Y/n" : "y/N";
+      const v = (await rl.question(`${label} [${shown}]: `)).trim().toLowerCase();
+      if (!v) return fallback;
+      return v === "y" || v === "yes";
+    };
+
+    printer.header("A.1 Agent Identity");
+    printer.why("Agent name and purpose define house identity and managed state.");
+    printer.how("Choose a stable name and concise purpose sentence.");
+    printer.examples("parity coder | Fix parity regressions and report delta");
+    const agentName = await ask("Agent name", "parity coder");
+    const purpose = await ask("Agent purpose", "Assist with scheduled automation tasks.");
+
+    printer.header("B.1 Runtime Backend");
+    printer.why("Backend/model determine response behavior for upcoming channel and schedule runs.");
+    printer.how("Select your default backend and model.");
+    printer.examples("backend=ollama, model=gpt-oss:latest");
+    const backend = await ask("Backend", "ollama");
+    const model = await ask("Model", "gpt-oss:latest");
+    const toolsMap = await ask("Tools map", "tools");
+
+    printer.header("C.1 Channel Binding");
+    printer.why("Most agents should inherit default channel routing.");
+    printer.how("Enable to write channel conduct file from current channel configure.");
+    printer.examples("yes");
+    const bindChannel = await askYesNo("Bind default channel to this agent", true);
+    if (bindChannel) {
+      const matrix = await loadMatrixConfigFromSecret(worldRoot);
+      if (!matrix?.homeserver || !matrix?.room) {
+        textOut("- warning: default channel configure missing; binding will be skipped unless channel is configured.");
+      } else {
+        textOut(`- channel source ${matrix.homeserver} ${matrix.room}`);
+      }
+    }
+
+    printer.header("D.1 Schedule");
+    printer.why("Schedule ensures the agent runs regularly.");
+    printer.how("Set heartbeat interval in minutes.");
+    printer.examples("24");
+    const intervalRaw = await ask("Interval minutes", "24");
+    const intervalMinutes = normalizeIntervalMinutes(intervalRaw, 24);
+
+    printer.header("E.1 Smoke Test");
+    printer.why("Quick begin/stop verifies the new agent can be controlled.");
+    printer.how("Enable for first setup; disable if you only want file writes.");
+    printer.examples("yes");
+    const smokeTest = await askYesNo("Run begin/stop smoke test", true);
+
+    return {
+      agentName,
+      purpose,
+      intervalMinutes,
+      backend,
+      model,
+      toolsMap,
+      bindChannel,
+      smokeTest
+    };
+  } finally {
+    rl.close();
+  }
+}
+
+async function configureAgent({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const print = hasFlag(args, "--print");
+  const dryRun = hasFlag(args, "--dry-run");
+  const nonInteractive = hasFlag(args, "--non-interactive");
+
+  const cfg = nonInteractive
+    ? collectAgentFromFlags({ args })
+    : await collectAgentInteractive({ worldRoot });
+
+  if (!cfg.agentName) {
+    throw new Error("configure agent requires --agent");
+  }
+  if (!cfg.backend || !cfg.model) {
+    throw new Error("configure agent requires backend and model");
+  }
+
+  let establishResult = {
+    action: "establish",
+    status: "dry-run",
+    changed: false,
+    changes: [],
+    agentName: cfg.agentName
+  };
+  if (!dryRun) {
+    establishResult = await establishAgent({
+      worldRoot,
+      agentName: cfg.agentName,
+      purpose: cfg.purpose,
+      intervalMinutes: cfg.intervalMinutes
+    });
+  }
+
+  const runtimeWrite = await upsertAgentRuntime({
+    worldRoot,
+    agentName: cfg.agentName,
+    backend: cfg.backend,
+    model: cfg.model,
+    toolsMap: cfg.toolsMap,
+    dryRun
+  });
+
+  const channelWrite = cfg.bindChannel
+    ? await bindAgentToDefaultChannel({
+      rootDir,
+      worldRoot,
+      agentName: cfg.agentName,
+      mentionGate: false,
+      dryRun
+    })
+    : { ok: false, reason: "channel binding disabled", path: null, changed: false, action: "none" };
+
+  let smoke = null;
+  if (cfg.smokeTest && !dryRun) {
+    const beginRes = await beginAgent({ worldRoot, agentName: cfg.agentName, startScheduler: false });
+    const stopRes = await stopAgent({ worldRoot, agentName: cfg.agentName });
+    smoke = {
+      ok: true,
+      begin: beginRes.enabledServices ?? [],
+      stop: stopRes.disabledServices ?? []
+    };
+  }
+
+  const changed = Boolean(establishResult.changed || runtimeWrite.changed || channelWrite.changed);
+  const out = {
+    ok: true,
+    route: "configure agent",
+    rootDir,
+    worldRoot,
+    dryRun,
+    changed,
+    config: {
+      agentName: cfg.agentName,
+      intervalMinutes: cfg.intervalMinutes,
+      backend: cfg.backend,
+      model: cfg.model,
+      toolsMap: cfg.toolsMap,
+      bindChannel: cfg.bindChannel,
+      smokeTest: cfg.smokeTest
+    },
+    establish: {
+      status: establishResult.status,
+      changed: establishResult.changed,
+      changes: establishResult.changes
+    },
+    runtimeWrite,
+    channelWrite,
+    smoke
+  };
+
+  if (json) {
+    jsonOut(out);
+    return;
+  }
+
+  textOut("configure agent complete");
+  textOut(`- agent ${cfg.agentName}`);
+  textOut(`- establish ${establishResult.status}`);
+  textOut(`- runtime ${runtimeWrite.path} (${runtimeWrite.changed ? "changed" : "unchanged"})`);
+  if (cfg.bindChannel) {
+    if (channelWrite.ok) {
+      textOut(`- channel ${channelWrite.path} (${channelWrite.changed ? "changed" : "unchanged"})`);
+    } else {
+      textOut(`- channel skipped (${channelWrite.reason})`);
+    }
+  }
+  if (smoke) {
+    textOut(`- smoke test passed (begin=${smoke.begin.length} stop=${smoke.stop.length})`);
+  }
+  if (print) {
+    const runtimePath = path.join(worldRoot, "house", cfg.agentName, "conduct", "runtime.pya");
+    const runtimeText = await readText(runtimePath);
+    if (runtimeText) {
+      textOut("");
+      textOut(`## ${runtimePath}`);
+      textOut(renderShortPreview(runtimeText));
+    }
+  }
+}
+
 async function configureChannel(args) {
   const sub = args[0] ?? "";
   if (!sub) {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    try {
+    while (true) {
+      let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      try {
       textOut("Pyash Configure Channel");
-      textOut("1. list caterers");
-      textOut("2. matrix");
-      textOut("3. exit");
-      const choice = (await rl.question("Choose option [2]: ")).trim() || "2";
-      if (choice === "1") {
-        await configureChannelList({ json: false });
-        return;
-      }
-      if (choice === "3") {
+      textOut("1. matrix");
+      textOut("2. exit");
+      const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
+      if (choice === "2") {
         textOut("No changes made.");
         return;
       }
-      await configureMatrix({ args: [] });
-      return;
-    } finally {
+      // Close parent prompt before entering nested interactive flow.
       rl.close();
+      rl = null;
+      await configureMatrix({ args: [] });
+      } finally {
+        try { rl?.close(); } catch {}
+      }
     }
   }
 
@@ -916,20 +1586,37 @@ async function configureMenu(args) {
     await configureChannel(args.slice(1));
     return;
   }
+  if (first === "agent") {
+    await configureAgent({ args: args.slice(1) });
+    return;
+  }
 
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  try {
+  while (true) {
+    let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
     textOut("Pyash Configure");
     textOut("1. channel");
-    textOut("2. exit");
+    textOut("2. agent");
+    textOut("3. exit");
     const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
     if (choice === "1") {
+      // Close parent prompt before entering nested interactive flow.
+      rl.close();
+      rl = null;
       await configureChannel([]);
-      return;
+      continue;
+    }
+    if (choice === "2") {
+      rl.close();
+      rl = null;
+      await configureAgent({ args: [] });
+      continue;
     }
     textOut("No changes made.");
-  } finally {
-    rl.close();
+    return;
+    } finally {
+      try { rl?.close(); } catch {}
+    }
   }
 }
 
