@@ -190,3 +190,123 @@ test("configure agent apply writes runtime and binds channel when available", as
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
 });
+
+test("configure orchestrator apply writes managed config and is idempotent", async () => {
+  const root = await makeRoot();
+  const args = [
+    "configure", "orchestrator",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--mode", "container",
+    "--host", "127.0.0.1",
+    "--port", "59652",
+    "--autostart", "truth",
+    "--health-minute", "1"
+  ];
+
+  const first = runCli(args);
+  assert.equal(first.status, 0, first.stderr);
+  const firstPayload = JSON.parse(first.stdout);
+  assert.equal(firstPayload.ok, true);
+  assert.equal(firstPayload.changed, true);
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /managed by pyash configure orchestrator configure:start/);
+  assert.match(secretText, /su name mode ob text "container" ya/);
+  assert.match(secretText, /su name port ob text "59652" ya/);
+
+  const second = runCli(args);
+  assert.equal(second.status, 0, second.stderr);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.ok, true);
+  assert.equal(secondPayload.changed, false);
+});
+
+test("configure mind dry-run does not write and apply writes defaults", async () => {
+  const root = await makeRoot();
+  const dry = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--dry-run",
+    "--json",
+    "--backend", "ollama command mind",
+    "--host", "http://localhost:11434",
+    "--model", "gpt-oss:latest"
+  ]);
+  assert.equal(dry.status, 0, dry.stderr);
+  const dryPayload = JSON.parse(dry.stdout);
+  assert.equal(dryPayload.ok, true);
+  assert.equal(dryPayload.dryRun, true);
+  await assert.rejects(() => fs.stat(path.join(root, "configure", "secret.pya")));
+
+  const apply = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--backend", "ollama command mind",
+    "--host", "http://localhost:11434",
+    "--model", "gpt-oss:latest",
+    "--test-now", "lie"
+  ]);
+  assert.equal(apply.status, 0, apply.stderr);
+  const payload = JSON.parse(apply.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.changed, true);
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /managed by pyash configure mind configure:start/);
+  assert.match(secretText, /managed by pyash configure mind defaults:start/);
+  assert.match(secretText, /exists su name mind backend be default ob name ollama command mind ya/);
+});
+
+test("configure intro json reports onboarding stage status", async () => {
+  const root = await makeRoot();
+
+  const before = runCli(["configure", "intro", "--root", root, "--json"]);
+  assert.equal(before.status, 0, before.stderr);
+  const beforePayload = JSON.parse(before.stdout);
+  assert.equal(beforePayload.ok, true);
+  assert.equal(beforePayload.status.orchestrator, false);
+  assert.equal(beforePayload.status.channel, false);
+  assert.equal(beforePayload.status.mind, false);
+  assert.equal(beforePayload.status.agent, false);
+
+  runCli([
+    "configure", "orchestrator",
+    "--root", root, "--non-interactive", "--json",
+    "--mode", "container", "--host", "127.0.0.1", "--port", "59652",
+    "--autostart", "truth", "--health-minute", "1"
+  ]);
+  runCli([
+    "configure", "channel", "matrix",
+    "--root", root, "--non-interactive", "--json",
+    "--homeserver", "https://matrix.org", "--room", "#pyash:matrix.org",
+    "--auth-mode", "token", "--token", "abc123", "--test-now", "lie"
+  ]);
+  runCli([
+    "configure", "mind",
+    "--root", root, "--non-interactive", "--json",
+    "--backend", "ollama command mind", "--host", "http://localhost:11434", "--model", "gpt-oss:latest",
+    "--test-now", "lie"
+  ]);
+  runCli([
+    "configure", "agent",
+    "--root", root, "--non-interactive", "--json",
+    "--agent", "builder", "--purpose", "Build things.",
+    "--backend", "ollama", "--model", "gpt-oss:latest",
+    "--bind-channel", "lie", "--smoke-test", "lie"
+  ]);
+
+  const after = runCli(["configure", "intro", "--root", root, "--json"]);
+  assert.equal(after.status, 0, after.stderr);
+  const afterPayload = JSON.parse(after.stdout);
+  assert.equal(afterPayload.status.orchestrator, true);
+  assert.equal(afterPayload.status.channel, true);
+  assert.equal(afterPayload.status.mind, true);
+  assert.equal(afterPayload.status.agent, true);
+});
