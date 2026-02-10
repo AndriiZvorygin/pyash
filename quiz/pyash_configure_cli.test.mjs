@@ -201,7 +201,7 @@ test("configure orchestrator apply writes managed config and is idempotent", asy
     "--mode", "container",
     "--host", "127.0.0.1",
     "--port", "59652",
-    "--autostart", "truth",
+    "--autostart", "lie",
     "--health-minute", "1"
   ];
 
