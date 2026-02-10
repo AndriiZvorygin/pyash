@@ -1,0 +1,4 @@
+su name matrix channel ob bool truth ya
+su name matrix mention gate ob bool lie ya
+su name matrix homeserver ob text "https://matrix.example.org" ya
+su name matrix room ob text "!roomid:example.org" ya

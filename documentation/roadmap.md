@@ -369,6 +369,9 @@ Ordered integration path:
     * when fresh hash is unchanged, skip heavy refinement/mind-call stages and reuse latest staged outputs
   * Session gold emission/export pipeline `[partial]`
     * deterministic dedup and export contract for LoRA/SFT dataset builds
+  * Retention and garbage collection policy `[todo]`
+    * periodic pruning/compaction for stale `world/house/<agent>/artifacts/<run-id>/` trees
+    * periodic pruning/compaction for old `world/newspaper/*` files with replay-safe checkpoints
   * Sleep-mode pipeline: `[partial]`
     * deterministic context compaction by default
     * optional background dataset export/training jobs when resources permit

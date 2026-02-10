@@ -1,0 +1,4 @@
+interface:
+  display_name: "Automation Runner"
+  short_description: "Build repeatable Pyash-native automation"
+  default_prompt: "Create or update a Pyash-native automation flow using agent house layout, calendar scheduler, deterministic artifacts, and a concise verification checklist."
