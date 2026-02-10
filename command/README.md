@@ -7,11 +7,14 @@ Utility scripts for working with Pyash from the shell:
   - `<file.pya> [flags...]` (backward-compatible shorthand)
   - `repl`
   - `configure`
+  - `configure intro`
+  - `configure orchestrator`
   - `configure channel`
   - `configure channel list`
   - `configure channel matrix`
   - `configure channel matrix test`
   - `configure channel matrix doctor`
+  - `configure mind`
   - `configure agent`
 - `run_pya_program.mjs [--full] [--gross] [--result] <path>` — run a `.pya` program, print Outputs/Result (or JSON with `--gross`). Use `--result` to print the final result sentence in non-`--full` mode.
 - `read_pya_trace.mjs [--gross] <path>` — interpret a `.pya` file and show memory/sandpit traces (beautiful by default).

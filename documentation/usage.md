@@ -12,11 +12,14 @@ Global CLI (recommended):
 - `pyash run <file.pya>` — same runtime as `./run`.
 - `pyash repl` — same as `./interpret`.
 - `pyash configure` — interactive setup menu.
+- `pyash configure intro` — onboarding launcher with recommended setup order.
+- `pyash configure orchestrator` — orchestrator endpoint and service behavior setup.
 - `pyash configure channel` — interactive channel setup menu.
 - `pyash configure channel list` — list available channel caterers.
 - `pyash configure channel matrix` — matrix channel wizard.
 - `pyash configure channel matrix test` — run matrix connectivity/auth checks.
 - `pyash configure channel matrix doctor` — diagnose stored matrix setup.
+- `pyash configure mind` — default mind relay/backend setup.
 - `pyash configure agent` — agent setup flow (identity, backend/model, channel bind, schedule, smoke test).
 
 Install globally:

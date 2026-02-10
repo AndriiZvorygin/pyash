@@ -30,14 +30,15 @@ This chapter applies to:
 Canonical route family:
 
 1. `pyash configure`
-2. `pyash configure orchestrator`
-3. `pyash configure channel`
-4. `pyash configure channel list`
-5. `pyash configure channel <caterer>`
-6. `pyash configure channel <caterer> test`
-7. `pyash configure channel <caterer> doctor`
-8. `pyash configure mind`
-9. `pyash configure agent`
+2. `pyash configure intro`
+3. `pyash configure orchestrator`
+4. `pyash configure channel`
+5. `pyash configure channel list`
+6. `pyash configure channel <caterer>`
+7. `pyash configure channel <caterer> test`
+8. `pyash configure channel <caterer> doctor`
+9. `pyash configure mind`
+10. `pyash configure agent`
 
 Examples:
 
@@ -57,6 +58,8 @@ Canonical onboarding order:
 2. `configure channel`
 3. `configure mind`
 4. `configure agent`
+
+`configure intro` SHOULD present this order with per-step configured/pending status.
 
 Each stage SHOULD print the next recommended command after success.
 

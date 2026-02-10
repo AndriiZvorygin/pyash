@@ -17,6 +17,9 @@ const MATRIX_CATERER_NAME = "matrix";
 const MATRIX_BLOCK_NAME = "matrix channel";
 const CHANNEL_CONFIG_BLOCK_NAME = "channel configure";
 const MATRIX_POLICY_BLOCK_NAME = "matrix channel conduct";
+const ORCHESTRATOR_CONFIG_BLOCK_NAME = "orchestrator configure";
+const MIND_CONFIG_BLOCK_NAME = "mind configure";
+const MIND_DEFAULTS_BLOCK_NAME = "mind defaults";
 
 function parseArgValue(args, flag) {
   const idx = args.findIndex((arg) => arg === flag);
@@ -40,14 +43,18 @@ function usage() {
     "  pyash <file.pya> [run flags...]",
     "  pyash repl",
     "  pyash configure",
+    "  pyash configure intro [--root <path>] [--json]",
+    "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
     "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
+    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>]",
     "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
     "",
     "Notes:",
+    "  - Recommended onboarding route is: pyash configure intro",
     "  - Canonical configure route is: pyash configure channel <caterer>",
     "  - Channel config writes managed blocks to configure/secret.pya",
     "  - Optional channel conduct writes to world/house/<agent>/conduct/channels.pya"
@@ -291,6 +298,46 @@ async function loadMatrixConfigFromSecret(rootDir) {
     registrationSharedSecret: matrixValues["registration shared secret"] || "",
     adminToken: matrixValues["admin token"] || ""
   };
+}
+
+async function loadOrchestratorConfigFromSecret(rootDir) {
+  const secretPath = path.join(rootDir, "configure", "secret.pya");
+  const text = await readText(secretPath);
+  if (!text) return {};
+  const orchestratorBlock = extractManagedBlock(text, ORCHESTRATOR_CONFIG_BLOCK_NAME);
+  const values = parseMapBlock(orchestratorBlock);
+  return {
+    mode: values.mode || "",
+    host: values.host || "",
+    port: values.port || "",
+    autostart: values.autostart || "",
+    healthMinute: values["health minute"] || ""
+  };
+}
+
+async function loadMindConfigFromSecret(rootDir) {
+  const secretPath = path.join(rootDir, "configure", "secret.pya");
+  const text = await readText(secretPath);
+  if (!text) return {};
+  const mindBlock = extractManagedBlock(text, MIND_CONFIG_BLOCK_NAME);
+  const values = parseMapBlock(mindBlock);
+  return {
+    backend: values.backend || "",
+    host: values.host || "",
+    model: values.model || ""
+  };
+}
+
+function buildOrchestratorConfigureBlock(cfg) {
+  return [
+    "su name orchestrator configure be map def",
+    `  su name mode ob text ${quoteText(cfg.mode)} ya`,
+    `  su name host ob text ${quoteText(cfg.host)} ya`,
+    `  su name port ob text ${quoteText(String(cfg.port))} ya`,
+    `  su name autostart ob text ${quoteText(cfg.autostart ? "truth" : "lie")} ya`,
+    `  su name health minute ob text ${quoteText(String(cfg.healthMinute))} ya`,
+    "prah"
+  ].join("\n");
 }
 
 function buildMatrixMapBlock(cfg) {
@@ -1248,6 +1295,339 @@ async function configureMatrixDoctor({ args }) {
   if (!report.ok) process.exit(1);
 }
 
+function normalizePort(raw, fallback = 59652) {
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return fallback;
+  const whole = Math.floor(num);
+  if (whole < 1 || whole > 65535) return fallback;
+  return whole;
+}
+
+function normalizePositiveInt(raw, fallback = 1) {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return fallback;
+  return Math.floor(num);
+}
+
+function collectOrchestratorFromFlags({ args, prior }) {
+  return {
+    mode: String(parseArgValue(args, "--mode") ?? prior.mode ?? "container").trim().toLowerCase(),
+    host: String(parseArgValue(args, "--host") ?? prior.host ?? "127.0.0.1").trim(),
+    port: normalizePort(parseArgValue(args, "--port") ?? prior.port ?? 59652, 59652),
+    autostart: parseTruthy(parseArgValue(args, "--autostart"), parseTruthy(prior.autostart, true)),
+    healthMinute: normalizePositiveInt(parseArgValue(args, "--health-minute") ?? prior.healthMinute ?? 1, 1)
+  };
+}
+
+async function collectOrchestratorInteractive({ prior }) {
+  const printer = sectionPrinter();
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const ask = async (label, fallback = "") => {
+      const shown = fallback ? ` [${fallback}]` : "";
+      const v = (await rl.question(`${label}${shown}: `)).trim();
+      return v || fallback;
+    };
+    const askYesNo = async (label, fallback = true) => {
+      const shown = fallback ? "Y/n" : "y/N";
+      const v = (await rl.question(`${label} [${shown}]: `)).trim().toLowerCase();
+      if (!v) return fallback;
+      return v === "y" || v === "yes";
+    };
+
+    printer.header("A.1 Orchestrator Endpoint");
+    printer.why("Host and port define where host-side pyash reaches the running orchestrator.");
+    printer.how("Use container mode for Docker setups. Default port 59652.");
+    printer.examples("mode=container host=127.0.0.1 port=59652");
+    let mode = "";
+    while (!mode) {
+      const picked = String(await ask("Mode (container/local)", prior.mode || "container")).trim().toLowerCase();
+      if (picked !== "container" && picked !== "local") {
+        textOut("- invalid: mode must be container or local");
+        continue;
+      }
+      mode = picked;
+    }
+    const host = String(await ask("Host", prior.host || "127.0.0.1")).trim() || "127.0.0.1";
+    const port = normalizePort(await ask("Port", String(prior.port || 59652)), 59652);
+
+    printer.header("B.1 Service Behavior");
+    printer.why("Autostart and health cadence control background supervision behavior.");
+    printer.how("Keep autostart on and health minute low for quick failures.");
+    printer.examples("autostart=yes health minute=1");
+    const autostart = await askYesNo("Autostart services", parseTruthy(prior.autostart, true));
+    const healthMinute = normalizePositiveInt(await ask("Health minute cadence", String(prior.healthMinute || 1)), 1);
+
+    return { mode, host, port, autostart, healthMinute };
+  } finally {
+    rl.close();
+  }
+}
+
+function orchestratorVerification(cfg) {
+  const errors = [];
+  const mode = String(cfg.mode ?? "").trim().toLowerCase();
+  if (mode !== "container" && mode !== "local") {
+    errors.push({ code: "invalid_mode", message: "mode must be container or local" });
+  }
+  if (!String(cfg.host ?? "").trim()) {
+    errors.push({ code: "missing_host", message: "host is required" });
+  }
+  const port = Number(cfg.port);
+  if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    errors.push({ code: "invalid_port", message: "port must be between 1 and 65535" });
+  }
+  return { ok: errors.length === 0, errors, warnings: [] };
+}
+
+async function createOrchestratorWritePlan({ rootDir, cfg }) {
+  const secretPath = path.join(rootDir, "configure", "secret.pya");
+  const secretExisting = await readText(secretPath);
+  const plan = planManagedUpsert({
+    existing: secretExisting,
+    blockName: ORCHESTRATOR_CONFIG_BLOCK_NAME,
+    content: buildOrchestratorConfigureBlock(cfg)
+  });
+  return {
+    writes: [{
+      path: secretPath,
+      changed: plan.changed,
+      action: plan.action,
+      preview: [ORCHESTRATOR_CONFIG_BLOCK_NAME],
+      nextText: plan.nextText
+    }],
+    changed: plan.changed
+  };
+}
+
+async function configureOrchestrator({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const json = hasFlag(args, "--json");
+  const print = hasFlag(args, "--print");
+  const dryRun = hasFlag(args, "--dry-run");
+  const nonInteractive = hasFlag(args, "--non-interactive");
+  const prior = await loadOrchestratorConfigFromSecret(rootDir);
+  const cfg = nonInteractive
+    ? collectOrchestratorFromFlags({ args, prior })
+    : await collectOrchestratorInteractive({ prior });
+
+  const verification = orchestratorVerification(cfg);
+  if (!verification.ok) {
+    const out = { ok: false, stage: "verification", verification, config: cfg };
+    if (json) jsonOut(out);
+    else {
+      textOut("verification failed:");
+      for (const err of verification.errors) textOut(`- ${err.code}: ${err.message}`);
+    }
+    process.exit(1);
+  }
+
+  const plan = await createOrchestratorWritePlan({ rootDir, cfg });
+  if (!dryRun) await applyWritePlan(plan);
+
+  const out = {
+    ok: true,
+    route: "configure orchestrator",
+    rootDir,
+    dryRun,
+    changed: plan.changed,
+    writes: writePlanSummary(plan),
+    verification,
+    config: cfg
+  };
+  if (json) {
+    jsonOut(out);
+    return;
+  }
+  textOut("configure orchestrator complete");
+  for (const w of out.writes) {
+    textOut(`- ${w.path} (${w.changed ? "changed" : "unchanged"}, ${w.action})`);
+  }
+  if (print) {
+    textOut("");
+    textOut("planned blocks:");
+    for (const w of plan.writes) {
+      textOut(`## ${w.path}`);
+      textOut(renderShortPreview(w.nextText));
+    }
+  }
+}
+
+function collectMindFromFlags({ args, prior }) {
+  return {
+    backend: String(parseArgValue(args, "--backend") ?? prior.backend ?? "ollama command mind").trim(),
+    host: normalizeHomeserver(parseArgValue(args, "--host") ?? prior.host ?? "http://localhost:11434"),
+    model: String(parseArgValue(args, "--model") ?? prior.model ?? "gpt-oss:latest").trim()
+  };
+}
+
+async function collectMindInteractive({ prior }) {
+  const printer = sectionPrinter();
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const ask = async (label, fallback = "") => {
+      const shown = fallback ? ` [${fallback}]` : "";
+      const v = (await rl.question(`${label}${shown}: `)).trim();
+      return v || fallback;
+    };
+
+    printer.header("A.1 Mind Relay");
+    printer.why("Channel and agent responses require a configured mind relay backend.");
+    printer.how("Use ollama command mind unless you have a different relay module.");
+    printer.examples("backend=ollama command mind");
+    const backend = String(await ask("Mind backend", prior.backend || "ollama command mind")).trim();
+
+    printer.header("B.1 Provider Endpoint");
+    printer.why("Mind backend uses this host for model calls.");
+    printer.how("Use full URL; protocol defaults to https when omitted.");
+    printer.examples("http://localhost:11434");
+    const host = normalizeHomeserver(await ask("Mind host", prior.host || "http://localhost:11434"));
+
+    printer.header("C.1 Default Model");
+    printer.why("Used when agent/mind facts do not specify an explicit model.");
+    printer.how("Set a stable local model tag.");
+    printer.examples("gpt-oss:latest");
+    const model = String(await ask("Mind model", prior.model || "gpt-oss:latest")).trim();
+
+    return { backend, host, model };
+  } finally {
+    rl.close();
+  }
+}
+
+function mindVerification(cfg) {
+  const errors = [];
+  if (!String(cfg.backend ?? "").trim()) errors.push({ code: "missing_backend", message: "backend is required" });
+  const host = normalizeHomeserver(cfg.host);
+  if (!host) errors.push({ code: "missing_host", message: "host is required" });
+  if (!/^https?:\/\//i.test(host)) errors.push({ code: "invalid_host", message: "host must start with http:// or https://" });
+  if (!String(cfg.model ?? "").trim()) errors.push({ code: "missing_model", message: "model is required" });
+  return { ok: errors.length === 0, errors, warnings: [] };
+}
+
+async function mindLiveTest(cfg) {
+  const host = normalizeHomeserver(cfg.host);
+  const checks = [];
+  try {
+    const response = await fetch(`${host}/api/tags`, { method: "GET" });
+    if (!response.ok) throw new Error(`status=${response.status}`);
+    checks.push({ name: "host reachable", ok: true });
+  } catch (err) {
+    checks.push({ name: "host reachable", ok: false, error: String(err?.message || err) });
+    return { ok: false, checks };
+  }
+  return { ok: true, checks };
+}
+
+function buildMindConfigureBlock(cfg) {
+  return [
+    "su name mind configure be map def",
+    `  su name backend ob text ${quoteText(cfg.backend)} ya`,
+    `  su name host ob text ${quoteText(cfg.host)} ya`,
+    `  su name model ob text ${quoteText(cfg.model)} ya`,
+    "prah"
+  ].join("\n");
+}
+
+function buildMindDefaultsBlock(cfg) {
+  return [
+    `exists su name mind backend be default ob name ${cfg.backend} ya`,
+    `exists su name ollama host ob text ${quoteText(cfg.host)} be default ya`,
+    `exists su name ai host ob text ${quoteText(cfg.host)} be default ya`,
+    `exists su name mind model ob text ${quoteText(cfg.model)} be default ya`
+  ].join("\n");
+}
+
+async function createMindWritePlan({ rootDir, cfg }) {
+  const secretPath = path.join(rootDir, "configure", "secret.pya");
+  const secretExisting = await readText(secretPath);
+  const configPlan = planManagedUpsert({
+    existing: secretExisting,
+    blockName: MIND_CONFIG_BLOCK_NAME,
+    content: buildMindConfigureBlock(cfg)
+  });
+  const defaultsPlan = planManagedUpsert({
+    existing: configPlan.nextText,
+    blockName: MIND_DEFAULTS_BLOCK_NAME,
+    content: buildMindDefaultsBlock(cfg)
+  });
+  return {
+    writes: [{
+      path: secretPath,
+      changed: configPlan.changed || defaultsPlan.changed,
+      action: defaultsPlan.action,
+      preview: [MIND_CONFIG_BLOCK_NAME, MIND_DEFAULTS_BLOCK_NAME],
+      nextText: defaultsPlan.nextText
+    }],
+    changed: configPlan.changed || defaultsPlan.changed
+  };
+}
+
+async function configureMind({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const json = hasFlag(args, "--json");
+  const print = hasFlag(args, "--print");
+  const dryRun = hasFlag(args, "--dry-run");
+  const nonInteractive = hasFlag(args, "--non-interactive");
+  const testNowFlag = parseArgValue(args, "--test-now");
+  const prior = await loadMindConfigFromSecret(rootDir);
+  const cfg = nonInteractive
+    ? collectMindFromFlags({ args, prior })
+    : await collectMindInteractive({ prior });
+
+  const verification = mindVerification(cfg);
+  if (!verification.ok) {
+    const out = { ok: false, stage: "verification", verification, config: cfg };
+    if (json) jsonOut(out);
+    else {
+      textOut("verification failed:");
+      for (const err of verification.errors) textOut(`- ${err.code}: ${err.message}`);
+    }
+    process.exit(1);
+  }
+
+  const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
+  let live = null;
+  if (runTestNow) live = await mindLiveTest(cfg);
+
+  const plan = await createMindWritePlan({ rootDir, cfg });
+  if (!dryRun) await applyWritePlan(plan);
+
+  const out = {
+    ok: true,
+    route: "configure mind",
+    rootDir,
+    dryRun,
+    changed: plan.changed,
+    writes: writePlanSummary(plan),
+    verification,
+    live,
+    config: cfg
+  };
+  if (json) {
+    jsonOut(out);
+    return;
+  }
+  textOut("configure mind complete");
+  for (const w of out.writes) {
+    textOut(`- ${w.path} (${w.changed ? "changed" : "unchanged"}, ${w.action})`);
+  }
+  if (runTestNow) {
+    textOut(`mind test ${live?.ok ? "passed" : "failed"}`);
+    for (const check of live?.checks || []) {
+      textOut(`- ${check.ok ? "ok" : "fail"}: ${check.name}${check.error ? ` (${check.error})` : ""}`);
+    }
+  }
+  if (print) {
+    textOut("");
+    textOut("planned blocks:");
+    for (const w of plan.writes) {
+      textOut(`## ${w.path}`);
+      textOut(renderShortPreview(w.nextText));
+    }
+  }
+}
+
 function normalizeIntervalMinutes(raw, fallback = 24) {
   const num = Number(raw);
   if (!Number.isFinite(num) || num <= 0) return fallback;
@@ -1535,6 +1915,73 @@ async function configureAgent({ args }) {
   }
 }
 
+async function configureIntro({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const json = hasFlag(args, "--json");
+  const orchestrator = await loadOrchestratorConfigFromSecret(rootDir);
+  const channel = await loadMatrixConfigFromSecret(rootDir);
+  const mind = await loadMindConfigFromSecret(rootDir);
+  let agentConfigured = false;
+  try {
+    const houseDir = path.join(rootDir, "world", "house");
+    const entries = await fs.readdir(houseDir, { withFileTypes: true });
+    agentConfigured = entries.some((entry) => entry.isDirectory() && entry.name !== "base");
+  } catch {}
+
+  const status = {
+    orchestrator: Boolean(orchestrator.mode && orchestrator.host && orchestrator.port),
+    channel: Boolean(channel.homeserver && channel.room),
+    mind: Boolean(mind.backend && mind.host && mind.model),
+    agent: agentConfigured
+  };
+
+  if (json) {
+    jsonOut({ ok: true, route: "configure intro", rootDir, status });
+    return;
+  }
+
+  while (true) {
+    let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      textOut("Pyash Configure Intro");
+      textOut(`1. orchestrator ${status.orchestrator ? "(configured)" : "(pending)"}`);
+      textOut(`2. channel ${status.channel ? "(configured)" : "(pending)"}`);
+      textOut(`3. mind ${status.mind ? "(configured)" : "(pending)"}`);
+      textOut(`4. agent ${status.agent ? "(configured)" : "(pending)"}`);
+      textOut("5. exit");
+      const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
+      if (choice === "1") {
+        rl.close();
+        rl = null;
+        await configureOrchestrator({ args: [] });
+        return;
+      }
+      if (choice === "2") {
+        rl.close();
+        rl = null;
+        await configureChannel([]);
+        return;
+      }
+      if (choice === "3") {
+        rl.close();
+        rl = null;
+        await configureMind({ args: [] });
+        return;
+      }
+      if (choice === "4") {
+        rl.close();
+        rl = null;
+        await configureAgent({ args: [] });
+        return;
+      }
+      textOut("No changes made.");
+      return;
+    } finally {
+      try { rl?.close(); } catch {}
+    }
+  }
+}
+
 async function configureChannel(args) {
   const sub = args[0] ?? "";
   if (!sub) {
@@ -1582,8 +2029,20 @@ async function configureChannel(args) {
 
 async function configureMenu(args) {
   const first = args[0] ?? "";
+  if (first === "intro") {
+    await configureIntro({ args: args.slice(1) });
+    return;
+  }
+  if (first === "orchestrator") {
+    await configureOrchestrator({ args: args.slice(1) });
+    return;
+  }
   if (first === "channel") {
     await configureChannel(args.slice(1));
+    return;
+  }
+  if (first === "mind") {
+    await configureMind({ args: args.slice(1) });
     return;
   }
   if (first === "agent") {
@@ -1595,18 +2054,39 @@ async function configureMenu(args) {
     let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     try {
     textOut("Pyash Configure");
-    textOut("1. channel");
-    textOut("2. agent");
-    textOut("3. exit");
+    textOut("1. intro");
+    textOut("2. orchestrator");
+    textOut("3. channel");
+    textOut("4. mind");
+    textOut("5. agent");
+    textOut("6. exit");
     const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
     if (choice === "1") {
       // Close parent prompt before entering nested interactive flow.
       rl.close();
       rl = null;
-      await configureChannel([]);
+      await configureIntro({ args: [] });
       continue;
     }
     if (choice === "2") {
+      rl.close();
+      rl = null;
+      await configureOrchestrator({ args: [] });
+      continue;
+    }
+    if (choice === "3") {
+      rl.close();
+      rl = null;
+      await configureChannel([]);
+      continue;
+    }
+    if (choice === "4") {
+      rl.close();
+      rl = null;
+      await configureMind({ args: [] });
+      continue;
+    }
+    if (choice === "5") {
       rl.close();
       rl = null;
       await configureAgent({ args: [] });
