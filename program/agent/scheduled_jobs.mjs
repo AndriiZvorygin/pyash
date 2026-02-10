@@ -13,6 +13,8 @@ import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
 import { runChannelOnce } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
 import { ensureMatrixCredentials } from "./channels/bootstrap.mjs";
+import { updateAgentPresence } from "./presence.mjs";
+import { resolveConfigMapText } from "../configure/env.mjs";
 
 const HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK";
 const HEARTBEAT_PROMPT = `Read HEARTBEAT.md in your agent house.
@@ -65,22 +67,31 @@ function readRememberText(name) {
 }
 
 function resolveMatrixConfigWithRemember(rawConfig = {}) {
+  const mapName = "matrix channel";
+  const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
+  const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
+  const mapAdminToken = resolveConfigMapText(mapName, "admin token");
+  const mapToken = resolveConfigMapText(mapName, "token");
   return {
     ...rawConfig,
     homeserver:
+      mapHomeserver ??
       rawConfig.homeserver ??
       readRememberText("matrix homeserver") ??
       readRememberText("matrix server") ??
       null,
     registrationSharedSecret:
+      mapSharedSecret ??
       rawConfig.registrationSharedSecret ??
       readRememberText("matrix registration shared secret") ??
       null,
     adminToken:
+      mapAdminToken ??
       rawConfig.adminToken ??
       readRememberText("matrix admin token") ??
       null,
     token:
+      mapToken ??
       rawConfig.token ??
       readRememberText("matrix access token") ??
       null
@@ -220,10 +231,38 @@ async function runServiceDefinitionJob({ worldRoot, job }) {
 
 export async function runScheduledJob({ worldRoot, job }) {
   if (!job?.agentName) return { status: "skipped:missing_agent" };
+  const nowIso = new Date().toISOString();
+  await updateAgentPresence({
+    worldRoot,
+    agentName: job.agentName,
+    latestIso: nowIso,
+    touchedFiles: [
+      `house/${job.agentName}/conduct/calendar.pya`,
+      `house/${job.agentName}/session`
+    ]
+  });
   await interpret(parse(`exists su name ${job.agentName} be mind ya`));
+  let result = null;
   const serviceResult = await runServiceDefinitionJob({ worldRoot, job });
-  if (serviceResult) return serviceResult;
-  const channelResult = await runChannelPollJob({ worldRoot, job });
-  if (channelResult) return channelResult;
-  return runMindScheduledJob({ worldRoot, job });
+  if (serviceResult) {
+    result = serviceResult;
+  } else {
+    const channelResult = await runChannelPollJob({ worldRoot, job });
+    if (channelResult) {
+      result = channelResult;
+    } else {
+      result = await runMindScheduledJob({ worldRoot, job });
+    }
+  }
+  await updateAgentPresence({
+    worldRoot,
+    agentName: job.agentName,
+    latestIso: new Date().toISOString(),
+    touchedFiles: [
+      `house/${job.agentName}/conduct/calendar.pya`,
+      `house/${job.agentName}/session`,
+      `house/${job.agentName}/artifacts`
+    ]
+  });
+  return result;
 }

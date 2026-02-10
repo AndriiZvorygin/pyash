@@ -46,6 +46,35 @@ node command/channel_run.mjs --agent confederation-priest --channel matrix --onc
 Use this for debug/bootstrap only.  
 Normal operation should be scheduler-driven.
 
+## 4.1 Matrix config map (recommended)
+
+Prefer configuring Matrix via the `matrix channel` map in `configure/secret.pya`
+or `configure/default.pya`.
+
+Fast path:
+
+```bash
+pyash configure matrix
+```
+
+Example:
+
+```pyash
+su name matrix channel be map def
+su name homeserver ob text "https://matrix.liberit.ca" ya
+su name room ob text "!roomid:matrix.liberit.ca" ya
+su name executive username ob text "@andrii:matrix.liberit.ca" ya
+su name token ob text "<access-token>" ya
+prah
+```
+
+Notes:
+1. If `token` is present, registration shared secret is optional.
+2. If no `token` is present, set `registration shared secret` for bootstrap registration/login.
+3. Room id (`!…`) is preferred over alias (`#…`) for reliable sends.
+4. Ready-to-copy template: `configure/secret.pya.example`.
+5. matrix.org users should prefer token or password-login mode; shared secret is usually not available.
+
 ## 5. Ratify policy for propose tools
 
 Policy file:
@@ -94,7 +123,8 @@ Look for:
 ## 7. Fast sanity checklist
 
 1. `channels.pya` enables the channel (`matrix channel ob bool truth`).
-2. scheduler health shows running.
-3. channel telemetry shows `received > 0`.
-4. session file appends user/assistant lines.
-5. if tool not executed, check `be ratify ya` and `ratify.pya`.
+2. `matrix channel` config map has valid homeserver + token (or shared secret path).
+3. scheduler health shows running.
+4. channel telemetry shows `received > 0`.
+5. session file appends user/assistant lines.
+6. if tool not executed, check `be ratify ya` and `ratify.pya`.

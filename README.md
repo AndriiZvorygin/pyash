@@ -31,6 +31,23 @@ Outputs:
 - Newspaper: `newspaper/<run-id>.pya`
 - Artifacts: `artifacts/sha256/<first2>/<next2>/<hex><ext>`
 
+## Global `pyash` CLI
+
+Install globally from the repo root:
+
+```bash
+npm link
+```
+
+Then use from anywhere:
+
+```bash
+pyash run examples/pyash/mind-tool-call.pya --newspaper --run-id demo
+pyash repl
+pyash configure
+pyash configure matrix
+```
+
 ## Running the REPL
 ```bash
 node program/main.mjs
