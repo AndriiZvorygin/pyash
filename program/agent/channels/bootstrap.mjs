@@ -261,28 +261,31 @@ export async function ensureMatrixCredentials({
       registerResult.code === "M_USER_IN_USE" ||
       /in use/i.test(registerResult.error)
     )) {
-      const generated = generateCredentials({ agentName, localpart, withSuffix: true });
-      localpart = generated.localpart;
-      password = generated.password;
-      const retryUser = userFromConfig && userFromConfig.startsWith("@")
-        ? `@${localpart}:${String(userFromConfig).split(":").slice(1).join(":") || ""}`
-        : localpart;
-      registerResult = await registerWithSharedSecret({
-        homeserver,
-        sharedSecret,
-        localpart,
-        password,
-        fetchImpl
-      });
-      if (!registerResult.ok) {
-        throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
-      }
-      if (!userFromConfig || !userFromConfig.startsWith("@")) {
-        // localpart login below uses updated localpart
+      const canReuseExistingUser = Boolean(cached?.password) && (
+        !userFromConfig ||
+        cached.user === userFromConfig ||
+        cached.localpart === localpart
+      );
+      if (canReuseExistingUser) {
+        // Deterministic path: user already exists and we have reusable credentials.
+        registerResult = { ok: true, payload: null };
+      } else if (!userFromConfig) {
+        // No explicit user requested: allow suffix fallback for first-time bootstrap collisions.
+        const generated = generateCredentials({ agentName, localpart, withSuffix: true });
+        localpart = generated.localpart;
+        password = generated.password;
+        registerResult = await registerWithSharedSecret({
+          homeserver,
+          sharedSecret,
+          localpart,
+          password,
+          fetchImpl
+        });
+        if (!registerResult.ok) {
+          throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
+        }
       } else {
-        // keep deterministic updated user id after retry suffix
-        // eslint-disable-next-line no-unused-vars
-        const _ = retryUser;
+        throw new Error("matrix user already exists; reuse cached token or configure token/password for this user");
       }
     } else if (!registerResult.ok) {
       throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);

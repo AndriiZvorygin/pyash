@@ -78,6 +78,18 @@ function buildPrompt(event) {
   return `${header}\n${event.text}`;
 }
 
+function noMindConfiguredFallback() {
+  return "mind is not configured yet, pyash configure mind to set the mind relays";
+}
+
+function isMindUnavailableError(err) {
+  if (!err) return false;
+  const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
+  const message = String(err?.message ?? "").trim().toLowerCase();
+  if (sentenceName === "mind backend missing") return true;
+  return message.includes("mind backend missing");
+}
+
 function outputName(channelType) {
   return `${sanitizeLaneName(channelType)}_channel_out`;
 }
@@ -298,9 +310,15 @@ async function dispatchChannelEvents({
 
     for (const listener of listenersToRun) {
       const sentence = buildChannelMindSentence({ agentName: listener, event, channelConfig });
-      const result = await interpretFn(sentence);
       handled += 1;
-      const responseText = String(result?.ob?.text ?? "").trim();
+      let responseText = "";
+      try {
+        const result = await interpretFn(sentence);
+        responseText = String(result?.ob?.text ?? "").trim();
+      } catch (err) {
+        if (!isMindUnavailableError(err)) throw err;
+        responseText = noMindConfiguredFallback();
+      }
       if (debug) {
         await appendTelemetry(agentHouse, {
           timestamp: nowIso(),

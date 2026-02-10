@@ -129,6 +129,52 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
   assert.equal(result.skippedMention, 1);
 });
 
+test("channel runtime sends configure-mind fallback when mind backend is missing", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-no-mind-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$1", sender: "@u:server", text: "hello" }
+        ],
+        checkpoint: { nextBatch: "tok-no-mind" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-no-mind" };
+    }
+  };
+
+  const interpretFn = async () => {
+    const err = new Error("mind backend missing for generate request");
+    err.sentence = { mood: "do", be: "error", su: { name: "mind backend missing" } };
+    throw err;
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "mind is not configured yet, pyash configure mind to set the mind relays");
+});
+
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-listeners-"));
   const agentHouse = path.join(root, "world", "house", "postmaster");

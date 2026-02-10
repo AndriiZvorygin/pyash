@@ -17,6 +17,7 @@ Global CLI (recommended):
 - `pyash configure channel matrix` — matrix channel wizard.
 - `pyash configure channel matrix test` — run matrix connectivity/auth checks.
 - `pyash configure channel matrix doctor` — diagnose stored matrix setup.
+- `pyash configure agent` — agent setup flow (identity, backend/model, channel bind, schedule, smoke test).
 
 Install globally:
 

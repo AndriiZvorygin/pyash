@@ -71,11 +71,14 @@ test("configure channel matrix apply writes managed blocks and is idempotent", a
 
   const secretPath = path.join(root, "configure", "secret.pya");
   const channelsPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
+  const calendarPath = path.join(root, "world", "house", "parity coder", "conduct", "calendar.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
+  const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
+  assert.match(calendarText, /su name matrix poll for name parity coder with wo tools vyah habit during minute 1 be calendar ya/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
@@ -109,4 +112,81 @@ test("configure channel matrix test fails when verification fails", async () => 
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, false);
   assert.equal(payload.stage, "verification");
+});
+
+test("configure agent dry-run does not write house files", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "agent",
+    "--root", root,
+    "--non-interactive",
+    "--dry-run",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.route, "configure agent");
+  assert.equal(payload.dryRun, true);
+  const runtimePath = path.join(root, "world", "house", "builder", "conduct", "runtime.pya");
+  await assert.rejects(() => fs.stat(runtimePath));
+});
+
+test("configure agent apply writes runtime and binds channel when available", async () => {
+  const root = await makeRoot();
+  const channelRun = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.org",
+    "--room", "#pyash:matrix.org",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--write-agent-policy", "lie"
+  ]);
+  assert.equal(channelRun.status, 0, channelRun.stderr);
+
+  const args = [
+    "configure", "agent",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--interval-minutes", "15",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "truth",
+    "--smoke-test", "lie"
+  ];
+
+  const first = runCli(args);
+  assert.equal(first.status, 0, first.stderr);
+  const firstPayload = JSON.parse(first.stdout);
+  assert.equal(firstPayload.ok, true);
+  assert.equal(firstPayload.changed, true);
+  assert.equal(firstPayload.runtimeWrite.changed, true);
+  assert.equal(firstPayload.channelWrite.ok, true);
+
+  const runtimePath = path.join(root, "world", "house", "builder", "conduct", "runtime.pya");
+  const channelsPath = path.join(root, "world", "house", "builder", "conduct", "channels.pya");
+  const runtimeText = await fs.readFile(runtimePath, "utf8");
+  const channelsText = await fs.readFile(channelsPath, "utf8");
+  assert.match(runtimeText, /managed by pyash configure agent runtime:start/);
+  assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
+
+  const second = runCli(args);
+  assert.equal(second.status, 0, second.stderr);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.ok, true);
+  assert.equal(secondPayload.changed, false);
 });

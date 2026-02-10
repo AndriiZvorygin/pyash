@@ -58,6 +58,68 @@ test("matrix bootstrap registers, logs in, and caches token", async () => {
   assert.equal(callsAfterCache.length, 0);
 });
 
+test("matrix bootstrap with explicit user is idempotent when user already exists", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-idempotent-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
+  await fs.writeFile(cachedAuthPath, JSON.stringify({
+    homeserver: "https://matrix.example.org",
+    user: "@helper:example.org",
+    localpart: "helper",
+    password: "pw0",
+    accessToken: "",
+    deviceId: "DEV0"
+  }, null, 2));
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.endsWith("/_synapse/admin/v1/register") && (!opts.method || opts.method === "GET")) {
+      return { ok: true, async json() { return { nonce: "nonce1" }; } };
+    }
+    if (url.endsWith("/_synapse/admin/v1/register") && opts.method === "POST") {
+      return {
+        ok: false,
+        status: 400,
+        async json() {
+          return { errcode: "M_USER_IN_USE", error: "User ID already taken." };
+        }
+      };
+    }
+    if (url.endsWith("/_matrix/client/v3/login")) {
+      const payload = JSON.parse(String(opts.body ?? "{}"));
+      assert.equal(payload?.identifier?.user, "@helper:example.org");
+      assert.equal(payload?.password, "pw0");
+      return {
+        ok: true,
+        async json() {
+          return { access_token: "tok-new", user_id: "@helper:example.org", device_id: "DEV1" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixCredentials({
+    agentName: "helper",
+    agentHouse,
+    config: {
+      homeserver: "https://matrix.example.org",
+      user: "@helper:example.org",
+      registrationSharedSecret: "secret"
+    },
+    fetchImpl
+  });
+  assert.equal(resolved.user, "@helper:example.org");
+  assert.equal(resolved.token, "tok-new");
+  const postText = await fs.readFile(cachedAuthPath, "utf8");
+  const post = JSON.parse(postText);
+  assert.equal(post.user, "@helper:example.org");
+  assert.equal(post.localpart, "helper");
+  assert.equal(post.accessToken, "tok-new");
+});
+
 test("matrix executive dm bootstrap reuses m.direct room when present", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-existing-"));
   const agentHouse = path.join(root, "world", "house", "helper");
