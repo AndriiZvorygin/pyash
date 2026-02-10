@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
-import { ensureMatrixCredentials } from "../program/agent/channels/bootstrap.mjs";
+import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
 import { establishAgent, beginAgent, stopAgent } from "../program/agent/admin.mjs";
-import { schedulerBegin, schedulerStop } from "../program/agent/scheduler_control.mjs";
+import { schedulerBegin, schedulerStop, schedulerRestart } from "../program/agent/scheduler_control.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..");
@@ -637,7 +637,20 @@ async function matrixCreateDirectRoom({ homeserver, token, executiveUsername }) 
   return roomId;
 }
 
-async function matrixPostSetupTest(cfg) {
+async function ensureExecutiveDmRoom({ cfg, rootDir }) {
+  const agentName = String(cfg.agentName || "parity coder").trim() || "parity coder";
+  const agentHouse = path.join(rootDir, "world", "house", agentName);
+  const roomId = await ensureMatrixExecutiveDmRoom({
+    agentHouse,
+    homeserver: cfg.homeserver,
+    token: cfg.token,
+    user: cfg.userId,
+    executiveUser: cfg.executiveUsername
+  });
+  return roomId;
+}
+
+async function matrixPostSetupTest(cfg, { rootDir } = {}) {
   const checks = [];
   const live = await matrixLiveTest(cfg);
   checks.push(...(live.checks || []));
@@ -672,12 +685,14 @@ async function matrixPostSetupTest(cfg) {
 
   if (cfg.executiveUsername) {
     try {
-      const dmRoomId = await matrixCreateDirectRoom({
-        homeserver: cfg.homeserver,
-        token: cfg.token,
-        executiveUsername: cfg.executiveUsername
-      });
-      checks.push({ name: "create executive dm room", ok: true, roomId: dmRoomId });
+      const dmRoomId = rootDir
+        ? await ensureExecutiveDmRoom({ cfg, rootDir })
+        : await matrixCreateDirectRoom({
+          homeserver: cfg.homeserver,
+          token: cfg.token,
+          executiveUsername: cfg.executiveUsername
+        });
+      checks.push({ name: "resolve executive dm room", ok: true, roomId: dmRoomId });
       const dmEventId = await matrixSendRoomMessage({
         homeserver: cfg.homeserver,
         token: cfg.token,
@@ -981,10 +996,12 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     executiveUsername = ensureMatrixUserServer(await ask("Executive user (optional DM target)", executiveUsername), host);
     if (executiveUsername) {
       try {
-        const dmRoomId = await matrixCreateDirectRoom({
+        const dmRoomId = await ensureMatrixExecutiveDmRoom({
+          agentHouse: path.join(rootDir, "world", "house", "parity coder"),
           homeserver,
           token,
-          executiveUsername
+          user: userId,
+          executiveUser: executiveUsername
         });
         await matrixSendRoomMessage({
           homeserver,
@@ -1188,12 +1205,20 @@ async function configureMatrix({ args }) {
   const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
   let live = null;
   if (runTestNow) {
-    live = await matrixPostSetupTest(cfg);
+    live = await matrixPostSetupTest(cfg, { rootDir });
   }
 
   const plan = await createMatrixWritePlan({ rootDir, cfg });
   if (!dryRun) {
     await applyWritePlan(plan);
+  }
+  let runtime = null;
+  if (!dryRun && cfg.writeAgentPolicy) {
+    const orchestrator = await loadOrchestratorConfigFromSecret(rootDir);
+    const autoStart = parseTruthy(orchestrator.autostart, false);
+    if (autoStart) {
+      runtime = await schedulerRestart({ worldRoot: path.join(rootDir, "world") });
+    }
   }
 
   const out = {
@@ -1206,6 +1231,7 @@ async function configureMatrix({ args }) {
     writes: writePlanSummary(plan),
     verification,
     live,
+    runtime,
     config: redactMatrixConfig(cfg)
   };
 
@@ -1223,6 +1249,9 @@ async function configureMatrix({ args }) {
     for (const check of live?.checks || []) {
       textOut(`- ${check.ok ? "ok" : "fail"}: ${check.name}${check.error ? ` (${check.error})` : ""}`);
     }
+  }
+  if (runtime) {
+    textOut(`scheduler reload ${runtime.running ? "running" : "stopped"}`);
   }
   if (print) {
     textOut("");
@@ -1258,7 +1287,7 @@ async function configureMatrixTest({ args }) {
     process.exit(1);
   }
 
-  const live = await matrixPostSetupTest(resolved);
+  const live = await matrixPostSetupTest(resolved, { rootDir });
   const payload = {
     ok: live.ok,
     route: "configure channel matrix test",
