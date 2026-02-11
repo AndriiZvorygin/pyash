@@ -82,3 +82,51 @@ test("channel run routes input through router, executes orchestrator+saddle path
     forget();
   }
 });
+
+test("channel run emits mind defective fallback instead of failing tick", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-router-orchestra-error-"));
+  const agentHouse = path.join(root, "world", "house", "pyash-agent");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [{
+          channelType: "matrix",
+          channelId: "!pyash:server",
+          eventId: "$in-2",
+          sender: "@user:server",
+          text: "hello"
+        }],
+        checkpoint: { nextBatch: "tok-router-error" }
+      };
+    },
+    async send({ content }) {
+      sent.push(String(content));
+      return { eventId: "$out-2" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "pyash-agent",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@pyash-agent:server",
+      mentionGate: false
+    },
+    adapter,
+    interpretFn: async () => {
+      throw new Error("spawn node ENOENT");
+    },
+    routerInterpretFn: interpret,
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /^mind defective: spawn node ENOENT$/);
+});
