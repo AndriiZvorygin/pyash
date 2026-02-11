@@ -124,3 +124,74 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.match(String(calls[0].url), /\/rooms\//);
   assert.equal(calls[0].opts?.method, "PUT");
 });
+
+test("matrix adapter receive includes m.direct room events", async () => {
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    if (text.includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    if (text.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            "@friend:server": ["!dm:server"]
+          };
+        }
+      };
+    }
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server", "!dm:server"] };
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": { timeline: { events: [] } },
+              "!dm:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$dm1",
+                      sender: "@friend:server",
+                      origin_server_ts: 1700000000100,
+                      content: { body: "hello dm", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@bot:server",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$dm1");
+  assert.equal(received.events[0]?.channelId, "!dm:server");
+  assert.equal(received.events[0]?.laneName, null);
+  assert.deepEqual(received.diagnostics?.directRoomsSnapshot?.rooms, ["!dm:server"]);
+});
