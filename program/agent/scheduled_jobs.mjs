@@ -160,13 +160,14 @@ export function mergeMatrixDmRooms({ channelConfig, dmRoomIds = [], channelType 
 
 function parseChannelPollJob(jobName) {
   const text = String(jobName ?? "").trim().toLowerCase();
-  const match = text.match(/^([a-z0-9_-]+)\s+(poll|probe)$/);
+  const match = text.match(/^([a-z0-9_-]+)\s+(poll|probe|input)$/);
   if (!match) return null;
   const source = match[1];
+  const kind = match[2];
   if (source === "channel") {
-    return { mode: "multi" };
+    return { mode: "multi", kind };
   }
-  return { mode: "single", channelType: source };
+  return { mode: "single", channelType: source, kind };
 }
 
 function normalizeChannelOrder(values = []) {
@@ -189,7 +190,8 @@ function channelTypesFromJobWithCase(withCase, fallback = []) {
 
 function normalizeChannelMode(raw) {
   const text = String(raw ?? "").trim().toLowerCase();
-  if (text === "poll" || text === "sync" || text === "appservice") return text;
+  if (text === "appservice") return "appservice-push";
+  if (text === "poll" || text === "sync" || text === "appservice-push") return text;
   return "sync";
 }
 
@@ -231,6 +233,10 @@ async function runChannelPollJob({ worldRoot, job }) {
       ? 1000
       : normalizeLongPollMs(channelConfig.longPollMs, 30000);
     channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
+    if (channelMode === "appservice-push" && parsed.kind !== "input") {
+      channelStatus.push(`${channelType}:skipped=push_mode`);
+      continue;
+    }
     if (channelType === "matrix") {
       channelConfig = resolveMatrixConfigWithRemember(channelConfig);
       const credentials = await ensureMatrixCredentials({
@@ -289,7 +295,9 @@ async function runChannelPollJob({ worldRoot, job }) {
       totalReceived += Number(result?.received ?? 0);
       totalHandled += Number(result?.handled ?? 0);
       totalSent += Number(result?.sent ?? 0);
-      const modeSuffix = channelMode === "appservice" ? "mode=appservice(sync)" : `mode=${channelMode}`;
+      const modeSuffix = channelMode === "appservice-push"
+        ? "mode=appservice-push"
+        : `mode=${channelMode}`;
       channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}:${modeSuffix}`);
     } catch (err) {
       const message = String(err?.message ?? err).replace(/\s+/g, " ").trim();
