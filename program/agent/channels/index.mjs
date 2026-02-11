@@ -6,6 +6,10 @@ import { remember } from "../../remember/index.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
+import {
+  readChannelRuntimeState,
+  writeChannelRuntimeState
+} from "../channel_core/state.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -30,18 +34,6 @@ function channelTelemetryPath(agentHouse, { channelType, agentName } = {}) {
   return worldNewspaperLogPath({ worldRoot, name: logName });
 }
 
-function checkpointPath(agentHouse, channelType) {
-  return path.join(agentHouse, "conduct", `checkpoint-${channelType}.json`);
-}
-
-function dedupPath(agentHouse, channelType) {
-  return path.join(agentHouse, "conduct", `dedup-${channelType}.json`);
-}
-
-function selfEventsPath(agentHouse, channelType) {
-  return path.join(agentHouse, "conduct", `self-events-${channelType}.json`);
-}
-
 async function appendTelemetry(agentHouse, event, { channelType, agentName } = {}) {
   const target = channelTelemetryPath(agentHouse, { channelType, agentName });
   await fs.mkdir(path.dirname(target), { recursive: true });
@@ -60,21 +52,6 @@ function shortText(value, limit = 180) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}...`;
-}
-
-async function readJsonFile(filePath, fallback) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (err) {
-    if (err?.code === "ENOENT") return fallback;
-    throw err;
-  }
-}
-
-async function writeJsonFile(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
 }
 
 function buildPrompt(event, { payloadId } = {}) {
@@ -531,14 +508,14 @@ export async function runChannelOnce({
   if (typeof interpretFn !== "function") throw new Error("runChannelOnce requires interpretFn");
   if (!agentHouse) throw new Error("runChannelOnce requires agentHouse");
 
-  const cpPath = checkpointPath(agentHouse, channelType);
-  const ddPath = dedupPath(agentHouse, channelType);
-  const sePath = selfEventsPath(agentHouse, channelType);
-  const checkpoint = await readJsonFile(cpPath, {});
-  const dedupState = await readJsonFile(ddPath, { order: [], ids: {} });
-  const selfState = await readJsonFile(sePath, { order: [] });
-  const dedupIds = new Set(Array.isArray(dedupState.order) ? dedupState.order : []);
-  const selfEventIds = new Set(Array.isArray(selfState.order) ? selfState.order : []);
+  const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+  const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+    ? runtimeState.checkpoint
+    : {};
+  const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+  const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+  const dedupIds = new Set(dedupState.order);
+  const selfEventIds = new Set(selfState.order);
 
   const startMs = Date.now();
   const recv = await adapter.receive({ config: channelConfig, checkpoint });
@@ -575,11 +552,17 @@ export async function runChannelOnce({
   });
 
   const newCheckpoint = recv?.checkpoint ?? checkpoint;
-  await writeJsonFile(cpPath, newCheckpoint);
-  await writeJsonFile(ddPath, dedupState);
-  await writeJsonFile(sePath, selfState);
+  await writeChannelRuntimeState({
+    agentHouse,
+    channelType,
+    checkpoint: newCheckpoint,
+    dedupOrder: dedupState.order,
+    selfOrder: selfState.order,
+    removeLegacy: true
+  });
 
   const durationMs = Date.now() - startMs;
+  const lastInputAt = events.length ? String(events[events.length - 1]?.timestamp ?? "") : "";
   await appendTelemetry(agentHouse, {
     timestamp: nowIso(),
     channelType,
@@ -587,5 +570,10 @@ export async function runChannelOnce({
     durationMs,
     ...dispatchResult
   }, { channelType, agentName });
-  return { ...dispatchResult, durationMs };
+  return {
+    ...dispatchResult,
+    durationMs,
+    lastInputAt,
+    queueDepth: 0
+  };
 }

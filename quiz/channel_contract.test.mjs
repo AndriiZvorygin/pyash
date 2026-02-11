@@ -78,7 +78,12 @@ test("channel contract builds and parses router health sentence", () => {
     name: "router",
     statusText: "ready",
     healthy: true,
-    sinceIso: "2026-02-11T13:00:00.000Z"
+    sinceIso: "2026-02-11T13:00:00.000Z",
+    activeMode: "",
+    fallbackActive: false,
+    fallbackReason: "",
+    queueDepth: 0,
+    lastInputAt: ""
   });
 });
 

@@ -100,6 +100,11 @@ Router `health` mapping:
 1. `ob text` -> health text (`ready` or `defective`)
 2. `as bool` -> health truth
 3. `since date` -> health timestamp
+4. `for text` -> active intake mode
+5. `fromstate text` -> fallback state (`active` or `inactive`)
+6. `fromtext text` -> fallback reason (optional)
+7. `to num` -> queue depth
+8. `during date` -> last input timestamp (optional)
 
 ## 4. Determinism and Format Rules
 
@@ -155,5 +160,13 @@ Rules:
 3. fallback reason text (when active)
 4. queue depth (if push queue is used)
 5. last push event timestamp (if push is configured)
+
+Current implementation surface:
+
+1. `for text` carries active intake mode
+2. `fromstate text` carries fallback state (`active`/`inactive`)
+3. `fromtext text` carries fallback reason
+4. `to num` carries queue depth
+5. `during date` carries last input timestamp
 
 Implementations MAY add extra health facts, but these required fields MUST remain present.

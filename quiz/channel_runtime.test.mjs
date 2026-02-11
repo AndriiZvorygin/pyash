@@ -672,3 +672,65 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     resetMindLogs();
   }
 });
+
+test("channel runtime migrates legacy json state into managed .pya state", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-state-migrate-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  const conductDir = path.join(agentHouse, "conduct");
+  await fs.mkdir(conductDir, { recursive: true });
+
+  await fs.writeFile(
+    path.join(conductDir, "checkpoint-matrix.json"),
+    JSON.stringify({ nextBatch: "tok-legacy" }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(conductDir, "dedup-matrix.json"),
+    JSON.stringify({ order: ["$legacy-1"] }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(conductDir, "self-events-matrix.json"),
+    JSON.stringify({ order: ["$self-legacy-1"] }, null, 2)
+  );
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$legacy-1", sender: "@u:server", text: "legacy dedup" }
+        ],
+        checkpoint: { nextBatch: "tok-new" }
+      };
+    },
+    async send() {
+      return { eventId: "$out-unused" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => ({ ob: { text: "reply" } }),
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 0);
+  assert.equal(result.skippedDedup, 1);
+
+  const newStatePath = path.join(conductDir, "channel-state-matrix.pya");
+  const newStateText = await fs.readFile(newStatePath, "utf8");
+  assert.match(newStateText, /su name matrix channel state be map def/);
+  assert.match(newStateText, /su name checkpoint next batch ob text "tok-new" ya/);
+  assert.match(newStateText, /su name dedup event ob text "\$legacy-1" ya/);
+  assert.match(newStateText, /su name self event ob text "\$self-legacy-1" ya/);
+
+  await assert.rejects(fs.access(path.join(conductDir, "checkpoint-matrix.json")), { code: "ENOENT" });
+  await assert.rejects(fs.access(path.join(conductDir, "dedup-matrix.json")), { code: "ENOENT" });
+  await assert.rejects(fs.access(path.join(conductDir, "self-events-matrix.json")), { code: "ENOENT" });
+});
