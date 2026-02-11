@@ -827,7 +827,8 @@ function buildChannelConductBlock({
   mentionGate = false,
   mode = DEFAULT_MATRIX_CHANNEL_MODE,
   longPollMs = DEFAULT_MATRIX_LONG_POLL_MS,
-  appserviceRegistration = ""
+  appserviceRegistration = "",
+  userId = ""
 }) {
   const normalizedMode = normalizeMatrixMode(mode, DEFAULT_MATRIX_CHANNEL_MODE);
   const normalizedLongPollMs = normalizeMatrixLongPollMs(longPollMs, DEFAULT_MATRIX_LONG_POLL_MS);
@@ -838,6 +839,9 @@ function buildChannelConductBlock({
     `su name matrix long poll ms ob text ${quoteText(String(normalizedLongPollMs))} ya`,
     `su name matrix homeserver ob text ${quoteText(homeserver)} ya`,
     `su name matrix room ob text ${quoteText(room)} ya`,
+    ...(userId
+      ? [`su name matrix user ob text ${quoteText(userId)} ya`]
+      : []),
     ...(appserviceRegistration
       ? [`su name matrix bridge service file ob text ${quoteText(appserviceRegistration)} ya`]
       : [])
@@ -1900,7 +1904,8 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         mentionGate: cfg.mentionGate,
         mode: cfg.mode,
         longPollMs: cfg.longPollMs,
-        appserviceRegistration: cfg.appserviceRegistration
+        appserviceRegistration: cfg.appserviceRegistration,
+        userId: cfg.userId
       })
     });
     writes.push({
@@ -3215,7 +3220,8 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
       mentionGate,
       mode: matrix.mode,
       longPollMs: matrix.longPollMs,
-      appserviceRegistration: matrix.appserviceRegistration
+      appserviceRegistration: matrix.appserviceRegistration,
+      userId: matrix.userId
     })
   });
   if (!dryRun && plan.changed) {

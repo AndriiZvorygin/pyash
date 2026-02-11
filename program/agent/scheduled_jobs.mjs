@@ -66,7 +66,7 @@ function readRememberText(name) {
   return text || null;
 }
 
-function resolveMatrixConfigWithRemember(rawConfig = {}) {
+export function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
   const mapMode = resolveConfigMapText(mapName, "mode");
@@ -81,38 +81,38 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapToken = resolveConfigMapText(mapName, "token");
   return {
     ...rawConfig,
-    mode: mapMode ?? rawConfig.mode ?? null,
-    longPollMs: mapLongPollMs ?? rawConfig.longPollMs ?? null,
-    appserviceRegistration: mapAppserviceRegistration ?? rawConfig.appserviceRegistration ?? null,
+    mode: rawConfig.mode ?? mapMode ?? null,
+    longPollMs: rawConfig.longPollMs ?? mapLongPollMs ?? null,
+    appserviceRegistration: rawConfig.appserviceRegistration ?? mapAppserviceRegistration ?? null,
     homeserver:
-      mapHomeserver ??
       rawConfig.homeserver ??
+      mapHomeserver ??
       readRememberText("matrix homeserver") ??
       readRememberText("matrix server") ??
       null,
     user:
-      mapUser ??
       rawConfig.user ??
+      mapUser ??
       readRememberText("matrix user") ??
       null,
     executiveUsername:
-      mapExecutiveUsername ??
       rawConfig.executiveUsername ??
+      mapExecutiveUsername ??
       readRememberText("matrix executive username") ??
       null,
     registrationSharedSecret:
-      mapSharedSecret ??
       rawConfig.registrationSharedSecret ??
+      mapSharedSecret ??
       readRememberText("matrix registration shared secret") ??
       null,
     adminToken:
-      mapAdminToken ??
       rawConfig.adminToken ??
+      mapAdminToken ??
       readRememberText("matrix admin token") ??
       null,
     token:
-      mapToken ??
       rawConfig.token ??
+      mapToken ??
       readRememberText("matrix access token") ??
       null
   };
