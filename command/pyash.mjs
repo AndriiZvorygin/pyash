@@ -118,6 +118,16 @@ async function readText(filePath) {
   }
 }
 
+async function pathExists(filePath) {
+  try {
+    await fs.stat(filePath);
+    return true;
+  } catch (err) {
+    if (err?.code === "ENOENT") return false;
+    throw err;
+  }
+}
+
 async function ensureDirForFile(filePath) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
@@ -2827,7 +2837,24 @@ async function loadAgentDefaults({ worldRoot, agentName }) {
 
 async function listConfiguredAgents({ worldRoot }) {
   const names = await listAgents({ worldRoot });
-  const items = await Promise.all(names.map(async (agentName) => await loadAgentDefaults({ worldRoot, agentName })));
+  const configuredNames = [];
+  for (const agentName of names) {
+    const conductDir = path.join(worldRoot, "house", agentName, "conduct");
+    const markerPaths = [
+      path.join(conductDir, "managed.pya"),
+      path.join(conductDir, "runtime.pya"),
+      path.join(conductDir, "channels.pya")
+    ];
+    let configured = false;
+    for (const markerPath of markerPaths) {
+      if (await pathExists(markerPath)) {
+        configured = true;
+        break;
+      }
+    }
+    if (configured) configuredNames.push(agentName);
+  }
+  const items = await Promise.all(configuredNames.map(async (agentName) => await loadAgentDefaults({ worldRoot, agentName })));
   return items.sort((a, b) => a.agentName.localeCompare(b.agentName, "en"));
 }
 
