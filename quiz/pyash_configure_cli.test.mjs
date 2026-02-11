@@ -305,6 +305,38 @@ test("configure channel matrix appservice mode defaults registration path to con
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
 });
 
+test("configure channel matrix appservice mode auto-fills token auth from registration", async () => {
+  const root = await makeRoot();
+  const registrationDir = path.join(root, "configure", "secret");
+  await fs.mkdir(registrationDir, { recursive: true });
+  const registrationPath = path.join(registrationDir, "matrix.yaml");
+  await fs.writeFile(registrationPath, [
+    "id: pyash-agent",
+    "url: http://appservice:9001",
+    "as_token: as-token-abc",
+    "hs_token: hs-token-def",
+    "sender_localpart: agentbot"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--mode", "appservice",
+    "--appservice-registration", "configure/secret/matrix.yaml"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.authMode, "token");
+  assert.equal(payload.config.userId, "@agentbot:matrix.liberit.ca");
+  assert.equal(payload.config.token, "[redacted]");
+});
+
 test("configure channel matrix resolves root from parent directories when --root is omitted", async () => {
   const root = await makeRoot();
   const secretDir = path.join(root, "configure");
