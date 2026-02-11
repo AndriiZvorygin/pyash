@@ -160,7 +160,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
       const roomLane = resolvedRooms.laneByRoomId;
       const directRoomIds = Array.isArray(directRoomsSnapshot?.rooms) ? directRoomsSnapshot.rooms : [];
-      const roomIdsToRead = [...new Set([...resolvedRooms.roomIds, ...directRoomIds])];
+      const roomIdsToRead = [...new Set([...resolvedRooms.roomIds, ...directRoomIds, ...joinedRoomIds])];
       const events = [];
       for (const roomId of roomIdsToRead) {
         if (!roomId) continue;
