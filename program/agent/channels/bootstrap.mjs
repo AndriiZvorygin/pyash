@@ -256,6 +256,27 @@ async function createDirectRoom({
   return String(roomId);
 }
 
+async function fetchJoinedRoomSet({
+  homeserver,
+  token,
+  userId,
+  mode,
+  fetchImpl
+}) {
+  const url = applyAuthToUrl(
+    `${homeserver}/_matrix/client/v3/joined_rooms`,
+    { token, userId, mode }
+  );
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: authHeaders({ token, mode })
+  });
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => ({}));
+  const values = Array.isArray(payload?.joined_rooms) ? payload.joined_rooms : [];
+  return new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean));
+}
+
 function envSharedSecret() {
   return process.env.MATRIX_REGISTRATION_SHARED_SECRET ?? process.env.PYA_MATRIX_REGISTRATION_SHARED_SECRET ?? null;
 }
@@ -304,7 +325,9 @@ export async function ensureMatrixCredentials({
       await writeJsonFile(authPath(agentHouse), {
         ...cached,
         homeserver,
-        user: resolvedCachedUser
+        user: resolvedCachedUser,
+        localpart: resolvedLocalpart,
+        executiveDmRooms: {}
       });
     }
     return {
@@ -455,8 +478,21 @@ export async function ensureMatrixExecutiveDmRoom({
   if (!executiveUserId) return null;
 
   const cached = await readJsonFile(authPath(agentHouse), null);
+  const joinedRooms = await fetchJoinedRoomSet({
+    homeserver,
+    token,
+    userId: user,
+    mode,
+    fetchImpl
+  });
   const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
-  if (typeof cachedRoom === "string" && cachedRoom.startsWith("!")) return cachedRoom;
+  if (
+    typeof cachedRoom === "string"
+    && cachedRoom.startsWith("!")
+    && (!joinedRooms || joinedRooms.has(cachedRoom))
+  ) {
+    return cachedRoom;
+  }
 
   const directRoom = await readDirectRoomFromAccountData({
     homeserver,
@@ -466,7 +502,7 @@ export async function ensureMatrixExecutiveDmRoom({
     mode,
     fetchImpl
   });
-  if (directRoom) {
+  if (directRoom && (!joinedRooms || joinedRooms.has(directRoom))) {
     const next = {
       ...(cached ?? {}),
       homeserver,
