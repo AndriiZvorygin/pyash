@@ -122,6 +122,35 @@ test("configure channel matrix scrubs legacy matrix seed lines from agent policy
   assert.match(text, /su name matrix room ob text "#pyash:matrix\.org" ya/);
 });
 
+test("configure channel matrix shared-secret mode reuses provided token idempotently", async () => {
+  const root = await makeRoot();
+  const args = [
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "shared-secret",
+    "--registration-shared-secret", "shared-secret-value",
+    "--token", "existing-token",
+    "--agent-user-id", "@pyash-agent:matrix.liberit.ca",
+    "--agent", "pyash-agent"
+  ];
+
+  const first = runCli(args);
+  assert.equal(first.status, 0, first.stderr);
+  const firstPayload = JSON.parse(first.stdout);
+  assert.equal(firstPayload.ok, true);
+  assert.equal(firstPayload.config.token, "[redacted]");
+
+  const second = runCli(args);
+  assert.equal(second.status, 0, second.stderr);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.ok, true);
+  assert.equal(secondPayload.changed, false);
+});
+
 test("configure channel matrix doctor fails with missing config", async () => {
   const root = await makeRoot();
   const run = runCli(["configure", "channel", "matrix", "doctor", "--root", root, "--json"]);

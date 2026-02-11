@@ -1004,7 +1004,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
         }
         userId = ensureMatrixUserServer(await ask("Default agent Matrix user id", userId || "@pyash-agent"), host);
         adminToken = "";
-        token = "";
+        // Keep existing token so reruns are idempotent for already-registered users.
+        token = token || prior.token || "";
         password = "";
       }
 
