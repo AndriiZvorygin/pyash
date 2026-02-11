@@ -174,6 +174,14 @@ test("matrix executive dm bootstrap reuses m.direct room when present", async ()
   const roomId = "!dmexisting:example.org";
   const fetchImpl = async (url, opts = {}) => {
     calls.push({ url, opts });
+    if (String(url).includes("/joined_rooms")) {
+      return {
+        ok: true,
+        async json() {
+          return { joined_rooms: [roomId] };
+        }
+      };
+    }
     if (url.includes("/account_data/m.direct")) {
       return {
         ok: true,
@@ -196,7 +204,7 @@ test("matrix executive dm bootstrap reuses m.direct room when present", async ()
     fetchImpl
   });
   assert.equal(resolved, roomId);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
 });
 
 test("matrix executive dm bootstrap creates room and normalizes executive username", async () => {
@@ -207,6 +215,14 @@ test("matrix executive dm bootstrap creates room and normalizes executive userna
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
     calls.push({ url, opts });
+    if (String(url).includes("/joined_rooms")) {
+      return {
+        ok: true,
+        async json() {
+          return { joined_rooms: [] };
+        }
+      };
+    }
     if (url.includes("/account_data/m.direct")) {
       return {
         ok: true,
@@ -238,7 +254,7 @@ test("matrix executive dm bootstrap creates room and normalizes executive userna
     fetchImpl
   });
   assert.equal(resolved, "!newdm:matrix.liberit.ca");
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
 });
 
 test("matrix executive dm bootstrap appservice mode uses query auth context", async () => {
@@ -249,6 +265,14 @@ test("matrix executive dm bootstrap appservice mode uses query auth context", as
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
     calls.push({ url: String(url), opts });
+    if (String(url).includes("/joined_rooms")) {
+      return {
+        ok: true,
+        async json() {
+          return { joined_rooms: ["!dmexisting:matrix.liberit.ca"] };
+        }
+      };
+    }
     if (String(url).includes("/account_data/m.direct")) {
       return {
         ok: true,
@@ -273,9 +297,103 @@ test("matrix executive dm bootstrap appservice mode uses query auth context", as
   });
 
   assert.equal(resolved, "!dmexisting:matrix.liberit.ca");
-  assert.equal(calls.length, 1);
-  const callUrl = new URL(calls[0].url);
+  assert.equal(calls.length, 2);
+  const callUrl = new URL(calls.find((call) => call.url.includes("/account_data/m.direct")).url);
   assert.equal(callUrl.searchParams.get("access_token"), "as-token-123");
   assert.equal(callUrl.searchParams.get("user_id"), "@agentbot:matrix.liberit.ca");
-  assert.equal(calls[0].opts?.headers?.Authorization, undefined);
+  const accountCall = calls.find((call) => call.url.includes("/account_data/m.direct"));
+  assert.equal(accountCall?.opts?.headers?.Authorization, undefined);
+});
+
+test("matrix credentials clears cached executive dm rooms when configured user changes", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-user-switch-"));
+  const agentHouse = path.join(root, "world", "house", "pyash-agent");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
+  await fs.writeFile(cachedAuthPath, JSON.stringify({
+    homeserver: "https://matrix.liberit.ca",
+    user: "@agentbot:matrix.liberit.ca",
+    localpart: "agentbot",
+    accessToken: "tok-cached",
+    executiveDmRooms: {
+      "@andrii:matrix.liberit.ca": "!old:matrix.liberit.ca"
+    }
+  }, null, 2));
+
+  const resolved = await ensureMatrixCredentials({
+    agentName: "pyash-agent",
+    agentHouse,
+    config: {
+      homeserver: "https://matrix.liberit.ca",
+      user: "@pyash-agent:matrix.liberit.ca",
+      mode: "appservice"
+    },
+    fetchImpl: async () => {
+      throw new Error("should not fetch with cached token");
+    }
+  });
+
+  assert.equal(resolved.user, "@pyash-agent:matrix.liberit.ca");
+  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  assert.equal(persisted.user, "@pyash-agent:matrix.liberit.ca");
+  assert.deepEqual(persisted.executiveDmRooms, {});
+});
+
+test("matrix executive dm bootstrap ignores stale cached room when not joined", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-dm-stale-room-"));
+  const agentHouse = path.join(root, "world", "house", "pyash-agent");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
+  await fs.writeFile(cachedAuthPath, JSON.stringify({
+    homeserver: "https://matrix.liberit.ca",
+    user: "@agentbot:matrix.liberit.ca",
+    accessToken: "tok",
+    executiveDmRooms: {
+      "@andrii:matrix.liberit.ca": "!stale:matrix.liberit.ca"
+    }
+  }, null, 2));
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    if (String(url).includes("/joined_rooms")) {
+      return {
+        ok: true,
+        async json() {
+          return { joined_rooms: ["!active:matrix.liberit.ca"] };
+        }
+      };
+    }
+    if (String(url).includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            "@andrii:matrix.liberit.ca": ["!stale:matrix.liberit.ca"]
+          };
+        }
+      };
+    }
+    if (String(url).endsWith("/_matrix/client/v3/createRoom")) {
+      return {
+        ok: true,
+        async json() {
+          return { room_id: "!fresh:matrix.liberit.ca" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixExecutiveDmRoom({
+    agentHouse,
+    homeserver: "https://matrix.liberit.ca",
+    token: "tok",
+    user: "@agentbot:matrix.liberit.ca",
+    executiveUser: "@andrii:matrix.liberit.ca",
+    fetchImpl
+  });
+  assert.equal(resolved, "!fresh:matrix.liberit.ca");
+  assert.ok(calls.some((call) => call.url.includes("/joined_rooms")));
+  assert.ok(calls.some((call) => call.url.endsWith("/_matrix/client/v3/createRoom")));
 });
