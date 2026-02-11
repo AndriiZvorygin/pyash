@@ -133,6 +133,26 @@ async function pathExists(filePath) {
   }
 }
 
+async function detectProjectRoot(startDir = process.cwd()) {
+  let current = path.resolve(startDir);
+  while (true) {
+    const hasConfigureSecret = await pathExists(path.join(current, "configure", "secret.pya"));
+    const hasWorldHouse = await pathExists(path.join(current, "world", "house"));
+    const hasPyashCommand = await pathExists(path.join(current, "command", "pyash.mjs"));
+    if (hasConfigureSecret || hasWorldHouse || hasPyashCommand) return current;
+    const parent = path.dirname(current);
+    if (!parent || parent === current) break;
+    current = parent;
+  }
+  return installRoot;
+}
+
+async function resolveRootDirFromArgs(args = []) {
+  const provided = parseArgValue(args, "--root");
+  if (provided != null && String(provided).trim()) return path.resolve(String(provided).trim());
+  return await detectProjectRoot(process.cwd());
+}
+
 async function ensureDirForFile(filePath) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
@@ -1375,21 +1395,45 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     }
     const host = homeserverHost(homeserver);
 
-    printer.header("A.2 Delivery Mode");
-    printer.why("Delivery mode controls how fast channel input reaches the router.");
-    printer.how("sync uses long-poll, poll is low-overhead fallback, appservice prepares push integration.");
-    printer.examples("sync | appservice | poll");
+    const detectedDefaultAppservicePath = await pathExists(
+      path.join(rootDir, DEFAULT_MATRIX_APPSERVICE_REGISTRATION)
+    )
+      ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION
+      : "";
+    let appserviceRegistration = String(prior.appserviceRegistration || "").trim();
     let channelMode = "";
-    while (!channelMode) {
-      const enteredMode = normalizeMatrixMode(
-        await ask("Channel mode", normalizeMatrixMode(prior.mode || "", DEFAULT_MATRIX_CHANNEL_MODE)),
-        ""
+    if (!appserviceRegistration && detectedDefaultAppservicePath) {
+      printer.header("A.1b Appservice Detection");
+      printer.why("A default Matrix appservice registration file was detected.");
+      printer.how("Using it now can skip manual appservice path entry.");
+      printer.examples(detectedDefaultAppservicePath);
+      const useDetectedAppservice = await askYesNo(
+        `Use detected ${detectedDefaultAppservicePath}`,
+        true
       );
-      if (!enteredMode || !MATRIX_CHANNEL_MODES.includes(enteredMode)) {
-        textOut(`- invalid: mode must be ${MATRIX_CHANNEL_MODES.join(", ")}`);
-        continue;
+      if (useDetectedAppservice) {
+        channelMode = "appservice";
+        appserviceRegistration = detectedDefaultAppservicePath;
+        textOut("- mode set to appservice");
       }
-      channelMode = enteredMode;
+    }
+
+    if (!channelMode) {
+      printer.header("A.2 Delivery Mode");
+      printer.why("Delivery mode controls how fast channel input reaches the router.");
+      printer.how("sync uses long-poll, poll is low-overhead fallback, appservice prepares push integration.");
+      printer.examples("sync | appservice | poll");
+      while (!channelMode) {
+        const enteredMode = normalizeMatrixMode(
+          await ask("Channel mode", normalizeMatrixMode(prior.mode || "", DEFAULT_MATRIX_CHANNEL_MODE)),
+          ""
+        );
+        if (!enteredMode || !MATRIX_CHANNEL_MODES.includes(enteredMode)) {
+          textOut(`- invalid: mode must be ${MATRIX_CHANNEL_MODES.join(", ")}`);
+          continue;
+        }
+        channelMode = enteredMode;
+      }
     }
     const defaultLongPollMs = normalizeMatrixLongPollMs(
       prior.longPollMs || (channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS),
@@ -1403,13 +1447,30 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     const longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
     textOut(`- long poll set to ${longPollMs} ms`);
 
-    let appserviceRegistration = String(prior.appserviceRegistration || "").trim();
     if (channelMode === "appservice") {
       printer.header("A.4 Appservice Registration");
       printer.why("Registration file contains service tokens and sender namespace for Matrix push routing.");
       printer.how("Put the file at configure/secret/matrix.yaml (recommended) or provide another local YAML path.");
       printer.examples("configure/secret/matrix.yaml");
       let validated = false;
+      if (appserviceRegistration) {
+        try {
+          const loaded = await readMatrixAppserviceRegistration({
+            rootDir,
+            registrationPath: appserviceRegistration
+          });
+          textOut(`- appservice registration loaded (${loaded.path})`);
+          textOut(`- appservice sender localpart ${loaded.senderLocalpart}`);
+          validated = true;
+          const keepDetected = await askYesNo("Use this appservice registration path", true);
+          if (!keepDetected) {
+            validated = false;
+            appserviceRegistration = "";
+          }
+        } catch {
+          appserviceRegistration = "";
+        }
+      }
       while (!validated) {
         appserviceRegistration = String(await ask(
           "Appservice registration path",
@@ -1620,7 +1681,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       writeAgentPolicy,
       agentName,
       mentionGate,
-      mode: quickstart ? "quickstart" : "advanced"
+      configureMode: quickstart ? "quickstart" : "advanced"
     };
   } finally {
     rl.close();
@@ -1782,7 +1843,7 @@ async function configureChannelList({ json }) {
 }
 
 async function configureMatrix({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
@@ -2057,7 +2118,7 @@ function renderServiceMap(name, items) {
 
 async function calendarCommand(args) {
   const sub = (args[0] ?? "health").toLowerCase();
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const agentFilter = parseArgValue(args, "--agent") ?? "";
@@ -2123,7 +2184,7 @@ async function calendarCommand(args) {
 }
 
 async function channelPollCommand(args) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const channelType = parseArgValue(args, "--channel") ?? "matrix";
@@ -2149,7 +2210,7 @@ async function channelPollCommand(args) {
 }
 
 async function channelLogCommand(args) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
@@ -2193,7 +2254,7 @@ async function channelCommand(args) {
 }
 
 async function configureMatrixTest({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const loaded = await loadMatrixConfigFromSecret(rootDir);
@@ -2227,7 +2288,7 @@ async function configureMatrixTest({ args }) {
 }
 
 async function configureMatrixDoctor({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const report = await matrixDoctor({ rootDir });
   if (json) jsonOut(report);
@@ -2361,7 +2422,7 @@ async function createOrchestratorWritePlan({ rootDir, cfg }) {
 }
 
 async function configureOrchestrator({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
@@ -2829,7 +2890,7 @@ async function askContinueWithoutCodexLogin() {
 }
 
 async function configureMind({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
@@ -3245,7 +3306,7 @@ async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaul
 }
 
 async function configureAgentList({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const agents = await listConfiguredAgents({ worldRoot });
@@ -3273,7 +3334,7 @@ async function configureAgentList({ args }) {
 }
 
 async function configureAgentDelete({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const nonInteractive = hasFlag(args, "--non-interactive");
@@ -3363,7 +3424,7 @@ async function configureAgentDelete({ args }) {
 }
 
 async function configureAgentApply({ args, mode = "establish" }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
@@ -3579,7 +3640,7 @@ async function configureAgent({ args }) {
 }
 
 async function configureIntro({ args }) {
-  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const loadStatus = async () => {
     const channel = await loadMatrixConfigFromSecret(rootDir);
