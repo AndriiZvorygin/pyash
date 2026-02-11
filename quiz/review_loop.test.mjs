@@ -212,6 +212,8 @@ test("review loop emits deterministic session gold record", async () => {
   const firstKey = String(remember("review loop gold key")?.ob?.text ?? "");
   assert.equal(remember("review loop gold label")?.ob?.text, "gold_positive");
   assert.ok(firstFile.includes("/gold/accepted/"));
+  assert.ok(firstFile.includes("/house/varied/"));
+  assert.ok(firstFile.includes("/gold/accepted/gold gen/"));
   assert.ok(firstKey.length >= 12);
 
   const firstText = await fs.readFile(firstFile, "utf8");
