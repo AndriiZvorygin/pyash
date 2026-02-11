@@ -221,6 +221,55 @@ test("configure channel matrix shared-secret mode reuses provided token idempote
   assert.equal(secondPayload.changed, false);
 });
 
+test("configure channel matrix appservice mode validates registration and persists mode fields", async () => {
+  const root = await makeRoot();
+  const registrationDir = path.join(root, "synapse-data", "appservices");
+  await fs.mkdir(registrationDir, { recursive: true });
+  const registrationPath = path.join(registrationDir, "agent.yaml");
+  await fs.writeFile(registrationPath, [
+    "id: pyash-agent",
+    "url: http://appservice:9001",
+    "as_token: as-token-123",
+    "hs_token: hs-token-456",
+    "sender_localpart: pyash-agent"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--mode", "appservice",
+    "--long-poll-ms", "45000",
+    "--appservice-registration", registrationPath,
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "@pyash-agent:matrix.liberit.ca",
+    "--agent", "pyash-agent"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.longPollMs, 45000);
+  assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
+  assert.equal(payload.appservice?.hasAsToken, true);
+  assert.equal(payload.appservice?.hasHsToken, true);
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const channelsPath = path.join(root, "world", "house", "pyash-agent", "conduct", "channels.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  const channelsText = await fs.readFile(channelsPath, "utf8");
+  assert.match(secretText, /su name mode ob text "appservice" ya/);
+  assert.match(secretText, /su name long poll ms ob text "45000" ya/);
+  assert.match(secretText, /su name bridge service file ob text/);
+  assert.match(channelsText, /su name matrix mode ob text "appservice" ya/);
+  assert.match(channelsText, /su name matrix long poll ms ob text "45000" ya/);
+  assert.match(channelsText, /su name matrix bridge service file ob text/);
+});
+
 test("configure channel matrix doctor fails with missing config", async () => {
   const root = await makeRoot();
   const run = runCli(["configure", "channel", "matrix", "doctor", "--root", root, "--json"]);

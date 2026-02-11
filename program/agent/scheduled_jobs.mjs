@@ -69,6 +69,11 @@ function readRememberText(name) {
 function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
+  const mapMode = resolveConfigMapText(mapName, "mode");
+  const mapLongPollMs = resolveConfigMapText(mapName, "long poll ms");
+  const mapAppserviceRegistration =
+    resolveConfigMapText(mapName, "bridge service file") ??
+    resolveConfigMapText(mapName, "appservice registration");
   const mapUser = resolveConfigMapText(mapName, "user");
   const mapExecutiveUsername = resolveConfigMapText(mapName, "executive username");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
@@ -76,6 +81,9 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapToken = resolveConfigMapText(mapName, "token");
   return {
     ...rawConfig,
+    mode: mapMode ?? rawConfig.mode ?? null,
+    longPollMs: mapLongPollMs ?? rawConfig.longPollMs ?? null,
+    appserviceRegistration: mapAppserviceRegistration ?? rawConfig.appserviceRegistration ?? null,
     homeserver:
       mapHomeserver ??
       rawConfig.homeserver ??
@@ -179,6 +187,21 @@ function channelTypesFromJobWithCase(withCase, fallback = []) {
   return normalizeChannelOrder(values);
 }
 
+function normalizeChannelMode(raw) {
+  const text = String(raw ?? "").trim().toLowerCase();
+  if (text === "poll" || text === "sync" || text === "appservice") return text;
+  return "sync";
+}
+
+function normalizeLongPollMs(raw, fallback = 30000) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  const rounded = Math.trunc(value);
+  if (rounded < 1000) return 1000;
+  if (rounded > 120000) return 120000;
+  return rounded;
+}
+
 async function runChannelPollJob({ worldRoot, job }) {
   const parsed = parseChannelPollJob(job.jobName);
   if (!parsed) return null;
@@ -203,6 +226,11 @@ async function runChannelPollJob({ worldRoot, job }) {
       continue;
     }
     let channelConfig = { ...rawConfig };
+    const channelMode = normalizeChannelMode(channelConfig.mode);
+    const effectiveLongPollMs = channelMode === "poll"
+      ? 1000
+      : normalizeLongPollMs(channelConfig.longPollMs, 30000);
+    channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
     if (channelType === "matrix") {
       channelConfig = resolveMatrixConfigWithRemember(channelConfig);
       const credentials = await ensureMatrixCredentials({
@@ -261,7 +289,8 @@ async function runChannelPollJob({ worldRoot, job }) {
       totalReceived += Number(result?.received ?? 0);
       totalHandled += Number(result?.handled ?? 0);
       totalSent += Number(result?.sent ?? 0);
-      channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}`);
+      const modeSuffix = channelMode === "appservice" ? "mode=appservice(sync)" : `mode=${channelMode}`;
+      channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}:${modeSuffix}`);
     } catch (err) {
       const message = String(err?.message ?? err).replace(/\s+/g, " ").trim();
       channelStatus.push(`${channelType}:error=${message}`);

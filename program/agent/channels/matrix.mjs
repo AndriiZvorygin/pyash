@@ -2,6 +2,15 @@ function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
 }
 
+function normalizeLongPollMs(raw, fallback = 30000) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  const rounded = Math.trunc(value);
+  if (rounded < 1000) return 1000;
+  if (rounded > 120000) return 120000;
+  return rounded;
+}
+
 function pickTextEventBody(event) {
   const body = event?.content?.body;
   if (typeof body !== "string" || !body.trim()) return null;
@@ -139,7 +148,8 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, rooms, fetchImpl });
 
       const params = new URLSearchParams();
-      params.set("timeout", "0");
+      const longPollMs = normalizeLongPollMs(config?.longPollMs);
+      params.set("timeout", String(longPollMs));
       if (checkpoint?.nextBatch) params.set("since", checkpoint.nextBatch);
       const syncUrl = `${homeserver}/_matrix/client/v3/sync?${params.toString()}`;
       const syncRes = await fetchImpl(syncUrl, {
@@ -181,6 +191,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         checkpoint: { nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null },
         diagnostics: {
           since: checkpoint?.nextBatch ?? null,
+          timeoutMs: longPollMs,
           nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null,
           configuredRooms: roomIdsToRead,
           joinDiagnostics,

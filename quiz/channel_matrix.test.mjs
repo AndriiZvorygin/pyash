@@ -49,8 +49,49 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.equal(received.events[0]?.eventId, "$ev1");
   assert.equal(received.events[0]?.laneName, "main");
   assert.equal(received.checkpoint?.nextBatch, "tok2");
+  assert.equal(received.diagnostics?.timeoutMs, 30000);
   assert.ok(calls.some(call => String(call.url).includes("/join/")));
   assert.ok(calls.some(call => String(call.url).includes("/sync?")));
+  assert.ok(calls.some(call => String(call.url).includes("timeout=30000")));
+});
+
+test("matrix adapter receive accepts long poll timeout override", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: []
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      longPollMs: 45000,
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.diagnostics?.timeoutMs, 45000);
+  assert.ok(calls.some(url => url.includes("timeout=45000")));
 });
 
 test("matrix adapter receive resolves alias room ids from join diagnostics", async () => {

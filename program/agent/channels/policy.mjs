@@ -36,6 +36,9 @@ function ensureChannel(channels, channelType) {
     channels.set(channelType, {
       type: channelType,
       enabled: undefined,
+      mode: null,
+      longPollMs: null,
+      appserviceRegistration: null,
       homeserver: null,
       user: null,
       token: null,
@@ -94,6 +97,20 @@ export function parseChannelPolicyText(text) {
     }
     if (action === "homeserver") {
       cfg.homeserver = readTextValue(sentence) ?? cfg.homeserver;
+      continue;
+    }
+    if (action === "mode") {
+      cfg.mode = readTextValue(sentence) ?? cfg.mode;
+      continue;
+    }
+    if (action === "long poll ms") {
+      const raw = readTextValue(sentence);
+      const num = Number(raw);
+      if (Number.isFinite(num) && num > 0) cfg.longPollMs = Math.trunc(num);
+      continue;
+    }
+    if (action === "bridge service file" || action === "appservice registration") {
+      cfg.appserviceRegistration = readTextValue(sentence) ?? cfg.appserviceRegistration;
       continue;
     }
     if (action === "user") {
@@ -217,6 +234,9 @@ function mergeChannelEntry(base = {}, override = {}) {
     ...base,
     ...override,
     enabled: override.enabled ?? base.enabled ?? false,
+    mode: override.mode ?? base.mode ?? "sync",
+    longPollMs: override.longPollMs ?? base.longPollMs ?? 30000,
+    appserviceRegistration: override.appserviceRegistration ?? base.appserviceRegistration ?? null,
     homeserver: override.homeserver ?? base.homeserver ?? null,
     user: override.user ?? base.user ?? null,
     token: override.token ?? base.token ?? null,
