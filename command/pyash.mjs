@@ -34,7 +34,7 @@ const DEFAULT_MIND_RELAY_NAME = "default";
 const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice"];
 const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
 const DEFAULT_MATRIX_LONG_POLL_MS = 30000;
-const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "synapse-data/appservices/agent.yaml";
+const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "configure/secret/matrix.yaml";
 const MIND_BACKEND_CHOICES = [
   { key: "ollama", value: "ollama command mind", label: "Ollama" },
   { key: "litellm", value: "litellm command mind", label: "LiteLLM" },
@@ -87,6 +87,7 @@ function usage() {
     "  - Recommended onboarding route is: pyash configure intro",
     "  - Canonical configure route is: pyash configure channel <caterer>",
     "  - Channel config writes managed blocks to configure/secret.pya",
+    `  - Matrix appservice default registration path is ${DEFAULT_MATRIX_APPSERVICE_REGISTRATION}`,
     "  - Optional channel conduct writes to world/house/<agent>/conduct/channels.pya"
   ].join("\n");
 }
@@ -1406,8 +1407,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     if (channelMode === "appservice") {
       printer.header("A.4 Appservice Registration");
       printer.why("Registration file contains service tokens and sender namespace for Matrix push routing.");
-      printer.how("Use the Synapse registration YAML path on this host.");
-      printer.examples("synapse-data/appservices/agent.yaml");
+      printer.how("Put the file at configure/secret/matrix.yaml (recommended) or provide another local YAML path.");
+      printer.examples("configure/secret/matrix.yaml");
       let validated = false;
       while (!validated) {
         appserviceRegistration = String(await ask(

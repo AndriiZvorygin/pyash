@@ -270,6 +270,41 @@ test("configure channel matrix appservice mode validates registration and persis
   assert.match(channelsText, /su name matrix bridge service file ob text/);
 });
 
+test("configure channel matrix appservice mode defaults registration path to configure/secret/matrix.yaml", async () => {
+  const root = await makeRoot();
+  const registrationDir = path.join(root, "configure", "secret");
+  await fs.mkdir(registrationDir, { recursive: true });
+  const registrationPath = path.join(registrationDir, "matrix.yaml");
+  await fs.writeFile(registrationPath, [
+    "id: pyash-agent",
+    "url: http://appservice:9001",
+    "as_token: as-token-123",
+    "hs_token: hs-token-456",
+    "sender_localpart: pyash-agent"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--mode", "appservice",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "@pyash-agent:matrix.liberit.ca",
+    "--agent", "pyash-agent"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.appserviceRegistration, "configure/secret/matrix.yaml");
+  assert.equal(payload.appservice?.path, registrationPath);
+  assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
+});
+
 test("configure channel matrix doctor fails with missing config", async () => {
   const root = await makeRoot();
   const run = runCli(["configure", "channel", "matrix", "doctor", "--root", root, "--json"]);

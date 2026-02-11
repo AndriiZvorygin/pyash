@@ -28,6 +28,8 @@ newspaper/
 quiz/sandpit/
 documentation/parity/
 configure/secret.pya
+configure/secret/
+.configure/secret/
 configure/workplace.pya
 container/building/compose.override.yaml
 container/compose.override.yaml
