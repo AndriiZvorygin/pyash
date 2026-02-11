@@ -61,6 +61,16 @@ function parseLaneSubject(subjectText) {
 
 function normalizeToolsCase(withCase) {
   if (!withCase || typeof withCase !== "object") return { wo: "tools" };
+  if (Array.isArray(withCase?.ve?.values) && withCase.ve.values.length > 0) {
+    return {
+      ve: {
+        type: String(withCase?.ve?.type ?? "text"),
+        values: withCase.ve.values
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean)
+      }
+    };
+  }
   if (withCase.wo === "tools" || withCase.text === "tools") return { wo: "tools" };
   if (typeof withCase.name === "string" && withCase.name.trim()) return { name: withCase.name.trim() };
   return { wo: "tools" };

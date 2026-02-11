@@ -33,6 +33,7 @@ export async function evoke(sentence) {
   const withCase = sentence?.with ? { with: sentence.with } : {};
   const byCase = sentence?.by ? { by: sentence.by } : {};
   const atCase = sentence?.at ? { at: sentence.at } : {};
+  const underCase = sentence?.under ? { under: sentence.under } : {};
 
   if (targetFact?.be === "mind") {
     await interpret({
@@ -43,7 +44,8 @@ export async function evoke(sentence) {
       to: outputTo,
       ...withCase,
       ...byCase,
-      ...atCase
+      ...atCase,
+      ...underCase
     });
     const outFact = outputName ? remember(outputName) : remember("result");
     return outFact?.ob ? { ob: outFact.ob, be: outFact.be ?? "text" } : { ob: { text: "" }, be: "text" };
@@ -56,7 +58,8 @@ export async function evoke(sentence) {
       be: "refinery",
       from: { name: refineryName, nameTypeWords: ["text"] },
       ob: inputOb,
-      to: outputTo
+      to: outputTo,
+      ...underCase
     });
     const outFact = outputName ? remember(outputName) : remember("result");
     return outFact?.ob ? { ob: outFact.ob, be: outFact.be ?? "text" } : { ob: { text: "" }, be: "text" };
@@ -69,7 +72,8 @@ export async function evoke(sentence) {
     to: outputTo,
     ...withCase,
     ...byCase,
-    ...atCase
+    ...atCase,
+    ...underCase
   });
   const outFact = outputName ? remember(outputName) : remember("result");
   return outFact?.ob ? { ob: outFact.ob, be: outFact.be ?? "text" } : { ob: { text: "" }, be: "text" };
@@ -99,7 +103,24 @@ export const signatures = [
   { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text"], handler: evoke },
   { signatureWords: ["be", "evoke", "for", "name", "num", "ob", "text"], handler: evoke },
   { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text"], handler: evoke },
-  { signatureWords: ["be", "evoke", "for", "name", "refinery", "ob", "text"], handler: evoke }
+  { signatureWords: ["be", "evoke", "for", "name", "refinery", "ob", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "refinery", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "refinery", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "refinery", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: evoke },
+  { signatureWords: ["be", "evoke", "beneath", "name", "map", "for", "name", "refinery", "ob", "text", "to", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "beneath", "name", "text", "for", "name", "refinery", "ob", "text", "to", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "with", "name", "map", "under", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "with", "name", "map", "beneath", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "text", "ob", "text", "to", "name", "text", "with", "name", "map", "beneath", "name", "map"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "with", "name", "map", "under", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "with", "name", "map", "beneath", "name", "text"], handler: evoke },
+  { signatureWords: ["be", "evoke", "for", "name", "mind", "ob", "text", "to", "name", "text", "with", "name", "map", "beneath", "name", "map"], handler: evoke }
 ];
 
 export default evoke;

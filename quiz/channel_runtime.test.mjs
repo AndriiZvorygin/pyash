@@ -172,7 +172,50 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
   assert.equal(result.handled, 1);
   assert.equal(result.sent, 1);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0], "mind is not configured yet, pyash configure mind to set the mind relays");
+  assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
+});
+
+test("channel runtime sends configure-mind fallback when mind answer is empty and mind configure is missing", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-no-mind-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$1", sender: "@u:server", text: "hello" }
+        ],
+        checkpoint: { nextBatch: "tok-empty-no-mind" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-no-mind" };
+    }
+  };
+
+  const interpretFn = async () => ({ be: "answer", ob: { text: "" } });
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
 });
 
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {

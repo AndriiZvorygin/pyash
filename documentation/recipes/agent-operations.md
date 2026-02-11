@@ -128,3 +128,104 @@ Look for:
 4. channel telemetry shows `received > 0`.
 5. session file appends user/assistant lines.
 6. if tool not executed, check `be ratify ya` and `ratify.pya`.
+
+## 8. Authoring guardrails (for agent/mind updates)
+
+When proposing new runtime surfaces:
+
+1. Prefer canonical sentence forms over new map/json wrappers.
+2. Reuse existing invoke surface for mind/refinery runs:
+   - `ob text "<input>" for name <target> to name text <output> be evoke do`
+   - `ob text "<input>" for name <target> with name <tools map> to name text <output> be evoke do`
+3. Reuse existing error sentence surface:
+   - surfaced: `... be error ya`
+   - thrown/internal: `... be error do`
+   - stable names like `<verb> defective`
+4. Lifecycle/aspect success marker is `vyah ... success` in emitted forms.
+5. Keep conduct-driven control in conduct files (`world/conduct/*`, then agent-local overrides), not ad hoc per-call grammar.
+
+## 9. JSON hallucination to Pyash mapping
+
+Use these substitutions when a model drafts JSON-shaped runtime plans.
+
+1. Tool invoke request
+Bad (JSON):
+```json
+{"tool":"write","input":"hello","target":"helper","output":"out"}
+```
+Use (Pyash):
+```pyash
+ob text "hello" for name helper to name text out be evoke do
+```
+
+2. Tool invoke with tool map
+Bad (JSON):
+```json
+{"target":"coding saddle","input":"task","tools":"saddle tools","output":"result"}
+```
+Use (Pyash):
+```pyash
+ob text "task" for name coding saddle with name saddle tools to name text result be evoke do
+```
+
+3. Run-scoped conduct on invoke
+Bad (JSON):
+```json
+{"input":"task","target":"helper","conduct":"review loop configure"}
+```
+Use (Pyash):
+```pyash
+ob text "task" for name helper under name review loop configure to name text result be evoke do
+```
+
+4. Error surface
+Bad (JSON):
+```json
+{"status":"error","name":"repair defective","message":"hunk mismatch","from":"repair"}
+```
+Use (Pyash):
+```pyash
+su name repair defective ob text "hunk mismatch" from name repair be error ya
+```
+
+5. Internal thrown error
+Bad (JSON):
+```json
+{"throw":{"name":"command defective","message":"exit 1"}}
+```
+Use (Pyash):
+```pyash
+su name command defective ob text "exit 1" from name command be error do
+```
+
+6. Success marker (lifecycle/aspect)
+Bad (JSON):
+```json
+{"status":"success","aspect":"await"}
+```
+Use (Pyash):
+```pyash
+ob text "ok" vyah await success be text ya
+```
+
+7. Retry control in call payload
+Bad (JSON):
+```json
+{"retry":{"max":3,"backoff":2}}
+```
+Use (Pyash):
+```pyash
+# put retry/alternate/lift in conduct files, not in invoke sentence payload
+# world/conduct/* then world/house/<agent>/conduct/*
+```
+
+8. Tool event recording
+Bad (JSON):
+```json
+{"tool_event":{"id":"1","tool":"command","args":"...","result":"..."}}
+```
+Use (Pyash):
+```pyash
+# rely on existing newspaper records (be evoke ya + runtime artifacts)
+# do not invent a new tool-event grammar
+```

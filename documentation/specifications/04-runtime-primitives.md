@@ -317,7 +317,7 @@ Finished results are expressed as:
 * a normal return sentence (for success), or
 * an error sentence (`be error ya`) (for failure)
 
-`vyah` modifier rules (including `sloh`) are defined in `03-vyah-and-aspect.md`.
+`vyah` modifier rules (including `success`) are defined in `03-vyah-and-aspect.md`.
 Aspect inventory and meaning are defined in `03-vyah-and-aspect.md`.
 
 ---
@@ -343,7 +343,7 @@ Aspect inventory and meaning are defined in `03-vyah-and-aspect.md`.
    Lifecycle aspects MUST either reach a terminal outcome or raise an error.
 
 4. No silent success for lifecycle aspects  
-   When a lifecycle aspect succeeds, the returned sentence MUST include `vyah … sloh …`.
+   When a lifecycle aspect succeeds, the returned sentence MUST include `vyah … success …`.
 
 ---
 
@@ -480,7 +480,7 @@ Input form:
 
 Output:
 
-* on success: a chip sentence, and MUST include `vyah eval sloh`
+* on success: a chip sentence, and MUST include `vyah eval success`
 * on failure: an error sentence
 
 Notes:
@@ -491,7 +491,7 @@ Notes:
 
 Example success:
 
-`su name S3 atindex num 0 ob text "he" vyah eval sloh be chip ya`
+`su name S3 atindex num 0 ob text "he" vyah eval success be chip ya`
 
 Example after exhaustion:
 
@@ -503,12 +503,13 @@ Example after exhaustion:
 
 ## 8. Lifecycle aspects and outcomes
 
-Lifecycle aspects return ordinary sentences. Success is marked using `vyah … sloh`.
+Lifecycle aspects return ordinary sentences. Success is marked using `vyah … success`.
 
-### 8.1 The `sloh` success marker
+### 8.1 The `success` outcome marker
 
-When a lifecycle aspect succeeds, the returned sentence MUST include `vyah … sloh`.
+When a lifecycle aspect succeeds, the returned sentence MUST include `vyah … success`.
 Failure is always an error sentence.
+Legacy `sloh` MAY be accepted on input during transition, but canonical output MUST emit `success`.
 
 ---
 
@@ -516,17 +517,17 @@ Failure is always an error sentence.
 
 Input: duty lever in `su`  
 Output:
-* on success: a finished normal return sentence with `vyah await sloh`
+* on success: a finished normal return sentence with `vyah await success`
 * on failure: an error sentence
 
 Rules:
 
-* If duty reaches `done`, return the finished result with `vyah await sloh`
+* If duty reaches `done`, return the finished result with `vyah await success`
 * If duty reaches `fail`, `abandoned`, or `lost`, return an error sentence
 
 Example:
 
-`ob text "ok" vyah await sloh be text ya`
+`ob text "ok" vyah await success be text ya`
 
 ---
 
@@ -534,7 +535,7 @@ Example:
 
 Input: duty or stream identifier in `su`  
 Output:
-* on success: an acknowledgement sentence with `vyah cancel sloh`
+* on success: an acknowledgement sentence with `vyah cancel success`
 * on failure: an error sentence
 
 Rules:
@@ -546,9 +547,9 @@ Rules:
 
 Example success acknowledgement:
 
-`su name L7 vyah cancel sloh be hear ya`
+`su name L7 vyah cancel success be hear ya`
 
-(Any acknowledgement verb is allowed; the requirement is `vyah cancel sloh`.)
+(Any acknowledgement verb is allowed; the requirement is `vyah cancel success`.)
 
 ---
 
@@ -556,7 +557,7 @@ Example success acknowledgement:
 
 Input: duty or stream identifier in `su`  
 Output:
-* on success: an acknowledgement sentence with `vyah finish sloh`
+* on success: an acknowledgement sentence with `vyah finish success`
 * on failure: an error sentence
 
 Rules:
@@ -566,7 +567,7 @@ Rules:
 
 Example:
 
-`su name S3 vyah finish sloh be hear ya`
+`su name S3 vyah finish success be hear ya`
 
 ---
 
@@ -577,9 +578,9 @@ At minimum:
 * `eval` → finished result (normal sentence or error sentence)
 * `start` → duty
 * `stream` → stream
-* `await` → finished result (with `sloh` on success)
-* `finish` → acknowledgement or error (with `sloh` on success)
-* `cancel` → acknowledgement or error (with `sloh` on success)
+* `await` → finished result (with `success` on success)
+* `finish` → acknowledgement or error (with `success` on success)
+* `cancel` → acknowledgement or error (with `success` on success)
 
 Unsupported aspects MUST return an error sentence.
 
@@ -618,7 +619,7 @@ An implementation conforms if it:
 * represents duties, streams, and chips using the sentence forms above
 * returns finished results as normal sentences or error sentences
 * enforces lifecycle state transitions
-* uses `vyah … sloh` for lifecycle success
+* uses `vyah … success` for lifecycle success
 * emits deterministic sentences with official `vyah` ordering
 
 

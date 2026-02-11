@@ -8,15 +8,6 @@ function pickTextEventBody(event) {
   return body;
 }
 
-function buildRoomLaneMap(rooms = []) {
-  const map = new Map();
-  for (const room of rooms) {
-    if (!room?.id) continue;
-    map.set(room.id, room.lane ?? null);
-  }
-  return map;
-}
-
 async function fetchJoinedRooms({ homeserver, token, fetchImpl }) {
   const url = `${homeserver}/_matrix/client/v3/joined_rooms`;
   const response = await fetchImpl(url, {
@@ -44,14 +35,38 @@ async function ensureJoinedRooms({ homeserver, token, rooms, fetchImpl }) {
       },
       body: "{}"
     });
+    const payload = await response.json().catch(() => ({}));
     // Ignore join failures so polling can continue for already-joined rooms.
     // Typical non-fatal cases: already joined, invite-only without invite.
     const status = response.status;
     const ok = response.ok || status === 403 || status === 404;
-    diagnostics.push({ room: String(roomIdOrAlias), status, ok });
+    const joinedRoomId = typeof payload?.room_id === "string" ? payload.room_id : null;
+    diagnostics.push({ room: String(roomIdOrAlias), status, ok, joinedRoomId });
     if (!ok) throw new Error(`matrix join failed: room=${roomIdOrAlias} status=${response.status}`);
   }
   return diagnostics;
+}
+
+function buildResolvedRoomConfig(rooms, joinDiagnostics) {
+  const diagByRoom = new Map(
+    (Array.isArray(joinDiagnostics) ? joinDiagnostics : []).map((entry) => [String(entry?.room ?? ""), entry])
+  );
+  const resolvedRoomIds = [];
+  const laneByRoomId = new Map();
+  for (const room of rooms) {
+    const configuredId = String(room?.id ?? "");
+    if (!configuredId) continue;
+    const lane = room?.lane ?? null;
+    const joinedRoomId = String(diagByRoom.get(configuredId)?.joinedRoomId ?? "").trim();
+    const resolvedId = joinedRoomId || configuredId;
+    resolvedRoomIds.push(resolvedId);
+    laneByRoomId.set(resolvedId, lane);
+    laneByRoomId.set(configuredId, lane);
+  }
+  return {
+    roomIds: [...new Set(resolvedRoomIds)],
+    laneByRoomId
+  };
 }
 
 function normalizeMatrixEvent(event, { roomId }) {
@@ -116,10 +131,10 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, fetchImpl });
       const eventTypeCounts = {};
       const joinedRoomIds = Object.keys(joined);
-      const roomLane = buildRoomLaneMap(rooms);
+      const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
+      const roomLane = resolvedRooms.laneByRoomId;
       const events = [];
-      for (const room of rooms) {
-        const roomId = room?.id;
+      for (const roomId of resolvedRooms.roomIds) {
         if (!roomId) continue;
         const timelineEvents = joined?.[roomId]?.timeline?.events;
         if (!Array.isArray(timelineEvents)) continue;
@@ -139,7 +154,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         diagnostics: {
           since: checkpoint?.nextBatch ?? null,
           nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null,
-          configuredRooms: rooms.map(room => room?.id).filter(Boolean),
+          configuredRooms: resolvedRooms.roomIds,
           joinDiagnostics,
           joinedRoomsSnapshot: joinedRoomSnapshot,
           joinedRooms: joinedRoomIds,

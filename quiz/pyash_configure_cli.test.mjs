@@ -70,21 +70,56 @@ test("configure channel matrix apply writes managed blocks and is idempotent", a
   assert.equal(firstPayload.changed, true);
 
   const secretPath = path.join(root, "configure", "secret.pya");
+  const worldChannelsPath = path.join(root, "world", "conduct", "channels.pya");
   const channelsPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
   const calendarPath = path.join(root, "world", "house", "parity coder", "conduct", "calendar.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
+  const worldChannelsText = await fs.readFile(worldChannelsPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
   const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
+  assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
-  assert.match(calendarText, /su name matrix poll for name parity coder with wo tools vyah habit during minute 1 be calendar ya/);
+  assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during minute 1 be calendar ya/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
   const secondPayload = JSON.parse(second.stdout);
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
+});
+
+test("configure channel matrix scrubs legacy matrix seed lines from agent policy", async () => {
+  const root = await makeRoot();
+  const channelPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
+  await fs.mkdir(path.dirname(channelPath), { recursive: true });
+  await fs.writeFile(channelPath, [
+    "su name matrix channel ob bool truth ya",
+    "su name matrix mention gate ob bool lie ya",
+    "su name matrix homeserver ob text \"https://matrix.example.org\" ya",
+    "su name matrix room ob text \"!roomid:example.org\" ya",
+    "su name matrix room lane ob text \"matrix_main\" ya"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.org",
+    "--room", "#pyash:matrix.org",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--write-agent-policy", "truth",
+    "--agent", "parity coder"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const text = await fs.readFile(channelPath, "utf8");
+  assert.doesNotMatch(text, /matrix\.example\.org/);
+  assert.doesNotMatch(text, /!roomid:example\.org/);
+  assert.match(text, /# managed by pyash configure matrix channel conduct:start/);
+  assert.match(text, /su name matrix room ob text "#pyash:matrix\.org" ya/);
 });
 
 test("configure channel matrix doctor fails with missing config", async () => {
@@ -202,7 +237,7 @@ test("configure orchestrator apply writes managed config and is idempotent", asy
     "--host", "127.0.0.1",
     "--port", "59652",
     "--autostart", "lie",
-    "--health-minute", "1"
+    "--health-rhythm-minute", "1"
   ];
 
   const first = runCli(args);
@@ -271,17 +306,10 @@ test("configure intro json reports onboarding stage status", async () => {
   assert.equal(before.status, 0, before.stderr);
   const beforePayload = JSON.parse(before.stdout);
   assert.equal(beforePayload.ok, true);
-  assert.equal(beforePayload.status.orchestrator, false);
   assert.equal(beforePayload.status.channel, false);
   assert.equal(beforePayload.status.mind, false);
   assert.equal(beforePayload.status.agent, false);
 
-  runCli([
-    "configure", "orchestrator",
-    "--root", root, "--non-interactive", "--json",
-    "--mode", "container", "--host", "127.0.0.1", "--port", "59652",
-    "--autostart", "truth", "--health-minute", "1"
-  ]);
   runCli([
     "configure", "channel", "matrix",
     "--root", root, "--non-interactive", "--json",
@@ -305,8 +333,96 @@ test("configure intro json reports onboarding stage status", async () => {
   const after = runCli(["configure", "intro", "--root", root, "--json"]);
   assert.equal(after.status, 0, after.stderr);
   const afterPayload = JSON.parse(after.stdout);
-  assert.equal(afterPayload.status.orchestrator, true);
   assert.equal(afterPayload.status.channel, true);
   assert.equal(afterPayload.status.mind, true);
   assert.equal(afterPayload.status.agent, true);
+});
+
+test("calendar health and list return json payload", async () => {
+  const root = await makeRoot();
+  const healthRun = runCli(["calendar", "health", "--root", root, "--json"]);
+  assert.equal(healthRun.status, 0, healthRun.stderr);
+  const healthPayload = JSON.parse(healthRun.stdout);
+  assert.equal(healthPayload.ok, true);
+  assert.equal(healthPayload.route, "calendar health");
+  assert.equal(typeof healthPayload.result.running, "boolean");
+
+  const listRun = runCli(["calendar", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.route, "calendar list");
+  assert.equal(Array.isArray(listPayload.result.services), true);
+});
+
+test("calendar list supports agent filter and returns available/stopped service maps", async () => {
+  const root = await makeRoot();
+  const worldConduct = path.join(root, "world", "conduct");
+  const agentConduct = path.join(root, "world", "house", "pyash-agent", "conduct");
+  await fs.mkdir(worldConduct, { recursive: true });
+  await fs.mkdir(agentConduct, { recursive: true });
+  await fs.writeFile(path.join(worldConduct, "calendar.pya"), "", "utf8");
+  await fs.writeFile(path.join(agentConduct, "calendar.pya"), [
+    "su name heartbeat with wo tools vyah habit during minute 24 for name pyash-agent be calendar ya",
+    "su name heartbeat lane ob text \"heartbeat\" ya"
+  ].join("\n") + "\n", "utf8");
+  await fs.mkdir(path.join(root, "world", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, "world", "conduct", "calendar.services.pya"),
+    "su name heartbeat be disabled ya\n",
+    "utf8"
+  );
+
+  const run = runCli(["calendar", "list", "--root", root, "--agent", "pyash-agent", "--json"]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.agent, "pyash-agent");
+  assert.equal(Array.isArray(payload.services), true);
+  assert.equal(payload.services.includes("heartbeat"), true);
+  assert.equal(Array.isArray(payload.available), true);
+  assert.equal(payload.available.length, 0);
+  assert.equal(Array.isArray(payload.stopped), true);
+  assert.equal(payload.stopped.length, 1);
+  assert.match(payload.stopped[0].sentence, /for name pyash-agent be calendar ya/);
+});
+
+test("calendar begin passes explicit world root to scheduler daemon", async () => {
+  const root = await makeRoot();
+  const worldRoot = path.join(root, "world");
+  const beginRun = runCli(["calendar", "begin", "--root", root, "--json"]);
+  assert.equal(beginRun.status, 0, beginRun.stderr);
+  const beginPayload = JSON.parse(beginRun.stdout);
+  assert.equal(beginPayload.ok, true);
+
+  let observedWorldRoot = null;
+  for (let i = 0; i < 20; i += 1) {
+    const healthRun = runCli(["calendar", "health", "--root", root, "--json"]);
+    assert.equal(healthRun.status, 0, healthRun.stderr);
+    const healthPayload = JSON.parse(healthRun.stdout);
+    assert.equal(healthPayload.ok, true);
+    observedWorldRoot = healthPayload.result?.status?.worldRoot ?? null;
+    if (observedWorldRoot) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(observedWorldRoot, worldRoot);
+
+  const stopRun = runCli(["calendar", "stop", "--root", root, "--json"]);
+  assert.equal(stopRun.status, 0, stopRun.stderr);
+});
+
+test("channel log returns not found when no newspaper exists", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "channel", "log",
+    "--root", root,
+    "--agent", "parity coder",
+    "--channel", "matrix",
+    "--json"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.route, "channel log");
+  assert.equal(payload.log.found, false);
 });

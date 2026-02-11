@@ -60,6 +60,62 @@ function resolveInputOb(ob) {
   return null;
 }
 
+function normalizeKey(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function mapEntryNumber(mapFact, keys) {
+  const entries = mapFact?.ob?.map;
+  if (!entries || typeof entries !== "object") return null;
+  for (const key of keys) {
+    const probe = entries[key]
+      ?? entries[normalizeKey(key)]
+      ?? Object.entries(entries).find(([entryKey]) => normalizeKey(entryKey) === normalizeKey(key))?.[1];
+    if (!probe || typeof probe !== "object") continue;
+    const value = probe?.ob?.num ?? probe?.ob?.text ?? probe?.num ?? probe?.text;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function buildRetryConfigFromConduct({ sentence, namedTarget, refineryName }) {
+  const config = {};
+  const sources = [];
+  const globalConduct = remember("saddle conduct");
+  if (globalConduct?.be === "map") sources.push(globalConduct);
+  const targetConductName = namedTarget ? `${namedTarget} saddle conduct` : null;
+  if (targetConductName) {
+    const targetConduct = remember(targetConductName);
+    if (targetConduct?.be === "map") sources.push(targetConduct);
+  }
+  const refineryConductName = refineryName ? `${refineryName} saddle conduct` : null;
+  if (refineryConductName && refineryConductName !== targetConductName) {
+    const refineryConduct = remember(refineryConductName);
+    if (refineryConduct?.be === "map") sources.push(refineryConduct);
+  }
+  const explicitConductName = sentence?.under?.name ?? null;
+  if (explicitConductName) {
+    const explicitConduct = remember(explicitConductName);
+    if (explicitConduct?.be === "map") sources.push(explicitConduct);
+  }
+
+  for (const source of sources) {
+    const attempts = mapEntryNumber(source, ["reiterate attempts", "attempts", "max attempts", "retry attempts"]);
+    const delay = mapEntryNumber(source, ["reiterate delay", "delay", "initial delay", "retry delay"]);
+    const backoff = mapEntryNumber(source, ["reiterate backoff", "backoff", "retry backoff"]);
+    const cap = mapEntryNumber(source, ["reiterate cap", "cap", "max delay", "retry cap"]);
+    if (attempts != null) config.maxAttempts = attempts;
+    if (delay != null) config.initialDelayMs = delay;
+    if (backoff != null) config.backoff = backoff;
+    if (cap != null) config.maxDelayMs = cap;
+  }
+
+  const callMaxAttempts = sentence?.atmost?.num ?? null;
+  if (Number.isFinite(callMaxAttempts)) config.maxAttempts = Number(callMaxAttempts);
+  return Object.keys(config).length ? config : null;
+}
+
 async function refinery(sentence) {
   const interpret = await resolveInterpret();
   const namedTarget = sentence?.for?.name ?? null;
@@ -73,6 +129,7 @@ async function refinery(sentence) {
     resolveConfigText("refinery name", { rememberFn: remember }) ??
     null;
   const inputOb = resolveInputOb(sentence?.ob);
+  const retryConfig = buildRetryConfigFromConduct({ sentence, namedTarget, refineryName });
   const priorInput = remember("input");
 
   if (inputOb) {
@@ -84,6 +141,7 @@ async function refinery(sentence) {
     const resultSentence = await runRefinery({
       name: refineryName,
       interpret,
+      retryConfig,
       runId: null,
       onEvoke: (actionSentence) => {
         emitExchangeSentence({ mood: "ya", be: "evoke", ob: { la: actionSentence } });
@@ -141,9 +199,30 @@ export const signatures = [
   { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "text"], handler: refinery },
   { signatureWords: ["be", "refinery", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "name", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "name", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "name", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "name", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "name", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "name", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
   { signatureWords: ["be", "refinery", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: refinery },
-  { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "name", "text", "to", "name", "text"], handler: refinery }
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "name", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "name", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "name", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "name", "text", "to", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "name", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "name", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "num", "ob", "name", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "name", "text", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "under", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "beneath", "name", "text"], handler: refinery },
+  { signatureWords: ["be", "refinery", "from", "text", "ob", "text", "to", "name", "text", "beneath", "name", "map"], handler: refinery }
 ];
 
 export default refinery;
