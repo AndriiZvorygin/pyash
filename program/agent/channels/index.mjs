@@ -176,6 +176,38 @@ function agentMentionCandidates(agentName) {
   return [...variants];
 }
 
+function homeserverHost(homeserver) {
+  const value = String(homeserver ?? "").trim();
+  if (!value) return "";
+  try {
+    const parsed = new URL(value.includes("://") ? value : `https://${value}`);
+    return parsed.host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function deriveMatrixServer(channelConfig = {}) {
+  const configuredUser = String(channelConfig?.user ?? "").trim();
+  const idx = configuredUser.indexOf(":");
+  if (configuredUser.startsWith("@") && idx > 1) {
+    return configuredUser.slice(idx + 1).toLowerCase();
+  }
+  return homeserverHost(channelConfig?.homeserver);
+}
+
+function selfSenderCandidates({ channelConfig, agentName } = {}) {
+  const out = new Set();
+  const configuredUser = String(channelConfig?.user ?? "").trim().toLowerCase();
+  if (configuredUser) out.add(configuredUser);
+  const server = deriveMatrixServer(channelConfig);
+  const normalizedAgent = String(agentName ?? "").trim().toLowerCase();
+  if (server && normalizedAgent) {
+    out.add(`@${normalizedAgent}:${server}`);
+  }
+  return out;
+}
+
 function roomListenerAgents(channelConfig, roomId, fallbackAgentName) {
   const roomScoped = channelConfig?.roomListeners?.[roomId];
   if (Array.isArray(roomScoped) && roomScoped.length) return roomScoped;
@@ -222,6 +254,7 @@ async function dispatchChannelEvents({
   let sent = 0;
   const dmRooms = new Set(Array.isArray(channelConfig?.dmRooms) ? channelConfig.dmRooms : []);
   const mentionGate = channelConfig?.mentionGate === true;
+  const selfSenders = selfSenderCandidates({ channelConfig, agentName });
 
   for (const event of events) {
     received += 1;
@@ -266,7 +299,7 @@ async function dispatchChannelEvents({
       dedupIds.delete(removed);
     }
 
-    if (channelConfig?.user && event.sender === channelConfig.user) {
+    if (selfSenders.has(String(event.sender ?? "").trim().toLowerCase())) {
       selfEventIds.add(event.eventId);
       selfState.order.push(event.eventId);
       while (selfState.order.length > dedupLimit) {

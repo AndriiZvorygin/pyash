@@ -439,6 +439,52 @@ test("channel mention gate allows replies to self messages without explicit ment
   assert.equal(result.sent, 1);
 });
 
+test("channel runtime skips agent canonical sender when configured user differs", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-self-canonical-"));
+  const agentHouse = path.join(root, "world", "house", "pyash-agent");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:matrix.liberit.ca",
+            eventId: "$self-canonical",
+            sender: "@pyash-agent:matrix.liberit.ca",
+            text: "hello from legacy identity"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-self-canonical" }
+      };
+    },
+    async send() {
+      return { eventId: "$out-self-canonical" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "pyash-agent",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@agentbot:matrix.liberit.ca",
+      homeserver: "https://matrix.liberit.ca",
+      mentionGate: false,
+      dmRooms: [],
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => ({ ob: { text: "reply" } }),
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.skippedSelf, 1);
+  assert.equal(result.handled, 0);
+  assert.equal(result.sent, 0);
+});
+
 test("channel mention matching uses token boundaries and avoids substring false positives", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-boundary-"));
   const agentHouse = path.join(root, "world", "house", "helper");
