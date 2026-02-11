@@ -1439,13 +1439,16 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       prior.longPollMs || (channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS),
       channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
     );
-    printer.header("A.3 Long Poll Rhythm");
-    printer.why("Long-poll timeout controls receive wait time for sync delivery.");
-    printer.how("Use 30000 for normal sync, lower values for poll fallback.");
-    printer.examples("1000 | 30000 | 45000");
-    const enteredLongPollMs = await ask("Long poll ms", String(defaultLongPollMs));
-    const longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
-    textOut(`- long poll set to ${longPollMs} ms`);
+    let longPollMs = defaultLongPollMs;
+    if (channelMode !== "appservice") {
+      printer.header("A.3 Long Poll Rhythm");
+      printer.why("Long-poll timeout controls receive wait time for sync delivery.");
+      printer.how("Use 30000 for normal sync, lower values for poll fallback.");
+      printer.examples("1000 | 30000 | 45000");
+      const enteredLongPollMs = await ask("Long poll ms", String(defaultLongPollMs));
+      longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
+      textOut(`- long poll set to ${longPollMs} ms`);
+    }
 
     if (channelMode === "appservice") {
       printer.header("A.4 Appservice Registration");
