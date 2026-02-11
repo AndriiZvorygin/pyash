@@ -12,7 +12,7 @@ import { loadServiceDefinition, resolveServiceModulePath } from "./service_defin
 import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
 import { runChannelOnce } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
-import { ensureMatrixCredentials, readMatrixAuthCache } from "./channels/bootstrap.mjs";
+import { ensureMatrixCredentials, readMatrixAuthCache, ensureMatrixExecutiveDmRoom } from "./channels/bootstrap.mjs";
 import { updateAgentPresence } from "./presence.mjs";
 import { resolveConfigMapText } from "../configure/env.mjs";
 
@@ -70,6 +70,7 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
   const mapUser = resolveConfigMapText(mapName, "user");
+  const mapExecutiveUsername = resolveConfigMapText(mapName, "executive username");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
   const mapToken = resolveConfigMapText(mapName, "token");
@@ -85,6 +86,11 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
       mapUser ??
       rawConfig.user ??
       readRememberText("matrix user") ??
+      null,
+    executiveUsername:
+      mapExecutiveUsername ??
+      rawConfig.executiveUsername ??
+      readRememberText("matrix executive username") ??
       null,
     registrationSharedSecret:
       mapSharedSecret ??
@@ -117,7 +123,7 @@ function laneFromRoomId(channelType, roomId) {
   return normalizeLaneName(`${channelType}_${roomId}`);
 }
 
-function mergeMatrixDmRooms({ channelConfig, dmRoomIds = [], channelType }) {
+export function mergeMatrixDmRooms({ channelConfig, dmRoomIds = [], channelType }) {
   const dmRooms = Array.isArray(channelConfig?.dmRooms) ? [...channelConfig.dmRooms] : [];
   const rooms = Array.isArray(channelConfig?.rooms) ? [...channelConfig.rooms] : [];
   const knownDm = new Set(dmRooms.map((room) => String(room ?? "").trim()).filter(Boolean));
@@ -210,6 +216,26 @@ async function runChannelPollJob({ worldRoot, job }) {
         token: credentials.token,
         user: channelConfig.user ?? credentials.user
       };
+      if (channelConfig.executiveUsername && channelConfig.token && channelConfig.user) {
+        try {
+          const dmRoomId = await ensureMatrixExecutiveDmRoom({
+            agentHouse,
+            homeserver: channelConfig.homeserver,
+            token: channelConfig.token,
+            user: channelConfig.user,
+            executiveUser: channelConfig.executiveUsername
+          });
+          if (dmRoomId) {
+            channelConfig = mergeMatrixDmRooms({
+              channelConfig,
+              dmRoomIds: [dmRoomId],
+              channelType
+            });
+          }
+        } catch {
+          // DM bootstrap is best-effort; continue polling configured rooms.
+        }
+      }
       const authCache = await readMatrixAuthCache(agentHouse);
       const dmRoomIds = Object.values(authCache?.executiveDmRooms ?? {})
         .map((roomId) => String(roomId ?? "").trim())
