@@ -66,7 +66,9 @@ const lines = [
   "  pyash:",
   yamlKeyValue("user", quote("${PYASH_UID}:${PYASH_GID}"), "    "),
   "    environment:",
-  `      - HOME=${quote(containerHome)}`
+  `      - HOME=${quote(containerHome)}`,
+  `      - NPM_CONFIG_PREFIX=${quote(`${containerHome}/.npm-global`)}`,
+  `      - PATH=${quote(`${containerHome}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`)}`
 ];
 const codexDir = process.env.PYASH_CODEX_DIR;
 const gitConfig = process.env.PYASH_GITCONFIG;
