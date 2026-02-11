@@ -1,5 +1,6 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveWorldRoot } from "../library/world.mjs";
 import {
   ROUTER_OPERATION_HEALTH,
   ROUTER_OPERATION_INPUT,
@@ -9,6 +10,7 @@ import {
   healthToSentence,
   resolveRouterOperation
 } from "../agent/channel_core/contract.mjs";
+import { readRouterHealthStateSync } from "../agent/channel_core/state.mjs";
 
 function dayStamp(now = new Date()) {
   return now.toISOString().slice(0, 10).replace(/-/g, "");
@@ -155,15 +157,26 @@ function routeProduce(sentence, { rememberFn = remember } = {}) {
   });
 }
 
-function routerHealth() {
-  return healthToSentence();
+function routerHealth({ rememberFn = remember } = {}) {
+  const worldRoot = resolveWorldRoot({ rememberFn });
+  const state = readRouterHealthStateSync(worldRoot);
+  return healthToSentence({
+    statusText: state.statusText || "ready",
+    healthy: state.healthy !== false,
+    sinceIso: state.updatedAt || new Date().toISOString(),
+    activeMode: state.activeMode || "",
+    fallbackActive: state.fallbackActive === true,
+    fallbackReason: state.fallbackReason || "",
+    queueDepth: state.queueDepth || 0,
+    lastInputAt: state.lastInputAt || ""
+  });
 }
 
 export function router(sentence, { remember: rememberFn = remember } = {}) {
   const operation = resolveRouterOperation(sentence);
   if (operation === ROUTER_OPERATION_INPUT) return routeInput(sentence, { rememberFn });
   if (operation === ROUTER_OPERATION_PRODUCE) return routeProduce(sentence, { rememberFn });
-  if (operation === ROUTER_OPERATION_HEALTH) return routerHealth();
+  if (operation === ROUTER_OPERATION_HEALTH) return routerHealth({ rememberFn });
   throwErrorSentence({
     name: "router input defective",
     message: `router input defective: unsupported operation ${operation || "none"}`,

@@ -84,9 +84,14 @@ export function ackFromSentence(sentence) {
 export function healthToSentence({
   statusText = "ready",
   healthy = true,
-  sinceIso = new Date().toISOString()
+  sinceIso = new Date().toISOString(),
+  activeMode = "",
+  fallbackActive = false,
+  fallbackReason = "",
+  queueDepth = 0,
+  lastInputAt = ""
 } = {}) {
-  return {
+  const sentence = {
     mood: "ya",
     su: { name: "router" },
     ob: { text: normalizeText(statusText) || "ready" },
@@ -94,14 +99,30 @@ export function healthToSentence({
     since: { date: String(sinceIso) },
     be: ROUTER_OPERATION_HEALTH
   };
+  const modeText = normalizeText(activeMode);
+  if (modeText) sentence.for = { text: modeText };
+  sentence.fromstate = { text: fallbackActive ? "active" : "inactive" };
+  const reasonText = normalizeText(fallbackReason);
+  if (reasonText) sentence.fromtext = { text: reasonText };
+  const depth = Number(queueDepth);
+  if (Number.isFinite(depth) && depth >= 0) sentence.to = { num: Math.floor(depth) };
+  const lastInputText = normalizeText(lastInputAt);
+  if (lastInputText) sentence.during = { date: lastInputText };
+  return sentence;
 }
 
 export function healthFromSentence(sentence) {
+  const fallbackState = normalizeText(sentence?.fromstate?.text).toLowerCase();
   return {
     name: normalizeText(sentence?.su?.name),
     statusText: normalizeText(sentence?.ob?.text),
     healthy: sentence?.as?.boolean === true,
-    sinceIso: normalizeText(sentence?.since?.date)
+    sinceIso: normalizeText(sentence?.since?.date),
+    activeMode: normalizeText(sentence?.for?.text),
+    fallbackActive: fallbackState === "active",
+    fallbackReason: normalizeText(sentence?.fromtext?.text),
+    queueDepth: Number.isFinite(Number(sentence?.to?.num)) ? Number(sentence.to.num) : 0,
+    lastInputAt: normalizeText(sentence?.during?.date)
   };
 }
 

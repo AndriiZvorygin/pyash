@@ -15,6 +15,7 @@ import { createMatrixAdapter } from "./channels/matrix.mjs";
 import { ensureMatrixCredentials, readMatrixAuthCache, ensureMatrixExecutiveDmRoom } from "./channels/bootstrap.mjs";
 import { updateAgentPresence } from "./presence.mjs";
 import { resolveConfigMapText } from "../configure/env.mjs";
+import { writeRouterHealthState } from "./channel_core/state.mjs";
 
 const HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK";
 const HEARTBEAT_PROMPT = `Read HEARTBEAT.md in your agent house.
@@ -204,6 +205,16 @@ function normalizeLongPollMs(raw, fallback = 30000) {
   return rounded;
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function shortError(err) {
+  return String(err?.message ?? err ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function runChannelPollJob({ worldRoot, job }) {
   const parsed = parseChannelPollJob(job.jobName);
   if (!parsed) return null;
@@ -281,10 +292,26 @@ async function runChannelPollJob({ worldRoot, job }) {
     const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
     if (!adapter) {
       channelStatus.push(`${channelType}:unsupported`);
+      await writeRouterHealthState({
+        worldRoot,
+        channelType,
+        activeMode: channelMode,
+        fallbackActive: false,
+        fallbackReason: "unsupported channel adapter",
+        queueDepth: 0,
+        lastInputAt: "",
+        updatedAt: nowIso(),
+        healthy: false,
+        statusText: "defective"
+      });
       continue;
     }
+    let result = null;
+    let activeMode = channelMode;
+    let fallbackActive = false;
+    let fallbackReason = "";
     try {
-      const result = await runChannelOnce({
+      result = await runChannelOnce({
         agentName: job.agentName,
         channelType,
         channelConfig,
@@ -292,16 +319,73 @@ async function runChannelPollJob({ worldRoot, job }) {
         interpretFn: interpret,
         agentHouse
       });
+    } catch (err) {
+      if (channelMode === "appservice-push") {
+        const configuredFallbackMode = normalizeChannelMode(
+          channelConfig.fallbackMode || channelConfig.alternateMode || "sync"
+        );
+        if (configuredFallbackMode && configuredFallbackMode !== channelMode) {
+          const fallbackConfig = { ...channelConfig, mode: configuredFallbackMode };
+          try {
+            result = await runChannelOnce({
+              agentName: job.agentName,
+              channelType,
+              channelConfig: fallbackConfig,
+              adapter,
+              interpretFn: interpret,
+              agentHouse
+            });
+            activeMode = configuredFallbackMode;
+            fallbackActive = true;
+            fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
+          } catch (fallbackErr) {
+            const message = shortError(fallbackErr);
+            fallbackReason = `primary ${channelMode} defective: ${shortError(err)}; fallback ${configuredFallbackMode} defective: ${message}`;
+          }
+        } else {
+          fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
+        }
+      }
+      if (!result) {
+        const message = fallbackReason || shortError(err);
+        channelStatus.push(`${channelType}:error=${message}`);
+        await writeRouterHealthState({
+          worldRoot,
+          channelType,
+          activeMode,
+          fallbackActive,
+          fallbackReason: message,
+          queueDepth: 0,
+          lastInputAt: "",
+          updatedAt: nowIso(),
+          healthy: false,
+          statusText: "defective"
+        });
+        continue;
+      }
+    }
+    if (result) {
       totalReceived += Number(result?.received ?? 0);
       totalHandled += Number(result?.handled ?? 0);
       totalSent += Number(result?.sent ?? 0);
-      const modeSuffix = channelMode === "appservice-push"
-        ? "mode=appservice-push"
-        : `mode=${channelMode}`;
+      const modeSuffix = `mode=${activeMode}`;
+      const fallbackSuffix = fallbackActive ? ":fallback=active" : "";
       channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}:${modeSuffix}`);
-    } catch (err) {
-      const message = String(err?.message ?? err).replace(/\s+/g, " ").trim();
-      channelStatus.push(`${channelType}:error=${message}`);
+      if (fallbackSuffix) {
+        channelStatus[channelStatus.length - 1] += `${fallbackSuffix}`;
+      }
+      await writeRouterHealthState({
+        worldRoot,
+        channelType,
+        activeMode,
+        fallbackActive,
+        fallbackReason,
+        queueDepth: Number(result?.queueDepth ?? 0) || 0,
+        lastInputAt: String(result?.lastInputAt ?? ""),
+        updatedAt: nowIso(),
+        healthy: true,
+        statusText: "ready"
+      });
     }
   }
 
