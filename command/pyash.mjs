@@ -164,6 +164,22 @@ function normalizeHomeserver(raw) {
   return text;
 }
 
+function sanitizeMatrixLocalpart(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._=-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function matrixUserIdFromLocalpart(localpart, homeserver) {
+  const cleaned = sanitizeMatrixLocalpart(localpart);
+  if (!cleaned) return "";
+  const host = homeserverHost(homeserver);
+  if (!host) return `@${cleaned}`;
+  return `@${cleaned}:${host}`;
+}
+
 function canonicalizeMindBackend(raw) {
   const text = String(raw ?? "").trim();
   const key = text.toLowerCase();
@@ -1401,6 +1417,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION
       : "";
     let appserviceRegistration = String(prior.appserviceRegistration || "").trim();
+    let appserviceLoaded = null;
     let channelMode = "";
     if (!appserviceRegistration && detectedDefaultAppservicePath) {
       printer.header("A.1b Appservice Detection");
@@ -1462,6 +1479,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
             rootDir,
             registrationPath: appserviceRegistration
           });
+          appserviceLoaded = loaded;
           textOut(`- appservice registration loaded (${loaded.path})`);
           textOut(`- appservice sender localpart ${loaded.senderLocalpart}`);
           validated = true;
@@ -1484,6 +1502,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
             rootDir,
             registrationPath: appserviceRegistration
           });
+          appserviceLoaded = loaded;
           textOut(`- appservice registration loaded (${loaded.path})`);
           textOut(`- appservice sender localpart ${loaded.senderLocalpart}`);
           validated = true;
@@ -1496,38 +1515,61 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       }
     }
 
-    printer.header("B.1 Matrix Auth");
-    printer.why("The caterer needs credentials to verify and send.");
-    const supportsSharedSecret = matrixSupportsSharedSecret(homeserver);
-    const allowedAuthModes = supportsSharedSecret
-      ? ["password", "token", "shared-secret"]
-      : ["password", "token"];
-    printer.how(supportsSharedSecret
-      ? "Choose password for easiest setup, token for existing access token, shared-secret for self-hosted Synapse."
-      : "Choose password for easiest setup, or token for existing access token.");
-    printer.examples(allowedAuthModes.join(" | "));
-    let authMode = "";
-    while (!authMode) {
-      const defaultAuth = allowedAuthModes.includes(String(prior.authMode || "").trim().toLowerCase())
-        ? String(prior.authMode || "").trim().toLowerCase()
-        : "password";
-      const picked = String(await ask("Auth mode", defaultAuth)).trim().toLowerCase();
-      if (!allowedAuthModes.includes(picked)) {
-        textOut(`- invalid: auth mode must be ${allowedAuthModes.join(", ")}`);
-        continue;
-      }
-      authMode = picked;
-    }
-
     let userId = ensureMatrixUserServer(prior.userId || "", host);
     let agentName = String(prior.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim() || DEFAULT_CHANNEL_AGENT_NAME;
     let token = prior.token || "";
     let password = "";
     let registrationSharedSecret = prior.registrationSharedSecret || "";
     let adminToken = prior.adminToken || "";
+    let authMode = "";
+    let useAppserviceRegistrationAuth = false;
+    if (channelMode === "appservice" && appserviceLoaded) {
+      printer.header("B.1 Appservice Auth");
+      printer.why("Appservice registration already includes sender identity and channel token.");
+      printer.how("Use registration token to skip password/shared-secret setup.");
+      printer.examples("token from configure/secret/matrix.yaml");
+      useAppserviceRegistrationAuth = await askYesNo("Use registration token for channel auth", true);
+      if (useAppserviceRegistrationAuth) {
+        authMode = "token";
+        token = String(appserviceLoaded.asToken || "").trim();
+        const suggestedUserId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, homeserver);
+        userId = ensureMatrixUserServer(
+          await ask("Appservice sender user id", userId || suggestedUserId),
+          host
+        );
+        textOut("- auth mode set to token (appservice)");
+      }
+    }
+
+    if (!authMode) {
+      printer.header("B.1 Matrix Auth");
+      printer.why("The caterer needs credentials to verify and send.");
+      const supportsSharedSecret = matrixSupportsSharedSecret(homeserver);
+      const allowedAuthModes = supportsSharedSecret
+        ? ["password", "token", "shared-secret"]
+        : ["password", "token"];
+      printer.how(supportsSharedSecret
+        ? "Choose password for easiest setup, token for existing access token, shared-secret for self-hosted Synapse."
+        : "Choose password for easiest setup, or token for existing access token.");
+      printer.examples(allowedAuthModes.join(" | "));
+      while (!authMode) {
+        const defaultAuth = allowedAuthModes.includes(String(prior.authMode || "").trim().toLowerCase())
+          ? String(prior.authMode || "").trim().toLowerCase()
+          : "password";
+        const picked = String(await ask("Auth mode", defaultAuth)).trim().toLowerCase();
+        if (!allowedAuthModes.includes(picked)) {
+          textOut(`- invalid: auth mode must be ${allowedAuthModes.join(", ")}`);
+          continue;
+        }
+        authMode = picked;
+      }
+    }
+
     let authOk = false;
     while (!authOk) {
-      if (authMode === "password") {
+      if (useAppserviceRegistrationAuth) {
+        // Appservice token + sender id already selected from registration.
+      } else if (authMode === "password") {
         printer.header("B.2 Password Flow");
         printer.why("Password can be exchanged for token automatically.");
         printer.how("Use your bot/service account user id and password.");
@@ -1714,6 +1756,21 @@ function normalizeMatrixCollected(cfg) {
   };
 }
 
+function applyAppserviceAuthDefaults(cfg, appserviceLoaded) {
+  if (!cfg || String(cfg.mode || "").trim().toLowerCase() !== "appservice") return cfg;
+  if (!appserviceLoaded) return cfg;
+  const next = { ...cfg };
+  const currentAuthMode = String(next.authMode || "").trim().toLowerCase();
+  if (!currentAuthMode || currentAuthMode === "password" || currentAuthMode === "shared-secret") {
+    next.authMode = "token";
+  }
+  if (!next.token) next.token = String(appserviceLoaded.asToken || "").trim();
+  if (!next.userId) {
+    next.userId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, next.homeserver);
+  }
+  return next;
+}
+
 async function createMatrixWritePlan({ rootDir, cfg }) {
   const secretPath = path.join(rootDir, "configure", "secret.pya");
   const secretExisting = await readText(secretPath);
@@ -1862,21 +1919,24 @@ async function configureMatrix({ args }) {
 
   let cfg = normalizeMatrixCollected(collected);
 
-  const verification = matrixVerification(cfg);
+  let verification = matrixVerification(cfg);
   let appservice = null;
+  let appserviceLoaded = null;
   if (cfg.mode === "appservice" && cfg.appserviceRegistration) {
     try {
-      const loaded = await readMatrixAppserviceRegistration({
+      appserviceLoaded = await readMatrixAppserviceRegistration({
         rootDir,
         registrationPath: cfg.appserviceRegistration
       });
+      cfg = applyAppserviceAuthDefaults(cfg, appserviceLoaded);
+      verification = matrixVerification(cfg);
       appservice = {
-        path: loaded.path,
-        id: loaded.id || "",
-        senderLocalpart: loaded.senderLocalpart,
-        url: loaded.url,
-        hasAsToken: Boolean(loaded.asToken),
-        hasHsToken: Boolean(loaded.hsToken)
+        path: appserviceLoaded.path,
+        id: appserviceLoaded.id || "",
+        senderLocalpart: appserviceLoaded.senderLocalpart,
+        url: appserviceLoaded.url,
+        hasAsToken: Boolean(appserviceLoaded.asToken),
+        hasHsToken: Boolean(appserviceLoaded.hsToken)
       };
     } catch (err) {
       verification.errors.push({
