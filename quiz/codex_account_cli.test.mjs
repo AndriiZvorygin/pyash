@@ -105,7 +105,11 @@ rl.on("line", (line) => {
               displayName: "GPT-5 Codex",
               isDefault: true,
               inputModalities: ["text"],
-              reasoningEffort: ["low", "medium", "high"],
+              supportedReasoningEfforts: [
+                { reasoningEffort: "low" },
+                { reasoningEffort: "medium" },
+                { reasoningEffort: "high" }
+              ],
               defaultReasoningEffort: "medium"
             }
           ],
