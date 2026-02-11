@@ -519,6 +519,26 @@ test("configure mind can run codex oauth login for openai-codex relay", async ()
   assert.match(secretText, /exists su name mind source ob text "openai-codex" be default ya/);
 });
 
+test("configure mind openai-codex defaults host and model when omitted", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "codex",
+    "--set-default", "truth",
+    "--backend", "openai-codex",
+    "--test-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.source, "openai-codex");
+  assert.equal(payload.config.host, "https://api.openai.com");
+  assert.equal(payload.config.model, "gpt-5-codex");
+});
+
 test("configure mind supports multiple relays and one default relay", async () => {
   const root = await makeRoot();
 
