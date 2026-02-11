@@ -1,5 +1,14 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import {
+  ROUTER_OPERATION_HEALTH,
+  ROUTER_OPERATION_INPUT,
+  ROUTER_OPERATION_PRODUCE,
+  ackToSentence,
+  eventToSentence,
+  healthToSentence,
+  resolveRouterOperation
+} from "../agent/channel_core/contract.mjs";
 
 function dayStamp(now = new Date()) {
   return now.toISOString().slice(0, 10).replace(/-/g, "");
@@ -26,11 +35,6 @@ function resolveText(value, { rememberFn = remember } = {}) {
     ?? null;
   if (fromFact == null) return literal;
   return String(fromFact).trim();
-}
-
-function resolveOperation(sentence) {
-  const raw = sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name ?? "";
-  return String(raw).trim().toLowerCase();
 }
 
 function nextSerial(name, { rememberFn = remember } = {}) {
@@ -122,19 +126,16 @@ function routeInput(sentence, { rememberFn = remember } = {}) {
   const toEndpoint = ensureRouteEndpoint(resolveText(sentence?.to, { rememberFn }), sentence);
   const payloadId = buildPayloadId();
   const explicitSession = resolveText(sentence?.fromtext, { rememberFn });
-  const result = {
-    mood: "ya",
-    su: { name: payloadId },
-    from: { name: fromEndpoint },
-    to: { name: toEndpoint },
-    ob: { text: payload },
-    be: "input"
-  };
   const resolvedAgent = resolveAgentName(toEndpoint);
-  if (resolvedAgent) result.for = { text: resolvedAgent };
   const sessionId = explicitSession || buildSessionId(fromEndpoint, toEndpoint);
-  if (sessionId) result.fromtext = { text: sessionId };
-  return result;
+  return eventToSentence({
+    payloadId,
+    fromEndpoint,
+    toEndpoint,
+    payloadText: payload,
+    targetAgentName: resolvedAgent,
+    sessionId
+  });
 }
 
 function routeProduce(sentence, { rememberFn = remember } = {}) {
@@ -145,33 +146,24 @@ function routeProduce(sentence, { rememberFn = remember } = {}) {
     sentence
   );
   const messageId = buildMessageId(toEndpoint);
-  return {
-    mood: "ya",
-    su: { name: messageId },
-    vyah: { ve: { type: "name", values: ["success"] } },
-    from: { name: fromEndpoint },
-    to: { name: toEndpoint },
-    accordingto: { text: payloadId },
-    be: "produce"
-  };
+  return ackToSentence({
+    messageId,
+    fromEndpoint,
+    toEndpoint,
+    payloadId,
+    success: true
+  });
 }
 
 function routerHealth() {
-  return {
-    mood: "ya",
-    su: { name: "router" },
-    ob: { text: "ready" },
-    as: { boolean: true },
-    since: { date: new Date().toISOString() },
-    be: "health"
-  };
+  return healthToSentence();
 }
 
 export function router(sentence, { remember: rememberFn = remember } = {}) {
-  const operation = resolveOperation(sentence);
-  if (operation === "input") return routeInput(sentence, { rememberFn });
-  if (operation === "produce") return routeProduce(sentence, { rememberFn });
-  if (operation === "health") return routerHealth();
+  const operation = resolveRouterOperation(sentence);
+  if (operation === ROUTER_OPERATION_INPUT) return routeInput(sentence, { rememberFn });
+  if (operation === ROUTER_OPERATION_PRODUCE) return routeProduce(sentence, { rememberFn });
+  if (operation === ROUTER_OPERATION_HEALTH) return routerHealth();
   throwErrorSentence({
     name: "router input defective",
     message: `router input defective: unsupported operation ${operation || "none"}`,

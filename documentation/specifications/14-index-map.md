@@ -31,6 +31,7 @@ Use this when the cheat sheet is not enough.
 
 - **Mind calls or tool calling envelope** → `08-tools-and-mcp.md`
 - **External binaries / modules** → `11-modules.md`
+- **Router/channel sentence contract** → `24-channel-contract.md`
 
 ## If you are doing IO or web…
 
