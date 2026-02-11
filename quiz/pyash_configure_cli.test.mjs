@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import http from "node:http";
+import { spawn, spawnSync } from "node:child_process";
 
 const cliPath = path.resolve("command/pyash.mjs");
 
@@ -11,6 +12,20 @@ function runCli(args, opts = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
     encoding: "utf8",
     ...opts
+  });
+}
+
+function runCliAsync(args, opts = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      ...opts
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.on("close", (code) => resolve({ status: code, stdout, stderr }));
   });
 }
 
@@ -326,6 +341,145 @@ test("configure mind dry-run does not write and apply writes defaults", async ()
   assert.match(secretText, /managed by pyash configure mind configure:start/);
   assert.match(secretText, /managed by pyash configure mind defaults:start/);
   assert.match(secretText, /exists su name mind backend be default ob name ollama command mind ya/);
+});
+
+test("configure mind test-now verifies selected ollama model is available", async () => {
+  const root = await makeRoot();
+  const server = http.createServer((req, res) => {
+    if (req.url === "/api/tags") {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({
+        models: [
+          { name: "gpt-oss:latest" },
+          { name: "qwen3-vl:8b-instruct" }
+        ]
+      }));
+      return;
+    }
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const host = `http://127.0.0.1:${address.port}`;
+  try {
+    const run = await runCliAsync([
+      "configure", "mind",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--backend", "ollama command mind",
+      "--host", host,
+      "--model", "gpt-oss:latest",
+      "--test-now", "truth"
+    ]);
+    assert.equal(run.status, 0, run.stderr);
+    const payload = JSON.parse(run.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.live.ok, true);
+    const checks = Array.isArray(payload.live.checks) ? payload.live.checks : [];
+    assert.equal(checks.some((item) => item.name === "models listed" && item.ok === true), true);
+    assert.equal(checks.some((item) => item.name === "model available" && item.ok === true), true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("configure mind test-now skips live model probe for non-ollama backends", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--backend", "openai",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-4o-mini",
+    "--test-now", "truth"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.live.ok, true);
+  const checks = Array.isArray(payload.live.checks) ? payload.live.checks : [];
+  assert.equal(checks.some((item) => item.name === "provider live check" && item.ok === true && item.skipped === true), true);
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /su name backend ob text "openai command mind" ya/);
+  assert.match(secretText, /su name model ob text "gpt-4o-mini" ya/);
+});
+
+test("configure mind accepts openai-codex backend alias", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--backend", "openai-codex",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-4o-mini",
+    "--test-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.backend, "openai command mind");
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /su name backend ob text "openai command mind" ya/);
+});
+
+test("configure mind supports multiple relays and one default relay", async () => {
+  const root = await makeRoot();
+
+  const first = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "local",
+    "--set-default", "truth",
+    "--backend", "ollama",
+    "--host", "http://localhost:11434",
+    "--model", "gpt-oss:latest",
+    "--test-now", "lie"
+  ]);
+  assert.equal(first.status, 0, first.stderr);
+  const firstPayload = JSON.parse(first.stdout);
+  assert.equal(firstPayload.ok, true);
+  assert.equal(firstPayload.config.defaultRelay, "local");
+
+  const second = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "cloud",
+    "--set-default", "lie",
+    "--backend", "openai-api",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-4o-mini",
+    "--test-now", "lie"
+  ]);
+  assert.equal(second.status, 0, second.stderr);
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.ok, true);
+  assert.equal(secondPayload.config.defaultRelay, "local");
+  assert.equal(secondPayload.config.relays.local.backend, "ollama command mind");
+  assert.equal(secondPayload.config.relays.cloud.backend, "openai command mind");
+  assert.equal(secondPayload.config.backend, "openai command mind");
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /managed by pyash configure mind relays:start/);
+  assert.match(secretText, /su name default relay ob text "local" ya/);
+  assert.match(secretText, /su name relay local backend ob text "ollama command mind" ya/);
+  assert.match(secretText, /su name relay cloud backend ob text "openai command mind" ya/);
+  assert.match(secretText, /su name backend ob text "ollama command mind" ya/);
+  assert.match(secretText, /exists su name mind relay default ob text "local" be default ya/);
 });
 
 test("configure intro json reports onboarding stage status", async () => {

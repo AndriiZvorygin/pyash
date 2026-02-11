@@ -20,7 +20,7 @@ This chapter applies to:
 
 - orchestrator setup (`configure orchestrator`),
 - channel setup (matrix now, more caterers later),
-- mind bridge setup (`configure mind`),
+- mind relay setup (`configure mind`) for provider/source defaults,
 - agent setup (`configure agent`).
 
 ---
@@ -51,6 +51,11 @@ Rules:
 1. No compatibility aliases are required by this spec.
 2. New caterers MUST be attached under `configure channel <caterer>`.
 3. `pyash configure` and `pyash configure channel` SHOULD loop back to menu after each completed action until explicit exit.
+4. `pyash configure mind` SHOULD probe Ollama (`/api/tags`) when backend is Ollama-compatible, list available models, and allow selecting default model by name or index.
+5. `pyash configure mind` SHOULD store one global fallback backend/host/model for the default `pyash-agent`.
+6. `pyash configure agent` SHOULD allow per-agent backend/model override (including refinery alias in model field).
+7. Mind backend picker SHOULD present short backend keys (for example `openai-api` and `openai-codex`) instead of requiring multi-word backend commands.
+8. `pyash configure mind` SHOULD support named relays (`--relay <name>`) and one selected default relay (`--set-default truth|lie`).
 
 Canonical onboarding order:
 
@@ -344,6 +349,7 @@ Recommended interactive order:
 
 1. Agent name and purpose.
 2. Runtime backend selection (`mind`/model path and tool map defaults).
+  Notes: default values are inherited from `configure mind`, then overridden per agent.
 3. Channel binding to existing `channel configure` data.
 4. Schedule defaults (interval/calendar seed).
 5. Validate by running an agent smoke check (`begin`/single message/stop path).
@@ -376,4 +382,4 @@ Agent configure conformance (initial target):
 3. Unified caterer capability matrix output for `configure channel list`.
 4. Final `configure agent` non-interactive flag contract and storage map keys.
 5. Final `configure orchestrator` managed file schema and endpoint auth model.
-6. `configure mind` command contract and default bridge/profile schema.
+6. richer provider-aware mind setup beyond Ollama tag listing (non-Ollama model discovery contract).

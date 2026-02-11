@@ -26,8 +26,18 @@ const MATRIX_POLICY_BLOCK_NAME = "matrix channel conduct";
 const MATRIX_WORLD_POLICY_BLOCK_NAME = "matrix channel world conduct";
 const ORCHESTRATOR_CONFIG_BLOCK_NAME = "orchestrator configure";
 const MIND_CONFIG_BLOCK_NAME = "mind configure";
+const MIND_RELAYS_BLOCK_NAME = "mind relays";
 const MIND_DEFAULTS_BLOCK_NAME = "mind defaults";
 const DEFAULT_CHANNEL_AGENT_NAME = "pyash-agent";
+const DEFAULT_MIND_RELAY_NAME = "default";
+const MIND_BACKEND_CHOICES = [
+  { key: "ollama", value: "ollama command mind", label: "Ollama" },
+  { key: "litellm", value: "litellm command mind", label: "LiteLLM" },
+  { key: "openai-api", value: "openai command mind", label: "OpenAI API key" },
+  { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
+  { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
+  { key: "vllm", value: "vllm command mind", label: "vLLM" }
+];
 
 function parseArgValue(args, flag) {
   const idx = args.findIndex((arg) => arg === flag);
@@ -58,7 +68,7 @@ function usage() {
     "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
-    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>]",
+    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>]",
     "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
@@ -112,6 +122,130 @@ function normalizeHomeserver(raw) {
   if (!text) return "";
   if (!/^https?:\/\//i.test(text)) return `https://${text}`;
   return text;
+}
+
+function canonicalizeMindBackend(raw) {
+  const text = String(raw ?? "").trim();
+  const key = text.toLowerCase();
+  if (!key) return "";
+  if (key === "ollama") return "ollama command mind";
+  if (key === "litellm") return "litellm command mind";
+  if (key === "openai-api") return "openai command mind";
+  if (key === "openai-codex") return "openai command mind";
+  if (key === "openai") return "openai command mind";
+  if (key === "openrouter") return "openrouter command mind";
+  if (key === "vllm") return "vllm command mind";
+  return text;
+}
+
+function looksLikeOllamaBackend(backend) {
+  const text = canonicalizeMindBackend(backend).toLowerCase();
+  return text.includes("ollama");
+}
+
+async function fetchOllamaModels(host, { timeoutMs = 5000 } = {}) {
+  const base = normalizeHomeserver(host);
+  if (!base || !/^https?:\/\//i.test(base)) {
+    return { ok: false, models: [], error: "invalid host" };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${base}/api/tags`, {
+      method: "GET",
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      return { ok: false, models: [], error: `status=${response.status}` };
+    }
+    const payload = await response.json().catch(() => ({}));
+    const models = Array.from(new Set(
+      (Array.isArray(payload?.models) ? payload.models : [])
+        .map((entry) => {
+          if (typeof entry === "string") return entry.trim();
+          const name = entry?.name ?? entry?.model ?? "";
+          return String(name ?? "").trim();
+        })
+        .filter(Boolean)
+    ));
+    return { ok: true, models: models.sort((a, b) => a.localeCompare(b)) };
+  } catch (err) {
+    return { ok: false, models: [], error: String(err?.message ?? err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function resolveModelSelection(raw, { fallback = "", models = [] } = {}) {
+  const text = String(raw ?? "").trim();
+  if (!text) return fallback;
+  if (/^\d+$/.test(text) && Array.isArray(models) && models.length > 0) {
+    const index = Number(text);
+    if (Number.isFinite(index) && index >= 1 && index <= models.length) {
+      return models[index - 1];
+    }
+  }
+  return text;
+}
+
+function findMindBackendChoice(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  const lowered = text.toLowerCase();
+  if (/^\d+$/.test(lowered)) {
+    const index = Number(lowered);
+    if (Number.isFinite(index) && index >= 1 && index <= MIND_BACKEND_CHOICES.length) {
+      return MIND_BACKEND_CHOICES[index - 1];
+    }
+  }
+  const canonical = canonicalizeMindBackend(text);
+  for (const item of MIND_BACKEND_CHOICES) {
+    if (lowered === item.key || canonical === item.value) return item;
+  }
+  return null;
+}
+
+function backendChoiceKey(backend) {
+  const choice = findMindBackendChoice(backend);
+  if (choice) return choice.key;
+  if (canonicalizeMindBackend(backend) === "openai command mind") return "openai-api";
+  return "ollama";
+}
+
+function resolveMindBackendSelection(raw, fallbackBackend) {
+  const fallbackChoice = findMindBackendChoice(fallbackBackend);
+  const fallback = fallbackChoice ? fallbackChoice.value : canonicalizeMindBackend(fallbackBackend);
+  const selected = findMindBackendChoice(raw);
+  if (selected) return selected.value;
+  const text = String(raw ?? "").trim();
+  if (!text) return fallback;
+  return canonicalizeMindBackend(text);
+}
+
+function displayMindBackendKey(backend) {
+  const canonical = canonicalizeMindBackend(backend);
+  if (canonical === "ollama command mind") return "ollama";
+  if (canonical === "litellm command mind") return "litellm";
+  if (canonical === "openai command mind") return "openai-api";
+  if (canonical === "openrouter command mind") return "openrouter";
+  if (canonical === "vllm command mind") return "vllm";
+  return canonical || "unknown";
+}
+
+function formatNumberedRows(items, { columns = 2, gap = 3 } = {}) {
+  const values = Array.isArray(items) ? items : [];
+  if (values.length === 0) return [];
+  const normalizedColumns = Math.max(1, Number(columns) || 1);
+  const labels = values.map((item, index) => `${index + 1}. ${item}`);
+  const width = labels.reduce((max, item) => Math.max(max, item.length), 0) + gap;
+  const lines = [];
+  for (let i = 0; i < labels.length; i += normalizedColumns) {
+    const row = labels.slice(i, i + normalizedColumns);
+    lines.push(row.map((entry, offset) => (
+      offset === row.length - 1 ? entry : entry.padEnd(width, " ")
+    )).join(""));
+  }
+  return lines;
 }
 
 function homeserverHost(homeserver) {
@@ -331,11 +465,41 @@ async function loadMindConfigFromSecret(rootDir) {
   const text = await readText(secretPath);
   if (!text) return {};
   const mindBlock = extractManagedBlock(text, MIND_CONFIG_BLOCK_NAME);
+  const relaysBlock = extractManagedBlock(text, MIND_RELAYS_BLOCK_NAME);
   const values = parseMapBlock(mindBlock);
+  const relayValues = parseMapBlock(relaysBlock);
+  const relays = {};
+  for (const [key, value] of Object.entries(relayValues)) {
+    const match = key.match(/^relay (.+) (backend|host|model)$/);
+    if (!match) continue;
+    const relayName = String(match[1] ?? "").trim();
+    const field = match[2];
+    if (!relayName) continue;
+    if (!relays[relayName]) relays[relayName] = { backend: "", host: "", model: "" };
+    relays[relayName][field] = String(value ?? "").trim();
+  }
+  if (!Object.keys(relays).length && values.backend && values.host && values.model) {
+    relays[DEFAULT_MIND_RELAY_NAME] = {
+      backend: String(values.backend).trim(),
+      host: String(values.host).trim(),
+      model: String(values.model).trim()
+    };
+  }
+  let defaultRelay = String(relayValues["default relay"] || "").trim();
+  if (!defaultRelay) defaultRelay = Object.keys(relays)[0] || DEFAULT_MIND_RELAY_NAME;
+  if (!relays[defaultRelay] && Object.keys(relays).length > 0) {
+    defaultRelay = Object.keys(relays)[0];
+  }
+  const selected = relays[defaultRelay] ?? {};
+  const backend = String(selected.backend || values.backend || "").trim();
+  const host = String(selected.host || values.host || "").trim();
+  const model = String(selected.model || values.model || "").trim();
   return {
-    backend: values.backend || "",
-    host: values.host || "",
-    model: values.model || ""
+    backend,
+    host,
+    model,
+    defaultRelay,
+    relays
   };
 }
 
@@ -1879,8 +2043,16 @@ async function configureOrchestrator({ args }) {
 }
 
 function collectMindFromFlags({ args, prior }) {
+  const backend = canonicalizeMindBackend(parseArgValue(args, "--backend") ?? prior.backend ?? "ollama command mind");
+  const relayName = String(parseArgValue(args, "--relay") ?? prior.defaultRelay ?? DEFAULT_MIND_RELAY_NAME).trim();
+  const setDefaultRaw = parseArgValue(args, "--set-default");
+  const setDefault = setDefaultRaw == null
+    ? (!prior.defaultRelay || relayName === prior.defaultRelay)
+    : parseTruthy(setDefaultRaw, true);
   return {
-    backend: String(parseArgValue(args, "--backend") ?? prior.backend ?? "ollama command mind").trim(),
+    relayName,
+    setDefault,
+    backend,
     host: normalizeHomeserver(parseArgValue(args, "--host") ?? prior.host ?? "http://localhost:11434"),
     model: String(parseArgValue(args, "--model") ?? prior.model ?? "gpt-oss:latest").trim()
   };
@@ -1895,12 +2067,56 @@ async function collectMindInteractive({ prior }) {
       const v = (await rl.question(`${label}${shown}: `)).trim();
       return v || fallback;
     };
+    const askYesNo = async (label, fallback = true) => {
+      const shown = fallback ? "Y/n" : "y/N";
+      const v = (await rl.question(`${label} [${shown}]: `)).trim().toLowerCase();
+      if (!v) return fallback;
+      return v === "y" || v === "yes";
+    };
 
-    printer.header("A.1 Mind Relay");
+    const priorRelays = prior?.relays ?? {};
+    const relayNames = Object.keys(priorRelays).sort((a, b) => a.localeCompare(b));
+    printer.header("A.0 Existing Relays");
+    printer.why("This shows what is already configured so you can add or adjust relays without guessing.");
+    printer.how("Default relay is listed first, then each configured relay in Pyash-style sentence form.");
+    printer.examples("su name local fromstate text \"ollama\" from text \"http://localhost:11434\" as text \"gpt-oss:latest\" be relay ya");
+    if (relayNames.length === 0) {
+      textOut("su name mind relays ob text \"none configured\" ya");
+    } else {
+      const defaultRelay = String(prior?.defaultRelay || relayNames[0] || DEFAULT_MIND_RELAY_NAME).trim();
+      textOut(`su name default relay ob text ${quoteText(defaultRelay)} ya`);
+      for (const name of relayNames) {
+        const relay = priorRelays[name] ?? {};
+        textOut(
+          `su name ${name} fromstate text ${quoteText(displayMindBackendKey(relay.backend))} from text ${quoteText(relay.host || "")} as text ${quoteText(relay.model || "")} be relay ya`
+        );
+      }
+    }
+
+    printer.header("A.1 Relay Name");
+    printer.why("Relay names let you store multiple mind sources and select one as default.");
+    printer.how("Use a short stable name, then choose whether to set it as default.");
+    printer.examples("default | local ollama | cloud openai");
+    const relayName = String(await ask("Relay name", prior.defaultRelay || DEFAULT_MIND_RELAY_NAME)).trim();
+
+    printer.header("A.2 Mind Relay");
     printer.why("Channel and agent responses require a configured mind relay backend.");
-    printer.how("Use ollama command mind unless you have a different relay module.");
-    printer.examples("backend=ollama command mind");
-    const backend = String(await ask("Mind backend", prior.backend || "ollama command mind")).trim();
+    printer.how("Choose a provider by number or short name; Pyash maps it to the full backend command.");
+    printer.examples("1 | ollama | openai-api | openai-codex | openrouter");
+    textOut("- providers:");
+    for (const line of formatNumberedRows(MIND_BACKEND_CHOICES.map((item) => `${item.key} (${item.label})`), { columns: 2 })) {
+      textOut(`  ${line}`);
+    }
+    const backendFallback = backendChoiceKey(prior.backend || "ollama command mind");
+    const backendInput = await ask("Mind backend", backendFallback);
+    const selectedChoice = findMindBackendChoice(backendInput) ?? findMindBackendChoice(backendFallback);
+    const backend = resolveMindBackendSelection(backendInput, prior.backend || "ollama command mind");
+    if (selectedChoice?.key === "openai-api") {
+      textOut("- auth note: openai-api expects OPENAI_API_KEY in runtime environment.");
+    }
+    if (selectedChoice?.key === "openai-codex") {
+      textOut("- auth note: openai-codex expects prior Codex OAuth login in runtime environment.");
+    }
 
     printer.header("B.1 Provider Endpoint");
     printer.why("Mind backend uses this host for model calls.");
@@ -1908,13 +2124,40 @@ async function collectMindInteractive({ prior }) {
     printer.examples("http://localhost:11434");
     const host = normalizeHomeserver(await ask("Mind host", prior.host || "http://localhost:11434"));
 
-    printer.header("C.1 Default Model");
-    printer.why("Used when agent/mind facts do not specify an explicit model.");
-    printer.how("Set a stable local model tag.");
-    printer.examples("gpt-oss:latest");
-    const model = String(await ask("Mind model", prior.model || "gpt-oss:latest")).trim();
+    const discoveredModels = [];
+    if (looksLikeOllamaBackend(backend)) {
+      printer.header("C.1 Ollama Models");
+      printer.why("Listing local tags helps choose a valid default model.");
+      printer.how("Pyash queries /api/tags on the configured host.");
+      printer.examples("gpt-oss:latest");
+      const discovered = await fetchOllamaModels(host);
+      if (discovered.ok && discovered.models.length > 0) {
+        textOut(`- found ${discovered.models.length} model(s):`);
+        for (let i = 0; i < discovered.models.length; i += 1) {
+          discoveredModels.push(discovered.models[i]);
+        }
+        for (const line of formatNumberedRows(discoveredModels, { columns: 2 })) {
+          textOut(`  ${line}`);
+        }
+      } else if (discovered.ok) {
+        textOut("- no models reported by host");
+      } else {
+        textOut(`- model listing unavailable (${discovered.error})`);
+      }
+    }
 
-    return { backend, host, model };
+    printer.header("D.1 Default Model");
+    printer.why("Used when agent/mind facts do not specify an explicit model.");
+    printer.how("Choose from listed models (number) or enter a model/refinery alias.");
+    printer.examples("gpt-oss:latest");
+    const defaultModel = String(prior.model || discoveredModels[0] || "gpt-oss:latest").trim();
+    const modelInput = await ask("Mind model (name or number)", defaultModel);
+    const model = resolveModelSelection(modelInput, { fallback: defaultModel, models: discoveredModels });
+    textOut(`- selected model ${model}`);
+    const setDefaultFallback = !prior.defaultRelay || relayName === prior.defaultRelay;
+    const setDefault = await askYesNo("Set this relay as default", setDefaultFallback);
+
+    return { relayName, setDefault, backend, host, model };
   } finally {
     rl.close();
   }
@@ -1922,6 +2165,7 @@ async function collectMindInteractive({ prior }) {
 
 function mindVerification(cfg) {
   const errors = [];
+  if (!String(cfg.relayName ?? "").trim()) errors.push({ code: "missing_relay", message: "relay is required" });
   if (!String(cfg.backend ?? "").trim()) errors.push({ code: "missing_backend", message: "backend is required" });
   const host = normalizeHomeserver(cfg.host);
   if (!host) errors.push({ code: "missing_host", message: "host is required" });
@@ -1931,16 +2175,29 @@ function mindVerification(cfg) {
 }
 
 async function mindLiveTest(cfg) {
-  const host = normalizeHomeserver(cfg.host);
+  const backend = canonicalizeMindBackend(cfg.backend);
   const checks = [];
-  try {
-    const response = await fetch(`${host}/api/tags`, { method: "GET" });
-    if (!response.ok) throw new Error(`status=${response.status}`);
+  if (looksLikeOllamaBackend(backend)) {
+    const tags = await fetchOllamaModels(cfg.host);
+    if (!tags.ok) {
+      checks.push({ name: "host reachable", ok: false, error: tags.error });
+      return { ok: false, checks };
+    }
     checks.push({ name: "host reachable", ok: true });
-  } catch (err) {
-    checks.push({ name: "host reachable", ok: false, error: String(err?.message || err) });
-    return { ok: false, checks };
+    checks.push({ name: "models listed", ok: true, count: tags.models.length });
+    const selectedModel = String(cfg.model ?? "").trim();
+    const available = tags.models.includes(selectedModel);
+    checks.push({ name: "model available", ok: available, model: selectedModel });
+    if (!available) return { ok: false, checks };
+    return { ok: true, checks };
   }
+  checks.push({
+    name: "provider live check",
+    ok: true,
+    skipped: true,
+    backend,
+    reason: "non-ollama backend: host/model saved; run provider-specific smoke test separately"
+  });
   return { ok: true, checks };
 }
 
@@ -1954,8 +2211,25 @@ function buildMindConfigureBlock(cfg) {
   ].join("\n");
 }
 
-function buildMindDefaultsBlock(cfg) {
+function buildMindRelaysBlock({ relays = {}, defaultRelay = DEFAULT_MIND_RELAY_NAME }) {
+  const names = Object.keys(relays).sort((a, b) => a.localeCompare(b));
+  const lines = [
+    "su name mind relays be map def",
+    `  su name default relay ob text ${quoteText(defaultRelay)} ya`
+  ];
+  for (const relayName of names) {
+    const relay = relays[relayName] ?? {};
+    lines.push(`  su name relay ${relayName} backend ob text ${quoteText(relay.backend ?? "")} ya`);
+    lines.push(`  su name relay ${relayName} host ob text ${quoteText(relay.host ?? "")} ya`);
+    lines.push(`  su name relay ${relayName} model ob text ${quoteText(relay.model ?? "")} ya`);
+  }
+  lines.push("prah");
+  return lines.join("\n");
+}
+
+function buildMindDefaultsBlock(cfg, { defaultRelay = DEFAULT_MIND_RELAY_NAME } = {}) {
   return [
+    `exists su name mind relay default ob text ${quoteText(defaultRelay)} be default ya`,
     `exists su name mind backend be default ob name ${cfg.backend} ya`,
     `exists su name ollama host ob text ${quoteText(cfg.host)} be default ya`,
     `exists su name ai host ob text ${quoteText(cfg.host)} be default ya`,
@@ -1963,29 +2237,60 @@ function buildMindDefaultsBlock(cfg) {
   ].join("\n");
 }
 
-async function createMindWritePlan({ rootDir, cfg }) {
+async function createMindWritePlan({ rootDir, cfg, prior }) {
   const secretPath = path.join(rootDir, "configure", "secret.pya");
   const secretExisting = await readText(secretPath);
-  const configPlan = planManagedUpsert({
+  const mergedRelays = { ...(prior?.relays ?? {}) };
+  mergedRelays[cfg.relayName] = {
+    backend: cfg.backend,
+    host: cfg.host,
+    model: cfg.model
+  };
+  let defaultRelay = cfg.setDefault
+    ? cfg.relayName
+    : String(prior?.defaultRelay || "").trim();
+  if (!defaultRelay) defaultRelay = cfg.relayName;
+  if (!mergedRelays[defaultRelay]) defaultRelay = cfg.relayName;
+  const selectedCfg = mergedRelays[defaultRelay];
+
+  const relaysPlan = planManagedUpsert({
     existing: secretExisting,
+    blockName: MIND_RELAYS_BLOCK_NAME,
+    content: buildMindRelaysBlock({ relays: mergedRelays, defaultRelay })
+  });
+  const configPlan = planManagedUpsert({
+    existing: relaysPlan.nextText,
     blockName: MIND_CONFIG_BLOCK_NAME,
-    content: buildMindConfigureBlock(cfg)
+    content: buildMindConfigureBlock(selectedCfg)
   });
   const defaultsPlan = planManagedUpsert({
     existing: configPlan.nextText,
     blockName: MIND_DEFAULTS_BLOCK_NAME,
-    content: buildMindDefaultsBlock(cfg)
+    content: buildMindDefaultsBlock(selectedCfg, { defaultRelay })
   });
   return {
     writes: [{
       path: secretPath,
-      changed: configPlan.changed || defaultsPlan.changed,
+      changed: relaysPlan.changed || configPlan.changed || defaultsPlan.changed,
       action: defaultsPlan.action,
-      preview: [MIND_CONFIG_BLOCK_NAME, MIND_DEFAULTS_BLOCK_NAME],
+      preview: [MIND_RELAYS_BLOCK_NAME, MIND_CONFIG_BLOCK_NAME, MIND_DEFAULTS_BLOCK_NAME],
       nextText: defaultsPlan.nextText
     }],
-    changed: configPlan.changed || defaultsPlan.changed
+    changed: relaysPlan.changed || configPlan.changed || defaultsPlan.changed,
+    resolvedDefaultRelay: defaultRelay,
+    resolvedDefaultConfig: selectedCfg,
+    relays: mergedRelays
   };
+}
+
+async function askConfigureAnotherRelay() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const value = (await rl.question("Configure another relay [y/N]: ")).trim().toLowerCase();
+    return value === "y" || value === "yes";
+  } finally {
+    rl.close();
+  }
 }
 
 async function configureMind({ args }) {
@@ -1995,58 +2300,91 @@ async function configureMind({ args }) {
   const dryRun = hasFlag(args, "--dry-run");
   const nonInteractive = hasFlag(args, "--non-interactive");
   const testNowFlag = parseArgValue(args, "--test-now");
-  const prior = await loadMindConfigFromSecret(rootDir);
-  const cfg = nonInteractive
-    ? collectMindFromFlags({ args, prior })
-    : await collectMindInteractive({ prior });
+  const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
+  let workingPrior = await loadMindConfigFromSecret(rootDir);
+  const runs = [];
+  let lastPlan = null;
 
-  const verification = mindVerification(cfg);
-  if (!verification.ok) {
-    const out = { ok: false, stage: "verification", verification, config: cfg };
-    if (json) jsonOut(out);
-    else {
-      textOut("verification failed:");
-      for (const err of verification.errors) textOut(`- ${err.code}: ${err.message}`);
+  while (true) {
+    const cfg = nonInteractive
+      ? collectMindFromFlags({ args, prior: workingPrior })
+      : await collectMindInteractive({ prior: workingPrior });
+
+    const verification = mindVerification(cfg);
+    if (!verification.ok) {
+      const out = { ok: false, stage: "verification", verification, config: cfg };
+      if (json) jsonOut(out);
+      else {
+        textOut("verification failed:");
+        for (const err of verification.errors) textOut(`- ${err.code}: ${err.message}`);
+      }
+      process.exit(1);
     }
-    process.exit(1);
+
+    let live = null;
+    if (runTestNow) live = await mindLiveTest(cfg);
+
+    const plan = await createMindWritePlan({ rootDir, cfg, prior: workingPrior });
+    if (!dryRun) await applyWritePlan(plan);
+    lastPlan = plan;
+
+    const runOut = {
+      ok: true,
+      route: "configure mind",
+      rootDir,
+      dryRun,
+      changed: plan.changed,
+      writes: writePlanSummary(plan),
+      verification,
+      live,
+      config: {
+        relayName: cfg.relayName,
+        setDefault: cfg.setDefault,
+        backend: cfg.backend,
+        host: cfg.host,
+        model: cfg.model,
+        defaultRelay: plan.resolvedDefaultRelay,
+        relays: plan.relays
+      }
+    };
+    runs.push(runOut);
+    workingPrior = {
+      backend: plan.resolvedDefaultConfig?.backend ?? cfg.backend,
+      host: plan.resolvedDefaultConfig?.host ?? cfg.host,
+      model: plan.resolvedDefaultConfig?.model ?? cfg.model,
+      defaultRelay: plan.resolvedDefaultRelay ?? cfg.relayName,
+      relays: plan.relays ?? {}
+    };
+
+    if (nonInteractive) break;
+    const again = await askConfigureAnotherRelay();
+    if (!again) break;
   }
 
-  const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
-  let live = null;
-  if (runTestNow) live = await mindLiveTest(cfg);
-
-  const plan = await createMindWritePlan({ rootDir, cfg });
-  if (!dryRun) await applyWritePlan(plan);
-
-  const out = {
-    ok: true,
-    route: "configure mind",
-    rootDir,
-    dryRun,
-    changed: plan.changed,
-    writes: writePlanSummary(plan),
-    verification,
-    live,
-    config: cfg
-  };
+  const out = runs[runs.length - 1];
   if (json) {
-    jsonOut(out);
+    jsonOut(runs.length > 1 ? { ...out, runs } : out);
     return;
   }
-  textOut("configure mind complete");
-  for (const w of out.writes) {
+  const relayNames = runs.map((entry) => entry?.config?.relayName).filter(Boolean);
+  textOut(`configure mind complete${relayNames.length > 1 ? ` (${relayNames.length} relays)` : ""}`);
+  for (const w of out.writes || []) {
     textOut(`- ${w.path} (${w.changed ? "changed" : "unchanged"}, ${w.action})`);
   }
+  if (relayNames.length > 0) {
+    textOut(`- relays configured ${relayNames.join(", ")}`);
+  }
+  textOut(`- default relay ${out?.config?.defaultRelay ?? DEFAULT_MIND_RELAY_NAME}`);
   if (runTestNow) {
-    textOut(`mind test ${live?.ok ? "passed" : "failed"}`);
-    for (const check of live?.checks || []) {
+    textOut(`mind test ${out?.live?.ok ? "passed" : "failed"}`);
+    for (const check of out?.live?.checks || []) {
       textOut(`- ${check.ok ? "ok" : "fail"}: ${check.name}${check.error ? ` (${check.error})` : ""}`);
     }
   }
   if (print) {
     textOut("");
     textOut("planned blocks:");
-    for (const w of plan.writes) {
+    for (const w of lastPlan?.writes || []) {
       textOut(`## ${w.path}`);
       textOut(renderShortPreview(w.nextText));
     }
@@ -2124,12 +2462,14 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
-function collectAgentFromFlags({ args }) {
+function collectAgentFromFlags({ args, mindDefaults = {} }) {
+  const defaultBackend = canonicalizeMindBackend(mindDefaults.backend || "ollama command mind");
+  const defaultModel = String(mindDefaults.model || "gpt-oss:latest").trim();
   const agentName = String(parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME).trim();
   const purpose = String(parseArgValue(args, "--purpose") ?? "Assist with scheduled automation tasks.").trim();
   const intervalMinutes = normalizeIntervalMinutes(parseArgValue(args, "--interval-minutes") ?? 24, 24);
-  const backend = String(parseArgValue(args, "--backend") ?? "ollama").trim();
-  const model = String(parseArgValue(args, "--model") ?? "gpt-oss:latest").trim();
+  const backend = canonicalizeMindBackend(parseArgValue(args, "--backend") ?? defaultBackend);
+  const model = String(parseArgValue(args, "--model") ?? defaultModel).trim();
   const toolsMap = String(parseArgValue(args, "--tools-map") ?? "tools").trim();
   const bindChannel = parseTruthy(parseArgValue(args, "--bind-channel"), true);
   const smokeTest = parseTruthy(parseArgValue(args, "--smoke-test"), true);
@@ -2145,7 +2485,9 @@ function collectAgentFromFlags({ args }) {
   };
 }
 
-async function collectAgentInteractive({ worldRoot }) {
+async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }) {
+  const defaultBackend = canonicalizeMindBackend(mindDefaults.backend || "ollama command mind");
+  const defaultModel = String(mindDefaults.model || "gpt-oss:latest").trim();
   const printer = sectionPrinter();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -2170,10 +2512,10 @@ async function collectAgentInteractive({ worldRoot }) {
 
     printer.header("B.1 Runtime Backend");
     printer.why("Backend/model determine response behavior for upcoming channel and schedule runs.");
-    printer.how("Select your default backend and model.");
-    printer.examples("backend=ollama, model=gpt-oss:latest");
-    const backend = await ask("Backend", "ollama");
-    const model = await ask("Model", "gpt-oss:latest");
+    printer.how("Start from global mind defaults, then override per agent when needed.");
+    printer.examples("backend=ollama command mind, model=gpt-oss:latest");
+    const backend = canonicalizeMindBackend(await ask("Backend", defaultBackend));
+    const model = await ask("Model (tag or refinery alias)", defaultModel);
     const toolsMap = await ask("Tools map", "tools");
 
     printer.header("C.1 Channel Binding");
@@ -2182,7 +2524,7 @@ async function collectAgentInteractive({ worldRoot }) {
     printer.examples("yes");
     const bindChannel = await askYesNo("Bind default channel to this agent", true);
     if (bindChannel) {
-      const matrix = await loadMatrixConfigFromSecret(worldRoot);
+      const matrix = await loadMatrixConfigFromSecret(rootDir);
       if (!matrix?.homeserver || !matrix?.room) {
         textOut("- warning: default channel configure missing; binding will be skipped unless channel is configured.");
       } else {
@@ -2225,10 +2567,11 @@ async function configureAgent({ args }) {
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
   const nonInteractive = hasFlag(args, "--non-interactive");
+  const mindDefaults = await loadMindConfigFromSecret(rootDir);
 
   const cfg = nonInteractive
-    ? collectAgentFromFlags({ args })
-    : await collectAgentInteractive({ worldRoot });
+    ? collectAgentFromFlags({ args, mindDefaults })
+    : await collectAgentInteractive({ rootDir, worldRoot, mindDefaults });
 
   if (!cfg.agentName) {
     throw new Error("configure agent requires --agent");
