@@ -243,6 +243,7 @@ su name mind configure be map def
   su name backend ob text "openai command mind" ya
   su name host ob text "https://api.openai.com" ya
   su name model ob text "gpt-5-codex" ya
+  su name reasoning effort ob text "medium" ya
 prah
 ```
 
@@ -250,6 +251,7 @@ Rules:
 
 1. `source` disambiguates auth strategy when canonical backend text is shared.
 2. `openai-codex` MAY invoke Codex App Server login flow during configure.
+3. when model metadata includes reasoning options, configure SHOULD capture `reasoning effort`.
 3. repeated configure runs MUST be idempotent for relay/source/backend/host/model blocks.
 
 Auth notes:

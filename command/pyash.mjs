@@ -69,7 +69,7 @@ function usage() {
     "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
-    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
+    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
     "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
@@ -212,6 +212,18 @@ function resolveModelSelection(raw, { fallback = "", models = [] } = {}) {
   return text;
 }
 
+function resolveReasoningEffortSelection(raw, { fallback = "", options = [] } = {}) {
+  const text = String(raw ?? "").trim();
+  if (!text) return fallback;
+  if (/^\d+$/.test(text) && Array.isArray(options) && options.length > 0) {
+    const index = Number(text);
+    if (Number.isFinite(index) && index >= 1 && index <= options.length) {
+      return String(options[index - 1] ?? "").trim();
+    }
+  }
+  return text;
+}
+
 function findMindBackendChoice(raw) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
@@ -283,6 +295,41 @@ function formatNumberedRows(items, { columns = 2, gap = 3 } = {}) {
     )).join(""));
   }
   return lines;
+}
+
+function suggestMindRelayName({ source = "", model = "", fallback = DEFAULT_MIND_RELAY_NAME } = {}) {
+  const baseBySource = {
+    "openai-codex": "codex",
+    "openai-api": "openai",
+    "openrouter": "openrouter",
+    "litellm": "litellm",
+    "vllm": "vllm",
+    "ollama": "ollama"
+  };
+  const sourceKey = String(source || "").trim().toLowerCase();
+  const base = baseBySource[sourceKey] || sourceKey || String(fallback || DEFAULT_MIND_RELAY_NAME);
+  const modelText = String(model || "").trim().toLowerCase();
+  const modelStemRaw = modelText.split(":")[0] || "";
+  const modelStem = modelStemRaw.replace(/[^a-z0-9]+/g, " ").trim();
+  if (!modelStem) return base;
+  if (modelStem === base) return base;
+  if (modelStem.startsWith(`${base} `)) return modelStem;
+  return `${base} ${modelStem}`.trim();
+}
+
+function defaultMindHostForSource(source = "") {
+  const key = String(source || "").trim().toLowerCase();
+  if (key === "openai-api" || key === "openai-codex") return "https://api.openai.com";
+  if (key === "openrouter") return "https://openrouter.ai/api/v1";
+  if (key === "litellm") return "http://localhost:4000";
+  if (key === "vllm") return "http://localhost:8000";
+  return "http://localhost:11434";
+}
+
+function defaultMindModelForSource(source = "") {
+  const key = String(source || "").trim().toLowerCase();
+  if (key === "openai-codex") return "gpt-5-codex";
+  return "gpt-oss:latest";
 }
 
 function homeserverHost(homeserver) {
@@ -530,12 +577,12 @@ async function loadMindConfigFromSecret(rootDir) {
   const relayValues = parseMapBlock(relaysBlock);
   const relays = {};
   for (const [key, value] of Object.entries(relayValues)) {
-    const match = key.match(/^relay (.+) (backend|host|model|source)$/);
+    const match = key.match(/^relay (.+) (backend|host|model|source|reasoning effort)$/);
     if (!match) continue;
     const relayName = String(match[1] ?? "").trim();
-    const field = match[2];
+    const field = match[2] === "reasoning effort" ? "reasoningEffort" : match[2];
     if (!relayName) continue;
-    if (!relays[relayName]) relays[relayName] = { source: "", backend: "", host: "", model: "" };
+    if (!relays[relayName]) relays[relayName] = { source: "", backend: "", host: "", model: "", reasoningEffort: "" };
     relays[relayName][field] = String(value ?? "").trim();
   }
   if (!Object.keys(relays).length && values.backend && values.host && values.model) {
@@ -543,7 +590,8 @@ async function loadMindConfigFromSecret(rootDir) {
       source: backendChoiceKey(values.backend),
       backend: String(values.backend).trim(),
       host: String(values.host).trim(),
-      model: String(values.model).trim()
+      model: String(values.model).trim(),
+      reasoningEffort: String(values["reasoning effort"] || "").trim()
     };
   }
   for (const relayName of Object.keys(relays)) {
@@ -560,11 +608,13 @@ async function loadMindConfigFromSecret(rootDir) {
   const backend = String(selected.backend || values.backend || "").trim();
   const host = String(selected.host || values.host || "").trim();
   const model = String(selected.model || values.model || "").trim();
+  const reasoningEffort = String(selected.reasoningEffort || values["reasoning effort"] || "").trim();
   return {
     source: source || backendChoiceKey(backend),
     backend,
     host,
     model,
+    reasoningEffort,
     defaultRelay,
     relays
   };
@@ -2113,10 +2163,12 @@ function collectMindFromFlags({ args, prior }) {
   const backendInput = parseArgValue(args, "--backend") ?? prior.source ?? prior.backend ?? "ollama";
   const source = resolveMindBackendSource(backendInput, prior.backend ?? "ollama command mind");
   const backend = canonicalizeMindBackend(backendInput ?? prior.backend ?? "ollama command mind");
-  const defaultHost = source === "openai-api" || source === "openai-codex"
-    ? "https://api.openai.com"
-    : "http://localhost:11434";
-  const defaultModel = source === "openai-codex" ? "gpt-5-codex" : "gpt-oss:latest";
+  const priorSource = resolveMindBackendSource(prior.source ?? prior.backend ?? "ollama", prior.backend ?? "ollama command mind");
+  const defaultHost = defaultMindHostForSource(source);
+  const defaultModel = defaultMindModelForSource(source);
+  const hostFallback = priorSource === source && prior.host ? prior.host : defaultHost;
+  const modelFallback = priorSource === source && prior.model ? prior.model : defaultModel;
+  const reasoningFallback = priorSource === source ? String(prior.reasoningEffort || "").trim() : "";
   const relayName = String(parseArgValue(args, "--relay") ?? prior.defaultRelay ?? DEFAULT_MIND_RELAY_NAME).trim();
   const setDefaultRaw = parseArgValue(args, "--set-default");
   const setDefault = setDefaultRaw == null
@@ -2131,8 +2183,9 @@ function collectMindFromFlags({ args, prior }) {
     setDefault,
     source,
     backend,
-    host: normalizeHomeserver(parseArgValue(args, "--host") ?? prior.host ?? defaultHost),
-    model: String(parseArgValue(args, "--model") ?? prior.model ?? defaultModel).trim(),
+    host: normalizeHomeserver(parseArgValue(args, "--host") ?? hostFallback),
+    model: String(parseArgValue(args, "--model") ?? modelFallback).trim(),
+    reasoningEffort: String(parseArgValue(args, "--reasoning-effort") ?? reasoningFallback).trim(),
     codexLogin,
     codexBin
   };
@@ -2173,13 +2226,7 @@ async function collectMindInteractive({ prior, rootDir }) {
       }
     }
 
-    printer.header("A.1 Relay Name");
-    printer.why("Relay names let you store multiple mind sources and select one as default.");
-    printer.how("Use a short stable name, then choose whether to set it as default.");
-    printer.examples("default | local ollama | cloud openai");
-    const relayName = String(await ask("Relay name", prior.defaultRelay || DEFAULT_MIND_RELAY_NAME)).trim();
-
-    printer.header("A.2 Mind Relay");
+    printer.header("A.1 Mind Relay");
     printer.why("Channel and agent responses require a configured mind relay backend.");
     printer.how("Choose a provider by number or short name; Pyash maps it to the full backend command.");
     printer.examples("1 | ollama | openai-api | openai-codex | openrouter");
@@ -2202,15 +2249,23 @@ async function collectMindInteractive({ prior, rootDir }) {
     printer.header("B.1 Provider Endpoint");
     printer.why("Mind backend uses this host for model calls.");
     printer.how("Use full URL; protocol defaults to https when omitted.");
-    printer.examples("http://localhost:11434");
-    const defaultHost = source === "openai-api" || source === "openai-codex"
-      ? (prior.host || "https://api.openai.com")
-      : (prior.host || "http://localhost:11434");
+    const priorSource = resolveMindBackendSource(prior.source ?? prior.backend ?? "ollama", prior.backend ?? "ollama command mind");
+    const defaultHost = priorSource === source && prior.host
+      ? prior.host
+      : defaultMindHostForSource(source);
+    const hostExample = source === "openai-api" || source === "openai-codex"
+      ? "https://api.openai.com"
+      : defaultHost;
+    printer.examples(hostExample);
     const host = normalizeHomeserver(await ask("Mind host", defaultHost));
 
     const discoveredModels = [];
+    const codexModelById = new Map();
     let codexBin = "";
     let discoveredDefaultModel = "";
+    let codexLogin = false;
+    let codexLoginDone = false;
+    let codexAuth = null;
     if (looksLikeOllamaBackend(backend)) {
       printer.header("C.1 Ollama Models");
       printer.why("Listing local tags helps choose a valid default model.");
@@ -2231,11 +2286,37 @@ async function collectMindInteractive({ prior, rootDir }) {
         textOut(`- model listing unavailable (${discovered.error})`);
       }
     } else if (source === "openai-codex") {
+      printer.header("C.0 Codex Login");
+      printer.why("Codex auth enables model discovery so you can choose from available models.");
+      printer.how("Run login now unless you already authenticated this runtime recently.");
+      printer.examples("login truth");
+      codexBin = String(await ask("Codex binary path (optional)", "")).trim();
+      codexLogin = await askYesNo("Run Codex OAuth login now", true);
+      if (codexLogin) {
+        const codexRun = await runCodexAccountCommand({
+          action: "login",
+          codexBin,
+          cwd: rootDir,
+          json: false
+        });
+        if (codexRun.code !== 0) {
+          textOut("- codex auth failed");
+          const continueWithoutLogin = await askContinueWithoutCodexLogin();
+          if (!continueWithoutLogin) process.exit(1);
+          codexAuth = { ok: false, skipped: true, reason: "login failed and user chose continue" };
+        } else {
+          textOut("- codex auth passed");
+          codexLoginDone = true;
+          codexAuth = { ok: true, interactive: true };
+        }
+      } else {
+        codexAuth = { ok: false, skipped: true, reason: "user skipped login" };
+      }
+
       printer.header("C.1 Codex Models");
       printer.why("Listing Codex models lets you choose a valid model id for this relay.");
       printer.how("Pyash calls codex app-server model/list using the current Codex auth state.");
       printer.examples("gpt-5-codex");
-      codexBin = String(await ask("Codex binary path (optional)", "")).trim();
       const discovered = await fetchCodexModels({ rootDir, codexBin });
       if (discovered.ok && discovered.models.length > 0) {
         textOut(`- found ${discovered.models.length} model(s):`);
@@ -2243,6 +2324,7 @@ async function collectMindInteractive({ prior, rootDir }) {
         for (const entry of discovered.models) {
           const id = String(entry?.id ?? "").trim();
           if (!id) continue;
+          codexModelById.set(id, entry);
           if (!discoveredDefaultModel && entry?.isDefault) discoveredDefaultModel = id;
           discoveredModels.push(id);
           const displayName = String(entry?.displayName ?? "").trim();
@@ -2264,19 +2346,68 @@ async function collectMindInteractive({ prior, rootDir }) {
     printer.why("Used when agent/mind facts do not specify an explicit model.");
     printer.how("Choose from listed models (number) or enter a model/refinery alias.");
     printer.examples(source === "openai-codex" ? "gpt-5-codex" : "gpt-oss:latest");
-    const fallbackModel = source === "openai-codex" ? "gpt-5-codex" : "gpt-oss:latest";
-    const defaultModel = String(prior.model || discoveredDefaultModel || discoveredModels[0] || fallbackModel).trim();
+    const fallbackModel = defaultMindModelForSource(source);
+    const priorModel = priorSource === source ? String(prior.model || "").trim() : "";
+    const defaultModel = String(priorModel || discoveredDefaultModel || discoveredModels[0] || fallbackModel).trim();
     const modelInput = await ask("Mind model (name or number)", defaultModel);
     const model = resolveModelSelection(modelInput, { fallback: defaultModel, models: discoveredModels });
     textOut(`- selected model ${model}`);
+    let reasoningEffort = "";
+    if (source === "openai-codex") {
+      const selectedModelInfo = codexModelById.get(model) ?? null;
+      const optionsRaw = Array.isArray(selectedModelInfo?.reasoningEffort)
+        ? selectedModelInfo.reasoningEffort
+        : [];
+      const options = Array.from(new Set(optionsRaw.map((item) => String(item ?? "").trim()).filter(Boolean)));
+      if (options.length > 0) {
+        printer.header("D.2 Reasoning Effort");
+        printer.why("Some Codex models expose reasoning levels as submodel controls.");
+        printer.how("Choose one of the listed levels by number or name.");
+        printer.examples(options.join(" | "));
+        textOut("- reasoning levels:");
+        for (const line of formatNumberedRows(options, { columns: 2 })) {
+          textOut(`  ${line}`);
+        }
+        const defaultReasoningEffort = String(
+          selectedModelInfo?.defaultReasoningEffort
+          || (priorSource === source ? prior.reasoningEffort : "")
+          || options[0]
+        ).trim();
+        const reasoningInput = await ask("Reasoning effort (name or number)", defaultReasoningEffort);
+        reasoningEffort = resolveReasoningEffortSelection(reasoningInput, {
+          fallback: defaultReasoningEffort,
+          options
+        });
+        textOut(`- selected reasoning effort ${reasoningEffort}`);
+      }
+    }
+    printer.header("E.1 Relay Name");
+    printer.why("Relay names let you store multiple mind sources and select one as default.");
+    printer.how("Use a short stable name; suggestion is based on selected source and model.");
+    printer.examples("default | codex gpt 5 | local ollama");
+    const suggestedRelayName = suggestMindRelayName({
+      source,
+      model,
+      fallback: prior.defaultRelay || DEFAULT_MIND_RELAY_NAME
+    });
+    textOut(`- suggested relay name ${suggestedRelayName}`);
+    const relayName = String(await ask("Relay name", suggestedRelayName)).trim();
     const setDefaultFallback = !prior.defaultRelay || relayName === prior.defaultRelay;
     const setDefault = await askYesNo("Set this relay as default", setDefaultFallback);
-    let codexLogin = false;
-    if (source === "openai-codex") {
-      codexLogin = await askYesNo("Run Codex OAuth login now", true);
-    }
 
-    return { relayName, setDefault, source, backend, host, model, codexLogin, codexBin };
+    return {
+      relayName,
+      setDefault,
+      source,
+      backend,
+      host,
+      model,
+      reasoningEffort,
+      codexLogin,
+      codexLoginDone,
+      codexAuth,
+      codexBin
+    };
   } finally {
     rl.close();
   }
@@ -2328,6 +2459,7 @@ function buildMindConfigureBlock(cfg) {
     `  su name backend ob text ${quoteText(cfg.backend)} ya`,
     `  su name host ob text ${quoteText(cfg.host)} ya`,
     `  su name model ob text ${quoteText(cfg.model)} ya`,
+    `  su name reasoning effort ob text ${quoteText(cfg.reasoningEffort || "")} ya`,
     "prah"
   ].join("\n");
 }
@@ -2344,6 +2476,7 @@ function buildMindRelaysBlock({ relays = {}, defaultRelay = DEFAULT_MIND_RELAY_N
     lines.push(`  su name relay ${relayName} backend ob text ${quoteText(relay.backend ?? "")} ya`);
     lines.push(`  su name relay ${relayName} host ob text ${quoteText(relay.host ?? "")} ya`);
     lines.push(`  su name relay ${relayName} model ob text ${quoteText(relay.model ?? "")} ya`);
+    lines.push(`  su name relay ${relayName} reasoning effort ob text ${quoteText(relay.reasoningEffort ?? "")} ya`);
   }
   lines.push("prah");
   return lines.join("\n");
@@ -2356,7 +2489,8 @@ function buildMindDefaultsBlock(cfg, { defaultRelay = DEFAULT_MIND_RELAY_NAME } 
     `exists su name mind backend be default ob name ${cfg.backend} ya`,
     `exists su name ollama host ob text ${quoteText(cfg.host)} be default ya`,
     `exists su name ai host ob text ${quoteText(cfg.host)} be default ya`,
-    `exists su name mind model ob text ${quoteText(cfg.model)} be default ya`
+    `exists su name mind model ob text ${quoteText(cfg.model)} be default ya`,
+    `exists su name mind reasoning effort ob text ${quoteText(cfg.reasoningEffort || "")} be default ya`
   ].join("\n");
 }
 
@@ -2368,7 +2502,8 @@ async function createMindWritePlan({ rootDir, cfg, prior }) {
     source: cfg.source || backendChoiceKey(cfg.backend),
     backend: cfg.backend,
     host: cfg.host,
-    model: cfg.model
+    model: cfg.model,
+    reasoningEffort: cfg.reasoningEffort || ""
   };
   let defaultRelay = cfg.setDefault
     ? cfg.relayName
@@ -2457,8 +2592,8 @@ async function configureMind({ args }) {
 
     let live = null;
     if (runTestNow) live = await mindLiveTest(cfg);
-    let codexAuth = null;
-    if (cfg.source === "openai-codex" && cfg.codexLogin) {
+    let codexAuth = cfg.codexAuth ?? null;
+    if (cfg.source === "openai-codex" && cfg.codexLogin && !cfg.codexLoginDone) {
       const codexJsonMode = nonInteractive || json;
       const codexRun = await runCodexAccountCommand({
         action: "login",
@@ -2509,6 +2644,7 @@ async function configureMind({ args }) {
         backend: cfg.backend,
         host: cfg.host,
         model: cfg.model,
+        reasoningEffort: cfg.reasoningEffort || "",
         codexLogin: cfg.codexLogin,
         defaultRelay: plan.resolvedDefaultRelay,
         relays: plan.relays
@@ -2521,6 +2657,7 @@ async function configureMind({ args }) {
       backend: plan.resolvedDefaultConfig?.backend ?? cfg.backend,
       host: plan.resolvedDefaultConfig?.host ?? cfg.host,
       model: plan.resolvedDefaultConfig?.model ?? cfg.model,
+      reasoningEffort: plan.resolvedDefaultConfig?.reasoningEffort ?? cfg.reasoningEffort ?? "",
       defaultRelay: plan.resolvedDefaultRelay ?? cfg.relayName,
       relays: plan.relays ?? {}
     };

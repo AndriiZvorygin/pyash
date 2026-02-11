@@ -36,6 +36,7 @@ export async function runToolChat({
   toolBlock,
   backendName,
   ollamaHost,
+  reasoningEffort,
   mindDebug,
   debugMind,
   inputs,
@@ -91,6 +92,7 @@ export async function runToolChat({
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
+    if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     const mockResponse = nextMockResponse();

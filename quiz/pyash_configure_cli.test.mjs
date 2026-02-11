@@ -537,6 +537,69 @@ test("configure mind openai-codex defaults host and model when omitted", async (
   assert.equal(payload.config.source, "openai-codex");
   assert.equal(payload.config.host, "https://api.openai.com");
   assert.equal(payload.config.model, "gpt-5-codex");
+  assert.equal(payload.config.reasoningEffort, "");
+});
+
+test("configure mind source switch ignores prior ollama host/model defaults", async () => {
+  const root = await makeRoot();
+
+  const first = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "local",
+    "--set-default", "truth",
+    "--backend", "ollama",
+    "--host", "http://mriczo:11434",
+    "--model", "qwen3-vl:8b-instruct",
+    "--test-now", "lie"
+  ]);
+  assert.equal(first.status, 0, first.stderr);
+
+  const second = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "codex",
+    "--set-default", "truth",
+    "--backend", "openai-codex",
+    "--test-now", "lie"
+  ]);
+  assert.equal(second.status, 0, second.stderr);
+  const payload = JSON.parse(second.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.source, "openai-codex");
+  assert.equal(payload.config.host, "https://api.openai.com");
+  assert.equal(payload.config.model, "gpt-5-codex");
+});
+
+test("configure mind stores reasoning effort when provided", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "codex",
+    "--set-default", "truth",
+    "--backend", "openai-codex",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-5.3-codex",
+    "--reasoning-effort", "high",
+    "--test-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.reasoningEffort, "high");
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /su name reasoning effort ob text "high" ya/);
+  assert.match(secretText, /su name relay codex reasoning effort ob text "high" ya/);
+  assert.match(secretText, /exists su name mind reasoning effort ob text "high" be default ya/);
 });
 
 test("configure mind supports multiple relays and one default relay", async () => {

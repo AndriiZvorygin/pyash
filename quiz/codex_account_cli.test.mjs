@@ -100,7 +100,14 @@ rl.on("line", (line) => {
         id,
         result: {
           models: [
-            { id: "gpt-5-codex", displayName: "GPT-5 Codex", isDefault: true, inputModalities: ["text"] }
+            {
+              id: "gpt-5-codex",
+              displayName: "GPT-5 Codex",
+              isDefault: true,
+              inputModalities: ["text"],
+              reasoningEffort: ["low", "medium", "high"],
+              defaultReasoningEffort: "medium"
+            }
           ],
           nextCursor: "page-2"
         }
@@ -179,5 +186,7 @@ test("codex account models lists paginated model ids with default marker", async
   assert.equal(payload.models.length, 2);
   assert.equal(payload.models[0].id, "gpt-5-codex");
   assert.equal(payload.models[0].isDefault, true);
+  assert.equal(payload.models[0].defaultReasoningEffort, "medium");
+  assert.deepEqual(payload.models[0].reasoningEffort, ["low", "medium", "high"]);
   assert.deepEqual(payload.models[1].inputModalities, ["text", "image"]);
 });

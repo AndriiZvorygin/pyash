@@ -236,6 +236,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   });
   const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
   const ollamaHost = resolveConfigText("ollama host", { rememberFn: remember }) ?? null;
+  const mindReasoningEffort = resolveConfigText("mind reasoning effort", { rememberFn: remember }) ?? null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
 
   const debugMind = (label, payload) => {
@@ -389,6 +390,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       toolBlock,
       backendName,
       ollamaHost,
+      reasoningEffort: mindReasoningEffort,
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw },
@@ -407,6 +409,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       toolMapName,
       backendName,
       ollamaHost,
+      reasoningEffort: mindReasoningEffort,
       mindDebug,
       debugMind,
       outputName,

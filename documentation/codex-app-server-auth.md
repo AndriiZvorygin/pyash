@@ -52,6 +52,7 @@ This returns normalized model entries with:
 - `inputModalities` (defaults to `["text","image"]` when omitted)
 
 `pyash configure mind` uses this for `openai-codex` interactive model selection.
+When a selected model includes reasoning levels, configure also prompts for `reasoning effort`.
 
 ## Configure mind integration
 
