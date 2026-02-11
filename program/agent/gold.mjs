@@ -23,8 +23,22 @@ function resolveAgentName({ rememberFn, generatorName } = {}) {
   if (worldAgent) return String(worldAgent).trim();
   const agentName = rememberFn?.("agent name")?.ob?.text;
   if (agentName) return String(agentName).trim();
-  if (generatorName) return String(generatorName).trim();
-  return "agent";
+  return "varied";
+}
+
+function sanitizeSegment(value, fallback) {
+  const text = String(value ?? "").trim();
+  if (!text) return fallback;
+  const cleaned = text
+    .replace(/[\/\\]/gu, "_")
+    .replace(/\.+/gu, ".")
+    .replace(/^\.+$/u, "")
+    .trim();
+  return cleaned || fallback;
+}
+
+function resolvePlatformName(generatorName) {
+  return sanitizeSegment(generatorName, "unknown");
 }
 
 function stableText(value) {
@@ -74,17 +88,17 @@ export async function emitSessionGold({
 } = {}) {
   const worldRoot = resolveWorldRoot({ rememberFn });
   const agent = resolveAgentName({ rememberFn, generatorName });
+  const platform = resolvePlatformName(generatorName);
   const bucket = label === "gold_positive" ? "accepted" : "rejected";
-  const key = buildGoldKey({ label, task, draft, review, guarantee, generatorName: agent });
-  const dir = path.join(worldRoot, "house", agent, "gold", bucket);
+  const key = buildGoldKey({ label, task, draft, review, guarantee, generatorName: platform });
+  const dir = path.join(worldRoot, "house", sanitizeSegment(agent, "varied"), "gold", bucket, platform);
   const file = path.join(dir, `${dayCompact()}-${key.slice(0, 12)}.pya`);
   await fs.mkdir(dir, { recursive: true });
   try {
     await fs.access(file);
     return { key, file, existed: true };
   } catch {}
-  const text = buildGoldLines({ label, task, draft, review, guarantee, key, generatorName: agent });
+  const text = buildGoldLines({ label, task, draft, review, guarantee, key, generatorName: platform });
   await fs.writeFile(file, text, "utf8");
   return { key, file, existed: false };
 }
-
