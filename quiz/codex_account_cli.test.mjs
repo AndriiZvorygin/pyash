@@ -92,6 +92,37 @@ rl.on("line", (line) => {
     send({ jsonrpc: "2.0", id, result: { windowMinutes: 60, remaining: 42 } });
     return;
   }
+  if (method === "model/list") {
+    const cursor = String(message?.params?.cursor || "");
+    if (!cursor) {
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          models: [
+            { id: "gpt-5-codex", displayName: "GPT-5 Codex", isDefault: true, inputModalities: ["text"] }
+          ],
+          nextCursor: "page-2"
+        }
+      });
+      return;
+    }
+    if (cursor === "page-2") {
+      send({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          models: [
+            { id: "gpt-5.2-codex", displayName: "GPT-5.2 Codex", isDefault: false }
+          ],
+          nextCursor: null
+        }
+      });
+      return;
+    }
+    send({ jsonrpc: "2.0", id, result: { models: [], nextCursor: null } });
+    return;
+  }
   send({ jsonrpc: "2.0", id, error: { code: -32601, message: "method not found" } });
 });
 `;
@@ -134,4 +165,19 @@ test("codex account rate-limits and cancel actions return structured results", a
   assert.equal(cancelPayload.ok, true);
   assert.equal(cancelPayload.completed.success, false);
   assert.equal(cancelPayload.completed.error, "cancelled");
+});
+
+test("codex account models lists paginated model ids with default marker", async () => {
+  const { binPath } = await makeMockCodexBin();
+  const run = runCodexCli(["models", "--json", "--codex-bin", binPath, "--limit", "1"]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.action, "models");
+  assert.equal(payload.pages, 2);
+  assert.equal(Array.isArray(payload.models), true);
+  assert.equal(payload.models.length, 2);
+  assert.equal(payload.models[0].id, "gpt-5-codex");
+  assert.equal(payload.models[0].isDefault, true);
+  assert.deepEqual(payload.models[1].inputModalities, ["text", "image"]);
 });

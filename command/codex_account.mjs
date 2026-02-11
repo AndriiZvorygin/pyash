@@ -33,6 +33,7 @@ function usage() {
     "  node command/codex_account.mjs cancel --login-id <id> [--json] [--wait-ms <n>] [--timeout-ms <n>] [--codex-bin <path>]",
     "  node command/codex_account.mjs logout [--json] [--wait-ms <n>] [--timeout-ms <n>] [--codex-bin <path>]",
     "  node command/codex_account.mjs rate-limits [--json] [--timeout-ms <n>] [--codex-bin <path>]",
+    "  node command/codex_account.mjs models [--json] [--limit <n>] [--timeout-ms <n>] [--codex-bin <path>]",
     "",
     "Notes:",
     "  - Spawns `codex app-server` and talks JSON-RPC over stdio.",
@@ -297,6 +298,53 @@ async function runRateLimits({ rpc, timeoutMs }) {
   return { ok: true, limits };
 }
 
+function normalizeModelEntry(entry) {
+  const id = String(entry?.id ?? entry?.model ?? "").trim();
+  if (!id) return null;
+  const displayName = String(entry?.displayName ?? "").trim();
+  const rawModalities = Array.isArray(entry?.inputModalities) ? entry.inputModalities : [];
+  const inputModalities = rawModalities.length > 0
+    ? Array.from(new Set(rawModalities.map((item) => String(item ?? "").trim()).filter(Boolean)))
+    : ["text", "image"];
+  return {
+    id,
+    displayName,
+    isDefault: Boolean(entry?.isDefault),
+    supportsPersonality: Boolean(entry?.supportsPersonality),
+    defaultReasoningEffort: entry?.defaultReasoningEffort ?? null,
+    reasoningEffort: Array.isArray(entry?.reasoningEffort) ? entry.reasoningEffort : [],
+    upgrade: entry?.upgrade ?? null,
+    inputModalities
+  };
+}
+
+function getModelArray(payload) {
+  if (Array.isArray(payload?.models)) return payload.models;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+async function runModels({ rpc, timeoutMs, limit }) {
+  const models = [];
+  let cursor = null;
+  let pages = 0;
+  while (true) {
+    const params = { limit };
+    if (cursor) params.cursor = cursor;
+    const result = await rpc.request("model/list", params, { timeoutMs });
+    pages += 1;
+    for (const rawModel of getModelArray(result)) {
+      const normalized = normalizeModelEntry(rawModel);
+      if (normalized) models.push(normalized);
+    }
+    const nextCursor = String(result?.nextCursor ?? "").trim();
+    if (!nextCursor) break;
+    cursor = nextCursor;
+  }
+  return { ok: true, models, pages };
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const action = String(args[0] || "").trim();
@@ -309,6 +357,7 @@ async function main() {
   const codexBin = parseArgValue(args, "--codex-bin") ?? "";
   const timeoutMs = parsePositiveInt(parseArgValue(args, "--timeout-ms"), 15000);
   const waitMs = parsePositiveInt(parseArgValue(args, "--wait-ms"), 180000);
+  const limit = parsePositiveInt(parseArgValue(args, "--limit"), 50);
   const refreshToken = parseTruthy(parseArgValue(args, "--refresh-token"), false);
   const type = String(parseArgValue(args, "--type") || "chatgpt").trim();
   const loginId = String(parseArgValue(args, "--login-id") || "").trim();
@@ -345,6 +394,8 @@ async function main() {
       result = await runLogout({ rpc, timeoutMs, waitMs });
     } else if (action === "rate-limits") {
       result = await runRateLimits({ rpc, timeoutMs });
+    } else if (action === "models") {
+      result = await runModels({ rpc, timeoutMs, limit });
     } else {
       throw new Error(`unknown action: ${action}`);
     }
@@ -369,6 +420,13 @@ async function main() {
         process.stdout.write("- logged out\n");
       } else if (action === "rate-limits") {
         process.stdout.write(`- rate limits ${JSON.stringify(result?.limits ?? {})}\n`);
+      } else if (action === "models") {
+        const models = Array.isArray(result?.models) ? result.models : [];
+        process.stdout.write(`- models ${models.length}\n`);
+        for (const model of models) {
+          const defaultMark = model?.isDefault ? " (default)" : "";
+          process.stdout.write(`  ${model?.id ?? ""}${defaultMark}\n`);
+        }
       }
     }
   } catch (err) {

@@ -57,6 +57,7 @@ Rules:
 7. Mind backend picker SHOULD present short backend keys (for example `openai-api` and `openai-codex`) instead of requiring multi-word backend commands.
 8. `pyash configure mind` SHOULD support named relays (`--relay <name>`) and one selected default relay (`--set-default truth|lie`).
 9. `pyash configure mind` SHOULD support provider-specific auth setup when needed (for example `--codex-login truth` for `openai-codex`).
+10. `pyash configure mind` SHOULD list Codex models via `model/list` when source is `openai-codex` and auth state is available.
 
 Canonical onboarding order:
 
