@@ -12,7 +12,7 @@ import { loadServiceDefinition, resolveServiceModulePath } from "./service_defin
 import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
 import { runChannelOnce } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
-import { ensureMatrixCredentials } from "./channels/bootstrap.mjs";
+import { ensureMatrixCredentials, readMatrixAuthCache } from "./channels/bootstrap.mjs";
 import { updateAgentPresence } from "./presence.mjs";
 import { resolveConfigMapText } from "../configure/env.mjs";
 
@@ -69,6 +69,7 @@ function readRememberText(name) {
 function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
+  const mapUser = resolveConfigMapText(mapName, "user");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
   const mapToken = resolveConfigMapText(mapName, "token");
@@ -79,6 +80,11 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
       rawConfig.homeserver ??
       readRememberText("matrix homeserver") ??
       readRememberText("matrix server") ??
+      null,
+    user:
+      mapUser ??
+      rawConfig.user ??
+      readRememberText("matrix user") ??
       null,
     registrationSharedSecret:
       mapSharedSecret ??
@@ -95,6 +101,46 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
       rawConfig.token ??
       readRememberText("matrix access token") ??
       null
+  };
+}
+
+function normalizeLaneName(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "") || "session";
+}
+
+function laneFromRoomId(channelType, roomId) {
+  return normalizeLaneName(`${channelType}_${roomId}`);
+}
+
+function mergeMatrixDmRooms({ channelConfig, dmRoomIds = [], channelType }) {
+  const dmRooms = Array.isArray(channelConfig?.dmRooms) ? [...channelConfig.dmRooms] : [];
+  const rooms = Array.isArray(channelConfig?.rooms) ? [...channelConfig.rooms] : [];
+  const knownDm = new Set(dmRooms.map((room) => String(room ?? "").trim()).filter(Boolean));
+  const knownRoom = new Set(rooms.map((room) => String(room?.id ?? "").trim()).filter(Boolean));
+  for (const value of dmRoomIds) {
+    const roomId = String(value ?? "").trim();
+    if (!roomId) continue;
+    if (!knownDm.has(roomId)) {
+      knownDm.add(roomId);
+      dmRooms.push(roomId);
+    }
+    if (!knownRoom.has(roomId)) {
+      knownRoom.add(roomId);
+      rooms.push({
+        id: roomId,
+        lane: laneFromRoomId(channelType, roomId)
+      });
+    }
+  }
+  return {
+    ...channelConfig,
+    dmRooms,
+    rooms
   };
 }
 
@@ -164,6 +210,13 @@ async function runChannelPollJob({ worldRoot, job }) {
         token: credentials.token,
         user: channelConfig.user ?? credentials.user
       };
+      const authCache = await readMatrixAuthCache(agentHouse);
+      const dmRoomIds = Object.values(authCache?.executiveDmRooms ?? {})
+        .map((roomId) => String(roomId ?? "").trim())
+        .filter((roomId) => roomId.startsWith("!"));
+      if (dmRoomIds.length) {
+        channelConfig = mergeMatrixDmRooms({ channelConfig, dmRoomIds, channelType });
+      }
     }
     const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
     if (!adapter) {

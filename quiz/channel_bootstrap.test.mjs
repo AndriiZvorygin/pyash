@@ -120,6 +120,51 @@ test("matrix bootstrap with explicit user is idempotent when user already exists
   assert.equal(post.accessToken, "tok-new");
 });
 
+test("matrix bootstrap recovers cached token user via whoami when user is missing", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-whoami-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
+  await fs.writeFile(cachedAuthPath, JSON.stringify({
+    homeserver: "https://matrix.example.org",
+    user: null,
+    accessToken: "tok-cached",
+    executiveDmRooms: {
+      "@andrii:matrix.example.org": "!dm:matrix.example.org"
+    }
+  }, null, 2));
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (url.endsWith("/_matrix/client/v3/account/whoami")) {
+      return {
+        ok: true,
+        async json() {
+          return { user_id: "@helper:matrix.example.org" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixCredentials({
+    agentName: "helper",
+    agentHouse,
+    config: { homeserver: "https://matrix.example.org" },
+    fetchImpl
+  });
+  assert.equal(resolved.token, "tok-cached");
+  assert.equal(resolved.user, "@helper:matrix.example.org");
+  assert.deepEqual(resolved.executiveDmRooms, {
+    "@andrii:matrix.example.org": "!dm:matrix.example.org"
+  });
+
+  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  assert.equal(persisted.user, "@helper:matrix.example.org");
+  assert.equal(calls.length, 1);
+});
+
 test("matrix executive dm bootstrap reuses m.direct room when present", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-existing-"));
   const agentHouse = path.join(root, "world", "house", "helper");

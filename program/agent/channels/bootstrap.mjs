@@ -60,6 +60,40 @@ function sanitizeUserId(raw, homeserver) {
   return `@${text}`;
 }
 
+function normalizeConfiguredUserId(raw, homeserver) {
+  const text = String(raw ?? "").trim();
+  if (!text) return null;
+  return sanitizeUserId(text, homeserver);
+}
+
+async function matrixWhoAmI({ homeserver, token, fetchImpl }) {
+  const response = await fetchImpl(`${homeserver}/_matrix/client/v3/account/whoami`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new Error(`matrix whoami failed: status=${response.status}`);
+  }
+  const payload = await response.json().catch(() => ({}));
+  const userId = String(payload?.user_id ?? "").trim();
+  return userId || null;
+}
+
+async function resolveTokenUserId({
+  homeserver,
+  token,
+  preferredUser,
+  fetchImpl
+}) {
+  const normalizedPreferred = normalizeConfiguredUserId(preferredUser, homeserver);
+  if (normalizedPreferred) return normalizedPreferred;
+  try {
+    return await matrixWhoAmI({ homeserver, token, fetchImpl });
+  } catch {
+    return null;
+  }
+}
+
 async function registerWithSharedSecret({
   homeserver,
   sharedSecret,
@@ -197,6 +231,11 @@ function envHomeserver() {
   return process.env.MATRIX_HOMESERVER ?? process.env.PYA_MATRIX_HOMESERVER ?? null;
 }
 
+export async function readMatrixAuthCache(agentHouse) {
+  if (!agentHouse) return null;
+  return readJsonFile(authPath(agentHouse), null);
+}
+
 export async function ensureMatrixCredentials({
   agentName,
   agentHouse,
@@ -210,23 +249,57 @@ export async function ensureMatrixCredentials({
   const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
   if (!homeserver) throw new Error("matrix homeserver missing");
 
-  const cached = await readJsonFile(authPath(agentHouse), null);
+  const cached = await readMatrixAuthCache(agentHouse);
   const desiredUserFromConfig = config?.user ? String(config.user) : null;
-  if (cached?.accessToken && cached?.user && (!desiredUserFromConfig || cached.user === desiredUserFromConfig)) {
+  if (cached?.accessToken) {
+    const resolvedCachedUser = await resolveTokenUserId({
+      homeserver,
+      token: cached.accessToken,
+      preferredUser: desiredUserFromConfig ?? cached.user,
+      fetchImpl
+    });
+    const resolvedLocalpart = cached.localpart
+      ?? parseLocalpartFromUserId(resolvedCachedUser)
+      ?? null;
+    if (resolvedCachedUser && resolvedCachedUser !== cached.user) {
+      await writeJsonFile(authPath(agentHouse), {
+        ...cached,
+        homeserver,
+        user: resolvedCachedUser
+      });
+    }
     return {
       homeserver,
       token: cached.accessToken,
-      user: cached.user,
-      localpart: cached.localpart ?? null
+      user: resolvedCachedUser,
+      localpart: resolvedLocalpart,
+      executiveDmRooms: cached?.executiveDmRooms ?? {}
     };
   }
 
   if (config?.token) {
+    const resolvedTokenUser = await resolveTokenUserId({
+      homeserver,
+      token: config.token,
+      preferredUser: desiredUserFromConfig,
+      fetchImpl
+    });
+    if (resolvedTokenUser) {
+      await writeJsonFile(authPath(agentHouse), {
+        ...(cached ?? {}),
+        homeserver,
+        user: resolvedTokenUser,
+        localpart: parseLocalpartFromUserId(resolvedTokenUser),
+        accessToken: config.token,
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      });
+    }
     return {
       homeserver,
       token: config.token,
-      user: config.user ?? null,
-      localpart: null
+      user: resolvedTokenUser,
+      localpart: parseLocalpartFromUserId(resolvedTokenUser),
+      executiveDmRooms: cached?.executiveDmRooms ?? {}
     };
   }
 
@@ -312,14 +385,16 @@ export async function ensureMatrixCredentials({
     localpart,
     password,
     accessToken,
-    deviceId: loginPayload?.device_id ?? null
+    deviceId: loginPayload?.device_id ?? null,
+    executiveDmRooms: cached?.executiveDmRooms ?? {}
   };
   await writeJsonFile(authPath(agentHouse), record);
   return {
     homeserver,
     token: accessToken,
     user: resolvedUser,
-    localpart
+    localpart,
+    executiveDmRooms: record.executiveDmRooms
   };
 }
 
