@@ -489,13 +489,20 @@ test("configure agent apply writes runtime and binds channel when available", as
   assert.equal(firstPayload.changed, true);
   assert.equal(firstPayload.runtimeWrite.changed, true);
   assert.equal(firstPayload.channelWrite.ok, true);
+  assert.equal(firstPayload.channelScheduleWrite.ok, true);
+  assert.equal(firstPayload.config.startNow, true);
+  assert.equal(firstPayload.activation?.ok, true);
 
   const runtimePath = path.join(root, "world", "house", "builder", "conduct", "runtime.pya");
   const channelsPath = path.join(root, "world", "house", "builder", "conduct", "channels.pya");
+  const calendarPath = path.join(root, "world", "house", "builder", "conduct", "calendar.pya");
   const runtimeText = await fs.readFile(runtimePath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
+  const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(runtimeText, /managed by pyash configure agent runtime:start/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
+  assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
+  assert.match(calendarText, /su name matrix poll/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
@@ -600,6 +607,71 @@ test("configure agent improve reuses existing runtime defaults", async () => {
   assert.equal(payload.config.agentName, "builder");
   assert.equal(payload.config.backend, "ollama command mind");
   assert.equal(payload.config.model, "gpt-oss:latest");
+});
+
+test("configure agent improve can select backend/model from configured relay", async () => {
+  const root = await makeRoot();
+  const relayLocal = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "local",
+    "--set-default", "truth",
+    "--backend", "ollama",
+    "--host", "http://localhost:11434",
+    "--model", "gpt-oss:latest",
+    "--test-now", "lie"
+  ]);
+  assert.equal(relayLocal.status, 0, relayLocal.stderr);
+
+  const relayCodex = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "codex",
+    "--set-default", "lie",
+    "--backend", "openai-codex",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-5.3-codex",
+    "--test-now", "lie"
+  ]);
+  assert.equal(relayCodex.status, 0, relayCodex.stderr);
+
+  const establish = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(establish.status, 0, establish.stderr);
+
+  const improve = runCli([
+    "configure", "agent", "improve",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--relay", "codex",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(improve.status, 0, improve.stderr);
+  const payload = JSON.parse(improve.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.action, "improve");
+  assert.equal(payload.config.agentName, "builder");
+  assert.equal(payload.config.relayName, "codex");
+  assert.equal(payload.config.backend, "openai command mind");
+  assert.equal(payload.config.model, "gpt-5.3-codex");
 });
 
 test("configure agent delete removes existing house", async () => {
