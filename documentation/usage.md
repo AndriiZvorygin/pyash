@@ -19,8 +19,8 @@ Global CLI (recommended):
 - `pyash configure channel matrix` — matrix channel wizard.
 - `pyash configure channel matrix test` — run matrix connectivity/auth checks.
 - `pyash configure channel matrix doctor` — diagnose stored matrix setup.
-- `pyash configure mind` — default mind relay/backend setup.
-- `pyash configure agent` — agent setup flow (identity, backend/model, channel bind, schedule, smoke test).
+- `pyash configure mind` — multi-relay mind setup with one selected default relay.
+- `pyash configure agent` — agent management menu (`list`, `establish`, `improve`, `delete`).
 - `pyash calendar health|begin|stop|restart|list` — scheduler controls and health surface.
 - `pyash channel poll` — run one channel poll cycle now for debugging.
 - `pyash channel log` — tail latest channel telemetry log for an agent/channel.

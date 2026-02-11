@@ -36,6 +36,11 @@ Add `--json` for machine-readable output.
 
 The command waits for `account/login/completed`.
 
+Credential persistence note:
+
+- Credentials are managed by Codex tooling state.
+- If already authenticated, login returns success without requiring browser re-auth.
+
 ## Model discovery
 
 Use:
@@ -49,10 +54,20 @@ This returns normalized model entries with:
 - `id`
 - `displayName`
 - `isDefault`
+- `defaultReasoningEffort`
+- `reasoningEffort` (normalized list)
 - `inputModalities` (defaults to `["text","image"]` when omitted)
 
 `pyash configure mind` uses this for `openai-codex` interactive model selection.
 When a selected model includes reasoning levels, configure also prompts for `reasoning effort`.
+
+Normalization rules (current implementation):
+
+1. model arrays are accepted from `result.models`, `result.items`, or `result.data`.
+2. reasoning options are accepted from either:
+   - `reasoningEffort: string[]`, or
+   - `supportedReasoningEfforts: [{ reasoningEffort: string }]`.
+3. both forms are merged into one de-duplicated `reasoningEffort` list.
 
 ## Configure mind integration
 
@@ -70,6 +85,16 @@ pyash configure mind \
   --set-default truth \
   --backend openai-codex \
   --host https://api.openai.com \
-  --model gpt-5-codex \
+  --model gpt-5.3-codex \
+  --reasoning-effort medium \
   --codex-login truth
 ```
+
+Interactive order for `openai-codex`:
+
+1. backend/source selection,
+2. provider endpoint,
+3. optional Codex OAuth login,
+4. model list + model selection,
+5. reasoning effort selection (when supported),
+6. relay name and default relay toggle.

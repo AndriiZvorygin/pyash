@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
 import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
-import { establishAgent, beginAgent, stopAgent } from "../program/agent/admin.mjs";
+import { establishAgent, beginAgent, stopAgent, listAgents } from "../program/agent/admin.mjs";
 import { schedulerBegin, schedulerStop, schedulerRestart, schedulerHealth, schedulerList } from "../program/agent/scheduler_control.mjs";
 import { discoverScheduledJobs } from "../program/agent/scheduler.mjs";
 import { isServiceEnabled } from "../program/agent/scheduler_service_control.mjs";
@@ -70,7 +70,11 @@ function usage() {
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
-    "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
+    "  pyash configure agent",
+    "  pyash configure agent list [--root <path>] [--json]",
+    "  pyash configure agent establish [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
+    "  pyash configure agent improve [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
+    "  pyash configure agent delete [--root <path>] [--non-interactive] [--json] [--agent <name>] [--yes <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
     "  pyash channel log [--root <path>] [--agent <name>] [--channel <matrix>] [--tail <n>] [--json]",
@@ -2772,16 +2776,96 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
-function collectAgentFromFlags({ args, mindDefaults = {} }) {
-  const defaultBackend = canonicalizeMindBackend(mindDefaults.backend || "ollama command mind");
-  const defaultModel = String(mindDefaults.model || "gpt-oss:latest").trim();
-  const agentName = String(parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME).trim();
-  const purpose = String(parseArgValue(args, "--purpose") ?? "Assist with scheduled automation tasks.").trim();
-  const intervalMinutes = normalizeIntervalMinutes(parseArgValue(args, "--interval-minutes") ?? 24, 24);
+function parseManagedTextField(text, fieldName) {
+  const pattern = new RegExp(`su name ${escapeRegex(fieldName)}\\s+ob text\\s+("(?:[^"\\\\]|\\\\.)*")`, "m");
+  const match = String(text || "").match(pattern);
+  if (!match) return "";
+  return unquotePyashText(match[1]);
+}
+
+function parseManagedNumField(text, fieldName) {
+  const pattern = new RegExp(`su name ${escapeRegex(fieldName)}\\s+ob num\\s+([0-9]+(?:\\.[0-9]+)?)`, "m");
+  const match = String(text || "").match(pattern);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+async function loadAgentDefaults({ worldRoot, agentName }) {
+  const normalizedAgentName = String(agentName || "").trim();
+  const houseRoot = path.join(worldRoot, "house", normalizedAgentName);
+  let exists = true;
+  try {
+    const stat = await fs.stat(houseRoot);
+    exists = stat.isDirectory();
+  } catch {
+    exists = false;
+  }
+
+  const runtimePath = path.join(houseRoot, "conduct", "runtime.pya");
+  const managedPath = path.join(houseRoot, "conduct", "managed.pya");
+  const channelPath = path.join(houseRoot, "conduct", "channels.pya");
+  const runtimeText = await readText(runtimePath);
+  const runtimeBlock = extractManagedBlock(runtimeText, "agent runtime");
+  const runtimeValues = parseMapBlock(runtimeBlock);
+  const managedText = await readText(managedPath);
+  const channelText = await readText(channelPath);
+  const channelMarkers = blockMarkers(MATRIX_POLICY_BLOCK_NAME);
+  const bindChannel = channelText.includes(channelMarkers.start);
+
+  return {
+    exists,
+    agentName: normalizedAgentName,
+    purpose: parseManagedTextField(managedText, "managed purpose") || "",
+    intervalMinutes: normalizeIntervalMinutes(parseManagedNumField(managedText, "managed interval minutes"), 24),
+    backend: canonicalizeMindBackend(runtimeValues.backend || ""),
+    model: String(runtimeValues.model || "").trim(),
+    toolsMap: String(runtimeValues["tools map"] || "").trim() || "tools",
+    bindChannel
+  };
+}
+
+async function listConfiguredAgents({ worldRoot }) {
+  const names = await listAgents({ worldRoot });
+  const items = await Promise.all(names.map(async (agentName) => await loadAgentDefaults({ worldRoot, agentName })));
+  return items.sort((a, b) => a.agentName.localeCompare(b.agentName, "en"));
+}
+
+async function promptExistingAgent({ worldRoot, title = "Agent", actionLabel = "use" }) {
+  const items = await listConfiguredAgents({ worldRoot });
+  if (items.length === 0) return "";
+  textOut(`[${title}]`);
+  textOut(`Choose agent to ${actionLabel}:`);
+  for (const line of formatNumberedRows(items.map((item) => item.agentName), { columns: 1 })) {
+    textOut(`  ${line}`);
+  }
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const fallback = items[0].agentName;
+    while (true) {
+      const input = String(await rl.question(`Agent (name or number) [${fallback}]: `)).trim();
+      const selected = resolveModelSelection(input, {
+        fallback,
+        models: items.map((item) => item.agentName)
+      });
+      if (items.some((item) => item.agentName === selected)) return selected;
+      textOut("- unknown agent; choose from the listed names or numbers.");
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+function collectAgentFromFlags({ args, mindDefaults = {}, agentDefaults = {} }) {
+  const defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
+  const defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
+  const agentName = String(parseArgValue(args, "--agent") ?? agentDefaults.agentName ?? DEFAULT_CHANNEL_AGENT_NAME).trim();
+  const purpose = String(parseArgValue(args, "--purpose") ?? agentDefaults.purpose ?? "Assist with scheduled automation tasks.").trim();
+  const intervalMinutes = normalizeIntervalMinutes(parseArgValue(args, "--interval-minutes") ?? agentDefaults.intervalMinutes ?? 24, 24);
   const backend = canonicalizeMindBackend(parseArgValue(args, "--backend") ?? defaultBackend);
   const model = String(parseArgValue(args, "--model") ?? defaultModel).trim();
-  const toolsMap = String(parseArgValue(args, "--tools-map") ?? "tools").trim();
-  const bindChannel = parseTruthy(parseArgValue(args, "--bind-channel"), true);
+  const toolsMap = String(parseArgValue(args, "--tools-map") ?? agentDefaults.toolsMap ?? "tools").trim();
+  const bindChannel = parseTruthy(parseArgValue(args, "--bind-channel"), agentDefaults.bindChannel ?? true);
   const smokeTest = parseTruthy(parseArgValue(args, "--smoke-test"), true);
   return {
     agentName,
@@ -2795,9 +2879,15 @@ function collectAgentFromFlags({ args, mindDefaults = {} }) {
   };
 }
 
-async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }) {
-  const defaultBackend = canonicalizeMindBackend(mindDefaults.backend || "ollama command mind");
-  const defaultModel = String(mindDefaults.model || "gpt-oss:latest").trim();
+async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaults = {}, mode = "establish" }) {
+  const defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
+  const defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
+  const defaultAgentName = String(agentDefaults.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim();
+  const defaultPurpose = String(agentDefaults.purpose || "Assist with scheduled automation tasks.").trim();
+  const defaultToolsMap = String(agentDefaults.toolsMap || "tools").trim();
+  const defaultInterval = normalizeIntervalMinutes(agentDefaults.intervalMinutes ?? 24, 24);
+  const defaultBindChannel = agentDefaults.bindChannel ?? true;
+
   const printer = sectionPrinter();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
@@ -2815,10 +2905,12 @@ async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }
 
     printer.header("A.1 Agent Identity");
     printer.why("Agent name and purpose define house identity and managed state.");
-    printer.how("Choose a stable name and concise purpose sentence.");
+    printer.how(mode === "improve"
+      ? "Keep the current name and adjust purpose/runtime as needed."
+      : "Choose a stable name and concise purpose sentence.");
     printer.examples(`${DEFAULT_CHANNEL_AGENT_NAME} | Respond on configured channels and scheduled jobs`);
-    const agentName = await ask("Agent name", DEFAULT_CHANNEL_AGENT_NAME);
-    const purpose = await ask("Agent purpose", "Assist with scheduled automation tasks.");
+    const agentName = await ask("Agent name", defaultAgentName);
+    const purpose = await ask("Agent purpose", defaultPurpose);
 
     printer.header("B.1 Runtime Backend");
     printer.why("Backend/model determine response behavior for upcoming channel and schedule runs.");
@@ -2826,13 +2918,13 @@ async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }
     printer.examples("backend=ollama command mind, model=gpt-oss:latest");
     const backend = canonicalizeMindBackend(await ask("Backend", defaultBackend));
     const model = await ask("Model (tag or refinery alias)", defaultModel);
-    const toolsMap = await ask("Tools map", "tools");
+    const toolsMap = await ask("Tools map", defaultToolsMap);
 
     printer.header("C.1 Channel Binding");
     printer.why("Most agents should inherit default channel routing.");
     printer.how("Enable to write channel conduct file from current channel configure.");
     printer.examples("yes");
-    const bindChannel = await askYesNo("Bind default channel to this agent", true);
+    const bindChannel = await askYesNo("Bind default channel to this agent", defaultBindChannel);
     if (bindChannel) {
       const matrix = await loadMatrixConfigFromSecret(rootDir);
       if (!matrix?.homeserver || !matrix?.room) {
@@ -2846,11 +2938,11 @@ async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }
     printer.why("Schedule ensures the agent runs regularly.");
     printer.how("Set heartbeat interval in minutes.");
     printer.examples("24");
-    const intervalRaw = await ask("Interval minutes", "24");
-    const intervalMinutes = normalizeIntervalMinutes(intervalRaw, 24);
+    const intervalRaw = await ask("Interval minutes", String(defaultInterval));
+    const intervalMinutes = normalizeIntervalMinutes(intervalRaw, defaultInterval);
 
     printer.header("E.1 Smoke Test");
-    printer.why("Quick begin/stop verifies the new agent can be controlled.");
+    printer.why("Quick begin/stop verifies the agent can be controlled.");
     printer.how("Enable for first setup; disable if you only want file writes.");
     printer.examples("yes");
     const smokeTest = await askYesNo("Run begin/stop smoke test", true);
@@ -2870,7 +2962,125 @@ async function collectAgentInteractive({ rootDir, worldRoot, mindDefaults = {} }
   }
 }
 
-async function configureAgent({ args }) {
+async function configureAgentList({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const agents = await listConfiguredAgents({ worldRoot });
+  const out = {
+    ok: true,
+    route: "configure agent list",
+    rootDir,
+    worldRoot,
+    count: agents.length,
+    agents
+  };
+  if (json) {
+    jsonOut(out);
+    return;
+  }
+  textOut("configure agent list complete");
+  if (agents.length === 0) {
+    textOut("- no agents configured");
+    return;
+  }
+  textOut(`- agents ${agents.length}`);
+  for (const item of agents) {
+    textOut(`  su name ${item.agentName} fromstate text ${quoteText(displayMindBackendKey(item.backend))} as text ${quoteText(item.model)} be relay ya`);
+  }
+}
+
+async function configureAgentDelete({ args }) {
+  const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const nonInteractive = hasFlag(args, "--non-interactive");
+  let agentName = String(parseArgValue(args, "--agent") || "").trim();
+  if (!agentName && !nonInteractive) {
+    agentName = await promptExistingAgent({
+      worldRoot,
+      title: "A.1 Agent Delete",
+      actionLabel: "delete"
+    });
+    if (!agentName) {
+      if (json) {
+        jsonOut({ ok: true, route: "configure agent delete", rootDir, worldRoot, changed: false, skipped: "no agents configured" });
+      } else {
+        textOut("configure agent delete complete");
+        textOut("- no agents configured");
+      }
+      return;
+    }
+  }
+  if (!agentName) {
+    throw new Error("configure agent delete requires --agent");
+  }
+  if (agentName === "base") {
+    throw new Error("configure agent delete cannot remove base");
+  }
+
+  let confirmed = parseTruthy(parseArgValue(args, "--yes"), false);
+  if (!nonInteractive) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const raw = String(await rl.question(`Delete agent ${agentName} [y/N]: `)).trim().toLowerCase();
+      confirmed = raw === "y" || raw === "yes";
+    } finally {
+      rl.close();
+    }
+  }
+
+  const housePath = path.join(worldRoot, "house", agentName);
+  let existed = true;
+  try {
+    const stat = await fs.stat(housePath);
+    existed = stat.isDirectory();
+  } catch {
+    existed = false;
+  }
+  if (!confirmed || !existed) {
+    const out = {
+      ok: true,
+      route: "configure agent delete",
+      rootDir,
+      worldRoot,
+      changed: false,
+      agentName,
+      existed,
+      confirmed
+    };
+    if (json) {
+      jsonOut(out);
+      return;
+    }
+    textOut("configure agent delete complete");
+    if (!confirmed) textOut("- no changes made");
+    if (!existed) textOut(`- agent ${agentName} not found`);
+    return;
+  }
+
+  const stopResult = await stopAgent({ worldRoot, agentName }).catch(() => ({ disabledServices: [] }));
+  await fs.rm(housePath, { recursive: true, force: true });
+  const out = {
+    ok: true,
+    route: "configure agent delete",
+    rootDir,
+    worldRoot,
+    changed: true,
+    agentName,
+    removedPath: housePath,
+    disabledServices: stopResult.disabledServices ?? []
+  };
+  if (json) {
+    jsonOut(out);
+    return;
+  }
+  textOut("configure agent delete complete");
+  textOut(`- agent ${agentName}`);
+  textOut("- removed house");
+}
+
+async function configureAgentApply({ args, mode = "establish" }) {
   const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
@@ -2879,9 +3089,31 @@ async function configureAgent({ args }) {
   const nonInteractive = hasFlag(args, "--non-interactive");
   const mindDefaults = await loadMindConfigFromSecret(rootDir);
 
+  let agentDefaults = {};
+  if (mode === "improve") {
+    let targetAgent = String(parseArgValue(args, "--agent") || "").trim();
+    if (!targetAgent && !nonInteractive) {
+      targetAgent = await promptExistingAgent({
+        worldRoot,
+        title: "A.0 Existing Agents",
+        actionLabel: "improve"
+      });
+      if (!targetAgent) {
+        throw new Error("no agents configured to improve");
+      }
+    }
+    if (!targetAgent) {
+      throw new Error("configure agent improve requires --agent");
+    }
+    agentDefaults = await loadAgentDefaults({ worldRoot, agentName: targetAgent });
+    if (!agentDefaults.exists) {
+      throw new Error(`agent not found: ${targetAgent}`);
+    }
+  }
+
   const cfg = nonInteractive
-    ? collectAgentFromFlags({ args, mindDefaults })
-    : await collectAgentInteractive({ rootDir, worldRoot, mindDefaults });
+    ? collectAgentFromFlags({ args, mindDefaults, agentDefaults })
+    : await collectAgentInteractive({ rootDir, mindDefaults, agentDefaults, mode });
 
   if (!cfg.agentName) {
     throw new Error("configure agent requires --agent");
@@ -2940,6 +3172,7 @@ async function configureAgent({ args }) {
   const out = {
     ok: true,
     route: "configure agent",
+    action: mode,
     rootDir,
     worldRoot,
     dryRun,
@@ -2968,7 +3201,7 @@ async function configureAgent({ args }) {
     return;
   }
 
-  textOut("configure agent complete");
+  textOut(`configure agent ${mode} complete`);
   textOut(`- agent ${cfg.agentName}`);
   textOut(`- establish ${establishResult.status}`);
   textOut(`- runtime ${runtimeWrite.path} (${runtimeWrite.changed ? "changed" : "unchanged"})`);
@@ -2989,6 +3222,76 @@ async function configureAgent({ args }) {
       textOut("");
       textOut(`## ${runtimePath}`);
       textOut(renderShortPreview(runtimeText));
+    }
+  }
+}
+
+async function configureAgent({ args }) {
+  const sub = String(args[0] || "");
+  const hasSub = sub && !sub.startsWith("--");
+  if (hasSub) {
+    if (sub === "list") {
+      await configureAgentList({ args: args.slice(1) });
+      return;
+    }
+    if (sub === "establish") {
+      await configureAgentApply({ args: args.slice(1), mode: "establish" });
+      return;
+    }
+    if (sub === "improve") {
+      await configureAgentApply({ args: args.slice(1), mode: "improve" });
+      return;
+    }
+    if (sub === "delete") {
+      await configureAgentDelete({ args: args.slice(1) });
+      return;
+    }
+    throw new Error(`unknown configure agent action: ${sub}`);
+  }
+
+  if (hasFlag(args, "--non-interactive")) {
+    await configureAgentApply({ args, mode: "establish" });
+    return;
+  }
+
+  while (true) {
+    let rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      textOut("Pyash Configure Agent");
+      textOut("1. list");
+      textOut("2. establish");
+      textOut("3. improve");
+      textOut("4. delete");
+      textOut("5. exit");
+      const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
+      if (choice === "1") {
+        rl.close();
+        rl = null;
+        await configureAgentList({ args: [] });
+        continue;
+      }
+      if (choice === "2") {
+        rl.close();
+        rl = null;
+        await configureAgentApply({ args: [], mode: "establish" });
+        continue;
+      }
+      if (choice === "3") {
+        rl.close();
+        rl = null;
+        await configureAgentApply({ args: [], mode: "improve" });
+        continue;
+      }
+      if (choice === "4") {
+        rl.close();
+        rl = null;
+        await configureAgentDelete({ args: [] });
+        continue;
+      }
+      textOut("No changes made.");
+      return;
+    } finally {
+      try { rl?.close(); } catch {}
     }
   }
 }

@@ -325,6 +325,116 @@ test("configure agent apply writes runtime and binds channel when available", as
   assert.equal(secondPayload.changed, false);
 });
 
+test("configure agent list returns configured agents", async () => {
+  const root = await makeRoot();
+  const establish = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(establish.status, 0, establish.stderr);
+
+  const listed = runCli([
+    "configure", "agent", "list",
+    "--root", root,
+    "--json"
+  ]);
+  assert.equal(listed.status, 0, listed.stderr);
+  const payload = JSON.parse(listed.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.route, "configure agent list");
+  assert.equal(payload.count, 1);
+  assert.equal(payload.agents[0].agentName, "builder");
+});
+
+test("configure agent improve reuses existing runtime defaults", async () => {
+  const root = await makeRoot();
+  const establish = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(establish.status, 0, establish.stderr);
+
+  const improve = runCli([
+    "configure", "agent", "improve",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(improve.status, 0, improve.stderr);
+  const payload = JSON.parse(improve.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.action, "improve");
+  assert.equal(payload.config.agentName, "builder");
+  assert.equal(payload.config.backend, "ollama command mind");
+  assert.equal(payload.config.model, "gpt-oss:latest");
+});
+
+test("configure agent delete removes existing house", async () => {
+  const root = await makeRoot();
+  const establish = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(establish.status, 0, establish.stderr);
+
+  const deleted = runCli([
+    "configure", "agent", "delete",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--yes", "truth"
+  ]);
+  assert.equal(deleted.status, 0, deleted.stderr);
+  const payload = JSON.parse(deleted.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.changed, true);
+  await assert.rejects(() => fs.stat(path.join(root, "world", "house", "builder")));
+});
+
+test("configure agent interactive opens management menu", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "agent",
+    "--root", root
+  ], {
+    input: "1\n5\n"
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /Pyash Configure Agent/);
+  assert.match(run.stdout, /configure agent list complete/);
+});
+
 test("configure orchestrator apply writes managed config and is idempotent", async () => {
   const root = await makeRoot();
   const args = [

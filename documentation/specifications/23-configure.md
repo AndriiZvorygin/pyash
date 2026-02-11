@@ -1,6 +1,6 @@
 # `23-configure.md`
 
-Status: draft v0.2
+Status: draft v0.3
 
 Purpose: define a channel-first and agent-aware configuration flow for Pyash.
 
@@ -21,7 +21,7 @@ This chapter applies to:
 - orchestrator setup (`configure orchestrator`),
 - channel setup (matrix now, more caterers later),
 - mind relay setup (`configure mind`) for provider/source defaults,
-- agent setup (`configure agent`).
+- agent setup and lifecycle (`configure agent list|establish|improve|delete`).
 
 ---
 
@@ -39,6 +39,10 @@ Canonical route family:
 8. `pyash configure channel <caterer> doctor`
 9. `pyash configure mind`
 10. `pyash configure agent`
+11. `pyash configure agent list`
+12. `pyash configure agent establish`
+13. `pyash configure agent improve`
+14. `pyash configure agent delete`
 
 Examples:
 
@@ -52,12 +56,14 @@ Rules:
 2. New caterers MUST be attached under `configure channel <caterer>`.
 3. `pyash configure` and `pyash configure channel` SHOULD loop back to menu after each completed action until explicit exit.
 4. `pyash configure mind` SHOULD probe Ollama (`/api/tags`) when backend is Ollama-compatible, list available models, and allow selecting default model by name or index.
-5. `pyash configure mind` SHOULD store one global fallback source/backend/host/model for the default `pyash-agent`.
+5. `pyash configure mind` SHOULD support multiple named relays and exactly one selected default relay.
 6. `pyash configure agent` SHOULD allow per-agent backend/model override (including refinery alias in model field).
 7. Mind backend picker SHOULD present short backend keys (for example `openai-api` and `openai-codex`) instead of requiring multi-word backend commands.
 8. `pyash configure mind` SHOULD support named relays (`--relay <name>`) and one selected default relay (`--set-default truth|lie`).
 9. `pyash configure mind` SHOULD support provider-specific auth setup when needed (for example `--codex-login truth` for `openai-codex`).
 10. `pyash configure mind` SHOULD list Codex models via `model/list` when source is `openai-codex` and auth state is available.
+11. `pyash configure mind` SHOULD show existing relay/default state before prompting for a new relay.
+12. `pyash configure agent` interactive route SHOULD open a management menu (`list`, `establish`, `improve`, `delete`) instead of directly entering establish prompts.
 
 Canonical onboarding order:
 
@@ -235,16 +241,30 @@ su name mind relays be map def
   su name relay default source ob text "openai-codex" ya
   su name relay default backend ob text "openai command mind" ya
   su name relay default host ob text "https://api.openai.com" ya
-  su name relay default model ob text "gpt-5-codex" ya
+  su name relay default model ob text "gpt-5.3-codex" ya
+  su name relay default reasoning effort ob text "medium" ya
+  su name relay local source ob text "ollama" ya
+  su name relay local backend ob text "ollama command mind" ya
+  su name relay local host ob text "http://mriczo:11434" ya
+  su name relay local model ob text "qwen3-vl:8b-instruct" ya
+  su name relay local reasoning effort ob text "" ya
 prah
 
 su name mind configure be map def
   su name source ob text "openai-codex" ya
   su name backend ob text "openai command mind" ya
   su name host ob text "https://api.openai.com" ya
-  su name model ob text "gpt-5-codex" ya
+  su name model ob text "gpt-5.3-codex" ya
   su name reasoning effort ob text "medium" ya
 prah
+
+exists su name mind relay default ob text "default" be default ya
+exists su name mind source ob text "openai-codex" be default ya
+exists su name mind backend be default ob name openai command mind ya
+exists su name ollama host ob text "https://api.openai.com" be default ya
+exists su name ai host ob text "https://api.openai.com" be default ya
+exists su name mind model ob text "gpt-5.3-codex" be default ya
+exists su name mind reasoning effort ob text "medium" be default ya
 ```
 
 Rules:
@@ -252,7 +272,18 @@ Rules:
 1. `source` disambiguates auth strategy when canonical backend text is shared.
 2. `openai-codex` MAY invoke Codex App Server login flow during configure.
 3. when model metadata includes reasoning options, configure SHOULD capture `reasoning effort`.
-3. repeated configure runs MUST be idempotent for relay/source/backend/host/model blocks.
+4. repeated configure runs MUST be idempotent for relay/source/backend/host/model/reasoning blocks.
+5. configure SHOULD allow configuring another relay in the same command run.
+6. selected default relay SHOULD update both `mind relays` and default facts.
+
+Codex model metadata parsing rules:
+
+1. model list payload MAY be in `result.models`, `result.items`, or `result.data`.
+2. reasoning options MAY be present as:
+   - `reasoningEffort: [\"low\", \"medium\", ...]`, or
+   - `supportedReasoningEfforts: [{ reasoningEffort: \"low\" }, ...]`.
+3. configure MUST normalize both shapes into one reasoning options list for selection.
+4. default reasoning selection SHOULD use `defaultReasoningEffort` when present.
 
 Auth notes:
 
@@ -277,7 +308,7 @@ Interactive matrix notes:
 
 ---
 
-## 9. Security requirements
+## 10. Security requirements
 
 1. Secret values MUST be redacted in screen output and JSON.
 2. Secret prompts SHOULD avoid echo where terminal support exists.
@@ -286,7 +317,7 @@ Interactive matrix notes:
 
 ---
 
-## 10. Conformance checklist
+## 11. Conformance checklist
 
 A configure implementation conforms to this spec when it:
 
@@ -301,7 +332,7 @@ A configure implementation conforms to this spec when it:
 
 ---
 
-## 11. Onboarding
+## 12. Onboarding
 
 First-time onboarding MUST prioritize dependency order:
 
@@ -319,7 +350,7 @@ Recommended success prompts:
 
 ---
 
-## 12. Configure Orchestrator
+## 13. Configure Orchestrator
 
 Purpose: set up the runtime control plane that `pyash` uses to manage scheduler, channels, and agents.
 
@@ -372,23 +403,33 @@ Success output SHOULD include:
 
 ---
 
-## 13. Configure Agent
+## 14. Configure Agent
 
 Purpose: set up default agent identity/runtime settings after channel setup.
 
 Canonical commands:
 
 1. `pyash configure agent`
-2. `pyash configure agent --non-interactive ...` (future)
+2. `pyash configure agent list`
+3. `pyash configure agent establish`
+4. `pyash configure agent improve`
+5. `pyash configure agent delete`
+6. `pyash configure agent <action> --non-interactive ...`
 
 Recommended interactive order:
 
-1. Agent name and purpose.
-2. Runtime backend selection (`mind`/model path and tool map defaults).
-  Notes: default values are inherited from `configure mind`, then overridden per agent.
-3. Channel binding to existing `channel configure` data.
-4. Schedule defaults (interval/calendar seed).
-5. Validate by running an agent smoke check (`begin`/single message/stop path).
+1. Open management menu (`list`, `establish`, `improve`, `delete`, `exit`).
+2. For `establish` and `improve`:
+   - Agent name and purpose.
+   - Runtime backend/model/tools map.
+     Notes: defaults are inherited from `configure mind`, then overridden per agent.
+   - Channel bind toggle.
+   - Schedule interval.
+   - Optional smoke test (`begin`/`stop`).
+3. For `delete`:
+   - Choose agent.
+   - Confirm deletion.
+   - Stop agent services before removing house directory.
 
 Advanced-only step (optional):
 
@@ -407,15 +448,17 @@ Agent configure conformance (initial target):
 2. deterministic file writes with managed boundaries,
 3. optional start test that does not leave scheduler in unknown state,
 4. machine-readable summary in `--json` mode,
-5. channel binding and schedule setup available in baseline flow (non-advanced).
+5. channel binding and schedule setup available in baseline flow (non-advanced),
+6. delete path must be explicit and non-implicit (`delete` action only),
+7. `base` house must never be deletable.
 
 ---
 
-## 14. Open items
+## 15. Open items
 
 1. Final map names for multi-caterer routing conduct in `world/house/<agent>/conduct/channels.pya`.
 2. Whether `test` should auto-resolve Matrix alias to room id and persist normalization.
 3. Unified caterer capability matrix output for `configure channel list`.
-4. Final `configure agent` non-interactive flag contract and storage map keys.
+4. Additional guardrails for `configure agent delete` (for example optional archive-before-delete).
 5. Final `configure orchestrator` managed file schema and endpoint auth model.
 6. richer provider-aware mind setup beyond Ollama tag listing (non-Ollama model discovery contract).
