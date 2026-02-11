@@ -76,8 +76,8 @@ function usage() {
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
     "  pyash configure agent",
     "  pyash configure agent list [--root <path>] [--json]",
-    "  pyash configure agent establish [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
-    "  pyash configure agent improve [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
+    "  pyash configure agent establish [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--relay <name|number>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>] [--start-now <truth|lie>]",
+    "  pyash configure agent improve [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--relay <name|number>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>] [--start-now <truth|lie>]",
     "  pyash configure agent delete [--root <path>] [--non-interactive] [--json] [--agent <name>] [--yes <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
@@ -374,6 +374,13 @@ function displayMindBackendKey(backend, source = "") {
   if (canonical === "openrouter command mind") return "openrouter";
   if (canonical === "vllm command mind") return "vllm";
   return canonical || "unknown";
+}
+
+function relayMatchesBackendSource(relay, sourceKey, backendValue) {
+  const relaySource = String(relay?.source || "").trim().toLowerCase();
+  const relayBackend = canonicalizeMindBackend(relay?.backend || "");
+  if (relaySource && relaySource === String(sourceKey || "").trim().toLowerCase()) return true;
+  return relayBackend === canonicalizeMindBackend(backendValue || "");
 }
 
 function formatNumberedRows(items, { columns = 2, gap = 3 } = {}) {
@@ -3190,6 +3197,27 @@ function buildAgentRuntimeBlock({ backend, model, toolsMap }) {
   ].join("\n");
 }
 
+function buildAgentChannelScheduleBlock({ agentName, intervalMinutes = 1 }) {
+  const everyMinute = normalizeIntervalMinutes(intervalMinutes, 1);
+  return [
+    sentenceToPyash({
+      mood: "ya",
+      su: { name: "matrix poll" },
+      for: { name: agentName },
+      with: { wo: "tools" },
+      vyah: { habit: true },
+      during: { minute: everyMinute },
+      be: "calendar"
+    }),
+    sentenceToPyash({
+      mood: "ya",
+      su: { name: "matrix poll lane" },
+      ob: { text: "matrix_poll" },
+      be: "text"
+    })
+  ].join("\n");
+}
+
 async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsMap, dryRun = false }) {
   const runtimePath = path.join(worldRoot, "house", agentName, "conduct", "runtime.pya");
   const existing = await readText(runtimePath);
@@ -3246,6 +3274,41 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
     action: plan.action,
     homeserver: matrix.homeserver,
     room: matrix.room
+  };
+}
+
+async function upsertAgentChannelSchedule({
+  worldRoot,
+  agentName,
+  channelType = "matrix",
+  intervalMinutes = 1,
+  dryRun = false
+}) {
+  if (String(channelType || "").trim().toLowerCase() !== "matrix") {
+    return {
+      ok: false,
+      reason: "unsupported channel type",
+      path: null,
+      changed: false,
+      action: "none"
+    };
+  }
+  const calendarPath = path.join(worldRoot, "house", agentName, "conduct", "calendar.pya");
+  const existing = await readText(calendarPath);
+  const plan = planManagedUpsert({
+    existing,
+    blockName: "agent channel schedule",
+    content: buildAgentChannelScheduleBlock({ agentName, intervalMinutes })
+  });
+  if (!dryRun && plan.changed) {
+    await ensureDirForFile(calendarPath);
+    await fs.writeFile(calendarPath, plan.nextText, "utf8");
+  }
+  return {
+    ok: true,
+    path: calendarPath,
+    changed: plan.changed,
+    action: plan.action
   };
 }
 
@@ -3347,8 +3410,29 @@ async function promptExistingAgent({ worldRoot, title = "Agent", actionLabel = "
 }
 
 function collectAgentFromFlags({ args, mindDefaults = {}, agentDefaults = {} }) {
-  const defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
-  const defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
+  let defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
+  let defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
+  const relays = mindDefaults?.relays ?? {};
+  const relayNames = Object.keys(relays).sort((a, b) => a.localeCompare(b, "en"));
+  const relayInputRaw = parseArgValue(args, "--relay");
+  const relayInput = String(relayInputRaw ?? "").trim();
+  const relayFallback = relayNames.includes(String(mindDefaults?.defaultRelay || "").trim())
+    ? String(mindDefaults.defaultRelay).trim()
+    : (relayNames[0] || "");
+  let relayName = "";
+  if (relayInput) {
+    const selectedRelayName = resolveModelSelection(relayInput, {
+      fallback: relayFallback,
+      models: relayNames
+    });
+    const selectedRelay = relays[selectedRelayName];
+    if (!selectedRelay) {
+      throw new Error(`unknown relay: ${relayInput}`);
+    }
+    relayName = selectedRelayName;
+    defaultBackend = canonicalizeMindBackend(selectedRelay.backend || defaultBackend);
+    defaultModel = String(selectedRelay.model || defaultModel).trim();
+  }
   const agentName = String(parseArgValue(args, "--agent") ?? agentDefaults.agentName ?? DEFAULT_CHANNEL_AGENT_NAME).trim();
   const purpose = String(parseArgValue(args, "--purpose") ?? agentDefaults.purpose ?? "Assist with scheduled automation tasks.").trim();
   const intervalMinutes = normalizeIntervalMinutes(parseArgValue(args, "--interval-minutes") ?? agentDefaults.intervalMinutes ?? 24, 24);
@@ -3357,26 +3441,35 @@ function collectAgentFromFlags({ args, mindDefaults = {}, agentDefaults = {} }) 
   const toolsMap = String(parseArgValue(args, "--tools-map") ?? agentDefaults.toolsMap ?? "tools").trim();
   const bindChannel = parseTruthy(parseArgValue(args, "--bind-channel"), agentDefaults.bindChannel ?? true);
   const smokeTest = parseTruthy(parseArgValue(args, "--smoke-test"), true);
+  const startNow = parseTruthy(parseArgValue(args, "--start-now"), true);
   return {
     agentName,
+    relayName,
     purpose,
     intervalMinutes,
     backend,
     model,
     toolsMap,
     bindChannel,
-    smokeTest
+    smokeTest,
+    startNow
   };
 }
 
 async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaults = {}, mode = "establish" }) {
-  const defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
-  const defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
+  let defaultBackend = canonicalizeMindBackend(agentDefaults.backend || mindDefaults.backend || "ollama command mind");
+  let defaultModel = String(agentDefaults.model || mindDefaults.model || "gpt-oss:latest").trim();
   const defaultAgentName = String(agentDefaults.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim();
   const defaultPurpose = String(agentDefaults.purpose || "Assist with scheduled automation tasks.").trim();
   const defaultToolsMap = String(agentDefaults.toolsMap || "tools").trim();
   const defaultInterval = normalizeIntervalMinutes(agentDefaults.intervalMinutes ?? 24, 24);
   const defaultBindChannel = agentDefaults.bindChannel ?? true;
+  const relays = mindDefaults?.relays ?? {};
+  const relayNames = Object.keys(relays).sort((a, b) => a.localeCompare(b, "en"));
+  const relayFallback = relayNames.includes(String(mindDefaults?.defaultRelay || "").trim())
+    ? String(mindDefaults.defaultRelay).trim()
+    : (relayNames[0] || "");
+  let relayName = "";
 
   const printer = sectionPrinter();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -3404,10 +3497,47 @@ async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaul
 
     printer.header("B.1 Runtime Backend");
     printer.why("Backend/model determine response behavior for upcoming channel and schedule runs.");
-    printer.how("Start from global mind defaults, then override per agent when needed.");
-    printer.examples("backend=ollama command mind, model=gpt-oss:latest");
-    const backend = canonicalizeMindBackend(await ask("Backend", defaultBackend));
-    const model = await ask("Model (tag or refinery alias)", defaultModel);
+    printer.how("Choose a provider first, then choose model from defaults or matching relay models.");
+    printer.examples("1 | ollama | openai-codex");
+    for (const line of formatNumberedRows(MIND_BACKEND_CHOICES.map((item) => `${item.key} (${item.label})`), { columns: 2 })) {
+      textOut(`  ${line}`);
+    }
+    const backendFallback = backendChoiceKey(defaultBackend || "ollama command mind");
+    const backendInput = await ask("Backend (name or number)", backendFallback);
+    const selectedBackendChoice = findMindBackendChoice(backendInput) ?? findMindBackendChoice(backendFallback);
+    const sourceKey = selectedBackendChoice?.key || resolveMindBackendSource(backendInput, defaultBackend || "ollama command mind");
+    const backend = resolveMindBackendSelection(backendInput, defaultBackend || "ollama command mind");
+    textOut(`- backend set to ${sourceKey}`);
+
+    const backendRelayNames = relayNames.filter((name) => relayMatchesBackendSource(relays[name], sourceKey, backend));
+    const backendRelayModels = Array.from(new Set(
+      backendRelayNames
+        .map((name) => String(relays[name]?.model || "").trim())
+        .filter(Boolean)
+    ));
+
+    printer.header("B.2 Runtime Model");
+    printer.why("Model controls output quality/cost and should match selected provider backend.");
+    printer.how("Choose from listed relay models when available, or enter a model/refinery alias.");
+    printer.examples("gpt-5.3-codex | qwen3-vl:8b-instruct");
+    if (backendRelayModels.length > 0) {
+      textOut(`- found ${backendRelayModels.length} model(s) from matching relay(s):`);
+      for (const line of formatNumberedRows(backendRelayModels, { columns: 2 })) {
+        textOut(`  ${line}`);
+      }
+    } else {
+      textOut("- no matching relay models found for this backend; using current default model.");
+    }
+    const defaultModelForBackend =
+      (canonicalizeMindBackend(agentDefaults.backend || "") === canonicalizeMindBackend(backend) && String(agentDefaults.model || "").trim())
+      || (backendRelayModels[0] || "")
+      || defaultModel;
+    const modelInput = await ask("Model (name or number)", defaultModelForBackend);
+    const model = resolveModelSelection(modelInput, { fallback: defaultModelForBackend, models: backendRelayModels });
+    const matchedRelayName = backendRelayNames.find((name) => String(relays[name]?.model || "").trim() === String(model).trim()) || "";
+    relayName = matchedRelayName || relayName;
+    if (relayName) textOut(`- relay matched ${relayName}`);
+
     const toolsMap = await ask("Tools map", defaultToolsMap);
 
     printer.header("C.1 Channel Binding");
@@ -3437,15 +3567,23 @@ async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaul
     printer.examples("yes");
     const smokeTest = await askYesNo("Run begin/stop smoke test", true);
 
+    printer.header("F.1 Activation");
+    printer.why("Activation enables agent services now so it can respond without extra commands.");
+    printer.how("Keep enabled for normal use. Disable only when staging config without running.");
+    printer.examples("yes");
+    const startNow = await askYesNo("Start agent services now", true);
+
     return {
       agentName,
+      relayName,
       purpose,
       intervalMinutes,
       backend,
       model,
       toolsMap,
       bindChannel,
-      smokeTest
+      smokeTest,
+      startNow
     };
   } finally {
     rl.close();
@@ -3647,7 +3785,18 @@ async function configureAgentApply({ args, mode = "establish" }) {
     })
     : { ok: false, reason: "channel binding disabled", path: null, changed: false, action: "none" };
 
+  const channelScheduleWrite = (cfg.bindChannel && channelWrite.ok)
+    ? await upsertAgentChannelSchedule({
+      worldRoot,
+      agentName: cfg.agentName,
+      channelType: "matrix",
+      intervalMinutes: 1,
+      dryRun
+    })
+    : { ok: false, reason: "channel schedule skipped", path: null, changed: false, action: "none" };
+
   let smoke = null;
+  let activation = null;
   if (cfg.smokeTest && !dryRun) {
     const beginRes = await beginAgent({ worldRoot, agentName: cfg.agentName, startScheduler: false });
     const stopRes = await stopAgent({ worldRoot, agentName: cfg.agentName });
@@ -3657,8 +3806,26 @@ async function configureAgentApply({ args, mode = "establish" }) {
       stop: stopRes.disabledServices ?? []
     };
   }
+  if (!dryRun && cfg.startNow) {
+    const beginRes = await beginAgent({ worldRoot, agentName: cfg.agentName, startScheduler: true });
+    activation = {
+      ok: true,
+      enabled: beginRes.enabledServices ?? []
+    };
+  } else if (!dryRun) {
+    activation = {
+      ok: true,
+      enabled: [],
+      note: "start skipped"
+    };
+  }
 
-  const changed = Boolean(establishResult.changed || runtimeWrite.changed || channelWrite.changed);
+  const changed = Boolean(
+    establishResult.changed
+    || runtimeWrite.changed
+    || channelWrite.changed
+    || channelScheduleWrite.changed
+  );
   const out = {
     ok: true,
     route: "configure agent",
@@ -3669,12 +3836,14 @@ async function configureAgentApply({ args, mode = "establish" }) {
     changed,
     config: {
       agentName: cfg.agentName,
+      relayName: cfg.relayName || "",
       intervalMinutes: cfg.intervalMinutes,
       backend: cfg.backend,
       model: cfg.model,
       toolsMap: cfg.toolsMap,
       bindChannel: cfg.bindChannel,
-      smokeTest: cfg.smokeTest
+      smokeTest: cfg.smokeTest,
+      startNow: cfg.startNow
     },
     establish: {
       status: establishResult.status,
@@ -3683,7 +3852,9 @@ async function configureAgentApply({ args, mode = "establish" }) {
     },
     runtimeWrite,
     channelWrite,
-    smoke
+    channelScheduleWrite,
+    smoke,
+    activation
   };
 
   if (json) {
@@ -3698,12 +3869,18 @@ async function configureAgentApply({ args, mode = "establish" }) {
   if (cfg.bindChannel) {
     if (channelWrite.ok) {
       textOut(`- channel ${channelWrite.path} (${channelWrite.changed ? "changed" : "unchanged"})`);
+      if (channelScheduleWrite.ok) {
+        textOut(`- channel schedule ${channelScheduleWrite.path} (${channelScheduleWrite.changed ? "changed" : "unchanged"})`);
+      }
     } else {
       textOut(`- channel skipped (${channelWrite.reason})`);
     }
   }
   if (smoke) {
     textOut(`- smoke test passed (begin=${smoke.begin.length} stop=${smoke.stop.length})`);
+  }
+  if (activation?.ok) {
+    textOut(`- start now enabled services ${activation.enabled.length}`);
   }
   if (print) {
     const runtimePath = path.join(worldRoot, "house", cfg.agentName, "conduct", "runtime.pya");
