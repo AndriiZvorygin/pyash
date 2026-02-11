@@ -13,7 +13,11 @@ function pidPath(worldRoot) {
   return path.join(controlDir(worldRoot), "scheduler.pid");
 }
 
-function statusPath(worldRoot) {
+function healthPath(worldRoot) {
+  return path.join(controlDir(worldRoot), "health.pya");
+}
+
+function legacyStatusPath(worldRoot) {
   return path.join(controlDir(worldRoot), "scheduler.status.json");
 }
 
@@ -21,19 +25,154 @@ function daemonScriptPath() {
   return fileURLToPath(new URL("../../command/scheduler_daemon.mjs", import.meta.url));
 }
 
-async function readJson(filePath, fallback) {
+function quotePyashText(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+
+function parsePyashQuotedText(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+async function readHealthFile(filePath) {
   try {
     const text = await fs.readFile(filePath, "utf8");
-    return JSON.parse(text);
+    const fallback = {
+      running: false,
+      pid: 0,
+      worldRoot: "",
+      startedAt: "",
+      updatedAt: "",
+      stoppedAt: "",
+      jobsCount: 0,
+      jobs: []
+    };
+    const blockPattern = /su name (.+?) be map def\n([\s\S]*?)\nprah/g;
+    const blocks = new Map();
+    for (const match of String(text).matchAll(blockPattern)) {
+      blocks.set(String(match[1]).trim(), String(match[2] ?? ""));
+    }
+    const parseMap = (body) => {
+      const out = {};
+      for (const raw of String(body ?? "").split("\n")) {
+        const line = raw.trim();
+        if (!line) continue;
+        const m = line.match(/^su name (.+?) ob (bool|num|text|filename) (.+?) ya$/i);
+        if (!m) continue;
+        const key = String(m[1]).trim();
+        const type = String(m[2]).toLowerCase();
+        const valueRaw = String(m[3]).trim();
+        if (type === "bool") {
+          out[key] = /^truth$/i.test(valueRaw);
+          continue;
+        }
+        if (type === "num") {
+          const n = Number(valueRaw);
+          out[key] = Number.isFinite(n) ? n : 0;
+          continue;
+        }
+        if (type === "text" || type === "filename") {
+          out[key] = parsePyashQuotedText(valueRaw);
+        }
+      }
+      return out;
+    };
+    const healthMap = parseMap(blocks.get("scheduler health"));
+    const jobsCount = Math.max(0, Number(healthMap["jobs count"] ?? 0) || 0);
+    const jobs = [];
+    for (let i = 1; i <= jobsCount; i += 1) {
+      const jobMap = parseMap(blocks.get(`scheduler job ${i}`));
+      if (!jobMap["job name"]) continue;
+      jobs.push({
+        jobName: String(jobMap["job name"] ?? ""),
+        laneName: String(jobMap["lane name"] ?? ""),
+        intervalMs: Number(jobMap["interval ms"] ?? 0) || 0,
+        runs: Number(jobMap.runs ?? 0) || 0,
+        skips: Number(jobMap.skips ?? 0) || 0,
+        lastDurationMs: Number(jobMap["last duration ms"] ?? 0) || 0,
+        avgDurationMs: Number(jobMap["avg duration ms"] ?? 0) || 0,
+        utilizationPct: Number(jobMap["utilization pct"] ?? 0) || 0,
+        overlapPct: Number(jobMap["overlap pct"] ?? 0) || 0,
+        errorCount: Number(jobMap["error count"] ?? 0) || 0,
+        consecutiveErrors: Number(jobMap["consecutive errors"] ?? 0) || 0,
+        enabled: Boolean(jobMap.enabled),
+        running: Boolean(jobMap.running),
+        lastStatus: String(jobMap["last status"] ?? ""),
+        lastError: String(jobMap["last error"] ?? "")
+      });
+    }
+    return {
+      ...fallback,
+      running: Boolean(healthMap.running),
+      pid: Number(healthMap.pid ?? 0) || 0,
+      worldRoot: String(healthMap["world root"] ?? ""),
+      startedAt: String(healthMap["started at"] ?? ""),
+      updatedAt: String(healthMap["updated at"] ?? ""),
+      stoppedAt: String(healthMap["stopped at"] ?? ""),
+      jobsCount,
+      jobs
+    };
   } catch (err) {
-    if (err?.code === "ENOENT") return fallback;
+    if (err?.code === "ENOENT") {
+      return {
+        running: false,
+        pid: 0,
+        worldRoot: "",
+        startedAt: "",
+        updatedAt: "",
+        stoppedAt: "",
+        jobsCount: 0,
+        jobs: []
+      };
+    }
     throw err;
   }
 }
 
-async function writeJson(filePath, value) {
+async function writeHealthFile(filePath, value) {
+  const mapBlock = (name, entries) => {
+    const lines = [`su name ${name} be map def`];
+    for (const entry of entries) {
+      lines.push(`  su name ${entry.key} ob ${entry.type} ${entry.value} ya`);
+    }
+    lines.push("prah");
+    return lines.join("\n");
+  };
+  const jobs = Array.isArray(value.jobs) ? value.jobs : [];
+  const lines = [mapBlock("scheduler health", [
+    { key: "running", type: "bool", value: value.running ? "truth" : "lie" },
+    { key: "pid", type: "num", value: Number.isFinite(value.pid) ? Math.floor(value.pid) : 0 },
+    { key: "world root", type: "filename", value: quotePyashText(value.worldRoot || "") },
+    { key: "jobs count", type: "num", value: Math.max(0, Math.floor(Number(value.jobsCount) || 0)) },
+    { key: "started at", type: "text", value: quotePyashText(value.startedAt || "") },
+    { key: "updated at", type: "text", value: quotePyashText(value.updatedAt || "") },
+    { key: "stopped at", type: "text", value: quotePyashText(value.stoppedAt || "") }
+  ])];
+  for (let i = 0; i < jobs.length; i += 1) {
+    const job = jobs[i] ?? {};
+    lines.push(mapBlock(`scheduler job ${i + 1}`, [
+      { key: "job name", type: "text", value: quotePyashText(job.jobName || "") },
+      { key: "lane name", type: "text", value: quotePyashText(job.laneName || "") },
+      { key: "interval ms", type: "num", value: Number(job.intervalMs || 0) || 0 },
+      { key: "runs", type: "num", value: Number(job.runs || 0) || 0 },
+      { key: "skips", type: "num", value: Number(job.skips || 0) || 0 },
+      { key: "last duration ms", type: "num", value: Number(job.lastDurationMs || 0) || 0 },
+      { key: "avg duration ms", type: "num", value: Number(job.avgDurationMs || 0) || 0 },
+      { key: "utilization pct", type: "num", value: Number(job.utilizationPct || 0) || 0 },
+      { key: "overlap pct", type: "num", value: Number(job.overlapPct || 0) || 0 },
+      { key: "error count", type: "num", value: Number(job.errorCount || 0) || 0 },
+      { key: "consecutive errors", type: "num", value: Number(job.consecutiveErrors || 0) || 0 },
+      { key: "enabled", type: "bool", value: job.enabled ? "truth" : "lie" },
+      { key: "running", type: "bool", value: job.running ? "truth" : "lie" },
+      { key: "last status", type: "text", value: quotePyashText(job.lastStatus || "") },
+      { key: "last error", type: "text", value: quotePyashText(job.lastError || "") }
+    ]));
+  }
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+  await fs.writeFile(filePath, `${lines.join("\n")}\n`, "utf8");
 }
 
 async function readPid(worldRoot) {
@@ -61,11 +200,16 @@ function isPidAlive(pid) {
 export async function schedulerHealth({ worldRoot } = {}) {
   const pid = await readPid(worldRoot);
   const alive = isPidAlive(pid);
-  const status = await readJson(statusPath(worldRoot), {});
+  const status = await readHealthFile(healthPath(worldRoot));
   return {
     running: alive,
     pid: alive ? pid : null,
-    status,
+    status: {
+      ...status,
+      running: alive,
+      pid: alive ? pid : 0,
+      worldRoot: worldRoot || status.worldRoot || ""
+    },
     worldRoot
   };
 }
@@ -140,7 +284,8 @@ export async function schedulerBegin({ worldRoot } = {}) {
   }
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
   await fs.mkdir(path.join(controlDir(worldRoot), "service"), { recursive: true });
-  const child = spawn(process.execPath, [daemonScriptPath(), "--run", `--world-root=${worldRoot}`], {
+  await fs.rm(legacyStatusPath(worldRoot), { force: true });
+  const child = spawn(process.execPath, [daemonScriptPath(), "--run", "--world-root", worldRoot], {
     detached: true,
     stdio: "ignore",
     cwd: process.cwd()
@@ -169,6 +314,7 @@ export async function schedulerStop({ worldRoot } = {}) {
   const stopped = await waitForStop(pid);
   if (stopped) {
     await fs.rm(pidPath(worldRoot), { force: true });
+    await fs.rm(legacyStatusPath(worldRoot), { force: true });
   }
   const health = await schedulerHealth({ worldRoot });
   return { ...health, action: "stop", changed: true, stopped };
@@ -182,15 +328,22 @@ export async function schedulerRestart({ worldRoot } = {}) {
 
 export async function updateSchedulerStatus({ worldRoot, status }) {
   const payload = {
-    ...status,
-    worldRoot
+    running: status?.running === true,
+    pid: Number(status?.pid || 0),
+    worldRoot: worldRoot || "",
+    startedAt: String(status?.startedAt || ""),
+    updatedAt: String(status?.updatedAt || ""),
+    stoppedAt: String(status?.stoppedAt || ""),
+    jobsCount: Array.isArray(status?.jobs) ? status.jobs.length : 0,
+    jobs: Array.isArray(status?.jobs) ? status.jobs : []
   };
-  await writeJson(statusPath(worldRoot), payload);
+  await writeHealthFile(healthPath(worldRoot), payload);
+  await fs.rm(legacyStatusPath(worldRoot), { force: true });
 }
 
 export function schedulerControlPaths({ worldRoot } = {}) {
   return {
     pidPath: pidPath(worldRoot),
-    statusPath: statusPath(worldRoot)
+    healthPath: healthPath(worldRoot)
   };
 }

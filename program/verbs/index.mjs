@@ -73,6 +73,7 @@ import exportFact, { signatures as exportSignatures } from "./export.mjs";
 import repair, { signatures as repairSignatures } from "./repair.mjs";
 import establish, { signatures as establishSignatures } from "./establish.mjs";
 import improve, { signatures as improveSignatures } from "./improve.mjs";
+import router, { signatures as routerSignatures } from "./router.mjs";
 
 export {
   plus,
@@ -136,7 +137,8 @@ export {
   exportFact,
   repair,
   establish,
-  improve
+  improve,
+  router
 };
 
 export const builtInSignatures = [
@@ -215,4 +217,5 @@ export const builtInSignatures = [
   ...repairSignatures,
   ...establishSignatures,
   ...improveSignatures,
+  ...routerSignatures,
 ];

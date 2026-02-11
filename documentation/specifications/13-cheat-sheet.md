@@ -74,7 +74,7 @@ fromindex num 0 toindex num 2 to name text result be re-entry cycle do
 Error:
 
 ```pyash
-su name broken ob text "reason" be error ya
+su name broken ob text "reason" from name runtime be error ya
 ```
 
 ## 5) Tool and IO verbs (core)
@@ -178,6 +178,7 @@ Never:
 - invent new keywords or reorder cases
 - omit `be` when a verb is required
 - mix multiple verbs in one sentence
+- invent map wrappers when a canonical sentence form already exists
 
 ## 8) Gotchas (frequent failures)
 
@@ -191,6 +192,7 @@ Never:
 8) `do` executes; `ya` declares a fact.
 9) `be error ya` is data; `be error do` throws.
 10) Always introduce names before use.
+11) For lifecycle/aspect success, use `vyah ... success` (legacy `sloh` may be accepted on input only).
 
 ## 9) Minimal grammar sketch
 

@@ -60,3 +60,4 @@ This guide keeps contributions consistent for the Pyash codebase.
 ## Security & Configuration Tips
 - `motor/ollama.mjs` calls an Ollama HTTP server (configured via `OLLAMA_HOST`, default `http://localhost:11434`); ensure the server is reachable.
 - Never commit secrets or personal data; prefer env vars or local, git-ignored config.
+- Do not introduce ad hoc `.json` state/config files. Prefer Pyash sentence files (`.pya`) unless a task explicitly requires JSON output.

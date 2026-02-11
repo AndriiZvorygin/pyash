@@ -20,6 +20,14 @@ The profile SHOULD reference:
 
 The canonical local coding tool map is `module/saddle_tools.pya`.
 
+Invoke surface for coding saddle runs MUST use existing evoke grammar:
+
+- `ob text "<input>" for name <target> to name text <output> be evoke do`
+- `ob text "<input>" for name <target> with name <tools map> to name text <output> be evoke do`
+- `under name <conduct>` MAY be attached when run-scoped conduct is needed.
+
+Coding saddle runs are for mind/refinery targets, not plain builtin execution.
+
 ---
 
 ## 2. Local tool baseline
@@ -110,3 +118,14 @@ Reference:
 - `examples/pyash/coding-loop-guarantee.pya`
 
 This example runs a coding loop with `saddle tools` and a guarantee command gate, without a reviewer mind.
+
+## 6. Error and success surfaces
+
+Errors MUST use standard error sentence forms already used by runtime:
+
+- surfaced: `... be error ya`
+- thrown/internal: `... be error do`
+- stable names MAY include `<verb> defective`
+
+Success marker for lifecycle/aspect outcomes is `vyah ... success`.
+Legacy `sloh` MAY be accepted during transition, but emitted spec examples SHOULD use `success`.

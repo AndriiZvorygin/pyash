@@ -102,44 +102,91 @@ function parseChannelPollJob(jobName) {
   const text = String(jobName ?? "").trim().toLowerCase();
   const match = text.match(/^([a-z0-9_-]+)\s+(poll|probe)$/);
   if (!match) return null;
-  return match[1];
+  const source = match[1];
+  if (source === "channel") {
+    return { mode: "multi" };
+  }
+  return { mode: "single", channelType: source };
+}
+
+function normalizeChannelOrder(values = []) {
+  const ordered = [];
+  const seen = new Set();
+  for (const value of values) {
+    const normalized = String(value ?? "").trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    ordered.push(normalized);
+  }
+  return ordered;
+}
+
+function channelTypesFromJobWithCase(withCase, fallback = []) {
+  const values = withCase?.ve?.values;
+  if (!Array.isArray(values) || values.length === 0) return normalizeChannelOrder(fallback);
+  return normalizeChannelOrder(values);
 }
 
 async function runChannelPollJob({ worldRoot, job }) {
-  const channelType = parseChannelPollJob(job.jobName);
-  if (!channelType) return null;
+  const parsed = parseChannelPollJob(job.jobName);
+  if (!parsed) return null;
   const agentHouse = resolveAgentHouse({ mindName: job.agentName, rememberFn: remember });
   await ensureAgentDirs(agentHouse);
   const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
-  const rawConfig = allChannels[channelType];
-  if (!rawConfig?.enabled) return { status: `skipped:${channelType}_disabled` };
-  let channelConfig = { ...rawConfig };
-  if (channelType === "matrix") {
-    channelConfig = resolveMatrixConfigWithRemember(channelConfig);
-    const credentials = await ensureMatrixCredentials({
+  const availableChannelTypes = normalizeChannelOrder(Object.keys(allChannels));
+  const channelTypes = parsed.mode === "multi"
+    ? channelTypesFromJobWithCase(job.withCase, availableChannelTypes)
+    : [parsed.channelType];
+  if (!channelTypes.length) return { status: "skipped:no_channels" };
+
+  let totalReceived = 0;
+  let totalHandled = 0;
+  let totalSent = 0;
+  const channelStatus = [];
+
+  for (const channelType of channelTypes) {
+    const rawConfig = allChannels[channelType];
+    if (!rawConfig?.enabled) {
+      channelStatus.push(`${channelType}:disabled`);
+      continue;
+    }
+    let channelConfig = { ...rawConfig };
+    if (channelType === "matrix") {
+      channelConfig = resolveMatrixConfigWithRemember(channelConfig);
+      const credentials = await ensureMatrixCredentials({
+        agentName: job.agentName,
+        agentHouse,
+        config: channelConfig
+      });
+      channelConfig = {
+        ...channelConfig,
+        homeserver: credentials.homeserver,
+        token: credentials.token,
+        user: channelConfig.user ?? credentials.user
+      };
+    }
+    const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
+    if (!adapter) {
+      channelStatus.push(`${channelType}:unsupported`);
+      continue;
+    }
+    const result = await runChannelOnce({
       agentName: job.agentName,
-      agentHouse,
-      config: channelConfig
+      channelType,
+      channelConfig,
+      adapter,
+      interpretFn: interpret,
+      agentHouse
     });
-    channelConfig = {
-      ...channelConfig,
-      homeserver: credentials.homeserver,
-      token: credentials.token,
-      user: channelConfig.user ?? credentials.user
-    };
+    totalReceived += Number(result?.received ?? 0);
+    totalHandled += Number(result?.handled ?? 0);
+    totalSent += Number(result?.sent ?? 0);
+    channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}`);
   }
-  const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
-  if (!adapter) return { status: `skipped:unsupported_channel_${channelType}` };
-  const result = await runChannelOnce({
-    agentName: job.agentName,
-    channelType,
-    channelConfig,
-    adapter,
-    interpretFn: interpret,
-    agentHouse
-  });
+
+  if (!channelStatus.length) return { status: "skipped:no_enabled_channels" };
   return {
-    status: `${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}`
+    status: `channel:received=${totalReceived}:handled=${totalHandled}:sent=${totalSent} [${channelStatus.join(", ")}]`
   };
 }
 

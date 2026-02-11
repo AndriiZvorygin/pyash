@@ -110,10 +110,7 @@ async function ensureWorldChannelSeed(worldRoot) {
   } catch (err) {
     if (err?.code !== "ENOENT") throw err;
     const seed = [
-      "su name matrix channel ob bool lie ya",
-      'su name matrix homeserver ob text "https://matrix.example.org" ya',
-      'su name matrix room ob text "!roomid:example.org" ya',
-      'su name matrix room lane ob text "matrix_main" ya'
+      "su name matrix channel ob bool lie ya"
     ].join("\n") + "\n";
     await fs.writeFile(channelsPath, seed, "utf8");
   }

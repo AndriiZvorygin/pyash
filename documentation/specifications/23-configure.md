@@ -82,7 +82,7 @@ Rules:
 3. Flow MUST support `quickstart` and `advanced` modes.
 4. Quickstart asks minimum required fields only.
 5. Advanced exposes optional routing/conduct overrides.
-6. Each step SHOULD validate immediately before moving to the next step.
+6. Each step SHOULD verify immediately before moving to the next step.
 
 Channel section groups (current implementation):
 
@@ -112,7 +112,7 @@ Each caterer MUST expose a deterministic contract:
 5. `renderManagedBlocks` — produce managed block content for files
 6. `redact` — hide secrets from display/json output
 
-Caterer behavior constraints:
+Caterer conduct constraints:
 
 1. same input must produce same verification result,
 2. write plan must be side-effect-free until explicit apply,
@@ -166,7 +166,7 @@ Verification MUST include:
 4. write-target permissions/path existence checks.
 5. homeserver-specific auth constraints (for example matrix.org MUST NOT allow shared-secret mode).
 
-`test` command behavior:
+`test` command conduct:
 
 1. run caterer live check (auth + destination reachability),
 2. return pass/fail and concise diagnosis,
@@ -174,7 +174,7 @@ Verification MUST include:
 4. for matrix: SHOULD join target room and send greeting test message,
 5. if executive user is configured: SHOULD send executive DM test message.
 
-`doctor` command behavior:
+`doctor` command conduct:
 
 1. inspect current stored config,
 2. classify issues (`missing`, `invalid`, `auth_failed`, `unreachable`, `warning`),
@@ -255,7 +255,7 @@ A configure implementation conforms to this spec when it:
 4. writes idempotent managed map blocks,
 5. supports `--dry-run`, `--print`, `--json`, and `--non-interactive`,
 6. redacts secrets in all non-storage outputs.
-7. interactive flow validates each step before advancing.
+7. interactive flow verifies each step before advancing.
 8. matrix flow enforces homeserver-aware auth options.
 
 ---
@@ -265,8 +265,8 @@ A configure implementation conforms to this spec when it:
 First-time onboarding MUST prioritize dependency order:
 
 1. Orchestrator first: initialize runtime control plane (locks, presence, scheduler health paths).
-2. Channel second: validate ingress/egress and message tests.
-3. Mind third: validate backend/model bridge and generation health checks.
+2. Channel second: verify input/produce message tests.
+3. Mind third: verify backend/model bridge and generation health checks.
 4. Agent fourth: bind to orchestrator + channel + mind defaults and run smoke test.
 
 Recommended success prompts:
@@ -281,6 +281,11 @@ Recommended success prompts:
 ## 12. Configure Orchestrator
 
 Purpose: set up the runtime control plane that `pyash` uses to manage scheduler, channels, and agents.
+
+Normative orchestrator definition and responsibility contract is defined in:
+
+1. `documentation/specifications/18-pyash-agent.md`, section `13.1 Orchestrator contract (normative)`.
+2. `documentation/specifications/18-pyash-agent.md`, section `13.2 Runtime component boundaries (normative)`.
 
 Current target profile:
 
@@ -301,6 +306,16 @@ Advanced fields (optional):
 3. lock/presence path overrides,
 4. concurrency caps.
 
+Out of scope for orchestrator configure:
+
+1. schedule rhythm/poll timing knobs,
+2. per-channel poll frequency,
+3. job-level calendar declarations.
+4. saddle execution policy internals,
+5. router conduct for `as wo input` / `as wo produce`.
+
+These MUST be configured via calendar policy (`world/conduct/calendar.pya` and agent-local calendar), not orchestrator config maps.
+
 Control-plane contract:
 
 1. container runtime exposes orchestrator control endpoint,
@@ -309,7 +324,7 @@ Control-plane contract:
 
 Success output SHOULD include:
 
-1. selected mode and start behavior,
+1. selected mode and start conduct,
 2. resolved control endpoint (for example `http://localhost:59652`),
 3. health check pass/fail details,
 4. next recommended step: `pyash configure channel`.

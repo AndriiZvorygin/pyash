@@ -1,0 +1,201 @@
+import { remember, doRemember } from "../remember/index.mjs";
+import { throwErrorSentence } from "../error.mjs";
+
+function dayStamp(now = new Date()) {
+  return now.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+function padSerial(value) {
+  return String(value).padStart(4, "0");
+}
+
+function resolveText(value, { rememberFn = remember } = {}) {
+  if (!value || typeof value !== "object") return "";
+  if (typeof value.text === "string") return value.text.trim();
+  if (typeof value.wo === "string") return value.wo.trim();
+  if (typeof value.filename === "string") return value.filename.trim();
+  if (typeof value.name !== "string") return "";
+  const literal = value.name.trim();
+  if (!literal) return "";
+  if (literal.includes(" ")) return literal;
+  const fact = rememberFn(literal);
+  const fromFact =
+    fact?.ob?.text
+    ?? fact?.ob?.name
+    ?? fact?.ob?.filename
+    ?? null;
+  if (fromFact == null) return literal;
+  return String(fromFact).trim();
+}
+
+function resolveOperation(sentence) {
+  const raw = sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name ?? "";
+  return String(raw).trim().toLowerCase();
+}
+
+function nextSerial(name, { rememberFn = remember } = {}) {
+  const currentFact = rememberFn(name);
+  const current = Number(currentFact?.ob?.num);
+  const next = Number.isFinite(current) ? current + 1 : 1;
+  doRemember({
+    mood: "ya",
+    su: { name },
+    ob: { num: next },
+    be: "number"
+  });
+  return next;
+}
+
+function buildPayloadId() {
+  const serial = nextSerial("router input serial");
+  return `news-${dayStamp()}-${padSerial(serial)}`;
+}
+
+function buildMessageId(toEndpoint = "") {
+  const serial = nextSerial("router produce serial");
+  const prefix = String(toEndpoint).trim().toLowerCase().startsWith("channel matrix")
+    ? "matrix-event"
+    : "event";
+  return `${prefix}-${dayStamp()}-${padSerial(serial)}`;
+}
+
+function ensureInputPayload(text, sentence) {
+  if (typeof text === "string" && text.trim()) return text.trim();
+  throwErrorSentence({
+    name: "router input defective",
+    message: "router input defective: missing payload",
+    from: { name: "router" },
+    raw: { sentence }
+  });
+}
+
+function ensureInputEndpoint(text, sentence) {
+  if (typeof text === "string" && text.trim()) return text.trim();
+  throwErrorSentence({
+    name: "router input defective",
+    message: "router input defective: missing source endpoint",
+    from: { name: "router" },
+    raw: { sentence }
+  });
+}
+
+function ensureRouteEndpoint(text, sentence) {
+  if (typeof text === "string" && text.trim()) return text.trim();
+  throwErrorSentence({
+    name: "router route defective",
+    message: "router route defective: destination unresolved",
+    from: { name: "router" },
+    raw: { sentence }
+  });
+}
+
+function ensureProducePayloadId(text, sentence) {
+  if (typeof text === "string" && text.trim()) return text.trim();
+  throwErrorSentence({
+    name: "router produce defective",
+    message: "router produce defective: missing routed payload id",
+    from: { name: "router" },
+    raw: { sentence }
+  });
+}
+
+function resolveAgentName(endpoint) {
+  const text = String(endpoint ?? "").trim();
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  if (!lower.startsWith("agent ")) return null;
+  const parts = text.split(/\s+/).slice(1);
+  if (!parts.length) return null;
+  return parts.join(" ").trim();
+}
+
+function buildSessionId(fromEndpoint, toEndpoint) {
+  const fromText = String(fromEndpoint ?? "").trim();
+  const toText = String(toEndpoint ?? "").trim();
+  if (!fromText || !toText) return null;
+  return `${fromText} -> ${toText}`;
+}
+
+function routeInput(sentence, { rememberFn = remember } = {}) {
+  const payload = ensureInputPayload(resolveText(sentence?.ob, { rememberFn }), sentence);
+  const fromEndpoint = ensureInputEndpoint(resolveText(sentence?.from, { rememberFn }), sentence);
+  const toEndpoint = ensureRouteEndpoint(resolveText(sentence?.to, { rememberFn }), sentence);
+  const payloadId = buildPayloadId();
+  const explicitSession = resolveText(sentence?.fromtext, { rememberFn });
+  const result = {
+    mood: "ya",
+    su: { name: payloadId },
+    from: { name: fromEndpoint },
+    to: { name: toEndpoint },
+    ob: { text: payload },
+    be: "input"
+  };
+  const resolvedAgent = resolveAgentName(toEndpoint);
+  if (resolvedAgent) result.for = { text: resolvedAgent };
+  const sessionId = explicitSession || buildSessionId(fromEndpoint, toEndpoint);
+  if (sessionId) result.fromtext = { text: sessionId };
+  return result;
+}
+
+function routeProduce(sentence, { rememberFn = remember } = {}) {
+  const fromEndpoint = ensureRouteEndpoint(resolveText(sentence?.from, { rememberFn }), sentence);
+  const toEndpoint = ensureRouteEndpoint(resolveText(sentence?.to, { rememberFn }), sentence);
+  const payloadId = ensureProducePayloadId(
+    resolveText(sentence?.accordingto, { rememberFn }),
+    sentence
+  );
+  const messageId = buildMessageId(toEndpoint);
+  return {
+    mood: "ya",
+    su: { name: messageId },
+    vyah: { ve: { type: "name", values: ["success"] } },
+    from: { name: fromEndpoint },
+    to: { name: toEndpoint },
+    accordingto: { text: payloadId },
+    be: "produce"
+  };
+}
+
+function routerHealth() {
+  return {
+    mood: "ya",
+    su: { name: "router" },
+    ob: { text: "ready" },
+    as: { boolean: true },
+    since: { date: new Date().toISOString() },
+    be: "health"
+  };
+}
+
+export function router(sentence, { remember: rememberFn = remember } = {}) {
+  const operation = resolveOperation(sentence);
+  if (operation === "input") return routeInput(sentence, { rememberFn });
+  if (operation === "produce") return routeProduce(sentence, { rememberFn });
+  if (operation === "health") return routerHealth();
+  throwErrorSentence({
+    name: "router input defective",
+    message: `router input defective: unsupported operation ${operation || "none"}`,
+    from: { name: "router" },
+    raw: { sentence }
+  });
+}
+
+export default router;
+
+export const signatures = [
+  { signatureWords: ["be", "router"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "health"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "ob", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "from", "text", "ob", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "ob", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "from", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "from", "text", "fromtext", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "from", "text", "fromtext", "text", "ob", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "input", "from", "text", "ob", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "produce"], handler: router },
+  { signatureWords: ["be", "router", "as", "wo", "produce", "from", "text", "ob", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "accordingto", "text", "as", "wo", "produce"], handler: router },
+  { signatureWords: ["be", "router", "accordingto", "text", "as", "wo", "produce", "from", "text", "to", "text"], handler: router },
+  { signatureWords: ["be", "router", "accordingto", "text", "as", "wo", "produce", "from", "text", "ob", "text", "to", "text"], handler: router }
+];

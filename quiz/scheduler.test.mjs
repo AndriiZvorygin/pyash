@@ -64,6 +64,16 @@ test("parse schedule policy locks recurrence grammar across per/every/during for
   assert.equal(weekLegacy?.intervalMs, 7 * 24 * 60 * 60 * 1000);
 });
 
+test("parse schedule policy preserves channel poll vector order in with case", () => {
+  const text = [
+    'su name channel poll for name helper with ve text "matrix" "email" "telegram" vyah habit during minute 1 be calendar ya'
+  ].join("\n");
+  const jobs = parseSchedulePolicyText(text, { defaultAgentName: "helper" });
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0]?.jobName, "channel poll");
+  assert.deepEqual(jobs[0]?.withCase?.ve?.values, ["matrix", "email", "telegram"]);
+});
+
 test("load schedule policy reads conduct/calendar.pya", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-schedule-"));
   const agentHouse = path.join(root, "world", "house", "helper");

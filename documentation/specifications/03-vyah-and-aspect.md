@@ -39,7 +39,7 @@ The value of `vyah` is an **ordered vector of atomic verb modifiers**.
 Example:
 
 ```
-be hear do su name L7 vyah cancel sloh ya
+be hear do su name L7 vyah cancel success ya
 ```
 
 ---
@@ -49,13 +49,13 @@ be hear do su name L7 vyah cancel sloh ya
 Conceptually:
 
 ```
-vyah = ["cancel", "sloh"]
+vyah = ["cancel", "success"]
 ```
 
 Surface form:
 
 ```
-vyah cancel sloh
+vyah cancel success
 ```
 
 Modifiers are **symbols** (not `name`, `text`, or structured values).
@@ -126,14 +126,15 @@ Currently defined outcome particle:
 
 | Modifier | Meaning                          |
 | -------- | -------------------------------- |
-| `sloh`   | explicit success acknowledgement |
+| `success`   | explicit success acknowledgement |
 
 #### Rules (normative)
 
-* `sloh` MAY appear only inside `vyah`
-* `sloh` MUST NOT appear on an error sentence (`be error … ya`)
-* Lifecycle aspects (`await`, `finish`, `cancel`) MUST include `sloh` on success
-* Absence of `sloh` does **not** imply failure
+* `success` MAY appear only inside `vyah`
+* `success` MUST NOT appear on an error sentence (`be error … ya`)
+* Lifecycle aspects (`await`, `finish`, `cancel`) MUST include `success` on success
+* Absence of `success` does **not** imply failure
+* Legacy `sloh` MAY be accepted on input during transition, but canonical output MUST emit `success`
 
 Outcome modifiers:
 
@@ -150,7 +151,7 @@ Outcome modifiers:
 `vyah` MAY include emotional or attitudinal modifiers, including (non-exhaustive):
 
 ```
-satisfied, success, hope, doubt, fear, love, anger,
+satisfied, hope, doubt, fear, love, anger,
 curious, enthusiasm, patience, wonder, despair, pride,
 equanimity, melancholy, joy, shame, surprise
 ```
@@ -187,9 +188,9 @@ The **input order** of modifiers inside `vyah` is **free**.
 All of the following are valid inputs:
 
 ```
-vyah sloh cancel
-vyah cancel sloh
-vyah satisfied cancel sloh
+vyah success cancel
+vyah cancel success
+vyah satisfied cancel success
 ```
 
 ---
@@ -201,13 +202,13 @@ When a sentence is **emitted, stored, logged, or agained**, modifiers inside `vy
 1. **Aspect modifiers**
 2. **Tense / temporal modifiers**
 3. **Other verb modifiers**
-4. **Outcome modifiers** (`sloh`)
+4. **Outcome modifiers** (`success`)
 5. **Attitudinal / emotional modifiers**
 
 Example (official form):
 
 ```
-vyah cancel past sloh satisfied
+vyah cancel past success satisfied
 ```
 
 This ordering is required for:
@@ -273,7 +274,7 @@ An implementation conforms to this specification if it:
 * enforces **at most one aspect modifier**
 * accepts modifiers in any input order
 * emits modifiers using the official ordering in §4.2
-* enforces `sloh` rules in §3.3
+* enforces `success` rules in §3.3 (including legacy `sloh` input acceptance when supported)
 * does not assign semantics to emotional modifiers unless specified elsewhere
 
 ---

@@ -39,6 +39,21 @@ test("scheduler control surface supports begin health restart stop", async () =>
   const beginRes = await interpret(parse('be begin ob text "scheduler" as wo scheduler do'));
   assert.equal(beginRes?.value?.boolean, true);
 
+  const healthPath = path.join(worldRoot, "conduct", "health.pya");
+  let healthText = "";
+  for (let i = 0; i < 20; i += 1) {
+    try {
+      healthText = await fs.readFile(healthPath, "utf8");
+      if (healthText) break;
+    } catch (err) {
+      if (err?.code !== "ENOENT") throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.match(healthText, /su name scheduler health be map def/);
+  assert.match(healthText, /su name scheduler job 1 be map def/);
+  assert.match(healthText, /su name job name ob text "heartbeat" ya/);
+
   const healthRes = await interpret(parse('be health ob text "scheduler" as wo scheduler do'));
   assert.equal(typeof healthRes?.value?.boolean, "boolean");
 

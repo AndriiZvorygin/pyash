@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { interpret as bridgeInterpret } from "../../bridge/index.mjs";
+import { remember } from "../../remember/index.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
+import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
+import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -73,13 +77,16 @@ async function writeJsonFile(filePath, value) {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
 }
 
-function buildPrompt(event) {
+function buildPrompt(event, { payloadId } = {}) {
   const header = `[channel ${event.channelType} channelId ${event.channelId} sender ${event.sender} eventId ${event.eventId}]`;
+  if (payloadId) {
+    return `${header} [payloadId ${payloadId}]\n${event.text}`;
+  }
   return `${header}\n${event.text}`;
 }
 
 function noMindConfiguredFallback() {
-  return "mind is not configured yet, pyash configure mind to set the mind relays";
+  return "no mind configured yet, run pyash configure mind to set a mind relay";
 }
 
 function isMindUnavailableError(err) {
@@ -87,7 +94,20 @@ function isMindUnavailableError(err) {
   const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
   const message = String(err?.message ?? "").trim().toLowerCase();
   if (sentenceName === "mind backend missing") return true;
+  if (sentenceName === "mind defective" && message.includes("mind backend missing")) return true;
+  if (sentenceName === "variable as not exists" && message.includes("mind")) return true;
   return message.includes("mind backend missing");
+}
+
+function isMindConfigured() {
+  const fact = remember("mind configure");
+  if (!fact || fact.be !== "map") return false;
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") return false;
+  const backend = String(map?.backend?.ob?.text ?? "").trim();
+  const host = String(map?.host?.ob?.text ?? "").trim();
+  const model = String(map?.model?.ob?.text ?? "").trim();
+  return Boolean(backend && host && model);
 }
 
 function outputName(channelType) {
@@ -179,6 +199,7 @@ async function dispatchChannelEvents({
   agentName,
   adapter,
   interpretFn,
+  routerInterpretFn,
   agentHouse,
   dedupIds,
   dedupState,
@@ -309,12 +330,39 @@ async function dispatchChannelEvents({
     }
 
     for (const listener of listenersToRun) {
-      const sentence = buildChannelMindSentence({ agentName: listener, event, channelConfig });
+      const lane = resolveEventLane(event, channelConfig);
+      const fallbackSessionName = `session name ${lane}`;
+      const routedInput = await routeChannelInput({
+        routerInterpretFn,
+        channelType,
+        event,
+        targetAgentName: listener,
+        sessionName: fallbackSessionName
+      });
+      const orchestratorDirective = orchestrateRouterInput({
+        routerInput: routedInput,
+        fallbackAgentName: listener,
+        fallbackSessionName
+      });
+      const routedEvent = {
+        ...event,
+        text: orchestratorDirective.payloadText || event.text
+      };
+      const sentence = buildChannelMindSentence({
+        agentName: orchestratorDirective.agentName || listener,
+        event: routedEvent,
+        channelConfig,
+        sessionName: orchestratorDirective.sessionName,
+        payloadId: orchestratorDirective.payloadId
+      });
       handled += 1;
       let responseText = "";
       try {
         const result = await interpretFn(sentence);
         responseText = String(result?.ob?.text ?? "").trim();
+        if (!responseText && !isMindConfigured()) {
+          responseText = noMindConfiguredFallback();
+        }
       } catch (err) {
         if (!isMindUnavailableError(err)) throw err;
         responseText = noMindConfiguredFallback();
@@ -332,7 +380,8 @@ async function dispatchChannelEvents({
           listenerAgents,
           targetedByMention,
           listenersToRun,
-          listener,
+          listener: orchestratorDirective.agentName || listener,
+          payloadId: orchestratorDirective.payloadId,
           replied: Boolean(responseText),
           repliedToSelf
         }, { channelType, agentName });
@@ -348,6 +397,14 @@ async function dispatchChannelEvents({
           selfEventIds.delete(removed);
         }
       }
+      await routeChannelProduce({
+        routerInterpretFn,
+        channelType,
+        event,
+        sourceAgentName: orchestratorDirective.agentName || listener,
+        payloadId: orchestratorDirective.payloadId,
+        responseText
+      });
       sent += 1;
     }
   }
@@ -362,16 +419,23 @@ async function dispatchChannelEvents({
   };
 }
 
-export function buildChannelMindSentence({ agentName, event, channelConfig }) {
+export function buildChannelMindSentence({
+  agentName,
+  event,
+  channelConfig,
+  sessionName,
+  payloadId
+}) {
   const lane = resolveEventLane(event, channelConfig);
+  const resolvedSessionName = sessionName || `session name ${lane}`;
   return {
     mood: "do",
     be: "write",
-    ob: { text: buildPrompt(event) },
+    ob: { text: buildPrompt(event, { payloadId }) },
     for: { name: agentName },
     to: { name: outputName(event.channelType) },
     with: { wo: "tools" },
-    fromtext: { name: `session name ${lane}` }
+    fromtext: { name: resolvedSessionName }
   };
 }
 
@@ -401,6 +465,7 @@ export async function runChannelOnce({
   channelConfig,
   adapter,
   interpretFn,
+  routerInterpretFn = bridgeInterpret,
   agentHouse,
   dedupLimit = 2000
 }) {
@@ -443,6 +508,7 @@ export async function runChannelOnce({
     agentName,
     adapter,
     interpretFn,
+    routerInterpretFn,
     agentHouse,
     dedupIds,
     dedupState,

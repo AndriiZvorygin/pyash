@@ -29,6 +29,19 @@ test("evoke dispatches to refinery alias target", async () => {
   assert.equal(remember("out")?.ob?.text, "refinery ok");
 });
 
+test("evoke accepts under name conduct for refinery target", async () => {
+  forget();
+  await run("su name unit refinery be refinery def");
+  await run('su name stage ob text "refinery ok" be text do');
+  await run("prah");
+  await run('exists su name helper refinery be refinery as name "unit refinery" ya');
+  await run("su name tight conduct be map def");
+  await run("su name reiterate attempts ob num 1 ya");
+  await run("prah");
+  await run('ob text "task" for name helper refinery to name text out under name tight conduct be evoke do');
+  assert.equal(remember("out")?.ob?.text, "refinery ok");
+});
+
 test("evoke dispatches to mind target", async () => {
   forget();
   await run('exists su name mind response ob text "mind ok" be text ya');

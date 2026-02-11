@@ -53,6 +53,52 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.ok(calls.some(call => String(call.url).includes("/sync?")));
 });
 
+test("matrix adapter receive resolves alias room ids from join diagnostics", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$ev1",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: { body: "hello alias", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "#pyash:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$ev1");
+  assert.equal(received.events[0]?.channelId, "!room:server");
+  assert.equal(received.events[0]?.laneName, "main");
+});
+
 test("matrix adapter send posts m.room.message", async () => {
   const calls = [];
   const fetchImpl = async (url, opts) => {

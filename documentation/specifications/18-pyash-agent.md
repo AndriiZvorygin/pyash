@@ -2,11 +2,11 @@
 
 ### 0. Purpose
 
-Define a minimal, deterministic agent loop for Pyash that mirrors nanobot-style behavior:
+Define a minimal, deterministic agent loop for Pyash:
 
 1. Build prompt context from bootstrap files, memory, and history.
 2. Call a mind backend with tools.
-3. Execute tool calls and feed results back into the loop.
+3. Execute tool calls and feed tool produce back into the loop.
 4. Record outputs and memory changes deterministically.
 
 This spec focuses on functional parity for loop, context, memory integration, and orchestration. It does not require internal implementation parity.
@@ -37,13 +37,13 @@ Operational companion (non-normative): `documentation/recipes/agent-operations.m
 2. Prompt context is assembled in a stable order.
 3. Memory files are append-only unless explicitly overwritten by a dedicated memory verb.
 4. Tool calls are executed in the order returned by the mind backend.
-5. Each mind call records request and response artifacts for inspection and replay.
+5. Mind-call recording follows conduct; default recording is newspaper + run summary, and per-call dumps are optional.
 
 ---
 
 ## 3. Data shapes
 
-### 3.1 Prompt context record (json map)
+### 3.1 Prompt context record (map)
 
 Required keys:
 
@@ -57,13 +57,29 @@ Message entry fields:
 * `name` (text, optional): tool name for tool responses.
 * `tool_call_id` (text, optional): id for tool response linkage.
 
-### 3.2 Tool call record (json map)
+### 3.2 Tool evoke record (sentence)
 
-Required keys:
+Canonical tool evoke record shape:
 
-* `id` (text)
-* `name` (text)
-* `arguments` (map) or `arguments_json` (text)
+```pyash
+su name <tool call id>
+as text "<tool name>"
+ob text "<arguments json>"
+be evoke ya
+```
+
+Optional structured-arguments shape:
+
+```pyash
+su name <tool call id>
+as text "<tool name>"
+ob la <tool argument sentence> ko
+be evoke ya
+```
+
+Bridge interoperability note:
+
+* External tool bridges MAY project this sentence to map fields such as `id`, `name`, and `arguments_json`.
 
 ### 3.3 Memory context block (text)
 
@@ -95,7 +111,7 @@ Minimum layout under `world/house/<agent>/`:
 * `identity/` (bootstrap files)
 * `memory/` (persistent memory files)
 * `session/` (session history)
-* `conduct/` (policy, calendar, managed state)
+* `conduct/` (calendar and managed conduct state)
 * `program/` (agent-local automation/helpers)
 * `artifacts/` (run-scoped artifacts)
 
@@ -145,7 +161,7 @@ Agent identity SHOULD explain:
 
 1. what folders/files exist inside `world/house/<agent>/` (home scope),
 2. what shared collaboration areas exist outside home (for example `world/workplace/<project>/`),
-3. which locations are writable vs read-only under current conduct policy,
+3. which locations are writable vs read-only under current conduct,
 4. assigned project roots (for example `world/workplace/<project>/`) and shared processing roots (for example `world/library/processed/`).
 
 This orientation MUST be explicit in identity files (`IDENTITY.md` and/or `TOOLS.md`) so agents can reason about safe collaboration paths.
@@ -207,9 +223,9 @@ Canonical CLI parity surface:
 * `node command/agent_admin.mjs stop --name <agent>`
 * `node command/agent_admin.mjs restart --name <agent>`
 
-Establish reconcile result MUST report:
+Establish reconcile produce MUST report:
 
-* `status`: one of `created`, `updated`, `unchanged`
+* `produce`: one of `created`, `updated`, `unchanged`
 * `changed`: boolean
 * `changes`: deterministic list of updated areas
 
@@ -226,7 +242,7 @@ Managed-purpose identity block:
   * `<!-- managed-purpose:end -->`
 * Reconcile updates this bounded section in place instead of appending duplicates.
 
-Managed calendar policy:
+Managed calendar conduct:
 
 * Reconcile MAY write `world/house/<agent>/conduct/calendar.pya` when missing.
 * Reconcile MAY update that file only when it is managed (`# managed by agent_admin`) or absent.
@@ -457,7 +473,7 @@ Gold records are intended for two complementary training objectives:
   * `chosen` <- `gold_positive`
   * `rejected` <- `gold_negative`
 * Train with a preference objective (for example DPO, ORPO, or KTO).
-* This teaches ranking behavior: prefer accepted outputs and avoid rejected patterns.
+* This teaches ranking conduct: prefer accepted outputs and avoid rejected patterns.
 
 Guideline:
 
@@ -491,7 +507,7 @@ Optional heavy mode:
 2. Load or create the session history.
 3. Build prompt context from system + memory + history + current input.
 4. Call the mind backend with tool definitions.
-5. If tool calls are present, execute each tool and append tool results as `tool` role messages.
+5. If tool calls are present, execute each tool and append tool produce messages as `tool` role messages.
 6. Continue the loop until a response without tool calls is returned, or a max iteration cap is reached.
 7. Save the user message and final assistant response to session history.
 
@@ -501,16 +517,16 @@ A hard limit prevents runaway loops. Default `max_iterations = 20`.
 
 ### 7.3 Tool execution order
 
-Tool calls are executed in the order returned. Results are appended immediately after execution.
+Tool calls are executed in the order returned. Tool produce is appended immediately after execution.
 
 ### 7.4 Tool approval gating (normative)
 
-Tool approval is policy-driven:
+Tool approval is conduct-driven:
 
 * `can` mood tool entries execute immediately.
 * `propose` mood tool entries require ratification before execution.
 
-Default-tool ratification policy is loaded from:
+Default-tool ratification conduct is loaded from:
 
 ```
 world/house/<agent>/conduct/ratify.pya
@@ -520,14 +536,14 @@ If a proposed tool is denied or unanswered, the tool call is skipped and the loo
 
 Ratification decisions in non-interactive runs (scheduler/channel) are resolved from
 `conduct/ratify.pya` and emitted as `be ratify ya` decision sentences before
-the loop continues. Implementations SHOULD preserve the matched policy key/value
+the loop continues. Implementations SHOULD preserve the matched conduct key/value
 as decision text so audits can reconstruct why a proposed tool was allowed or denied.
 
-### 7.5 Heartbeat behavior (normative)
+### 7.5 Heartbeat conduct (normative)
 
 Heartbeat checks are scheduler-driven and default to every 24 minutes.
 
-Overlap policy:
+Overlap conduct:
 
 * If a prior heartbeat tick is still running when the next tick arrives, skip the next tick.
 
@@ -553,24 +569,24 @@ If tools depend on channel or session context, the agent loop updates tool conte
 
 ## 9. Artifacts and logging
 
-### 9.1 Mind request/response artifacts
+### 9.1 Mind artifacts
 
-Every mind call records:
+Default conduct:
 
-* request payload
-* response payload
+* mind calls are recorded in newspaper and run-level summaries,
+* per-call request/response dump files are optional and enabled only by conduct.
 
 Storage location defaults to the agent house run scope:
 
-* `world/house/<agent>/artifacts/<run-id>/mind/`
+* `world/house/<agent>/artifacts/<run-id>/mind-trace.pya`
 
 For parity/autofix style jobs, implementations SHOULD keep all per-run diagnostics
 under the same run root, for example:
 
-* `world/house/<agent>/artifacts/<run-id>/status-before.json`
-* `world/house/<agent>/artifacts/<run-id>/status-after.json`
-* `world/house/<agent>/artifacts/<run-id>/delta.json`
-* `world/house/<agent>/artifacts/<run-id>/fix-log/*.log`
+* `world/house/<agent>/artifacts/<run-id>/health-before.pya`
+* `world/house/<agent>/artifacts/<run-id>/health-after.pya`
+* `world/house/<agent>/artifacts/<run-id>/delta.pya`
+* `world/house/<agent>/artifacts/<run-id>/fix-log.pya`
 * `world/house/<agent>/artifacts/<run-id>/summary.pya`
 
 Global newspapers remain outside agent control under world-level logs.
@@ -595,7 +611,7 @@ A loop trace is a structured log of each iteration:
    * home root: `world/house/<agent>/`
    * shared collaboration roots: explicit allowlist entries (for example assigned `world/workplace/<project>/`)
    * shared processing roots: explicit allowlist entries (for example `world/library/processed/`)
-6. Access outside house root and shared allowlist roots MUST be denied by default unless explicitly configured in conduct policy.
+6. Access outside house root and shared allowlist roots MUST be denied by default unless explicitly configured in conduct.
 
 ---
 
@@ -620,7 +636,7 @@ Recommended files to implement this spec:
 * Execute tool calls in a deterministic loop.
 * Record request/response artifacts.
 * Enforce approval on `propose` tools via `conduct/ratify.pya`.
-* Run heartbeat from scheduler with skip-on-overlap policy.
+* Run heartbeat from scheduler with skip-on-overlap conduct.
 
 ## 13. Agent house paths
 
@@ -648,6 +664,202 @@ such as `examples/agent-identity/agent-helper/identity/`.
 * Record request/response artifacts.
 * Persist session history and memory to disk.
 
+### 13.1 Orchestrator contract (normative)
+
+Canonical source of truth for orchestrator conduct lives here.
+
+Orchestrator definition:
+
+1. The orchestrator is the conduct coordinator that turns normalized events into controlled commands and produces output.
+2. The orchestrator MAY be implemented as a mind (LLM-driven) or as a deterministic conduct program.
+3. The orchestrator is not a schedule grammar surface. Schedule timing belongs to calendar conduct.
+4. The orchestrator does not execute tools directly; tool execution belongs to saddle.
+
+Core responsibilities:
+
+1. agent/mode selection,
+2. context inclusion and budget conduct,
+3. next-step decision conduct (`proceed`, `tool intent`, `retry`, `stop`),
+4. retry, alternate, and lift strategy.
+
+### 13.2 Runtime component boundaries (normative)
+
+Canonical runtime components:
+
+1. `calendar`
+2. `router`
+3. `saddle`
+4. `orchestrator`
+
+`calendar` contract:
+
+1. emits scheduled events (heartbeat, poll, retry, maintenance),
+2. persists schedule declarations and leases,
+3. MUST NOT call minds or execute cognition tools.
+
+`router` contract:
+
+1. exposes a single router surface: `be router do`,
+2. operation kind is carried in `as` with literal words:
+   `as wo input`, `as wo produce`, `as wo health`,
+3. endpoints are explicit:
+   `from` is source endpoint and `to` is destination endpoint,
+4. for `as wo produce`, endpoint direction is the inverse of the corresponding `as wo input` decision,
+5. normalizes input to a stable event shape,
+6. applies identity/access checks and resolves session keys,
+7. MUST NOT perform reasoning or tool execution.
+
+Router sentence forms (normative examples):
+
+```pyash
+su name router as wo input
+from name channel matrix room pyash
+to name agent pyash-agent
+ob text "hi"
+be router do
+```
+
+```pyash
+su name router as wo produce
+from name agent pyash-agent
+to name channel matrix room pyash
+ob text "mind is not configured yet; pyash configure mind"
+be router do
+```
+
+```pyash
+su name router as wo health
+be router do
+```
+
+### 13.3 Router produce and error contract (normative)
+
+Router execution MUST return deterministic typed produce by operation kind:
+
+1. `as wo input` returns resolved destination context and normalized payload id.
+2. `as wo produce` returns channel delivery outcome and message id.
+3. `as wo health` returns router health map.
+
+Canonical return routing:
+
+1. router returns a produce sentence,
+2. failures raise canonical error sentences (`be error ya` payload).
+
+Canonical produce sentence parts:
+
+`as wo input`:
+
+1. `su name <payload id>` (normalized payload id, for example `news-20260211-0001`),
+2. `from <source endpoint>`,
+3. `to <destination endpoint>`,
+4. optional resolved agent in `for text "<agent>"`,
+5. optional resolved session in `fromtext text "<session>"`,
+6. `ob text "<payload>"`,
+7. `be input ya`.
+
+`as wo produce`:
+
+1. `su name <message id>` (channel delivery id),
+2. `vyah success` or `vyah fail`,
+3. `from <source endpoint>`,
+4. `to <destination endpoint>`,
+5. `accordingto text "<payload id>"` links produce to the routed input payload id,
+6. optional failure detail in `ob text "<defect>"`,
+7. `be produce ya`.
+
+`as wo health`:
+
+1. `su name router`,
+2. `ob text "<health>"` (`ready` or `defective`),
+3. `as bool <active>`,
+4. `since date "<checked-at>"`,
+5. optional issue summary in `totext text "<issues>"`,
+6. `be health ya`.
+
+Canonical router errors:
+
+1. `router input defective` for invalid/unsupported input endpoint or payload,
+2. `router route defective` for unresolved destination context,
+3. `router produce defective` for output delivery failure.
+
+Produce examples:
+
+```pyash
+su name router as wo input
+from name channel matrix room pyash
+to name agent pyash-agent
+ob text "hi"
+be router do
+```
+
+```pyash
+su name news-20260211-0001
+from name channel matrix room pyash
+to name agent pyash-agent
+for text "pyash-agent"
+fromtext text "matrix:#pyash:matrix.org/@user:matrix.org"
+ob text "hi"
+be input ya
+```
+
+```pyash
+su name router as wo produce
+from name agent pyash-agent
+to name channel matrix room pyash
+ob text "mind is not configured yet; pyash configure mind"
+be router do
+```
+
+```pyash
+su name matrix-event-12345
+vyah success
+from name agent pyash-agent
+to name channel matrix room pyash
+accordingto text "news-20260211-0001"
+be produce ya
+```
+
+```pyash
+su name router
+ob text "ready"
+as bool truth
+since date "2026-02-11T12:00:00Z"
+be health ya
+```
+
+`saddle` contract:
+
+1. is a command bridge for controlled commands,
+2. wraps mind dispatch when requested by orchestrator,
+3. uses canonical invoke surface for mind/refinery targets:
+   `ob text "<input>" for name <target> to name text <output> be evoke do`
+   `ob text "<input>" for name <target> with name <tools map> to name text <output> be evoke do`
+   and MAY include `under name <conduct>` for run-scoped conduct,
+4. exposes tools and enforces allow/deny/approval conduct,
+5. executes tool calls deterministically,
+6. retry/alternate/lift conduct comes from conduct roots (global then agent):
+   `world/conduct/*` then `world/house/<agent>/conduct/*`,
+7. records invoke activity using existing newspaper `be evoke ya` records,
+8. surfaces failures via standard error sentences (`be error ya` / `<verb> defective`),
+9. persists session state, traces, and run artifacts,
+10. returns structured produce/health to orchestrator/router,
+11. MUST NOT perform schedule control, channel routing, or agent-selection conduct.
+
+`orchestrator` contract:
+
+1. may be mind-driven or deterministic,
+2. decides what should happen next,
+3. relies on saddle for deterministic execution and persistence.
+
+Canonical flow:
+
+1. `calendar` emits event,
+2. `router` routes event to session context,
+3. `saddle` opens run,
+4. `orchestrator` emits controlled command,
+5. `saddle` executes controlled command and records state,
+6. `router` emits response to origin.
+
 ## 14. Scheduler and load
 
 ### 14.1 Real scheduler requirement
@@ -656,7 +868,7 @@ The system MUST provide a real scheduler runtime (not ad-hoc sleeps in agent log
 
 ### 14.2 Schedule declaration format
 
-Schedules are declared as Pyash sentences (stored in policy/config files, typically under `conduct/`).
+Schedules are declared as Pyash sentences (stored in conduct/config files, typically under `conduct/`).
 
 Canonical calendar declaration pattern:
 
@@ -720,7 +932,7 @@ Rules:
 2. `during` is updated at run start and run end.
 3. `with ve filename ...` contains touched/owned files for the active window when available.
 4. Presence emission must be deterministic and safe to rewrite.
-5. Scheduler overlap/skip policy does not create duplicate active windows.
+5. Scheduler overlap/skip conduct does not create duplicate active windows.
 
 ### 14.5 Single scheduler daemon (normative)
 
@@ -729,15 +941,15 @@ that manages scheduled work for all agents.
 
 Scheduler daemon responsibilities:
 
-1. discover schedule declarations from policy files,
-2. run due jobs with overlap policy (`skip next tick`),
+1. discover schedule declarations from conduct files,
+2. run due jobs with overlap conduct (`skip next tick`),
 3. emit scheduler telemetry,
-4. expose status and control actions.
+4. expose health and control actions.
 
 Initial schedule discovery roots:
 
-* global: `world/conduct/calendar.pya` (fallback: `schedule.pya`)
-* agent-local: `world/house/<agent>/conduct/calendar.pya` (fallback: `schedule.pya`)
+* global: `world/conduct/calendar.pya` (alternate: `schedule.pya`)
+* agent-local: `world/house/<agent>/conduct/calendar.pya` (alternate: `schedule.pya`)
 
 If both global and agent-local schedules define the same `job` for the same
 `agent`, the agent-local declaration MUST take precedence.
@@ -777,9 +989,9 @@ from wo calendar su name matrix probe be health do
 
 Implementation may map these intents to concrete verbs/ceremonies, but they MUST remain callable from Pyash programs and sessions.
 
-### 14.7 Daemon status shape (recommended)
+### 14.7 Daemon health shape (recommended)
 
-Scheduler status SHOULD include:
+Scheduler health SHOULD include:
 
 * daemon running state
 * loaded jobs (agent + job name + interval)
@@ -787,10 +999,10 @@ Scheduler status SHOULD include:
 * overlap skip count per job
 * utilization estimate per job
 
-### 14.8 Service definitions and system block bridge (normative)
+### 14.8 Service definitions (normative)
 
 Calendar entries define only timing/scope.
-Execution/service policy linkage lives in service definition files.
+Execution/service conduct linkage lives in service definition files.
 
 Service definition root:
 
@@ -811,37 +1023,13 @@ fromperson name <wants-target>
 as text "<service-type>"
 ob filename "<exec-start>"
 for name <wanted-by-target>
-onto text "<restart-policy>"
+onto text "<restart-conduct>"
 be service ya
 ```
 
-Systemd equivalence:
+`ob filename` is the canonical execution linkup. If the executable is a Pyash runner, that command may in turn call module/ceremony code.
 
-* `since name` -> `[Unit] After=`
-* `fromperson name` -> `[Unit] Wants=`
-* `as text` -> `[Service] Type=`
-* `ob filename` -> `[Service] ExecStart=`
-* `onto text` -> `[Service] Restart=`
-* `for name` -> `[Install] WantedBy=`
-
-`ob filename` is the canonical execution linkup (`ExecStart` equivalent). If the executable is a Pyash runner, that command may in turn call module/ceremony code.
-
-Service definitions MAY also be represented as a canonical map for format conversion and round-trip.
-Implementations SHOULD support conversions:
-
-* systemd INI -> canonical map -> convenience sentence
-* convenience sentence -> canonical map -> systemd INI
-
-Recommended canonical map keys:
-
-* `unit_after`
-* `unit_wants`
-* `service_type`
-* `service_exec_start`
-* `service_restart`
-* `install_wanted_by`
-
-This bridge SHOULD share parsing/emission infrastructure with existing structured format support (json/yaml/csv map flows).
+Format bridges (for example systemd INI) belong to `documentation/specifications/06-data-formats.md`.
 
 Example:
 
@@ -874,19 +1062,38 @@ Each channel adapter MUST implement:
 
 Inbound channel events MUST be normalized before agent-loop handling.
 
-Required fields:
+Canonical normalized envelope is a single sentence:
 
-* `channelType`
-* `channelId`
-* `eventId`
-* `sender`
-* `text`
-* `timestamp`
+```pyash
+su name <event id>
+fromstate text "matrix"
+from text "!roomid:example.org"
+fromperson text "@user:example.org"
+ob text "hi"
+during date "2026-02-11T12:00:00Z"
+accordingto text "$event122"
+totext text "$thread123"
+be event ya
+```
 
-Optional fields:
+Required sentence parts:
 
-* `threadId`
-* `inReplyToEventId`
+* `su name <event id>`
+* `be event`
+* `fromstate text <channel type>`
+* `from text <channel id>`
+* `fromperson text <sender>`
+* `ob text <message text>`
+* `during date <event time>`
+
+Optional sentence parts:
+
+* `accordingto text <reply to event id>`
+* `totext text <thread id>`
+
+Bridge interoperability note:
+
+* External bridges MAY project this sentence to map keys (`channel_type`, `channel_id`, `event_id`, `from_person`, `text`, `at_time`, `reply_to_event_id`, `thread_id`) for transport adapters.
 
 ### 15.3 Channel schedule orchestration
 
@@ -894,21 +1101,21 @@ Channel polling MUST run under the single scheduler daemon defined in section 14
 
 Continuous operation MUST be daemon-managed; per-agent/per-channel CLI processes are debug/bootstrap helpers only.
 
-### 15.4 Channel policy roots and precedence
+### 15.4 Channel conduct roots and precedence
 
-Channel policy is resolved from:
+Channel conduct is resolved from:
 
 1. global: `world/conduct/channels.pya`
 2. agent-local: `world/house/<agent>/conduct/channels.pya`
 
-Agent-local policy overrides global for overlapping keys.
+Agent-local conduct overrides global for overlapping keys.
 
 ### 15.5 Channel schedule roots and precedence
 
 Channel polling schedules are resolved from:
 
-1. global: `world/conduct/calendar.pya` (fallback: `schedule.pya`)
-2. agent-local: `world/house/<agent>/conduct/calendar.pya` (fallback: `schedule.pya`)
+1. global: `world/conduct/calendar.pya` (alternate: `schedule.pya`)
+2. agent-local: `world/house/<agent>/conduct/calendar.pya` (alternate: `schedule.pya`)
 
 For duplicate `<agent> + <job>` schedule definitions, agent-local takes precedence.
 
@@ -916,7 +1123,7 @@ For duplicate `<agent> + <job>` schedule definitions, agent-local takes preceden
 
 Default channel lane:
 
-* `<channelType>_<channelId>`
+* `<channel_type>_<channel_id>`
 
 After sanitation:
 
@@ -924,20 +1131,20 @@ After sanitation:
 * spaces to `_`
 * non-alphanumeric to `_`
 
-Policy MAY override via lane sentences in `channels.pya`.
+Conduct MAY override via lane sentences in `channels.pya`.
 
 ### 15.7 Checkpoint and dedup
 
 Channel runtimes MUST persist:
 
-* checkpoint state (`conduct/checkpoint-<channel>.json`)
-* dedup state keyed by `eventId` (bounded retention)
+* checkpoint state (`conduct/checkpoint-<channel>.pya`)
+* dedup state keyed by `event id` (bounded retention)
 
 Dedup MUST run before mind-loop invocation.
 
-### 15.8 Mention gate policy
+### 15.8 Mention gate conduct
 
-Channel policy MAY enable mention gating for shared rooms.
+Channel conduct MAY enable mention gating for shared rooms.
 
 When enabled:
 
@@ -946,7 +1153,7 @@ When enabled:
 
 ### 15.9 Approval and tool safety
 
-Approval policy from section 7.4 applies unchanged to channel-triggered runs:
+Approval conduct from section 7.4 applies unchanged to channel-triggered runs:
 
 * `can` tools execute immediately
 * `propose` tools require `conduct/ratify.pya`
@@ -972,7 +1179,7 @@ Suggested path:
 Subprocess agents are treated as callable tools and MUST support:
 
 1. deterministic invocation
-2. deterministic result capture
+2. deterministic produce capture
 3. explicit session lane selection
 
 ## 17. Matrix MVP profile
@@ -991,9 +1198,9 @@ Subprocess agents are treated as callable tools and MUST support:
 1. end-to-end encryption
 2. media/file upload
 3. reactions/edits/redactions
-4. advanced thread semantics beyond basic `threadId` carriage
+4. advanced thread semantics beyond basic `thread_id` carriage
 
-### 17.3 Minimum policy examples
+### 17.3 Minimum conduct examples
 
 Global `world/conduct/channels.pya`:
 
@@ -1018,12 +1225,12 @@ prah
 
 Config precedence (normative):
 1. `matrix channel` config map values
-2. channel policy files (`world/conduct/channels.pya`, then agent-local override)
+2. channel conduct files (`world/conduct/channels.pya`, then agent-local override)
 3. legacy remembered scalar facts (`matrix homeserver`, `matrix access token`, etc.)
 
 Bootstrap auth rule:
 * if `token` is available, runtimes SHOULD use it directly;
-* otherwise runtimes MAY bootstrap credentials using registration/admin policy.
+* otherwise runtimes MAY bootstrap credentials using registration/admin conduct.
 
 Global `world/conduct/calendar.pya`:
 
