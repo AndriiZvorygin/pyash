@@ -252,7 +252,7 @@ test("configure channel matrix appservice mode validates registration and persis
   assert.equal(run.status, 0, run.stderr);
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, true);
-  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.mode, "appservice-push");
   assert.equal(payload.config.longPollMs, 45000);
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
   assert.equal(payload.appservice?.hasAsToken, true);
@@ -262,13 +262,17 @@ test("configure channel matrix appservice mode validates registration and persis
   const channelsPath = path.join(root, "world", "house", "pyash-agent", "conduct", "channels.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  assert.match(secretText, /su name mode ob text "appservice" ya/);
+  assert.match(secretText, /su name mode ob text "appservice-push" ya/);
   assert.match(secretText, /su name long poll ms ob text "45000" ya/);
   assert.match(secretText, /su name bridge service file ob text/);
-  assert.match(channelsText, /su name matrix mode ob text "appservice" ya/);
+  assert.match(channelsText, /su name matrix mode ob text "appservice-push" ya/);
   assert.match(channelsText, /su name matrix long poll ms ob text "45000" ya/);
   assert.match(channelsText, /su name matrix user ob text "@pyash-agent:matrix\.liberit\.ca" ya/);
   assert.match(channelsText, /su name matrix bridge service file ob text/);
+  const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
+  const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
+  assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
+  assert.match(worldCalendarText, /su name channel input for name pyash-agent/);
 });
 
 test("configure channel matrix appservice mode defaults registration path to configure/secret/matrix.yaml", async () => {
@@ -300,7 +304,7 @@ test("configure channel matrix appservice mode defaults registration path to con
   assert.equal(run.status, 0, run.stderr);
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, true);
-  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.mode, "appservice-push");
   assert.equal(payload.config.appserviceRegistration, "configure/secret/matrix.yaml");
   assert.equal(payload.appservice?.path, registrationPath);
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
@@ -332,7 +336,7 @@ test("configure channel matrix appservice mode auto-fills token auth from regist
   assert.equal(run.status, 0, run.stderr);
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, true);
-  assert.equal(payload.config.mode, "appservice");
+  assert.equal(payload.config.mode, "appservice-push");
   assert.equal(payload.config.authMode, "token");
   assert.equal(payload.config.userId, "@agentbot:matrix.liberit.ca");
   assert.equal(payload.config.token, "[redacted]");
@@ -509,6 +513,50 @@ test("configure agent apply writes runtime and binds channel when available", as
   const secondPayload = JSON.parse(second.stdout);
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
+});
+
+test("configure agent skips per-agent channel schedule when channel mode is appservice-push", async () => {
+  const root = await makeRoot();
+  const registrationDir = path.join(root, "configure", "secret");
+  await fs.mkdir(registrationDir, { recursive: true });
+  const registrationPath = path.join(registrationDir, "matrix.yaml");
+  await fs.writeFile(registrationPath, [
+    "id: pyash-agent",
+    "url: http://appservice:9001",
+    "as_token: as-token-123",
+    "hs_token: hs-token-456",
+    "sender_localpart: pyash-agent"
+  ].join("\n") + "\n", "utf8");
+
+  const channelRun = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--mode", "appservice",
+    "--appservice-registration", "configure/secret/matrix.yaml",
+    "--agent", "pyash-agent"
+  ]);
+  assert.equal(channelRun.status, 0, channelRun.stderr);
+  const channelPayload = JSON.parse(channelRun.stdout);
+  assert.equal(channelPayload.config.mode, "appservice-push");
+
+  const run = runCli([
+    "configure", "agent", "improve",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "pyash-agent",
+    "--bind-channel", "truth",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.channelScheduleWrite.ok, false);
+  assert.match(String(payload.channelScheduleWrite.reason || ""), /appservice-push/);
 });
 
 test("configure agent list returns configured agents", async () => {

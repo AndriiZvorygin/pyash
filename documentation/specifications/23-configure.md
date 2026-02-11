@@ -166,6 +166,8 @@ Managed write rules:
 2. repeated runs MUST be idempotent,
 3. caterer sections MUST be replaceable without touching unrelated sections.
 4. interactive setup MAY also write per-agent channel conduct at `world/house/<agent>/conduct/channels.pya`.
+5. when mode is `appservice-push`, configure SHOULD write a global channel input schedule in `world/conduct/calendar.pya`.
+6. when mode is `appservice-push`, configure agent SHOULD avoid writing per-agent channel poll schedules.
 
 ---
 
@@ -225,7 +227,8 @@ Matrix profile minimally covers:
 2. room id/alias,
 3. executive username (optional),
 4. agent user id (optional, recommended),
-5. auth mode: `password | token | shared-secret`.
+5. auth mode: `password | token | shared-secret`,
+6. delivery mode: `sync | poll | appservice-push` (`appservice` accepted as alias).
 
 ---
 

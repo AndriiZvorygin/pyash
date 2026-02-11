@@ -31,7 +31,7 @@ const MIND_RELAYS_BLOCK_NAME = "mind relays";
 const MIND_DEFAULTS_BLOCK_NAME = "mind defaults";
 const DEFAULT_CHANNEL_AGENT_NAME = "pyash-agent";
 const DEFAULT_MIND_RELAY_NAME = "default";
-const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice"];
+const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice-push", "appservice"];
 const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
 const DEFAULT_MATRIX_LONG_POLL_MS = 30000;
 const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "configure/secret/matrix.yaml";
@@ -70,7 +70,7 @@ function usage() {
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
@@ -176,7 +176,8 @@ function normalizeHomeserver(raw) {
 }
 
 function isAppserviceMode(mode) {
-  return String(mode ?? "").trim().toLowerCase() === "appservice";
+  const value = String(mode ?? "").trim().toLowerCase();
+  return value === "appservice" || value === "appservice-push";
 }
 
 function applyMatrixAuthToUrl(url, { token, userId, mode } = {}) {
@@ -499,6 +500,7 @@ function redactMatrixConfig(cfg) {
 
 function normalizeMatrixMode(raw, fallback = DEFAULT_MATRIX_CHANNEL_MODE) {
   const value = String(raw ?? "").trim().toLowerCase();
+  if (value === "appservice") return "appservice-push";
   if (MATRIX_CHANNEL_MODES.includes(value)) return value;
   return fallback;
 }
@@ -881,6 +883,21 @@ function buildChannelPollCalendarBlock({ agentName, channels = [], intervalMinut
   ].join("\n");
 }
 
+function buildChannelInputCalendarBlock({ agentName, channels = [], intervalMinutes = 1 }) {
+  const interval = Math.max(1, Math.floor(Number(intervalMinutes) || 1));
+  const orderedChannels = Array.from(new Set(
+    (Array.isArray(channels) ? channels : [])
+      .map((value) => String(value ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  ));
+  const channelValues = orderedChannels.length ? orderedChannels : ["matrix"];
+  const vectorLiteral = channelValues.map((value) => quoteText(value)).join(" ");
+  return [
+    `su name channel input for name ${agentName} with ve text ${vectorLiteral} vyah habit during minute ${interval} be calendar ya`,
+    "su name channel input lane ob text \"channel_input\" ya"
+  ].join("\n");
+}
+
 function scrubLegacyMatrixChannelSeed(text) {
   const original = String(text ?? "");
   const lines = original.split("\n");
@@ -1031,10 +1048,10 @@ function matrixVerification(cfg) {
   if (!Number.isFinite(longPollMs) || longPollMs <= 0) {
     errors.push({ code: "invalid_long_poll_ms", message: "long poll ms must be a positive number" });
   }
-  if (channelMode === "appservice" && !appserviceRegistration) {
+  if (isAppserviceMode(channelMode) && !appserviceRegistration) {
     errors.push({
       code: "missing_appservice_registration",
-      message: "appservice registration path is required for appservice mode"
+      message: "appservice registration path is required for appservice-push mode"
     });
   }
   if (authMode === "shared-secret" && !matrixSupportsSharedSecret(homeserver)) {
@@ -1324,7 +1341,7 @@ async function matrixDoctor({ rootDir }) {
   for (const err of verification.errors) issues.push({ code: err.code, kind: "invalid", message: err.message });
   for (const warn of verification.warnings) issues.push({ code: warn.code, kind: "warning", message: warn.message });
   let appservice = null;
-  if (resolved.mode === "appservice" && resolved.appserviceRegistration) {
+  if (isAppserviceMode(resolved.mode) && resolved.appserviceRegistration) {
     try {
       const loaded = await readMatrixAppserviceRegistration({
         rootDir,
@@ -1401,7 +1418,7 @@ function collectMatrixFromFlags({ args, prior }) {
   const appserviceRegistration = String(
     parseArgValue(args, "--appservice-registration")
       ?? prior.appserviceRegistration
-      ?? (mode === "appservice" ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION : "")
+      ?? (isAppserviceMode(mode) ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION : "")
   ).trim();
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
@@ -1519,18 +1536,18 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
         true
       );
       if (useDetectedAppservice) {
-        channelMode = "appservice";
+        channelMode = "appservice-push";
         appserviceRegistration = detectedDefaultAppservicePath;
         appserviceDetectedAccepted = true;
-        textOut("- mode set to appservice");
+        textOut("- mode set to appservice-push");
       }
     }
 
     if (!channelMode) {
       printer.header("A.2 Delivery Mode");
       printer.why("Delivery mode controls how fast channel input reaches the router.");
-      printer.how("sync uses long-poll, poll is low-overhead fallback, appservice prepares push integration.");
-      printer.examples("sync | appservice | poll");
+      printer.how("sync uses long-poll, poll is low-overhead fallback, appservice-push enables global input with fallback.");
+      printer.examples("sync | appservice-push | poll");
       while (!channelMode) {
         const enteredMode = normalizeMatrixMode(
           await ask("Channel mode", normalizeMatrixMode(prior.mode || "", DEFAULT_MATRIX_CHANNEL_MODE)),
@@ -1548,7 +1565,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
     );
     let longPollMs = defaultLongPollMs;
-    if (channelMode !== "appservice") {
+    if (!isAppserviceMode(channelMode)) {
       printer.header("A.3 Long Poll Rhythm");
       printer.why("Long-poll timeout controls receive wait time for sync delivery.");
       printer.how("Use 30000 for normal sync, lower values for poll fallback.");
@@ -1558,7 +1575,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       textOut(`- long poll set to ${longPollMs} ms`);
     }
 
-    if (channelMode === "appservice") {
+    if (isAppserviceMode(channelMode)) {
       printer.header("A.4 Appservice Registration");
       printer.why("Registration file contains service tokens and sender namespace for Matrix push routing.");
       printer.how("Put the file at configure/secret/matrix.yaml (recommended) or provide another local YAML path.");
@@ -1612,7 +1629,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     let adminToken = prior.adminToken || "";
     let authMode = "";
     let useAppserviceRegistrationAuth = false;
-    if (channelMode === "appservice" && appserviceLoaded) {
+    if (isAppserviceMode(channelMode) && appserviceLoaded) {
       printer.header("B.1 Appservice Auth");
       printer.why("Appservice registration already includes sender identity and channel token.");
       printer.how("Pyash will use registration auth automatically for channel setup.");
@@ -1622,7 +1639,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       token = String(appserviceLoaded.asToken || "").trim();
       const derivedUserId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, homeserver);
       userId = derivedUserId || userId;
-      textOut("- auth mode set to token (appservice)");
+      textOut("- auth mode set to token (appservice-push)");
       if (userId) textOut(`- sender user id ${userId}`);
     }
 
@@ -1843,7 +1860,7 @@ function normalizeMatrixCollected(cfg) {
 }
 
 function applyAppserviceAuthDefaults(cfg, appserviceLoaded) {
-  if (!cfg || String(cfg.mode || "").trim().toLowerCase() !== "appservice") return cfg;
+  if (!cfg || !isAppserviceMode(cfg.mode)) return cfg;
   if (!appserviceLoaded) return cfg;
   const next = { ...cfg };
   const currentAuthMode = String(next.authMode || "").trim().toLowerCase();
@@ -1937,21 +1954,43 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
   }
 
   if (cfg.agentName && cfg.agentName.trim()) {
-    const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
-    const calendarExisting = await readText(calendarPath);
-    const calendarPlan = upsertChannelPollCalendarText({
-      existing: calendarExisting,
-      agentName: cfg.agentName,
-      channelType: MATRIX_CATERER_NAME,
-      intervalMinutes: 1
-    });
-    writes.push({
-      path: calendarPath,
-      changed: calendarPlan.changed,
-      action: calendarPlan.action,
-      preview: ["channel poll calendar"],
-      nextText: calendarPlan.nextText
-    });
+    const channelMode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
+    if (channelMode === "appservice-push") {
+      const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
+      const worldCalendarExisting = await readText(worldCalendarPath);
+      const worldInputPlan = planManagedUpsert({
+        existing: worldCalendarExisting,
+        blockName: "channel input schedule",
+        content: buildChannelInputCalendarBlock({
+          agentName: cfg.agentName,
+          channels: [MATRIX_CATERER_NAME],
+          intervalMinutes: 1
+        })
+      });
+      writes.push({
+        path: worldCalendarPath,
+        changed: worldInputPlan.changed,
+        action: worldInputPlan.action,
+        preview: ["channel input schedule"],
+        nextText: worldInputPlan.nextText
+      });
+    } else {
+      const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
+      const calendarExisting = await readText(calendarPath);
+      const calendarPlan = upsertChannelPollCalendarText({
+        existing: calendarExisting,
+        agentName: cfg.agentName,
+        channelType: MATRIX_CATERER_NAME,
+        intervalMinutes: 1
+      });
+      writes.push({
+        path: calendarPath,
+        changed: calendarPlan.changed,
+        action: calendarPlan.action,
+        preview: ["channel poll calendar"],
+        nextText: calendarPlan.nextText
+      });
+    }
   }
 
   return {
@@ -2012,7 +2051,7 @@ async function configureMatrix({ args }) {
   let verification = matrixVerification(cfg);
   let appservice = null;
   let appserviceLoaded = null;
-  if (cfg.mode === "appservice" && cfg.appserviceRegistration) {
+  if (isAppserviceMode(cfg.mode) && cfg.appserviceRegistration) {
     try {
       appserviceLoaded = await readMatrixAppserviceRegistration({
         rootDir,
@@ -3273,7 +3312,8 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
     changed: plan.changed,
     action: plan.action,
     homeserver: matrix.homeserver,
-    room: matrix.room
+    room: matrix.room,
+    mode: normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE)
   };
 }
 
@@ -3786,13 +3826,21 @@ async function configureAgentApply({ args, mode = "establish" }) {
     : { ok: false, reason: "channel binding disabled", path: null, changed: false, action: "none" };
 
   const channelScheduleWrite = (cfg.bindChannel && channelWrite.ok)
-    ? await upsertAgentChannelSchedule({
-      worldRoot,
-      agentName: cfg.agentName,
-      channelType: "matrix",
-      intervalMinutes: 1,
-      dryRun
-    })
+    ? (channelWrite.mode === "appservice-push"
+      ? {
+        ok: false,
+        reason: "channel schedule skipped (appservice-push uses global channel input)",
+        path: null,
+        changed: false,
+        action: "none"
+      }
+      : await upsertAgentChannelSchedule({
+        worldRoot,
+        agentName: cfg.agentName,
+        channelType: "matrix",
+        intervalMinutes: 1,
+        dryRun
+      }))
     : { ok: false, reason: "channel schedule skipped", path: null, changed: false, action: "none" };
 
   let smoke = null;
@@ -3871,6 +3919,8 @@ async function configureAgentApply({ args, mode = "establish" }) {
       textOut(`- channel ${channelWrite.path} (${channelWrite.changed ? "changed" : "unchanged"})`);
       if (channelScheduleWrite.ok) {
         textOut(`- channel schedule ${channelScheduleWrite.path} (${channelScheduleWrite.changed ? "changed" : "unchanged"})`);
+      } else if (channelScheduleWrite.reason) {
+        textOut(`- channel schedule ${channelScheduleWrite.reason}`);
       }
     } else {
       textOut(`- channel skipped (${channelWrite.reason})`);

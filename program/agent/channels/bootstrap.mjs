@@ -7,7 +7,8 @@ function toBaseUrl(raw) {
 }
 
 function isAppserviceMode(mode) {
-  return String(mode ?? "").trim().toLowerCase() === "appservice";
+  const value = String(mode ?? "").trim().toLowerCase();
+  return value === "appservice" || value === "appservice-push";
 }
 
 function applyAuthToUrl(url, { token, userId, mode } = {}) {
