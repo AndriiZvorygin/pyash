@@ -534,6 +534,49 @@ export async function runChannelOnce({
     }, { channelType, agentName });
   }
 
+  const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+  const shouldWarmStart = channelConfig?.warmStart === true
+    && !checkpointText
+    && dedupState.order.length === 0
+    && selfState.order.length === 0;
+  const newCheckpoint = recv?.checkpoint ?? checkpoint;
+  if (shouldWarmStart) {
+    await writeChannelRuntimeState({
+      agentHouse,
+      channelType,
+      checkpoint: newCheckpoint,
+      dedupOrder: dedupState.order,
+      selfOrder: selfState.order,
+      removeLegacy: true
+    });
+    const durationMs = Date.now() - startMs;
+    await appendTelemetry(agentHouse, {
+      timestamp: nowIso(),
+      channelType,
+      event: "poll",
+      decision: "warm_start",
+      durationMs,
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0
+    }, { channelType, agentName });
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs,
+      lastInputAt: "",
+      queueDepth: 0,
+      warmed: true
+    };
+  }
+
   const dispatchResult = await dispatchChannelEvents({
     events,
     channelType,
@@ -550,8 +593,6 @@ export async function runChannelOnce({
     dedupLimit,
     debug
   });
-
-  const newCheckpoint = recv?.checkpoint ?? checkpoint;
   await writeChannelRuntimeState({
     agentHouse,
     channelType,
