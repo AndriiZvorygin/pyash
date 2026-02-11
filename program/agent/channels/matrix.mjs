@@ -20,6 +20,27 @@ async function fetchJoinedRooms({ homeserver, token, fetchImpl }) {
   return { ok: true, status: response.status, rooms };
 }
 
+async function fetchDirectRooms({ homeserver, token, userId, fetchImpl }) {
+  const encodedUserId = encodeURIComponent(String(userId ?? ""));
+  const url = `${homeserver}/_matrix/client/v3/user/${encodedUserId}/account_data/m.direct`;
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) return { ok: false, status: response.status, rooms: [] };
+  const payload = await response.json().catch(() => ({}));
+  const roomIds = new Set();
+  for (const value of Object.values(payload ?? {})) {
+    if (!Array.isArray(value)) continue;
+    for (const roomId of value) {
+      const text = String(roomId ?? "").trim();
+      if (!text) continue;
+      roomIds.add(text);
+    }
+  }
+  return { ok: true, status: response.status, rooms: [...roomIds] };
+}
+
 async function ensureJoinedRooms({ homeserver, token, rooms, fetchImpl }) {
   const diagnostics = [];
   for (const room of rooms) {
@@ -100,6 +121,8 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
     async receive({ config, checkpoint }) {
       const homeserver = toBaseUrl(config?.homeserver);
       const token = config?.token;
+      const userId = String(config?.user ?? "").trim();
+      const includeDirectRooms = config?.includeDirectRooms !== false;
       const rooms = Array.isArray(config?.rooms) ? config.rooms : [];
       if (!homeserver || !token || rooms.length === 0) {
         return {
@@ -129,12 +152,17 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const payload = await syncRes.json();
       const joined = payload?.rooms?.join ?? {};
       const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, fetchImpl });
+      const directRoomsSnapshot = includeDirectRooms && userId
+        ? await fetchDirectRooms({ homeserver, token, userId, fetchImpl })
+        : { ok: false, status: null, rooms: [] };
       const eventTypeCounts = {};
       const joinedRoomIds = Object.keys(joined);
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
       const roomLane = resolvedRooms.laneByRoomId;
+      const directRoomIds = Array.isArray(directRoomsSnapshot?.rooms) ? directRoomsSnapshot.rooms : [];
+      const roomIdsToRead = [...new Set([...resolvedRooms.roomIds, ...directRoomIds])];
       const events = [];
-      for (const roomId of resolvedRooms.roomIds) {
+      for (const roomId of roomIdsToRead) {
         if (!roomId) continue;
         const timelineEvents = joined?.[roomId]?.timeline?.events;
         if (!Array.isArray(timelineEvents)) continue;
@@ -154,8 +182,9 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         diagnostics: {
           since: checkpoint?.nextBatch ?? null,
           nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null,
-          configuredRooms: resolvedRooms.roomIds,
+          configuredRooms: roomIdsToRead,
           joinDiagnostics,
+          directRoomsSnapshot,
           joinedRoomsSnapshot: joinedRoomSnapshot,
           joinedRooms: joinedRoomIds,
           eventTypeCounts
