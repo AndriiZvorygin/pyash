@@ -164,6 +164,27 @@ function normalizeHomeserver(raw) {
   return text;
 }
 
+function isAppserviceMode(mode) {
+  return String(mode ?? "").trim().toLowerCase() === "appservice";
+}
+
+function applyMatrixAuthToUrl(url, { token, userId, mode } = {}) {
+  const text = String(url ?? "");
+  if (!isAppserviceMode(mode)) return text;
+  const parsed = new URL(text);
+  if (token) parsed.searchParams.set("access_token", String(token));
+  if (userId) parsed.searchParams.set("user_id", String(userId));
+  return parsed.toString();
+}
+
+function matrixAuthHeaders({ token, mode, headers = {} } = {}) {
+  const next = { ...headers };
+  if (!isAppserviceMode(mode) && token) {
+    next.Authorization = `Bearer ${token}`;
+  }
+  return next;
+}
+
 function sanitizeMatrixLocalpart(raw) {
   return String(raw ?? "")
     .toLowerCase()
@@ -931,11 +952,14 @@ async function loginMatrixWithPassword({ homeserver, userId, password }) {
   };
 }
 
-async function matrixWhoAmI({ homeserver, token }) {
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/account/whoami`;
+async function matrixWhoAmI({ homeserver, token, userId = "", mode = "" }) {
+  const endpoint = applyMatrixAuthToUrl(
+    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/account/whoami`,
+    { token, userId, mode }
+  );
   const response = await fetch(endpoint, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}` }
+    headers: matrixAuthHeaders({ token, mode })
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -1064,7 +1088,12 @@ async function matrixLiveTest(cfg) {
   }
 
   try {
-    const who = await matrixWhoAmI({ homeserver: cfg.homeserver, token });
+    const who = await matrixWhoAmI({
+      homeserver: cfg.homeserver,
+      token,
+      userId: cfg.userId || "",
+      mode: cfg.mode || ""
+    });
     checks.push({ name: "whoami", ok: true, userId: who.userId || null });
   } catch (err) {
     checks.push({ name: "whoami", ok: false, error: String(err?.message || err) });
@@ -1096,11 +1125,18 @@ async function ensureSharedSecretToken({ cfg, rootDir }) {
   };
 }
 
-async function matrixJoinRoom({ homeserver, token, room }) {
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/join/${encodeURIComponent(room)}`;
+async function matrixJoinRoom({ homeserver, token, room, mode = "", userId = "" }) {
+  const endpoint = applyMatrixAuthToUrl(
+    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/join/${encodeURIComponent(room)}`,
+    { token, userId, mode }
+  );
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: matrixAuthHeaders({
+      token,
+      mode,
+      headers: { "Content-Type": "application/json" }
+    }),
     body: JSON.stringify({})
   });
   const payload = await response.json().catch(() => ({}));
@@ -1112,12 +1148,19 @@ async function matrixJoinRoom({ homeserver, token, room }) {
   return String(payload?.room_id || room);
 }
 
-async function matrixSendRoomMessage({ homeserver, token, roomId, content }) {
+async function matrixSendRoomMessage({ homeserver, token, roomId, content, mode = "", userId = "" }) {
   const txnId = `pyash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`;
+  const endpoint = applyMatrixAuthToUrl(
+    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`,
+    { token, userId, mode }
+  );
   const response = await fetch(endpoint, {
     method: "PUT",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: matrixAuthHeaders({
+      token,
+      mode,
+      headers: { "Content-Type": "application/json" }
+    }),
     body: JSON.stringify({
       msgtype: "m.text",
       body: String(content ?? "")
@@ -1132,11 +1175,18 @@ async function matrixSendRoomMessage({ homeserver, token, roomId, content }) {
   return String(payload?.event_id || "");
 }
 
-async function matrixCreateDirectRoom({ homeserver, token, executiveUsername }) {
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/createRoom`;
+async function matrixCreateDirectRoom({ homeserver, token, executiveUsername, mode = "", userId = "" }) {
+  const endpoint = applyMatrixAuthToUrl(
+    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/createRoom`,
+    { token, userId, mode }
+  );
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: matrixAuthHeaders({
+      token,
+      mode,
+      headers: { "Content-Type": "application/json" }
+    }),
     body: JSON.stringify({
       is_direct: true,
       invite: [String(executiveUsername ?? "")],
@@ -1162,6 +1212,7 @@ async function ensureExecutiveDmRoom({ cfg, rootDir }) {
     homeserver: cfg.homeserver,
     token: cfg.token,
     user: cfg.userId,
+    mode: cfg.mode || "",
     executiveUser: cfg.executiveUsername
   });
   return roomId;
@@ -1185,14 +1236,18 @@ async function matrixPostSetupTest(cfg, { rootDir } = {}) {
     const joinedRoomId = await matrixJoinRoom({
       homeserver: cfg.homeserver,
       token: cfg.token,
-      room: cfg.room
+      room: cfg.room,
+      mode: cfg.mode || "",
+      userId: cfg.userId || ""
     });
     checks.push({ name: "join room", ok: true, roomId: joinedRoomId });
     const roomEventId = await matrixSendRoomMessage({
       homeserver: cfg.homeserver,
       token: cfg.token,
       roomId: joinedRoomId,
-      content: "Pyash configure test greeting. If you can read this, channel setup works."
+      content: "Pyash configure test greeting. If you can read this, channel setup works.",
+      mode: cfg.mode || "",
+      userId: cfg.userId || ""
     });
     checks.push({ name: "send room greeting", ok: true, eventId: roomEventId });
   } catch (err) {
@@ -1207,14 +1262,18 @@ async function matrixPostSetupTest(cfg, { rootDir } = {}) {
         : await matrixCreateDirectRoom({
           homeserver: cfg.homeserver,
           token: cfg.token,
-          executiveUsername: cfg.executiveUsername
+          executiveUsername: cfg.executiveUsername,
+          mode: cfg.mode || "",
+          userId: cfg.userId || ""
         });
       checks.push({ name: "resolve executive dm room", ok: true, roomId: dmRoomId });
       const dmEventId = await matrixSendRoomMessage({
         homeserver: cfg.homeserver,
         token: cfg.token,
         roomId: dmRoomId,
-        content: "Pyash configure DM test greeting. Executive messaging is working."
+        content: "Pyash configure DM test greeting. Executive messaging is working.",
+        mode: cfg.mode || "",
+        userId: cfg.userId || ""
       });
       checks.push({ name: "send executive dm greeting", ok: true, eventId: dmEventId });
     } catch (err) {
@@ -1632,7 +1691,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
           password,
           registrationSharedSecret,
           adminToken,
-          agentName
+          agentName,
+          mode: channelMode
         };
         if (authMode === "password" && !authCfg.token && authCfg.userId && authCfg.password) {
           const login = await loginMatrixWithPassword({

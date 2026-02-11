@@ -2,6 +2,27 @@ function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
 }
 
+function isAppserviceMode(mode) {
+  return String(mode ?? "").trim().toLowerCase() === "appservice";
+}
+
+function applyAuthToUrl(url, { token, userId, mode } = {}) {
+  const text = String(url ?? "");
+  if (!isAppserviceMode(mode)) return text;
+  const parsed = new URL(text);
+  if (token) parsed.searchParams.set("access_token", String(token));
+  if (userId) parsed.searchParams.set("user_id", String(userId));
+  return parsed.toString();
+}
+
+function authHeaders({ token, mode, headers = {} } = {}) {
+  const next = { ...headers };
+  if (!isAppserviceMode(mode) && token) {
+    next.Authorization = `Bearer ${token}`;
+  }
+  return next;
+}
+
 function normalizeLongPollMs(raw, fallback = 30000) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return fallback;
@@ -17,11 +38,11 @@ function pickTextEventBody(event) {
   return body;
 }
 
-async function fetchJoinedRooms({ homeserver, token, fetchImpl }) {
-  const url = `${homeserver}/_matrix/client/v3/joined_rooms`;
+async function fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl }) {
+  const url = applyAuthToUrl(`${homeserver}/_matrix/client/v3/joined_rooms`, { token, userId, mode });
   const response = await fetchImpl(url, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}` }
+    headers: authHeaders({ token, mode })
   });
   if (!response.ok) return { ok: false, status: response.status, rooms: [] };
   const payload = await response.json().catch(() => ({}));
@@ -29,12 +50,15 @@ async function fetchJoinedRooms({ homeserver, token, fetchImpl }) {
   return { ok: true, status: response.status, rooms };
 }
 
-async function fetchDirectRooms({ homeserver, token, userId, fetchImpl }) {
+async function fetchDirectRooms({ homeserver, token, userId, mode, fetchImpl }) {
   const encodedUserId = encodeURIComponent(String(userId ?? ""));
-  const url = `${homeserver}/_matrix/client/v3/user/${encodedUserId}/account_data/m.direct`;
+  const url = applyAuthToUrl(
+    `${homeserver}/_matrix/client/v3/user/${encodedUserId}/account_data/m.direct`,
+    { token, userId, mode }
+  );
   const response = await fetchImpl(url, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}` }
+    headers: authHeaders({ token, mode })
   });
   if (!response.ok) return { ok: false, status: response.status, rooms: [] };
   const payload = await response.json().catch(() => ({}));
@@ -50,19 +74,24 @@ async function fetchDirectRooms({ homeserver, token, userId, fetchImpl }) {
   return { ok: true, status: response.status, rooms: [...roomIds] };
 }
 
-async function ensureJoinedRooms({ homeserver, token, rooms, fetchImpl }) {
+async function ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetchImpl }) {
   const diagnostics = [];
   for (const room of rooms) {
     const roomIdOrAlias = room?.id;
     if (!roomIdOrAlias) continue;
     const encoded = encodeURIComponent(String(roomIdOrAlias));
-    const joinUrl = `${homeserver}/_matrix/client/v3/join/${encoded}`;
+    const joinUrl = applyAuthToUrl(`${homeserver}/_matrix/client/v3/join/${encoded}`, {
+      token,
+      userId,
+      mode
+    });
     const response = await fetchImpl(joinUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders({
+        token,
+        mode,
+        headers: { "Content-Type": "application/json" }
+      }),
       body: "{}"
     });
     const payload = await response.json().catch(() => ({}));
@@ -131,6 +160,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const homeserver = toBaseUrl(config?.homeserver);
       const token = config?.token;
       const userId = String(config?.user ?? "").trim();
+      const mode = String(config?.mode ?? "").trim().toLowerCase();
       const includeDirectRooms = config?.includeDirectRooms !== false;
       const rooms = Array.isArray(config?.rooms) ? config.rooms : [];
       if (!homeserver || !token || rooms.length === 0) {
@@ -145,25 +175,28 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         };
       }
 
-      const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, rooms, fetchImpl });
+      const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetchImpl });
 
       const params = new URLSearchParams();
       const longPollMs = normalizeLongPollMs(config?.longPollMs);
       params.set("timeout", String(longPollMs));
       if (checkpoint?.nextBatch) params.set("since", checkpoint.nextBatch);
-      const syncUrl = `${homeserver}/_matrix/client/v3/sync?${params.toString()}`;
+      const syncUrl = applyAuthToUrl(
+        `${homeserver}/_matrix/client/v3/sync?${params.toString()}`,
+        { token, userId, mode }
+      );
       const syncRes = await fetchImpl(syncUrl, {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` }
+        headers: authHeaders({ token, mode })
       });
       if (!syncRes.ok) {
         throw new Error(`matrix sync failed: status=${syncRes.status}`);
       }
       const payload = await syncRes.json();
       const joined = payload?.rooms?.join ?? {};
-      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, fetchImpl });
+      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
       const directRoomsSnapshot = includeDirectRooms && userId
-        ? await fetchDirectRooms({ homeserver, token, userId, fetchImpl })
+        ? await fetchDirectRooms({ homeserver, token, userId, mode, fetchImpl })
         : { ok: false, status: null, rooms: [] };
       const eventTypeCounts = {};
       const joinedRoomIds = Object.keys(joined);
@@ -206,6 +239,8 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
     async send({ config, event, content }) {
       const homeserver = toBaseUrl(config?.homeserver);
       const token = config?.token;
+      const userId = String(config?.user ?? "").trim();
+      const mode = String(config?.mode ?? "").trim().toLowerCase();
       const roomId = event?.channelId;
       if (!homeserver || !token || !roomId) {
         throw new Error("matrix send missing homeserver/token/room");
@@ -213,17 +248,21 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const txnId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const encodedRoomId = encodeURIComponent(String(roomId));
       const encodedTxnId = encodeURIComponent(txnId);
-      const sendUrl = `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/send/m.room.message/${encodedTxnId}`;
+      const sendUrl = applyAuthToUrl(
+        `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/send/m.room.message/${encodedTxnId}`,
+        { token, userId, mode }
+      );
       const body = {
         msgtype: "m.text",
         body: String(content ?? "")
       };
       const sendRes = await fetchImpl(sendUrl, {
         method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers: authHeaders({
+          token,
+          mode,
+          headers: { "Content-Type": "application/json" }
+        }),
         body: JSON.stringify(body)
       });
       if (!sendRes.ok) {

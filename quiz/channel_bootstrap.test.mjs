@@ -240,3 +240,42 @@ test("matrix executive dm bootstrap creates room and normalizes executive userna
   assert.equal(resolved, "!newdm:matrix.liberit.ca");
   assert.equal(calls.length, 2);
 });
+
+test("matrix executive dm bootstrap appservice mode uses query auth context", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-appservice-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    if (String(url).includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            "@admin:matrix.liberit.ca": ["!dmexisting:matrix.liberit.ca"]
+          };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixExecutiveDmRoom({
+    agentHouse,
+    homeserver: "https://matrix.liberit.ca",
+    token: "as-token-123",
+    user: "@agentbot:matrix.liberit.ca",
+    mode: "appservice",
+    executiveUser: "@admin:matrix.liberit.ca",
+    fetchImpl
+  });
+
+  assert.equal(resolved, "!dmexisting:matrix.liberit.ca");
+  assert.equal(calls.length, 1);
+  const callUrl = new URL(calls[0].url);
+  assert.equal(callUrl.searchParams.get("access_token"), "as-token-123");
+  assert.equal(callUrl.searchParams.get("user_id"), "@agentbot:matrix.liberit.ca");
+  assert.equal(calls[0].opts?.headers?.Authorization, undefined);
+});

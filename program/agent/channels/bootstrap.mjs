@@ -6,6 +6,27 @@ function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
 }
 
+function isAppserviceMode(mode) {
+  return String(mode ?? "").trim().toLowerCase() === "appservice";
+}
+
+function applyAuthToUrl(url, { token, userId, mode } = {}) {
+  const text = String(url ?? "");
+  if (!isAppserviceMode(mode)) return text;
+  const parsed = new URL(text);
+  if (token) parsed.searchParams.set("access_token", String(token));
+  if (userId) parsed.searchParams.set("user_id", String(userId));
+  return parsed.toString();
+}
+
+function authHeaders({ token, mode, headers = {} } = {}) {
+  const next = { ...headers };
+  if (!isAppserviceMode(mode) && token) {
+    next.Authorization = `Bearer ${token}`;
+  }
+  return next;
+}
+
 function randomSuffix() {
   return crypto.randomBytes(4).toString("hex");
 }
@@ -66,29 +87,39 @@ function normalizeConfiguredUserId(raw, homeserver) {
   return sanitizeUserId(text, homeserver);
 }
 
-async function matrixWhoAmI({ homeserver, token, fetchImpl }) {
-  const response = await fetchImpl(`${homeserver}/_matrix/client/v3/account/whoami`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` }
-  });
+async function matrixWhoAmI({ homeserver, token, fetchImpl, userId = "", mode = "" }) {
+  const response = await fetchImpl(
+    applyAuthToUrl(`${homeserver}/_matrix/client/v3/account/whoami`, { token, userId, mode }),
+    {
+      method: "GET",
+      headers: authHeaders({ token, mode })
+    }
+  );
   if (!response.ok) {
     throw new Error(`matrix whoami failed: status=${response.status}`);
   }
   const payload = await response.json().catch(() => ({}));
-  const userId = String(payload?.user_id ?? "").trim();
-  return userId || null;
+  const resolvedUserId = String(payload?.user_id ?? "").trim();
+  return resolvedUserId || null;
 }
 
 async function resolveTokenUserId({
   homeserver,
   token,
   preferredUser,
+  mode,
   fetchImpl
 }) {
   const normalizedPreferred = normalizeConfiguredUserId(preferredUser, homeserver);
   if (normalizedPreferred) return normalizedPreferred;
   try {
-    return await matrixWhoAmI({ homeserver, token, fetchImpl });
+    return await matrixWhoAmI({
+      homeserver,
+      token,
+      userId: normalizedPreferred || "",
+      mode,
+      fetchImpl
+    });
   } catch {
     return null;
   }
@@ -173,14 +204,18 @@ async function readDirectRoomFromAccountData({
   token,
   userId,
   executiveUserId,
+  mode,
   fetchImpl
 }) {
   if (!userId || !executiveUserId) return null;
   const encodedUser = encodeURIComponent(String(userId));
-  const url = `${homeserver}/_matrix/client/v3/user/${encodedUser}/account_data/m.direct`;
+  const url = applyAuthToUrl(
+    `${homeserver}/_matrix/client/v3/user/${encodedUser}/account_data/m.direct`,
+    { token, userId, mode }
+  );
   const response = await fetchImpl(url, {
     method: "GET",
-    headers: { Authorization: `Bearer ${token}` }
+    headers: authHeaders({ token, mode })
   });
   if (!response.ok) return null;
   const payload = await response.json().catch(() => ({}));
@@ -194,15 +229,17 @@ async function createDirectRoom({
   homeserver,
   token,
   executiveUserId,
+  mode,
+  actingUserId,
   fetchImpl
 }) {
-  const url = `${homeserver}/_matrix/client/v3/createRoom`;
+  const url = applyAuthToUrl(
+    `${homeserver}/_matrix/client/v3/createRoom`,
+    { token, userId: actingUserId, mode }
+  );
   const response = await fetchImpl(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
+    headers: authHeaders({ token, mode, headers: { "Content-Type": "application/json" } }),
     body: JSON.stringify({
       is_direct: true,
       invite: [executiveUserId],
@@ -251,11 +288,13 @@ export async function ensureMatrixCredentials({
 
   const cached = await readMatrixAuthCache(agentHouse);
   const desiredUserFromConfig = config?.user ? String(config.user) : null;
+  const mode = config?.mode ? String(config.mode) : "";
   if (cached?.accessToken) {
     const resolvedCachedUser = await resolveTokenUserId({
       homeserver,
       token: cached.accessToken,
       preferredUser: desiredUserFromConfig ?? cached.user,
+      mode,
       fetchImpl
     });
     const resolvedLocalpart = cached.localpart
@@ -282,6 +321,7 @@ export async function ensureMatrixCredentials({
       homeserver,
       token: config.token,
       preferredUser: desiredUserFromConfig,
+      mode,
       fetchImpl
     });
     if (resolvedTokenUser) {
@@ -403,6 +443,7 @@ export async function ensureMatrixExecutiveDmRoom({
   homeserver,
   token,
   user,
+  mode = "",
   executiveUser,
   fetchImpl = globalThis.fetch
 }) {
@@ -422,6 +463,7 @@ export async function ensureMatrixExecutiveDmRoom({
     token,
     userId: user,
     executiveUserId,
+    mode,
     fetchImpl
   });
   if (directRoom) {
@@ -443,6 +485,8 @@ export async function ensureMatrixExecutiveDmRoom({
     homeserver,
     token,
     executiveUserId,
+    mode,
+    actingUserId: user,
     fetchImpl
   });
   const next = {
