@@ -107,3 +107,53 @@ Router `health` mapping:
 2. Object->sentence and sentence->object conversions MUST round-trip deterministically.
 3. Validation failures MUST raise typed router defectives.
 4. New channels (matrix/email/telegram/etc.) MUST reuse the same input/produce/health contract.
+
+## 5. Intake Modes and Fallback (Normative)
+
+Channel runtime MUST support intake modes:
+
+1. `appservice-push` (push-first, global input service)
+2. `sync` (legacy long-poll/sync)
+3. `poll` (explicit polling fallback)
+
+Selection rules:
+
+1. If `appservice-push` is configured and healthy, router intake MUST run in push-first mode.
+2. If push intake is unavailable and fallback is enabled, runtime MUST switch to fallback mode (`sync` or `poll`).
+3. Runtime MUST report active mode and fallback reason in health output.
+4. Existing `sync` behavior MUST remain valid for deployments that are not migrated to push.
+
+## 6. Global Input and Router Fan-Out (Normative)
+
+Push intake MUST be global per channel type, then fan out through router:
+
+1. One channel input service receives events for the channel.
+2. Adapter normalizes native event shape into canonical `as wo input` request.
+3. Router resolves listeners/targets and emits one or more routed `be input ya` produce sentences.
+4. Agent runs consume routed produce; channel adapters are not allowed to bypass router for fan-out.
+
+This separation is mandatory for DRY reuse across Matrix/Telegram/Discord/email adapters.
+
+## 7. Dedup and Idempotency (Normative)
+
+Dedup key:
+
+1. `(channel type, channel id, event id)` MUST identify a single inbound event.
+
+Rules:
+
+1. The same dedup key MUST NOT be routed more than once.
+2. Dedup handling MUST be shared between push and fallback intake paths.
+3. Dedup state MUST use managed Pyash sentence files (`.pya`) and MUST NOT introduce ad hoc JSON state files.
+
+## 8. Health Produce Requirements (Normative)
+
+`as wo health` produce MUST include enough data to diagnose intake mode and fallback:
+
+1. active intake mode
+2. fallback active bool
+3. fallback reason text (when active)
+4. queue depth (if push queue is used)
+5. last push event timestamp (if push is configured)
+
+Implementations MAY add extra health facts, but these required fields MUST remain present.
