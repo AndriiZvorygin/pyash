@@ -135,15 +135,26 @@ async function pathExists(filePath) {
 
 async function detectProjectRoot(startDir = process.cwd()) {
   let current = path.resolve(startDir);
+  let bestMatch = "";
+  let bestScore = -1;
   while (true) {
     const hasConfigureSecret = await pathExists(path.join(current, "configure", "secret.pya"));
     const hasWorldHouse = await pathExists(path.join(current, "world", "house"));
     const hasPyashCommand = await pathExists(path.join(current, "command", "pyash.mjs"));
-    if (hasConfigureSecret || hasWorldHouse || hasPyashCommand) return current;
+    let score = -1;
+    if (hasPyashCommand) score = 3;
+    else if (hasConfigureSecret) score = 2;
+    else if (hasWorldHouse) score = 1;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = current;
+    }
+    if (score === 3) return current;
     const parent = path.dirname(current);
     if (!parent || parent === current) break;
     current = parent;
   }
+  if (bestMatch) return bestMatch;
   return installRoot;
 }
 
