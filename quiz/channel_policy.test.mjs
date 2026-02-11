@@ -6,6 +6,9 @@ import { parseChannelPolicyText, mergeChannelPolicies } from "../program/agent/c
 test("channel policy parser loads matrix settings and room lanes", () => {
   const text = [
     "su name matrix channel ob bool truth ya",
+    'su name matrix mode ob text "appservice" ya',
+    'su name matrix long poll ms ob text "45000" ya',
+    'su name matrix bridge service file ob text "synapse-data/appservices/agent.yaml" ya',
     "su name matrix mention gate ob bool truth ya",
     "su name matrix debug ob bool truth ya",
     'su name matrix homeserver ob text "https://matrix.example.org" ya',
@@ -21,6 +24,9 @@ test("channel policy parser loads matrix settings and room lanes", () => {
   const matrix = policy.matrix;
   assert.ok(matrix);
   assert.equal(matrix.enabled, true);
+  assert.equal(matrix.mode, "appservice");
+  assert.equal(matrix.longPollMs, 45000);
+  assert.equal(matrix.appserviceRegistration, "synapse-data/appservices/agent.yaml");
   assert.equal(matrix.homeserver, "https://matrix.example.org");
   assert.equal(matrix.user, "@agent:example.org");
   assert.equal(matrix.mentionGate, true);
@@ -38,6 +44,8 @@ test("channel policy parser loads matrix settings and room lanes", () => {
 test("channel policy merge applies global defaults with agent overrides", () => {
   const global = parseChannelPolicyText([
     "su name matrix channel ob bool truth ya",
+    'su name matrix mode ob text "sync" ya',
+    'su name matrix long poll ms ob text "30000" ya',
     "su name matrix mention gate ob bool truth ya",
     "su name matrix debug ob bool lie ya",
     'su name matrix homeserver ob text "https://matrix.example.org" ya',
@@ -48,6 +56,8 @@ test("channel policy merge applies global defaults with agent overrides", () => 
   ].join("\n"));
   const agent = parseChannelPolicyText([
     'su name matrix user ob text "@helper:example.org" ya',
+    'su name matrix mode ob text "poll" ya',
+    'su name matrix long poll ms ob text "1000" ya',
     "su name matrix debug ob bool truth ya",
     'su name matrix room ob text "!agent:example.org" ya',
     'su name matrix !agent:example.org lane ob text "agent_lane" ya',
@@ -58,6 +68,8 @@ test("channel policy merge applies global defaults with agent overrides", () => 
   assert.ok(matrix?.enabled);
   assert.equal(matrix?.homeserver, "https://matrix.example.org");
   assert.equal(matrix?.user, "@helper:example.org");
+  assert.equal(matrix?.mode, "poll");
+  assert.equal(matrix?.longPollMs, 1000);
   assert.equal(matrix?.mentionGate, true);
   assert.equal(matrix?.debug, true);
   assert.ok(matrix?.dmRooms?.includes("!dm:example.org"));

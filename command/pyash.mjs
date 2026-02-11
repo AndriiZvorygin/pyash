@@ -31,6 +31,10 @@ const MIND_RELAYS_BLOCK_NAME = "mind relays";
 const MIND_DEFAULTS_BLOCK_NAME = "mind defaults";
 const DEFAULT_CHANNEL_AGENT_NAME = "pyash-agent";
 const DEFAULT_MIND_RELAY_NAME = "default";
+const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice"];
+const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
+const DEFAULT_MATRIX_LONG_POLL_MS = 30000;
+const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "synapse-data/appservices/agent.yaml";
 const MIND_BACKEND_CHOICES = [
   { key: "ollama", value: "ollama command mind", label: "Ollama" },
   { key: "litellm", value: "litellm command mind", label: "LiteLLM" },
@@ -66,7 +70,7 @@ function usage() {
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
@@ -409,6 +413,76 @@ function redactMatrixConfig(cfg) {
   };
 }
 
+function normalizeMatrixMode(raw, fallback = DEFAULT_MATRIX_CHANNEL_MODE) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (MATRIX_CHANNEL_MODES.includes(value)) return value;
+  return fallback;
+}
+
+function normalizeMatrixLongPollMs(raw, fallback = DEFAULT_MATRIX_LONG_POLL_MS) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  const rounded = Math.trunc(value);
+  if (rounded < 1000) return 1000;
+  if (rounded > 120000) return 120000;
+  return rounded;
+}
+
+function stripYamlScalarQuotes(value) {
+  const text = String(value ?? "").trim();
+  if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
+function parseTopLevelYamlScalars(text) {
+  const out = {};
+  const lines = String(text ?? "").split("\n");
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\s+#.*$/u, "");
+    const match = line.match(/^\s*([a-zA-Z0-9_]+)\s*:\s*(.*?)\s*$/u);
+    if (!match) continue;
+    out[match[1]] = stripYamlScalarQuotes(match[2]);
+  }
+  return out;
+}
+
+function resolveConfigPath(rootDir, candidate) {
+  const text = String(candidate ?? "").trim();
+  if (!text) return "";
+  if (path.isAbsolute(text)) return text;
+  return path.resolve(rootDir, text);
+}
+
+async function readMatrixAppserviceRegistration({ rootDir, registrationPath }) {
+  const resolvedPath = resolveConfigPath(rootDir, registrationPath);
+  if (!resolvedPath) throw new Error("appservice registration path is required");
+  const raw = await fs.readFile(resolvedPath, "utf8");
+  const parsed = parseTopLevelYamlScalars(raw);
+  const asToken = String(parsed.as_token ?? "").trim();
+  const hsToken = String(parsed.hs_token ?? "").trim();
+  const senderLocalpart = String(parsed.sender_localpart ?? "").trim();
+  const url = String(parsed.url ?? "").trim();
+  const id = String(parsed.id ?? "").trim();
+  const missing = [];
+  if (!asToken) missing.push("as_token");
+  if (!hsToken) missing.push("hs_token");
+  if (!senderLocalpart) missing.push("sender_localpart");
+  if (!url) missing.push("url");
+  if (missing.length) {
+    throw new Error(`appservice registration missing required keys: ${missing.join(", ")}`);
+  }
+  return {
+    path: resolvedPath,
+    id,
+    asToken,
+    hsToken,
+    senderLocalpart,
+    url
+  };
+}
+
 function sectionPrinter() {
   return {
     header(title) {
@@ -557,6 +631,9 @@ async function loadMatrixConfigFromSecret(rootDir) {
     defaultCaterer,
     homeserver: matrixValues.homeserver || "",
     room: matrixValues.room || "",
+    mode: normalizeMatrixMode(matrixValues.mode || "", DEFAULT_MATRIX_CHANNEL_MODE),
+    longPollMs: normalizeMatrixLongPollMs(matrixValues["long poll ms"] || "", DEFAULT_MATRIX_LONG_POLL_MS),
+    appserviceRegistration: matrixValues["bridge service file"] || matrixValues["appservice registration"] || "",
     executiveUsername: matrixValues["executive username"] || "",
     userId: matrixValues.user || "",
     authMode: matrixValues["auth mode"] || "",
@@ -650,8 +727,13 @@ function buildMatrixMapBlock(cfg) {
   const lines = [
     "su name matrix channel be map def",
     `  su name homeserver ob text ${quoteText(cfg.homeserver)} ya`,
-    `  su name room ob text ${quoteText(cfg.room)} ya`
+    `  su name room ob text ${quoteText(cfg.room)} ya`,
+    `  su name mode ob text ${quoteText(normalizeMatrixMode(cfg.mode, DEFAULT_MATRIX_CHANNEL_MODE))} ya`,
+    `  su name long poll ms ob text ${quoteText(String(normalizeMatrixLongPollMs(cfg.longPollMs, DEFAULT_MATRIX_LONG_POLL_MS)))} ya`
   ];
+  if (cfg.appserviceRegistration) {
+    lines.push(`  su name bridge service file ob text ${quoteText(String(cfg.appserviceRegistration))} ya`);
+  }
   if (cfg.executiveUsername) lines.push(`  su name executive username ob text ${quoteText(cfg.executiveUsername)} ya`);
   if (cfg.userId) lines.push(`  su name user ob text ${quoteText(cfg.userId)} ya`);
   lines.push(`  su name auth mode ob text ${quoteText(cfg.authMode)} ya`);
@@ -673,12 +755,26 @@ function buildChannelConfigureBlock() {
   ].join("\n");
 }
 
-function buildChannelConductBlock({ homeserver, room, mentionGate = false }) {
+function buildChannelConductBlock({
+  homeserver,
+  room,
+  mentionGate = false,
+  mode = DEFAULT_MATRIX_CHANNEL_MODE,
+  longPollMs = DEFAULT_MATRIX_LONG_POLL_MS,
+  appserviceRegistration = ""
+}) {
+  const normalizedMode = normalizeMatrixMode(mode, DEFAULT_MATRIX_CHANNEL_MODE);
+  const normalizedLongPollMs = normalizeMatrixLongPollMs(longPollMs, DEFAULT_MATRIX_LONG_POLL_MS);
   return [
     "su name matrix channel ob bool truth ya",
     `su name matrix mention gate ob bool ${mentionGate ? "truth" : "lie"} ya`,
+    `su name matrix mode ob text ${quoteText(normalizedMode)} ya`,
+    `su name matrix long poll ms ob text ${quoteText(String(normalizedLongPollMs))} ya`,
     `su name matrix homeserver ob text ${quoteText(homeserver)} ya`,
-    `su name matrix room ob text ${quoteText(room)} ya`
+    `su name matrix room ob text ${quoteText(room)} ya`,
+    ...(appserviceRegistration
+      ? [`su name matrix bridge service file ob text ${quoteText(appserviceRegistration)} ya`]
+      : [])
   ].join("\n");
 }
 
@@ -821,6 +917,9 @@ function matrixVerification(cfg) {
   const homeserver = normalizeHomeserver(cfg.homeserver);
   const room = String(cfg.room || "").trim();
   const authMode = String(cfg.authMode || "").trim();
+  const channelMode = normalizeMatrixMode(cfg.mode || "", "");
+  const longPollMs = Number(cfg.longPollMs);
+  const appserviceRegistration = String(cfg.appserviceRegistration || "").trim();
 
   if (!homeserver) errors.push({ code: "missing_homeserver", message: "homeserver is required" });
   if (!/^https?:\/\//i.test(homeserver)) {
@@ -834,6 +933,18 @@ function matrixVerification(cfg) {
 
   if (!["password", "token", "shared-secret"].includes(authMode)) {
     errors.push({ code: "invalid_auth_mode", message: "auth mode must be password, token, or shared-secret" });
+  }
+  if (!MATRIX_CHANNEL_MODES.includes(channelMode)) {
+    errors.push({ code: "invalid_channel_mode", message: `mode must be ${MATRIX_CHANNEL_MODES.join(", ")}` });
+  }
+  if (!Number.isFinite(longPollMs) || longPollMs <= 0) {
+    errors.push({ code: "invalid_long_poll_ms", message: "long poll ms must be a positive number" });
+  }
+  if (channelMode === "appservice" && !appserviceRegistration) {
+    errors.push({
+      code: "missing_appservice_registration",
+      message: "appservice registration path is required for appservice mode"
+    });
   }
   if (authMode === "shared-secret" && !matrixSupportsSharedSecret(homeserver)) {
     errors.push({
@@ -1086,6 +1197,29 @@ async function matrixDoctor({ rootDir }) {
   const issues = [];
   for (const err of verification.errors) issues.push({ code: err.code, kind: "invalid", message: err.message });
   for (const warn of verification.warnings) issues.push({ code: warn.code, kind: "warning", message: warn.message });
+  let appservice = null;
+  if (resolved.mode === "appservice" && resolved.appserviceRegistration) {
+    try {
+      const loaded = await readMatrixAppserviceRegistration({
+        rootDir,
+        registrationPath: resolved.appserviceRegistration
+      });
+      appservice = {
+        path: loaded.path,
+        id: loaded.id || "",
+        senderLocalpart: loaded.senderLocalpart,
+        url: loaded.url,
+        hasAsToken: Boolean(loaded.asToken),
+        hasHsToken: Boolean(loaded.hsToken)
+      };
+    } catch (err) {
+      issues.push({
+        code: "invalid_appservice_registration",
+        kind: "invalid",
+        message: String(err?.message || err)
+      });
+    }
+  }
 
   let live = null;
   if (verification.ok) {
@@ -1107,10 +1241,11 @@ async function matrixDoctor({ rootDir }) {
   }
 
   return {
-    ok: verification.ok && (!live || live.ok),
+    ok: verification.ok && (!live || live.ok) && !issues.some((issue) => issue.kind === "invalid"),
     config: redactMatrixConfig(resolved),
     issues,
     live,
+    appservice,
     remedies
   };
 }
@@ -1129,6 +1264,19 @@ function collectMatrixFromFlags({ args, prior }) {
   const password = parseArgValue(args, "--password") ?? "";
   const registrationSharedSecret = parseArgValue(args, "--registration-shared-secret") ?? prior.registrationSharedSecret ?? "";
   const adminToken = parseArgValue(args, "--admin-token") ?? prior.adminToken ?? "";
+  const mode = normalizeMatrixMode(
+    parseArgValue(args, "--mode") ?? prior.mode ?? DEFAULT_MATRIX_CHANNEL_MODE,
+    DEFAULT_MATRIX_CHANNEL_MODE
+  );
+  const longPollMs = normalizeMatrixLongPollMs(
+    parseArgValue(args, "--long-poll-ms") ?? prior.longPollMs ?? DEFAULT_MATRIX_LONG_POLL_MS,
+    DEFAULT_MATRIX_LONG_POLL_MS
+  );
+  const appserviceRegistration = String(
+    parseArgValue(args, "--appservice-registration")
+      ?? prior.appserviceRegistration
+      ?? (mode === "appservice" ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION : "")
+  ).trim();
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
   const mentionGate = parseTruthy(parseArgValue(args, "--mention-gate"), false);
@@ -1143,6 +1291,9 @@ function collectMatrixFromFlags({ args, prior }) {
     password,
     registrationSharedSecret,
     adminToken,
+    mode,
+    longPollMs,
+    appserviceRegistration,
     agentName,
     writeAgentPolicy,
     mentionGate
@@ -1222,6 +1373,63 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       textOut(`- server check ${reachable ? "passed" : "not verified"}`);
     }
     const host = homeserverHost(homeserver);
+
+    printer.header("A.2 Delivery Mode");
+    printer.why("Delivery mode controls how fast channel input reaches the router.");
+    printer.how("sync uses long-poll, poll is low-overhead fallback, appservice prepares push integration.");
+    printer.examples("sync | appservice | poll");
+    let channelMode = "";
+    while (!channelMode) {
+      const enteredMode = normalizeMatrixMode(
+        await ask("Channel mode", normalizeMatrixMode(prior.mode || "", DEFAULT_MATRIX_CHANNEL_MODE)),
+        ""
+      );
+      if (!enteredMode || !MATRIX_CHANNEL_MODES.includes(enteredMode)) {
+        textOut(`- invalid: mode must be ${MATRIX_CHANNEL_MODES.join(", ")}`);
+        continue;
+      }
+      channelMode = enteredMode;
+    }
+    const defaultLongPollMs = normalizeMatrixLongPollMs(
+      prior.longPollMs || (channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS),
+      channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
+    );
+    printer.header("A.3 Long Poll Rhythm");
+    printer.why("Long-poll timeout controls receive wait time for sync delivery.");
+    printer.how("Use 30000 for normal sync, lower values for poll fallback.");
+    printer.examples("1000 | 30000 | 45000");
+    const enteredLongPollMs = await ask("Long poll ms", String(defaultLongPollMs));
+    const longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
+    textOut(`- long poll set to ${longPollMs} ms`);
+
+    let appserviceRegistration = String(prior.appserviceRegistration || "").trim();
+    if (channelMode === "appservice") {
+      printer.header("A.4 Appservice Registration");
+      printer.why("Registration file contains service tokens and sender namespace for Matrix push routing.");
+      printer.how("Use the Synapse registration YAML path on this host.");
+      printer.examples("synapse-data/appservices/agent.yaml");
+      let validated = false;
+      while (!validated) {
+        appserviceRegistration = String(await ask(
+          "Appservice registration path",
+          appserviceRegistration || DEFAULT_MATRIX_APPSERVICE_REGISTRATION
+        )).trim();
+        try {
+          const loaded = await readMatrixAppserviceRegistration({
+            rootDir,
+            registrationPath: appserviceRegistration
+          });
+          textOut(`- appservice registration loaded (${loaded.path})`);
+          textOut(`- appservice sender localpart ${loaded.senderLocalpart}`);
+          validated = true;
+        } catch (err) {
+          textOut(`- invalid: ${String(err?.message || err)}`);
+          const retry = await askYesNo("Retry appservice registration path", true);
+          if (!retry) throw err;
+          appserviceRegistration = "";
+        }
+      }
+    }
 
     printer.header("B.1 Matrix Auth");
     printer.why("The caterer needs credentials to verify and send.");
@@ -1405,6 +1613,9 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       password,
       registrationSharedSecret,
       adminToken,
+      mode: channelMode,
+      longPollMs,
+      appserviceRegistration,
       writeAgentPolicy,
       agentName,
       mentionGate,
@@ -1419,10 +1630,19 @@ function normalizeMatrixCollected(cfg) {
   const homeserver = normalizeHomeserver(cfg.homeserver);
   const host = homeserverHost(homeserver);
   const room = ensureMatrixIdServer(cfg.room, host);
+  const mode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
+  const longPollMs = normalizeMatrixLongPollMs(
+    cfg.longPollMs,
+    mode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
+  );
+  const appserviceRegistration = String(cfg.appserviceRegistration || "").trim();
   return {
     ...cfg,
     homeserver,
     room,
+    mode,
+    longPollMs,
+    appserviceRegistration,
     executiveUsername: ensureMatrixUserServer(cfg.executiveUsername, host),
     userId: ensureMatrixUserServer(cfg.userId, host),
     authMode: String(cfg.authMode || "password").trim().toLowerCase()
@@ -1464,7 +1684,10 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       content: buildChannelConductBlock({
         homeserver: cfg.homeserver,
         room: cfg.room,
-        mentionGate: cfg.mentionGate
+        mentionGate: cfg.mentionGate,
+        mode: cfg.mode,
+        longPollMs: cfg.longPollMs,
+        appserviceRegistration: cfg.appserviceRegistration
       })
     });
     writes.push({
@@ -1485,7 +1708,10 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       content: buildChannelConductBlock({
         homeserver: cfg.homeserver,
         room: cfg.room,
-        mentionGate: cfg.mentionGate
+        mentionGate: cfg.mentionGate,
+        mode: cfg.mode,
+        longPollMs: cfg.longPollMs,
+        appserviceRegistration: cfg.appserviceRegistration
       })
     });
     writes.push({
@@ -1572,11 +1798,35 @@ async function configureMatrix({ args }) {
   let cfg = normalizeMatrixCollected(collected);
 
   const verification = matrixVerification(cfg);
+  let appservice = null;
+  if (cfg.mode === "appservice" && cfg.appserviceRegistration) {
+    try {
+      const loaded = await readMatrixAppserviceRegistration({
+        rootDir,
+        registrationPath: cfg.appserviceRegistration
+      });
+      appservice = {
+        path: loaded.path,
+        id: loaded.id || "",
+        senderLocalpart: loaded.senderLocalpart,
+        url: loaded.url,
+        hasAsToken: Boolean(loaded.asToken),
+        hasHsToken: Boolean(loaded.hsToken)
+      };
+    } catch (err) {
+      verification.errors.push({
+        code: "invalid_appservice_registration",
+        message: String(err?.message || err)
+      });
+      verification.ok = false;
+    }
+  }
   if (!verification.ok) {
     const payload = {
       ok: false,
       stage: "verification",
       verification,
+      appservice,
       config: redactMatrixConfig(cfg)
     };
     if (json) jsonOut(payload);
@@ -1626,6 +1876,7 @@ async function configureMatrix({ args }) {
     live,
     startSchedulerNow,
     runtime,
+    appservice,
     config: redactMatrixConfig(cfg)
   };
 
@@ -2769,7 +3020,10 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
     content: buildChannelConductBlock({
       homeserver: matrix.homeserver,
       room: matrix.room,
-      mentionGate
+      mentionGate,
+      mode: matrix.mode,
+      longPollMs: matrix.longPollMs,
+      appserviceRegistration: matrix.appserviceRegistration
     })
   });
   if (!dryRun && plan.changed) {
