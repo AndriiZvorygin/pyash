@@ -106,6 +106,14 @@ async function ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetch
   return diagnostics;
 }
 
+function inviteRoomEntries(inviteRooms) {
+  if (!inviteRooms || typeof inviteRooms !== "object") return [];
+  return Object.keys(inviteRooms)
+    .map((roomId) => String(roomId ?? "").trim())
+    .filter(Boolean)
+    .map((id) => ({ id }));
+}
+
 function buildResolvedRoomConfig(rooms, joinDiagnostics) {
   const diagByRoom = new Map(
     (Array.isArray(joinDiagnostics) ? joinDiagnostics : []).map((entry) => [String(entry?.room ?? ""), entry])
@@ -194,6 +202,11 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       }
       const payload = await syncRes.json();
       const joined = payload?.rooms?.join ?? {};
+      const invites = payload?.rooms?.invite ?? {};
+      const inviteRooms = inviteRoomEntries(invites);
+      const inviteJoinDiagnostics = inviteRooms.length
+        ? await ensureJoinedRooms({ homeserver, token, userId, mode, rooms: inviteRooms, fetchImpl })
+        : [];
       const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
       const directRoomsSnapshot = includeDirectRooms && userId
         ? await fetchDirectRooms({ homeserver, token, userId, mode, fetchImpl })
@@ -228,6 +241,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
           nextBatch: payload?.next_batch ?? checkpoint?.nextBatch ?? null,
           configuredRooms: roomIdsToRead,
           joinDiagnostics,
+          inviteJoinDiagnostics,
           directRoomsSnapshot,
           joinedRoomsSnapshot: joinedRoomSnapshot,
           joinedRooms: joinedRoomIds,

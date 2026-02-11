@@ -204,6 +204,68 @@ test("matrix adapter appservice mode sends auth via query params", async () => {
   assert.equal(syncCall.opts?.headers?.Authorization, undefined);
 });
 
+test("matrix adapter receive auto-joins invited rooms", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    const text = String(url);
+    calls.push({ url: text, opts });
+    if (text.includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!joined:server" }; } };
+    }
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server", "!joined:server"] };
+        }
+      };
+    }
+    if (text.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {};
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": { timeline: { events: [] } }
+            },
+            invite: {
+              "!invite:server": {}
+            }
+          }
+        };
+      }
+    };
+  };
+
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@bot:server",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+
+  assert.equal(received.checkpoint?.nextBatch, "tok2");
+  assert.ok(calls.some((call) => call.url.includes("/join/!invite%3Aserver")));
+  assert.ok(Array.isArray(received.diagnostics?.inviteJoinDiagnostics));
+  assert.equal(received.diagnostics?.inviteJoinDiagnostics?.length, 1);
+});
+
 test("matrix adapter receive includes m.direct room events", async () => {
   const fetchImpl = async (url) => {
     const text = String(url);
