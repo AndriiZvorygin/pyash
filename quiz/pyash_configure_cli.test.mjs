@@ -267,6 +267,7 @@ test("configure channel matrix appservice mode validates registration and persis
   assert.match(secretText, /su name bridge service file ob text/);
   assert.match(channelsText, /su name matrix mode ob text "appservice" ya/);
   assert.match(channelsText, /su name matrix long poll ms ob text "45000" ya/);
+  assert.match(channelsText, /su name matrix user ob text "@pyash-agent:matrix\.liberit\.ca" ya/);
   assert.match(channelsText, /su name matrix bridge service file ob text/);
 });
 
