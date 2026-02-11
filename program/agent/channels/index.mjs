@@ -89,6 +89,12 @@ function noMindConfiguredFallback() {
   return "no mind configured yet, run pyash configure mind to set a mind relay";
 }
 
+function mindErrorFallback(err) {
+  const message = String(err?.message ?? err ?? "").trim();
+  if (!message) return "mind defective: run pyash configure mind to verify relay settings";
+  return `mind defective: ${message}`;
+}
+
 function isMindUnavailableError(err) {
   if (!err) return false;
   const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
@@ -364,8 +370,25 @@ async function dispatchChannelEvents({
           responseText = noMindConfiguredFallback();
         }
       } catch (err) {
-        if (!isMindUnavailableError(err)) throw err;
-        responseText = noMindConfiguredFallback();
+        if (isMindUnavailableError(err)) {
+          responseText = noMindConfiguredFallback();
+        } else {
+          responseText = mindErrorFallback(err);
+          if (debug) {
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: "mind_error",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              listener: orchestratorDirective.agentName || listener,
+              payloadId: orchestratorDirective.payloadId,
+              error: String(err?.stack ?? err?.message ?? err)
+            }, { channelType, agentName });
+          }
+        }
       }
       if (debug) {
         await appendTelemetry(agentHouse, {

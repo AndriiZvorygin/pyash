@@ -170,18 +170,23 @@ async function runChannelPollJob({ worldRoot, job }) {
       channelStatus.push(`${channelType}:unsupported`);
       continue;
     }
-    const result = await runChannelOnce({
-      agentName: job.agentName,
-      channelType,
-      channelConfig,
-      adapter,
-      interpretFn: interpret,
-      agentHouse
-    });
-    totalReceived += Number(result?.received ?? 0);
-    totalHandled += Number(result?.handled ?? 0);
-    totalSent += Number(result?.sent ?? 0);
-    channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}`);
+    try {
+      const result = await runChannelOnce({
+        agentName: job.agentName,
+        channelType,
+        channelConfig,
+        adapter,
+        interpretFn: interpret,
+        agentHouse
+      });
+      totalReceived += Number(result?.received ?? 0);
+      totalHandled += Number(result?.handled ?? 0);
+      totalSent += Number(result?.sent ?? 0);
+      channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}`);
+    } catch (err) {
+      const message = String(err?.message ?? err).replace(/\s+/g, " ").trim();
+      channelStatus.push(`${channelType}:error=${message}`);
+    }
   }
 
   if (!channelStatus.length) return { status: "skipped:no_enabled_channels" };

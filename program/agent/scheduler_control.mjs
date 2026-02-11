@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -19,6 +20,10 @@ function healthPath(worldRoot) {
 
 function legacyStatusPath(worldRoot) {
   return path.join(controlDir(worldRoot), "scheduler.status.json");
+}
+
+function daemonLogPath(worldRoot) {
+  return path.join(controlDir(worldRoot), "scheduler.log");
 }
 
 function daemonScriptPath() {
@@ -285,11 +290,26 @@ export async function schedulerBegin({ worldRoot } = {}) {
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
   await fs.mkdir(path.join(controlDir(worldRoot), "service"), { recursive: true });
   await fs.rm(legacyStatusPath(worldRoot), { force: true });
+  const logPath = daemonLogPath(worldRoot);
+  let stdoutFd = null;
+  let stderrFd = null;
+  try {
+    stdoutFd = fsSync.openSync(logPath, "a");
+    stderrFd = fsSync.openSync(logPath, "a");
+  } catch {
+    stdoutFd = null;
+    stderrFd = null;
+  }
+  const stdio = (stdoutFd != null && stderrFd != null)
+    ? ["ignore", stdoutFd, stderrFd]
+    : "ignore";
   const child = spawn(process.execPath, [daemonScriptPath(), "--run", "--world-root", worldRoot], {
     detached: true,
-    stdio: "ignore",
+    stdio,
     cwd: process.cwd()
   });
+  if (stdoutFd != null) fsSync.closeSync(stdoutFd);
+  if (stderrFd != null) fsSync.closeSync(stderrFd);
   child.unref();
   await fs.writeFile(pidPath(worldRoot), `${child.pid}\n`, "utf8");
   const started = await schedulerHealth({ worldRoot });

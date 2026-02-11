@@ -34,6 +34,13 @@ function splitCommand(cmd) {
   return String(cmd).trim().split(/\s+/).filter(Boolean);
 }
 
+function resolveDirectProgram(programName) {
+  const name = String(programName ?? "").trim();
+  if (!name) return name;
+  if (name === "node" && process.execPath) return process.execPath;
+  return name;
+}
+
 function isExecutablePath(filename) {
   try {
     return fsSync.existsSync(filename) && fsSync.statSync(filename).isFile();
@@ -482,7 +489,7 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
     };
     if (canRunDirect(cmd)) {
       const parts = splitCommand(cmd);
-      proc = spawn(parts[0], parts.slice(1), spawnOptions);
+      proc = spawn(resolveDirectProgram(parts[0]), parts.slice(1), spawnOptions);
     } else {
       const shell = resolveShellCommand();
       if (!shell) {
@@ -685,7 +692,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     };
     if (canRunDirect(cmd)) {
       const parts = splitCommand(cmd);
-      proc = spawn(parts[0], parts.slice(1), spawnOptions);
+      proc = spawn(resolveDirectProgram(parts[0]), parts.slice(1), spawnOptions);
     } else {
       const shell = resolveShellCommand();
       if (!shell) {

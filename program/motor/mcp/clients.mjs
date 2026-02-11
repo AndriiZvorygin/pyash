@@ -4,6 +4,13 @@ import path from "node:path";
 
 import { throwErrorSentence } from "../../error.mjs";
 
+export function resolveMcpProgram(command) {
+  const text = String(command ?? "").trim();
+  if (!text) return text;
+  if (text === "node" && process.execPath) return process.execPath;
+  return text;
+}
+
 class McpClient {
   constructor({ command, args, serverName, onExit }) {
     this.serverName = serverName;
@@ -11,7 +18,7 @@ class McpClient {
     this.pending = new Map();
     this.buffer = "";
     this.onExit = typeof onExit === "function" ? onExit : null;
-    this.proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    this.proc = spawn(resolveMcpProgram(command), args, { stdio: ["pipe", "pipe", "pipe"] });
     this.proc.stdout.on("data", (chunk) => this.onData(chunk));
     this.proc.stderr.on("data", () => {});
     this.proc.stdin.on("error", (err) => {

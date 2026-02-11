@@ -62,7 +62,7 @@ async function runLoop(worldRoot) {
     runJob: (job) => runScheduledJob({ worldRoot, job }),
     onError: (err) => {
       // eslint-disable-next-line no-console
-      console.error(`[scheduler daemon error] ${String(err?.message ?? err)}`);
+      console.error(`[scheduler daemon error] ${String(err?.stack ?? err?.message ?? err)}`);
     }
   });
   const { pidPath } = schedulerControlPaths({ worldRoot });
