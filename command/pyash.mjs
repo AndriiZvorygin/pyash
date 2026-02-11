@@ -180,6 +180,14 @@ function matrixUserIdFromLocalpart(localpart, homeserver) {
   return `@${cleaned}:${host}`;
 }
 
+function matrixLocalpartFromUserId(userId) {
+  const text = String(userId ?? "").trim();
+  if (!text.startsWith("@")) return "";
+  const withoutAt = text.slice(1);
+  const colonIndex = withoutAt.indexOf(":");
+  return colonIndex === -1 ? withoutAt : withoutAt.slice(0, colonIndex);
+}
+
 function canonicalizeMindBackend(raw) {
   const text = String(raw ?? "").trim();
   const key = text.toLowerCase();
@@ -1418,6 +1426,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       : "";
     let appserviceRegistration = String(prior.appserviceRegistration || "").trim();
     let appserviceLoaded = null;
+    let appserviceDetectedAccepted = false;
     let channelMode = "";
     if (!appserviceRegistration && detectedDefaultAppservicePath) {
       printer.header("A.1b Appservice Detection");
@@ -1431,6 +1440,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       if (useDetectedAppservice) {
         channelMode = "appservice";
         appserviceRegistration = detectedDefaultAppservicePath;
+        appserviceDetectedAccepted = true;
         textOut("- mode set to appservice");
       }
     }
@@ -1483,10 +1493,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
           textOut(`- appservice registration loaded (${loaded.path})`);
           textOut(`- appservice sender localpart ${loaded.senderLocalpart}`);
           validated = true;
-          const keepDetected = await askYesNo("Use this appservice registration path", true);
-          if (!keepDetected) {
-            validated = false;
-            appserviceRegistration = "";
+          if (!appserviceDetectedAccepted) {
+            textOut("- using appservice registration path");
           }
         } catch {
           appserviceRegistration = "";
@@ -1526,19 +1534,15 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     if (channelMode === "appservice" && appserviceLoaded) {
       printer.header("B.1 Appservice Auth");
       printer.why("Appservice registration already includes sender identity and channel token.");
-      printer.how("Use registration token to skip password/shared-secret setup.");
-      printer.examples("token from configure/secret/matrix.yaml");
-      useAppserviceRegistrationAuth = await askYesNo("Use registration token for channel auth", true);
-      if (useAppserviceRegistrationAuth) {
-        authMode = "token";
-        token = String(appserviceLoaded.asToken || "").trim();
-        const suggestedUserId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, homeserver);
-        userId = ensureMatrixUserServer(
-          await ask("Appservice sender user id", userId || suggestedUserId),
-          host
-        );
-        textOut("- auth mode set to token (appservice)");
-      }
+      printer.how("Pyash will use registration auth automatically for channel setup.");
+      printer.examples("sender_localpart + as_token from configure/secret/matrix.yaml");
+      useAppserviceRegistrationAuth = true;
+      authMode = "token";
+      token = String(appserviceLoaded.asToken || "").trim();
+      const derivedUserId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, homeserver);
+      userId = derivedUserId || userId;
+      textOut("- auth mode set to token (appservice)");
+      if (userId) textOut(`- sender user id ${userId}`);
     }
 
     if (!authMode) {
@@ -1765,8 +1769,11 @@ function applyAppserviceAuthDefaults(cfg, appserviceLoaded) {
     next.authMode = "token";
   }
   if (!next.token) next.token = String(appserviceLoaded.asToken || "").trim();
-  if (!next.userId) {
-    next.userId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, next.homeserver);
+  const expectedUserId = matrixUserIdFromLocalpart(appserviceLoaded.senderLocalpart, next.homeserver);
+  const currentLocalpart = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(next.userId));
+  const expectedLocalpart = sanitizeMatrixLocalpart(appserviceLoaded.senderLocalpart);
+  if (!next.userId || (expectedLocalpart && currentLocalpart !== expectedLocalpart)) {
+    next.userId = expectedUserId;
   }
   return next;
 }
