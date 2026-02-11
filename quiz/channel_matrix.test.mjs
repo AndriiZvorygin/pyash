@@ -166,6 +166,44 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.equal(calls[0].opts?.method, "PUT");
 });
 
+test("matrix adapter appservice mode sends auth via query params", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: { join: { "!room:server": { timeline: { events: [] } } } }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "appservice-token",
+      user: "@agentbot:matrix.example.org",
+      mode: "appservice",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+
+  const syncCall = calls.find((call) => call.url.includes("/_matrix/client/v3/sync?"));
+  assert.ok(syncCall);
+  const syncUrl = new URL(syncCall.url);
+  assert.equal(syncUrl.searchParams.get("access_token"), "appservice-token");
+  assert.equal(syncUrl.searchParams.get("user_id"), "@agentbot:matrix.example.org");
+  assert.equal(syncCall.opts?.headers?.Authorization, undefined);
+});
+
 test("matrix adapter receive includes m.direct room events", async () => {
   const fetchImpl = async (url) => {
     const text = String(url);
