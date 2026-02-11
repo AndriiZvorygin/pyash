@@ -355,6 +355,39 @@ test("configure agent list returns configured agents", async () => {
   assert.equal(payload.agents[0].agentName, "builder");
 });
 
+test("configure agent list excludes houses without configured conduct", async () => {
+  const root = await makeRoot();
+  const runtimeOnlyHouse = path.join(root, "world", "house", "review gen", "gold", "accepted");
+  await fs.mkdir(runtimeOnlyHouse, { recursive: true });
+  await fs.writeFile(path.join(runtimeOnlyHouse, "artifact.pya"), "su name note ob text \"runtime only\" ya\n", "utf8");
+
+  const establish = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "builder",
+    "--purpose", "Build things.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "lie",
+    "--smoke-test", "lie"
+  ]);
+  assert.equal(establish.status, 0, establish.stderr);
+
+  const listed = runCli([
+    "configure", "agent", "list",
+    "--root", root,
+    "--json"
+  ]);
+  assert.equal(listed.status, 0, listed.stderr);
+  const payload = JSON.parse(listed.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.count, 1);
+  assert.equal(payload.agents[0].agentName, "builder");
+});
+
 test("configure agent improve reuses existing runtime defaults", async () => {
   const root = await makeRoot();
   const establish = runCli([
