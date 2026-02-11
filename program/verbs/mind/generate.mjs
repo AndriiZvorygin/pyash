@@ -32,6 +32,7 @@ export async function runGenerate({
   toolMapName,
   backendName,
   ollamaHost,
+  reasoningEffort,
   mindDebug,
   debugMind,
   outputName,
@@ -59,6 +60,7 @@ export async function runGenerate({
     const requestPayload = { mode: "chat", model, messages, stream: true };
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
+    if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     (async () => {
@@ -153,6 +155,7 @@ export async function runGenerate({
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
+    if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     responseText = mockResponse;
@@ -160,6 +163,7 @@ export async function runGenerate({
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
+    if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     if (!backendName) {
