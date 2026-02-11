@@ -303,6 +303,15 @@ function normalizeModelEntry(entry) {
   if (!id) return null;
   const displayName = String(entry?.displayName ?? "").trim();
   const rawModalities = Array.isArray(entry?.inputModalities) ? entry.inputModalities : [];
+  const directReasoning = Array.isArray(entry?.reasoningEffort) ? entry.reasoningEffort : [];
+  const supportedReasoning = Array.isArray(entry?.supportedReasoningEfforts)
+    ? entry.supportedReasoningEfforts.map((item) => item?.reasoningEffort)
+    : [];
+  const reasoningEffort = Array.from(new Set(
+    [...directReasoning, ...supportedReasoning]
+      .map((item) => String(item ?? "").trim())
+      .filter(Boolean)
+  ));
   const inputModalities = rawModalities.length > 0
     ? Array.from(new Set(rawModalities.map((item) => String(item ?? "").trim()).filter(Boolean)))
     : ["text", "image"];
@@ -312,7 +321,7 @@ function normalizeModelEntry(entry) {
     isDefault: Boolean(entry?.isDefault),
     supportsPersonality: Boolean(entry?.supportsPersonality),
     defaultReasoningEffort: entry?.defaultReasoningEffort ?? null,
-    reasoningEffort: Array.isArray(entry?.reasoningEffort) ? entry.reasoningEffort : [],
+    reasoningEffort,
     upgrade: entry?.upgrade ?? null,
     inputModalities
   };
