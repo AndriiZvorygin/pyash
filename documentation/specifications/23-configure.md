@@ -52,10 +52,11 @@ Rules:
 2. New caterers MUST be attached under `configure channel <caterer>`.
 3. `pyash configure` and `pyash configure channel` SHOULD loop back to menu after each completed action until explicit exit.
 4. `pyash configure mind` SHOULD probe Ollama (`/api/tags`) when backend is Ollama-compatible, list available models, and allow selecting default model by name or index.
-5. `pyash configure mind` SHOULD store one global fallback backend/host/model for the default `pyash-agent`.
+5. `pyash configure mind` SHOULD store one global fallback source/backend/host/model for the default `pyash-agent`.
 6. `pyash configure agent` SHOULD allow per-agent backend/model override (including refinery alias in model field).
 7. Mind backend picker SHOULD present short backend keys (for example `openai-api` and `openai-codex`) instead of requiring multi-word backend commands.
 8. `pyash configure mind` SHOULD support named relays (`--relay <name>`) and one selected default relay (`--set-default truth|lie`).
+9. `pyash configure mind` SHOULD support provider-specific auth setup when needed (for example `--codex-login truth` for `openai-codex`).
 
 Canonical onboarding order:
 
@@ -196,6 +197,7 @@ All configure routes SHOULD support:
 3. `--json` (machine-readable report),
 4. `--non-interactive` (flag-only execution).
 5. `--test-now` (enable/disable post-config live test).
+6. for mind setup: `--codex-login` and `--codex-bin` for Codex OAuth bootstrap.
 
 Machine-readable report SHOULD include:
 
@@ -217,6 +219,37 @@ Matrix profile minimally covers:
 3. executive username (optional),
 4. agent user id (optional, recommended),
 5. auth mode: `password | token | shared-secret`.
+
+---
+
+## 9. Mind relay profile (initial)
+
+Mind setup stores short-source identity plus canonical backend command.
+
+Canonical managed shape:
+
+```text
+su name mind relays be map def
+  su name default relay ob text "default" ya
+  su name relay default source ob text "openai-codex" ya
+  su name relay default backend ob text "openai command mind" ya
+  su name relay default host ob text "https://api.openai.com" ya
+  su name relay default model ob text "gpt-5-codex" ya
+prah
+
+su name mind configure be map def
+  su name source ob text "openai-codex" ya
+  su name backend ob text "openai command mind" ya
+  su name host ob text "https://api.openai.com" ya
+  su name model ob text "gpt-5-codex" ya
+prah
+```
+
+Rules:
+
+1. `source` disambiguates auth strategy when canonical backend text is shared.
+2. `openai-codex` MAY invoke Codex App Server login flow during configure.
+3. repeated configure runs MUST be idempotent for relay/source/backend/host/model blocks.
 
 Auth notes:
 

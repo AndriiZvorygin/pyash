@@ -33,6 +33,61 @@ async function makeRoot() {
   return await fs.mkdtemp(path.join(os.tmpdir(), "pyash-configure-"));
 }
 
+async function makeMockCodexBin() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-codex-mock-"));
+  const binPath = path.join(dir, "codex");
+  const script = `#!/usr/bin/env node
+import readline from "node:readline";
+
+if (process.argv[2] !== "app-server") process.exit(2);
+
+const state = { loginId: "login-1", authMode: null, account: null };
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+
+function send(payload) {
+  process.stdout.write(JSON.stringify(payload) + "\\n");
+}
+
+rl.on("line", (line) => {
+  let message;
+  try { message = JSON.parse(line); } catch { return; }
+  const id = message?.id;
+  const method = message?.method;
+  if (method === "initialize") {
+    send({ jsonrpc: "2.0", id, result: { ok: true } });
+    return;
+  }
+  if (method === "initialized") return;
+  if (method === "account/read") {
+    send({ jsonrpc: "2.0", id, result: { requiresOpenaiAuth: true, authMode: state.authMode, account: state.account } });
+    return;
+  }
+  if (method === "account/login/start") {
+    send({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        type: "chatgpt",
+        loginId: state.loginId,
+        authUrl: "https://chatgpt.com/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8765%2Fauth%2Fcallback"
+      }
+    });
+    setTimeout(() => {
+      state.authMode = "chatgpt";
+      state.account = { type: "chatgpt", id: "acct-1" };
+      send({ jsonrpc: "2.0", method: "account/login/completed", params: { loginId: state.loginId, success: true } });
+      send({ jsonrpc: "2.0", method: "account/updated", params: { authMode: "chatgpt" } });
+    }, 10);
+    return;
+  }
+  send({ jsonrpc: "2.0", id, result: {} });
+});
+`;
+  await fs.writeFile(binPath, script, "utf8");
+  await fs.chmod(binPath, 0o755);
+  return { dir, binPath };
+}
+
 test("configure channel list emits matrix caterer", () => {
   const run = runCli(["configure", "channel", "list", "--json"]);
   assert.equal(run.status, 0, run.stderr);
@@ -430,6 +485,38 @@ test("configure mind accepts openai-codex backend alias", async () => {
   const secretPath = path.join(root, "configure", "secret.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   assert.match(secretText, /su name backend ob text "openai command mind" ya/);
+});
+
+test("configure mind can run codex oauth login for openai-codex relay", async () => {
+  const root = await makeRoot();
+  const { binPath } = await makeMockCodexBin();
+  const run = runCli([
+    "configure", "mind",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--relay", "codex",
+    "--set-default", "truth",
+    "--backend", "openai-codex",
+    "--host", "https://api.openai.com",
+    "--model", "gpt-5-codex",
+    "--codex-login", "truth",
+    "--codex-bin", binPath,
+    "--test-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.source, "openai-codex");
+  assert.equal(payload.codexAuth?.ok, true);
+  assert.equal(payload.codexAuth?.action, "login");
+  assert.equal(payload.codexAuth?.started?.loginId, "login-1");
+
+  const secretPath = path.join(root, "configure", "secret.pya");
+  const secretText = await fs.readFile(secretPath, "utf8");
+  assert.match(secretText, /su name source ob text "openai-codex" ya/);
+  assert.match(secretText, /su name relay codex source ob text "openai-codex" ya/);
+  assert.match(secretText, /exists su name mind source ob text "openai-codex" be default ya/);
 });
 
 test("configure mind supports multiple relays and one default relay", async () => {

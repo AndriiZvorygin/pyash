@@ -18,6 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..");
 const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
+const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
 const MATRIX_CATERER_NAME = "matrix";
 const MATRIX_BLOCK_NAME = "matrix channel";
@@ -68,7 +69,7 @@ function usage() {
     "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
-    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>]",
+    "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
     "  pyash configure agent [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
@@ -198,9 +199,12 @@ function findMindBackendChoice(raw) {
       return MIND_BACKEND_CHOICES[index - 1];
     }
   }
+  for (const item of MIND_BACKEND_CHOICES) {
+    if (lowered === item.key) return item;
+  }
   const canonical = canonicalizeMindBackend(text);
   for (const item of MIND_BACKEND_CHOICES) {
-    if (lowered === item.key || canonical === item.value) return item;
+    if (canonical === item.value) return item;
   }
   return null;
 }
@@ -210,6 +214,14 @@ function backendChoiceKey(backend) {
   if (choice) return choice.key;
   if (canonicalizeMindBackend(backend) === "openai command mind") return "openai-api";
   return "ollama";
+}
+
+function resolveMindBackendSource(raw, fallbackBackend = "ollama command mind") {
+  const selected = findMindBackendChoice(raw);
+  if (selected) return selected.key;
+  const fallback = findMindBackendChoice(fallbackBackend);
+  if (fallback) return fallback.key;
+  return backendChoiceKey(fallbackBackend);
 }
 
 function resolveMindBackendSelection(raw, fallbackBackend) {
@@ -222,7 +234,9 @@ function resolveMindBackendSelection(raw, fallbackBackend) {
   return canonicalizeMindBackend(text);
 }
 
-function displayMindBackendKey(backend) {
+function displayMindBackendKey(backend, source = "") {
+  const sourceText = String(source || "").trim().toLowerCase();
+  if (sourceText) return sourceText;
   const canonical = canonicalizeMindBackend(backend);
   if (canonical === "ollama command mind") return "ollama";
   if (canonical === "litellm command mind") return "litellm";
@@ -359,6 +373,29 @@ async function runNodeScript(scriptPath, args, { cwd = process.cwd() } = {}) {
   });
 }
 
+async function runCodexAccountCommand({ action, codexBin = "", cwd = process.cwd(), json = false }) {
+  const args = [action];
+  if (json) args.push("--json");
+  if (codexBin) args.push("--codex-bin", codexBin);
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [codexAccountPath, ...args], {
+      stdio: json ? ["ignore", "pipe", "pipe"] : "inherit",
+      cwd,
+      env: process.env
+    });
+    let stdout = "";
+    let stderr = "";
+    if (json) {
+      child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    }
+    child.on("exit", (code, signal) => {
+      if (signal) process.kill(process.pid, signal);
+      resolve({ code: code ?? 0, stdout, stderr });
+    });
+  });
+}
+
 function blockMarkers(blockName) {
   return {
     start: `# managed by pyash configure ${blockName}:start`,
@@ -470,20 +507,25 @@ async function loadMindConfigFromSecret(rootDir) {
   const relayValues = parseMapBlock(relaysBlock);
   const relays = {};
   for (const [key, value] of Object.entries(relayValues)) {
-    const match = key.match(/^relay (.+) (backend|host|model)$/);
+    const match = key.match(/^relay (.+) (backend|host|model|source)$/);
     if (!match) continue;
     const relayName = String(match[1] ?? "").trim();
     const field = match[2];
     if (!relayName) continue;
-    if (!relays[relayName]) relays[relayName] = { backend: "", host: "", model: "" };
+    if (!relays[relayName]) relays[relayName] = { source: "", backend: "", host: "", model: "" };
     relays[relayName][field] = String(value ?? "").trim();
   }
   if (!Object.keys(relays).length && values.backend && values.host && values.model) {
     relays[DEFAULT_MIND_RELAY_NAME] = {
+      source: backendChoiceKey(values.backend),
       backend: String(values.backend).trim(),
       host: String(values.host).trim(),
       model: String(values.model).trim()
     };
+  }
+  for (const relayName of Object.keys(relays)) {
+    const relay = relays[relayName];
+    if (!relay.source) relay.source = backendChoiceKey(relay.backend || "");
   }
   let defaultRelay = String(relayValues["default relay"] || "").trim();
   if (!defaultRelay) defaultRelay = Object.keys(relays)[0] || DEFAULT_MIND_RELAY_NAME;
@@ -491,10 +533,12 @@ async function loadMindConfigFromSecret(rootDir) {
     defaultRelay = Object.keys(relays)[0];
   }
   const selected = relays[defaultRelay] ?? {};
+  const source = String(selected.source || values.source || "").trim();
   const backend = String(selected.backend || values.backend || "").trim();
   const host = String(selected.host || values.host || "").trim();
   const model = String(selected.model || values.model || "").trim();
   return {
+    source: source || backendChoiceKey(backend),
     backend,
     host,
     model,
@@ -2043,18 +2087,27 @@ async function configureOrchestrator({ args }) {
 }
 
 function collectMindFromFlags({ args, prior }) {
-  const backend = canonicalizeMindBackend(parseArgValue(args, "--backend") ?? prior.backend ?? "ollama command mind");
+  const backendInput = parseArgValue(args, "--backend") ?? prior.source ?? prior.backend ?? "ollama";
+  const source = resolveMindBackendSource(backendInput, prior.backend ?? "ollama command mind");
+  const backend = canonicalizeMindBackend(backendInput ?? prior.backend ?? "ollama command mind");
   const relayName = String(parseArgValue(args, "--relay") ?? prior.defaultRelay ?? DEFAULT_MIND_RELAY_NAME).trim();
   const setDefaultRaw = parseArgValue(args, "--set-default");
   const setDefault = setDefaultRaw == null
     ? (!prior.defaultRelay || relayName === prior.defaultRelay)
     : parseTruthy(setDefaultRaw, true);
+  const codexLogin = source === "openai-codex"
+    ? parseTruthy(parseArgValue(args, "--codex-login"), false)
+    : false;
+  const codexBin = String(parseArgValue(args, "--codex-bin") ?? "").trim();
   return {
     relayName,
     setDefault,
+    source,
     backend,
     host: normalizeHomeserver(parseArgValue(args, "--host") ?? prior.host ?? "http://localhost:11434"),
-    model: String(parseArgValue(args, "--model") ?? prior.model ?? "gpt-oss:latest").trim()
+    model: String(parseArgValue(args, "--model") ?? prior.model ?? "gpt-oss:latest").trim(),
+    codexLogin,
+    codexBin
   };
 }
 
@@ -2088,7 +2141,7 @@ async function collectMindInteractive({ prior }) {
       for (const name of relayNames) {
         const relay = priorRelays[name] ?? {};
         textOut(
-          `su name ${name} fromstate text ${quoteText(displayMindBackendKey(relay.backend))} from text ${quoteText(relay.host || "")} as text ${quoteText(relay.model || "")} be relay ya`
+          `su name ${name} fromstate text ${quoteText(displayMindBackendKey(relay.backend, relay.source || ""))} from text ${quoteText(relay.host || "")} as text ${quoteText(relay.model || "")} be relay ya`
         );
       }
     }
@@ -2110,12 +2163,13 @@ async function collectMindInteractive({ prior }) {
     const backendFallback = backendChoiceKey(prior.backend || "ollama command mind");
     const backendInput = await ask("Mind backend", backendFallback);
     const selectedChoice = findMindBackendChoice(backendInput) ?? findMindBackendChoice(backendFallback);
+    const source = selectedChoice?.key || resolveMindBackendSource(backendInput, prior.backend || "ollama command mind");
     const backend = resolveMindBackendSelection(backendInput, prior.backend || "ollama command mind");
     if (selectedChoice?.key === "openai-api") {
       textOut("- auth note: openai-api expects OPENAI_API_KEY in runtime environment.");
     }
     if (selectedChoice?.key === "openai-codex") {
-      textOut("- auth note: openai-codex expects prior Codex OAuth login in runtime environment.");
+      textOut("- auth note: openai-codex can run Codex OAuth now via codex app-server.");
     }
 
     printer.header("B.1 Provider Endpoint");
@@ -2156,8 +2210,12 @@ async function collectMindInteractive({ prior }) {
     textOut(`- selected model ${model}`);
     const setDefaultFallback = !prior.defaultRelay || relayName === prior.defaultRelay;
     const setDefault = await askYesNo("Set this relay as default", setDefaultFallback);
+    let codexLogin = false;
+    if (source === "openai-codex") {
+      codexLogin = await askYesNo("Run Codex OAuth login now", true);
+    }
 
-    return { relayName, setDefault, backend, host, model };
+    return { relayName, setDefault, source, backend, host, model, codexLogin, codexBin: "" };
   } finally {
     rl.close();
   }
@@ -2166,6 +2224,7 @@ async function collectMindInteractive({ prior }) {
 function mindVerification(cfg) {
   const errors = [];
   if (!String(cfg.relayName ?? "").trim()) errors.push({ code: "missing_relay", message: "relay is required" });
+  if (!String(cfg.source ?? "").trim()) errors.push({ code: "missing_source", message: "source is required" });
   if (!String(cfg.backend ?? "").trim()) errors.push({ code: "missing_backend", message: "backend is required" });
   const host = normalizeHomeserver(cfg.host);
   if (!host) errors.push({ code: "missing_host", message: "host is required" });
@@ -2204,6 +2263,7 @@ async function mindLiveTest(cfg) {
 function buildMindConfigureBlock(cfg) {
   return [
     "su name mind configure be map def",
+    `  su name source ob text ${quoteText(cfg.source || backendChoiceKey(cfg.backend || ""))} ya`,
     `  su name backend ob text ${quoteText(cfg.backend)} ya`,
     `  su name host ob text ${quoteText(cfg.host)} ya`,
     `  su name model ob text ${quoteText(cfg.model)} ya`,
@@ -2219,6 +2279,7 @@ function buildMindRelaysBlock({ relays = {}, defaultRelay = DEFAULT_MIND_RELAY_N
   ];
   for (const relayName of names) {
     const relay = relays[relayName] ?? {};
+    lines.push(`  su name relay ${relayName} source ob text ${quoteText(relay.source || backendChoiceKey(relay.backend || ""))} ya`);
     lines.push(`  su name relay ${relayName} backend ob text ${quoteText(relay.backend ?? "")} ya`);
     lines.push(`  su name relay ${relayName} host ob text ${quoteText(relay.host ?? "")} ya`);
     lines.push(`  su name relay ${relayName} model ob text ${quoteText(relay.model ?? "")} ya`);
@@ -2230,6 +2291,7 @@ function buildMindRelaysBlock({ relays = {}, defaultRelay = DEFAULT_MIND_RELAY_N
 function buildMindDefaultsBlock(cfg, { defaultRelay = DEFAULT_MIND_RELAY_NAME } = {}) {
   return [
     `exists su name mind relay default ob text ${quoteText(defaultRelay)} be default ya`,
+    `exists su name mind source ob text ${quoteText(cfg.source || backendChoiceKey(cfg.backend || ""))} be default ya`,
     `exists su name mind backend be default ob name ${cfg.backend} ya`,
     `exists su name ollama host ob text ${quoteText(cfg.host)} be default ya`,
     `exists su name ai host ob text ${quoteText(cfg.host)} be default ya`,
@@ -2242,6 +2304,7 @@ async function createMindWritePlan({ rootDir, cfg, prior }) {
   const secretExisting = await readText(secretPath);
   const mergedRelays = { ...(prior?.relays ?? {}) };
   mergedRelays[cfg.relayName] = {
+    source: cfg.source || backendChoiceKey(cfg.backend),
     backend: cfg.backend,
     host: cfg.host,
     model: cfg.model
@@ -2293,6 +2356,16 @@ async function askConfigureAnotherRelay() {
   }
 }
 
+async function askContinueWithoutCodexLogin() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const value = (await rl.question("Continue without completed Codex login [y/N]: ")).trim().toLowerCase();
+    return value === "y" || value === "yes";
+  } finally {
+    rl.close();
+  }
+}
+
 async function configureMind({ args }) {
   const rootDir = path.resolve(parseArgValue(args, "--root") ?? process.cwd());
   const json = hasFlag(args, "--json");
@@ -2323,6 +2396,37 @@ async function configureMind({ args }) {
 
     let live = null;
     if (runTestNow) live = await mindLiveTest(cfg);
+    let codexAuth = null;
+    if (cfg.source === "openai-codex" && cfg.codexLogin) {
+      const codexJsonMode = nonInteractive || json;
+      const codexRun = await runCodexAccountCommand({
+        action: "login",
+        codexBin: cfg.codexBin,
+        cwd: rootDir,
+        json: codexJsonMode
+      });
+      if (codexRun.code !== 0) {
+        const errorText = codexJsonMode ? (codexRun.stderr || codexRun.stdout || "codex login failed") : "codex login failed";
+        if (nonInteractive) {
+          const out = { ok: false, stage: "codex auth", error: errorText.trim(), config: cfg };
+          if (json) jsonOut(out);
+          else textOut(`codex auth failed: ${out.error}`);
+          process.exit(1);
+        }
+        textOut(`- codex auth failed: ${errorText.trim() || "unknown error"}`);
+        const continueWithoutLogin = await askContinueWithoutCodexLogin();
+        if (!continueWithoutLogin) process.exit(1);
+        codexAuth = { ok: false, skipped: true, reason: "login failed and user chose continue" };
+      } else if (codexJsonMode) {
+        try {
+          codexAuth = JSON.parse(codexRun.stdout || "{}");
+        } catch {
+          codexAuth = { ok: true };
+        }
+      } else {
+        codexAuth = { ok: true };
+      }
+    }
 
     const plan = await createMindWritePlan({ rootDir, cfg, prior: workingPrior });
     if (!dryRun) await applyWritePlan(plan);
@@ -2340,15 +2444,19 @@ async function configureMind({ args }) {
       config: {
         relayName: cfg.relayName,
         setDefault: cfg.setDefault,
+        source: cfg.source,
         backend: cfg.backend,
         host: cfg.host,
         model: cfg.model,
+        codexLogin: cfg.codexLogin,
         defaultRelay: plan.resolvedDefaultRelay,
         relays: plan.relays
-      }
+      },
+      codexAuth
     };
     runs.push(runOut);
     workingPrior = {
+      source: plan.resolvedDefaultConfig?.source ?? cfg.source,
       backend: plan.resolvedDefaultConfig?.backend ?? cfg.backend,
       host: plan.resolvedDefaultConfig?.host ?? cfg.host,
       model: plan.resolvedDefaultConfig?.model ?? cfg.model,
@@ -2375,6 +2483,10 @@ async function configureMind({ args }) {
     textOut(`- relays configured ${relayNames.join(", ")}`);
   }
   textOut(`- default relay ${out?.config?.defaultRelay ?? DEFAULT_MIND_RELAY_NAME}`);
+  const defaultSource = out?.config?.relays?.[out?.config?.defaultRelay]?.source
+    || out?.config?.source
+    || backendChoiceKey(out?.config?.backend ?? "");
+  textOut(`- default source ${defaultSource}`);
   if (runTestNow) {
     textOut(`mind test ${out?.live?.ok ? "passed" : "failed"}`);
     for (const check of out?.live?.checks || []) {
