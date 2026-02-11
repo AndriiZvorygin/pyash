@@ -26,6 +26,7 @@ Reading order (feature chapters):
 18. `21-coding-saddle-readiness.md` — local-tool-first coding harness profile (`software` saddle).
 19. `22-memory-and-remember.md` — file-only MemCube lifecycle, retention, retrieval, and replay.
 20. `23-configure.md` — channel-first caterer-agnostic configure flow (`configure channel <caterer>`).
+21. `24-channel-contract.md` — canonical sentence contract for router/channel input/produce/health.
 
 Recommended practice loop
 1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
