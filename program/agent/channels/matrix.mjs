@@ -171,6 +171,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const userId = String(config?.user ?? "").trim();
       const mode = String(config?.mode ?? "").trim().toLowerCase();
       const includeDirectRooms = config?.includeDirectRooms !== false;
+      const includeJoinedRooms = config?.includeJoinedRooms === true;
       const rooms = Array.isArray(config?.rooms) ? config.rooms : [];
       if (!homeserver || !token || rooms.length === 0) {
         return {
@@ -217,7 +218,11 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
       const roomLane = resolvedRooms.laneByRoomId;
       const directRoomIds = Array.isArray(directRoomsSnapshot?.rooms) ? directRoomsSnapshot.rooms : [];
-      const roomIdsToRead = [...new Set([...resolvedRooms.roomIds, ...directRoomIds, ...joinedRoomIds])];
+      const roomIdsToRead = [...new Set([
+        ...resolvedRooms.roomIds,
+        ...directRoomIds,
+        ...(includeJoinedRooms ? joinedRoomIds : [])
+      ])];
       const events = [];
       for (const roomId of roomIdsToRead) {
         if (!roomId) continue;
@@ -244,6 +249,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
           joinDiagnostics,
           inviteJoinDiagnostics,
           directRoomsSnapshot,
+          includeJoinedRooms,
           joinedRoomsSnapshot: joinedRoomSnapshot,
           joinedRooms: joinedRoomIds,
           eventTypeCounts

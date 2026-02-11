@@ -129,6 +129,73 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
   assert.equal(result.skippedMention, 1);
 });
 
+test("channel runtime warm-start primes checkpoint and skips backlog on first poll", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-warm-start-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCalls = 0;
+  const sent = [];
+  const adapter = {
+    async receive() {
+      receiveCalls += 1;
+      if (receiveCalls === 1) {
+        return {
+          events: [
+            { channelType: "matrix", channelId: "!pub:server", eventId: "$old1", sender: "@u:server", text: "old backlog message" }
+          ],
+          checkpoint: { nextBatch: "tok-after-warm" }
+        };
+      }
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$new1", sender: "@u:server", text: "new message" }
+        ],
+        checkpoint: { nextBatch: "tok-after-new" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-warm" };
+    }
+  };
+
+  const first = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => ({ ob: { text: "reply" } }),
+    agentHouse
+  });
+  assert.equal(first.warmed, true);
+  assert.equal(first.handled, 0);
+  assert.equal(first.sent, 0);
+
+  const second = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => ({ ob: { text: "reply" } }),
+    agentHouse
+  });
+  assert.equal(second.warmed, undefined);
+  assert.equal(second.handled, 1);
+  assert.equal(second.sent, 1);
+  assert.equal(sent.length, 1);
+});
+
 test("channel runtime sends configure-mind fallback when mind backend is missing", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-no-mind-"));
   const agentHouse = path.join(root, "world", "house", "helper");

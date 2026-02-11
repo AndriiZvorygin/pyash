@@ -244,6 +244,9 @@ async function runChannelPollJob({ worldRoot, job }) {
       ? 1000
       : normalizeLongPollMs(channelConfig.longPollMs, 30000);
     channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
+    if (channelMode === "appservice-push" && channelConfig.warmStart == null) {
+      channelConfig = { ...channelConfig, warmStart: true };
+    }
     if (channelMode === "appservice-push" && parsed.kind !== "input") {
       channelStatus.push(`${channelType}:skipped=push_mode`);
       continue;
