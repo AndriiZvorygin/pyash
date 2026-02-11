@@ -91,6 +91,7 @@ fi
 node "$ROOT_DIR/container/tools/update_compose.mjs"
 
 compose_args=()
+full_compose_args=(-f "$ROOT_DIR/container/service/pyash.yaml" -f "$OVERRIDE_FILE")
 if [[ "$search_only" != "truth" ]]; then
   compose_args=(-f "$ROOT_DIR/container/service/pyash.yaml" -f "$OVERRIDE_FILE")
 fi
@@ -107,6 +108,7 @@ if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; t
     printf 'SEARXNG_SECRET=%s\n' "$secret" > "$searx_env"
   fi
   compose_args+=(-f "$ROOT_DIR/container/service/searxng.yaml")
+  full_compose_args+=(-f "$ROOT_DIR/container/service/searxng.yaml")
 fi
 
 if [[ ${#compose_args[@]} -eq 0 ]]; then
@@ -114,11 +116,13 @@ if [[ ${#compose_args[@]} -eq 0 ]]; then
   exit 1
 fi
 
+if [[ "$restart_container" == "truth" ]]; then
+  docker compose "${full_compose_args[@]}" down --remove-orphans || true
+fi
+
 if [[ "$search_only" != "truth" ]]; then
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
-    if [[ "$restart_container" == "truth" ]]; then
-      docker compose "${compose_args[@]}" down
-    else
+    if [[ "$restart_container" != "truth" ]]; then
       echo "Container already running."
       exec docker exec -it pyash bash
     fi
@@ -126,7 +130,7 @@ if [[ "$search_only" != "truth" ]]; then
 fi
 
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
-  docker compose "${compose_args[@]}" up -d
+  docker compose "${compose_args[@]}" up -d --remove-orphans
 
 if [[ "$search_only" == "truth" ]]; then
   echo "Search service started."
