@@ -369,6 +369,37 @@ test("configure channel matrix resolves root from parent directories when --root
   assert.equal(payload.config.room, "#pyash:matrix.liberit.ca");
 });
 
+test("configure channel matrix root detection ignores nested world-house trap", async () => {
+  const root = await makeRoot();
+  const secretDir = path.join(root, "configure");
+  await fs.mkdir(secretDir, { recursive: true });
+  await fs.writeFile(path.join(secretDir, "secret.pya"), [
+    "# managed by pyash configure matrix channel:start",
+    "su name matrix channel be map def",
+    "  su name homeserver ob text \"https://matrix.liberit.ca\" ya",
+    "  su name room ob text \"#pyash:matrix.liberit.ca\" ya",
+    "prah",
+    "# managed by pyash configure matrix channel:end"
+  ].join("\n") + "\n", "utf8");
+  const nestedCwd = path.join(root, "configure", "secret");
+  await fs.mkdir(path.join(nestedCwd, "world", "house"), { recursive: true });
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--non-interactive",
+    "--dry-run",
+    "--json",
+    "--auth-mode", "token",
+    "--token", "abc123"
+  ], { cwd: nestedCwd });
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.rootDir, root);
+  assert.equal(payload.config.homeserver, "https://matrix.liberit.ca");
+  assert.equal(payload.config.room, "#pyash:matrix.liberit.ca");
+});
+
 test("configure channel matrix doctor fails with missing config", async () => {
   const root = await makeRoot();
   const run = runCli(["configure", "channel", "matrix", "doctor", "--root", root, "--json"]);
