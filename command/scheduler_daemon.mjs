@@ -110,9 +110,23 @@ async function runLoop(worldRoot) {
     void shutdown();
   });
 
+  async function ensureWorldRootAlive() {
+    try {
+      await fs.access(worldRoot);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   await scheduler.runNow();
   scheduler.start();
   const interval = setInterval(async () => {
+    const alive = await ensureWorldRootAlive();
+    if (!alive) {
+      await shutdown();
+      return;
+    }
     const snapshot = scheduler.snapshot();
     await updateSchedulerStatus({
       worldRoot,
