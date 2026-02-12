@@ -3,13 +3,18 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
+const canCaptureNodeChildStdout = (() => {
+  const { stdout } = spawnSync(process.execPath, ["-e", "console.log('ok')"], { encoding: "utf8" });
+  return String(stdout ?? "").trim() === "ok";
+})();
 
-test("run_pya_program prints series result in block form with --result", async () => {
+test("run_pya_program prints series result in block form with --result", async (t) => {
+  if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-run-series-format-"));
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [

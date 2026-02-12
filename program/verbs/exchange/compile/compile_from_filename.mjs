@@ -105,12 +105,22 @@ export async function compile_from_filename_to_filename(sentence) {
       }
       throw err;
     }
-    if (res.error || res.status !== 0) {
+    const spawnError = res.error;
+    const fatalSpawnError = Boolean(spawnError) && (res.status == null || res.status !== 0);
+    if (fatalSpawnError || res.status !== 0) {
       const stderr = res.stderr ? res.stderr.toString("utf8") : "";
+      if (spawnError?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: "file or directory unavailable: pandoc",
+          from: { name: "compile" }
+        });
+      }
       throwErrorSentence({
         name: "compile error",
         message: `compile: pandoc failed${stderr ? ` (${stderr.trim()})` : ""}`,
-        from: { name: "compile" }
+        from: { name: "compile" },
+        raw: { status: res.status ?? null, error: spawnError?.code ?? null }
       });
     }
     const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;

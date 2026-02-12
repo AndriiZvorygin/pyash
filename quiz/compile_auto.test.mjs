@@ -19,7 +19,8 @@ async function importCompileAuto() {
 }
 
 const pandocAvailable = (() => {
-  const res = spawnSync("pandoc", ["-v"], { stdio: "ignore" });
+  const res = spawnSync("pandoc", ["-v"], { stdio: "ignore", timeout: 4000 });
+  if (res.error?.code === "ETIMEDOUT") return false;
   return !res.error;
 })();
 
@@ -28,8 +29,10 @@ const pandocPdfAvailable = (() => {
   const probePath = path.resolve("quiz/sandpit/pandoc-probe.pdf");
   const res = spawnSync("pandoc", ["--from=markdown", "-o", probePath], {
     input: "# probe\n",
-    stdio: ["pipe", "ignore", "ignore"]
+    stdio: ["pipe", "ignore", "ignore"],
+    timeout: 5000
   });
+  if (res.error?.code === "ETIMEDOUT") return false;
   return res.status === 0;
 })();
 
