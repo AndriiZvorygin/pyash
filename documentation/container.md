@@ -9,15 +9,13 @@ Container assets live under `container/` (Dockerfile, orchestrate file, VNC help
 docker build -t pyash-dev -f container/Dockerfile .
 ```
 
-## Guided setup (TUI)
+## Configure + start
 
-For a guided, i18n-friendly setup on Linux:
+Set container options in `configure/container.pya` (and private overrides in `configure/secret.pya`), then start:
 
 ```bash
-./command/container_preparation_tui.sh
+./container/command/begin.sh --restart
 ```
-
-The wizard checks Docker status, asks about GPU/audio/VNC, and prints the exact build/run commands.
 
 ## Run the container (base)
 

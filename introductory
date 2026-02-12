@@ -2,7 +2,27 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONTAINER_CONFIG="$ROOT_DIR/configure/container.pya"
 source "$ROOT_DIR/command/container_preflight.sh"
+
+ensure_container_config_defaults() {
+  mkdir -p "$ROOT_DIR/configure"
+  if [[ ! -f "$CONTAINER_CONFIG" ]]; then
+    cat > "$CONTAINER_CONFIG" <<'EOF'
+exists su name web search motor ob filename "http://searxng:8080/" be default ya
+exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya
+EOF
+    return
+  fi
+  if ! grep -q '^exists su name web search motor ob filename "http://searxng:8080/" be default ya$' "$CONTAINER_CONFIG"; then
+    printf '%s\n' 'exists su name web search motor ob filename "http://searxng:8080/" be default ya' >> "$CONTAINER_CONFIG"
+  fi
+  if ! grep -q '^exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya$' "$CONTAINER_CONFIG"; then
+    printf '%s\n' 'exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya' >> "$CONTAINER_CONFIG"
+  fi
+}
+
+ensure_container_config_defaults
 
 has_dialog="no"
 if [[ "${PYA_USE_DIALOG:-}" == "1" && "${PYA_NO_DIALOG:-}" != "1" ]] && command -v dialog >/dev/null 2>&1; then
@@ -25,12 +45,12 @@ if [[ "$has_dialog" == "yes" ]]; then
   if [[ "$container_running" == "yes" ]]; then
     CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 5 \
       1 "Enter running container (pyash)" \
-      2 "Container preparation (Docker)" \
+      2 "Restart container from config (Docker)" \
       3 "Local quick start (run a demo)" \
       4 "Show commands only") || exit 1
   else
     CHOICE=$(dialog --stdout --title "Pyash introduction" --menu "Choose a path:" 12 70 4 \
-      1 "Container preparation (Docker)" \
+      1 "Start container (Docker)" \
       3 "Local quick start (run a demo)" \
       4 "Show commands only") || exit 1
   fi
@@ -41,9 +61,9 @@ else
   fi
   if [[ "$container_running" == "yes" ]]; then
     echo "1) Enter running container (pyash)"
-    echo "2) Container preparation (Docker)"
+    echo "2) Restart container from config (Docker)"
   else
-    echo "1) Container preparation (Docker)"
+    echo "1) Start container (Docker)"
   fi
   echo "3) Local quick start (run a demo)"
   echo "4) Show commands only"
@@ -59,7 +79,7 @@ case "$CHOICE" in
     if [[ "$buildx_available" != "yes" ]]; then
       echo "Buildx not detected. If you use ./container/build.sh, run: ./container/build.sh --no-buildx"
     fi
-    exec "$ROOT_DIR/command/container_preparation_tui.sh"
+    exec "$ROOT_DIR/container/command/begin.sh" --restart
     ;;
   3)
     echo "Running demo: ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo"
@@ -68,16 +88,16 @@ case "$CHOICE" in
   4)
     cat <<'TEXT'
 Container prep:
-  ./command/container_preparation_tui.sh
+  edit configure/container.pya or configure/secret.pya
 
 Docker compose:
-  ./container/command/begin.sh
+  ./container/command/begin.sh --restart
 
 Local demo:
   ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
 TEXT
     ;;
   *)
-    exec "$ROOT_DIR/command/container_preparation_tui.sh"
+    exec "$ROOT_DIR/container/command/begin.sh"
     ;;
 esac

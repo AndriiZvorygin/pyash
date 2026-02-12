@@ -3,17 +3,41 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 WORKPLACE_CONFIG="$ROOT_DIR/configure/workplace.pya"
+DEFAULT_CONFIG="$ROOT_DIR/configure/default.pya"
+CONTAINER_CONFIG="$ROOT_DIR/configure/container.pya"
+SECRET_CONFIG="$ROOT_DIR/configure/secret.pya"
 OVERRIDE_FILE="$ROOT_DIR/container/building/compose.override.yaml"
 
-get_map_value() {
+get_pyash_value() {
   local key="$1"
+  local file="$2"
   local line
-  if [[ ! -f "$WORKPLACE_CONFIG" ]]; then
+  if [[ ! -f "$file" ]]; then
     return
   fi
   while IFS= read -r line; do
+    if [[ "$line" == "exists su name ${key} ob text \""* ]]; then
+      line="${line#*ob text \"}"
+      echo "${line%\" be default ya}"
+      return
+    fi
+    if [[ "$line" == "exists su name ${key} ob filename \""* ]]; then
+      line="${line#*ob filename \"}"
+      echo "${line%\" be default ya}"
+      return
+    fi
+    if [[ "$line" == "exists su name ${key} ob bool "* ]]; then
+      line="${line#*ob bool }"
+      echo "${line% be default ya}"
+      return
+    fi
     if [[ "$line" == "  su name ${key} ob text \""* ]]; then
       line="${line#*ob text \"}"
+      echo "${line%\" ya}"
+      return
+    fi
+    if [[ "$line" == "  su name ${key} ob filename \""* ]]; then
+      line="${line#*ob filename \"}"
       echo "${line%\" ya}"
       return
     fi
@@ -22,17 +46,45 @@ get_map_value() {
       echo "${line% ya}"
       return
     fi
-  done < "$WORKPLACE_CONFIG"
+  done < "$file"
 }
 
-ai_host="$(get_map_value "ai host")"
-web_search_enabled="$(get_map_value "web search enabled")"
+get_config_value() {
+  local key="$1"
+  local value=""
+  local candidate=""
+  for config in "$DEFAULT_CONFIG" "$CONTAINER_CONFIG" "$SECRET_CONFIG" "$WORKPLACE_CONFIG"; do
+    candidate="$(get_pyash_value "$key" "$config" || true)"
+    if [[ -n "${candidate:-}" ]]; then
+      value="$candidate"
+    fi
+  done
+  echo "$value"
+}
+
+ai_host="$(get_config_value "ai host")"
+if [[ -z "${ai_host:-}" ]]; then
+  ai_host="$(get_config_value "ollama host")"
+fi
+web_search_enabled="$(get_config_value "web search enabled")"
+web_search_motor="$(get_config_value "web search motor")"
 search_only="lie"
 vnc_enabled="truth"
 restart_container="lie"
 
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://mriczo:11434"
+fi
+
+if [[ -z "${web_search_enabled:-}" ]]; then
+  case "${web_search_motor:-}" in
+    http://searxng:8080/*|http://searxng:8080|http://localhost:60490/*|http://localhost:60490)
+      web_search_enabled="truth"
+      ;;
+    *)
+      web_search_enabled="lie"
+      ;;
+  esac
 fi
 
 ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"

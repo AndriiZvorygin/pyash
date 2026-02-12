@@ -265,6 +265,25 @@ Recommended `sandbox configure` keys:
 - `max output bytes` (`num`)
 - `command env allowlist` (`ve text ...`)
 
+Agent directory policy SHOULD be defined in:
+
+- `world/conduct/agent.pya`
+
+Supported policy map shape:
+
+- `su name <agent> directory license be map def`
+- map entries:
+  - `su name "<path>" ob ve text "read" "write" "command" ya`
+- `prah`
+
+Notes:
+
+- `<agent>` may be `default` for fallback.
+- Capability words are `read`, `write`, `command`.
+- When `su name agent sandbox` is truth, runtime MUST prioritize this world policy
+  over agent-memory overrides for directory expansion.
+- If no world policy file exists, sandbox may fallback to legacy house-local behavior.
+
 Policy precedence for `policy mode` is:
 - `session command configure`
 - `agent command configure`
@@ -272,4 +291,4 @@ Policy precedence for `policy mode` is:
 - legacy single-subject keys (`session command policy mode`, `agent command policy mode`, `command policy mode`)
 
 Container or local overrides MAY replace either map in later config files
-(`configure/container.pya`, `configure/secret.pya`, `configure/workplace.pya`).
+(`configure/container.pya`, `configure/secret.pya`).
