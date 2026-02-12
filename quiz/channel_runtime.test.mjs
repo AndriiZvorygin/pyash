@@ -504,6 +504,71 @@ test("channel runtime appends DM tool call and summary block when enabled", asyn
   }
 });
 
+test("channel runtime emits tool call none when tool-expected prompt returns no tool calls", async () => {
+  const originalMock = process.env.PYA_MIND_RESPONSE;
+  try {
+    forget();
+    resetMindLogs();
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-dm-tool-none-"));
+    const worldRoot = path.join(root, "world");
+    const agentHouse = path.join(worldRoot, "house", "helper");
+    await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+    await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
+
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([
+      { message: { content: "done" } }
+    ]);
+
+    const sent = [];
+    const adapter = {
+      async receive() {
+        return {
+          events: [
+            {
+              channelType: "matrix",
+              channelId: "!dm:server",
+              eventId: "$dm-none-1",
+              sender: "@u:server",
+              text: "please do a web search for pyash"
+            }
+          ],
+          checkpoint: { nextBatch: "tok-dm-none" }
+        };
+      },
+      async send({ content }) {
+        sent.push(content);
+        return { eventId: "$out-dm-none" };
+      }
+    };
+
+    const result = await runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig: {
+        user: "@helper:server",
+        mentionGate: false,
+        dmRooms: ["!dm:server"],
+        dmToolSummary: true
+      },
+      adapter,
+      interpretFn: interpret,
+      agentHouse
+    });
+
+    assert.equal(result.handled, 1);
+    assert.equal(result.sent, 2);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0], "tool call: none");
+    assert.equal(sent[1], "done");
+  } finally {
+    if (originalMock === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalMock;
+    forget();
+    resetMindLogs();
+  }
+});
+
 test("channel debug mode logs per-event routing decisions", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-debug-"));
   const agentHouse = path.join(root, "world", "house", "helper");
