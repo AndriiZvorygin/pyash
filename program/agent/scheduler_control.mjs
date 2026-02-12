@@ -10,8 +10,12 @@ function controlDir(worldRoot) {
   return path.join(worldRoot, "conduct");
 }
 
+function presenceDir(worldRoot) {
+  return path.join(worldRoot, "presence");
+}
+
 function pidPath(worldRoot) {
-  return path.join(controlDir(worldRoot), "scheduler.pid");
+  return path.join(presenceDir(worldRoot), "scheduler.pid");
 }
 
 function healthPath(worldRoot) {
@@ -351,6 +355,7 @@ export async function schedulerBegin({ worldRoot } = {}) {
     return { ...health, action: "begin", changed: false };
   }
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
+  await fs.mkdir(presenceDir(worldRoot), { recursive: true });
   await fs.mkdir(path.join(controlDir(worldRoot), "service"), { recursive: true });
   await fs.rm(legacyStatusPath(worldRoot), { force: true });
   const logPath = daemonLogPath(worldRoot);
