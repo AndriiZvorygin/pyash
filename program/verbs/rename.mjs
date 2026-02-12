@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -27,8 +28,16 @@ export async function rename(sentence, { remember: rememberFn = remember } = {})
       raw: { sentence }
     });
   }
-  const resolvedSource = path.resolve(String(source));
-  const resolvedDest = path.resolve(String(dest));
+  const { resolved: resolvedSource, outside: sourceOutside, agentCwd } = resolveAgentPath(String(source), { rememberFn });
+  const { resolved: resolvedDest, outside: destOutside } = resolveAgentPath(String(dest), { rememberFn });
+  if (sourceOutside || destOutside) {
+    throwErrorSentence({
+      name: "rename defective",
+      message: `rename defective: outside agent cwd (${agentCwd})`,
+      from: { name: "rename" },
+      raw: { source, dest }
+    });
+  }
   try {
     await fs.stat(resolvedSource);
   } catch (err) {

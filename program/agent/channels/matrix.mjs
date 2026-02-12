@@ -171,7 +171,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const userId = String(config?.user ?? "").trim();
       const mode = String(config?.mode ?? "").trim().toLowerCase();
       const includeDirectRooms = config?.includeDirectRooms !== false;
-      const includeJoinedRooms = config?.includeJoinedRooms === true;
+      const includeJoinedRooms = config?.includeJoinedRooms === true || isAppserviceMode(mode);
       const rooms = Array.isArray(config?.rooms) ? config.rooms : [];
       if (!homeserver || !token || rooms.length === 0) {
         return {

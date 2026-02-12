@@ -128,6 +128,11 @@ Selection rules:
 3. Runtime MUST report active mode and fallback reason in health output.
 4. Existing `sync` behavior MUST remain valid for deployments that are not migrated to push.
 
+Current runtime profile:
+
+1. appservice-push intake is scheduled as a continuous `channel input` service (`during second 1`) with long-poll receive.
+2. fallback default is `poll` when no explicit alternate mode is configured.
+
 ## 6. Global Input and Router Fan-Out (Normative)
 
 Push intake MUST be global per channel type, then fan out through router:

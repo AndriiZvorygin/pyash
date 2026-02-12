@@ -47,7 +47,7 @@ function sanitizeName(raw, fallback = "value") {
   return cleaned || fallback;
 }
 
-function buildMindSentence({ job, prompt, outName }) {
+function buildMindSentence({ job, prompt, outName, agentHouse }) {
   return {
     mood: "do",
     be: "write",
@@ -55,7 +55,8 @@ function buildMindSentence({ job, prompt, outName }) {
     for: { name: job.agentName },
     to: { name: outName },
     fromtext: { name: `session name ${job.laneName}` },
-    with: job.withCase ?? { wo: "tools" }
+    with: job.withCase ?? { wo: "tools" },
+    at: { filename: String(agentHouse) }
   };
 }
 
@@ -325,7 +326,7 @@ async function runChannelPollJob({ worldRoot, job }) {
     } catch (err) {
       if (channelMode === "appservice-push") {
         const configuredFallbackMode = normalizeChannelMode(
-          channelConfig.fallbackMode || channelConfig.alternateMode || "sync"
+          channelConfig.fallbackMode || channelConfig.alternateMode || "poll"
         );
         if (configuredFallbackMode && configuredFallbackMode !== channelMode) {
           const fallbackConfig = { ...channelConfig, mode: configuredFallbackMode };
@@ -418,7 +419,7 @@ async function runMindScheduledJob({ worldRoot, job }) {
   if (!prompt || !prompt.trim()) return { status: "skipped:empty_prompt" };
 
   const outName = `${sanitizeName(job.jobName, "job")}_out`;
-  const sentence = buildMindSentence({ job, prompt, outName });
+  const sentence = buildMindSentence({ job, prompt, outName, agentHouse });
   const result = await interpret(sentence);
   const responseText = String(result?.ob?.text ?? "");
   if (isHeartbeat) {

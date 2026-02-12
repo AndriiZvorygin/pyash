@@ -71,6 +71,7 @@ test("channel runtime routes to session lane and deduplicates by event id", asyn
   assert.equal(first.skippedDedup, 1);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.fromtext?.name, "session name matrix_main");
+  assert.equal(calls[0]?.at?.filename, path.join(root, "world", "house", "helper"));
 
   const second = await runChannelOnce({
     agentName: "helper",
@@ -377,7 +378,10 @@ test("channel runtime shared fanout dispatches one event to multiple listeners i
     },
     adapter,
     interpretFn: async (sentence) => {
-      listeners.push(sentence?.for?.name);
+      listeners.push({
+        name: sentence?.for?.name,
+        cwd: sentence?.at?.filename ?? ""
+      });
       return { ob: { text: `reply from ${sentence?.for?.name}` } };
     },
     agentHouse
@@ -386,7 +390,15 @@ test("channel runtime shared fanout dispatches one event to multiple listeners i
   assert.equal(result.received, 1);
   assert.equal(result.handled, 2);
   assert.equal(result.sent, 2);
-  assert.deepEqual(listeners.slice().sort(), ["agent-helper", "confederation-priest"]);
+  assert.deepEqual(
+    listeners
+      .slice()
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), "en")),
+    [
+      { name: "agent-helper", cwd: path.join(root, "world", "house", "agent-helper") },
+      { name: "confederation-priest", cwd: path.join(root, "world", "house", "confederation-priest") }
+    ]
+  );
 });
 
 test("channel sentence builder uses default tools and lane from event", () => {
@@ -648,7 +660,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
       }
     });
 
-    const outDenied = path.join(root, "denied.txt");
+    const outDenied = path.join(agentHouse, "denied.txt");
     await fs.writeFile(
       path.join(conductDir, "ratify.pya"),
       "su name be_command_ob_text ob bool lie ya\n",
@@ -690,7 +702,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     assert.equal(denyResult.sent, 1);
     await assert.rejects(fs.access(outDenied), { code: "ENOENT" });
 
-    const outAllowed = path.join(root, "allowed.txt");
+    const outAllowed = path.join(agentHouse, "allowed.txt");
     await fs.writeFile(
       path.join(conductDir, "ratify.pya"),
       "su name be_command_ob_text ob bool truth ya\n",

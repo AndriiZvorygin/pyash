@@ -166,8 +166,9 @@ Managed write rules:
 2. repeated runs MUST be idempotent,
 3. caterer sections MUST be replaceable without touching unrelated sections.
 4. interactive setup MAY also write per-agent channel conduct at `world/house/<agent>/conduct/channels.pya`.
-5. when mode is `appservice-push`, configure SHOULD write a global channel input schedule in `world/conduct/calendar.pya`.
+5. when mode is `appservice-push`, configure SHOULD write a global `channel input` schedule in `world/conduct/calendar.pya` at `during second 1` for continuous intake.
 6. when mode is `appservice-push`, configure agent SHOULD avoid writing per-agent channel poll schedules.
+7. appservice-push runtime SHOULD use `poll` as default alternate mode when primary intake is defective.
 
 ---
 
