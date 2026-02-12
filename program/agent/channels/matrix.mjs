@@ -53,6 +53,33 @@ function pickTextEventBody(event) {
   return body;
 }
 
+function pickEventMxcUrl(event) {
+  const content = event?.content ?? {};
+  const direct = typeof content?.url === "string" ? content.url : "";
+  if (direct.startsWith("mxc://")) return direct;
+  const encrypted = typeof content?.file?.url === "string" ? content.file.url : "";
+  if (encrypted.startsWith("mxc://")) return encrypted;
+  return "";
+}
+
+function normalizeAttachmentFromEvent(event) {
+  const msgtype = String(event?.content?.msgtype ?? "").trim();
+  if (!msgtype || !msgtype.startsWith("m.")) return null;
+  if (!["m.file", "m.image", "m.video", "m.audio"].includes(msgtype)) return null;
+  const mxcUrl = pickEventMxcUrl(event);
+  if (!mxcUrl) return null;
+  const body = String(event?.content?.body ?? "").trim();
+  const mimetype = String(event?.content?.info?.mimetype ?? "").trim();
+  const size = Number(event?.content?.info?.size);
+  return {
+    kind: msgtype,
+    body,
+    mxcUrl,
+    mimetype: mimetype || "",
+    size: Number.isFinite(size) && size >= 0 ? Math.trunc(size) : null
+  };
+}
+
 async function fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl }) {
   const url = applyAuthToUrl(`${homeserver}/_matrix/client/v3/joined_rooms`, { token, userId, mode });
   const response = await fetchImpl(url, {
@@ -153,7 +180,10 @@ function buildResolvedRoomConfig(rooms, joinDiagnostics) {
 
 function normalizeMatrixEvent(event, { roomId }) {
   const text = pickTextEventBody(event);
-  if (!text) return null;
+  const attachment = normalizeAttachmentFromEvent(event);
+  const fallbackText = attachment?.body ? `file received: ${attachment.body}` : "file received";
+  const resolvedText = text ?? (attachment ? fallbackText : null);
+  if (!resolvedText) return null;
   const eventId = event?.event_id;
   const sender = event?.sender;
   const timestampNum = Number(event?.origin_server_ts);
@@ -169,9 +199,61 @@ function normalizeMatrixEvent(event, { roomId }) {
     inReplyToEventId: inReplyToEventId ? String(inReplyToEventId) : null,
     eventId: String(eventId),
     sender: String(sender),
-    text: String(text),
+    text: String(resolvedText),
+    attachments: attachment ? [attachment] : [],
     timestamp: Number.isFinite(timestampNum) ? new Date(timestampNum).toISOString() : new Date().toISOString()
   };
+}
+
+function parseMxcUrl(mxcUrl) {
+  const text = String(mxcUrl ?? "").trim();
+  const match = text.match(/^mxc:\/\/([^/]+)\/(.+)$/);
+  if (!match) return null;
+  return { serverName: match[1], mediaId: match[2] };
+}
+
+function sanitizeFileName(raw, fallback = "file.bin") {
+  const text = String(raw ?? "").trim();
+  const base = text.split("/").pop() || "";
+  const safe = base.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  if (!safe || safe === "." || safe === "..") return fallback;
+  return safe;
+}
+
+function extFromMime(mimetype = "") {
+  const value = String(mimetype ?? "").toLowerCase().trim();
+  if (!value) return "";
+  const map = {
+    "text/plain": ".txt",
+    "application/json": ".json",
+    "application/pdf": ".pdf",
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "audio/mpeg": ".mp3",
+    "audio/wav": ".wav",
+    "video/mp4": ".mp4"
+  };
+  return map[value] ?? "";
+}
+
+function uniquePathName(existing, baseName) {
+  if (!existing.has(baseName)) {
+    existing.add(baseName);
+    return baseName;
+  }
+  const dotIdx = baseName.lastIndexOf(".");
+  const stem = dotIdx > 0 ? baseName.slice(0, dotIdx) : baseName;
+  const ext = dotIdx > 0 ? baseName.slice(dotIdx) : "";
+  let index = 2;
+  while (true) {
+    const candidate = `${stem}-${index}${ext}`;
+    if (!existing.has(candidate)) {
+      existing.add(candidate);
+      return candidate;
+    }
+    index += 1;
+  }
 }
 
 export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
@@ -307,6 +389,53 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       }
       const payload = await sendRes.json().catch(() => ({}));
       return { eventId: payload?.event_id ?? null };
+    },
+
+    async downloadAttachments({ config, event, targetDir }) {
+      const homeserver = toBaseUrl(config?.homeserver);
+      const token = config?.token;
+      const userId = String(config?.user ?? "").trim();
+      const mode = String(config?.mode ?? "").trim().toLowerCase();
+      const attachments = Array.isArray(event?.attachments) ? event.attachments : [];
+      if (!homeserver || !token || !targetDir || attachments.length === 0) return [];
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      await fs.mkdir(targetDir, { recursive: true });
+      const usedNames = new Set();
+      const downloaded = [];
+      for (const attachment of attachments) {
+        const parsed = parseMxcUrl(attachment?.mxcUrl);
+        if (!parsed) continue;
+        const sourceName = sanitizeFileName(attachment?.body || "file");
+        const withExt = sourceName.includes(".")
+          ? sourceName
+          : `${sourceName}${extFromMime(attachment?.mimetype) || ".bin"}`;
+        const filename = uniquePathName(usedNames, withExt);
+        const outPath = path.join(targetDir, filename);
+        const downloadUrl = applyAuthToUrl(
+          `${homeserver}/_matrix/media/v3/download/${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`,
+          { token, userId, mode }
+        );
+        const response = await fetchImpl(downloadUrl, {
+          method: "GET",
+          headers: authHeaders({ token, mode })
+        });
+        if (!response.ok) {
+          throw new Error(`matrix media download failed: status=${response.status} mxc=${attachment?.mxcUrl ?? ""}`);
+        }
+        const bytes = Buffer.from(await response.arrayBuffer());
+        await fs.writeFile(outPath, bytes);
+        downloaded.push({
+          kind: attachment?.kind ?? "m.file",
+          originalName: attachment?.body || filename,
+          filename,
+          mimeType: attachment?.mimetype || "",
+          bytes: bytes.length,
+          path: outPath,
+          mxcUrl: attachment?.mxcUrl || ""
+        });
+      }
+      return downloaded;
     }
   };
 }

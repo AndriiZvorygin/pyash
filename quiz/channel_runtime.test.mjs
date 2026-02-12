@@ -243,6 +243,82 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
   assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
 });
 
+test("channel runtime stores channel attachments and includes file hints in prompt", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachments-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$f1",
+            sender: "@u:server",
+            text: "please inspect the attached file",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.file",
+                body: "notes.txt",
+                mxcUrl: "mxc://matrix.example.org/abc123",
+                mimetype: "text/plain"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-file-1" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "notes.txt");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "hello", "utf8");
+      return [{
+        filename: "notes.txt",
+        path: filePath,
+        mimeType: "text/plain",
+        bytes: 5
+      }];
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-file-1" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(calls.length, 1);
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[channel files saved\]/);
+  assert.match(prompt, /artifacts\/20260212\/notes\.txt/);
+  assert.match(prompt, /be command/);
+  assert.match(prompt, /be repair/);
+  assert.equal(sent[sent.length - 1], "done");
+});
+
 test("channel runtime sends configure-mind fallback when mind answer is empty and mind configure is missing", async () => {
   forget();
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-no-mind-"));
