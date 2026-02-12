@@ -87,6 +87,15 @@ export async function runToolChat({
     fromtext: { text: matchedKey ? `policy ${matchedKey}` : "policy unanswered" }
   });
 
+  const emitToolCall = async (payload) => {
+    if (typeof onToolCall !== "function") return;
+    try {
+      await onToolCall(payload);
+    } catch {
+      // Tool-call observers are best-effort and should not break response generation.
+    }
+  };
+
   while (turns < maxToolTurns) {
     turns += 1;
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
@@ -155,9 +164,7 @@ export async function runToolChat({
       });
       const toolSignatureWords = deriveSignatureFromCall(capability, { remember });
       const toolSignature = joinSignatureWords(toolSignatureWords);
-      if (typeof onToolCall === "function") {
-        onToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
-      }
+      await emitToolCall({ stage: "call", toolName, toolSentence, toolCall: call });
       if (capability?.be === "read" && !toolSentence.to) {
         toolSentence.to = { name: "result", nameTypeWords: ["text"] };
       }
@@ -180,9 +187,7 @@ export async function runToolChat({
           raw,
           matchedKey
         });
-        if (typeof onToolCall === "function") {
-          onToolCall({ stage: "ratify", toolName, toolSentence, toolCall: call, ratifySentence });
-        }
+        await emitToolCall({ stage: "ratify", toolName, toolSentence, toolCall: call, ratifySentence });
         if (decision !== "truth") {
           toolResult = ratifySentence;
         }
@@ -224,9 +229,7 @@ export async function runToolChat({
       } else {
         toolText = String(surfacedTool ?? "");
       }
-      if (typeof onToolCall === "function") {
-        onToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
-      }
+      await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;
       toolMessage.tool_name = toolName;

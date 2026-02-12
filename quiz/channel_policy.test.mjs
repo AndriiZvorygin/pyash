@@ -11,6 +11,8 @@ test("channel policy parser loads matrix settings and room lanes", () => {
     'su name matrix bridge service file ob text "synapse-data/appservices/agent.yaml" ya',
     "su name matrix mention gate ob bool truth ya",
     "su name matrix debug ob bool truth ya",
+    "su name matrix tool summary ob bool truth ya",
+    "su name matrix dm tool summary ob bool lie ya",
     'su name matrix homeserver ob text "https://matrix.example.org" ya',
     'su name matrix user ob text "@agent:example.org" ya',
     'su name matrix room ob text "!a:example.org" ya',
@@ -31,6 +33,8 @@ test("channel policy parser loads matrix settings and room lanes", () => {
   assert.equal(matrix.user, "@agent:example.org");
   assert.equal(matrix.mentionGate, true);
   assert.equal(matrix.debug, true);
+  assert.equal(matrix.toolSummary, true);
+  assert.equal(matrix.dmToolSummary, false);
   assert.ok(matrix.dmRooms.includes("!dm:example.org"));
   assert.deepEqual(matrix.listeners, ["confederation-priest", "agent-helper"]);
   assert.deepEqual(matrix.roomListeners["!a:example.org"], ["confederation-priest"]);
@@ -48,6 +52,8 @@ test("channel policy merge applies global defaults with agent overrides", () => 
     'su name matrix long poll ms ob text "30000" ya',
     "su name matrix mention gate ob bool truth ya",
     "su name matrix debug ob bool lie ya",
+    "su name matrix tool summary ob bool lie ya",
+    "su name matrix dm tool summary ob bool lie ya",
     'su name matrix homeserver ob text "https://matrix.example.org" ya',
     'su name matrix dm room ob text "!dm:example.org" ya',
     'su name matrix room ob text "!global:example.org" ya',
@@ -59,6 +65,7 @@ test("channel policy merge applies global defaults with agent overrides", () => 
     'su name matrix mode ob text "poll" ya',
     'su name matrix long poll ms ob text "1000" ya',
     "su name matrix debug ob bool truth ya",
+    "su name matrix dm tool summary ob bool truth ya",
     'su name matrix room ob text "!agent:example.org" ya',
     'su name matrix !agent:example.org lane ob text "agent_lane" ya',
     "su name matrix listeners ob ve name agent-helper be map ya"
@@ -72,6 +79,8 @@ test("channel policy merge applies global defaults with agent overrides", () => 
   assert.equal(matrix?.longPollMs, 1000);
   assert.equal(matrix?.mentionGate, true);
   assert.equal(matrix?.debug, true);
+  assert.equal(matrix?.toolSummary, false);
+  assert.equal(matrix?.dmToolSummary, true);
   assert.ok(matrix?.dmRooms?.includes("!dm:example.org"));
   assert.deepEqual(matrix?.listeners, ["confederation-priest", "agent-helper"]);
   assert.equal(matrix?.rooms.length, 3);

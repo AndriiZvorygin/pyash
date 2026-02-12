@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { discoverScheduledJobs } from "./scheduler.mjs";
 import { isServiceEnabled, normalizeSchedulerServiceName, setServiceEnabled } from "./scheduler_service_control.mjs";
 
@@ -202,17 +202,76 @@ function isPidAlive(pid) {
   }
 }
 
+function escapeRegExp(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function listSchedulerDaemonPids({ worldRoot } = {}) {
+  const targetWorldRoot = path.resolve(String(worldRoot ?? ""));
+  const scriptPath = daemonScriptPath();
+  const worldFlagPattern = new RegExp(`--world-root(?:\\s+|=)${escapeRegExp(targetWorldRoot)}(?:\\s|$)`);
+  try {
+    const output = execFileSync("ps", ["-eo", "pid=,args="], { encoding: "utf8" });
+    const pids = [];
+    for (const rawLine of String(output).split("\n")) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const match = line.match(/^(\d+)\s+([\s\S]+)$/);
+      if (!match) continue;
+      const pid = Number.parseInt(match[1], 10);
+      const argsText = String(match[2] ?? "");
+      if (!Number.isFinite(pid) || pid <= 0) continue;
+      if (!argsText.includes(scriptPath)) continue;
+      if (!argsText.includes("--run")) continue;
+      if (!worldFlagPattern.test(argsText)) continue;
+      pids.push(pid);
+    }
+    return [...new Set(pids)].filter(isPidAlive).sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+}
+
+async function stopSchedulerPids(pids = []) {
+  const normalized = [...new Set((Array.isArray(pids) ? pids : [])
+    .map((value) => Number.parseInt(String(value), 10))
+    .filter((value) => Number.isFinite(value) && value > 0))];
+  if (normalized.length === 0) return { pids: [], stopped: true };
+  for (const pid of normalized) {
+    if (!isPidAlive(pid)) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // ignore dead pid races
+    }
+  }
+  const checks = await Promise.all(normalized.map(async (pid) => ({
+    pid,
+    stopped: await waitForStop(pid)
+  })));
+  return {
+    pids: checks.map(entry => entry.pid),
+    stopped: checks.every(entry => entry.stopped)
+  };
+}
+
 export async function schedulerHealth({ worldRoot } = {}) {
   const pid = await readPid(worldRoot);
+  const daemonPids = listSchedulerDaemonPids({ worldRoot });
   const alive = isPidAlive(pid);
+  const activePid = daemonPids[0] ?? (alive ? pid : null);
+  if (activePid && activePid !== pid) {
+    await fs.writeFile(pidPath(worldRoot), `${activePid}\n`, "utf8");
+  }
   const status = await readHealthFile(healthPath(worldRoot));
   return {
-    running: alive,
-    pid: alive ? pid : null,
+    running: Boolean(activePid),
+    pid: activePid ?? null,
     status: {
       ...status,
-      running: alive,
-      pid: alive ? pid : 0,
+      running: Boolean(activePid),
+      pid: activePid ?? 0,
+      schedulerPids: daemonPids,
       worldRoot: worldRoot || status.worldRoot || ""
     },
     worldRoot
@@ -284,7 +343,11 @@ export async function schedulerServiceRestart({ worldRoot, serviceName } = {}) {
 
 export async function schedulerBegin({ worldRoot } = {}) {
   const health = await schedulerHealth({ worldRoot });
-  if (health.running) {
+  const runningPids = Array.isArray(health?.status?.schedulerPids) ? health.status.schedulerPids : [];
+  if (runningPids.length > 1) {
+    await stopSchedulerPids(runningPids);
+    await fs.rm(pidPath(worldRoot), { force: true });
+  } else if (health.running) {
     return { ...health, action: "begin", changed: false };
   }
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
@@ -327,11 +390,13 @@ async function waitForStop(pid, timeoutMs = 4000) {
 
 export async function schedulerStop({ worldRoot } = {}) {
   const pid = await readPid(worldRoot);
-  if (!pid || !isPidAlive(pid)) {
+  const daemonPids = listSchedulerDaemonPids({ worldRoot });
+  const targets = [...new Set([pid, ...daemonPids].filter(Boolean))];
+  if (targets.length === 0) {
     return { running: false, pid: null, action: "stop", changed: false, worldRoot };
   }
-  process.kill(pid, "SIGTERM");
-  const stopped = await waitForStop(pid);
+  const stopResult = await stopSchedulerPids(targets);
+  const stopped = stopResult.stopped;
   if (stopped) {
     await fs.rm(pidPath(worldRoot), { force: true });
     await fs.rm(legacyStatusPath(worldRoot), { force: true });

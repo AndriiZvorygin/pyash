@@ -419,6 +419,91 @@ test("channel sentence builder uses default tools and lane from event", () => {
   assert.equal(sentence.fromtext?.name, "session name room_main");
 });
 
+test("channel runtime appends DM tool call and summary block when enabled", async () => {
+  const originalMock = process.env.PYA_MIND_RESPONSE;
+  const originalCommandResponse = process.env.PYA_COMMAND_RESPONSE;
+  try {
+    forget();
+    resetMindLogs();
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-dm-tool-summary-"));
+    const worldRoot = path.join(root, "world");
+    const agentHouse = path.join(worldRoot, "house", "helper");
+    await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+    await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
+
+    process.env.PYA_COMMAND_RESPONSE = "tool-ok";
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([
+      {
+        message: {
+          content: "",
+          tool_calls: [
+            {
+              id: "call-1",
+              function: {
+                name: "be_command_ob_text_to_name_text",
+                arguments: JSON.stringify({ ob: "echo hi" })
+              }
+            }
+          ]
+        }
+      },
+      { message: { content: "done" } }
+    ]);
+
+    const sent = [];
+    const adapter = {
+      async receive() {
+        return {
+          events: [
+            {
+              channelType: "matrix",
+              channelId: "!dm:server",
+              eventId: "$dm-summary-1",
+              sender: "@u:server",
+              text: "run a tool"
+            }
+          ],
+          checkpoint: { nextBatch: "tok-dm-summary" }
+        };
+      },
+      async send({ content }) {
+        sent.push(content);
+        return { eventId: "$out-dm-summary" };
+      }
+    };
+
+    const result = await runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig: {
+        user: "@helper:server",
+        mentionGate: false,
+        dmRooms: ["!dm:server"],
+        dmToolSummary: true
+      },
+      adapter,
+      interpretFn: interpret,
+      agentHouse
+    });
+
+    assert.equal(result.handled, 1);
+    assert.equal(result.sent, 3);
+    assert.equal(sent.length, 3);
+    assert.match(sent[0], /^tool call: be_command_ob_text_to_name_text$/);
+    assert.match(sent[1], /^tool result: be_command_ob_text_to_name_text:/);
+    assert.match(sent[1], /tool-ok/);
+    assert.match(sent[2], /^done$/);
+  } finally {
+    if (originalMock === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalMock;
+    if (originalCommandResponse === undefined) delete process.env.PYA_COMMAND_RESPONSE;
+    else process.env.PYA_COMMAND_RESPONSE = originalCommandResponse;
+    forget();
+    resetMindLogs();
+  }
+});
+
 test("channel debug mode logs per-event routing decisions", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-debug-"));
   const agentHouse = path.join(root, "world", "house", "helper");
