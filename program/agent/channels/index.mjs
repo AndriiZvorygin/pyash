@@ -25,6 +25,99 @@ function sanitizeLaneName(raw) {
     .replace(/^_+|_+$/g, "") || "session";
 }
 
+function channelInputLockPath({ worldRoot, agentName, channelType }) {
+  const agent = sanitizeLaneName(agentName || "agent");
+  const channel = sanitizeLaneName(channelType || "channel");
+  return path.join(worldRoot, "presence", `${agent}-${channel}-channel-input.lock`);
+}
+
+function isPidAlive(pid) {
+  const value = Number.parseInt(String(pid ?? ""), 10);
+  if (!Number.isFinite(value) || value <= 0) return false;
+  try {
+    process.kill(value, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseLockPid(text) {
+  const match = String(text ?? "").match(/(?:^|\n)pid=(\d+)(?:\n|$)/);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+async function acquireChannelInputLock({
+  worldRoot,
+  agentName,
+  channelType,
+  staleMs = 15 * 60 * 1000
+} = {}) {
+  const lockPath = channelInputLockPath({ worldRoot, agentName, channelType });
+  await fs.mkdir(path.dirname(lockPath), { recursive: true });
+  const staleAgeMs = Number.isFinite(Number(staleMs)) && Number(staleMs) > 0
+    ? Math.trunc(Number(staleMs))
+    : 15 * 60 * 1000;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      const payload = [
+        `pid=${process.pid}`,
+        `startedAt=${new Date().toISOString()}`,
+        `agent=${String(agentName ?? "").trim()}`,
+        `channel=${String(channelType ?? "").trim()}`
+      ].join("\n");
+      await handle.writeFile(`${payload}\n`, "utf8");
+      return { lockPath, handle };
+    } catch (err) {
+      if (err?.code !== "EEXIST") return null;
+      let stale = false;
+      try {
+        const raw = await fs.readFile(lockPath, "utf8");
+        const ownerPid = parseLockPid(raw);
+        if (ownerPid && !isPidAlive(ownerPid)) {
+          stale = true;
+        }
+      } catch {
+        // continue to mtime fallback check
+      }
+      if (!stale) {
+        try {
+          const stat = await fs.stat(lockPath);
+          stale = (Date.now() - Number(stat.mtimeMs || 0)) > staleAgeMs;
+        } catch {
+          stale = false;
+        }
+      }
+      if (!stale) return null;
+      try {
+        await fs.rm(lockPath, { force: true });
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+async function releaseChannelInputLock(lock) {
+  if (!lock) return;
+  try {
+    if (lock.handle?.close) await lock.handle.close();
+  } catch {
+    // best-effort close
+  }
+  try {
+    if (lock.lockPath) await fs.rm(lock.lockPath, { force: true });
+  } catch {
+    // best-effort cleanup
+  }
+}
+
 function defaultLane({ channelType, channelId }) {
   return sanitizeLaneName(`${channelType}_${channelId}`);
 }
@@ -38,13 +131,17 @@ function channelTelemetryPath(agentHouse, { channelType, agentName } = {}) {
 async function appendTelemetry(agentHouse, event, { channelType, agentName } = {}) {
   const target = channelTelemetryPath(agentHouse, { channelType, agentName });
   await fs.mkdir(path.dirname(target), { recursive: true });
+  const payload = {
+    ...(event && typeof event === "object" ? event : {}),
+    pid: Number(event?.pid ?? process.pid)
+  };
   const sentence = {
     mood: "ya",
-    su: { name: event?.channelType ?? "channel" },
+    su: { name: payload?.channelType ?? "channel" },
     be: "channel telemetry",
-    as: { name: event?.event ?? "poll" },
-    during: { date: event?.timestamp ?? new Date().toISOString() },
-    ob: { text: JSON.stringify(event ?? {}) }
+    as: { name: payload?.event ?? "poll" },
+    during: { date: payload?.timestamp ?? new Date().toISOString() },
+    ob: { text: JSON.stringify(payload) }
   };
   await fs.appendFile(target, `${sentenceToPyash(sentence)}\n`, "utf8");
 }
@@ -726,6 +823,37 @@ export async function runChannelOnce({
   if (typeof interpretFn !== "function") throw new Error("runChannelOnce requires interpretFn");
   if (!agentHouse) throw new Error("runChannelOnce requires agentHouse");
 
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
+  if (!lock) {
+    await appendTelemetry(agentHouse, {
+      timestamp: nowIso(),
+      channelType,
+      event: "poll",
+      decision: "lock_skip",
+      durationMs: 0,
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0
+    }, { channelType, agentName });
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      lastInputAt: "",
+      queueDepth: 0,
+      locked: true
+    };
+  }
+
+  try {
   const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
   const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
     ? runtimeState.checkpoint
@@ -829,10 +957,13 @@ export async function runChannelOnce({
     durationMs,
     ...dispatchResult
   }, { channelType, agentName });
-  return {
-    ...dispatchResult,
-    durationMs,
-    lastInputAt,
-    queueDepth: 0
-  };
+    return {
+      ...dispatchResult,
+      durationMs,
+      lastInputAt,
+      queueDepth: 0
+    };
+  } finally {
+    await releaseChannelInputLock(lock);
+  }
 }
