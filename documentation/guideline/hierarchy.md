@@ -29,6 +29,7 @@ Optional names
 - `binary/`          Built executables or entrypoints
 - `sandpit/`         Temporary scratch space, safe to wipe
 - `configure/`       Project-local configuration
+- `world/`           Runtime state for agents, scheduler, channels, and newspaper
 
 
 ### Mapping from common shorthand
@@ -70,6 +71,14 @@ pyash/
   distribute/
   know/
   caterer/
+
+
+### Runtime control paths
+
+Inside `world/`, control-plane files are split by role:
+- `world/conduct/health.pya`       Scheduler health snapshot
+- `world/conduct/scheduler.log`    Scheduler daemon log
+- `world/presence/scheduler.pid`   Scheduler daemon pid lock/presence marker
 
 
 ## 2) Linux filesystem gloss (speakable FHS sugar)
