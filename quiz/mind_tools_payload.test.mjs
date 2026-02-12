@@ -10,6 +10,7 @@ import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
+import { buildToolSentence } from "../program/verbs/mind/tooling.mjs";
 
 function buildMapIndex(records) {
   const index = new Map();
@@ -258,4 +259,18 @@ test("mind tool adapter executes propose tools when ratify policy allows", async
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
   }
+});
+
+test("tool sentence builder extracts filename from object args", () => {
+  const capability = parse("su name see be see from filename input can");
+  const toolSentence = buildToolSentence({
+    capability,
+    args: {
+      from: {
+        filename: "/workplace/world/house/pyash-agent/artifacts/20260212/sample.png"
+      }
+    }
+  });
+  assert.equal(toolSentence?.be, "see");
+  assert.equal(toolSentence?.from?.filename, "/workplace/world/house/pyash-agent/artifacts/20260212/sample.png");
 });

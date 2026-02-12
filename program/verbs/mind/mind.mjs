@@ -393,7 +393,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       reasoningEffort: mindReasoningEffort,
       mindDebug,
       debugMind,
-      inputs: { inputText, mockResponseRaw },
+      inputs: { inputText, mockResponseRaw, imageInputs: inputs },
       onToolCall
     });
   } else {

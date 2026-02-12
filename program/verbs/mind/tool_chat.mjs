@@ -22,6 +22,24 @@ function buildPromptText(messages) {
   return lines.join("\n");
 }
 
+function modelLooksVisionCapable(model) {
+  const text = String(model ?? "").toLowerCase().trim();
+  if (!text) return false;
+  return /(vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
+}
+
+function normalizeVisionInput(input) {
+  if (!input || typeof input !== "object") return null;
+  const kind = String(input?.kind ?? "").toLowerCase().trim();
+  if (kind && kind !== "image") return null;
+  const filename = String(input?.filename ?? "").trim();
+  if (!filename) return null;
+  return {
+    filename,
+    mimeType: String(input?.mimeType ?? "").trim()
+  };
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -45,6 +63,9 @@ export async function runToolChat({
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
   const mockResponseRaw = inputs?.mockResponseRaw ?? null;
+  const visionInputs = Array.isArray(inputs?.imageInputs)
+    ? inputs.imageInputs.map(normalizeVisionInput).filter(Boolean)
+    : [];
   let mockResponseQueue = null;
   if (mockResponseRaw) {
     try {
@@ -70,7 +91,11 @@ export async function runToolChat({
   if (toolBlock) messages.push({ role: "system", content: toolBlock });
   if (historyMessages.length) messages.push(...historyMessages);
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
-  messages.push({ role: "user", content: userContent });
+  const userMessage = { role: "user", content: userContent };
+  if (visionInputs.length && modelLooksVisionCapable(model)) {
+    userMessage.imageFiles = visionInputs;
+  }
+  messages.push(userMessage);
 
   const interpret = await resolveInterpret();
   const maxToolTurns = 6;

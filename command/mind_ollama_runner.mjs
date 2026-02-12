@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import dns from "node:dns";
 import { spawn, spawnSync } from "node:child_process";
+import { attachImagesToMessages } from "./ollama_image_payload.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -275,9 +276,13 @@ async function runGenerate(payload) {
 async function runChat(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
+  const { messages, images } = await normalizeChatMessages(payload.messages);
+  const extraImages = Array.isArray(payload.images) ? payload.images : [];
+  const allImages = [...images, ...extraImages];
+  const ollamaMessages = attachImagesToMessages(messages, allImages);
   const body = {
     model: payload.model,
-    messages: await normalizeChatMessages(payload.messages),
+    messages: ollamaMessages,
     stream: !!payload.stream
   };
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
@@ -291,24 +296,29 @@ async function runChat(payload) {
 
 async function normalizeChatMessages(rawMessages) {
   const messages = Array.isArray(rawMessages) ? rawMessages : [];
+  const images = [];
   const out = [];
   for (const message of messages) {
     const next = { ...(message ?? {}) };
     const imageFiles = Array.isArray(next.imageFiles) ? next.imageFiles : [];
     delete next.imageFiles;
+    if (Array.isArray(next.images) && next.images.length) {
+      for (const encoded of next.images) {
+        if (typeof encoded === "string" && encoded.trim()) images.push(encoded.trim());
+      }
+    }
+    delete next.images;
     if (imageFiles.length) {
-      const encoded = [];
       for (const entry of imageFiles) {
         const filepath = String(entry?.filename ?? "").trim();
         if (!filepath) continue;
         const bytes = await fs.promises.readFile(filepath);
-        encoded.push(bytes.toString("base64"));
+        images.push(bytes.toString("base64"));
       }
-      if (encoded.length) next.images = encoded;
     }
     out.push(next);
   }
-  return out;
+  return { messages: out, images };
 }
 
 async function main() {
