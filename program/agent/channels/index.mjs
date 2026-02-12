@@ -93,10 +93,42 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence }) {
 
 function buildPrompt(event, { payloadId } = {}) {
   const header = `[channel ${event.channelType} channelId ${event.channelId} sender ${event.sender} eventId ${event.eventId}]`;
+  const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved);
   if (payloadId) {
-    return `${header} [payloadId ${payloadId}]\n${event.text}`;
+    return `${header} [payloadId ${payloadId}]\n${event.text}${attachmentBlock}`;
   }
-  return `${header}\n${event.text}`;
+  return `${header}\n${event.text}${attachmentBlock}`;
+}
+
+function dateStampFromIso(isoText) {
+  const value = String(isoText ?? "").trim();
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    const now = new Date();
+    return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}${String(now.getUTCDate()).padStart(2, "0")}`;
+  }
+  return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function buildAttachmentPromptBlock(attachmentsSaved) {
+  const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
+  if (!files.length) return "";
+  const lines = ["", "", "[channel files saved]"];
+  for (const entry of files) {
+    const filePath = String(entry?.path ?? "").trim();
+    if (!filePath) continue;
+    const mime = String(entry?.mimeType ?? "").trim();
+    const size = Number(entry?.bytes);
+    const meta = [
+      mime ? `mime=${mime}` : "",
+      Number.isFinite(size) ? `bytes=${Math.trunc(size)}` : ""
+    ].filter(Boolean).join(" ");
+    lines.push(meta ? `- ${filePath} (${meta})` : `- ${filePath}`);
+  }
+  lines.push("[tools for files]");
+  lines.push("- be command ... : inspect/process files");
+  lines.push("- be repair ... : patch code/text files safely");
+  return lines.join("\n");
 }
 
 function noMindConfiguredFallback() {
@@ -402,6 +434,31 @@ async function dispatchChannelEvents({
         ...event,
         text: orchestratorDirective.payloadText || event.text
       };
+      if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
+        const dayStamp = dateStampFromIso(event.timestamp);
+        const targetDir = path.join(worldRoot, "house", orchestratorDirective.agentName || listener, "artifacts", dayStamp);
+        try {
+          routedEvent.attachmentsSaved = await adapter.downloadAttachments({
+            config: channelConfig,
+            event,
+            targetDir
+          });
+        } catch (err) {
+          if (debug) {
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: "attachment_download_error",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              listener: orchestratorDirective.agentName || listener,
+              error: String(err?.stack ?? err?.message ?? err)
+            }, { channelType, agentName });
+          }
+        }
+      }
       const sentence = buildChannelMindSentence({
         agentName: orchestratorDirective.agentName || listener,
         event: routedEvent,
@@ -554,7 +611,8 @@ function normalizeEvent(rawEvent, channelType) {
     sender,
     text,
     timestamp: rawEvent.timestamp ? String(rawEvent.timestamp) : nowIso(),
-    laneName: rawEvent.laneName ? String(rawEvent.laneName) : null
+    laneName: rawEvent.laneName ? String(rawEvent.laneName) : null,
+    attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : []
   };
 }
 

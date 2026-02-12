@@ -55,6 +55,57 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.ok(calls.some(call => String(call.url).includes("timeout=30000")));
 });
 
+test("matrix adapter receive keeps attachment metadata for m.file events", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$evf1",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: {
+                        msgtype: "m.file",
+                        body: "notes.txt",
+                        url: "mxc://matrix.example.org/abc123",
+                        info: { mimetype: "text/plain", size: 5 }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.text, "notes.txt");
+  assert.equal(received.events[0]?.attachments?.length, 1);
+  assert.equal(received.events[0]?.attachments?.[0]?.mxcUrl, "mxc://matrix.example.org/abc123");
+});
+
 test("matrix adapter receive accepts long poll timeout override", async () => {
   const calls = [];
   const fetchImpl = async (url) => {
@@ -169,6 +220,56 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.equal(payload.body, "reply text");
   assert.equal(payload.format, "org.matrix.custom.html");
   assert.match(payload.formatted_body, /<p>reply text<\/p>/);
+});
+
+test("matrix adapter downloads attachments into target directory", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    if (String(url).includes("/_matrix/media/v3/download/")) {
+      return {
+        ok: true,
+        async arrayBuffer() {
+          return new TextEncoder().encode("hello").buffer;
+        }
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return { event_id: "$out1" };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-media-"));
+  const outDir = path.join(root, "artifacts", "20260212");
+  const files = await adapter.downloadAttachments({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret"
+    },
+    event: {
+      attachments: [
+        {
+          kind: "m.file",
+          body: "notes.txt",
+          mxcUrl: "mxc://matrix.example.org/abc123",
+          mimetype: "text/plain"
+        }
+      ]
+    },
+    targetDir: outDir
+  });
+  assert.equal(files.length, 1);
+  assert.equal(files[0]?.filename, "notes.txt");
+  assert.equal(files[0]?.bytes, 5);
+  const saved = await fs.readFile(files[0]?.path, "utf8");
+  assert.equal(saved, "hello");
+  assert.ok(calls.some(call => call.url.includes("/_matrix/media/v3/download/matrix.example.org/abc123")));
 });
 
 test("matrix adapter send converts markdown into formatted_body html", async () => {
