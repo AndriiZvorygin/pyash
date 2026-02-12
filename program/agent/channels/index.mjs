@@ -62,6 +62,10 @@ function shortToolSummary(value, limit = 140) {
   return `${text.slice(0, limit)}...`;
 }
 
+function expectsToolActivity(text = "") {
+  return /\b(tool|search|web\s*search|lookup|look\s+up|find)\b/i.test(String(text ?? ""));
+}
+
 function shouldIncludeToolSummary({ channelConfig, channelId, dmRooms }) {
   const isDmRoom = dmRooms?.has(channelId) === true;
   const dmSetting = channelConfig?.dmToolSummary;
@@ -413,6 +417,8 @@ async function dispatchChannelEvents({
         channelId: event.channelId,
         dmRooms
       });
+      const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
+      let toolEventCount = 0;
       const sendChannelMessage = async (content) => {
         const sendResult = await adapter.send({ config: channelConfig, event, content });
         if (sendResult?.eventId) {
@@ -428,6 +434,7 @@ async function dispatchChannelEvents({
       };
       const onToolCall = includeToolSummary
         ? async (payload) => {
+          toolEventCount += 1;
           const content = formatToolEventMessage(payload);
           if (!content) return;
           await sendChannelMessage(content);
@@ -461,6 +468,9 @@ async function dispatchChannelEvents({
             }, { channelType, agentName });
           }
         }
+      }
+      if (toolExpectation && toolEventCount === 0) {
+        await sendChannelMessage("tool call: none");
       }
       if (debug) {
         await appendTelemetry(agentHouse, {
