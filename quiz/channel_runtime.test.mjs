@@ -696,7 +696,8 @@ test("channel runtime appends DM tool call and summary block when enabled", asyn
     assert.equal(result.handled, 1);
     assert.equal(result.sent, 3);
     assert.equal(sent.length, 3);
-    assert.match(sent[0], /^tool call: be_command_ob_text_to_name_text$/);
+    assert.match(sent[0], /^tool call: be_command_ob_text_to_name_text args: /);
+    assert.match(sent[0], /"ob":"echo hi"/);
     assert.match(sent[1], /^tool result: be_command_ob_text_to_name_text:/);
     assert.match(sent[1], /tool-ok/);
     assert.match(sent[2], /^done$/);
@@ -705,6 +706,92 @@ test("channel runtime appends DM tool call and summary block when enabled", asyn
     else process.env.PYA_MIND_RESPONSE = originalMock;
     if (originalCommandResponse === undefined) delete process.env.PYA_COMMAND_RESPONSE;
     else process.env.PYA_COMMAND_RESPONSE = originalCommandResponse;
+    forget();
+    resetMindLogs();
+  }
+});
+
+test("channel runtime see tool summary uses ceremony return instead of stale result memory", async () => {
+  const originalMock = process.env.PYA_MIND_RESPONSE;
+  const originalSeeFixture = process.env.PYA_SEE_VL_FIXTURE;
+  try {
+    forget();
+    resetMindLogs();
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-dm-see-summary-"));
+    const worldRoot = path.join(root, "world");
+    const agentHouse = path.join(worldRoot, "house", "helper");
+    await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+    await interpret(parse("from name ./module/see_vl.pya to name see vl be import do"));
+    await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
+
+    process.env.PYA_SEE_VL_FIXTURE = "fixture vision text";
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([
+      {
+        message: {
+          content: "",
+          tool_calls: [
+            {
+              id: "call-see-1",
+              function: {
+                name: "be_see_from_filename",
+                arguments: JSON.stringify({ from: "/workplace/quiz/fixtures/pyash_raven.png" })
+              }
+            }
+          ]
+        }
+      },
+      { message: { content: "done" } }
+    ]);
+
+    const sent = [];
+    const adapter = {
+      async receive() {
+        return {
+          events: [
+            {
+              channelType: "matrix",
+              channelId: "!dm:server",
+              eventId: "$dm-see-1",
+              sender: "@u:server",
+              text: "please check this image"
+            }
+          ],
+          checkpoint: { nextBatch: "tok-dm-see" }
+        };
+      },
+      async send({ content }) {
+        sent.push(content);
+        return { eventId: "$out-dm-see" };
+      }
+    };
+
+    const result = await runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig: {
+        user: "@helper:server",
+        mentionGate: false,
+        dmRooms: ["!dm:server"],
+        dmToolSummary: true
+      },
+      adapter,
+      interpretFn: interpret,
+      agentHouse
+    });
+
+    assert.equal(result.handled, 1);
+    assert.equal(result.sent, 3);
+    assert.equal(sent.length, 3);
+    assert.match(sent[0], /^tool call: be_see_from_filename args: /);
+    assert.match(sent[1], /^tool result: be_see_from_filename:/);
+    assert.doesNotMatch(sent[1], /please check this image/);
+    assert.match(sent[2], /^done$/);
+  } finally {
+    if (originalMock === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalMock;
+    if (originalSeeFixture === undefined) delete process.env.PYA_SEE_VL_FIXTURE;
+    else process.env.PYA_SEE_VL_FIXTURE = originalSeeFixture;
     forget();
     resetMindLogs();
   }

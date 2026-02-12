@@ -229,9 +229,18 @@ export async function runToolChat({
           throw err;
         }
       }
-      const surfacedTool = (toolResult && toolResult.mood)
-        ? toolResult
-        : remember("result");
+      const surfacedTool = (() => {
+        if (toolResult && toolResult.mood) return toolResult;
+        if (toolResult && typeof toolResult === "object" && toolResult.result && typeof toolResult.result === "object") {
+          return {
+            mood: "ya",
+            su: { name: "result" },
+            be: capability?.be ?? "result",
+            ob: toolResult.result
+          };
+        }
+        return remember("result");
+      })();
       let toolText = "";
       if (surfacedTool && typeof surfacedTool === "object") {
         const mapName = surfacedTool.ob?.name;

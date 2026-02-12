@@ -271,5 +271,17 @@ export function buildToolSentence({ capability, args }) {
     call[caseKey] = argValue;
   }
 
+  // `be see` needs a prompt; accept explicit `ob` even when capability sentences
+  // only expose `from filename`, otherwise use a deterministic default so we do
+  // not accidentally inherit unrelated conversational text.
+  if (call?.be === "see") {
+    if (!call?.ob && Object.prototype.hasOwnProperty.call(argObject, "ob")) {
+      call.ob = { text: scalarArgValue(argObject.ob) };
+    }
+    if (!call?.ob) {
+      call.ob = { text: "Describe the image." };
+    }
+  }
+
   return call;
 }
