@@ -62,6 +62,35 @@ function shortToolSummary(value, limit = 140) {
   return `${text.slice(0, limit)}...`;
 }
 
+function shortToolArgs(value, limit = 220) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}...`;
+}
+
+function extractToolCallArgs(toolCall) {
+  const raw = toolCall?.function?.arguments ?? toolCall?.arguments;
+  if (raw == null) return "";
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    try {
+      return JSON.stringify(JSON.parse(trimmed));
+    } catch {
+      return trimmed;
+    }
+  }
+  if (typeof raw === "object") {
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return String(raw);
+    }
+  }
+  return String(raw);
+}
+
 function expectsToolActivity(text = "") {
   return /\b(tool|search|web\s*search|lookup|look\s+up|find)\b/i.test(String(text ?? ""));
 }
@@ -74,10 +103,13 @@ function shouldIncludeToolSummary({ channelConfig, channelId, dmRooms }) {
   return false;
 }
 
-function formatToolEventMessage({ stage, toolName, toolText, ratifySentence }) {
+function formatToolEventMessage({ stage, toolName, toolText, ratifySentence, toolCall }) {
   const name = String(toolName ?? "").trim();
   if (!name) return "";
-  if (stage === "call") return `tool call: ${name}`;
+  if (stage === "call") {
+    const args = shortToolArgs(extractToolCallArgs(toolCall));
+    return args ? `tool call: ${name} args: ${args}` : `tool call: ${name}`;
+  }
   if (stage === "ratify") {
     const decision = ratifySentence?.ob?.boolean;
     if (decision === true) return `tool review: ${name} allowed`;

@@ -223,6 +223,24 @@ export async function handleImperative({
       if (mapped) exportRefs.set(name, { name: mapped });
     }
 
+    // Namespace imports keep qualified ceremony names internally (e.g. "ns foo").
+    // Register unqualified exported ceremony aliases so callers can invoke
+    // exported verbs directly (e.g. "be foo ...") when the module exports them.
+    for (const name of record.exportNames) {
+      if (!record.localCeremonies.has(name)) continue;
+      const mapped = exportNameMap.get(name);
+      const entries = mapped ? memory.getDefinitionEntries(mapped) : [];
+      const all = memory.allRemember();
+      for (const entry of entries) {
+        const def = all[entry.index];
+        const sig = def?.signatureWords ?? (def ? deriveSignatureFromDefinition(def) : null);
+        if (!sig?.length) continue;
+        const aliasSig = [...sig];
+        aliasSig[1] = name;
+        registerSignatureAlias({ name: mapped, signatureWords: aliasSig, source: record.id });
+      }
+    }
+
     if (symbol) {
       if (!record.exportNames.has(symbol)) {
         throwErrorSentence({

@@ -273,4 +273,19 @@ test("tool sentence builder extracts filename from object args", () => {
   });
   assert.equal(toolSentence?.be, "see");
   assert.equal(toolSentence?.from?.filename, "/workplace/world/house/pyash-agent/artifacts/20260212/sample.png");
+  assert.equal(toolSentence?.ob?.text, "Describe the image.");
+});
+
+test("tool sentence builder keeps explicit prompt for see tool", () => {
+  const capability = parse("su name see be see from filename input can");
+  const toolSentence = buildToolSentence({
+    capability,
+    args: {
+      from: {
+        filename: "/workplace/world/house/pyash-agent/artifacts/20260212/sample.png"
+      },
+      ob: "Read all visible text exactly."
+    }
+  });
+  assert.equal(toolSentence?.ob?.text, "Read all visible text exactly.");
 });
