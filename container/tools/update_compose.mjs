@@ -2,13 +2,26 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const rootDir = path.resolve(new URL("../..", import.meta.url).pathname);
-const configPath = path.join(rootDir, "configure", "workplace.pya");
+const defaultConfigPath = path.join(rootDir, "configure", "default.pya");
+const containerConfigPath = path.join(rootDir, "configure", "container.pya");
+const secretConfigPath = path.join(rootDir, "configure", "secret.pya");
+const legacyWorkplacePath = path.join(rootDir, "configure", "workplace.pya");
 const overridePath = path.join(rootDir, "container", "building", "compose.override.yaml");
 
-function parseWorkplace(text) {
+function parseConfigText(text) {
   const out = new Map();
   const lines = text.split("\n");
   for (const line of lines) {
+    const existsTextMatch = line.match(/^\s*exists su name (.+?) ob text "([^"]*)" be default ya\s*$/);
+    if (existsTextMatch) {
+      out.set(existsTextMatch[1], existsTextMatch[2]);
+      continue;
+    }
+    const existsBoolMatch = line.match(/^\s*exists su name (.+?) ob bool (truth|lie) be default ya\s*$/);
+    if (existsBoolMatch) {
+      out.set(existsBoolMatch[1], existsBoolMatch[2]);
+      continue;
+    }
     const textMatch = line.match(/^\s*su name ([^ ]+) ob text "([^"]*)" ya\s*$/);
     if (textMatch) {
       out.set(textMatch[1], textMatch[2]);
@@ -23,13 +36,26 @@ function parseWorkplace(text) {
   return out;
 }
 
-async function loadWorkplace() {
-  try {
-    const text = await fs.readFile(configPath, "utf8");
-    return parseWorkplace(text);
-  } catch {
-    return new Map();
+async function loadConfig() {
+  const out = new Map();
+  const configPaths = [
+    defaultConfigPath,
+    containerConfigPath,
+    secretConfigPath,
+    legacyWorkplacePath
+  ];
+  for (const configPath of configPaths) {
+    try {
+      const text = await fs.readFile(configPath, "utf8");
+      const parsed = parseConfigText(text);
+      for (const [key, value] of parsed.entries()) {
+        out.set(key, value);
+      }
+    } catch {
+      // ignore missing config files
+    }
   }
+  return out;
 }
 
 function yamlList(items, indent = "    ") {
@@ -47,11 +73,11 @@ function quote(value) {
   return JSON.stringify(value);
 }
 
-const workplace = await loadWorkplace();
-const gpuEnabled = (workplace.get("gpu enabled") ?? "lie") === "truth";
-const audioEnabled = (workplace.get("audio enabled") ?? "lie") === "truth";
+const config = await loadConfig();
+const gpuEnabled = (config.get("gpu enabled") ?? "lie") === "truth";
+const audioEnabled = (config.get("audio enabled") ?? "lie") === "truth";
 const envVncEnabled = process.env.PYASH_VNC_ENABLED;
-const vncEnabled = ((envVncEnabled ?? workplace.get("vnc enabled") ?? "lie") === "truth");
+const vncEnabled = ((envVncEnabled ?? config.get("vnc enabled") ?? "lie") === "truth");
 
 const pulseDir = process.env.PYASH_PULSE_DIR;
 const pulseCookie = process.env.PYASH_PULSE_COOKIE;
