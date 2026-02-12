@@ -5,14 +5,37 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONTAINER_CONFIG="$ROOT_DIR/configure/container.pya"
 source "$ROOT_DIR/command/container_preflight.sh"
 
+upsert_config_line() {
+  local key="$1"
+  local newline="$2"
+  local tmp
+  mkdir -p "$ROOT_DIR/configure"
+  touch "$CONTAINER_CONFIG"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v newline="$newline" '
+    BEGIN { replaced = 0 }
+    {
+      if ($0 ~ ("^exists su name " key " ob ")) {
+        if (!replaced) {
+          print newline;
+          replaced = 1;
+        }
+      } else {
+        print $0;
+      }
+    }
+    END {
+      if (!replaced) print newline;
+    }
+  ' "$CONTAINER_CONFIG" > "$tmp"
+  mv "$tmp" "$CONTAINER_CONFIG"
+}
+
 ensure_container_config_defaults() {
   mkdir -p "$ROOT_DIR/configure"
-  if [[ ! -f "$CONTAINER_CONFIG" ]]; then
-    cat > "$CONTAINER_CONFIG" <<'EOF'
-exists su name web search motor ob filename "http://searxng:8080/" be default ya
-exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya
-EOF
-    return
+  touch "$CONTAINER_CONFIG"
+  if ! grep -q '^exists su name web search enabled ob bool ' "$CONTAINER_CONFIG"; then
+    printf '%s\n' 'exists su name web search enabled ob bool truth be default ya' >> "$CONTAINER_CONFIG"
   fi
   if ! grep -q '^exists su name web search motor ob filename "http://searxng:8080/" be default ya$' "$CONTAINER_CONFIG"; then
     printf '%s\n' 'exists su name web search motor ob filename "http://searxng:8080/" be default ya' >> "$CONTAINER_CONFIG"
@@ -20,6 +43,95 @@ EOF
   if ! grep -q '^exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya$' "$CONTAINER_CONFIG"; then
     printf '%s\n' 'exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya' >> "$CONTAINER_CONFIG"
   fi
+}
+
+configure_searxng_behavior() {
+  local enable="$1"
+  if [[ "$enable" == "truth" ]]; then
+    upsert_config_line "web search enabled" 'exists su name web search enabled ob bool truth be default ya'
+    upsert_config_line "web search motor" 'exists su name web search motor ob filename "http://searxng:8080/" be default ya'
+    upsert_config_line "search web default" 'exists su name search web default ob la be search fromstate wo web ko from filename "http://searxng:8080/" be default ya'
+    return
+  fi
+  upsert_config_line "web search enabled" 'exists su name web search enabled ob bool lie be default ya'
+}
+
+cpu_cores() {
+  nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo "unknown"
+}
+
+ram_gib() {
+  awk '/MemTotal:/ {printf "%.1f", $2/1024/1024}' /proc/meminfo 2>/dev/null || echo "unknown"
+}
+
+disk_gib() {
+  df -BG "$ROOT_DIR" 2>/dev/null | awk 'NR==2 {gsub("G", "", $4); print $4}' || echo "unknown"
+}
+
+bogomips_avg() {
+  awk '/bogomips/ {sum+=$3; count+=1} END {if (count>0) printf "%.1f", sum/count; else print "unknown"}' /proc/cpuinfo 2>/dev/null || echo "unknown"
+}
+
+gpu_status() {
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    echo "detected"
+    return
+  fi
+  if [[ -e /dev/nvidiactl ]]; then
+    echo "detected"
+    return
+  fi
+  echo "missing"
+}
+
+vram_gib() {
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "n/a"
+    return
+  fi
+  nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null \
+    | awk 'NR==1 {printf "%.1f", $1/1024}' \
+    || echo "n/a"
+}
+
+preflight_summary_text() {
+  local docker_state="missing"
+  local daemon_state="down"
+  local compose_state="missing"
+  local buildx_state="missing"
+  local gpu_state
+  gpu_state="$(gpu_status)"
+
+  if pya_container_has_docker; then
+    docker_state="ok"
+    if pya_container_daemon_running; then
+      daemon_state="ok"
+    fi
+    if pya_container_has_compose; then
+      compose_state="ok"
+    fi
+    if pya_container_has_buildx; then
+      buildx_state="ok"
+    fi
+  fi
+
+  cat <<EOF
+System pre-flight (non-blocking)
+
+Container tools:
+  Docker:          $docker_state
+  Docker daemon:   $daemon_state
+  Docker compose:  $compose_state
+  Docker buildx:   $buildx_state
+
+System summary:
+  CPU cores:       $(cpu_cores)
+  RAM (GiB):       $(ram_gib)
+  Free disk (GiB): $(disk_gib)
+  GPU:             $gpu_state
+  VRAM (GiB):      $(vram_gib)
+  Bogomips avg:    $(bogomips_avg)
+EOF
 }
 
 ensure_container_config_defaults
@@ -40,6 +152,29 @@ buildx_available="no"
 if pya_container_has_docker && pya_container_has_buildx; then
   buildx_available="yes"
 fi
+
+if [[ "$has_dialog" == "yes" ]]; then
+  dialog --title "Pyash pre-flight" --msgbox "$(preflight_summary_text)" 22 76
+else
+  echo
+  preflight_summary_text
+  echo
+fi
+
+searxng_enabled="truth"
+if [[ "$has_dialog" == "yes" ]]; then
+  if dialog --title "Web search (SearxNG)" --yesno "Enable local SearxNG web search service in container startup?" 8 76; then
+    searxng_enabled="truth"
+  else
+    searxng_enabled="lie"
+  fi
+else
+  read -r -p "Enable local SearxNG web search service? [Y/n]: " searx_choice || true
+  if [[ "${searx_choice:-}" =~ ^([nN]|no|NO)$ ]]; then
+    searxng_enabled="lie"
+  fi
+fi
+configure_searxng_behavior "$searxng_enabled"
 
 if [[ "$has_dialog" == "yes" ]]; then
   if [[ "$container_running" == "yes" ]]; then
