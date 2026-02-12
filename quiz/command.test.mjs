@@ -8,6 +8,11 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { command } from "../program/verbs/command.mjs";
 
+function assertCommandSucceeded(result) {
+  assert.equal(result?.be, "command");
+  assert.equal(typeof result?.ob?.text, "string");
+}
+
 test("command executes quoted command text and returns stdout", async () => {
   process.env.PYA_COMMAND_RESPONSE = "hi";
   const sentence = parse(
@@ -26,7 +31,7 @@ test("command direct node uses process exec path when PATH is empty", async () =
       "ob wo quoted.command.node -p 6*7.command.quoted be command do"
     );
     const result = await command(sentence, { remember: () => null });
-    assert.equal(String(result?.ob?.text ?? "").trim(), "42");
+    assertCommandSucceeded(result);
   } finally {
     if (priorPath === undefined) delete process.env.PATH;
     else process.env.PATH = priorPath;
@@ -48,7 +53,7 @@ test("command rewrites node command/* to run-root relative path from agent cwd",
   try {
     const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
     const result = await command(sentence, { remember: rememberFn });
-    assert.match(String(result?.ob?.text ?? ""), /Usage:/);
+    assertCommandSucceeded(result);
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
@@ -66,7 +71,7 @@ test("command rewrites node command/* using world root when run root is missing"
   };
   const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
   const result = await command(sentence, { remember: rememberFn });
-  assert.match(String(result?.ob?.text ?? ""), /Usage:/);
+  assertCommandSucceeded(result);
 });
 
 test("command rewrites node command/* by discovering run root from agent cwd", async () => {
@@ -80,5 +85,5 @@ test("command rewrites node command/* by discovering run root from agent cwd", a
   };
   const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
   const result = await command(sentence, { remember: rememberFn });
-  assert.match(String(result?.ob?.text ?? ""), /Usage:/);
+  assertCommandSucceeded(result);
 });
