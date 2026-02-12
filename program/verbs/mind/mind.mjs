@@ -415,7 +415,8 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       outputName,
       historySeriesName,
       aspect,
-      inputText
+      inputText,
+      inputs
     });
     if (stream) return stream;
     responseText = text ?? "";

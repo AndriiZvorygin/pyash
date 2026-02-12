@@ -20,6 +20,24 @@ function buildPromptText(messages) {
   return lines.join("\n");
 }
 
+function modelLooksVisionCapable(model) {
+  const text = String(model ?? "").toLowerCase().trim();
+  if (!text) return false;
+  return /(vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
+}
+
+function normalizeVisionInput(input) {
+  if (!input || typeof input !== "object") return null;
+  const kind = String(input?.kind ?? "").toLowerCase().trim();
+  if (kind && kind !== "image") return null;
+  const filename = String(input?.filename ?? "").trim();
+  if (!filename) return null;
+  return {
+    filename,
+    mimeType: String(input?.mimeType ?? "").trim()
+  };
+}
+
 export async function runGenerate({
   sentence,
   ob,
@@ -38,8 +56,10 @@ export async function runGenerate({
   outputName,
   historySeriesName,
   aspect,
-  inputText
+  inputText,
+  inputs = []
 } = {}) {
+  const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
   const toolList = toolListFromMap(toolMapName);
   const systemParts = [];
@@ -50,7 +70,16 @@ export async function runGenerate({
   }
   if (historyMessages.length) messages.push(...historyMessages);
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
-  if (userContent) messages.push({ role: "user", content: userContent });
+  if (userContent || visionInputs.length) {
+    const userMessage = { role: "user", content: userContent };
+    if (visionInputs.length && modelLooksVisionCapable(model)) {
+      userMessage.imageFiles = visionInputs.map(item => ({
+        filename: item.filename,
+        mimeType: item.mimeType
+      }));
+    }
+    messages.push(userMessage);
+  }
   const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
 
   if (aspect === "stream") {

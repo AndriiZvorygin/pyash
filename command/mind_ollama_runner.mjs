@@ -275,7 +275,11 @@ async function runGenerate(payload) {
 async function runChat(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/chat`;
-  const body = { model: payload.model, messages: payload.messages, stream: !!payload.stream };
+  const body = {
+    model: payload.model,
+    messages: await normalizeChatMessages(payload.messages),
+    stream: !!payload.stream
+  };
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
@@ -283,6 +287,28 @@ async function runChat(payload) {
     return null;
   }
   return requestJson(endpoint, body);
+}
+
+async function normalizeChatMessages(rawMessages) {
+  const messages = Array.isArray(rawMessages) ? rawMessages : [];
+  const out = [];
+  for (const message of messages) {
+    const next = { ...(message ?? {}) };
+    const imageFiles = Array.isArray(next.imageFiles) ? next.imageFiles : [];
+    delete next.imageFiles;
+    if (imageFiles.length) {
+      const encoded = [];
+      for (const entry of imageFiles) {
+        const filepath = String(entry?.filename ?? "").trim();
+        if (!filepath) continue;
+        const bytes = await fs.promises.readFile(filepath);
+        encoded.push(bytes.toString("base64"));
+      }
+      if (encoded.length) next.images = encoded;
+    }
+    out.push(next);
+  }
+  return out;
 }
 
 async function main() {
