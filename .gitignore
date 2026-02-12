@@ -19,6 +19,7 @@ world/
 !world/
 world/*
 !world/conduct/
+world/conduct/*
 !world/conduct/agent.pya
 !world/house/
 world/house/*
