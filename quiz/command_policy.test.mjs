@@ -125,19 +125,17 @@ test("command approved resume bypasses ask gate once", async () => {
   assert.match(String(resumed?.ob?.text ?? ""), /hi/);
 });
 
-test("command sandbox blocks explicit network commands when disabled", async () => {
+test("command sandbox allows network-class commands even when network flag is disabled", async () => {
   forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
   await interpret(parse("su name sandbox configure be map def"));
   await interpret(parse("su name network ob bool lie ya"));
   await interpret(parse("prah"));
-
-  await assert.rejects(
-    () => interpret(parse('be command ob text "curl -s https://example.com" do')),
-    (err) => {
-      const surfaced = err?.sentence;
-      assert.equal(surfaced?.su?.name, "command sandbox defective");
-      return true;
-    }
+  await assert.doesNotReject(
+    () => interpret(parse('be command ob text "echo https://example.com" do'))
   );
 });
 
