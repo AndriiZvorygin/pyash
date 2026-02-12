@@ -359,6 +359,46 @@ function parseAbsolutePathTokens(commandText = "") {
   return tokens;
 }
 
+function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } = {}) {
+  const text = String(commandText ?? "").trim();
+  if (!text) return text;
+  const match = text.match(/^node\s+command\/([^\s]+)([\s\S]*)$/u);
+  if (!match) return text;
+  const runRootRaw =
+    rememberFn("run root")?.ob?.filename
+    ?? rememberFn("run root")?.ob?.text
+    ?? rememberFn("run root")?.ob?.name
+    ?? rememberFn("world root")?.ob?.filename
+    ?? rememberFn("world root")?.ob?.text
+    ?? rememberFn("world root")?.ob?.name
+    ?? "";
+  let runRoot = String(runRootRaw ?? "").trim();
+  if (runRoot.endsWith(`${path.sep}world`) || runRoot.endsWith("/world")) {
+    runRoot = path.dirname(runRoot);
+  }
+  const baseCwd = path.resolve(String(cwd ?? process.cwd()));
+  if (!runRoot) {
+    let cursor = baseCwd;
+    for (;;) {
+      const probe = path.join(cursor, "command", match[1]);
+      if (fsSync.existsSync(probe)) {
+        runRoot = cursor;
+        break;
+      }
+      const parent = path.dirname(cursor);
+      if (parent === cursor) break;
+      cursor = parent;
+    }
+  }
+  if (!runRoot) return text;
+  const target = path.resolve(runRoot, "command", match[1]);
+  const rel = path.relative(baseCwd, target);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    return `node ${path.posix.normalize(rel || target)}${match[2] ?? ""}`;
+  }
+  return `node ./${path.posix.normalize(rel)}${match[2] ?? ""}`;
+}
+
 function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
   const agentDerived = resolveAgentSandboxRoots({ rememberFn });
   const configuredWritableRoots =
@@ -644,18 +684,19 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     }
     return { ob: { text: output }, be: "command" };
   }
-  const cmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
-  if (!cmd) {
+  const rawCmd = resolveCommandText(sentence.ob ?? {}, { rememberFn });
+  if (!rawCmd) {
     throwErrorSentence({
       name: "command defective",
       message: "command defective: empty command",
       from: { la: sentence },
-      raw: { cmd }
+      raw: { cmd: rawCmd }
     });
   }
+  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
+  const cmd = rewriteRunRootCommandPath(rawCmd, { cwd: sandbox.cwd, rememberFn });
   const commandClass = classifyCommandText(cmd);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
-  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
   const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd });
   const requestId = nextAuditId();
   if (shouldDeny({ sentence, policy, commandClass })) {

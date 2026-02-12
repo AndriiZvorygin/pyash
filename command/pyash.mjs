@@ -898,6 +898,41 @@ function buildChannelInputCalendarBlock({ agentName, channels = [], intervalSeco
   ].join("\n");
 }
 
+function stripAgentChannelScheduleText({ existing, agentName, scheduleName }) {
+  const normalizedAgent = String(agentName ?? "").trim();
+  const normalizedSchedule = String(scheduleName ?? "").trim().toLowerCase();
+  if (!normalizedAgent || !normalizedSchedule) return String(existing ?? "");
+  const lines = String(existing ?? "").split("\n");
+  const kept = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      kept.push(line);
+      continue;
+    }
+    if (normalizedSchedule === "poll") {
+      if (new RegExp(`^su name channel poll for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
+        continue;
+      }
+      if (/^su name channel poll lane ob text ".*" ya$/i.test(trimmed)) {
+        continue;
+      }
+    }
+    if (normalizedSchedule === "input") {
+      if (new RegExp(`^su name channel input for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
+        continue;
+      }
+      if (/^su name channel input lane ob text ".*" ya$/i.test(trimmed)) {
+        continue;
+      }
+    }
+    kept.push(line);
+  }
+  let next = kept.join("\n").replace(/\n{3,}/g, "\n\n");
+  if (next && !next.endsWith("\n")) next = `${next}\n`;
+  return next;
+}
+
 function scrubLegacyMatrixChannelSeed(text) {
   const original = String(text ?? "");
   const lines = original.split("\n");
@@ -1974,7 +2009,37 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         preview: ["channel input schedule"],
         nextText: worldInputPlan.nextText
       });
+
+      const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
+      const calendarExisting = await readText(calendarPath);
+      const calendarWithoutPoll = stripAgentChannelScheduleText({
+        existing: calendarExisting,
+        agentName: cfg.agentName,
+        scheduleName: "poll"
+      });
+      writes.push({
+        path: calendarPath,
+        changed: calendarWithoutPoll !== calendarExisting,
+        action: "replace",
+        preview: ["channel poll calendar cleanup"],
+        nextText: calendarWithoutPoll
+      });
     } else {
+      const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
+      const worldCalendarExisting = await readText(worldCalendarPath);
+      const worldWithoutInput = stripAgentChannelScheduleText({
+        existing: worldCalendarExisting,
+        agentName: cfg.agentName,
+        scheduleName: "input"
+      });
+      writes.push({
+        path: worldCalendarPath,
+        changed: worldWithoutInput !== worldCalendarExisting,
+        action: "replace",
+        preview: ["channel input schedule cleanup"],
+        nextText: worldWithoutInput
+      });
+
       const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
       const calendarExisting = await readText(calendarPath);
       const calendarPlan = upsertChannelPollCalendarText({

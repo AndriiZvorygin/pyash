@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -28,4 +31,54 @@ test("command direct node uses process exec path when PATH is empty", async () =
     if (priorPath === undefined) delete process.env.PATH;
     else process.env.PATH = priorPath;
   }
+});
+
+test("command rewrites node command/* to run-root relative path from agent cwd", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-command-agent-"));
+  const agentCwd = path.join(tempRoot, "world", "house", "tester");
+  await fs.mkdir(agentCwd, { recursive: true });
+  const rememberFn = (name) => {
+    if (name === "agent sandbox") return { ob: { boolean: true } };
+    if (name === "agent cwd") return { ob: { filename: agentCwd } };
+    if (name === "run root") return { ob: { filename: process.cwd() } };
+    if (name === "world root") return { ob: { filename: path.join(tempRoot, "world") } };
+    if (name === "agent name") return { ob: { text: "tester" } };
+    return null;
+  };
+  try {
+    const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
+    const result = await command(sentence, { remember: rememberFn });
+    assert.match(String(result?.ob?.text ?? ""), /Usage:/);
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("command rewrites node command/* using world root when run root is missing", async () => {
+  const agentCwd = path.join(process.cwd(), "world", "house", "pyash-agent");
+  await fs.mkdir(agentCwd, { recursive: true });
+  const rememberFn = (name) => {
+    if (name === "agent sandbox") return { ob: { boolean: true } };
+    if (name === "agent cwd") return { ob: { filename: agentCwd } };
+    if (name === "world root") return { ob: { filename: path.join(process.cwd(), "world") } };
+    if (name === "agent name") return { ob: { text: "pyash-agent" } };
+    return null;
+  };
+  const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
+  const result = await command(sentence, { remember: rememberFn });
+  assert.match(String(result?.ob?.text ?? ""), /Usage:/);
+});
+
+test("command rewrites node command/* by discovering run root from agent cwd", async () => {
+  const agentCwd = path.join(process.cwd(), "world", "house", "pyash-agent");
+  await fs.mkdir(agentCwd, { recursive: true });
+  const rememberFn = (name) => {
+    if (name === "agent sandbox") return { ob: { boolean: true } };
+    if (name === "agent cwd") return { ob: { filename: agentCwd } };
+    if (name === "agent name") return { ob: { text: "pyash-agent" } };
+    return null;
+  };
+  const sentence = parse("ob wo quoted.command.node command/pyash.mjs --help.command.quoted be command do");
+  const result = await command(sentence, { remember: rememberFn });
+  assert.match(String(result?.ob?.text ?? ""), /Usage:/);
 });
