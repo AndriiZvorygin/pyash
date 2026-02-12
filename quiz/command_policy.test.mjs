@@ -215,3 +215,80 @@ test("command sandbox defaults to agent cwd roots when agent sandbox is enabled"
     }
   );
 });
+
+test("command sandbox uses world conduct agent policy as authoritative roots", async () => {
+  forget();
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-policy-"));
+  const worldRoot = path.join(rootDir, "world");
+  const agentDir = path.join(worldRoot, "house", "policy-agent");
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(agentDir, { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "conduct", "agent.pya"), "# strict house-only policy\n", "utf8");
+
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse(`exists su name world root ob filename "${worldRoot}" be default ya`));
+  await interpret(parse("exists su name agent sandbox ob bool truth be default ya"));
+  await interpret(parse(`exists su name agent cwd ob filename "${agentDir}" be default ya`));
+  await interpret(parse("su name sandbox configure be map def"));
+  await interpret(parse(`su name writable roots ob ve filename "${rootDir}" ya`));
+  await interpret(parse("prah"));
+
+  await assert.rejects(
+    () => command({
+      mood: "do",
+      be: "command",
+      ob: { text: "echo hi" },
+      to: { filename: path.join(rootDir, "outside.txt") }
+    }),
+    (err) => {
+      const surfaced = err?.sentence;
+      assert.equal(surfaced?.su?.name, "command sandbox defective");
+      return true;
+    }
+  );
+});
+
+test("command sandbox allows world conduct project roots for an agent", async () => {
+  forget();
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-policy-allow-"));
+  const worldRoot = path.join(rootDir, "world");
+  const agentName = "policy-agent";
+  const agentDir = path.join(worldRoot, "house", agentName);
+  const projectDir = path.join(rootDir, "workspace");
+  const outputFile = path.join(projectDir, "allowed.txt");
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(agentDir, { recursive: true });
+  await fs.mkdir(projectDir, { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    [
+      `su name ${agentName} directory license be map def`,
+      `  su name "${projectDir}" ob ve text "read" "write" "command" ya`,
+      "prah",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+  await interpret(parse(`exists su name world root ob filename "${worldRoot}" be default ya`));
+  await interpret(parse("exists su name agent sandbox ob bool truth be default ya"));
+  await interpret(parse(`exists su name agent cwd ob filename "${agentDir}" be default ya`));
+
+  const result = await command({
+    mood: "do",
+    be: "command",
+    ob: { text: "echo allowed" },
+    to: { filename: outputFile }
+  });
+
+  assert.equal(result?.be, "command");
+  const written = await fs.readFile(outputFile, "utf8");
+  assert.match(written, /allowed/);
+});

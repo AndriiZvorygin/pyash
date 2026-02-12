@@ -883,8 +883,8 @@ function buildChannelPollCalendarBlock({ agentName, channels = [], intervalMinut
   ].join("\n");
 }
 
-function buildChannelInputCalendarBlock({ agentName, channels = [], intervalMinutes = 1 }) {
-  const interval = Math.max(1, Math.floor(Number(intervalMinutes) || 1));
+function buildChannelInputCalendarBlock({ agentName, channels = [], intervalSeconds = 1 }) {
+  const interval = Math.max(1, Math.floor(Number(intervalSeconds) || 1));
   const orderedChannels = Array.from(new Set(
     (Array.isArray(channels) ? channels : [])
       .map((value) => String(value ?? "").trim().toLowerCase())
@@ -893,7 +893,7 @@ function buildChannelInputCalendarBlock({ agentName, channels = [], intervalMinu
   const channelValues = orderedChannels.length ? orderedChannels : ["matrix"];
   const vectorLiteral = channelValues.map((value) => quoteText(value)).join(" ");
   return [
-    `su name channel input for name ${agentName} with ve text ${vectorLiteral} vyah habit during minute ${interval} be calendar ya`,
+    `su name channel input for name ${agentName} with ve text ${vectorLiteral} vyah habit during second ${interval} be calendar ya`,
     "su name channel input lane ob text \"channel_input\" ya"
   ].join("\n");
 }
@@ -1964,7 +1964,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         content: buildChannelInputCalendarBlock({
           agentName: cfg.agentName,
           channels: [MATRIX_CATERER_NAME],
-          intervalMinutes: 1
+          intervalSeconds: 1
         })
       });
       writes.push({
@@ -3317,6 +3317,38 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
+function buildAgentDirectoryLicenseBlock({ rootDir, worldRoot, agentName }) {
+  const lines = [
+    `su name ${agentName} directory license be map def`,
+    `  su name ${quoteText(path.join("world", "house", agentName))} ob ve text "read" "write" "command" ya`
+  ];
+  if (String(agentName).trim() === "parity coder") {
+    lines.push(`  su name ${quoteText(path.resolve(rootDir))} ob ve text "read" "write" "command" ya`);
+  }
+  lines.push("prah");
+  return lines.join("\n");
+}
+
+async function upsertAgentDirectoryLicense({ rootDir, worldRoot, agentName, dryRun = false }) {
+  const policyPath = path.join(worldRoot, "conduct", "agent.pya");
+  const existing = await readText(policyPath);
+  const plan = planManagedUpsert({
+    existing,
+    blockName: `agent directory license ${agentName}`,
+    content: buildAgentDirectoryLicenseBlock({ rootDir, worldRoot, agentName })
+  });
+  if (!dryRun && plan.changed) {
+    await ensureDirForFile(policyPath);
+    await fs.writeFile(policyPath, plan.nextText, "utf8");
+  }
+  return {
+    ok: true,
+    path: policyPath,
+    changed: plan.changed,
+    action: plan.action
+  };
+}
+
 async function upsertAgentChannelSchedule({
   worldRoot,
   agentName,
@@ -3814,6 +3846,12 @@ async function configureAgentApply({ args, mode = "establish" }) {
     toolsMap: cfg.toolsMap,
     dryRun
   });
+  const directoryLicenseWrite = await upsertAgentDirectoryLicense({
+    rootDir,
+    worldRoot,
+    agentName: cfg.agentName,
+    dryRun
+  });
 
   const channelWrite = cfg.bindChannel
     ? await bindAgentToDefaultChannel({
@@ -3871,6 +3909,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
   const changed = Boolean(
     establishResult.changed
     || runtimeWrite.changed
+    || directoryLicenseWrite.changed
     || channelWrite.changed
     || channelScheduleWrite.changed
   );
@@ -3899,6 +3938,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
       changes: establishResult.changes
     },
     runtimeWrite,
+    directoryLicenseWrite,
     channelWrite,
     channelScheduleWrite,
     smoke,
@@ -3914,6 +3954,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
   textOut(`- agent ${cfg.agentName}`);
   textOut(`- establish ${establishResult.status}`);
   textOut(`- runtime ${runtimeWrite.path} (${runtimeWrite.changed ? "changed" : "unchanged"})`);
+  textOut(`- directory license ${directoryLicenseWrite.path} (${directoryLicenseWrite.changed ? "changed" : "unchanged"})`);
   if (cfg.bindChannel) {
     if (channelWrite.ok) {
       textOut(`- channel ${channelWrite.path} (${channelWrite.changed ? "changed" : "unchanged"})`);

@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -98,7 +98,15 @@ export async function license(sentence, { remember: rememberFn = remember } = {}
       raw: { sentence }
     });
   }
-  const resolved = path.resolve(String(target));
+  const { resolved, outside, agentCwd } = resolveAgentPath(String(target), { rememberFn });
+  if (outside) {
+    throwErrorSentence({
+      name: "license defective",
+      message: `license defective: outside agent cwd (${agentCwd})`,
+      from: { name: "license" },
+      raw: { target }
+    });
+  }
   const ownerName = sentence?.to?.name ?? sentence?.to?.text;
   const groupName = sentence?.among?.name ?? sentence?.among?.text;
   if (ownerName || groupName) {

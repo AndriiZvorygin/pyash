@@ -232,6 +232,7 @@ async function dispatchChannelEvents({
   const dmRooms = new Set(Array.isArray(channelConfig?.dmRooms) ? channelConfig.dmRooms : []);
   const mentionGate = channelConfig?.mentionGate === true;
   const selfSenders = selfSenderCandidates({ channelConfig, agentName });
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
 
   for (const event of events) {
     received += 1;
@@ -369,7 +370,8 @@ async function dispatchChannelEvents({
         event: routedEvent,
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
-        payloadId: orchestratorDirective.payloadId
+        payloadId: orchestratorDirective.payloadId,
+        agentCwd: path.join(worldRoot, "house", orchestratorDirective.agentName || listener)
       });
       handled += 1;
       let responseText = "";
@@ -457,11 +459,12 @@ export function buildChannelMindSentence({
   event,
   channelConfig,
   sessionName,
-  payloadId
+  payloadId,
+  agentCwd = ""
 }) {
   const lane = resolveEventLane(event, channelConfig);
   const resolvedSessionName = sessionName || `session name ${lane}`;
-  return {
+  const sentence = {
     mood: "do",
     be: "write",
     ob: { text: buildPrompt(event, { payloadId }) },
@@ -470,6 +473,9 @@ export function buildChannelMindSentence({
     with: { wo: "tools" },
     fromtext: { name: resolvedSessionName }
   };
+  const cwdText = String(agentCwd ?? "").trim();
+  if (cwdText) sentence.at = { filename: cwdText };
+  return sentence;
 }
 
 function normalizeEvent(rawEvent, channelType) {

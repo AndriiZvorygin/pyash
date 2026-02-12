@@ -19,6 +19,7 @@ import {
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
+import { collectLicensedRoots, resolveWorldAgentDirectoryLicense } from "../library/agent_command_policy.mjs";
 
 function resolveCommandText(ob = {}, { rememberFn } = {}) {
   if (typeof ob.wo === "string") return ob.wo;
@@ -272,6 +273,24 @@ function resolveWorldRoot({ rememberFn = remember } = {}) {
   return path.resolve("world");
 }
 
+function resolveAgentName({ rememberFn = remember } = {}) {
+  const raw = rememberFn("agent name")?.ob?.text
+    ?? rememberFn("agent name")?.ob?.name
+    ?? null;
+  const value = String(raw ?? "").trim();
+  return value || null;
+}
+
+function inferAgentNameFromCwd(cwd, worldRoot) {
+  const resolvedCwd = path.resolve(String(cwd ?? ""));
+  const houseRoot = path.join(path.resolve(String(worldRoot ?? "world")), "house");
+  const relative = path.relative(houseRoot, resolvedCwd);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
+  const [first] = relative.split(path.sep);
+  const value = String(first ?? "").trim();
+  return value || null;
+}
+
 function resolveAgentSandboxRoots({ rememberFn = remember } = {}) {
   const sandboxEnabled = rememberFn("agent sandbox")?.ob?.boolean === true;
   if (!sandboxEnabled) return null;
@@ -283,6 +302,24 @@ function resolveAgentSandboxRoots({ rememberFn = remember } = {}) {
   if (!cwdRaw) return null;
   const cwd = path.resolve(String(cwdRaw));
   const worldRoot = resolveWorldRoot({ rememberFn });
+  const agentName = resolveAgentName({ rememberFn }) ?? inferAgentNameFromCwd(cwd, worldRoot);
+  const license = agentName
+    ? resolveWorldAgentDirectoryLicense({ worldRoot, agentName })
+    : null;
+  if (license) {
+    const commandRoots = collectLicensedRoots(license, "command");
+    const writeRoots = collectLicensedRoots(license, "write");
+    const readRoots = collectLicensedRoots(license, "read");
+    const effectiveCommandRoots = commandRoots.length ? commandRoots : [];
+    const effectiveWriteRoots = writeRoots.length ? writeRoots : [];
+    const fallbackCwd = effectiveCommandRoots[0] ?? cwd;
+    return {
+      cwd: fallbackCwd,
+      commandRoots: effectiveCommandRoots,
+      writeRoots: effectiveWriteRoots,
+      readRoots
+    };
+  }
   const sharedRoots = resolveConfigMapSeries("agent command configure", "shared roots", { rememberFn })
     ?? resolveConfigSeries("agent shared roots", { rememberFn })
     ?? [];
@@ -298,7 +335,7 @@ function resolveAgentSandboxRoots({ rememberFn = remember } = {}) {
     if (path.isAbsolute(raw)) return raw;
     return path.resolve(raw);
   }).filter(Boolean);
-  return { cwd, roots: expanded };
+  return { cwd, commandRoots: expanded, writeRoots: expanded, readRoots: expanded };
 }
 
 function isPathWithinRoots(targetPath, roots = []) {
@@ -327,13 +364,13 @@ function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
   const configuredWritableRoots =
     resolveConfigMapSeries("sandbox configure", "writable roots", { rememberFn })
     ?? resolveConfigSeries("command sandbox writable roots", { rememberFn });
-  const writableRoots = normalizeRoots(configuredWritableRoots ?? agentDerived?.roots ?? [process.cwd()]);
+  const writableRoots = normalizeRoots(agentDerived?.writeRoots ?? configuredWritableRoots ?? [process.cwd()]);
+  const commandRoots = normalizeRoots(agentDerived?.commandRoots ?? writableRoots);
   const configuredCwd =
     resolveConfigMapText("sandbox configure", "cwd", { rememberFn })
     ?? resolveConfigMapText("command configure", "sandbox cwd", { rememberFn })
-    ?? agentDerived?.cwd
     ?? process.cwd();
-  const cwd = path.resolve(String(configuredCwd ?? process.cwd()));
+  const cwd = path.resolve(String(agentDerived?.cwd ?? configuredCwd ?? process.cwd()));
   const networkAllowed =
     resolveConfigMapBool("sandbox configure", "network", { rememberFn })
     ?? resolveConfigBool("command sandbox network", { rememberFn })
@@ -352,6 +389,7 @@ function resolveSandboxSettings({ sentence, rememberFn = remember } = {}) {
     ?? DEFAULT_ENV_ALLOWLIST;
   return {
     cwd,
+    commandRoots,
     writableRoots,
     networkAllowed,
     timeoutMs,
@@ -390,12 +428,20 @@ function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandb
       raw: { sandbox }
     });
   }
-  if (!isPathWithinRoots(sandbox.cwd, sandbox.writableRoots)) {
+  if (!Array.isArray(sandbox?.commandRoots) || sandbox.commandRoots.length === 0) {
+    throwErrorSentence({
+      name: "command permission defective",
+      message: "command permission defective: command license missing",
+      from: { la: sentence },
+      raw: { commandRoots: sandbox?.commandRoots }
+    });
+  }
+  if (!isPathWithinRoots(sandbox.cwd, sandbox.commandRoots)) {
     throwErrorSentence({
       name: "command sandbox defective",
-      message: `command sandbox defective: cwd outside writable roots (${sandbox.cwd})`,
+      message: `command sandbox defective: cwd outside command roots (${sandbox.cwd})`,
       from: { la: sentence },
-      raw: { cwd: sandbox.cwd, writableRoots: sandbox.writableRoots }
+      raw: { cwd: sandbox.cwd, commandRoots: sandbox.commandRoots }
     });
   }
   if (sentence?.to?.filename) {

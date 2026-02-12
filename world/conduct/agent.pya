@@ -1,0 +1,20 @@
+# world-level agent directory license policy
+#
+# map name shape:
+# su name <agent> directory license be map def
+#   su name "<directory>" ob ve text "read" "write" "command" ya
+# prah
+#
+# default fallback:
+su name default directory license be map def
+  su name "world/house/varied" ob ve text "read" "write" ya
+prah
+
+su name pyash-agent directory license be map def
+  su name "world/house/pyash-agent" ob ve text "read" "write" "command" ya
+prah
+
+su name parity coder directory license be map def
+  su name "world/house/parity coder" ob ve text "read" "write" "command" ya
+  su name "/workplace" ob ve text "read" "write" "command" ya
+prah

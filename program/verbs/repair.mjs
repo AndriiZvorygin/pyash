@@ -5,6 +5,7 @@ import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigMapSeries, resolveConfigMapText, resolveConfigSeries } from "../configure/env.mjs";
+import { collectLicensedRoots, resolveWorldAgentDirectoryLicense } from "../library/agent_command_policy.mjs";
 
 function throwRepairError(name, message, raw) {
   throwErrorSentence({
@@ -196,6 +197,15 @@ function resolveRepairRoots({ rememberFn = remember } = {}) {
     ?? null;
   if (sandboxEnabled && agentCwd) {
     const worldRoot = resolveWorldRoot({ rememberFn });
+    const agentName = path.basename(path.resolve(String(agentCwd)));
+    const license = resolveWorldAgentDirectoryLicense({ worldRoot, agentName });
+    if (license) {
+      const writeRoots = collectLicensedRoots(license, "write");
+      return {
+        baseRoot: path.resolve(String(agentCwd)),
+        roots: normalizeRoots(writeRoots.length ? writeRoots : [agentCwd])
+      };
+    }
     const sharedRoots = resolveConfigMapSeries("agent command configure", "shared roots", { rememberFn })
       ?? resolveConfigSeries("agent shared roots", { rememberFn })
       ?? [];

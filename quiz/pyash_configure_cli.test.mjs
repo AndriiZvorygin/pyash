@@ -273,6 +273,7 @@ test("configure channel matrix appservice mode validates registration and persis
   const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
   assert.match(worldCalendarText, /su name channel input for name pyash-agent/);
+  assert.match(worldCalendarText, /su name channel input for name pyash-agent with ve text "matrix" vyah habit during second 1 be calendar ya/);
 });
 
 test("configure channel matrix appservice mode defaults registration path to configure/secret/matrix.yaml", async () => {
@@ -492,18 +493,24 @@ test("configure agent apply writes runtime and binds channel when available", as
   assert.equal(firstPayload.ok, true);
   assert.equal(firstPayload.changed, true);
   assert.equal(firstPayload.runtimeWrite.changed, true);
+  assert.equal(firstPayload.directoryLicenseWrite.changed, true);
   assert.equal(firstPayload.channelWrite.ok, true);
   assert.equal(firstPayload.channelScheduleWrite.ok, true);
   assert.equal(firstPayload.config.startNow, true);
   assert.equal(firstPayload.activation?.ok, true);
 
   const runtimePath = path.join(root, "world", "house", "builder", "conduct", "runtime.pya");
+  const policyPath = path.join(root, "world", "conduct", "agent.pya");
   const channelsPath = path.join(root, "world", "house", "builder", "conduct", "channels.pya");
   const calendarPath = path.join(root, "world", "house", "builder", "conduct", "calendar.pya");
   const runtimeText = await fs.readFile(runtimePath, "utf8");
+  const policyText = await fs.readFile(policyPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
   const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(runtimeText, /managed by pyash configure agent runtime:start/);
+  assert.match(policyText, /managed by pyash configure agent directory license builder:start/);
+  assert.match(policyText, /su name builder directory license be map def/);
+  assert.match(policyText, /su name "world\/house\/builder" ob ve text "read" "write" "command" ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
   assert.match(calendarText, /su name matrix poll/);
@@ -513,6 +520,7 @@ test("configure agent apply writes runtime and binds channel when available", as
   const secondPayload = JSON.parse(second.stdout);
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
+  assert.equal(secondPayload.directoryLicenseWrite.changed, false);
 });
 
 test("configure agent skips per-agent channel schedule when channel mode is appservice-push", async () => {

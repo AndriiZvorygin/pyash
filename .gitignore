@@ -18,6 +18,8 @@ node_modules/
 world/
 !world/
 world/*
+!world/conduct/
+!world/conduct/agent.pya
 !world/house/
 world/house/*
 !world/house/base/

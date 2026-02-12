@@ -141,6 +141,16 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   const agentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? toolMapCwd;
   const toolMapSandpit = toolMapFact?.as?.wo === "sandpit" || toolMapFact?.as?.text === "sandpit";
   const toolMapWorld = toolMapFact?.as?.wo === "world" || toolMapFact?.as?.text === "world";
+  const agentEnabled = (() => {
+    if (!toolMapFact || toolMapFact.be !== "map") return false;
+    const entries = toolMapFact.ob?.map ?? {};
+    for (const entry of Object.values(entries)) {
+      if (!entry || entry.su?.name !== "agent") continue;
+      if (entry?.ob?.boolean === true) return true;
+      if (entry?.ob?.text && String(entry.ob.text).toLowerCase() === "truth") return true;
+    }
+    return false;
+  })();
   if (toolMapName && agentCwd) {
     doRemember({
       mood: "ya",
@@ -148,7 +158,7 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       su: { name: "agent cwd" },
       ob: { filename: String(agentCwd) }
     });
-    if (toolMapSandpit) {
+    if (toolMapSandpit || agentEnabled) {
       doRemember({
         mood: "ya",
         be: "truth",
@@ -179,16 +189,6 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     });
   }
   const { tools, toolMap, toolBlock } = buildToolSchemas(toolMapName);
-  const agentEnabled = (() => {
-    if (!toolMapFact || toolMapFact.be !== "map") return false;
-    const entries = toolMapFact.ob?.map ?? {};
-    for (const entry of Object.values(entries)) {
-      if (!entry || entry.su?.name !== "agent") continue;
-      if (entry?.ob?.boolean === true) return true;
-      if (entry?.ob?.text && String(entry.ob.text).toLowerCase() === "truth") return true;
-    }
-    return false;
-  })();
   const sessionNameHint = (() => {
     if (!toolMapFact || toolMapFact.be !== "map") return null;
     const entries = toolMapFact.ob?.map ?? {};
