@@ -67,7 +67,8 @@ function normalizeAttachmentFromEvent(event) {
   if (!msgtype || !msgtype.startsWith("m.")) return null;
   if (!["m.file", "m.image", "m.video", "m.audio"].includes(msgtype)) return null;
   const mxcUrl = pickEventMxcUrl(event);
-  if (!mxcUrl) return null;
+  const directUrl = typeof event?.content?.url === "string" ? String(event.content.url).trim() : "";
+  if (!mxcUrl && !/^https?:\/\//i.test(directUrl)) return null;
   const body = String(event?.content?.body ?? "").trim();
   const mimetype = String(event?.content?.info?.mimetype ?? "").trim();
   const size = Number(event?.content?.info?.size);
@@ -75,6 +76,7 @@ function normalizeAttachmentFromEvent(event) {
     kind: msgtype,
     body,
     mxcUrl,
+    directUrl: /^https?:\/\//i.test(directUrl) ? directUrl : "",
     mimetype: mimetype || "",
     size: Number.isFinite(size) && size >= 0 ? Math.trunc(size) : null
   };
@@ -210,6 +212,28 @@ function parseMxcUrl(mxcUrl) {
   const match = text.match(/^mxc:\/\/([^/]+)\/(.+)$/);
   if (!match) return null;
   return { serverName: match[1], mediaId: match[2] };
+}
+
+async function fetchWithAuthVariants(url, { token, userId, mode, fetchImpl }) {
+  const variants = [];
+  variants.push({
+    url: applyAuthToUrl(url, { token, userId, mode }),
+    headers: authHeaders({ token, mode })
+  });
+  if (isAppserviceMode(mode)) {
+    variants.push({
+      url,
+      headers: { Authorization: `Bearer ${String(token ?? "")}` }
+    });
+  }
+  for (const variant of variants) {
+    const response = await fetchImpl(variant.url, {
+      method: "GET",
+      headers: variant.headers
+    });
+    if (response.ok) return response;
+  }
+  return null;
 }
 
 function sanitizeFileName(raw, fallback = "file.bin") {
@@ -405,23 +429,28 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const downloaded = [];
       for (const attachment of attachments) {
         const parsed = parseMxcUrl(attachment?.mxcUrl);
-        if (!parsed) continue;
         const sourceName = sanitizeFileName(attachment?.body || "file");
         const withExt = sourceName.includes(".")
           ? sourceName
           : `${sourceName}${extFromMime(attachment?.mimetype) || ".bin"}`;
         const filename = uniquePathName(usedNames, withExt);
         const outPath = path.join(targetDir, filename);
-        const downloadUrl = applyAuthToUrl(
-          `${homeserver}/_matrix/media/v3/download/${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`,
-          { token, userId, mode }
-        );
-        const response = await fetchImpl(downloadUrl, {
-          method: "GET",
-          headers: authHeaders({ token, mode })
-        });
-        if (!response.ok) {
-          throw new Error(`matrix media download failed: status=${response.status} mxc=${attachment?.mxcUrl ?? ""}`);
+        let response = null;
+        if (parsed) {
+          const candidates = [
+            `${homeserver}/_matrix/media/v3/download/${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`,
+            `${homeserver}/_matrix/media/r0/download/${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`,
+            `${homeserver}/_matrix/client/v1/media/download/${encodeURIComponent(parsed.serverName)}/${encodeURIComponent(parsed.mediaId)}`
+          ];
+          for (const candidate of candidates) {
+            response = await fetchWithAuthVariants(candidate, { token, userId, mode, fetchImpl });
+            if (response?.ok) break;
+          }
+        } else if (attachment?.directUrl) {
+          response = await fetchWithAuthVariants(String(attachment.directUrl), { token, userId, mode, fetchImpl });
+        }
+        if (!response?.ok) {
+          throw new Error(`matrix media download failed: source=${attachment?.mxcUrl || attachment?.directUrl || "unknown"}`);
         }
         const bytes = Buffer.from(await response.arrayBuffer());
         await fs.writeFile(outPath, bytes);

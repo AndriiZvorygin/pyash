@@ -321,6 +321,134 @@ test("channel runtime stores channel attachments and includes file hints in prom
   assert.equal(sent[sent.length - 1], "done");
 });
 
+test("channel runtime injects auto image task for upload-only events", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-image-auto-task-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$img1",
+            sender: "@u:server",
+            text: "photo.png",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.image",
+                body: "photo.png",
+                mxcUrl: "mxc://matrix.example.org/def456",
+                mimetype: "image/png"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-img-auto-1" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "photo.png");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "png", "utf8");
+      return [{
+        filename: "photo.png",
+        path: filePath,
+        mimeType: "image/png",
+        bytes: 3
+      }];
+    },
+    async send() {
+      return { eventId: "$out-img-auto-1" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[channel auto task\]/);
+  assert.match(prompt, /Image upload detected without caption/);
+  assert.match(prompt, /First analyze the image directly/);
+  assert.match(prompt, /call be see from filename/);
+});
+
+test("channel runtime surfaces attachment download defects into prompt context", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachment-defect-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$f2",
+            sender: "@u:server",
+            text: "please inspect image",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              { kind: "m.image", body: "photo.png", mxcUrl: "mxc://matrix.example.org/def456", mimetype: "image/png" }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-file-2" }
+      };
+    },
+    async downloadAttachments() {
+      throw new Error("matrix media download failed: source=mxc://matrix.example.org/def456");
+    },
+    async send() {
+      return { eventId: "$out-file-2" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[channel file download defects\]/);
+  assert.match(prompt, /photo\.png/);
+  assert.match(prompt, /matrix media download failed/);
+});
+
 test("channel runtime sends configure-mind fallback when mind answer is empty and mind configure is missing", async () => {
   forget();
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-no-mind-"));

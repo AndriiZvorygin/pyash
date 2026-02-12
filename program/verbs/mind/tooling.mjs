@@ -113,6 +113,24 @@ function toolSchemaType(typeWords) {
   return "string";
 }
 
+function scalarArgValue(argValue) {
+  if (argValue == null) return "";
+  if (typeof argValue === "string" || typeof argValue === "number" || typeof argValue === "boolean") {
+    return String(argValue);
+  }
+  if (typeof argValue === "object") {
+    const filename = typeof argValue.filename === "string" ? argValue.filename : "";
+    if (filename) return filename;
+    const text = typeof argValue.text === "string" ? argValue.text : "";
+    if (text) return text;
+    const name = typeof argValue.name === "string" ? argValue.name : "";
+    if (name) return name;
+    const wo = typeof argValue.wo === "string" ? argValue.wo : "";
+    if (wo) return wo;
+  }
+  return String(argValue);
+}
+
 function toolFunctionNameFromSignature(signatureWords) {
   return signatureWords
     .map(word => String(word ?? ""))
@@ -206,7 +224,12 @@ export function buildToolSentence({ capability, args }) {
     return {};
   })();
 
+  const capabilityCaseKeys = new Set(
+    Object.keys(capability ?? {}).filter((key) => !TOOL_NON_CASE_FIELDS.has(key))
+  );
+
   for (const [caseKey, argValue] of Object.entries(argObject)) {
+    if (!capabilityCaseKeys.has(caseKey)) continue;
     const typeWords = toolTypeWordsFromValue(capability?.[caseKey], caseKey);
     const hasName = typeWords.includes("name");
     const isNum = typeWords.includes("num");
@@ -221,7 +244,7 @@ export function buildToolSentence({ capability, args }) {
       continue;
     }
     if (hasName) {
-      call[caseKey] = { name: String(argValue) };
+      call[caseKey] = { name: scalarArgValue(argValue) };
       continue;
     }
     if (isNum) {
@@ -234,15 +257,15 @@ export function buildToolSentence({ capability, args }) {
       continue;
     }
     if (isFilename) {
-      call[caseKey] = { filename: String(argValue) };
+      call[caseKey] = { filename: scalarArgValue(argValue) };
       continue;
     }
     if (isText) {
-      call[caseKey] = { text: String(argValue) };
+      call[caseKey] = { text: scalarArgValue(argValue) };
       continue;
     }
     if (isWo) {
-      call[caseKey] = { wo: String(argValue) };
+      call[caseKey] = { wo: scalarArgValue(argValue) };
       continue;
     }
     call[caseKey] = argValue;

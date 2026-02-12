@@ -93,11 +93,15 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence }) {
 
 function buildPrompt(event, { payloadId } = {}) {
   const header = `[channel ${event.channelType} channelId ${event.channelId} sender ${event.sender} eventId ${event.eventId}]`;
+  const attachmentTask = buildAttachmentAutoTaskBlock(event);
   const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved);
+  const attachmentErrorBlock = buildAttachmentErrorPromptBlock(event?.attachmentErrors);
+  const bodyText = String(event?.text ?? "");
+  const combinedBody = [attachmentTask, bodyText].filter(Boolean).join("\n\n");
   if (payloadId) {
-    return `${header} [payloadId ${payloadId}]\n${event.text}${attachmentBlock}`;
+    return `${header} [payloadId ${payloadId}]\n${combinedBody}${attachmentBlock}${attachmentErrorBlock}`;
   }
-  return `${header}\n${event.text}${attachmentBlock}`;
+  return `${header}\n${combinedBody}${attachmentBlock}${attachmentErrorBlock}`;
 }
 
 function dateStampFromIso(isoText) {
@@ -126,10 +130,40 @@ function buildAttachmentPromptBlock(attachmentsSaved) {
     lines.push(meta ? `- ${filePath} (${meta})` : `- ${filePath}`);
   }
   lines.push("[tools for files]");
+  lines.push("- image handling: if your model already has image capability, analyze attached images directly first; use be see only as fallback");
   lines.push("- be read from filename <path> ... : extract text from docs/audio/image via read auto");
   lines.push("- be see from filename <image> ... : ask a vision-capable mind directly");
   lines.push("- be command ... : inspect/process files");
   lines.push("- be repair ... : patch code/text files safely");
+  return lines.join("\n");
+}
+
+function buildAttachmentAutoTaskBlock(event) {
+  const saved = Array.isArray(event?.attachmentsSaved) ? event.attachmentsSaved : [];
+  if (!saved.length) return "";
+  const images = saved.filter((entry) => isImageAttachment(entry));
+  if (!images.length) return "";
+  const text = String(event?.text ?? "").trim();
+  const imageNames = new Set(images.map((entry) => String(entry?.filename ?? path.basename(String(entry?.path ?? ""))).trim().toLowerCase()).filter(Boolean));
+  const isLikelyNoCaption = !text || imageNames.has(text.toLowerCase());
+  if (!isLikelyNoCaption) return "";
+  return [
+    "[channel auto task]",
+    "Image upload detected without caption.",
+    "First analyze the image directly with your own image capability if available.",
+    "If direct image analysis is unavailable, call be see from filename on the saved image path."
+  ].join("\n");
+}
+
+function buildAttachmentErrorPromptBlock(attachmentErrors) {
+  const errors = Array.isArray(attachmentErrors) ? attachmentErrors : [];
+  if (!errors.length) return "";
+  const lines = ["", "", "[channel file download defects]"];
+  for (const entry of errors) {
+    const name = String(entry?.name ?? "file").trim();
+    const message = String(entry?.message ?? "").trim();
+    lines.push(message ? `- ${name}: ${message}` : `- ${name}: download failed`);
+  }
   return lines.join("\n");
 }
 
@@ -469,19 +503,21 @@ async function dispatchChannelEvents({
             targetDir
           });
         } catch (err) {
-          if (debug) {
-            await appendTelemetry(agentHouse, {
-              timestamp: nowIso(),
-              channelType,
-              event: "event",
-              decision: "attachment_download_error",
-              eventId: event.eventId,
-              sender: event.sender,
-              channelId: event.channelId,
-              listener: orchestratorDirective.agentName || listener,
-              error: String(err?.stack ?? err?.message ?? err)
-            }, { channelType, agentName });
-          }
+          routedEvent.attachmentErrors = (routedEvent.attachmentErrors ?? []).concat([{
+            name: event.attachments?.[0]?.body || "attachment",
+            message: String(err?.message ?? err)
+          }]);
+          await appendTelemetry(agentHouse, {
+            timestamp: nowIso(),
+            channelType,
+            event: "event",
+            decision: "attachment_download_error",
+            eventId: event.eventId,
+            sender: event.sender,
+            channelId: event.channelId,
+            listener: orchestratorDirective.agentName || listener,
+            error: String(err?.stack ?? err?.message ?? err)
+          }, { channelType, agentName });
         }
       }
       const sentence = buildChannelMindSentence({

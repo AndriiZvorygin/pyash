@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { attachImagesToMessages } from "./ollama_image_payload.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -244,9 +245,7 @@ async function main() {
     args.promptText ??
     (args.promptFile ? await resolvePrompt(args.promptFile) : null) ??
     (args.promptStdin ? fsSync.readFileSync(0, "utf8") : null);
-  if (!prompt) {
-    throw new Error("see_vl_runner: prompt is required");
-  }
+  const effectivePrompt = String(prompt ?? "").trim() || process.env.PYA_SEE_VL_DEFAULT_PROMPT || "Describe the image.";
   if (!Array.isArray(args.images) || args.images.length === 0) {
     throw new Error("see_vl_runner: at least one --image is required");
   }
@@ -258,7 +257,7 @@ async function main() {
   const openAiEndpoint = `${host.replace(/\/$/, "")}/v1/chat/completions`;
   const openAiBody = {
     model: args.model ?? "qwen3-vl:8b",
-    messages: [{ role: "user", content: [{ type: "text", text: prompt }, ...openAiParts] }],
+    messages: [{ role: "user", content: [{ type: "text", text: effectivePrompt }, ...openAiParts] }],
     max_tokens: Number.isFinite(args.maxTokens) ? args.maxTokens : undefined
   };
   if (!Number.isFinite(openAiBody.max_tokens)) delete openAiBody.max_tokens;
@@ -277,9 +276,13 @@ async function main() {
 
   if (!text) {
     const ollamaEndpoint = `${host.replace(/\/$/, "")}/api/chat`;
+    const ollamaMessages = attachImagesToMessages(
+      [{ role: "user", content: effectivePrompt }],
+      ollamaImages
+    );
     const ollamaBody = {
       model: args.model ?? "qwen3-vl:8b",
-      messages: [{ role: "user", content: prompt, images: ollamaImages }]
+      messages: ollamaMessages
     };
     response = await requestJson(ollamaEndpoint, ollamaBody);
     text = response?.message?.content ?? response?.response ?? "";
