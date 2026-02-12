@@ -46,6 +46,8 @@ function ensureChannel(channels, channelType) {
       adminToken: null,
       debug: undefined,
       mentionGate: undefined,
+      toolSummary: undefined,
+      dmToolSummary: undefined,
       rooms: [],
       dmRooms: [],
       listeners: null,
@@ -156,6 +158,16 @@ export function parseChannelPolicyText(text) {
       if (enabled != null) cfg.debug = enabled;
       continue;
     }
+    if (action === "tool summary") {
+      const enabled = readBoolValue(sentence);
+      if (enabled != null) cfg.toolSummary = enabled;
+      continue;
+    }
+    if (action === "dm tool summary") {
+      const enabled = readBoolValue(sentence);
+      if (enabled != null) cfg.dmToolSummary = enabled;
+      continue;
+    }
     if (action === "listeners") {
       cfg.listeners = readNameVector(sentence);
       continue;
@@ -245,6 +257,8 @@ function mergeChannelEntry(base = {}, override = {}) {
     defaultLane: override.defaultLane ?? base.defaultLane ?? null,
     mentionGate: override.mentionGate ?? base.mentionGate ?? false,
     debug: override.debug ?? base.debug ?? false,
+    toolSummary: override.toolSummary ?? base.toolSummary ?? false,
+    dmToolSummary: override.dmToolSummary ?? base.dmToolSummary ?? false,
     listeners: Array.from(new Set([...(base.listeners ?? []), ...(override.listeners ?? [])])),
     dmRooms: Array.from(new Set([...(base.dmRooms ?? []), ...(override.dmRooms ?? [])])),
     roomListeners: mergedRoomListeners,

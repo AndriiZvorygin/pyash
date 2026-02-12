@@ -237,6 +237,7 @@ export async function loadSchedulePolicyFromConductDir(conductDir, { defaultAgen
 
 function createStats(job) {
   return {
+    agentName: job.agentName,
     jobName: job.jobName,
     laneName: job.laneName,
     intervalMs: job.intervalMs,
@@ -255,6 +256,12 @@ function createStats(job) {
     lastError: null,
     lastStatus: null
   };
+}
+
+function schedulerJobKey(job) {
+  const agent = String(job?.agentName ?? "").trim().toLowerCase();
+  const name = String(job?.jobName ?? "").trim().toLowerCase();
+  return `${agent}::${name}`;
 }
 
 async function appendTelemetryLine(telemetryPath, entry) {
@@ -285,11 +292,11 @@ export function createScheduler({
   const tasks = new Set();
 
   for (const job of jobs) {
-    statsByJob.set(job.jobName, createStats(job));
+    statsByJob.set(schedulerJobKey(job), createStats(job));
   }
 
   async function tick(job) {
-    const stats = statsByJob.get(job.jobName);
+    const stats = statsByJob.get(schedulerJobKey(job));
     if (!stats) return null;
     if (typeof isJobEnabled === "function") {
       const enabled = await isJobEnabled(job);
@@ -405,7 +412,7 @@ export function createScheduler({
       const timer = setInterval(() => {
         void tick(job);
       }, job.intervalMs);
-      timers.set(job.jobName, timer);
+      timers.set(schedulerJobKey(job), timer);
     }
   }
 
@@ -434,8 +441,9 @@ export function createScheduler({
 
   function snapshot() {
     return jobs.map(job => {
-      const stats = statsByJob.get(job.jobName);
+      const stats = statsByJob.get(schedulerJobKey(job));
       return {
+        agentName: job.agentName,
         jobName: job.jobName,
         laneName: job.laneName,
         intervalMs: job.intervalMs,

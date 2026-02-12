@@ -3,6 +3,7 @@ import path from "node:path";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { interpret as bridgeInterpret } from "../../bridge/index.mjs";
 import { remember } from "../../remember/index.mjs";
+import { mind_to_name_text } from "../../verbs/mind/mind.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
@@ -52,6 +53,38 @@ function shortText(value, limit = 180) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}...`;
+}
+
+function shortToolSummary(value, limit = 140) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}...`;
+}
+
+function shouldIncludeToolSummary({ channelConfig, channelId, dmRooms }) {
+  const isDmRoom = dmRooms?.has(channelId) === true;
+  const dmSetting = channelConfig?.dmToolSummary;
+  if (isDmRoom && typeof dmSetting === "boolean") return dmSetting;
+  if (typeof channelConfig?.toolSummary === "boolean") return channelConfig.toolSummary;
+  return false;
+}
+
+function formatToolEventMessage({ stage, toolName, toolText, ratifySentence }) {
+  const name = String(toolName ?? "").trim();
+  if (!name) return "";
+  if (stage === "call") return `tool call: ${name}`;
+  if (stage === "ratify") {
+    const decision = ratifySentence?.ob?.boolean;
+    if (decision === true) return `tool review: ${name} allowed`;
+    if (decision === false) return `tool review: ${name} denied`;
+    return `tool review: ${name}`;
+  }
+  if (stage === "result") {
+    const summary = shortToolSummary(toolText);
+    return summary ? `tool result: ${name}: ${summary}` : `tool result: ${name}: (empty)`;
+  }
+  return "";
 }
 
 function buildPrompt(event, { payloadId } = {}) {
@@ -375,8 +408,35 @@ async function dispatchChannelEvents({
       });
       handled += 1;
       let responseText = "";
+      const includeToolSummary = shouldIncludeToolSummary({
+        channelConfig,
+        channelId: event.channelId,
+        dmRooms
+      });
+      const sendChannelMessage = async (content) => {
+        const sendResult = await adapter.send({ config: channelConfig, event, content });
+        if (sendResult?.eventId) {
+          selfEventIds.add(sendResult.eventId);
+          selfState.order.push(sendResult.eventId);
+          while (selfState.order.length > dedupLimit) {
+            const removed = selfState.order.shift();
+            if (!removed) break;
+            selfEventIds.delete(removed);
+          }
+        }
+        sent += 1;
+      };
+      const onToolCall = includeToolSummary
+        ? async (payload) => {
+          const content = formatToolEventMessage(payload);
+          if (!content) return;
+          await sendChannelMessage(content);
+        }
+        : null;
       try {
-        const result = await interpretFn(sentence);
+        const result = (onToolCall && interpretFn === bridgeInterpret)
+          ? await mind_to_name_text(sentence, { onToolCall })
+          : await interpretFn(sentence);
         responseText = String(result?.ob?.text ?? "").trim();
         if (!responseText && !isMindConfigured()) {
           responseText = noMindConfiguredFallback();
@@ -422,16 +482,7 @@ async function dispatchChannelEvents({
         }, { channelType, agentName });
       }
       if (!responseText) continue;
-      const sendResult = await adapter.send({ config: channelConfig, event, content: responseText });
-      if (sendResult?.eventId) {
-        selfEventIds.add(sendResult.eventId);
-        selfState.order.push(sendResult.eventId);
-        while (selfState.order.length > dedupLimit) {
-          const removed = selfState.order.shift();
-          if (!removed) break;
-          selfEventIds.delete(removed);
-        }
-      }
+      await sendChannelMessage(responseText);
       await routeChannelProduce({
         routerInterpretFn,
         channelType,
@@ -440,7 +491,6 @@ async function dispatchChannelEvents({
         payloadId: orchestratorDirective.payloadId,
         responseText
       });
-      sent += 1;
     }
   }
 
