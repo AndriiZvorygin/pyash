@@ -74,6 +74,27 @@ Relevant compositional cases at call time:
 - `to name <output>` receives the response text.
 - Optional `by num N` could override window per call (not yet wired; config-level `by num` is used).
 
+### Vision Inputs From Channel Files
+
+When channel delivery includes image attachments, Pyash stores them in the target agent house under:
+
+`world/house/<agent>/artifacts/YYYYMMDD/`
+
+Then the runtime does two things:
+
+1. Adds file location/tool hints to the prompt so the agent can use file tools directly.
+2. If the selected model looks vision-capable (`vl`, `vision`, `llava`, `minicpm-v`, etc.), the image file paths are passed to the mind backend as native image inputs (not pre-digested text).
+
+Current transport behavior:
+
+- `ollama command mind` (`command/mind_ollama_runner.mjs`) converts image file paths into base64 `messages[].images` for `/api/chat`.
+
+Tool guidance for file attachments:
+
+- `be read from filename <path> ...` for extraction/transformation.
+- `be see from filename <image> ...` for explicit image interpretation.
+- `be command ...` and `be repair ...` for inspection and code/file edits.
+
 ### Runtime behaviour (high level)
 
 1. Resolve mind config:

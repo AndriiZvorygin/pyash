@@ -126,9 +126,34 @@ function buildAttachmentPromptBlock(attachmentsSaved) {
     lines.push(meta ? `- ${filePath} (${meta})` : `- ${filePath}`);
   }
   lines.push("[tools for files]");
+  lines.push("- be read from filename <path> ... : extract text from docs/audio/image via read auto");
+  lines.push("- be see from filename <image> ... : ask a vision-capable mind directly");
   lines.push("- be command ... : inspect/process files");
   lines.push("- be repair ... : patch code/text files safely");
   return lines.join("\n");
+}
+
+function isImageAttachment(entry) {
+  const mime = String(entry?.mimeType ?? "").toLowerCase().trim();
+  if (mime.startsWith("image/")) return true;
+  const filePath = String(entry?.path ?? "").toLowerCase();
+  return /\.(png|jpe?g|webp|gif|bmp|tiff?|svg)$/.test(filePath);
+}
+
+function buildMindInputsFromAttachments(attachmentsSaved) {
+  const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
+  const out = [];
+  for (const entry of files) {
+    if (!isImageAttachment(entry)) continue;
+    const filename = String(entry?.path ?? "").trim();
+    if (!filename) continue;
+    out.push({
+      kind: "image",
+      filename,
+      mimeType: String(entry?.mimeType ?? "").trim()
+    });
+  }
+  return out;
 }
 
 function noMindConfiguredFallback() {
@@ -474,6 +499,7 @@ async function dispatchChannelEvents({
         channelId: event.channelId,
         dmRooms
       });
+      const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
       const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
       let toolEventCount = 0;
       const sendChannelMessage = async (content) => {
@@ -498,8 +524,8 @@ async function dispatchChannelEvents({
         }
         : null;
       try {
-        const result = (onToolCall && interpretFn === bridgeInterpret)
-          ? await mind_to_name_text(sentence, { onToolCall })
+        const result = (interpretFn === bridgeInterpret)
+          ? await mind_to_name_text(sentence, { onToolCall, inputs: mindInputs })
           : await interpretFn(sentence);
         responseText = String(result?.ob?.text ?? "").trim();
         if (!responseText && !isMindConfigured()) {

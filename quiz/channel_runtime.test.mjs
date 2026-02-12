@@ -314,6 +314,8 @@ test("channel runtime stores channel attachments and includes file hints in prom
   const prompt = String(calls[0]?.ob?.text ?? "");
   assert.match(prompt, /\[channel files saved\]/);
   assert.match(prompt, /artifacts\/20260212\/notes\.txt/);
+  assert.match(prompt, /be read/);
+  assert.match(prompt, /be see/);
   assert.match(prompt, /be command/);
   assert.match(prompt, /be repair/);
   assert.equal(sent[sent.length - 1], "done");
