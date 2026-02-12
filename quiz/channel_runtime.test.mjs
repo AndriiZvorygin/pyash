@@ -10,6 +10,10 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 test("channel runtime routes to session lane and deduplicates by event id", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-runtime-"));
   const agentHouse = path.join(root, "world", "house", "helper");
@@ -83,6 +87,111 @@ test("channel runtime routes to session lane and deduplicates by event id", asyn
   });
   assert.equal(second.handled, 0);
   assert.equal(second.skippedDedup, 2);
+});
+
+test("channel runtime lock prevents duplicate handling across concurrent polls", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-lock-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receives = 0;
+  let sends = 0;
+  let interprets = 0;
+  const adapter = {
+    async receive() {
+      receives += 1;
+      await sleep(120);
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!room:server", eventId: "$lock-1", sender: "@u:server", text: "hello" }
+        ],
+        checkpoint: { nextBatch: "tok-lock" }
+      };
+    },
+    async send() {
+      sends += 1;
+      return { eventId: "$out-lock" };
+    }
+  };
+
+  const interpretFn = async () => {
+    interprets += 1;
+    return { ob: { text: "reply" } };
+  };
+
+  const channelConfig = {
+    user: "@self:server",
+    mentionGate: false,
+    roomLanes: {}
+  };
+
+  const [a, b] = await Promise.all([
+    runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig,
+      adapter,
+      interpretFn,
+      agentHouse
+    }),
+    runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig,
+      adapter,
+      interpretFn,
+      agentHouse
+    })
+  ]);
+
+  assert.equal(receives, 1);
+  assert.equal(interprets, 1);
+  assert.equal(sends, 1);
+  assert.equal((a.handled ?? 0) + (b.handled ?? 0), 1);
+  assert.equal((a.locked === true ? 1 : 0) + (b.locked === true ? 1 : 0), 1);
+});
+
+test("channel runtime clears stale lock when lock owner pid is not alive", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-stale-lock-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  const presenceDir = path.join(root, "world", "presence");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.mkdir(presenceDir, { recursive: true });
+  const staleLockPath = path.join(presenceDir, "helper-matrix-channel-input.lock");
+  await fs.writeFile(
+    staleLockPath,
+    "pid=999999999\nstartedAt=2026-02-12T00:00:00.000Z\nagent=helper\nchannel=matrix\n",
+    "utf8"
+  );
+
+  let sends = 0;
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!room:server", eventId: "$stale-1", sender: "@u:server", text: "hello" }
+        ],
+        checkpoint: { nextBatch: "tok-stale" }
+      };
+    },
+    async send() {
+      sends += 1;
+      return { eventId: "$out-stale" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: { user: "@self:server", mentionGate: false, roomLanes: {} },
+    adapter,
+    interpretFn: async () => ({ ob: { text: "reply" } }),
+    agentHouse
+  });
+
+  assert.equal(result.locked, undefined);
+  assert.equal(result.handled, 1);
+  assert.equal(sends, 1);
 });
 
 test("channel runtime mention gate skips non-mentions in public rooms and allows DM", async () => {

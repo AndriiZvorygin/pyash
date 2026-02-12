@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -57,6 +58,15 @@ function hasFlag(args, flag) {
 function parseTruthy(value, fallback = false) {
   if (value == null || value === "") return fallback;
   return /^(truth|true|yes|1|y)$/i.test(String(value).trim());
+}
+
+function isEphemeralRootDir(rootDir) {
+  const resolved = path.resolve(String(rootDir ?? ""));
+  if (!resolved) return false;
+  const tmpRoot = path.resolve(os.tmpdir());
+  if (!(resolved === tmpRoot || resolved.startsWith(`${tmpRoot}${path.sep}`))) return false;
+  const base = path.basename(resolved);
+  return /^pyash-(configure|scheduler-control)-/i.test(base);
 }
 
 function usage() {
@@ -2098,6 +2108,7 @@ async function configureChannelList({ json }) {
 
 async function configureMatrix({ args }) {
   const rootDir = await resolveRootDirFromArgs(args);
+  const ephemeralRoot = isEphemeralRootDir(rootDir);
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
@@ -2168,7 +2179,10 @@ async function configureMatrix({ args }) {
   cfg = await ensureSharedSecretToken({ cfg, rootDir });
 
   const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
-  const startSchedulerNow = startNowFlag == null ? !nonInteractive : parseTruthy(startNowFlag, !nonInteractive);
+  const startSchedulerDefault = ephemeralRoot ? false : !nonInteractive;
+  const startSchedulerNow = startNowFlag == null
+    ? startSchedulerDefault
+    : parseTruthy(startNowFlag, startSchedulerDefault);
   let live = null;
   if (runTestNow) {
     live = await matrixPostSetupTest(cfg, { rootDir });
@@ -2680,15 +2694,19 @@ async function createOrchestratorWritePlan({ rootDir, cfg }) {
 
 async function configureOrchestrator({ args }) {
   const rootDir = await resolveRootDirFromArgs(args);
+  const ephemeralRoot = isEphemeralRootDir(rootDir);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
   const dryRun = hasFlag(args, "--dry-run");
   const nonInteractive = hasFlag(args, "--non-interactive");
   const prior = await loadOrchestratorConfigFromSecret(rootDir);
-  const cfg = nonInteractive
+  let cfg = nonInteractive
     ? collectOrchestratorFromFlags({ args, prior })
     : await collectOrchestratorInteractive({ prior });
+  if (ephemeralRoot && parseArgValue(args, "--autostart") == null) {
+    cfg = { ...cfg, autostart: false };
+  }
 
   const verification = orchestratorVerification(cfg);
   if (!verification.ok) {
@@ -3847,6 +3865,7 @@ async function configureAgentDelete({ args }) {
 
 async function configureAgentApply({ args, mode = "establish" }) {
   const rootDir = await resolveRootDirFromArgs(args);
+  const ephemeralRoot = isEphemeralRootDir(rootDir);
   const worldRoot = path.join(rootDir, "world");
   const json = hasFlag(args, "--json");
   const print = hasFlag(args, "--print");
@@ -3876,9 +3895,12 @@ async function configureAgentApply({ args, mode = "establish" }) {
     }
   }
 
-  const cfg = nonInteractive
+  let cfg = nonInteractive
     ? collectAgentFromFlags({ args, mindDefaults, agentDefaults })
     : await collectAgentInteractive({ rootDir, mindDefaults, agentDefaults, mode });
+  if (ephemeralRoot && parseArgValue(args, "--start-now") == null) {
+    cfg = { ...cfg, startNow: false };
+  }
 
   if (!cfg.agentName) {
     throw new Error("configure agent requires --agent");
