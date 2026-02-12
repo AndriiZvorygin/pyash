@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "csv-parse": "^5.5.0",
+    "markdown-it": "^14.1.1",
     "yaml": "^2.4.1"
   },
   "devDependencies": {

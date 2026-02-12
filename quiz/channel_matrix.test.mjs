@@ -164,6 +164,39 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.equal(calls.length, 1);
   assert.match(String(calls[0].url), /\/rooms\//);
   assert.equal(calls[0].opts?.method, "PUT");
+  const payload = JSON.parse(String(calls[0].opts?.body ?? "{}"));
+  assert.equal(payload.msgtype, "m.text");
+  assert.equal(payload.body, "reply text");
+  assert.equal(payload.format, "org.matrix.custom.html");
+  assert.match(payload.formatted_body, /<p>reply text<\/p>/);
+});
+
+test("matrix adapter send converts markdown into formatted_body html", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, opts });
+    return {
+      ok: true,
+      async json() {
+        return { event_id: "$out2" };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  await adapter.send({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret"
+    },
+    event: { channelId: "!room:server" },
+    content: "**bold** _italic_ `code`"
+  });
+  const payload = JSON.parse(String(calls[0].opts?.body ?? "{}"));
+  assert.equal(payload.body, "**bold** _italic_ `code`");
+  assert.equal(payload.format, "org.matrix.custom.html");
+  assert.match(payload.formatted_body, /<strong>bold<\/strong>/);
+  assert.match(payload.formatted_body, /<em>italic<\/em>/);
+  assert.match(payload.formatted_body, /<code>code<\/code>/);
 });
 
 test("matrix adapter appservice mode sends auth via query params", async () => {
