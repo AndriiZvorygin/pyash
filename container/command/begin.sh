@@ -189,5 +189,25 @@ if [[ "$search_only" == "truth" ]]; then
   exit 0
 fi
 
+ensure_pyash_link() {
+  local linked_target
+  linked_target="$(
+    docker exec pyash bash -lc 'target="$(command -v pyash 2>/dev/null || true)"; if [[ -n "$target" ]]; then readlink -f "$target" 2>/dev/null || true; fi'
+  )"
+  if [[ "$linked_target" == "/workplace/command/pyash.mjs" ]]; then
+    return
+  fi
+
+  echo "Linking pyash CLI (npm link)..."
+  if ! docker exec pyash bash -lc 'cd /workplace && npm link >/tmp/pyash-npm-link.log 2>&1'; then
+    echo "warn: npm link failed inside container (pyash command may be unavailable)." >&2
+    docker exec pyash bash -lc 'tail -n 20 /tmp/pyash-npm-link.log 2>/dev/null || true' >&2 || true
+    return
+  fi
+  echo "Linked: pyash -> /workplace/command/pyash.mjs"
+}
+
+ensure_pyash_link
+
 echo "Container started. Entering..."
 exec docker exec -it pyash bash
