@@ -1,5 +1,19 @@
+import MarkdownIt from "markdown-it";
+
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true
+});
+
 function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
+}
+
+function renderMatrixFormattedBody(markdownText) {
+  const text = String(markdownText ?? "");
+  if (!text.trim()) return "";
+  return markdown.render(text);
 }
 
 function isAppserviceMode(mode) {
@@ -275,7 +289,9 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       );
       const body = {
         msgtype: "m.text",
-        body: String(content ?? "")
+        body: String(content ?? ""),
+        format: "org.matrix.custom.html",
+        formatted_body: renderMatrixFormattedBody(content)
       };
       const sendRes = await fetchImpl(sendUrl, {
         method: "PUT",
