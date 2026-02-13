@@ -222,6 +222,37 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.match(payload.formatted_body, /<p>reply text<\/p>/);
 });
 
+test("matrix adapter markSeen posts m.read receipt", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {};
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const result = await adapter.markSeen({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@helper:server"
+    },
+    event: {
+      channelId: "!room:server",
+      eventId: "$ev1"
+    }
+  });
+  assert.equal(result.ok, true);
+  const receiptCall = calls.find((call) => call.url.includes("/receipt/m.read/"));
+  assert.ok(receiptCall);
+  assert.equal(receiptCall?.opts?.method, "POST");
+  assert.match(receiptCall?.url || "", /\/rooms\/!room%3Aserver\/receipt\/m\.read\/%24ev1/);
+});
+
 test("matrix adapter downloads attachments into target directory", async () => {
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
