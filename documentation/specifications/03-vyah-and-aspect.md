@@ -159,3 +159,20 @@ Implementation conforms when it:
 
 Long-form rationale and historical tables are preserved at:
 `documentation/recipes/spec-archive/03-vyah-and-aspect.full.md`
+
+## 10. Iterative aspect profile (spec extension)
+
+`iterative` is reserved as an aspect-level marker for replay-oriented execution cycles.
+
+Meaning:
+- signals iterative/replay-focused execution intent,
+- does not redefine verb semantics,
+- may be consumed by runners to enable stricter run recording/replay checks.
+
+Canonical example:
+```pyash
+su name run ob text "<program>" at filename "." vyah iterative be interpret do
+```
+
+Conformance note:
+- until runtime keyword tables include `iterative`, implementations may treat this as a draft extension token.

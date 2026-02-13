@@ -118,11 +118,12 @@ export const VYAH_TENSE_MODIFIERS = [
   "tomorrow"
 ];
 
-export const VYAH_OUTCOME_MODIFIERS = ["sloh"];
+export const VYAH_OUTCOME_MODIFIERS = ["success", "fail"];
 
 export const VYAH_ATTITUDINAL_MODIFIERS = [
   "satisfied",
   "success",
+  "fail",
   "hope",
   "doubt",
   "fear",

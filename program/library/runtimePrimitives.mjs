@@ -30,7 +30,7 @@ export function makeChip({ streamName, index, ob, toindex, vyahValues }) {
 export function makeAck({ subject, verb, aspect }) {
   return {
     su: { name: subject },
-    vyah: makeVyah([aspect, "sloh"]),
+    vyah: makeVyah([aspect, "success"]),
     be: verb,
     mood: "ya"
   };

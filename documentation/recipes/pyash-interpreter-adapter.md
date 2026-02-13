@@ -18,9 +18,10 @@ su name run
 ob text "<program text>"
 at filename "<cwd>"
 accordingto text "<run id>"
-by num <timeout ms>
+until date "<deadline iso>"
 atmost num <max output bytes>
-fromstate text "<profile>"
+under name "<policy profile>"
+vyah iterative
 be interpret do
 ```
 
@@ -30,14 +31,25 @@ Required in practice:
 Recommended:
 - `at filename` (cwd)
 - `accordingto text` (run correlation)
-- `by num` (timeout)
+- `until date` (deadline/timeout)
 - `atmost num` (output cap)
 
 Optional:
-- `fromstate text` (execution profile label)
+- `under name "<policy profile>"` (policy/conduct profile label)
+- `vyah iterative` (iterative/replay-oriented execution intent)
 
-Runner-level options (not sentence cases):
-- `again` / replay-verification mode
+### 2.1 Request case purpose table
+
+| Case | What it accomplishes | Notes |
+| --- | --- | --- |
+| `su name run` | stable subject id for run sentence | may be replaced with project-specific run subject |
+| `ob text "<program text>"` | carries full `.pya` source to execute | required |
+| `at filename "<cwd>"` | constrains relative path resolution | use explicit workspace path for determinism |
+| `accordingto text "<run id>"` | correlation id across logs/newspaper/replies | keep stable across retries of same intent |
+| `until date "<deadline iso>"` | execution deadline | policy safety and stuck-run protection |
+| `atmost num <max output bytes>` | caps output payload size | prevents overflow/token blowups |
+| `under name "<policy profile>"` | named policy/conduct selector | e.g. `agent-safe`, `strict-audit`, `repair-heavy` |
+| `vyah iterative` | marks replay-oriented run semantics | should trigger strict recording/replay checks |
 
 ## 3. Canonical result/error surface
 
@@ -63,7 +75,7 @@ Bad (JSON):
 ```
 Use (Pyash):
 ```pyash
-su name run ob text "..." at filename "/workplace" by num 120000 be interpret do
+su name run ob text "..." at filename "/workplace" until date "2026-02-13T12:00:00.000Z" be interpret do
 ```
 
 2. Run id
@@ -93,7 +105,7 @@ Bad (JSON):
 ```
 Use (Pyash):
 ```pyash
-# no in-sentence case; map to runner flag (for example: --again)
+vyah iterative
 ```
 
 5. Profile label
@@ -103,7 +115,7 @@ Bad (JSON):
 ```
 Use (Pyash):
 ```pyash
-fromstate text "agent-safe"
+under name "agent-safe"
 ```
 
 ### 4.2 Success/error wrappers
@@ -283,10 +295,10 @@ Use this table when converting transport payloads.
 - `program`, `input`, `text` -> `ob text "..."`
 - `cwd`, `workdir` -> `at filename "..."`
 - `run_id`, `trace_id`, `correlation_id` -> `accordingto text "..."`
-- `timeout_ms`, `timeout` -> `by num <n>`
+- `timeout_ms`, `timeout` -> `until date "<iso deadline>"`
 - `max_output_bytes` -> `atmost num <n>`
-- `again`, `replay` -> runner option/flag (not a sentence case)
-- `profile`, `mode` -> `fromstate text "..."`
+- `again`, `replay` -> `vyah iterative`
+- `profile` -> `under name "..."`
 - `path`, `filename` -> `from filename "..."` or `to filename "..."` depending direction
 - `target` -> `for name <target>`
 - `tools` -> `with name <tools map>`
