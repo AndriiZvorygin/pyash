@@ -917,6 +917,61 @@ test("channel runtime fans out to configured listeners and routes mention to nam
   assert.equal(calls[0]?.for?.name, "confederation-priest");
 });
 
+test("channel runtime pins listeners to self when self is in configured listener vector", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-self-listener-"));
+  const agentHouse = path.join(root, "world", "house", "mricge");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const listeners = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$self-1",
+            sender: "@u:server",
+            text: "status"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-self" }
+      };
+    },
+    async send() {
+      return { eventId: "$out-self" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "mricge",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@mricge:server",
+      mentionGate: false,
+      listeners: ["mricge", "accountant"],
+      roomListeners: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn: async (sentence) => {
+      listeners.push({
+        name: sentence?.for?.name,
+        cwd: sentence?.at?.filename ?? ""
+      });
+      return { ob: { text: "reply" } };
+    },
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.deepEqual(listeners, [
+    { name: "mricge", cwd: path.join(root, "world", "house", "mricge") }
+  ]);
+});
+
 test("channel runtime shared fanout dispatches one event to multiple listeners in one poll cycle", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-shared-fanout-"));
   const agentHouse = path.join(root, "world", "house", "postmaster");

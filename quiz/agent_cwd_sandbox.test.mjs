@@ -39,10 +39,13 @@ test("agent cwd sets download default output directory", async () => {
   try {
     await run(`exists su name agent sandbox ob boolean truth be default ya`);
     await run(`exists su name agent cwd ob filename "${agentDir}" be default ya`);
-    await run('be download from filename "https://example.com/file.txt" as wo web do');
-    const expected = path.join(agentDir, "file.txt");
+    const result = await run('be download from filename "https://example.com/file.txt" as wo web do');
+    const day = new Date();
+    const dayStamp = `${day.getUTCFullYear()}${String(day.getUTCMonth() + 1).padStart(2, "0")}${String(day.getUTCDate()).padStart(2, "0")}`;
+    const expected = path.join(agentDir, "artifacts", dayStamp, "file.txt");
     const content = await fs.readFile(expected, "utf8");
     assert.equal(content, "ok");
+    assert.equal(result?.value?.filename, expected);
   } finally {
     if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
     else process.env.PYA_DOWNLOAD_RESPONSE = original;

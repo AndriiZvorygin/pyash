@@ -38,6 +38,25 @@ function cacheKey({ url, intent, scheme }) {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
 
+function dayStamp(now = new Date()) {
+  return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, "0")}${String(now.getUTCDate()).padStart(2, "0")}`;
+}
+
+function defaultArtifactDirectory(agentCwd) {
+  return path.resolve(agentCwd ?? process.cwd(), "artifacts", dayStamp());
+}
+
+function inferHttpOutputFilename(url) {
+  try {
+    const parsed = new URL(url);
+    const base = path.basename(parsed.pathname || "");
+    if (base && base !== "/") return base;
+  } catch {
+    // keep deterministic fallback for malformed URL text
+  }
+  return "download.bin";
+}
+
 export async function download_http(sentence, { scheme, intent, remember: rememberFn = remember } = {}) {
   const url = resolveUrl(sentence, { rememberFn });
   const dest = resolveOutput(sentence, { rememberFn });
@@ -68,14 +87,8 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
       return resolved;
     })()
     : (() => {
-      try {
-        const parsed = new URL(url);
-        const base = path.basename(parsed.pathname || "");
-        const name = base && base !== "/" ? base : "download.bin";
-        return path.resolve(agentCwd ?? process.cwd(), name);
-      } catch {
-        return path.resolve(agentCwd ?? process.cwd(), "download.bin");
-      }
+      const outputDir = defaultArtifactDirectory(agentCwd);
+      return path.join(outputDir, inferHttpOutputFilename(url));
     })();
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
   await fs.mkdir(path.dirname(cachePath), { recursive: true });
@@ -159,7 +172,7 @@ export async function download_ytdlp(sentence, { scheme, intent, remember: remem
       outputTemplate = resolvedDest;
     }
   } else {
-    outputDir = agentCwd ?? cwd;
+    outputDir = defaultArtifactDirectory(agentCwd ?? cwd);
     outputTemplate = path.join(outputDir, "%(upload_date)s - %(title)s [%(id)s].%(ext)s");
   }
   await fs.mkdir(outputDir, { recursive: true });
