@@ -3359,7 +3359,7 @@ async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsM
   };
 }
 
-async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentionGate = false, dryRun = false }) {
+async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentionGate = true, dryRun = false }) {
   const matrix = await loadMatrixConfigFromSecret(rootDir);
   if (!matrix?.homeserver || !matrix?.room) {
     return {
@@ -4058,7 +4058,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
       rootDir,
       worldRoot,
       agentName: cfg.agentName,
-      mentionGate: false,
+      mentionGate: true,
       dryRun
     })
     : { ok: false, reason: "channel binding disabled", path: null, changed: false, action: "none" };

@@ -581,6 +581,7 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.match(policyText, /su name builder directory license be map def/);
   assert.match(policyText, /su name "world\/house\/builder" ob ve text "read" "write" "command" ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
+  assert.match(channelsText, /su name matrix mention gate ob bool truth ya/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
   assert.match(calendarText, /su name matrix poll/);
 
