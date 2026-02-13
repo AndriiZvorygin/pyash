@@ -172,15 +172,6 @@ if [[ "$restart_container" == "truth" ]]; then
   docker compose "${full_compose_args[@]}" down --remove-orphans || true
 fi
 
-if [[ "$search_only" != "truth" ]]; then
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^pyash$"; then
-    if [[ "$restart_container" != "truth" ]]; then
-      echo "Container already running."
-      exec docker exec -it pyash bash
-    fi
-  fi
-fi
-
 AI_HOST="$ai_host" OLLAMA_HOST="$ai_host" \
   docker compose "${compose_args[@]}" up -d --remove-orphans
 
@@ -188,6 +179,32 @@ if [[ "$search_only" == "truth" ]]; then
   echo "Search service started."
   exit 0
 fi
+
+ensure_node_modules() {
+  local deps_ready
+  deps_ready="$(
+    docker exec pyash bash -lc 'cd /workplace && npm ls --depth=0 markdown-it csv-parse yaml >/dev/null 2>&1; echo $?'
+  )"
+  if [[ "$deps_ready" == "0" ]]; then
+    return 0
+  fi
+
+  local install_cmd
+  install_cmd='if [[ -f package-lock.json ]]; then npm ci; else npm install; fi'
+  local attempt
+  for attempt in 1 2 3; do
+    echo "Installing npm dependencies (attempt ${attempt}/3)..."
+    if docker exec pyash bash -lc "cd /workplace && ${install_cmd} >/tmp/pyash-npm-install.log 2>&1"; then
+      echo "Dependencies ready."
+      return 0
+    fi
+    docker exec pyash bash -lc 'tail -n 40 /tmp/pyash-npm-install.log 2>/dev/null || true' >&2 || true
+    sleep 2
+  done
+
+  echo "error: npm dependency install failed inside container." >&2
+  return 1
+}
 
 ensure_pyash_link() {
   local linked_target
@@ -200,13 +217,15 @@ ensure_pyash_link() {
 
   echo "Linking pyash CLI (npm link)..."
   if ! docker exec pyash bash -lc 'cd /workplace && npm link >/tmp/pyash-npm-link.log 2>&1'; then
-    echo "warn: npm link failed inside container (pyash command may be unavailable)." >&2
+    echo "error: npm link failed inside container." >&2
     docker exec pyash bash -lc 'tail -n 20 /tmp/pyash-npm-link.log 2>/dev/null || true' >&2 || true
-    return
+    return 1
   fi
   echo "Linked: pyash -> /workplace/command/pyash.mjs"
+  return 0
 }
 
+ensure_node_modules
 ensure_pyash_link
 
 echo "Container started. Entering..."

@@ -39,6 +39,68 @@ async function makeRoot() {
   return await fs.mkdtemp(path.join(os.tmpdir(), "pyash-configure-"));
 }
 
+async function startMatrixMockServer() {
+  const calls = [];
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      const bodyText = Buffer.concat(chunks).toString("utf8");
+      calls.push({
+        method: req.method,
+        path: url.pathname,
+        query: url.searchParams.toString(),
+        body: bodyText
+      });
+
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/account/whoami") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ user_id: "@builder:example.test" }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/join/%23pyash%3Aexample.test") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ room_id: "!main:example.test" }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/joined_rooms") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ joined_rooms: ["!main:example.test"] }));
+        return;
+      }
+      if (req.method === "GET" && /\/_matrix\/client\/v3\/user\/.+\/account_data\/m\.direct$/.test(url.pathname)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/createRoom") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ room_id: "!dm:example.test" }));
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ errcode: "M_NOT_FOUND", error: "not found" }));
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    homeserver: `http://127.0.0.1:${port}`,
+    calls,
+    close: async () => {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  };
+}
+
 async function makeMockCodexBin() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-codex-mock-"));
   const binPath = path.join(dir, "codex");
@@ -528,6 +590,59 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
   assert.equal(secondPayload.directoryLicenseWrite.changed, false);
+});
+
+maybeTest("configure agent start-now bootstraps matrix room and executive dm", async () => {
+  const root = await makeRoot();
+  const matrix = await startMatrixMockServer();
+  try {
+    const channelRun = runCli([
+      "configure", "channel", "matrix",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--homeserver", matrix.homeserver,
+      "--room", "#pyash:example.test",
+      "--auth-mode", "token",
+      "--token", "abc123",
+      "--executive", "@boss:example.test",
+      "--write-agent-policy", "lie"
+    ]);
+    assert.equal(channelRun.status, 0, channelRun.stderr);
+
+    const agentRun = await runCliAsync([
+      "configure", "agent", "establish",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--agent", "builder",
+      "--purpose", "Build things.",
+      "--interval-minutes", "15",
+      "--backend", "ollama",
+      "--model", "gpt-oss:latest",
+      "--tools-map", "tools",
+      "--bind-channel", "truth",
+      "--smoke-test", "lie",
+      "--start-now", "truth"
+    ]);
+    assert.equal(agentRun.status, 0, agentRun.stderr);
+    const payload = JSON.parse(agentRun.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.channelBootstrap?.ok, true);
+    assert.equal(payload.channelBootstrap?.joinedRoomId, "!main:example.test");
+    assert.equal(payload.channelBootstrap?.executiveDm?.roomId, "!dm:example.test");
+
+    const seenWhoAmI = matrix.calls.some((call) => call.method === "GET" && call.path === "/_matrix/client/v3/account/whoami");
+    const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
+    const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
+    assert.equal(seenWhoAmI, true);
+    assert.equal(seenJoin, true);
+    assert.equal(seenCreateRoom, true);
+  } finally {
+    const stopRun = runCli(["calendar", "stop", "--root", root, "--json"]);
+    assert.equal(stopRun.status, 0, stopRun.stderr);
+    await matrix.close();
+  }
 });
 
 maybeTest("configure agent skips per-agent channel schedule when channel mode is appservice-push", async () => {
