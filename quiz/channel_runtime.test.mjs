@@ -501,6 +501,84 @@ test("channel runtime injects auto image task for upload-only events", async () 
   assert.match(prompt, /call be see from filename/);
 });
 
+test("channel runtime uses import conduct actions for image attachments", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-import-map-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.writeFile(path.join(agentHouse, "conduct", "import.pya"), [
+    "su name import be map def",
+    "  su name image do ob text \"receipt image refine\" ya",
+    "  su name no caption image do ob text \"receipt image auto\" ya",
+    "prah",
+    ""
+  ].join("\n"), "utf8");
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$img-import-1",
+            sender: "@u:server",
+            text: "receipt.png",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.image",
+                body: "receipt.png",
+                mxcUrl: "mxc://matrix.example.org/xyz123",
+                mimetype: "image/png"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-img-import-1" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "receipt.png");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "png", "utf8");
+      return [{
+        filename: "receipt.png",
+        path: filePath,
+        mimeType: "image/png",
+        bytes: 3
+      }];
+    },
+    async send() {
+      return { eventId: "$out-img-import-1" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[channel auto task\]/);
+  assert.match(prompt, /do receipt image auto/);
+  assert.match(prompt, /\[import do\]/);
+  assert.match(prompt, /do receipt image refine/);
+});
+
 test("channel runtime surfaces attachment download defects into prompt context", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachment-defect-"));
   const agentHouse = path.join(root, "world", "house", "helper");
