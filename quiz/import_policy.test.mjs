@@ -19,27 +19,42 @@ test("import policy parser reads map entries", () => {
     "prah"
   ].join("\n");
   const policy = parseImportPolicyText(text);
-  assert.equal(policy.photographAction, "receipt photograph import");
-  assert.equal(policy.fileAction, "file classify");
-  assert.equal(policy.readToolGuidance, "be read from filename <path>");
+  assert.equal(policy.photographAction?.kind, "name");
+  assert.equal(policy.photographAction?.name, "receipt photograph import");
+  assert.equal(policy.fileAction?.kind, "text");
+  assert.equal(policy.fileAction?.text, "file classify");
+  assert.equal(policy.readToolGuidance?.kind, "text");
+  assert.equal(policy.readToolGuidance?.text, "be read from filename <path>");
+});
+
+test("import policy parser keeps ob la sentence actions", () => {
+  const text = [
+    "su name import be map def",
+    "  su name file ob la from filename input to name text import output be read do ko ya",
+    "prah"
+  ].join("\n");
+  const policy = parseImportPolicyText(text);
+  assert.equal(policy.fileAction?.kind, "sentence");
+  assert.equal(policy.fileAction?.sentence?.be, "read");
+  assert.equal(policy.fileAction?.sentence?.from?.filename, "input");
 });
 
 test("import policy merge prefers agent override", () => {
   const base = {
-    photographAction: "world photograph",
-    fileAction: "world file",
-    defaultAction: "world default",
-    readToolGuidance: "world read"
+    photographAction: { kind: "text", text: "world photograph" },
+    fileAction: { kind: "text", text: "world file" },
+    defaultAction: { kind: "text", text: "world default" },
+    readToolGuidance: { kind: "text", text: "world read" }
   };
   const override = {
-    photographAction: "agent photograph",
-    readToolGuidance: "agent read"
+    photographAction: { kind: "text", text: "agent photograph" },
+    readToolGuidance: { kind: "text", text: "agent read" }
   };
   const merged = mergeImportPolicies(base, override);
-  assert.equal(merged.photographAction, "agent photograph");
-  assert.equal(merged.fileAction, "world file");
-  assert.equal(merged.defaultAction, "world default");
-  assert.equal(merged.readToolGuidance, "agent read");
+  assert.equal(merged.photographAction?.text, "agent photograph");
+  assert.equal(merged.fileAction?.text, "world file");
+  assert.equal(merged.defaultAction?.text, "world default");
+  assert.equal(merged.readToolGuidance?.text, "agent read");
 });
 
 test("import policy loader merges world and agent files", async () => {
@@ -63,7 +78,7 @@ test("import policy loader merges world and agent files", async () => {
     ""
   ].join("\n"), "utf8");
   const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse });
-  assert.equal(policy.photographAction, "agent photograph");
-  assert.equal(policy.fileAction, "world file");
-  assert.equal(policy.seeToolGuidance, "be see from filename <photograph>");
+  assert.equal(policy.photographAction?.text, "agent photograph");
+  assert.equal(policy.fileAction?.text, "world file");
+  assert.equal(policy.seeToolGuidance?.text, "be see from filename <photograph>");
 });
