@@ -29,11 +29,10 @@ function emptyPolicy() {
   return {
     defaultAction: "",
     fileAction: "",
-    imageAction: "",
-    pdfAction: "",
+    photographAction: "",
+    documentationAction: "",
     audioAction: "",
     textAction: "",
-    noCaptionImageAction: "",
     readToolGuidance: "",
     seeToolGuidance: "",
     commandToolGuidance: "",
@@ -45,39 +44,16 @@ function keyToField(rawKey) {
   const key = normalizeKey(rawKey);
   if (!key) return null;
   const map = new Map([
-    ["default do", "defaultAction"],
     ["default", "defaultAction"],
-    ["file do", "fileAction"],
     ["file", "fileAction"],
-    ["attachment do", "fileAction"],
-    ["image do", "imageAction"],
-    ["image", "imageAction"],
-    ["photograph do", "imageAction"],
-    ["photograph", "imageAction"],
-    ["pdf do", "pdfAction"],
-    ["pdf", "pdfAction"],
-    ["document do", "pdfAction"],
-    ["document", "pdfAction"],
-    ["documentation do", "pdfAction"],
-    ["documentation", "pdfAction"],
-    ["audio do", "audioAction"],
+    ["photograph", "photographAction"],
+    ["documentation", "documentationAction"],
     ["audio", "audioAction"],
-    ["text do", "textAction"],
     ["text", "textAction"],
-    ["no caption image do", "noCaptionImageAction"],
-    ["image no caption do", "noCaptionImageAction"],
-    ["no caption image", "noCaptionImageAction"],
-    ["no legend photograph do", "noCaptionImageAction"],
-    ["photograph no legend do", "noCaptionImageAction"],
-    ["no legend photograph", "noCaptionImageAction"],
-    ["read tool do", "readToolGuidance"],
-    ["tool read do", "readToolGuidance"],
-    ["see tool do", "seeToolGuidance"],
-    ["tool see do", "seeToolGuidance"],
-    ["command tool do", "commandToolGuidance"],
-    ["tool command do", "commandToolGuidance"],
-    ["repair tool do", "repairToolGuidance"],
-    ["tool repair do", "repairToolGuidance"]
+    ["read tool", "readToolGuidance"],
+    ["see tool", "seeToolGuidance"],
+    ["command tool", "commandToolGuidance"],
+    ["repair tool", "repairToolGuidance"]
   ]);
   return map.get(key) ?? null;
 }
@@ -106,6 +82,17 @@ export function parseImportPolicyText(text) {
     if (inImportMap) {
       if (/^prah$/i.test(trimmed)) {
         inImportMap = false;
+        pendingMapKey = "";
+        continue;
+      }
+      let inlineSentence = null;
+      try {
+        inlineSentence = parse(trimmed);
+      } catch {
+        inlineSentence = null;
+      }
+      if (inlineSentence?.mood === "ya" && String(inlineSentence?.su?.name ?? "").trim()) {
+        applyEntry(policy, inlineSentence.su.name, textValue(inlineSentence));
         pendingMapKey = "";
         continue;
       }
@@ -177,11 +164,10 @@ export function mergeImportPolicies(base = {}, override = {}) {
   return {
     defaultAction: normalizeAction(override.defaultAction) || normalizeAction(base.defaultAction),
     fileAction: normalizeAction(override.fileAction) || normalizeAction(base.fileAction),
-    imageAction: normalizeAction(override.imageAction) || normalizeAction(base.imageAction),
-    pdfAction: normalizeAction(override.pdfAction) || normalizeAction(base.pdfAction),
+    photographAction: normalizeAction(override.photographAction) || normalizeAction(base.photographAction),
+    documentationAction: normalizeAction(override.documentationAction) || normalizeAction(base.documentationAction),
     audioAction: normalizeAction(override.audioAction) || normalizeAction(base.audioAction),
     textAction: normalizeAction(override.textAction) || normalizeAction(base.textAction),
-    noCaptionImageAction: normalizeAction(override.noCaptionImageAction) || normalizeAction(base.noCaptionImageAction),
     readToolGuidance: normalizeAction(override.readToolGuidance) || normalizeAction(base.readToolGuidance),
     seeToolGuidance: normalizeAction(override.seeToolGuidance) || normalizeAction(base.seeToolGuidance),
     commandToolGuidance: normalizeAction(override.commandToolGuidance) || normalizeAction(base.commandToolGuidance),

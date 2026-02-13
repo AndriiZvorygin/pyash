@@ -245,10 +245,10 @@ function dateStampFromIso(isoText) {
 }
 
 function classifyAttachmentKind(entry) {
-  if (isImageAttachment(entry)) return "image";
+  if (isImageAttachment(entry)) return "photograph";
   const mime = String(entry?.mimeType ?? "").toLowerCase().trim();
   const filePath = String(entry?.path ?? "").toLowerCase();
-  if (mime === "application/pdf" || filePath.endsWith(".pdf")) return "pdf";
+  if (mime === "application/pdf" || filePath.endsWith(".pdf")) return "documentation";
   if (mime.startsWith("audio/")) return "audio";
   if (
     mime.startsWith("text/")
@@ -259,8 +259,8 @@ function classifyAttachmentKind(entry) {
 
 function importActionForKind(kind, importPolicy = {}) {
   const policy = importPolicy ?? {};
-  if (kind === "image") return String(policy.imageAction || policy.fileAction || policy.defaultAction || "").trim();
-  if (kind === "pdf") return String(policy.pdfAction || policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "photograph") return String(policy.photographAction || policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "documentation") return String(policy.documentationAction || policy.fileAction || policy.defaultAction || "").trim();
   if (kind === "audio") return String(policy.audioAction || policy.fileAction || policy.defaultAction || "").trim();
   if (kind === "text") return String(policy.textAction || policy.fileAction || policy.defaultAction || "").trim();
   return String(policy.fileAction || policy.defaultAction || "").trim();
@@ -322,12 +322,12 @@ function buildAttachmentAutoTaskBlock(event, importPolicy = {}) {
   const imageNames = new Set(images.map((entry) => String(entry?.filename ?? path.basename(String(entry?.path ?? ""))).trim().toLowerCase()).filter(Boolean));
   const isLikelyNoCaption = !text || imageNames.has(text.toLowerCase());
   if (!isLikelyNoCaption) return "";
-  const noCaptionAction = String(importPolicy?.noCaptionImageAction || importPolicy?.imageAction || "").trim();
-  if (!noCaptionAction) return "";
+  const photographAction = String(importPolicy?.photographAction || importPolicy?.fileAction || importPolicy?.defaultAction || "").trim();
+  if (!photographAction) return "";
   return [
     "[channel auto task]",
-    "Image upload detected without caption.",
-    `For agent, do ${noCaptionAction} using the saved image path.`
+    "Photograph upload detected.",
+    `For agent, do ${photographAction} using the saved photograph path.`
   ].join("\n");
 }
 

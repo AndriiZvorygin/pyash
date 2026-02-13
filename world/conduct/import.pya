@@ -1,13 +1,12 @@
 su name import be map def
-  su name default do ob text "" ya
-  su name photograph do ob text "" ya
-  su name documentation do ob text "" ya
-  su name audio do ob text "" ya
-  su name text do ob text "" ya
-  su name file do ob text "" ya
-  su name no legend photograph do ob text "first analyze the image directly with your own image capability if available; if direct image analysis is unavailable, call be see from filename on the saved image path" ya
-  su name read tool do ob text "be read from filename <path> ... : extract text from docs/audio/image via read auto" ya
-  su name see tool do ob text "be see from filename <image> ... : ask a vision-capable mind directly" ya
-  su name command tool do ob text "be command ... : inspect/process files" ya
-  su name repair tool do ob text "be repair ... : patch code/text files safely" ya
+  su name default ob text "" ya
+  su name photograph ob text "first analyze the photograph directly with your own photograph capability if available; if direct analysis is unavailable, call be see from filename on the saved photograph path" ya
+  su name documentation ob text "" ya
+  su name audio ob text "" ya
+  su name text ob text "" ya
+  su name file ob text "" ya
+  su name read tool ob text "be read from filename <path> ... : extract text from documentation/audio/photograph via read auto" ya
+  su name see tool ob text "be see from filename <photograph> ... : ask a photograph-capable mind directly" ya
+  su name command tool ob text "be command ... : inspect/process files" ya
+  su name repair tool ob text "be repair ... : patch code/text files safely" ya
 prah
