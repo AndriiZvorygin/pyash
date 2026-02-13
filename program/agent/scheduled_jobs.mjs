@@ -12,9 +12,12 @@ import { loadServiceDefinition, resolveServiceModulePath } from "./service_defin
 import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
 import { runChannelOnce } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
-import { ensureMatrixCredentials, readMatrixAuthCache, ensureMatrixExecutiveDmRoom } from "./channels/bootstrap.mjs";
+import {
+  resolveMatrixConfigWithMap,
+  mergeMatrixDmRooms as mergeMatrixDmRoomsFromRuntime,
+  hydrateMatrixRuntimeConfig
+} from "./channels/matrix_runtime.mjs";
 import { updateAgentPresence } from "./presence.mjs";
-import { resolveConfigMapText } from "../configure/env.mjs";
 import { writeRouterHealthState } from "./channel_core/state.mjs";
 
 const HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK";
@@ -60,146 +63,12 @@ function buildMindSentence({ job, prompt, outName, agentHouse }) {
   };
 }
 
-function readRememberText(name) {
-  const fact = remember(name);
-  const value = fact?.ob?.text ?? fact?.ob?.name ?? fact?.ob?.filename ?? null;
-  if (value == null) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
-function homeserverHost(homeserver) {
-  const text = String(homeserver ?? "").trim();
-  if (!text) return "";
-  try {
-    return new URL(text).host.toLowerCase();
-  } catch {
-    return text.replace(/^https?:\/\//i, "").replace(/\/.*$/g, "").toLowerCase();
-  }
-}
-
-function normalizeMatrixLocalpart(raw) {
-  return String(raw ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._=-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function normalizeMatrixUserIdentity(raw, homeserver = "") {
-  const text = String(raw ?? "").trim();
-  if (!text) return "";
-  const host = homeserverHost(homeserver);
-  const withAt = text.startsWith("@") ? text : `@${text}`;
-  const lower = withAt.toLowerCase();
-  const body = lower.slice(1);
-  const idx = body.indexOf(":");
-  const localpart = normalizeMatrixLocalpart(idx === -1 ? body : body.slice(0, idx));
-  if (!localpart) return "";
-  const server = idx === -1 ? host : body.slice(idx + 1).trim().toLowerCase();
-  return server ? `@${localpart}:${server}` : `@${localpart}`;
-}
-
-function matrixUsersMatch(a, b, homeserver = "") {
-  const left = normalizeMatrixUserIdentity(a, homeserver);
-  const right = normalizeMatrixUserIdentity(b, homeserver);
-  return Boolean(left && right && left === right);
-}
-
 export function resolveMatrixConfigWithRemember(rawConfig = {}) {
-  const mapName = "matrix channel";
-  const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
-  const mapMode = resolveConfigMapText(mapName, "mode");
-  const mapLongPollMs = resolveConfigMapText(mapName, "long poll ms");
-  const mapAppserviceRegistration =
-    resolveConfigMapText(mapName, "bridge service file") ??
-    resolveConfigMapText(mapName, "appservice registration");
-  const mapUser = resolveConfigMapText(mapName, "user");
-  const mapExecutiveUsername = resolveConfigMapText(mapName, "executive username");
-  const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
-  const mapAdminToken = resolveConfigMapText(mapName, "admin token");
-  const mapToken = resolveConfigMapText(mapName, "token");
-  const homeserver =
-    rawConfig.homeserver ??
-    mapHomeserver ??
-    readRememberText("matrix homeserver") ??
-    readRememberText("matrix server") ??
-    null;
-  const user =
-    rawConfig.user ??
-    mapUser ??
-    readRememberText("matrix user") ??
-    null;
-  const allowGlobalToken = !mapToken
-    ? false
-    : !mapUser || matrixUsersMatch(user, mapUser, homeserver || "");
-  return {
-    ...rawConfig,
-    mode: rawConfig.mode ?? mapMode ?? null,
-    longPollMs: rawConfig.longPollMs ?? mapLongPollMs ?? null,
-    appserviceRegistration: rawConfig.appserviceRegistration ?? mapAppserviceRegistration ?? null,
-    homeserver,
-    user,
-    executiveUsername:
-      rawConfig.executiveUsername ??
-      mapExecutiveUsername ??
-      readRememberText("matrix executive username") ??
-      null,
-    registrationSharedSecret:
-      rawConfig.registrationSharedSecret ??
-      mapSharedSecret ??
-      readRememberText("matrix registration shared secret") ??
-      null,
-    adminToken:
-      rawConfig.adminToken ??
-      mapAdminToken ??
-      readRememberText("matrix admin token") ??
-      null,
-    token:
-      rawConfig.token ??
-      (allowGlobalToken ? mapToken : null) ??
-      null
-  };
+  return resolveMatrixConfigWithMap(rawConfig);
 }
 
-function normalizeLaneName(raw) {
-  return String(raw ?? "")
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "") || "session";
-}
-
-function laneFromRoomId(channelType, roomId) {
-  return normalizeLaneName(`${channelType}_${roomId}`);
-}
-
-export function mergeMatrixDmRooms({ channelConfig, dmRoomIds = [], channelType }) {
-  const dmRooms = Array.isArray(channelConfig?.dmRooms) ? [...channelConfig.dmRooms] : [];
-  const rooms = Array.isArray(channelConfig?.rooms) ? [...channelConfig.rooms] : [];
-  const knownDm = new Set(dmRooms.map((room) => String(room ?? "").trim()).filter(Boolean));
-  const knownRoom = new Set(rooms.map((room) => String(room?.id ?? "").trim()).filter(Boolean));
-  for (const value of dmRoomIds) {
-    const roomId = String(value ?? "").trim();
-    if (!roomId) continue;
-    if (!knownDm.has(roomId)) {
-      knownDm.add(roomId);
-      dmRooms.push(roomId);
-    }
-    if (!knownRoom.has(roomId)) {
-      knownRoom.add(roomId);
-      rooms.push({
-        id: roomId,
-        lane: laneFromRoomId(channelType, roomId)
-      });
-    }
-  }
-  return {
-    ...channelConfig,
-    dmRooms,
-    rooms
-  };
+export function mergeMatrixDmRooms(args = {}) {
+  return mergeMatrixDmRoomsFromRuntime(args);
 }
 
 function parseChannelPollJob(jobName) {
@@ -283,9 +152,7 @@ async function runChannelPollJob({ worldRoot, job }) {
     }
     let channelConfig = { ...rawConfig };
     const channelMode = normalizeChannelMode(channelConfig.mode);
-    const effectiveLongPollMs = channelMode === "poll"
-      ? 1000
-      : normalizeLongPollMs(channelConfig.longPollMs, 30000);
+    const effectiveLongPollMs = normalizeLongPollMs(channelConfig.longPollMs, 30000);
     channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
     if (channelMode === "appservice-push" && channelConfig.warmStart == null) {
       channelConfig = { ...channelConfig, warmStart: true };
@@ -294,45 +161,19 @@ async function runChannelPollJob({ worldRoot, job }) {
       channelStatus.push(`${channelType}:skipped=push_mode`);
       continue;
     }
+    let dmBootstrapDefect = "";
     if (channelType === "matrix") {
-      channelConfig = resolveMatrixConfigWithRemember(channelConfig);
-      const credentials = await ensureMatrixCredentials({
+      const hydrated = await hydrateMatrixRuntimeConfig({
+        channelConfig,
         agentName: job.agentName,
         agentHouse,
-        config: channelConfig
+        channelType
       });
-      channelConfig = {
-        ...channelConfig,
-        homeserver: credentials.homeserver,
-        token: credentials.token,
-        user: channelConfig.user ?? credentials.user
-      };
-      if (channelConfig.executiveUsername && channelConfig.token && channelConfig.user) {
-        try {
-          const dmRoomId = await ensureMatrixExecutiveDmRoom({
-            agentHouse,
-            homeserver: channelConfig.homeserver,
-            token: channelConfig.token,
-            user: channelConfig.user,
-            executiveUser: channelConfig.executiveUsername
-          });
-          if (dmRoomId) {
-            channelConfig = mergeMatrixDmRooms({
-              channelConfig,
-              dmRoomIds: [dmRoomId],
-              channelType
-            });
-          }
-        } catch {
-          // DM bootstrap is best-effort; continue polling configured rooms.
-        }
-      }
-      const authCache = await readMatrixAuthCache(agentHouse);
-      const dmRoomIds = Object.values(authCache?.executiveDmRooms ?? {})
-        .map((roomId) => String(roomId ?? "").trim())
-        .filter((roomId) => roomId.startsWith("!"));
-      if (dmRoomIds.length) {
-        channelConfig = mergeMatrixDmRooms({ channelConfig, dmRoomIds, channelType });
+      channelConfig = hydrated.channelConfig;
+      if (hydrated.dmBootstrapErrors.length > 0) {
+        const first = hydrated.dmBootstrapErrors[0];
+        dmBootstrapDefect = `executive_dm_bootstrap_failed:${String(first.executiveUser ?? "").trim()}:${shortError(first.error)}`;
+        channelStatus.push(`${channelType}:dm_bootstrap_error=${hydrated.dmBootstrapErrors.length}`);
       }
     }
     const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
@@ -420,17 +261,19 @@ async function runChannelPollJob({ worldRoot, job }) {
       if (fallbackSuffix) {
         channelStatus[channelStatus.length - 1] += `${fallbackSuffix}`;
       }
+      const healthReason = [fallbackReason, dmBootstrapDefect].filter(Boolean).join("; ");
+      const healthy = !dmBootstrapDefect;
       await writeRouterHealthState({
         worldRoot,
         channelType,
         activeMode,
         fallbackActive,
-        fallbackReason,
+        fallbackReason: healthReason,
         queueDepth: Number(result?.queueDepth ?? 0) || 0,
         lastInputAt: String(result?.lastInputAt ?? ""),
         updatedAt: nowIso(),
-        healthy: true,
-        statusText: "ready"
+        healthy,
+        statusText: healthy ? "ready" : "degraded"
       });
     }
   }
