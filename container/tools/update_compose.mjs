@@ -184,8 +184,6 @@ try {
   volumes.push("/etc/group:/etc/group:ro");
 } catch {}
 
-lines.push(`      - GIT_SSH_COMMAND=ssh -i ${containerHome}/.ssh/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=${containerHome}/.ssh/known_hosts -o StrictHostKeyChecking=yes`);
-
 if (vncEnabled) {
   ports.push("\"5900:5900\"");
   ports.push("\"6080:6080\"");
