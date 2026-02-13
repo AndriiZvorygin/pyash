@@ -114,7 +114,7 @@ export async function chip_su_stream(sentence) {
       index,
       ob: { text: String(value) },
       toindex: final ? lastIndex : undefined,
-      vyahValues: ["eval", "sloh"]
+      vyahValues: ["eval", "success"]
     });
 
     const nextIndex = index + 1;
@@ -151,7 +151,7 @@ export async function chip_su_stream(sentence) {
     index,
     ob,
     toindex: lastIndex,
-    vyahValues: ["eval", "sloh"]
+    vyahValues: ["eval", "success"]
   });
 
   const nextIndex = index + 1;

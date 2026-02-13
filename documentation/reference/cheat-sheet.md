@@ -84,7 +84,7 @@ Common IO verbs (see `07-io-and-scripts.md`):
 - **read**: raw bytes by default; text extraction with `become wo text`.
 - **write**: write `ob text` to output or `to filename`.
 - **download**: fetch remote content to artifacts.
-- **search**: web search (see `12-web-search.md`).
+- **search**: web search (see `12-web-and-browser.md`).
 - **command**: run shell command (use carefully).
 - **import**: load a module.
 
@@ -192,7 +192,7 @@ Never:
 8) `do` executes; `ya` declares a fact.
 9) `be error ya` is data; `be error do` throws.
 10) Always introduce names before use.
-11) For lifecycle/aspect success, use `vyah ... success` (legacy `sloh` may be accepted on input only).
+11) For lifecycle/aspect outcomes, use `vyah ... success` or `vyah ... fail`.
 
 ## 9) Minimal grammar sketch
 
