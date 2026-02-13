@@ -3400,6 +3400,119 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
+async function bootstrapAgentMatrixChannelConnection({ rootDir, worldRoot, agentName }) {
+  const matrix = await loadMatrixConfigFromSecret(rootDir);
+  if (!matrix?.homeserver || !matrix?.room) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "missing channel configure"
+    };
+  }
+
+  const mode = normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
+  const agentHouse = path.join(worldRoot, "house", agentName);
+  let credentials;
+  try {
+    credentials = await ensureMatrixCredentials({
+      agentName,
+      agentHouse,
+      config: {
+        homeserver: matrix.homeserver,
+        user: matrix.userId || null,
+        token: matrix.token || null,
+        mode,
+        registrationSharedSecret: matrix.registrationSharedSecret || null,
+        adminToken: matrix.adminToken || null
+      }
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      skipped: false,
+      step: "credentials",
+      error: String(err?.message || err)
+    };
+  }
+
+  const token = String(credentials?.token || matrix.token || "").trim();
+  const userId = String(credentials?.user || matrix.userId || "").trim();
+  if (!token) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "missing token"
+    };
+  }
+
+  let joinedRoomId = "";
+  try {
+    joinedRoomId = await matrixJoinRoom({
+      homeserver: matrix.homeserver,
+      token,
+      room: matrix.room,
+      mode,
+      userId
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      skipped: false,
+      step: "join room",
+      userId,
+      error: String(err?.message || err)
+    };
+  }
+
+  const executiveUsername = String(matrix.executiveUsername || "").trim();
+  if (!executiveUsername) {
+    return {
+      ok: true,
+      mode,
+      homeserver: matrix.homeserver,
+      room: matrix.room,
+      joinedRoomId,
+      userId,
+      executiveDm: {
+        attempted: false
+      }
+    };
+  }
+
+  try {
+    const dmRoomId = await ensureMatrixExecutiveDmRoom({
+      agentHouse,
+      homeserver: matrix.homeserver,
+      token,
+      user: userId,
+      mode,
+      executiveUser: executiveUsername
+    });
+    return {
+      ok: true,
+      mode,
+      homeserver: matrix.homeserver,
+      room: matrix.room,
+      joinedRoomId,
+      userId,
+      executiveDm: {
+        attempted: true,
+        executiveUsername,
+        roomId: dmRoomId || ""
+      }
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      skipped: false,
+      step: "executive dm",
+      userId,
+      joinedRoomId,
+      error: String(err?.message || err)
+    };
+  }
+}
+
 function buildAgentDirectoryLicenseBlock({ rootDir, worldRoot, agentName }) {
   const lines = [
     `su name ${agentName} directory license be map def`,
@@ -3968,6 +4081,20 @@ async function configureAgentApply({ args, mode = "establish" }) {
       }))
     : { ok: false, reason: "channel schedule skipped", path: null, changed: false, action: "none" };
 
+  const channelBootstrap = (!dryRun && cfg.bindChannel && channelWrite.ok && cfg.startNow)
+    ? await bootstrapAgentMatrixChannelConnection({
+      rootDir,
+      worldRoot,
+      agentName: cfg.agentName
+    })
+    : {
+      ok: false,
+      skipped: true,
+      reason: (!cfg.bindChannel || !channelWrite.ok)
+        ? "channel bootstrap skipped"
+        : (cfg.startNow ? "channel bootstrap skipped" : "start skipped")
+    };
+
   let smoke = null;
   let activation = null;
   if (cfg.smokeTest && !dryRun) {
@@ -4028,6 +4155,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
     directoryLicenseWrite,
     channelWrite,
     channelScheduleWrite,
+    channelBootstrap,
     smoke,
     activation
   };
@@ -4049,6 +4177,14 @@ async function configureAgentApply({ args, mode = "establish" }) {
         textOut(`- channel schedule ${channelScheduleWrite.path} (${channelScheduleWrite.changed ? "changed" : "unchanged"})`);
       } else if (channelScheduleWrite.reason) {
         textOut(`- channel schedule ${channelScheduleWrite.reason}`);
+      }
+      if (!channelBootstrap.skipped) {
+        textOut(`- channel bootstrap ${channelBootstrap.ok ? "ok" : "failed"}`);
+        if (!channelBootstrap.ok && channelBootstrap.error) {
+          textOut(`  ${channelBootstrap.step || "error"}: ${channelBootstrap.error}`);
+        }
+      } else if (cfg.startNow) {
+        textOut(`- channel bootstrap skipped (${channelBootstrap.reason})`);
       }
     } else {
       textOut(`- channel skipped (${channelWrite.reason})`);
