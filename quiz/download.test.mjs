@@ -54,7 +54,7 @@ test("download video uses ytdlp path with mock response", async () => {
   }
 });
 
-test("download without to filename defaults to cwd basename", async () => {
+test("download without to filename defaults to cwd artifacts day directory", async () => {
   forget();
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-"));
   const originalCwd = process.cwd();
@@ -62,12 +62,15 @@ test("download without to filename defaults to cwd basename", async () => {
   process.env.PYA_DOWNLOAD_RESPONSE = "ok";
   try {
     process.chdir(tmpDir);
-    await interpret(parse(
+    const result = await interpret(parse(
       'be download from filename "https://example.com/file.txt" as wo web do'
     ));
-    const outPath = path.join(tmpDir, "file.txt");
+    const day = new Date();
+    const dayStamp = `${day.getUTCFullYear()}${String(day.getUTCMonth() + 1).padStart(2, "0")}${String(day.getUTCDate()).padStart(2, "0")}`;
+    const outPath = path.join(tmpDir, "artifacts", dayStamp, "file.txt");
     const content = await fs.readFile(outPath, "utf8");
     assert.equal(content, "ok");
+    assert.equal(result?.value?.filename, outPath);
   } finally {
     process.chdir(originalCwd);
     if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
@@ -86,10 +89,13 @@ test("download supports ob wo all during months for yt-dlp", async () => {
     const result = await interpret(parse(
       'be download ob wo all during months 1 from filename "https://example.com/playlist" as wo audio do'
     ));
-    const outPath = path.join(tmpDir, "download.mock");
+    const day = new Date();
+    const dayStamp = `${day.getUTCFullYear()}${String(day.getUTCMonth() + 1).padStart(2, "0")}${String(day.getUTCDate()).padStart(2, "0")}`;
+    const outDir = path.join(tmpDir, "artifacts", dayStamp);
+    const outPath = path.join(outDir, "download.mock");
     const content = await fs.readFile(outPath, "utf8");
     assert.equal(content, "ok");
-    assert.equal(result?.value?.filename, tmpDir);
+    assert.equal(result?.value?.filename, outDir);
   } finally {
     process.chdir(originalCwd);
     if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;

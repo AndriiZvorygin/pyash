@@ -498,11 +498,19 @@ function selfSenderCandidates({ channelConfig, agentName } = {}) {
 }
 
 function roomListenerAgents(channelConfig, roomId, fallbackAgentName) {
-  const roomScoped = channelConfig?.roomListeners?.[roomId];
-  if (Array.isArray(roomScoped) && roomScoped.length) return roomScoped;
-  const global = channelConfig?.listeners;
-  if (Array.isArray(global) && global.length) return global;
-  return [fallbackAgentName];
+  const normalize = (values) => {
+    if (!Array.isArray(values)) return [];
+    return values
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+  };
+  const roomScoped = normalize(channelConfig?.roomListeners?.[roomId]);
+  const global = normalize(channelConfig?.listeners);
+  const configured = roomScoped.length ? roomScoped : global;
+  if (!configured.length) return [fallbackAgentName];
+  const fallback = String(fallbackAgentName ?? "").trim();
+  if (fallback && configured.includes(fallback)) return [fallback];
+  return configured;
 }
 
 function resolveTargetAgentHouse(worldRoot, agentName) {
