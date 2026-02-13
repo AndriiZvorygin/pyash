@@ -4,16 +4,6 @@ import path from "node:path";
 import { splitSentences } from "../../library/sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
 
-function textValue(sentence) {
-  const value =
-    sentence?.ob?.name ??
-    sentence?.ob?.text ??
-    sentence?.ob?.wo ??
-    sentence?.ob?.filename ??
-    "";
-  return String(value ?? "").trim();
-}
-
 function normalizeKey(raw) {
   return String(raw ?? "")
     .toLowerCase()
@@ -21,22 +11,56 @@ function normalizeKey(raw) {
     .trim();
 }
 
+function cloneValue(value) {
+  if (globalThis.structuredClone) return globalThis.structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function actionFromOb(ob) {
+  if (!ob || typeof ob !== "object") return null;
+  if (ob.la && typeof ob.la === "object") {
+    return { kind: "sentence", sentence: cloneValue(ob.la) };
+  }
+  const name = String(ob.name ?? "").trim();
+  if (name) return { kind: "name", name };
+  const text = String(ob.text ?? ob.wo ?? ob.filename ?? "").trim();
+  if (text) return { kind: "text", text };
+  return null;
+}
+
 function normalizeAction(value) {
-  return String(value ?? "").trim();
+  if (!value) return null;
+  if (typeof value === "string") {
+    const text = value.trim();
+    return text ? { kind: "text", text } : null;
+  }
+  if (typeof value !== "object") return null;
+  if (value.kind === "text") {
+    const text = String(value.text ?? "").trim();
+    return text ? { kind: "text", text } : null;
+  }
+  if (value.kind === "name") {
+    const name = String(value.name ?? "").trim();
+    return name ? { kind: "name", name } : null;
+  }
+  if (value.kind === "sentence" && value.sentence && typeof value.sentence === "object") {
+    return { kind: "sentence", sentence: cloneValue(value.sentence) };
+  }
+  return null;
 }
 
 function emptyPolicy() {
   return {
-    defaultAction: "",
-    fileAction: "",
-    photographAction: "",
-    documentationAction: "",
-    audioAction: "",
-    textAction: "",
-    readToolGuidance: "",
-    seeToolGuidance: "",
-    commandToolGuidance: "",
-    repairToolGuidance: ""
+    defaultAction: null,
+    fileAction: null,
+    photographAction: null,
+    documentationAction: null,
+    audioAction: null,
+    textAction: null,
+    readToolGuidance: null,
+    seeToolGuidance: null,
+    commandToolGuidance: null,
+    repairToolGuidance: null
   };
 }
 
@@ -92,7 +116,7 @@ export function parseImportPolicyText(text) {
         inlineSentence = null;
       }
       if (inlineSentence?.mood === "ya" && String(inlineSentence?.su?.name ?? "").trim()) {
-        applyEntry(policy, inlineSentence.su.name, textValue(inlineSentence));
+        applyEntry(policy, inlineSentence.su.name, actionFromOb(inlineSentence.ob));
         pendingMapKey = "";
         continue;
       }
@@ -107,7 +131,7 @@ export function parseImportPolicyText(text) {
           sentence = null;
         }
         if (sentence?.mood === "ya") {
-          applyEntry(policy, pendingMapKey, textValue(sentence));
+          applyEntry(policy, pendingMapKey, actionFromOb(sentence.ob));
           pendingMapKey = "";
         }
       }
@@ -125,7 +149,7 @@ export function parseImportPolicyText(text) {
       if (sentence?.mood === "ya") {
         const subject = normalizeKey(sentence?.su?.name);
         const key = subject.startsWith("import ") ? subject.slice("import ".length).trim() : rest;
-        applyEntry(policy, key, textValue(sentence));
+        applyEntry(policy, key, actionFromOb(sentence.ob));
         pendingImportKey = "";
       }
       continue;
@@ -138,7 +162,7 @@ export function parseImportPolicyText(text) {
         sentence = null;
       }
       if (sentence?.mood === "ya") {
-        applyEntry(policy, pendingImportKey, textValue(sentence));
+        applyEntry(policy, pendingImportKey, actionFromOb(sentence.ob));
         pendingImportKey = "";
       }
       continue;
@@ -155,23 +179,24 @@ export function parseImportPolicyText(text) {
     const subject = normalizeKey(sentence?.su?.name);
     if (!subject.startsWith("import ")) continue;
     const key = subject.slice("import ".length).trim();
-    applyEntry(policy, key, textValue(sentence));
+    applyEntry(policy, key, actionFromOb(sentence.ob));
   }
   return policy;
 }
 
 export function mergeImportPolicies(base = {}, override = {}) {
+  const mergedAction = (baseValue, overrideValue) => normalizeAction(overrideValue) || normalizeAction(baseValue);
   return {
-    defaultAction: normalizeAction(override.defaultAction) || normalizeAction(base.defaultAction),
-    fileAction: normalizeAction(override.fileAction) || normalizeAction(base.fileAction),
-    photographAction: normalizeAction(override.photographAction) || normalizeAction(base.photographAction),
-    documentationAction: normalizeAction(override.documentationAction) || normalizeAction(base.documentationAction),
-    audioAction: normalizeAction(override.audioAction) || normalizeAction(base.audioAction),
-    textAction: normalizeAction(override.textAction) || normalizeAction(base.textAction),
-    readToolGuidance: normalizeAction(override.readToolGuidance) || normalizeAction(base.readToolGuidance),
-    seeToolGuidance: normalizeAction(override.seeToolGuidance) || normalizeAction(base.seeToolGuidance),
-    commandToolGuidance: normalizeAction(override.commandToolGuidance) || normalizeAction(base.commandToolGuidance),
-    repairToolGuidance: normalizeAction(override.repairToolGuidance) || normalizeAction(base.repairToolGuidance)
+    defaultAction: mergedAction(base.defaultAction, override.defaultAction),
+    fileAction: mergedAction(base.fileAction, override.fileAction),
+    photographAction: mergedAction(base.photographAction, override.photographAction),
+    documentationAction: mergedAction(base.documentationAction, override.documentationAction),
+    audioAction: mergedAction(base.audioAction, override.audioAction),
+    textAction: mergedAction(base.textAction, override.textAction),
+    readToolGuidance: mergedAction(base.readToolGuidance, override.readToolGuidance),
+    seeToolGuidance: mergedAction(base.seeToolGuidance, override.seeToolGuidance),
+    commandToolGuidance: mergedAction(base.commandToolGuidance, override.commandToolGuidance),
+    repairToolGuidance: mergedAction(base.repairToolGuidance, override.repairToolGuidance)
   };
 }
 

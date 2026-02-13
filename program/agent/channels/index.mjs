@@ -17,6 +17,11 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function cloneValue(value) {
+  if (globalThis.structuredClone) return globalThis.structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
 function sanitizeLaneName(raw) {
   return String(raw ?? "")
     .toLowerCase()
@@ -224,7 +229,7 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence, too
 function buildPrompt(event, { payloadId, importPolicy } = {}) {
   const header = `[channel ${event.channelType} channelId ${event.channelId} sender ${event.sender} eventId ${event.eventId}]`;
   const attachmentTask = buildAttachmentAutoTaskBlock(event, importPolicy);
-  const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved, importPolicy);
+  const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved, importPolicy, event?.importExecutions);
   const attachmentErrorBlock = buildAttachmentErrorPromptBlock(event?.attachmentErrors);
   const bodyText = String(event?.text ?? "");
   const combinedBody = [attachmentTask, bodyText].filter(Boolean).join("\n\n");
@@ -257,22 +262,52 @@ function classifyAttachmentKind(entry) {
   return "file";
 }
 
+function normalizeImportAction(action) {
+  if (!action) return null;
+  if (typeof action === "string") {
+    const text = action.trim();
+    return text ? { kind: "text", text } : null;
+  }
+  if (typeof action !== "object") return null;
+  if (action.kind === "text") {
+    const text = String(action.text ?? "").trim();
+    return text ? { kind: "text", text } : null;
+  }
+  if (action.kind === "name") {
+    const name = String(action.name ?? "").trim();
+    return name ? { kind: "name", name } : null;
+  }
+  if (action.kind === "sentence" && action.sentence && typeof action.sentence === "object") {
+    return { kind: "sentence", sentence: cloneValue(action.sentence) };
+  }
+  return null;
+}
+
 function importActionForKind(kind, importPolicy = {}) {
   const policy = importPolicy ?? {};
-  if (kind === "photograph") return String(policy.photographAction || policy.fileAction || policy.defaultAction || "").trim();
-  if (kind === "documentation") return String(policy.documentationAction || policy.fileAction || policy.defaultAction || "").trim();
-  if (kind === "audio") return String(policy.audioAction || policy.fileAction || policy.defaultAction || "").trim();
-  if (kind === "text") return String(policy.textAction || policy.fileAction || policy.defaultAction || "").trim();
-  return String(policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "photograph") return normalizeImportAction(policy.photographAction || policy.fileAction || policy.defaultAction);
+  if (kind === "documentation") return normalizeImportAction(policy.documentationAction || policy.fileAction || policy.defaultAction);
+  if (kind === "audio") return normalizeImportAction(policy.audioAction || policy.fileAction || policy.defaultAction);
+  if (kind === "text") return normalizeImportAction(policy.textAction || policy.fileAction || policy.defaultAction);
+  return normalizeImportAction(policy.fileAction || policy.defaultAction);
+}
+
+function importActionAsText(action) {
+  const resolved = normalizeImportAction(action);
+  if (!resolved) return "";
+  if (resolved.kind === "text") return String(resolved.text ?? "").trim();
+  if (resolved.kind === "name") return String(resolved.name ?? "").trim();
+  if (resolved.kind === "sentence") return sentenceToPyash(resolved.sentence);
+  return "";
 }
 
 function importToolGuidanceLines(importPolicy = {}) {
   const policy = importPolicy ?? {};
   const lines = [];
-  const read = String(policy.readToolGuidance || "").trim();
-  const see = String(policy.seeToolGuidance || "").trim();
-  const command = String(policy.commandToolGuidance || "").trim();
-  const repair = String(policy.repairToolGuidance || "").trim();
+  const read = importActionAsText(policy.readToolGuidance);
+  const see = importActionAsText(policy.seeToolGuidance);
+  const command = importActionAsText(policy.commandToolGuidance);
+  const repair = importActionAsText(policy.repairToolGuidance);
   if (read) lines.push(`- ${read}`);
   if (see) lines.push(`- ${see}`);
   if (command) lines.push(`- ${command}`);
@@ -280,7 +315,7 @@ function importToolGuidanceLines(importPolicy = {}) {
   return lines;
 }
 
-function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}) {
+function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}, importExecutions = []) {
   const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
   if (!files.length) return "";
   const lines = ["", "", "[channel files saved]"];
@@ -297,13 +332,23 @@ function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}) {
     lines.push(meta ? `- ${filePath} (${meta})` : `- ${filePath}`);
     const kind = classifyAttachmentKind(entry);
     const action = importActionForKind(kind, importPolicy);
-    if (action) {
-      importSteps.push(`- ${filePath}: do ${action}`);
+    if (action?.kind === "text") {
+      importSteps.push(`- ${filePath}: do ${action.text}`);
     }
   }
   if (importSteps.length) {
     lines.push("[import do]");
     lines.push(...importSteps);
+  }
+  const executed = Array.isArray(importExecutions) ? importExecutions : [];
+  if (executed.length) {
+    lines.push("[import execution]");
+    for (const entry of executed) {
+      const filePath = String(entry?.path ?? "").trim() || "file";
+      const status = String(entry?.status ?? "").trim() || "unknown";
+      const detail = shortText(entry?.detail ?? "", 240);
+      lines.push(detail ? `- ${filePath}: ${status} ${detail}` : `- ${filePath}: ${status}`);
+    }
   }
   const toolLines = importToolGuidanceLines(importPolicy);
   if (toolLines.length) {
@@ -322,12 +367,12 @@ function buildAttachmentAutoTaskBlock(event, importPolicy = {}) {
   const imageNames = new Set(images.map((entry) => String(entry?.filename ?? path.basename(String(entry?.path ?? ""))).trim().toLowerCase()).filter(Boolean));
   const isLikelyNoCaption = !text || imageNames.has(text.toLowerCase());
   if (!isLikelyNoCaption) return "";
-  const photographAction = String(importPolicy?.photographAction || importPolicy?.fileAction || importPolicy?.defaultAction || "").trim();
-  if (!photographAction) return "";
+  const photographAction = importActionForKind("photograph", importPolicy);
+  if (photographAction?.kind !== "text") return "";
   return [
     "[channel auto task]",
     "Photograph upload detected.",
-    `For agent, do ${photographAction} using the saved photograph path.`
+    `For agent, do ${photographAction.text} using the saved photograph path.`
   ].join("\n");
 }
 
@@ -364,6 +409,115 @@ function buildMindInputsFromAttachments(attachmentsSaved) {
     });
   }
   return out;
+}
+
+function replaceInputFilenamePlaceholders(value, inputFilename) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => replaceInputFilenamePlaceholders(entry, inputFilename));
+  }
+  if (!value || typeof value !== "object") return value;
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "filename" && entry === "input") {
+      out[key] = inputFilename;
+      continue;
+    }
+    out[key] = replaceInputFilenamePlaceholders(entry, inputFilename);
+  }
+  return out;
+}
+
+function namedImportActionKind(name) {
+  const raw = String(name ?? "").trim();
+  if (!raw) return null;
+  const lowered = raw.toLowerCase();
+  if (lowered.endsWith(" refinery")) {
+    return { kind: "refinery", name: raw.slice(0, -9).trim() };
+  }
+  if (lowered.endsWith(" ceremony")) {
+    return { kind: "ceremony", name: raw.slice(0, -9).trim() };
+  }
+  return null;
+}
+
+function buildNamedImportActionSentence(action, inputFilename) {
+  if (action?.kind === "refinery" && action?.name) {
+    return {
+      mood: "do",
+      be: "refinery",
+      from: { name: action.name, nameTypeWords: ["text"] },
+      ob: { text: inputFilename }
+    };
+  }
+  if (action?.kind === "ceremony" && action?.name) {
+    return {
+      mood: "do",
+      be: action.name,
+      from: { filename: inputFilename }
+    };
+  }
+  return null;
+}
+
+function summarizeImportExecutionResult(result) {
+  if (!result || typeof result !== "object") return "";
+  if (result?.ob?.text !== undefined) return shortText(result.ob.text, 200);
+  if (result?.ob?.name !== undefined) return shortText(result.ob.name, 200);
+  if (result?.ob?.filename !== undefined) return shortText(result.ob.filename, 200);
+  if (result?.be) return shortText(`be ${result.be}`, 200);
+  return "";
+}
+
+async function executeImportActions({
+  attachmentsSaved,
+  importPolicy,
+  interpretRunner
+} = {}) {
+  const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
+  if (!files.length) return [];
+  const runner = typeof interpretRunner === "function" ? interpretRunner : bridgeInterpret;
+  const executions = [];
+  for (const entry of files) {
+    const filePath = String(entry?.path ?? "").trim();
+    if (!filePath) continue;
+    const kind = classifyAttachmentKind(entry);
+    const action = importActionForKind(kind, importPolicy);
+    if (!action || action.kind === "text") continue;
+
+    let sentence = null;
+    if (action.kind === "name") {
+      const named = namedImportActionKind(action.name);
+      if (!named) {
+        executions.push({
+          path: filePath,
+          status: "skipped",
+          detail: `unsupported action name: ${String(action.name ?? "").trim()}`
+        });
+        continue;
+      }
+      sentence = buildNamedImportActionSentence(named, filePath);
+    } else if (action.kind === "sentence") {
+      sentence = replaceInputFilenamePlaceholders(cloneValue(action.sentence), filePath);
+    }
+    if (!sentence || typeof sentence !== "object") continue;
+    if (!sentence.mood) sentence.mood = "do";
+
+    try {
+      const result = await runner(sentence);
+      executions.push({
+        path: filePath,
+        status: "ok",
+        detail: summarizeImportExecutionResult(result)
+      });
+    } catch (err) {
+      executions.push({
+        path: filePath,
+        status: "error",
+        detail: shortText(err?.message ?? err, 200)
+      });
+    }
+  }
+  return executions;
 }
 
 function noMindConfiguredFallback() {
@@ -708,6 +862,13 @@ async function dispatchChannelEvents({
             error: String(err?.stack ?? err?.message ?? err)
           }, { channelType, agentName });
         }
+      }
+      if (Array.isArray(routedEvent.attachmentsSaved) && routedEvent.attachmentsSaved.length) {
+        routedEvent.importExecutions = await executeImportActions({
+          attachmentsSaved: routedEvent.attachmentsSaved,
+          importPolicy,
+          interpretRunner: routerInterpretFn
+        });
       }
       const sentence = buildChannelMindSentence({
         agentName: targetAgent,

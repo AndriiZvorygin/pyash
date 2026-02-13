@@ -666,6 +666,172 @@ test("channel runtime uses import conduct actions for image attachments", async 
   assert.match(prompt, /do receipt photograph refine/);
 });
 
+test("channel runtime executes import photograph action when map uses ob name refinery", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-import-name-refinery-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.writeFile(path.join(agentHouse, "conduct", "import.pya"), [
+    "su name import be map def",
+    "  su name photograph ob name receipt intake refinery ya",
+    "prah",
+    ""
+  ].join("\n"), "utf8");
+
+  await interpret(parse("su name receipt intake be refinery def"));
+  await interpret(parse("su name import stage ob name input to name text imported path be write do"));
+  await interpret(parse("prah"));
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$img-import-name-1",
+            sender: "@u:server",
+            text: "receipt.png",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.image",
+                body: "receipt.png",
+                mxcUrl: "mxc://matrix.example.org/name123",
+                mimetype: "image/png"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-img-import-name-1" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "receipt.png");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "png", "utf8");
+      return [{
+        filename: "receipt.png",
+        path: filePath,
+        mimeType: "image/png",
+        bytes: 3
+      }];
+    },
+    async send() {
+      return { eventId: "$out-img-import-name-1" };
+    }
+  };
+
+  const refineryCalls = [];
+  const routerInterpretFn = async (sentence) => {
+    if (sentence?.be === "refinery") refineryCalls.push(sentence);
+    return interpret(sentence);
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    routerInterpretFn,
+    agentHouse
+  });
+
+  assert.equal(refineryCalls.length, 1);
+  assert.equal(refineryCalls[0]?.from?.name, "receipt intake");
+  assert.match(String(refineryCalls[0]?.ob?.text ?? ""), /receipt\.png$/);
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[import execution\]/);
+  assert.match(prompt, /receipt\.png: ok/);
+});
+
+test("channel runtime executes import file action when map uses ob la and binds input filename", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-import-la-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.writeFile(path.join(agentHouse, "conduct", "import.pya"), [
+    "su name import be map def",
+    "  su name file ob la from filename input be read do ko ya",
+    "prah",
+    ""
+  ].join("\n"), "utf8");
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$file-import-la-1",
+            sender: "@u:server",
+            text: "inspect",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.file",
+                body: "notes.txt",
+                mxcUrl: "mxc://matrix.example.org/la123",
+                mimetype: "text/plain"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-file-import-la-1" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "notes.txt");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "hello from import", "utf8");
+      return [{
+        filename: "notes.txt",
+        path: filePath,
+        mimeType: "text/plain",
+        bytes: 17
+      }];
+    },
+    async send() {
+      return { eventId: "$out-file-import-la-1" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[import execution\]/);
+  assert.match(prompt, /notes\.txt: ok/);
+});
+
 test("channel runtime surfaces attachment download defects into prompt context", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachment-defect-"));
   const agentHouse = path.join(root, "world", "house", "helper");
