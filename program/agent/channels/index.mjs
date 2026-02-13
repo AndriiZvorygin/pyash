@@ -9,10 +9,20 @@ import { resolveWorldAgentHouseDirectory } from "../../library/agent_command_pol
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
+import { buildRouterProduceRequestSentence } from "../channel_core/contract.mjs";
 import {
   readChannelRuntimeState,
   writeChannelRuntimeState
 } from "../channel_core/state.mjs";
+import {
+  enqueueInputEnvelope,
+  enqueueProduceEnvelope,
+  claimOldestInputEnvelope,
+  claimOldestProduceEnvelope,
+  ackRuntimeEnvelopeSuccess,
+  ackRuntimeEnvelopeFail,
+  queueDepth
+} from "../channel_core/queue.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -544,12 +554,14 @@ async function dispatchChannelEvents({
   interpretFn,
   routerInterpretFn,
   agentHouse,
+  worldRoot = "",
   dedupIds,
   dedupState,
   selfEventIds,
   selfState,
   dedupLimit,
-  debug
+  debug,
+  outputMode = "direct"
 }) {
   let received = 0;
   let handled = 0;
@@ -560,15 +572,15 @@ async function dispatchChannelEvents({
   const dmRooms = new Set(Array.isArray(channelConfig?.dmRooms) ? channelConfig.dmRooms : []);
   const publicTagAnswer = channelConfig?.publicTagAnswer === true;
   const selfSenders = selfSenderCandidates({ channelConfig, agentName });
-  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const worldRootResolved = worldRoot || worldRootFromAgentHouse(agentHouse);
   const importPolicyByAgent = new Map();
 
   const loadImportPolicyForAgent = async (targetAgent) => {
     const key = String(targetAgent ?? "").trim();
     if (!key) return {};
     if (importPolicyByAgent.has(key)) return importPolicyByAgent.get(key);
-    const targetAgentHouse = resolveTargetAgentHouse(worldRoot, key);
-    const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse: targetAgentHouse });
+    const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, key);
+    const policy = await loadImportPolicyWithGlobal({ worldRoot: worldRootResolved, agentHouse: targetAgentHouse });
     importPolicyByAgent.set(key, policy);
     return policy;
   };
@@ -744,7 +756,7 @@ async function dispatchChannelEvents({
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
-        const targetAgentHouse = resolveTargetAgentHouse(worldRoot, targetAgent);
+        const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, targetAgent);
         const targetDir = path.join(targetAgentHouse, "artifacts", dayStamp);
         try {
           routedEvent.attachmentsSaved = await adapter.downloadAttachments({
@@ -777,7 +789,7 @@ async function dispatchChannelEvents({
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
         payloadId: orchestratorDirective.payloadId,
-        agentCwd: resolveTargetAgentHouse(worldRoot, targetAgent)
+        agentCwd: resolveTargetAgentHouse(worldRootResolved, targetAgent)
       });
       handled += 1;
       let responseText = "";
@@ -790,6 +802,7 @@ async function dispatchChannelEvents({
       const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
       let toolEventCount = 0;
       const sendChannelMessage = async (content) => {
+        if (outputMode !== "direct") return;
         const sendResult = await adapter.send({ config: channelConfig, event, content });
         if (sendResult?.eventId) {
           selfEventIds.add(sendResult.eventId);
@@ -862,7 +875,13 @@ async function dispatchChannelEvents({
         }, { channelType, agentName });
       }
       if (!responseText) continue;
-      await sendChannelMessage(responseText);
+      const produceRequest = buildRouterProduceRequestSentence({
+        channelType,
+        event,
+        sourceAgentName: targetAgent,
+        payloadId: orchestratorDirective.payloadId,
+        responseText
+      });
       await routeChannelProduce({
         routerInterpretFn,
         channelType,
@@ -871,6 +890,19 @@ async function dispatchChannelEvents({
         payloadId: orchestratorDirective.payloadId,
         responseText
       });
+      if (outputMode === "queue") {
+        await enqueueProduceEnvelope(worldRootResolved, {
+          channelType,
+          identity: String(channelConfig?.user ?? "").trim(),
+          agentName: targetAgent,
+          roomName: event.channelId,
+          payloadId: orchestratorDirective.payloadId,
+          payloadSentence: produceRequest
+        });
+        sent += 1;
+      } else {
+        await sendChannelMessage(responseText);
+      }
     }
   }
 
@@ -928,6 +960,385 @@ function normalizeEvent(rawEvent, channelType) {
     laneName: rawEvent.laneName ? String(rawEvent.laneName) : null,
     attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : [],
     dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true
+  };
+}
+
+function eventToQueueSentence(event) {
+  return {
+    mood: "ya",
+    su: { name: String(event?.eventId ?? "").trim() || "channel-event" },
+    be: "channel queued event",
+    ob: { text: JSON.stringify(event ?? {}) }
+  };
+}
+
+function eventFromQueueSentence(sentence) {
+  const text = String(sentence?.ob?.text ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseChannelIdFromEndpoint(endpoint) {
+  const text = String(endpoint ?? "").trim();
+  const match = text.match(/^channel\s+\S+\s+room\s+(.+)$/i);
+  if (!match) return "";
+  return String(match[1] ?? "").trim();
+}
+
+function parseAgentNameFromEndpoint(endpoint) {
+  const text = String(endpoint ?? "").trim();
+  const match = text.match(/^agent\s+(.+)$/i);
+  if (!match) return "";
+  return String(match[1] ?? "").trim();
+}
+
+export async function runChannelPollOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter,
+  agentHouse,
+  dedupLimit = 2000
+}) {
+  if (!agentName) throw new Error("runChannelPollOnce requires agentName");
+  if (!channelType) throw new Error("runChannelPollOnce requires channelType");
+  if (!adapter) throw new Error("runChannelPollOnce requires adapter");
+  if (!agentHouse) throw new Error("runChannelPollOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
+  if (!lock) return { received: 0, enqueued: 0, skippedDedup: 0, durationMs: 0, queueDepth: 0, locked: true };
+
+  try {
+    const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+    const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+      ? runtimeState.checkpoint
+      : {};
+    const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+    const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+    const dedupIds = new Set(dedupState.order);
+    const startMs = Date.now();
+    const recv = await adapter.receive({ config: channelConfig, checkpoint });
+    const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
+    const events = rawEvents.map(event => normalizeEvent(event, channelType)).filter(Boolean);
+    const newCheckpoint = recv?.checkpoint ?? checkpoint;
+    let enqueued = 0;
+    let skippedDedup = 0;
+    const debug = channelConfig?.debug === true;
+
+    for (const event of events) {
+      if (dedupIds.has(event.eventId)) {
+        skippedDedup += 1;
+        continue;
+      }
+      dedupIds.add(event.eventId);
+      dedupState.order.push(event.eventId);
+      while (dedupState.order.length > dedupLimit) {
+        const removed = dedupState.order.shift();
+        if (!removed) break;
+        dedupIds.delete(removed);
+      }
+      if (typeof adapter?.markSeen === "function") {
+        try {
+          const seenTask = adapter.markSeen({ config: channelConfig, event });
+          if (seenTask && typeof seenTask.then === "function") void seenTask.catch(() => {});
+        } catch {
+          // best-effort only
+        }
+      }
+      await enqueueInputEnvelope(worldRoot, {
+        channelType,
+        identity: String(channelConfig?.user ?? "").trim(),
+        agentName,
+        roomName: event.channelId,
+        eventId: event.eventId,
+        payloadSentence: eventToQueueSentence(event)
+      });
+      enqueued += 1;
+    }
+
+    await writeChannelRuntimeState({
+      agentHouse,
+      channelType,
+      checkpoint: newCheckpoint,
+      dedupOrder: dedupState.order,
+      selfOrder: selfState.order,
+      removeLegacy: true
+    });
+    const depth = await queueDepth(worldRoot);
+    const durationMs = Date.now() - startMs;
+    await appendTelemetry(agentHouse, {
+      timestamp: nowIso(),
+      channelType,
+      event: "poll_enqueue",
+      durationMs,
+      received: events.length,
+      enqueued,
+      skippedDedup,
+      queueDepth: depth.total
+    }, { channelType, agentName });
+    if (debug && recv?.diagnostics) {
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "poll_debug",
+        diagnostics: recv.diagnostics
+      }, { channelType, agentName });
+    }
+    return {
+      received: events.length,
+      enqueued,
+      skippedDedup,
+      durationMs,
+      queueDepth: depth.total
+    };
+  } finally {
+    await releaseChannelInputLock(lock);
+  }
+}
+
+export async function runChannelInputOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter = null,
+  interpretFn,
+  routerInterpretFn = bridgeInterpret,
+  agentHouse,
+  dedupLimit = 2000,
+  maxItems = 10,
+  concurrency = 2
+}) {
+  if (!agentName) throw new Error("runChannelInputOnce requires agentName");
+  if (!channelType) throw new Error("runChannelInputOnce requires channelType");
+  if (typeof interpretFn !== "function") throw new Error("runChannelInputOnce requires interpretFn");
+  if (!agentHouse) throw new Error("runChannelInputOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+  const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+    ? runtimeState.checkpoint
+    : {};
+  const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+  const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+  const dedupIds = new Set(dedupState.order);
+  const selfEventIds = new Set(selfState.order);
+  const claims = [];
+  const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  for (let i = 0; i < limit; i += 1) {
+    const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: `${agentName}-input` });
+    if (!claimed) break;
+    claims.push(claimed);
+  }
+  if (!claims.length) {
+    const depth = await queueDepth(worldRoot);
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      queueDepth: depth.total
+    };
+  }
+  const startMs = Date.now();
+  const workerCount = Math.max(1, Math.trunc(Number(concurrency) || 2));
+  let cursor = 0;
+  const totals = {
+    received: 0,
+    handled: 0,
+    sent: 0,
+    skippedDedup: 0,
+    skippedSelf: 0,
+    skippedMention: 0
+  };
+  const processClaim = async (claim) => {
+    const queuedEvent = eventFromQueueSentence(claim?.envelope?.payloadSentence);
+    const event = normalizeEvent(queuedEvent, channelType);
+    const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));
+    if (!event) {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount,
+        maxRetries: 0,
+        requeuePhase: "input"
+      });
+      return;
+    }
+    try {
+      const dispatchResult = await dispatchChannelEvents({
+        events: [event],
+        channelType,
+        channelConfig,
+        agentName,
+        adapter,
+        interpretFn,
+        routerInterpretFn,
+        agentHouse,
+        worldRoot,
+        dedupIds,
+        dedupState,
+        selfEventIds,
+        selfState,
+        dedupLimit,
+        debug: channelConfig?.debug === true,
+        outputMode: "queue"
+      });
+      totals.received += Number(dispatchResult?.received ?? 0);
+      totals.handled += Number(dispatchResult?.handled ?? 0);
+      totals.sent += Number(dispatchResult?.sent ?? 0);
+      totals.skippedDedup += Number(dispatchResult?.skippedDedup ?? 0);
+      totals.skippedSelf += Number(dispatchResult?.skippedSelf ?? 0);
+      totals.skippedMention += Number(dispatchResult?.skippedMention ?? 0);
+      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+    } catch {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount: retryCount + 1,
+        maxRetries: 2,
+        requeuePhase: "input"
+      });
+    }
+  };
+  const workers = Array.from({ length: Math.min(workerCount, claims.length) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= claims.length) return;
+      await processClaim(claims[index]);
+    }
+  });
+  await Promise.all(workers);
+  await writeChannelRuntimeState({
+    agentHouse,
+    channelType,
+    checkpoint,
+    dedupOrder: dedupState.order,
+    selfOrder: selfState.order,
+    removeLegacy: true
+  });
+  const depth = await queueDepth(worldRoot);
+  const durationMs = Date.now() - startMs;
+  await appendTelemetry(agentHouse, {
+    timestamp: nowIso(),
+    channelType,
+    event: "input_dispatch",
+    durationMs,
+    ...totals,
+    queueDepth: depth.total
+  }, { channelType, agentName });
+  return {
+    ...totals,
+    durationMs,
+    queueDepth: depth.total
+  };
+}
+
+export async function runChannelProduceOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter,
+  agentHouse,
+  dedupLimit = 2000,
+  maxItems = 10
+}) {
+  if (!agentName) throw new Error("runChannelProduceOnce requires agentName");
+  if (!channelType) throw new Error("runChannelProduceOnce requires channelType");
+  if (!adapter) throw new Error("runChannelProduceOnce requires adapter");
+  if (!agentHouse) throw new Error("runChannelProduceOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+  const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+    ? runtimeState.checkpoint
+    : {};
+  const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+  const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+  const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  let sent = 0;
+  let failed = 0;
+  const startMs = Date.now();
+
+  for (let i = 0; i < limit; i += 1) {
+    const claim = await claimOldestProduceEnvelope(worldRoot, { workerTag: `${agentName}-produce` });
+    if (!claim) break;
+    const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));
+    const payloadSentence = claim?.envelope?.payloadSentence ?? {};
+    const roomId = parseChannelIdFromEndpoint(payloadSentence?.to?.name);
+    const sourceAgent = parseAgentNameFromEndpoint(payloadSentence?.from?.name) || agentName;
+    const content = String(payloadSentence?.ob?.text ?? "").trim();
+    if (!roomId || !content) {
+      failed += 1;
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount,
+        maxRetries: 0,
+        requeuePhase: "produce"
+      });
+      continue;
+    }
+    try {
+      const sendResult = await adapter.send({
+        config: channelConfig,
+        event: { channelType, channelId: roomId },
+        content
+      });
+      if (sendResult?.eventId) {
+        selfState.order.push(sendResult.eventId);
+        while (selfState.order.length > dedupLimit) selfState.order.shift();
+      }
+      sent += 1;
+      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "produce_sent",
+        sourceAgent,
+        roomId,
+        eventId: sendResult?.eventId ?? ""
+      }, { channelType, agentName });
+    } catch {
+      failed += 1;
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount: retryCount + 1,
+        maxRetries: 2,
+        requeuePhase: "produce"
+      });
+    }
+  }
+
+  await writeChannelRuntimeState({
+    agentHouse,
+    channelType,
+    checkpoint,
+    dedupOrder: dedupState.order,
+    selfOrder: selfState.order,
+    removeLegacy: true
+  });
+  const depth = await queueDepth(worldRoot);
+  const durationMs = Date.now() - startMs;
+  await appendTelemetry(agentHouse, {
+    timestamp: nowIso(),
+    channelType,
+    event: "produce_dispatch",
+    durationMs,
+    sent,
+    failed,
+    queueDepth: depth.total
+  }, { channelType, agentName });
+  return {
+    received: sent + failed,
+    handled: sent,
+    sent,
+    failed,
+    durationMs,
+    queueDepth: depth.total
   };
 }
 

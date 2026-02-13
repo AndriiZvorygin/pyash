@@ -121,7 +121,7 @@ test("load schedule policy ignores conduct/schedule.pya without conduct/calendar
   assert.equal(jobs.length, 0);
 });
 
-test("scheduler skips overlapping ticks and records telemetry", async () => {
+test("scheduler coalesces overlapping ticks into one pending catch-up run", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-"));
   const telemetryPath = path.join(root, "scheduler.pya");
   let release;
@@ -152,7 +152,7 @@ test("scheduler skips overlapping ticks and records telemetry", async () => {
 
   const snap = scheduler.snapshot();
   assert.equal(snap.length, 1);
-  assert.equal(snap[0]?.runs, 1);
+  assert.equal(snap[0]?.runs, 2);
   assert.equal(snap[0]?.skips, 1);
   assert.equal(typeof snap[0]?.overlapPct, "number");
   assert.equal(snap[0]?.errorCount, 0);

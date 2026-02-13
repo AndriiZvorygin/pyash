@@ -366,6 +366,10 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   assert.match(worldCalendarText, /su name matrix long poll ms ob text "10000" be calendar ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
   assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during second 10 be calendar ya/);
+  assert.match(calendarText, /managed by pyash configure channel input schedule:start/);
+  assert.match(calendarText, /su name channel input for name parity coder with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.match(calendarText, /managed by pyash configure channel produce schedule:start/);
+  assert.match(calendarText, /su name channel produce for name parity coder with ve text "matrix" vyah habit during second 1 be calendar ya/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);

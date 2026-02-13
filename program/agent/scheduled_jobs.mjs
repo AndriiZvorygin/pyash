@@ -10,7 +10,12 @@ import { splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "./session.mjs";
 import { loadServiceDefinition, resolveServiceModulePath } from "./service_definition.mjs";
 import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
-import { runChannelOnce } from "./channels/index.mjs";
+import {
+  runChannelOnce,
+  runChannelPollOnce,
+  runChannelInputOnce,
+  runChannelProduceOnce
+} from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
 import {
   resolveMatrixConfigWithMap,
@@ -73,7 +78,7 @@ export function mergeMatrixDmRooms(args = {}) {
 
 function parseChannelPollJob(jobName) {
   const text = String(jobName ?? "").trim().toLowerCase();
-  const match = text.match(/^([a-z0-9_-]+)\s+(poll|probe|input)$/);
+  const match = text.match(/^([a-z0-9_-]+)\s+(poll|probe|input|produce)$/);
   if (!match) return null;
   const source = match[1];
   const kind = match[2];
@@ -157,7 +162,7 @@ async function runChannelPollJob({ worldRoot, job }) {
     if (channelMode === "appservice-push" && channelConfig.warmStart == null) {
       channelConfig = { ...channelConfig, warmStart: true };
     }
-    if (channelMode === "appservice-push" && parsed.kind !== "input") {
+    if (channelMode === "appservice-push" && (parsed.kind === "poll" || parsed.kind === "probe")) {
       channelStatus.push(`${channelType}:skipped=push_mode`);
       continue;
     }
@@ -197,15 +202,49 @@ async function runChannelPollJob({ worldRoot, job }) {
     let activeMode = channelMode;
     let fallbackActive = false;
     let fallbackReason = "";
-    try {
-      result = await runChannelOnce({
+    const runChannelPhase = async (configToRun) => {
+      if (parsed.kind === "poll" || parsed.kind === "probe") {
+        return runChannelPollOnce({
+          agentName: job.agentName,
+          channelType,
+          channelConfig: configToRun,
+          adapter,
+          agentHouse
+        });
+      }
+      if (parsed.kind === "input") {
+        return runChannelInputOnce({
+          agentName: job.agentName,
+          channelType,
+          channelConfig: configToRun,
+          adapter,
+          interpretFn: interpret,
+          agentHouse,
+          maxItems: 10,
+          concurrency: 2
+        });
+      }
+      if (parsed.kind === "produce") {
+        return runChannelProduceOnce({
+          agentName: job.agentName,
+          channelType,
+          channelConfig: configToRun,
+          adapter,
+          agentHouse,
+          maxItems: 10
+        });
+      }
+      return runChannelOnce({
         agentName: job.agentName,
         channelType,
-        channelConfig,
+        channelConfig: configToRun,
         adapter,
         interpretFn: interpret,
         agentHouse
       });
+    };
+    try {
+      result = await runChannelPhase(channelConfig);
     } catch (err) {
       if (channelMode === "appservice-push") {
         const configuredFallbackMode = normalizeChannelMode(
@@ -214,14 +253,7 @@ async function runChannelPollJob({ worldRoot, job }) {
         if (configuredFallbackMode && configuredFallbackMode !== channelMode) {
           const fallbackConfig = { ...channelConfig, mode: configuredFallbackMode };
           try {
-            result = await runChannelOnce({
-              agentName: job.agentName,
-              channelType,
-              channelConfig: fallbackConfig,
-              adapter,
-              interpretFn: interpret,
-              agentHouse
-            });
+            result = await runChannelPhase(fallbackConfig);
             activeMode = configuredFallbackMode;
             fallbackActive = true;
             fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
