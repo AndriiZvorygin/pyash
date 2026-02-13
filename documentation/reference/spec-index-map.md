@@ -17,7 +17,7 @@ Use this when the cheat sheet is not enough.
 - **Refinery / re-entry** → `10-pipelines.md`
 - **Translation** → `11-translation.md`
 - **Module system + runner contract** → `11-modules.md`
-- **Web search** → `12-web-search.md`
+- **Web search** → `12-web-and-browser.md`
 
 ## If you see errors about…
 
@@ -36,4 +36,4 @@ Use this when the cheat sheet is not enough.
 ## If you are doing IO or web…
 
 - **Download + read text/markdown** → `07-io-and-scripts.md`
-- **Web search** → `12-web-search.md`
+- **Web search** → `12-web-and-browser.md`

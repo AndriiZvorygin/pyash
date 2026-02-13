@@ -8,10 +8,10 @@ test("vyah emits modifiers in official order", () => {
     mood: "do",
     be: "hear",
     ob: { name: "mic" },
-    vyah: { ve: { type: "name", values: ["sloh", "past", "cancel", "satisfied"] } }
+    vyah: { ve: { type: "name", values: ["success", "past", "cancel", "satisfied"] } }
   };
   const text = sentenceToPyash(sentence);
-  assert.match(text, /vyah cancel past sloh satisfied/);
+  assert.match(text, /vyah cancel past success satisfied/);
 });
 
 test("vyah emits canonical habit for cron alias", () => {

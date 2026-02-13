@@ -10,25 +10,25 @@ async function run(line) {
   return interpret(sentence);
 }
 
-test("cancel updates duty state and returns sloh", async () => {
+test("cancel updates duty state and returns success", async () => {
   forget();
   await run("exists su name L7 as name running be duty ya");
 
   const res = await run("su name L7 be hear vyah cancel do");
   assert.equal(res?.be, "hear");
-  assert.deepEqual(res?.vyah?.ve?.values, ["cancel", "sloh"]);
+  assert.deepEqual(res?.vyah?.ve?.values, ["cancel", "success"]);
 
   const duty = remember("L7");
   assert.equal(duty?.as?.name, "abandoned");
 });
 
-test("finish updates stream state and returns sloh", async () => {
+test("finish updates stream state and returns success", async () => {
   forget();
   await run("exists su name S3 as name open ob ve text he llo be stream ya");
 
   const res = await run("su name S3 be hear vyah finish do");
   assert.equal(res?.be, "hear");
-  assert.deepEqual(res?.vyah?.ve?.values, ["finish", "sloh"]);
+  assert.deepEqual(res?.vyah?.ve?.values, ["finish", "success"]);
 
   const stream = remember("S3");
   assert.equal(stream?.as?.name, "done");
@@ -40,5 +40,5 @@ test("await succeeds only when duty is done", async () => {
 
   const res = await run("su name L9 be hear vyah await do");
   assert.equal(res?.be, "hear");
-  assert.deepEqual(res?.vyah?.ve?.values, ["await", "sloh"]);
+  assert.deepEqual(res?.vyah?.ve?.values, ["await", "success"]);
 });

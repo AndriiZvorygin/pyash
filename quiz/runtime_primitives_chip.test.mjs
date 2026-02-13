@@ -18,7 +18,7 @@ test("chip pulls stream items and includes toindex", async () => {
   assert.equal(first?.be, "chip");
   assert.equal(first?.atindex?.num, 0);
   assert.equal(first?.toindex?.num, 1);
-  assert.deepEqual(first?.vyah?.ve?.values, ["eval", "sloh"]);
+  assert.deepEqual(first?.vyah?.ve?.values, ["eval", "success"]);
 
   const second = await run("su name S3 vyah eval be chip do");
   assert.equal(second?.atindex?.num, 1);
