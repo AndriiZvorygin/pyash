@@ -133,6 +133,7 @@ async function maybeSeedIdentity(identityDir) {
 async function maybeSeedConduct(conductDir) {
   const calendarPath = path.join(conductDir, "calendar.pya");
   const channelsPath = path.join(conductDir, "channels.pya");
+  const importPath = path.join(conductDir, "import.pya");
   try {
     await fs.access(calendarPath);
   } catch (err) {
@@ -148,6 +149,23 @@ async function maybeSeedConduct(conductDir) {
   } catch (err) {
     if (err?.code !== "ENOENT") throw err;
     await fs.writeFile(channelsPath, "", "utf8");
+  }
+  try {
+    await fs.access(importPath);
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+    const seed = [
+      "su name import be map def",
+      '  su name default do ob text "" ya',
+      '  su name photograph do ob text "" ya',
+      '  su name documentation do ob text "" ya',
+      '  su name audio do ob text "" ya',
+      '  su name text do ob text "" ya',
+      '  su name file do ob text "" ya',
+      '  su name no legend photograph do ob text "" ya',
+      "prah"
+    ].join("\n") + "\n";
+    await fs.writeFile(importPath, seed, "utf8");
   }
 }
 
@@ -249,7 +267,7 @@ export async function updateSessionSummary({
     "",
     "New turn:",
     `USER: ${callPrompt ?? ""}`,
-    `ASSISTANT: ${responseText ?? ""}`
+    `AGENT: ${responseText ?? ""}`
   ].join("\n");
   const requestPayload = {
     mode: "chat",

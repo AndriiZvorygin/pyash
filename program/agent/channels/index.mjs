@@ -7,6 +7,7 @@ import { mind_to_name_text } from "../../verbs/mind/mind.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
+import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
 import {
   readChannelRuntimeState,
   writeChannelRuntimeState
@@ -220,10 +221,10 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence, too
   return "";
 }
 
-function buildPrompt(event, { payloadId } = {}) {
+function buildPrompt(event, { payloadId, importPolicy } = {}) {
   const header = `[channel ${event.channelType} channelId ${event.channelId} sender ${event.sender} eventId ${event.eventId}]`;
-  const attachmentTask = buildAttachmentAutoTaskBlock(event);
-  const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved);
+  const attachmentTask = buildAttachmentAutoTaskBlock(event, importPolicy);
+  const attachmentBlock = buildAttachmentPromptBlock(event?.attachmentsSaved, importPolicy);
   const attachmentErrorBlock = buildAttachmentErrorPromptBlock(event?.attachmentErrors);
   const bodyText = String(event?.text ?? "");
   const combinedBody = [attachmentTask, bodyText].filter(Boolean).join("\n\n");
@@ -243,10 +244,33 @@ function dateStampFromIso(isoText) {
   return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-function buildAttachmentPromptBlock(attachmentsSaved) {
+function classifyAttachmentKind(entry) {
+  if (isImageAttachment(entry)) return "image";
+  const mime = String(entry?.mimeType ?? "").toLowerCase().trim();
+  const filePath = String(entry?.path ?? "").toLowerCase();
+  if (mime === "application/pdf" || filePath.endsWith(".pdf")) return "pdf";
+  if (mime.startsWith("audio/")) return "audio";
+  if (
+    mime.startsWith("text/")
+    || /\.((txt|md|csv|json|yaml|yml|log))$/.test(filePath)
+  ) return "text";
+  return "file";
+}
+
+function importActionForKind(kind, importPolicy = {}) {
+  const policy = importPolicy ?? {};
+  if (kind === "image") return String(policy.imageAction || policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "pdf") return String(policy.pdfAction || policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "audio") return String(policy.audioAction || policy.fileAction || policy.defaultAction || "").trim();
+  if (kind === "text") return String(policy.textAction || policy.fileAction || policy.defaultAction || "").trim();
+  return String(policy.fileAction || policy.defaultAction || "").trim();
+}
+
+function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}) {
   const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
   if (!files.length) return "";
   const lines = ["", "", "[channel files saved]"];
+  const importSteps = [];
   for (const entry of files) {
     const filePath = String(entry?.path ?? "").trim();
     if (!filePath) continue;
@@ -257,9 +281,17 @@ function buildAttachmentPromptBlock(attachmentsSaved) {
       Number.isFinite(size) ? `bytes=${Math.trunc(size)}` : ""
     ].filter(Boolean).join(" ");
     lines.push(meta ? `- ${filePath} (${meta})` : `- ${filePath}`);
+    const kind = classifyAttachmentKind(entry);
+    const action = importActionForKind(kind, importPolicy);
+    if (action) {
+      importSteps.push(`- ${filePath}: do ${action}`);
+    }
+  }
+  if (importSteps.length) {
+    lines.push("[import do]");
+    lines.push(...importSteps);
   }
   lines.push("[tools for files]");
-  lines.push("- image handling: if your model already has image capability, analyze attached images directly first; use be see only as fallback");
   lines.push("- be read from filename <path> ... : extract text from docs/audio/image via read auto");
   lines.push("- be see from filename <image> ... : ask a vision-capable mind directly");
   lines.push("- be command ... : inspect/process files");
@@ -267,7 +299,7 @@ function buildAttachmentPromptBlock(attachmentsSaved) {
   return lines.join("\n");
 }
 
-function buildAttachmentAutoTaskBlock(event) {
+function buildAttachmentAutoTaskBlock(event, importPolicy = {}) {
   const saved = Array.isArray(event?.attachmentsSaved) ? event.attachmentsSaved : [];
   if (!saved.length) return "";
   const images = saved.filter((entry) => isImageAttachment(entry));
@@ -276,6 +308,14 @@ function buildAttachmentAutoTaskBlock(event) {
   const imageNames = new Set(images.map((entry) => String(entry?.filename ?? path.basename(String(entry?.path ?? ""))).trim().toLowerCase()).filter(Boolean));
   const isLikelyNoCaption = !text || imageNames.has(text.toLowerCase());
   if (!isLikelyNoCaption) return "";
+  const noCaptionAction = String(importPolicy?.noCaptionImageAction || importPolicy?.imageAction || "").trim();
+  if (noCaptionAction) {
+    return [
+      "[channel auto task]",
+      "Image upload detected without caption.",
+      `For agent, do ${noCaptionAction} using the saved image path.`
+    ].join("\n");
+  }
   return [
     "[channel auto task]",
     "Image upload detected without caption.",
@@ -490,6 +530,17 @@ async function dispatchChannelEvents({
   const mentionGate = channelConfig?.mentionGate === true;
   const selfSenders = selfSenderCandidates({ channelConfig, agentName });
   const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const importPolicyByAgent = new Map();
+
+  const loadImportPolicyForAgent = async (targetAgent) => {
+    const key = String(targetAgent ?? "").trim();
+    if (!key) return {};
+    if (importPolicyByAgent.has(key)) return importPolicyByAgent.get(key);
+    const targetAgentHouse = path.join(worldRoot, "house", key);
+    const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse: targetAgentHouse });
+    importPolicyByAgent.set(key, policy);
+    return policy;
+  };
 
   for (const event of events) {
     received += 1;
@@ -618,13 +669,15 @@ async function dispatchChannelEvents({
         fallbackAgentName: listener,
         fallbackSessionName
       });
+      const targetAgent = orchestratorDirective.agentName || listener;
+      const importPolicy = await loadImportPolicyForAgent(targetAgent);
       const routedEvent = {
         ...event,
         text: orchestratorDirective.payloadText || event.text
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
-        const targetDir = path.join(worldRoot, "house", orchestratorDirective.agentName || listener, "artifacts", dayStamp);
+        const targetDir = path.join(worldRoot, "house", targetAgent, "artifacts", dayStamp);
         try {
           routedEvent.attachmentsSaved = await adapter.downloadAttachments({
             config: channelConfig,
@@ -644,18 +697,19 @@ async function dispatchChannelEvents({
             eventId: event.eventId,
             sender: event.sender,
             channelId: event.channelId,
-            listener: orchestratorDirective.agentName || listener,
+            listener: targetAgent,
             error: String(err?.stack ?? err?.message ?? err)
           }, { channelType, agentName });
         }
       }
       const sentence = buildChannelMindSentence({
-        agentName: orchestratorDirective.agentName || listener,
+        agentName: targetAgent,
         event: routedEvent,
+        importPolicy,
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
         payloadId: orchestratorDirective.payloadId,
-        agentCwd: path.join(worldRoot, "house", orchestratorDirective.agentName || listener)
+        agentCwd: path.join(worldRoot, "house", targetAgent)
       });
       handled += 1;
       let responseText = "";
@@ -710,7 +764,7 @@ async function dispatchChannelEvents({
               eventId: event.eventId,
               sender: event.sender,
               channelId: event.channelId,
-              listener: orchestratorDirective.agentName || listener,
+              listener: targetAgent,
               payloadId: orchestratorDirective.payloadId,
               error: String(err?.stack ?? err?.message ?? err)
             }, { channelType, agentName });
@@ -733,7 +787,7 @@ async function dispatchChannelEvents({
           listenerAgents,
           targetedByMention,
           listenersToRun,
-          listener: orchestratorDirective.agentName || listener,
+          listener: targetAgent,
           payloadId: orchestratorDirective.payloadId,
           replied: Boolean(responseText),
           repliedToSelf
@@ -745,7 +799,7 @@ async function dispatchChannelEvents({
         routerInterpretFn,
         channelType,
         event,
-        sourceAgentName: orchestratorDirective.agentName || listener,
+        sourceAgentName: targetAgent,
         payloadId: orchestratorDirective.payloadId,
         responseText
       });
@@ -765,6 +819,7 @@ async function dispatchChannelEvents({
 export function buildChannelMindSentence({
   agentName,
   event,
+  importPolicy = {},
   channelConfig,
   sessionName,
   payloadId,
@@ -775,7 +830,7 @@ export function buildChannelMindSentence({
   const sentence = {
     mood: "do",
     be: "write",
-    ob: { text: buildPrompt(event, { payloadId }) },
+    ob: { text: buildPrompt(event, { payloadId, importPolicy }) },
     for: { name: agentName },
     to: { name: outputName(event.channelType) },
     with: { wo: "tools" },
