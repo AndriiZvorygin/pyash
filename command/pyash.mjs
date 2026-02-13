@@ -99,7 +99,7 @@ function usage() {
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--public-tag-answer <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
@@ -839,7 +839,7 @@ async function loadMatrixPolicyConfig({ rootDir, agentName = DEFAULT_CHANNEL_AGE
       matrixCalendar.longPollMs ?? matrix.longPollMs ?? "",
       DEFAULT_MATRIX_LONG_POLL_MS
     ),
-    mentionGate: matrix.mentionGate === true,
+    publicTagAnswer: matrix.publicTagAnswer === true,
     executiveUsername: executives[0] || "",
     executiveUsernames: executives,
     hasPolicy: Boolean(allChannels?.matrix),
@@ -860,7 +860,7 @@ async function loadMatrixConfigureDefaults({ rootDir, agentName = DEFAULT_CHANNE
     room: policy.room || secret.legacyRoom || "",
     mode: policy.hasPolicy ? policy.mode : legacyMode,
     longPollMs: (policy.hasPolicy || policy.hasCalendarLongPoll) ? policy.longPollMs : legacyLongPollMs,
-    mentionGate: policy.mentionGate === true,
+    publicTagAnswer: policy.publicTagAnswer === true,
     executiveUsername: policy.executiveUsername || "",
     executiveUsernames: policy.executiveUsernames || [],
     hasCalendarLongPoll: policy.hasCalendarLongPoll === true,
@@ -979,7 +979,7 @@ function buildChannelConfigureBlock() {
 function buildChannelConductBlock({
   room,
   executiveUsernames = [],
-  mentionGate = false,
+  publicTagAnswer = true,
   toolSummary = false,
   dmToolSummary = true,
   mode = DEFAULT_MATRIX_CHANNEL_MODE,
@@ -988,7 +988,7 @@ function buildChannelConductBlock({
   const normalizedMode = normalizeMatrixMode(mode, DEFAULT_MATRIX_CHANNEL_MODE);
   return [
     "su name matrix channel ob bool truth ya",
-    `su name matrix mention gate ob bool ${mentionGate ? "truth" : "lie"} ya`,
+    `su name matrix public tag answer ob bool ${publicTagAnswer ? "truth" : "lie"} ya`,
     `su name matrix tool summary ob bool ${toolSummary ? "truth" : "lie"} ya`,
     `su name matrix dm tool summary ob bool ${dmToolSummary ? "truth" : "lie"} ya`,
     `su name matrix mode ob text ${quoteText(normalizedMode)} ya`,
@@ -1772,7 +1772,7 @@ function collectMatrixFromFlags({ args, prior }) {
   ).trim();
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
-  const mentionGate = parseTruthy(parseArgValue(args, "--mention-gate"), prior.mentionGate === true);
+  const publicTagAnswer = parseTruthy(parseArgValue(args, "--public-tag-answer"), prior.publicTagAnswer !== false);
 
   return {
     homeserver,
@@ -1790,7 +1790,7 @@ function collectMatrixFromFlags({ args, prior }) {
     appserviceRegistration,
     agentName,
     writeAgentPolicy,
-    mentionGate
+    publicTagAnswer
   };
 }
 
@@ -2124,7 +2124,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
 
     let executiveUsername = ensureMatrixUserServer(prior.executiveUsername || "", host);
     let writeAgentPolicy = true;
-    let mentionGate = prior.mentionGate === true;
+    let publicTagAnswer = prior.publicTagAnswer !== false;
 
     printer.header("D.1 Executive Test");
     printer.why("Optional executive user can receive a DM greeting test.");
@@ -2187,7 +2187,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       appserviceRegistration,
       writeAgentPolicy,
       agentName,
-      mentionGate,
+      publicTagAnswer,
       configureMode: quickstart ? "quickstart" : "advanced"
     };
   } finally {
@@ -2279,7 +2279,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     content: buildChannelConductBlock({
       room: cfg.room,
       executiveUsernames: Array.isArray(cfg.executiveUsernames) ? cfg.executiveUsernames : [],
-      mentionGate: cfg.mentionGate,
+      publicTagAnswer: cfg.publicTagAnswer,
       mode: cfg.mode
     })
   });

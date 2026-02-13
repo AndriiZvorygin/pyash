@@ -46,7 +46,7 @@ function ensureChannel(channels, channelType) {
       registrationSharedSecret: null,
       adminToken: null,
       debug: undefined,
-      mentionGate: undefined,
+      publicTagAnswer: undefined,
       toolSummary: undefined,
       dmToolSummary: undefined,
       rooms: [],
@@ -164,9 +164,9 @@ export function parseChannelPolicyText(text) {
       cfg.defaultLane = readTextValue(sentence) ?? cfg.defaultLane;
       continue;
     }
-    if (action === "mention gate") {
+    if (action === "public tag answer") {
       const enabled = readBoolValue(sentence);
-      if (enabled != null) cfg.mentionGate = enabled;
+      if (enabled != null) cfg.publicTagAnswer = enabled;
       continue;
     }
     if (action === "debug") {
@@ -273,7 +273,7 @@ function mergeChannelEntry(base = {}, override = {}) {
     adminToken: override.adminToken ?? base.adminToken ?? null,
     executiveUsernames: Array.from(new Set([...(base.executiveUsernames ?? []), ...(override.executiveUsernames ?? [])])),
     defaultLane: override.defaultLane ?? base.defaultLane ?? null,
-    mentionGate: override.mentionGate ?? base.mentionGate ?? false,
+    publicTagAnswer: override.publicTagAnswer ?? base.publicTagAnswer ?? false,
     debug: override.debug ?? base.debug ?? false,
     toolSummary: override.toolSummary ?? base.toolSummary ?? false,
     dmToolSummary: override.dmToolSummary ?? base.dmToolSummary ?? false,

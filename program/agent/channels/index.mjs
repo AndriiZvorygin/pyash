@@ -558,7 +558,7 @@ async function dispatchChannelEvents({
   let skippedMention = 0;
   let sent = 0;
   const dmRooms = new Set(Array.isArray(channelConfig?.dmRooms) ? channelConfig.dmRooms : []);
-  const mentionGate = channelConfig?.mentionGate === true;
+  const publicTagAnswer = channelConfig?.publicTagAnswer === true;
   const selfSenders = selfSenderCandidates({ channelConfig, agentName });
   const worldRoot = worldRootFromAgentHouse(agentHouse);
   const importPolicyByAgent = new Map();
@@ -586,7 +586,7 @@ async function dispatchChannelEvents({
       (event.inReplyToEventId && selfEventIds.has(event.inReplyToEventId))
       || (event.threadId && selfEventIds.has(event.threadId))
     );
-    const listenersToRun = mentionGate && !eventIsDmRoom
+    const listenersToRun = publicTagAnswer && !eventIsDmRoom
       ? (repliedToSelf ? listenerAgents : targetedByMention)
       : (targetedByMention.length ? targetedByMention : listenerAgents);
 
@@ -694,7 +694,7 @@ async function dispatchChannelEvents({
           listenerAgents,
           targetedByMention,
           listenersToRun,
-          mentionGate,
+          publicTagAnswer,
           dmRoom: eventIsDmRoom,
           repliedToSelf
         }, { channelType, agentName });
@@ -715,7 +715,7 @@ async function dispatchChannelEvents({
         listenerAgents,
         targetedByMention,
         listenersToRun,
-        mentionGate,
+        publicTagAnswer,
         dmRoom: eventIsDmRoom,
         repliedToSelf
       }, { channelType, agentName });

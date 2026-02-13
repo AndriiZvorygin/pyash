@@ -380,7 +380,7 @@ maybeTest("configure channel matrix scrubs legacy matrix seed lines from agent p
   await fs.mkdir(path.dirname(channelPath), { recursive: true });
   await fs.writeFile(channelPath, [
     "su name matrix channel ob bool truth ya",
-    "su name matrix mention gate ob bool lie ya",
+    "su name matrix public tag answer ob bool lie ya",
     "su name matrix homeserver ob text \"https://matrix.example.org\" ya",
     "su name matrix room ob text \"!roomid:example.org\" ya",
     "su name matrix room lane ob text \"matrix_main\" ya"
@@ -796,7 +796,7 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.match(policyText, /su name builder directory license be map def/);
   assert.match(policyText, /su name "world\/house\/builder" ob ve text "read" "write" "command" ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
-  assert.doesNotMatch(channelsText, /su name matrix mention gate ob bool/);
+  assert.doesNotMatch(channelsText, /su name matrix public tag answer ob bool/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
   assert.match(calendarText, /su name channel poll/);
 
@@ -843,7 +843,7 @@ maybeTest("configure agent bind-channel writes per-agent matrix user when shared
 
   const channelsPath = path.join(root, "world", "house", "accountant", "conduct", "channels.pya");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  assert.doesNotMatch(channelsText, /su name matrix mention gate ob bool/);
+  assert.doesNotMatch(channelsText, /su name matrix public tag answer ob bool/);
   assert.match(channelsText, /su name matrix user ob text "@accountant:matrix\.liberit\.ca" ya/);
 });
 

@@ -385,7 +385,7 @@ async function main() {
         "--room", smokePublicRoomId,
         "--agent-user-id", agentUserId,
         "--executive", executiveUserId,
-        "--mention-gate", "truth",
+        "--public-tag-answer", "truth",
         "--write-agent-policy", "truth",
         "--test-now", "truth",
         "--start-now", "lie"
@@ -619,7 +619,7 @@ async function main() {
           "--room", originalRoom,
           "--agent-user-id", agentUserId,
           "--executive", executiveUserId,
-          "--mention-gate", "truth",
+          "--public-tag-answer", "truth",
           "--write-agent-policy", "truth",
           "--test-now", "truth",
           "--start-now", "lie"

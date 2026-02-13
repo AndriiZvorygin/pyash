@@ -53,7 +53,7 @@ test("scheduler and channel run reliably across repeated poll cycles without fix
       channelType: "matrix",
       channelConfig: {
         user: "@channel-postmaster:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         listeners: ["confederation-priest", "agent-helper"],
         roomListeners: {},
         dmRooms: []
