@@ -52,7 +52,7 @@ test("channel run routes input through router, executes orchestrator+saddle path
       channelType: "matrix",
       channelConfig: {
         user: "@pyash-agent:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         roomLanes: { "!pyash:server": "matrix_main" }
       },
       adapter,
@@ -114,7 +114,7 @@ test("channel run emits mind defective fallback instead of failing tick", async 
     channelType: "matrix",
     channelConfig: {
       user: "@pyash-agent:server",
-      mentionGate: false
+      publicTagAnswer: false
     },
     adapter,
     interpretFn: async () => {

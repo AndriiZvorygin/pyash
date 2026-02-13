@@ -56,7 +56,7 @@ test("channel runtime routes to session lane and deduplicates by event id", asyn
 
   const channelConfig = {
     user: "@self:server",
-    mentionGate: false,
+    publicTagAnswer: false,
     roomLanes: { "!room:server": "matrix_main" },
     defaultLane: null
   };
@@ -121,7 +121,7 @@ test("channel runtime lock prevents duplicate handling across concurrent polls",
 
   const channelConfig = {
     user: "@self:server",
-    mentionGate: false,
+    publicTagAnswer: false,
     roomLanes: {}
   };
 
@@ -193,7 +193,7 @@ test("channel runtime marks matrix events seen before response generation", asyn
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -240,7 +240,7 @@ test("channel runtime clears stale lock when lock owner pid is not alive", async
   const result = await runChannelOnce({
     agentName: "helper",
     channelType: "matrix",
-    channelConfig: { user: "@self:server", mentionGate: false, roomLanes: {} },
+    channelConfig: { user: "@self:server", publicTagAnswer: false, roomLanes: {} },
     adapter,
     interpretFn: async () => ({ ob: { text: "reply" } }),
     agentHouse
@@ -251,7 +251,7 @@ test("channel runtime clears stale lock when lock owner pid is not alive", async
   assert.equal(sends, 1);
 });
 
-test("channel runtime mention gate skips non-mentions in public rooms and allows DM", async () => {
+test("channel runtime public tag answer skips non-mentions in public rooms and allows DM", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
@@ -283,7 +283,7 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: ["!dm:server"],
       roomLanes: {}
     },
@@ -296,7 +296,7 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
   assert.equal(result.skippedMention, 1);
 });
 
-test("channel runtime mention gate allows direct-room events without configured dmRooms", async () => {
+test("channel runtime public tag answer allows direct-room events without configured dmRooms", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-direct-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
@@ -327,7 +327,7 @@ test("channel runtime mention gate allows direct-room events without configured 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: [],
       roomLanes: {}
     },
@@ -376,7 +376,7 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       warmStart: true,
       roomLanes: {}
     },
@@ -393,7 +393,7 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       warmStart: true,
       roomLanes: {}
     },
@@ -439,7 +439,7 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -522,7 +522,7 @@ test("channel runtime stores channel attachments and includes file hints in prom
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -598,7 +598,7 @@ test("channel runtime omits attachment tool hints when import conduct has none",
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -675,7 +675,7 @@ test("channel runtime injects auto image task for upload-only events", async () 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -752,7 +752,7 @@ test("channel runtime uses import conduct actions for image attachments", async 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -810,7 +810,7 @@ test("channel runtime surfaces attachment download defects into prompt context",
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -853,7 +853,7 @@ test("channel runtime sends configure-mind fallback when mind answer is empty an
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -898,7 +898,7 @@ test("channel runtime fans out to configured listeners and routes mention to nam
     channelType: "matrix",
     channelConfig: {
       user: "@channel-postmaster:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       listeners: ["confederation-priest", "agent-helper"],
       roomListeners: {},
       dmRooms: []
@@ -948,7 +948,7 @@ test("channel runtime pins listeners to self when self is in configured listener
     channelType: "matrix",
     channelConfig: {
       user: "@mricge:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       listeners: ["mricge", "accountant"],
       roomListeners: {},
       dmRooms: []
@@ -1007,7 +1007,7 @@ test("channel runtime shared fanout dispatches one event to multiple listeners i
     channelType: "matrix",
     channelConfig: {
       user: "@channel-postmaster:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       listeners: ["confederation-priest", "agent-helper"],
       roomListeners: {},
       dmRooms: []
@@ -1114,7 +1114,7 @@ test("channel runtime appends DM tool call and summary block when enabled", asyn
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1201,7 +1201,7 @@ test("channel runtime see tool summary uses ceremony return instead of stale res
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1270,7 +1270,7 @@ test("channel runtime emits tool call none when tool-expected prompt returns no 
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1316,7 +1316,7 @@ test("channel debug mode logs per-event routing decisions", async () => {
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       debug: true,
       dmRooms: [],
       roomLanes: {}
@@ -1334,7 +1334,7 @@ test("channel debug mode logs per-event routing decisions", async () => {
   assert.match(text, /decision\\\":\\\"mention_skip\\\"/);
 });
 
-test("channel mention gate allows replies to self messages without explicit mention", async () => {
+test("channel public tag answer allows replies to self messages without explicit mention", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-reply-self-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
@@ -1373,7 +1373,7 @@ test("channel mention gate allows replies to self messages without explicit ment
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1422,7 +1422,7 @@ test("channel runtime skips agent canonical sender when configured user differs"
     channelConfig: {
       user: "@agentbot:matrix.liberit.ca",
       homeserver: "https://matrix.liberit.ca",
-      mentionGate: false,
+      publicTagAnswer: false,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1475,7 +1475,7 @@ test("channel mention matching uses token boundaries and avoids substring false 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1560,7 +1560,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     const denyResult = await runChannelOnce({
       agentName,
       channelType: "matrix",
-      channelConfig: { user: "@helper:server", mentionGate: false },
+      channelConfig: { user: "@helper:server", publicTagAnswer: false },
       adapter: denyAdapter,
       interpretFn: async (sentence) => {
         const patched = {
@@ -1602,7 +1602,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     const allowResult = await runChannelOnce({
       agentName,
       channelType: "matrix",
-      channelConfig: { user: "@helper:server", mentionGate: false },
+      channelConfig: { user: "@helper:server", publicTagAnswer: false },
       adapter: allowAdapter,
       interpretFn: async (sentence) => {
         const patched = {
@@ -1663,7 +1663,7 @@ test("channel runtime migrates legacy json state into managed .pya state", async
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
