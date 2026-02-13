@@ -5,6 +5,7 @@ import { interpret as bridgeInterpret } from "../../bridge/index.mjs";
 import { remember } from "../../remember/index.mjs";
 import { mind_to_name_text } from "../../verbs/mind/mind.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
+import { resolveWorldAgentHouseDirectory } from "../../library/agent_command_policy.mjs";
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
@@ -504,6 +505,14 @@ function roomListenerAgents(channelConfig, roomId, fallbackAgentName) {
   return [fallbackAgentName];
 }
 
+function resolveTargetAgentHouse(worldRoot, agentName) {
+  return resolveWorldAgentHouseDirectory({
+    worldRoot,
+    agentName,
+    includeFallback: true
+  }) ?? path.join(worldRoot, "house", String(agentName ?? "").trim());
+}
+
 function resolveMentionTargets({ text, listenerAgents, channelUser }) {
   const body = String(text ?? "").toLowerCase();
   if (!body) return [];
@@ -550,7 +559,7 @@ async function dispatchChannelEvents({
     const key = String(targetAgent ?? "").trim();
     if (!key) return {};
     if (importPolicyByAgent.has(key)) return importPolicyByAgent.get(key);
-    const targetAgentHouse = path.join(worldRoot, "house", key);
+    const targetAgentHouse = resolveTargetAgentHouse(worldRoot, key);
     const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse: targetAgentHouse });
     importPolicyByAgent.set(key, policy);
     return policy;
@@ -692,7 +701,8 @@ async function dispatchChannelEvents({
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
-        const targetDir = path.join(worldRoot, "house", targetAgent, "artifacts", dayStamp);
+        const targetAgentHouse = resolveTargetAgentHouse(worldRoot, targetAgent);
+        const targetDir = path.join(targetAgentHouse, "artifacts", dayStamp);
         try {
           routedEvent.attachmentsSaved = await adapter.downloadAttachments({
             config: channelConfig,
@@ -724,7 +734,7 @@ async function dispatchChannelEvents({
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
         payloadId: orchestratorDirective.payloadId,
-        agentCwd: path.join(worldRoot, "house", targetAgent)
+        agentCwd: resolveTargetAgentHouse(worldRoot, targetAgent)
       });
       handled += 1;
       let responseText = "";

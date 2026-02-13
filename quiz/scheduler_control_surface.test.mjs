@@ -14,6 +14,11 @@ test("scheduler control surface supports begin health restart stop", async () =>
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
   await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    'su name helper house directory ob filename "world/house/helper" ya\n',
+    "utf8"
+  );
+  await fs.writeFile(
     path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
     [
       "su name heartbeat for name helper with wo tools vyah habit during minute 24 be calendar ya",
@@ -69,6 +74,11 @@ test("scheduler control surface supports from wo calendar forms", async () => {
   const worldRoot = path.join(root, "world");
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    'su name helper house directory ob filename "world/house/helper" ya\n',
+    "utf8"
+  );
   await fs.writeFile(
     path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
     [

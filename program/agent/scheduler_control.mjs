@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { discoverScheduledJobs } from "./scheduler.mjs";
 import { isServiceEnabled, normalizeSchedulerServiceName, setServiceEnabled } from "./scheduler_service_control.mjs";
+import { ensureAgentDirs } from "./session.mjs";
+import { listWorldDeclaredAgentHouses } from "../library/agent_command_policy.mjs";
 
 function controlDir(worldRoot) {
   return path.join(worldRoot, "conduct");
@@ -259,6 +261,16 @@ async function stopSchedulerPids(pids = []) {
   };
 }
 
+async function reconcileDeclaredAgentHouses(worldRoot) {
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  for (const declaration of declarations) {
+    const housePath = String(declaration?.path ?? "").trim();
+    if (!housePath) continue;
+    await ensureAgentDirs(housePath);
+  }
+  return declarations.length;
+}
+
 export async function schedulerHealth({ worldRoot } = {}) {
   const pid = await readPid(worldRoot);
   const daemonPids = listSchedulerDaemonPids({ worldRoot });
@@ -357,6 +369,7 @@ export async function schedulerBegin({ worldRoot } = {}) {
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
   await fs.mkdir(presenceDir(worldRoot), { recursive: true });
   await fs.mkdir(path.join(controlDir(worldRoot), "service"), { recursive: true });
+  await reconcileDeclaredAgentHouses(worldRoot);
   await fs.rm(legacyStatusPath(worldRoot), { force: true });
   const logPath = daemonLogPath(worldRoot);
   let stdoutFd = null;

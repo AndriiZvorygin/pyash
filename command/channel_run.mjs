@@ -16,10 +16,8 @@ import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/
 import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 
-const DEFAULT_INTERVAL_MS = 60 * 1000;
-
 function usage() {
-  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once] [--interval <seconds>]";
+  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once]";
 }
 
 function readRememberText(name) {
@@ -30,21 +28,70 @@ function readRememberText(name) {
   return text || null;
 }
 
+function homeserverHost(homeserver) {
+  const text = String(homeserver ?? "").trim();
+  if (!text) return "";
+  try {
+    return new URL(text).host.toLowerCase();
+  } catch {
+    return text.replace(/^https?:\/\//i, "").replace(/\/.*$/g, "").toLowerCase();
+  }
+}
+
+function normalizeMatrixLocalpart(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._=-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeMatrixUserIdentity(raw, homeserver = "") {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const host = homeserverHost(homeserver);
+  const withAt = text.startsWith("@") ? text : `@${text}`;
+  const lower = withAt.toLowerCase();
+  const body = lower.slice(1);
+  const idx = body.indexOf(":");
+  const localpart = normalizeMatrixLocalpart(idx === -1 ? body : body.slice(0, idx));
+  if (!localpart) return "";
+  const server = idx === -1 ? host : body.slice(idx + 1).trim().toLowerCase();
+  return server ? `@${localpart}:${server}` : `@${localpart}`;
+}
+
+function matrixUsersMatch(a, b, homeserver = "") {
+  const left = normalizeMatrixUserIdentity(a, homeserver);
+  const right = normalizeMatrixUserIdentity(b, homeserver);
+  return Boolean(left && right && left === right);
+}
+
 function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
   const mapToken = resolveConfigMapText(mapName, "token");
+  const mapUser = resolveConfigMapText(mapName, "user");
   const mapExecutive = resolveConfigMapText(mapName, "executive username");
+  const homeserver =
+    rawConfig.homeserver ??
+    mapHomeserver ??
+    readRememberText("matrix homeserver") ??
+    readRememberText("matrix server") ??
+    null;
+  const user =
+    rawConfig.user ??
+    mapUser ??
+    readRememberText("matrix user") ??
+    null;
+  const allowGlobalToken = !mapToken
+    ? false
+    : !mapUser || matrixUsersMatch(user, mapUser, homeserver || "");
   return {
     ...rawConfig,
-    homeserver:
-      mapHomeserver ??
-      rawConfig.homeserver ??
-      readRememberText("matrix homeserver") ??
-      readRememberText("matrix server") ??
-      null,
+    homeserver,
+    user,
     registrationSharedSecret:
       mapSharedSecret ??
       rawConfig.registrationSharedSecret ??
@@ -56,9 +103,8 @@ function resolveMatrixConfigWithRemember(rawConfig = {}) {
       readRememberText("matrix admin token") ??
       null,
     token:
-      mapToken ??
       rawConfig.token ??
-      readRememberText("matrix access token") ??
+      (allowGlobalToken ? mapToken : null) ??
       null,
     executiveUsername:
       mapExecutive ??
@@ -76,17 +122,6 @@ function selectChannelJobs(jobs, channelType, agentName) {
     const name = job.jobName.toLowerCase();
     return name.startsWith(prefixPoll) || name.startsWith(prefixProbe);
   });
-}
-
-function defaultChannelJob({ channelType, agentName, intervalMs }) {
-  return [{
-    jobName: `${channelType} poll`,
-    laneName: `${channelType}_poll`,
-    intervalMs,
-    agentName,
-    prompt: "",
-    withCase: { wo: "tools" }
-  }];
 }
 
 async function initializeRuntime({ cwd, agentName }) {
@@ -130,12 +165,6 @@ async function main() {
     process.exit(1);
   }
   const once = args.includes("--once");
-  const intervalSecondsRaw = readFlagValue(args, "--interval");
-  const intervalMs = intervalSecondsRaw ? Number(intervalSecondsRaw) * 1000 : DEFAULT_INTERVAL_MS;
-  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
-    console.error("Invalid --interval value");
-    process.exit(1);
-  }
 
   await initializeRuntime({ cwd: process.cwd(), agentName });
   const worldRoot = resolveWorldRoot({ rememberFn: remember }) ?? path.resolve(process.cwd(), "world");
@@ -160,31 +189,36 @@ async function main() {
       ...channelConfig,
       homeserver: credentials.homeserver,
       token: credentials.token,
-      user: channelConfig.user ?? credentials.user
+      user: credentials.user || channelConfig.user
     };
-    const executiveRoom = await ensureMatrixExecutiveDmRoom({
-      agentHouse,
-      homeserver: channelConfig.homeserver,
-      token: channelConfig.token,
-      user: channelConfig.user,
-      executiveUser: channelConfig.executiveUsername
-    });
-    if (executiveRoom) {
-      const hasRoom = Array.isArray(channelConfig.rooms) && channelConfig.rooms.some(room => room?.id === executiveRoom);
-      const nextRooms = Array.isArray(channelConfig.rooms) ? [...channelConfig.rooms] : [];
-      if (!hasRoom) {
-        nextRooms.push({
-          id: executiveRoom,
-          lane: "matrix_executive_dm"
-        });
+    try {
+      const executiveRoom = await ensureMatrixExecutiveDmRoom({
+        agentHouse,
+        homeserver: channelConfig.homeserver,
+        token: channelConfig.token,
+        user: channelConfig.user,
+        executiveUser: channelConfig.executiveUsername
+      });
+      if (executiveRoom) {
+        const hasRoom = Array.isArray(channelConfig.rooms) && channelConfig.rooms.some(room => room?.id === executiveRoom);
+        const nextRooms = Array.isArray(channelConfig.rooms) ? [...channelConfig.rooms] : [];
+        if (!hasRoom) {
+          nextRooms.push({
+            id: executiveRoom,
+            lane: "matrix_executive_dm"
+          });
+        }
+        const nextDmRooms = new Set(Array.isArray(channelConfig.dmRooms) ? channelConfig.dmRooms : []);
+        nextDmRooms.add(executiveRoom);
+        channelConfig = {
+          ...channelConfig,
+          rooms: nextRooms,
+          dmRooms: Array.from(nextDmRooms)
+        };
       }
-      const nextDmRooms = new Set(Array.isArray(channelConfig.dmRooms) ? channelConfig.dmRooms : []);
-      nextDmRooms.add(executiveRoom);
-      channelConfig = {
-        ...channelConfig,
-        rooms: nextRooms,
-        dmRooms: Array.from(nextDmRooms)
-      };
+    } catch (err) {
+      // DM room hydration is best-effort; channel polling should continue for configured rooms.
+      console.error(`[matrix executive dm skipped] ${String(err?.message ?? err)}`);
     }
   }
   const adapter = createAdapter(channelType);
@@ -203,9 +237,10 @@ async function main() {
     return;
   }
 
-  let jobs = selectChannelJobs(await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName }), channelType, agentName);
+  const jobs = selectChannelJobs(await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName }), channelType, agentName);
   if (!jobs.length) {
-    jobs = defaultChannelJob({ channelType, agentName, intervalMs });
+    console.error(`no calendar job configured for ${agentName} ${channelType} poll/probe`);
+    process.exit(1);
   }
   const scheduler = createScheduler({
     jobs,

@@ -948,8 +948,8 @@ Scheduler daemon responsibilities:
 
 Initial schedule discovery roots:
 
-* global: `world/conduct/calendar.pya` (alternate: `schedule.pya`)
-* agent-local: `world/house/<agent>/conduct/calendar.pya` (alternate: `schedule.pya`)
+* global: `world/conduct/calendar.pya`
+* agent-local: `world/house/<agent>/conduct/calendar.pya`
 
 If both global and agent-local schedules define the same `job` for the same
 `agent`, the agent-local declaration MUST take precedence.
@@ -1114,8 +1114,8 @@ Agent-local conduct overrides global for overlapping keys.
 
 Channel polling schedules are resolved from:
 
-1. global: `world/conduct/calendar.pya` (alternate: `schedule.pya`)
-2. agent-local: `world/house/<agent>/conduct/calendar.pya` (alternate: `schedule.pya`)
+1. global: `world/conduct/calendar.pya`
+2. agent-local: `world/house/<agent>/conduct/calendar.pya`
 
 For duplicate `<agent> + <job>` schedule definitions, agent-local takes precedence.
 

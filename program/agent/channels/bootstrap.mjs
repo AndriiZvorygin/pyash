@@ -88,6 +88,12 @@ function normalizeConfiguredUserId(raw, homeserver) {
   return sanitizeUserId(text, homeserver);
 }
 
+function userIdsMatch(a, b) {
+  const left = String(a ?? "").trim().toLowerCase();
+  const right = String(b ?? "").trim().toLowerCase();
+  return Boolean(left && right && left === right);
+}
+
 async function matrixWhoAmI({ homeserver, token, fetchImpl, userId = "", mode = "" }) {
   const response = await fetchImpl(
     applyAuthToUrl(`${homeserver}/_matrix/client/v3/account/whoami`, { token, userId, mode }),
@@ -112,17 +118,21 @@ async function resolveTokenUserId({
   fetchImpl
 }) {
   const normalizedPreferred = normalizeConfiguredUserId(preferredUser, homeserver);
-  if (normalizedPreferred) return normalizedPreferred;
   try {
-    return await matrixWhoAmI({
+    const resolved = await matrixWhoAmI({
       homeserver,
       token,
       userId: normalizedPreferred || "",
       mode,
       fetchImpl
     });
+    if (!resolved) return isAppserviceMode(mode) ? normalizedPreferred : null;
+    if (normalizedPreferred && !isAppserviceMode(mode) && !userIdsMatch(resolved, normalizedPreferred)) {
+      return null;
+    }
+    return resolved;
   } catch {
-    return null;
+    return isAppserviceMode(mode) ? normalizedPreferred : null;
   }
 }
 
@@ -310,61 +320,120 @@ export async function ensureMatrixCredentials({
 
   const cached = await readMatrixAuthCache(agentHouse);
   const desiredUserFromConfig = config?.user ? String(config.user) : null;
+  const desiredUserNormalized = normalizeConfiguredUserId(desiredUserFromConfig, homeserver);
   const mode = config?.mode ? String(config.mode) : "";
   if (cached?.accessToken) {
-    const resolvedCachedUser = await resolveTokenUserId({
-      homeserver,
-      token: cached.accessToken,
-      preferredUser: desiredUserFromConfig ?? cached.user,
-      mode,
-      fetchImpl
-    });
-    const resolvedLocalpart = cached.localpart
-      ?? parseLocalpartFromUserId(resolvedCachedUser)
-      ?? null;
-    if (resolvedCachedUser && resolvedCachedUser !== cached.user) {
-      await writeJsonFile(authPath(agentHouse), {
-        ...cached,
+    if (isAppserviceMode(mode) && desiredUserNormalized) {
+      const resolvedLocalpart = cached.localpart
+        ?? parseLocalpartFromUserId(desiredUserNormalized)
+        ?? null;
+      if (!userIdsMatch(cached.user, desiredUserNormalized)) {
+        await writeJsonFile(authPath(agentHouse), {
+          ...cached,
+          homeserver,
+          user: desiredUserNormalized,
+          localpart: resolvedLocalpart,
+          executiveDmRooms: {}
+        });
+      }
+      return {
         homeserver,
-        user: resolvedCachedUser,
+        token: cached.accessToken,
+        user: desiredUserNormalized,
         localpart: resolvedLocalpart,
-        executiveDmRooms: {}
+        executiveDmRooms: userIdsMatch(cached.user, desiredUserNormalized)
+          ? (cached?.executiveDmRooms ?? {})
+          : {}
+      };
+    }
+
+    const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
+    let preferredUser = desiredUserNormalized ?? cached.user;
+    let resolvedCachedUser = normalizeConfiguredUserId(cached.user, homeserver);
+    if (requireTokenUserValidation || !resolvedCachedUser) {
+      resolvedCachedUser = await resolveTokenUserId({
+        homeserver,
+        token: cached.accessToken,
+        preferredUser,
+        mode,
+        fetchImpl
       });
     }
-    return {
-      homeserver,
-      token: cached.accessToken,
-      user: resolvedCachedUser,
-      localpart: resolvedLocalpart,
-      executiveDmRooms: cached?.executiveDmRooms ?? {}
-    };
+    if (requireTokenUserValidation && !resolvedCachedUser) {
+      // Cached token is stale or belongs to a different user; continue with login/register flow.
+    } else {
+      const resolvedLocalpart = cached.localpart
+        ?? parseLocalpartFromUserId(resolvedCachedUser)
+        ?? null;
+      if (resolvedCachedUser && !userIdsMatch(resolvedCachedUser, cached.user)) {
+        await writeJsonFile(authPath(agentHouse), {
+          ...cached,
+          homeserver,
+          user: resolvedCachedUser,
+          localpart: resolvedLocalpart,
+          executiveDmRooms: {}
+        });
+      }
+      return {
+        homeserver,
+        token: cached.accessToken,
+        user: resolvedCachedUser,
+        localpart: resolvedLocalpart,
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
+    }
   }
 
   if (config?.token) {
-    const resolvedTokenUser = await resolveTokenUserId({
-      homeserver,
-      token: config.token,
-      preferredUser: desiredUserFromConfig,
-      mode,
-      fetchImpl
-    });
-    if (resolvedTokenUser) {
+    if (isAppserviceMode(mode) && desiredUserNormalized) {
       await writeJsonFile(authPath(agentHouse), {
         ...(cached ?? {}),
         homeserver,
-        user: resolvedTokenUser,
-        localpart: parseLocalpartFromUserId(resolvedTokenUser),
+        user: desiredUserNormalized,
+        localpart: parseLocalpartFromUserId(desiredUserNormalized),
         accessToken: config.token,
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       });
+      return {
+        homeserver,
+        token: config.token,
+        user: desiredUserNormalized,
+        localpart: parseLocalpartFromUserId(desiredUserNormalized),
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
     }
-    return {
-      homeserver,
-      token: config.token,
-      user: resolvedTokenUser,
-      localpart: parseLocalpartFromUserId(resolvedTokenUser),
-      executiveDmRooms: cached?.executiveDmRooms ?? {}
-    };
+
+    const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
+    let resolvedTokenUser = desiredUserNormalized ?? null;
+    if (requireTokenUserValidation || !resolvedTokenUser) {
+      resolvedTokenUser = await resolveTokenUserId({
+        homeserver,
+        token: config.token,
+        preferredUser: desiredUserNormalized,
+        mode,
+        fetchImpl
+      });
+    }
+    if (!requireTokenUserValidation || resolvedTokenUser) {
+      if (resolvedTokenUser) {
+        await writeJsonFile(authPath(agentHouse), {
+          ...(cached ?? {}),
+          homeserver,
+          user: resolvedTokenUser,
+          localpart: parseLocalpartFromUserId(resolvedTokenUser),
+          accessToken: config.token,
+          executiveDmRooms: cached?.executiveDmRooms ?? {}
+        });
+      }
+      return {
+        homeserver,
+        token: config.token,
+        user: resolvedTokenUser,
+        localpart: parseLocalpartFromUserId(resolvedTokenUser),
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
+    }
+    // Token exists but cannot be used for the configured user in non-appservice mode.
   }
 
   const sharedSecret = config?.registrationSharedSecret ?? envSharedSecret();

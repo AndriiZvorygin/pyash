@@ -8,3 +8,4 @@
 - `pyash-parity` — run/runjs/runc parity checks across examples.
 - `pyash-mind-session` — mind tool-call/session notes and verbose/newspaper review.
 - `pyash-alias` — add/update verb or compositional aliases and tests.
+- `pyash-channel-debug` — matrix channel configure/bootstrap/agent-creation smoke workflows and telemetry-first triage.

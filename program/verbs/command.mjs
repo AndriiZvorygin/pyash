@@ -19,7 +19,11 @@ import {
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
-import { collectLicensedRoots, resolveWorldAgentDirectoryLicense } from "../library/agent_command_policy.mjs";
+import {
+  collectLicensedRoots,
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentDirectoryLicense
+} from "../library/agent_command_policy.mjs";
 
 function resolveCommandText(ob = {}, { rememberFn } = {}) {
   if (typeof ob.wo === "string") return ob.wo;
@@ -285,6 +289,16 @@ function resolveAgentName({ rememberFn = remember } = {}) {
 
 function inferAgentNameFromCwd(cwd, worldRoot) {
   const resolvedCwd = path.resolve(String(cwd ?? ""));
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  for (const declaration of declarations) {
+    const housePath = path.resolve(String(declaration?.path ?? ""));
+    if (!housePath) continue;
+    const relative = path.relative(housePath, resolvedCwd);
+    const inside = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    if (!inside) continue;
+    const value = String(declaration?.agentName ?? "").trim();
+    if (value) return value;
+  }
   const houseRoot = path.join(path.resolve(String(worldRoot ?? "world")), "house");
   const relative = path.relative(houseRoot, resolvedCwd);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;
@@ -308,7 +322,7 @@ function resolveAgentSandboxRoots({ rememberFn = remember } = {}) {
   const license = agentName
     ? resolveWorldAgentDirectoryLicense({ worldRoot, agentName })
     : null;
-  if (license) {
+  if (license && Array.isArray(license.entries) && license.entries.length > 0) {
     const commandRoots = collectLicensedRoots(license, "command");
     const writeRoots = collectLicensedRoots(license, "write");
     const readRoots = collectLicensedRoots(license, "read");

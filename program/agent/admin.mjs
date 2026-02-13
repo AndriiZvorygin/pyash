@@ -6,6 +6,10 @@ import { sentenceToPyash } from "../beautiful.mjs";
 import { discoverScheduledJobs } from "./scheduler.mjs";
 import { schedulerBegin } from "./scheduler_control.mjs";
 import { setServiceEnabled } from "./scheduler_service_control.mjs";
+import {
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentHouseDirectory
+} from "../library/agent_command_policy.mjs";
 
 const REQUIRED_AGENT_DIRS = [
   "identity",
@@ -81,9 +85,17 @@ async function ensureBaseIdentityFiles(worldRoot) {
   }
 }
 
+function resolveAgentHouseRoot(worldRoot, agentName) {
+  return resolveWorldAgentHouseDirectory({
+    worldRoot,
+    agentName,
+    includeFallback: true
+  }) ?? path.join(worldRoot, "house", String(agentName ?? "").trim());
+}
+
 async function copyBaseIdentityFiles(worldRoot, agentName) {
   const baseIdentityDir = path.join(worldRoot, "house", "base", "identity");
-  const agentIdentityDir = path.join(worldRoot, "house", agentName, "identity");
+  const agentIdentityDir = path.join(resolveAgentHouseRoot(worldRoot, agentName), "identity");
   await fs.mkdir(agentIdentityDir, { recursive: true });
   let entries = [];
   try {
@@ -147,7 +159,7 @@ function defaultImportConductText() {
 }
 
 async function ensureImportConductFile({ worldRoot, agentName }) {
-  const importPath = path.join(worldRoot, "house", agentName, "conduct", "import.pya");
+  const importPath = path.join(resolveAgentHouseRoot(worldRoot, agentName), "conduct", "import.pya");
   const exists = await pathExists(importPath);
   if (exists) return { importPath, changed: false };
   await fs.writeFile(importPath, defaultImportConductText(), "utf8");
@@ -155,7 +167,7 @@ async function ensureImportConductFile({ worldRoot, agentName }) {
 }
 
 async function writeManagedConductCalendar({ worldRoot, agentName, intervalMinutes }) {
-  const calendarPath = path.join(worldRoot, "house", agentName, "conduct", "calendar.pya");
+  const calendarPath = path.join(resolveAgentHouseRoot(worldRoot, agentName), "conduct", "calendar.pya");
   const desired = defaultCalendarText({ agentName, intervalMinutes });
   const existing = await readTextIfExists(calendarPath);
   if (existing != null && !existing.startsWith("# managed by agent_admin")) {
@@ -168,7 +180,7 @@ async function writeManagedConductCalendar({ worldRoot, agentName, intervalMinut
 
 async function upsertPurposeIdentity({ worldRoot, agentName, purpose }) {
   if (!purpose) return { changed: false, identityPath: null };
-  const identityPath = path.join(worldRoot, "house", agentName, "identity", "IDENTITY.md");
+  const identityPath = path.join(resolveAgentHouseRoot(worldRoot, agentName), "identity", "IDENTITY.md");
   const markerStart = "<!-- managed-purpose:start -->";
   const markerEnd = "<!-- managed-purpose:end -->";
   const managedBlock = [
@@ -196,8 +208,73 @@ function managedSpecHash(spec) {
   return createHash("sha256").update(canonical).digest("hex");
 }
 
+function escapeRegex(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function quotePyashText(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+
+function policyPathTextForAgentRoot({ worldRoot, agentRoot }) {
+  const resolvedWorld = path.resolve(worldRoot);
+  const resolvedAgentRoot = path.resolve(agentRoot);
+  const repoRoot = path.dirname(resolvedWorld);
+  const relative = path.relative(repoRoot, resolvedAgentRoot);
+  if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+    return relative.split(path.sep).join("/");
+  }
+  return resolvedAgentRoot;
+}
+
+function buildAgentPolicyBlock({ agentName, housePathText }) {
+  return [
+    `su name ${agentName} directory license be map def`,
+    `  su name ${quotePyashText(housePathText)} ob ve text "read" "write" "command" ya`,
+    "prah"
+  ].join("\n");
+}
+
+async function upsertAgentPolicyRegistration({ worldRoot, agentName, agentRoot }) {
+  const policyPath = path.join(worldRoot, "conduct", "agent.pya");
+  const housePathText = policyPathTextForAgentRoot({ worldRoot, agentRoot });
+  const houseLine = `su name ${agentName} house directory ob filename ${quotePyashText(housePathText)} ya`;
+  const existing = (await readTextIfExists(policyPath)) ?? "";
+  let nextText = existing;
+  const housePattern = new RegExp(`^\\s*su name ${escapeRegex(agentName)} house directory ob filename .* ya\\s*$`, "i");
+  const lines = nextText.split("\n");
+  const kept = [];
+  let houseInserted = false;
+  for (const line of lines) {
+    if (!housePattern.test(line.trim())) {
+      kept.push(line);
+      continue;
+    }
+    if (houseInserted) continue;
+    kept.push(houseLine);
+    houseInserted = true;
+  }
+  nextText = kept.join("\n");
+  if (!houseInserted) {
+    const prefix = nextText.trimEnd();
+    nextText = prefix ? `${prefix}\n${houseLine}\n` : `${houseLine}\n`;
+  }
+  const mapPattern = new RegExp(`su name ${escapeRegex(agentName)} directory license be map def[\\s\\S]*?\\nprah`, "m");
+  if (!mapPattern.test(nextText)) {
+    const prefix = nextText.trimEnd();
+    const block = buildAgentPolicyBlock({ agentName, housePathText });
+    nextText = prefix ? `${prefix}\n${block}\n` : `${block}\n`;
+  }
+  const normalizedExisting = `${existing.trimEnd()}\n`;
+  const normalizedNext = `${nextText.trimEnd()}\n`;
+  if (normalizedNext === normalizedExisting) return { changed: false, policyPath };
+  await fs.mkdir(path.dirname(policyPath), { recursive: true });
+  await fs.writeFile(policyPath, normalizedNext, "utf8");
+  return { changed: true, policyPath };
+}
+
 async function writeManagedState({ worldRoot, agentName, spec, hash }) {
-  const managedPath = path.join(worldRoot, "house", agentName, "conduct", "managed.pya");
+  const managedPath = path.join(resolveAgentHouseRoot(worldRoot, agentName), "conduct", "managed.pya");
   const lines = [
     "# managed by agent_admin",
     sentenceToPyash({ mood: "ya", su: { name: "managed version" }, ob: { num: 1 }, be: "num" }),
@@ -214,7 +291,7 @@ async function writeManagedState({ worldRoot, agentName, spec, hash }) {
 }
 
 async function readManagedHash({ worldRoot, agentName }) {
-  const managedPath = path.join(worldRoot, "house", agentName, "conduct", "managed.pya");
+  const managedPath = path.join(resolveAgentHouseRoot(worldRoot, agentName), "conduct", "managed.pya");
   const text = await readTextIfExists(managedPath);
   if (!text) return null;
   const m = text.match(/su name managed spec hash ob text "([^"]+)"/);
@@ -235,17 +312,9 @@ export async function ensureBaseHouseTemplate({ worldRoot } = {}) {
 
 export async function listAgents({ worldRoot, includeBase = false } = {}) {
   if (!worldRoot) throw new Error("worldRoot is required");
-  const houseDir = path.join(worldRoot, "house");
-  let entries = [];
-  try {
-    entries = await fs.readdir(houseDir, { withFileTypes: true });
-  } catch (err) {
-    if (err?.code === "ENOENT") return [];
-    throw err;
-  }
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
+  const names = listWorldDeclaredAgentHouses({ worldRoot }).map((entry) => entry.agentName);
+  if (includeBase && !names.includes("base")) names.push("base");
+  return names
     .filter((name) => includeBase || name !== "base")
     .sort((a, b) => a.localeCompare(b, "en"));
 }
@@ -255,13 +324,14 @@ export async function establishAgent({
   agentName,
   purpose = "",
   intervalMinutes = 24,
+  writePolicy = true,
   nowFn
 } = {}) {
   if (!worldRoot) throw new Error("worldRoot is required");
   const normalized = normalizeAgentName(agentName);
   if (!normalized) throw new Error("agentName is required");
   await ensureBaseHouseTemplate({ worldRoot });
-  const agentRoot = path.join(worldRoot, "house", normalized);
+  const agentRoot = resolveAgentHouseRoot(worldRoot, normalized);
   const existedBefore = await pathExists(agentRoot);
   await ensureDirectoryTree(agentRoot, REQUIRED_AGENT_DIRS);
   await copyBaseIdentityFiles(worldRoot, normalized);
@@ -274,6 +344,14 @@ export async function establishAgent({
   const priorHash = await readManagedHash({ worldRoot, agentName: normalized });
   const created = !existedBefore;
   const changes = [];
+  if (writePolicy) {
+    const policyResult = await upsertAgentPolicyRegistration({
+      worldRoot,
+      agentName: normalized,
+      agentRoot
+    });
+    if (policyResult.changed) changes.push("agent_policy");
+  }
   let calendarResult = { calendarPath: null, changed: false };
   let purposeResult = { changed: false };
   const importResult = await ensureImportConductFile({ worldRoot, agentName: normalized });
@@ -324,7 +402,7 @@ export async function improveAgent({
   if (!worldRoot) throw new Error("worldRoot is required");
   const normalized = normalizeAgentName(agentName);
   if (!normalized) throw new Error("agentName is required");
-  const agentRoot = path.join(worldRoot, "house", normalized);
+  const agentRoot = resolveAgentHouseRoot(worldRoot, normalized);
   if (!(await pathExists(agentRoot))) {
     throw new Error(`agent not found: ${normalized}`);
   }

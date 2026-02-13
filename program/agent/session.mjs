@@ -7,6 +7,7 @@ import { parse } from "../understand/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { callMindBackend } from "../verbs/mind/backend.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
+import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
 
 const SESSION_ROLE_NAMES = new Set(["user", "assistant", "tool"]);
 
@@ -76,7 +77,11 @@ function sessionFilename({ sessionName }) {
 export function resolveAgentHouse({ mindName, rememberFn }) {
   const worldRoot = rememberFn?.("world root")?.ob?.filename ?? "world";
   const resolvedRoot = path.isAbsolute(worldRoot) ? worldRoot : path.resolve(worldRoot);
-  return path.join(resolvedRoot, "house", String(mindName));
+  return resolveWorldAgentHouseDirectory({
+    worldRoot: resolvedRoot,
+    agentName: String(mindName ?? "").trim(),
+    includeFallback: true
+  }) ?? path.join(resolvedRoot, "house", String(mindName));
 }
 
 export async function ensureAgentDirs(agentHouse) {

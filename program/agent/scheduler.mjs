@@ -4,9 +4,12 @@ import path from "node:path";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { parse } from "../understand/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import {
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentHouseDirectory
+} from "../library/agent_command_policy.mjs";
 
 const LANE_PATTERN = /^(.+?)\s+lane$/i;
-const CALENDAR_FILENAMES = ["calendar.pya", "schedule.pya"];
 
 function sanitizeLaneName(raw) {
   const text = String(raw ?? "").trim().toLowerCase();
@@ -182,34 +185,22 @@ export async function loadSchedulePolicyWithGlobal({
   return mergeSchedulePolicies(scopedGlobal, agentJobs);
 }
 
-async function listAgentNames(worldRoot) {
-  if (!worldRoot) return [];
-  const houseDir = path.join(worldRoot, "house");
-  let entries;
-  try {
-    entries = await fs.readdir(houseDir, { withFileTypes: true });
-  } catch (err) {
-    if (err?.code === "ENOENT") return [];
-    throw err;
-  }
-  return entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name)
-    .sort((a, b) => a.localeCompare(b, "en"));
+function listDeclaredAgentNames(worldRoot) {
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  return declarations.map((entry) => entry.agentName);
 }
 
 export async function discoverScheduledJobs({ worldRoot } = {}) {
   if (!worldRoot) return [];
-  const globalConductDir = path.join(worldRoot, "conduct");
-  const globalJobs = await loadSchedulePolicyFromConductDir(globalConductDir, { defaultAgentName: null });
-  const agentNamesFromGlobal = new Set(globalJobs.map(job => job.agentName).filter(Boolean));
-  const agentNamesFromHouse = await listAgentNames(worldRoot);
-  for (const name of agentNamesFromHouse) agentNamesFromGlobal.add(name);
-
-  const allAgentNames = [...agentNamesFromGlobal].sort((a, b) => a.localeCompare(b, "en"));
+  const allAgentNames = [...new Set(listDeclaredAgentNames(worldRoot))]
+    .sort((a, b) => a.localeCompare(b, "en"));
   const mergedJobs = [];
   for (const agentName of allAgentNames) {
-    const agentHouse = path.join(worldRoot, "house", agentName);
+    const agentHouse = resolveWorldAgentHouseDirectory({
+      worldRoot,
+      agentName,
+      includeFallback: true
+    }) ?? path.join(worldRoot, "house", agentName);
     const jobs = await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName });
     mergedJobs.push(...jobs);
   }
@@ -222,17 +213,14 @@ export async function discoverScheduledJobs({ worldRoot } = {}) {
 
 export async function loadSchedulePolicyFromConductDir(conductDir, { defaultAgentName } = {}) {
   if (!conductDir) return [];
-  for (const filename of CALENDAR_FILENAMES) {
-    const policyPath = path.join(conductDir, filename);
-    try {
-      await fs.access(policyPath);
-    } catch (err) {
-      if (err?.code === "ENOENT") continue;
-      throw err;
-    }
-    return loadSchedulePolicyFromPath(policyPath, { defaultAgentName });
+  const policyPath = path.join(conductDir, "calendar.pya");
+  try {
+    await fs.access(policyPath);
+  } catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
   }
-  return [];
+  return loadSchedulePolicyFromPath(policyPath, { defaultAgentName });
 }
 
 function createStats(job) {
