@@ -266,6 +266,20 @@ function importActionForKind(kind, importPolicy = {}) {
   return String(policy.fileAction || policy.defaultAction || "").trim();
 }
 
+function importToolGuidanceLines(importPolicy = {}) {
+  const policy = importPolicy ?? {};
+  const lines = [];
+  const read = String(policy.readToolGuidance || "").trim();
+  const see = String(policy.seeToolGuidance || "").trim();
+  const command = String(policy.commandToolGuidance || "").trim();
+  const repair = String(policy.repairToolGuidance || "").trim();
+  if (read) lines.push(`- ${read}`);
+  if (see) lines.push(`- ${see}`);
+  if (command) lines.push(`- ${command}`);
+  if (repair) lines.push(`- ${repair}`);
+  return lines;
+}
+
 function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}) {
   const files = Array.isArray(attachmentsSaved) ? attachmentsSaved : [];
   if (!files.length) return "";
@@ -291,11 +305,11 @@ function buildAttachmentPromptBlock(attachmentsSaved, importPolicy = {}) {
     lines.push("[import do]");
     lines.push(...importSteps);
   }
-  lines.push("[tools for files]");
-  lines.push("- be read from filename <path> ... : extract text from docs/audio/image via read auto");
-  lines.push("- be see from filename <image> ... : ask a vision-capable mind directly");
-  lines.push("- be command ... : inspect/process files");
-  lines.push("- be repair ... : patch code/text files safely");
+  const toolLines = importToolGuidanceLines(importPolicy);
+  if (toolLines.length) {
+    lines.push("[tools for files]");
+    lines.push(...toolLines);
+  }
   return lines.join("\n");
 }
 
@@ -309,18 +323,11 @@ function buildAttachmentAutoTaskBlock(event, importPolicy = {}) {
   const isLikelyNoCaption = !text || imageNames.has(text.toLowerCase());
   if (!isLikelyNoCaption) return "";
   const noCaptionAction = String(importPolicy?.noCaptionImageAction || importPolicy?.imageAction || "").trim();
-  if (noCaptionAction) {
-    return [
-      "[channel auto task]",
-      "Image upload detected without caption.",
-      `For agent, do ${noCaptionAction} using the saved image path.`
-    ].join("\n");
-  }
+  if (!noCaptionAction) return "";
   return [
     "[channel auto task]",
     "Image upload detected without caption.",
-    "First analyze the image directly with your own image capability if available.",
-    "If direct image analysis is unavailable, call be see from filename on the saved image path."
+    `For agent, do ${noCaptionAction} using the saved image path.`
   ].join("\n");
 }
 

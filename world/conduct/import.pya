@@ -5,5 +5,9 @@ su name import be map def
   su name audio do ob text "" ya
   su name text do ob text "" ya
   su name file do ob text "" ya
-  su name no legend photograph do ob text "" ya
+  su name no legend photograph do ob text "first analyze the image directly with your own image capability if available; if direct image analysis is unavailable, call be see from filename on the saved image path" ya
+  su name read tool do ob text "be read from filename <path> ... : extract text from docs/audio/image via read auto" ya
+  su name see tool do ob text "be see from filename <image> ... : ask a vision-capable mind directly" ya
+  su name command tool do ob text "be command ... : inspect/process files" ya
+  su name repair tool do ob text "be repair ... : patch code/text files safely" ya
 prah

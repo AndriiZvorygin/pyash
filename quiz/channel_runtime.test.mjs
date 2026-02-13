@@ -354,8 +354,19 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
 
 test("channel runtime stores channel attachments and includes file hints in prompt", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachments-"));
+  const worldRoot = path.join(root, "world");
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "conduct", "import.pya"), [
+    "su name import be map def",
+    "  su name read tool do ob text \"be read from filename <path> ...\" ya",
+    "  su name see tool do ob text \"be see from filename <image> ...\" ya",
+    "  su name command tool do ob text \"be command ...\" ya",
+    "  su name repair tool do ob text \"be repair ...\" ya",
+    "prah",
+    ""
+  ].join("\n"), "utf8");
 
   const sent = [];
   const adapter = {
@@ -430,10 +441,87 @@ test("channel runtime stores channel attachments and includes file hints in prom
   assert.equal(sent[sent.length - 1], "done");
 });
 
-test("channel runtime injects auto image task for upload-only events", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-image-auto-task-"));
+test("channel runtime omits attachment tool hints when import conduct has none", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachments-no-hints-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$f1-no-hints",
+            sender: "@u:server",
+            text: "inspect this",
+            timestamp: "2026-02-12T19:00:00.000Z",
+            attachments: [
+              {
+                kind: "m.file",
+                body: "notes.txt",
+                mxcUrl: "mxc://matrix.example.org/nohints",
+                mimetype: "text/plain"
+              }
+            ]
+          }
+        ],
+        checkpoint: { nextBatch: "tok-file-no-hints" }
+      };
+    },
+    async downloadAttachments({ targetDir }) {
+      const filePath = path.join(targetDir, "notes.txt");
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(filePath, "hello", "utf8");
+      return [{
+        filename: "notes.txt",
+        path: filePath,
+        mimeType: "text/plain",
+        bytes: 5
+      }];
+    },
+    async send() {
+      return { eventId: "$out-file-no-hints" };
+    }
+  };
+
+  const calls = [];
+  const interpretFn = async (sentence) => {
+    calls.push(sentence);
+    return { ob: { text: "done" } };
+  };
+
+  await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  const prompt = String(calls[0]?.ob?.text ?? "");
+  assert.match(prompt, /\[channel files saved\]/);
+  assert.doesNotMatch(prompt, /\[tools for files\]/);
+});
+
+test("channel runtime injects auto image task for upload-only events", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-image-auto-task-"));
+  const worldRoot = path.join(root, "world");
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.writeFile(path.join(worldRoot, "conduct", "import.pya"), [
+    "su name import be map def",
+    "  su name no caption image do ob text \"analyze image directly; if unavailable call be see from filename\" ya",
+    "prah",
+    ""
+  ].join("\n"), "utf8");
 
   const adapter = {
     async receive() {
@@ -497,7 +585,7 @@ test("channel runtime injects auto image task for upload-only events", async () 
   const prompt = String(calls[0]?.ob?.text ?? "");
   assert.match(prompt, /\[channel auto task\]/);
   assert.match(prompt, /Image upload detected without caption/);
-  assert.match(prompt, /First analyze the image directly/);
+  assert.match(prompt, /analyze image directly/);
   assert.match(prompt, /call be see from filename/);
 });
 

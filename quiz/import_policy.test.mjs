@@ -16,12 +16,14 @@ test("import policy parser reads map entries", () => {
     "  su name image do ob name receipt image import ya",
     "  su name no caption image do ob text \"receipt image import\" ya",
     "  su name file do ob text \"file classify\" ya",
+    "  su name read tool do ob text \"be read from filename <path>\" ya",
     "prah"
   ].join("\n");
   const policy = parseImportPolicyText(text);
   assert.equal(policy.imageAction, "receipt image import");
   assert.equal(policy.noCaptionImageAction, "receipt image import");
   assert.equal(policy.fileAction, "file classify");
+  assert.equal(policy.readToolGuidance, "be read from filename <path>");
 });
 
 test("import policy merge prefers agent override", () => {
@@ -29,17 +31,20 @@ test("import policy merge prefers agent override", () => {
     imageAction: "world image",
     fileAction: "world file",
     defaultAction: "world default",
-    noCaptionImageAction: ""
+    noCaptionImageAction: "",
+    readToolGuidance: "world read"
   };
   const override = {
     imageAction: "agent image",
-    noCaptionImageAction: "agent no caption"
+    noCaptionImageAction: "agent no caption",
+    readToolGuidance: "agent read"
   };
   const merged = mergeImportPolicies(base, override);
   assert.equal(merged.imageAction, "agent image");
   assert.equal(merged.fileAction, "world file");
   assert.equal(merged.defaultAction, "world default");
   assert.equal(merged.noCaptionImageAction, "agent no caption");
+  assert.equal(merged.readToolGuidance, "agent read");
 });
 
 test("import policy loader merges world and agent files", async () => {
@@ -52,6 +57,7 @@ test("import policy loader merges world and agent files", async () => {
     "su name import be map def",
     "  su name image do ob text \"world image\" ya",
     "  su name file do ob text \"world file\" ya",
+    "  su name see tool do ob text \"be see from filename <image>\" ya",
     "prah",
     ""
   ].join("\n"), "utf8");
@@ -64,4 +70,5 @@ test("import policy loader merges world and agent files", async () => {
   const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse });
   assert.equal(policy.imageAction, "agent image");
   assert.equal(policy.fileAction, "world file");
+  assert.equal(policy.seeToolGuidance, "be see from filename <image>");
 });
