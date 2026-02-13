@@ -33,7 +33,11 @@ function emptyPolicy() {
     pdfAction: "",
     audioAction: "",
     textAction: "",
-    noCaptionImageAction: ""
+    noCaptionImageAction: "",
+    readToolGuidance: "",
+    seeToolGuidance: "",
+    commandToolGuidance: "",
+    repairToolGuidance: ""
   };
 }
 
@@ -65,7 +69,15 @@ function keyToField(rawKey) {
     ["no caption image", "noCaptionImageAction"],
     ["no legend photograph do", "noCaptionImageAction"],
     ["photograph no legend do", "noCaptionImageAction"],
-    ["no legend photograph", "noCaptionImageAction"]
+    ["no legend photograph", "noCaptionImageAction"],
+    ["read tool do", "readToolGuidance"],
+    ["tool read do", "readToolGuidance"],
+    ["see tool do", "seeToolGuidance"],
+    ["tool see do", "seeToolGuidance"],
+    ["command tool do", "commandToolGuidance"],
+    ["tool command do", "commandToolGuidance"],
+    ["repair tool do", "repairToolGuidance"],
+    ["tool repair do", "repairToolGuidance"]
   ]);
   return map.get(key) ?? null;
 }
@@ -169,7 +181,11 @@ export function mergeImportPolicies(base = {}, override = {}) {
     pdfAction: normalizeAction(override.pdfAction) || normalizeAction(base.pdfAction),
     audioAction: normalizeAction(override.audioAction) || normalizeAction(base.audioAction),
     textAction: normalizeAction(override.textAction) || normalizeAction(base.textAction),
-    noCaptionImageAction: normalizeAction(override.noCaptionImageAction) || normalizeAction(base.noCaptionImageAction)
+    noCaptionImageAction: normalizeAction(override.noCaptionImageAction) || normalizeAction(base.noCaptionImageAction),
+    readToolGuidance: normalizeAction(override.readToolGuidance) || normalizeAction(base.readToolGuidance),
+    seeToolGuidance: normalizeAction(override.seeToolGuidance) || normalizeAction(base.seeToolGuidance),
+    commandToolGuidance: normalizeAction(override.commandToolGuidance) || normalizeAction(base.commandToolGuidance),
+    repairToolGuidance: normalizeAction(override.repairToolGuidance) || normalizeAction(base.repairToolGuidance)
   };
 }
 
