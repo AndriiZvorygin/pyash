@@ -1,51 +1,50 @@
 # 06. Data Formats
 
-Purpose: define deterministic map/series and exchange formats (JSON, CSV, YAML, INI).
+Purpose: define deterministic map/series model and format exchange contracts.
 
-## 1. Normative value shapes
+## 1. Format keyword table
 
-Supported core data shapes:
-- map
-- series (ordered list)
-- scalar typed values
+| Format | Meaning | Typical use |
+| --- | --- | --- |
+| map | keyed sentence/value object | configuration, structured facts |
+| series | ordered sentence list | logs, pipelines, session lines |
+| JSON | structured external interchange | APIs, canonical machine export |
+| CSV | row/column tabular data | ledgers/imports/exports |
+| YAML | human-readable structured config | config/spec inputs |
+| INI | sectioned key/value profile | system service mappings |
 
-## 2. Deterministic map behavior
+## 2. Canonical conversion shapes
 
-Rules:
-- map writes must follow canonical ordering
-- key collisions/overwrites follow explicit runtime semantics
-- serialization and parse roundtrip must be stable for supported subset
+JSON to map:
+```pyash
+from filename "input.json" become wo map to name map json map be read do
+```
 
-## 3. JSON
+Map to JSON:
+```pyash
+from name json map to filename "output.json" as wo json be write do
+```
 
-- parse into canonical map/value model
-- emit deterministic JSON from canonical model
-- preserve numeric/bool/null semantics
+CSV to map:
+```pyash
+from filename "input.csv" become wo map to name map csv map be read do
+```
 
-## 4. CSV
+## 3. Deterministic rules
 
-- deterministic header key handling
-- stable row/column mapping
-- predictable validation errors for malformed rows
+- canonical map ordering on emit,
+- explicit overwrite semantics,
+- stable parse/emit roundtrip for supported subsets,
+- sentence-shaped errors for malformed inputs.
 
-## 5. YAML
+## 4. INI service profile note
 
-- supported subset mapped into canonical value model
-- deterministic emission profile
+INI mapping supports system-service style sections (for example `unit`, `service`, `install`) and must roundtrip deterministically through map form.
 
-## 6. INI (service profile)
+## 5. Conformance
 
-INI mapping supports sectioned key/value conversion for service definitions (for example systemd-style unit/service/install blocks).
+Implementation conforms when supported format subsets roundtrip deterministically through canonical map/series model.
 
-## 7. Errors
+## 6. Full draft reference
 
-Each format family must expose stable, sentence-shaped parse/validation defects.
-
-## 8. Conformance
-
-Implementation conforms when supported format subset roundtrips deterministically through canonical map/value model.
-
-## 9. Full draft reference
-
-Detailed per-format rules are preserved at:
 `documentation/recipes/spec-archive/06-data-formats.full.md`

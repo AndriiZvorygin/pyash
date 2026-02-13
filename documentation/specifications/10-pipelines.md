@@ -1,50 +1,53 @@
 # 10. Pipelines
 
-Purpose: define refinery/pipeline declaration, scheduling hooks, and deterministic re-entry loops.
+Purpose: define refinery declarations, stage execution semantics, and deterministic re-entry loops.
 
-## 1. Core abstractions
+## 1. Pipeline keyword table
 
-- refinery declaration
-- stage series
-- retry/reiterate policy
-- checkpoints
-- report extraction
+| Keyword | Meaning | Application |
+| --- | --- | --- |
+| `be refinery def ... prah` | refinery declaration block | define staged workflow |
+| `su name <stage>` | stage identifier | unique stage node |
+| `from ve name ...` | stage dependencies | explicit prior-stage requirements |
+| `be refinery do` | execute refinery | run declared pipeline |
+| `be reiterate ya` | retry marker | bounded retry reporting |
+| `be checkpoint ya` | checkpoint marker | deterministic reuse/trace |
 
-## 2. Global invariants
+## 2. Canonical refinery pattern
 
-- deterministic stage ordering
-- explicit failure/success paths
-- sentence-shaped stage IO
-- replay visibility through run records
+```pyash
+su name plan loop be refinery def
+su name plan stage ob name input for name planner to name text plan out be write do
+su name execute stage ob name plan out for name worker to name text draft out be write do
+su name verify stage ob name draft out for name checker to name text verdict out be write do
+prah
 
-## 3. Refinery declaration
+ob text "task" from name plan loop to name text result be refinery do
+```
 
-Refinery definitions must declare stage list and target behavior explicitly.
+## 3. Determinism rules
 
-Execution must not depend on hidden implicit stage injection.
+- stage ordering deterministic,
+- explicit fail/success path,
+- bounded retry behavior,
+- replay visibility through run recording.
 
-## 4. Error and success handling
+## 4. Re-entry loop requirements
 
-Pipelines should support explicit failure sieve and success sieve patterns.
+Review/coding loops must declare:
+- explicit stop condition,
+- bounded attempt count,
+- recorded pass/fail decision.
 
-Retry behavior must be bounded and deterministic.
+## 5. Scheduling integration
 
-## 5. Re-entry loop profile
+Refineries may be triggered by calendar/scheduler services; scheduler control lives in agent/world specs.
 
-Re-entry/coding-review loops are allowed when:
-- stop conditions are explicit
-- attempt counts are bounded
-- pass/fail decision is recorded
+## 6. Conformance
 
-## 6. Scheduling integration
+Implementation conforms when refinery execution + retry/stop logic are deterministic and observable.
 
-Pipelines may be invoked by scheduler/calendar entries; scheduler semantics are specified in agent chapter.
+## 7. References
 
-## 7. Conformance
-
-Implementation conforms when refinery execution, retry rules, and loop stop conditions are deterministic and observable.
-
-## 8. Full draft reference
-
-Detailed stage examples and loop prompts are preserved at:
-`documentation/recipes/spec-archive/10-pipelines.full.md`
+- Full details: `documentation/recipes/spec-archive/10-pipelines.full.md`
+- LLM generation recipe: `documentation/recipes/refinery-planning-llm.md`
