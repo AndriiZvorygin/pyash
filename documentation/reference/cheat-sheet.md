@@ -84,7 +84,7 @@ Common IO verbs (see `07-io-and-scripts.md`):
 - **read**: raw bytes by default; text extraction with `become wo text`.
 - **write**: write `ob text` to output or `to filename`.
 - **download**: fetch remote content to artifacts.
-- **search**: web search (see `12-web-search.md`).
+- **search**: web search (see `12-web-and-browser.md`).
 - **command**: run shell command (use carefully).
 - **import**: load a module.
 

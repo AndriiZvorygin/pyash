@@ -1,73 +1,47 @@
 # Specifications Index
 
-Purpose: provide the normative specs for Pyash. Each module follows the same template and links to existing examples and quizzes.
+Purpose: normative spec set for Pyash. This folder is intentionally compact: <=20 files, each <=16KB.
 
-Reading order (core):
-1. `01-sentence-and-grammar.md` — sentence shape, cases, quoting, official ordering.
-2. `02-core-execution.md` — dispatch/signatures, ceremonies + `this`, control flow, error sentences, dynamic defaults.
-3. `03-vyah-and-aspect.md` — `vyah` modifiers and aspect inventory.
-4. `04-runtime-primitives.md` — C IR + duty/stream/chip primitives.
-5. `05-run-recording-and-artifacts.md` — newspaper/exchange/artifacts + again-mode determinism.
-6. `06-data-formats.md` — maps/JSON/YAML/CSV and canonical ordering.
+## Core order
 
-Reading order (feature chapters):
-7. `07-io-and-scripts.md` — directory verbs, date/time, interpret-script, download.
-8. `08-tools-and-mcp.md` — mind + tool calling + MCP.
-9. `09-speech-and-hear.md` — say/hear, speech artifacts, whisper input, vendoring.
-10. `10-pipelines.md` — refinery, re-entry cycle.
+1. `01-sentence-and-grammar.md` — sentence shape, cases, canonical emission.
+2. `02-core-execution.md` — dispatch/signatures, ceremonies, execution semantics.
+3. `03-vyah-and-aspect.md` — aspect/lifecycle vocabulary and recurrence normalization.
+4. `04-runtime-primitives.md` — runtime primitive and IR boundary contracts.
+5. `05-run-recording-and-artifacts.md` — newspaper/event/artifact replay requirements.
+6. `06-data-formats.md` — canonical maps/series and JSON/CSV/YAML/INI contracts.
+
+## Feature order
+
+7. `07-io-and-scripts.md` — IO, command, download, script execution boundaries.
+8. `08-tools-and-mcp.md` — mind tool envelope and MCP mapping.
+9. `09-speech-and-hear.md` — speech/hear contracts and metadata.
+10. `10-pipelines.md` — refinery/re-entry pipeline contracts.
 11. `11-translation.md` — translation pipeline.
-11. `11-modules.md` — module system and tool runner contract.
-12. `12-web-search.md` — web search spec (draft).
-13. `13-cheat-sheet.md` — compact coding-only reference (for small models).
-14. `14-index-map.md` — quick lookup map into the full specs.
-15. `18-pyash-agent.md` — agent loop, prompt context, and memory.
-16. `19-repair.md` — deterministic patch/repair verb (`be repair`).
-17. `20-command-safety.md` — sandbox, approvals, classification, audit, and tool/MCP permissions.
-18. `21-coding-saddle-readiness.md` — local-tool-first coding harness profile (`software` saddle).
-19. `22-memory-and-remember.md` — file-only MemCube lifecycle, retention, retrieval, and replay.
-20. `23-configure.md` — channel-first caterer-agnostic configure flow (`configure channel <caterer>`).
-21. `24-channel-contract.md` — canonical sentence contract for router/channel input/produce/health.
+12. `11-modules.md` — module system and runner contract.
+13. `12-web-and-browser.md` — web search + browser automation.
+14. `15-world.md` — world layout and shared runtime surfaces.
+15. `17-content-ingest.md` — ingest/chunk/abridge pipeline contract.
+16. `18-pyash-agent.md` — agent loop, session, memory, scheduler, channels.
+17. `19-ops-safety.md` — repair/command safety and coding harness requirements.
+18. `23-configure.md` — configure routes and managed write contract.
+19. `24-channel-contract.md` — channel/router input-produce-health contract.
 
-Recommended practice loop
-1. Read `01-sentence-and-grammar.md`, then run `examples/pyash/compile-subtract-to-js-text.pya`.
-2. Read `02-core-execution.md`, then run `examples/pyash/ceremony-invoke.pya` and `examples/pyash/ceremony-plus-two.pya`.
-3. Read `02-core-execution.md`, then trigger a signature inconsistency (see `quiz/ceremony_signature_inconsistency.test.mjs`).
-4. Read `03-vyah-and-aspect.md`, then run `examples/pyash/fizzbuzz.pya`.
-5. Read `04-runtime-primitives.md`, then run `quiz/runtime_primitives_lifecycle.test.mjs`.
-6. Read `05-run-recording-and-artifacts.md`, then run `quiz/run_newspaper_basic.test.mjs`.
-7. Read `06-data-formats.md`, then run `quiz/json_map_roundtrip_canonical.test.mjs`.
-8. Read `10-pipelines.md`, then run `examples/pyash/re-entry-cycle-fixture.pya`.
+## Reference docs (non-normative)
 
-If you need code locations without scanning the repo, read `documentation/specifications/90-implementation-map.md`.
+Moved out of `specifications/` to keep core spec compact:
+- `documentation/reference/cheat-sheet.md`
+- `documentation/reference/spec-index-map.md`
+- `documentation/reference/spec-implementation-map.md`
 
-Contributing overview (quick)
-1. Core modules and entry files
-- Parser: `program/understand/index.mjs` (`parse`)
-- Sentence splitting: `program/library/sentenceSplitter.mjs` (`splitSentences`, `splitSentencesWithLines`)
-- Interpreter bridge/dispatch: `program/bridge/index.mjs` (`interpret`), `program/bridge/signature.mjs` (signature derivation)
-- Exchange + artifacts: `program/bridge/exchange.mjs` (`recordArtifact`, `recordExchange`)
-- Compiler: `program/verbs/exchange/compile.mjs` (`transpileProgram`, runtime helper wiring)
-- Runtime helpers:
-  - JS: `program/verbs/exchange/compile/js/runtime_helpers.mjs` (`exchangeRuntimeHelper`, `newspaperRuntimeHelper`)
-  - C: `program/verbs/exchange/compile/c/helpers_c.mjs` (EXCHANGE_HELPER, MIND_RUNTIME_HELPER, CSV/YAML helpers)
+Archived long-form drafts:
+- `documentation/recipes/spec-archive/`
 
-2. Primary tests and how to run them
-- Full suite: `npm test`
-- Targeted: `node --test quiz/<file>.test.mjs`
-- Interpreter: `node program/main.mjs` (REPL), `./run <file.pya>`
-- Compiled JS/C: `./runjs <file.pya>`, `./runc <file.pya>`
+## Quick lookup
 
-3. Source of truth for keywords and ordering
-- Keywords (moods, cases, types, vyah): `program/library/grammar/keywords.mjs`
-- Compositional case mapping/order: `program/library/compositionalCases.mjs`
-- Official JSON key ordering: `documentation/specifications/06-data-formats.md`
-
-Feature specs (optional, when blessed):
-- `07-io-and-scripts.md`
-- `08-tools-and-mcp.md`
-- `09-speech-and-hear.md`
-- `10-pipelines.md`
-- `11-translation.md`
-- `11-modules.md` (v0.1)
-- `18-pyash-agent.md`
-- `documentation/whisper_initial_prompt.md` (draft)
+- unknown signature/dispatch issue -> `02-core-execution.md`
+- case ordering/grammar issue -> `01-sentence-and-grammar.md`
+- tool/MCP routing issue -> `08-tools-and-mcp.md`
+- scheduler/agent/session/memory issue -> `18-pyash-agent.md`
+- command approval/sandbox issue -> `19-ops-safety.md`
+- channel routing issue -> `24-channel-contract.md`
