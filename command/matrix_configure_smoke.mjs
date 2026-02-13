@@ -284,7 +284,7 @@ async function main() {
   const host = homeserverHost(secret.homeserver);
   const originalRoom = secret.room;
   const executiveUserId = ensureMatrixUserServer(executiveInput, host);
-  const agentUserId = ensureMatrixUserServer(secret.userId || agentName, host);
+  const agentUserId = ensureMatrixUserServer(agentName, host);
   const smokeHouseCandidates = [
     path.join("/tmp", `matrix-smoke-${sanitizePathSegment(executiveUserId)}`),
     path.join("/tmp", `${agentName}-smoke-house`),
