@@ -1063,6 +1063,21 @@ function buildChannelInputCalendarBlock({ agentName, channels = [], intervalSeco
   ].join("\n");
 }
 
+function buildChannelProduceCalendarBlock({ agentName, channels = [], intervalSeconds = 1 }) {
+  const interval = Math.max(1, Math.floor(Number(intervalSeconds) || 1));
+  const orderedChannels = Array.from(new Set(
+    (Array.isArray(channels) ? channels : [])
+      .map((value) => String(value ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  ));
+  const channelValues = orderedChannels.length ? orderedChannels : ["matrix"];
+  const vectorLiteral = channelValues.map((value) => quoteText(value)).join(" ");
+  return [
+    `su name channel produce for name ${agentName} with ve text ${vectorLiteral} vyah habit during second ${interval} be calendar ya`,
+    "su name channel produce lane ob text \"channel_produce\" ya"
+  ].join("\n");
+}
+
 function stripAgentChannelScheduleText({ existing, agentName, scheduleName, includeManagedBlockLines = true }) {
   const normalizedAgent = String(agentName ?? "").trim();
   const normalizedSchedule = String(scheduleName ?? "").trim().toLowerCase();
@@ -1107,6 +1122,14 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
         continue;
       }
     }
+    if (normalizedSchedule === "produce") {
+      if (new RegExp(`^su name channel produce for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
+        continue;
+      }
+      if (/^su name channel produce lane ob text ".*" ya$/i.test(trimmed)) {
+        continue;
+      }
+    }
     kept.push(line);
   }
   let next = kept.join("\n").replace(/\n{3,}/g, "\n\n");
@@ -1117,7 +1140,7 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
 function stripLegacySingleChannelScheduleText({
   existing,
   channelType = MATRIX_CATERER_NAME,
-  scheduleNames = ["poll", "probe", "input"]
+  scheduleNames = ["poll", "probe", "input", "produce"]
 }) {
   const normalizedChannel = String(channelType ?? "").trim().toLowerCase();
   if (!normalizedChannel) return String(existing ?? "");
@@ -2329,8 +2352,13 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         agentName: cfg.agentName,
         scheduleName: "poll"
       });
-      const worldInputPlan = planManagedUpsert({
+      const worldWithoutProduce = stripAgentChannelScheduleText({
         existing: worldWithoutPoll,
+        agentName: cfg.agentName,
+        scheduleName: "produce"
+      });
+      const worldInputPlan = planManagedUpsert({
+        existing: worldWithoutProduce,
         blockName: "channel input schedule",
         content: buildChannelInputCalendarBlock({
           agentName: cfg.agentName,
@@ -2338,8 +2366,17 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
           intervalSeconds: 1
         })
       });
-      const worldTimingPlan = planManagedUpsert({
+      const worldProducePlan = planManagedUpsert({
         existing: worldInputPlan.nextText,
+        blockName: "channel produce schedule",
+        content: buildChannelProduceCalendarBlock({
+          agentName: cfg.agentName,
+          channels: [MATRIX_CATERER_NAME],
+          intervalSeconds: 1
+        })
+      });
+      const worldTimingPlan = planManagedUpsert({
+        existing: worldProducePlan.nextText,
         blockName: "matrix long poll timing",
         content: buildMatrixLongPollCalendarLine({
           longPollMs: cfg.longPollMs
@@ -2348,11 +2385,11 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       writes.push({
         path: worldCalendarPath,
         changed: worldInputPlan.changed
+          || worldProducePlan.changed
           || worldTimingPlan.changed
-          || (worldLegacyCleaned !== worldCalendarExisting)
-          || (worldWithoutPoll !== worldLegacyCleaned),
+          || (worldLegacyCleaned !== worldCalendarExisting),
         action: worldTimingPlan.action,
-        preview: ["channel poll schedule cleanup", "channel input schedule", "matrix long poll timing"],
+        preview: ["channel poll schedule cleanup", "channel input schedule", "channel produce schedule", "matrix long poll timing"],
         nextText: worldTimingPlan.nextText
       });
 
@@ -2363,12 +2400,22 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         agentName: cfg.agentName,
         scheduleName: "poll"
       });
+      const calendarWithoutInput = stripAgentChannelScheduleText({
+        existing: calendarWithoutPoll,
+        agentName: cfg.agentName,
+        scheduleName: "input"
+      });
+      const calendarWithoutProduce = stripAgentChannelScheduleText({
+        existing: calendarWithoutInput,
+        agentName: cfg.agentName,
+        scheduleName: "produce"
+      });
       writes.push({
         path: calendarPath,
-        changed: calendarWithoutPoll !== calendarExisting,
+        changed: calendarWithoutProduce !== calendarExisting,
         action: "replace",
-        preview: ["channel poll calendar cleanup"],
-        nextText: calendarWithoutPoll
+        preview: ["channel poll calendar cleanup", "channel input calendar cleanup", "channel produce calendar cleanup"],
+        nextText: calendarWithoutProduce
       });
     } else {
       const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
@@ -2387,8 +2434,13 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         agentName: cfg.agentName,
         scheduleName: "input"
       });
-      const worldTimingPlan = planManagedUpsert({
+      const worldWithoutProduce = stripAgentChannelScheduleText({
         existing: worldWithoutInput,
+        agentName: cfg.agentName,
+        scheduleName: "produce"
+      });
+      const worldTimingPlan = planManagedUpsert({
+        existing: worldWithoutProduce,
         blockName: "matrix long poll timing",
         content: buildMatrixLongPollCalendarLine({
           longPollMs: cfg.longPollMs
@@ -2397,28 +2449,55 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       writes.push({
         path: worldCalendarPath,
         changed: worldTimingPlan.changed
-          || (worldLegacyCleaned !== worldCalendarExisting)
-          || (worldWithoutPoll !== worldLegacyCleaned)
-          || (worldWithoutInput !== worldWithoutPoll),
+          || (worldLegacyCleaned !== worldCalendarExisting),
         action: worldTimingPlan.action,
-        preview: ["channel poll schedule cleanup", "channel input schedule cleanup", "matrix long poll timing"],
+        preview: ["channel poll schedule cleanup", "channel input schedule cleanup", "channel produce schedule cleanup", "matrix long poll timing"],
         nextText: worldTimingPlan.nextText
       });
 
       const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
       const calendarExisting = await readText(calendarPath);
-      const calendarPlan = upsertChannelPollCalendarText({
+      const calendarWithoutInput = stripAgentChannelScheduleText({
         existing: calendarExisting,
+        agentName: cfg.agentName,
+        scheduleName: "input"
+      });
+      const calendarWithoutProduce = stripAgentChannelScheduleText({
+        existing: calendarWithoutInput,
+        agentName: cfg.agentName,
+        scheduleName: "produce"
+      });
+      const calendarInputPlan = planManagedUpsert({
+        existing: calendarWithoutProduce,
+        blockName: "channel input schedule",
+        content: buildChannelInputCalendarBlock({
+          agentName: cfg.agentName,
+          channels: [MATRIX_CATERER_NAME],
+          intervalSeconds: 1
+        })
+      });
+      const calendarProducePlan = planManagedUpsert({
+        existing: calendarInputPlan.nextText,
+        blockName: "channel produce schedule",
+        content: buildChannelProduceCalendarBlock({
+          agentName: cfg.agentName,
+          channels: [MATRIX_CATERER_NAME],
+          intervalSeconds: 1
+        })
+      });
+      const calendarPlan = upsertChannelPollCalendarText({
+        existing: calendarProducePlan.nextText,
         agentName: cfg.agentName,
         channelType: MATRIX_CATERER_NAME,
         intervalSeconds: DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS
       });
+      const calendarNextText = calendarPlan.nextText;
       writes.push({
         path: calendarPath,
-        changed: calendarPlan.changed,
+        changed: calendarNextText !== calendarExisting,
         action: calendarPlan.action,
-        preview: ["channel poll calendar"],
-        nextText: calendarPlan.nextText
+        preview: ["channel poll calendar", "channel input schedule", "channel produce schedule"],
+        nextText: calendarNextText
       });
     }
   }

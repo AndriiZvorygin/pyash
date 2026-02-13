@@ -239,6 +239,7 @@ function createStats(job) {
     consecutiveErrors: 0,
     enabled: true,
     running: false,
+    pending: false,
     lastStart: null,
     lastEnd: null,
     lastError: null,
@@ -307,6 +308,7 @@ export function createScheduler({
       stats.enabled = true;
     }
     if (stats.running) {
+      stats.pending = true;
       stats.skips += 1;
       const attempts = stats.runs + stats.skips;
       stats.overlapPct = attempts > 0
@@ -392,6 +394,14 @@ export function createScheduler({
       return { skipped: false, error: err };
     } finally {
       stats.running = false;
+      if (stats.pending) {
+        stats.pending = false;
+        const task = tick(job).catch((err) => {
+          if (onError) onError(err);
+        });
+        tasks.add(task);
+        task.finally(() => tasks.delete(task));
+      }
     }
   }
 
@@ -445,6 +455,7 @@ export function createScheduler({
         consecutiveErrors: stats?.consecutiveErrors ?? 0,
         enabled: stats?.enabled !== false,
         running: !!stats?.running,
+        pending: !!stats?.pending,
         lastStatus: stats?.lastStatus ?? null,
         lastError: stats?.lastError ?? null
       };
