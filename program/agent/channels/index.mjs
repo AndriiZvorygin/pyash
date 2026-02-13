@@ -193,8 +193,15 @@ function expectsToolActivity(text = "") {
   return /\b(tool|search|web\s*search|lookup|look\s+up|find)\b/i.test(String(text ?? ""));
 }
 
-function shouldIncludeToolSummary({ channelConfig, channelId, dmRooms }) {
-  const isDmRoom = dmRooms?.has(channelId) === true;
+function isDmEvent(event, dmRooms) {
+  if (event?.dmRoom === true) return true;
+  const channelId = String(event?.channelId ?? "").trim();
+  if (!channelId) return false;
+  return dmRooms?.has(channelId) === true;
+}
+
+function shouldIncludeToolSummary({ channelConfig, event, dmRooms }) {
+  const isDmRoom = isDmEvent(event, dmRooms);
   const dmSetting = channelConfig?.dmToolSummary;
   if (isDmRoom && typeof dmSetting === "boolean") return dmSetting;
   if (typeof channelConfig?.toolSummary === "boolean") return channelConfig.toolSummary;
@@ -552,6 +559,7 @@ async function dispatchChannelEvents({
   for (const event of events) {
     received += 1;
     const listenerAgents = roomListenerAgents(channelConfig, event.channelId, agentName);
+    const eventIsDmRoom = isDmEvent(event, dmRooms);
     const targetedByMention = resolveMentionTargets({
       text: event.text,
       listenerAgents,
@@ -561,7 +569,7 @@ async function dispatchChannelEvents({
       (event.inReplyToEventId && selfEventIds.has(event.inReplyToEventId))
       || (event.threadId && selfEventIds.has(event.threadId))
     );
-    const listenersToRun = mentionGate && !dmRooms.has(event.channelId)
+    const listenersToRun = mentionGate && !eventIsDmRoom
       ? (repliedToSelf ? listenerAgents : targetedByMention)
       : (targetedByMention.length ? targetedByMention : listenerAgents);
 
@@ -635,7 +643,7 @@ async function dispatchChannelEvents({
           targetedByMention,
           listenersToRun,
           mentionGate,
-          dmRoom: dmRooms.has(event.channelId),
+          dmRoom: eventIsDmRoom,
           repliedToSelf
         }, { channelType, agentName });
       }
@@ -656,7 +664,7 @@ async function dispatchChannelEvents({
         targetedByMention,
         listenersToRun,
         mentionGate,
-        dmRoom: dmRooms.has(event.channelId),
+        dmRoom: eventIsDmRoom,
         repliedToSelf
       }, { channelType, agentName });
     }
@@ -722,7 +730,7 @@ async function dispatchChannelEvents({
       let responseText = "";
       const includeToolSummary = shouldIncludeToolSummary({
         channelConfig,
-        channelId: event.channelId,
+        event,
         dmRooms
       });
       const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
@@ -865,7 +873,8 @@ function normalizeEvent(rawEvent, channelType) {
     text,
     timestamp: rawEvent.timestamp ? String(rawEvent.timestamp) : nowIso(),
     laneName: rawEvent.laneName ? String(rawEvent.laneName) : null,
-    attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : []
+    attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : [],
+    dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true
   };
 }
 

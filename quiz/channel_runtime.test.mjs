@@ -239,6 +239,50 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
   assert.equal(result.skippedMention, 1);
 });
 
+test("channel runtime mention gate allows direct-room events without configured dmRooms", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-direct-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$1", sender: "@u:server", text: "hello all" },
+          { channelType: "matrix", channelId: "!dm:server", eventId: "$2", sender: "@u:server", text: "dm hello", dmRoom: true }
+        ],
+        checkpoint: { nextBatch: "tok2" }
+      };
+    },
+    async send() {
+      return { eventId: "$out" };
+    }
+  };
+
+  let calls = 0;
+  const interpretFn = async () => {
+    calls += 1;
+    return { ob: { text: "reply" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: true,
+      dmRooms: [],
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.skippedMention, 1);
+});
+
 test("channel runtime warm-start primes checkpoint and skips backlog on first poll", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-warm-start-"));
   const agentHouse = path.join(root, "world", "house", "helper");

@@ -338,6 +338,10 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
       const roomLane = resolvedRooms.laneByRoomId;
       const directRoomIds = Array.isArray(directRoomsSnapshot?.rooms) ? directRoomsSnapshot.rooms : [];
+      const configuredDmRoomIds = Array.isArray(config?.dmRooms)
+        ? config.dmRooms.map((roomId) => String(roomId ?? "").trim()).filter(Boolean)
+        : [];
+      const dmRoomIds = new Set([...directRoomIds, ...configuredDmRoomIds]);
       const roomIdsToRead = [...new Set([
         ...resolvedRooms.roomIds,
         ...directRoomIds,
@@ -355,6 +359,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
           const normalized = normalizeMatrixEvent(event, { roomId });
           if (!normalized) continue;
           normalized.laneName = roomLane.get(roomId) ?? null;
+          normalized.dmRoom = dmRoomIds.has(roomId);
           events.push(normalized);
         }
       }

@@ -468,6 +468,7 @@ test("matrix adapter receive includes m.direct room events", async () => {
   assert.equal(received.events[0]?.eventId, "$dm1");
   assert.equal(received.events[0]?.channelId, "!dm:server");
   assert.equal(received.events[0]?.laneName, null);
+  assert.equal(received.events[0]?.dmRoom, true);
   assert.deepEqual(received.diagnostics?.directRoomsSnapshot?.rooms, ["!dm:server"]);
 });
 
