@@ -14,6 +14,10 @@ function hasFlag(args, flag) {
   return args.includes(flag);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
 function usage() {
   return [
     "Usage: node command/matrix_configure_smoke.mjs [options]",
@@ -78,9 +82,6 @@ function parseSecretText(secretText) {
     /su name homeserver ob text "([^"]+)" ya/i,
     /exists\s+su name matrix homeserver ob text "([^"]+)"/i
   ]);
-  const room = read([
-    /su name room ob text "([^"]+)" ya/i
-  ]);
   const userId = read([
     /su name user ob text "([^"]+)" ya/i
   ]);
@@ -88,7 +89,34 @@ function parseSecretText(secretText) {
     /exists\s+su name matrix registration shared secret ob text "([^"]+)"/i,
     /su name registration shared secret ob text "([^"]+)" ya/i
   ]);
-  return { homeserver, room, userId, sharedSecret };
+  return { homeserver, userId, sharedSecret };
+}
+
+async function readTextOrEmpty(filePath) {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch (err) {
+    if (err?.code === "ENOENT") return "";
+    throw err;
+  }
+}
+
+function parseMatrixRoomFromChannelPolicy(policyText) {
+  const matches = [...String(policyText ?? "").matchAll(/su name matrix room ob text "([^"]+)" ya/ig)];
+  if (!matches.length) return "";
+  return String(matches[matches.length - 1]?.[1] ?? "").trim();
+}
+
+async function loadConfiguredMatrixRoom({ rootDir, agentName }) {
+  const worldPolicyPath = path.join(rootDir, "world", "conduct", "channels.pya");
+  const agentPolicyPath = path.join(rootDir, "world", "house", agentName, "conduct", "channels.pya");
+  const [worldPolicyText, agentPolicyText] = await Promise.all([
+    readTextOrEmpty(worldPolicyPath),
+    readTextOrEmpty(agentPolicyPath)
+  ]);
+  const agentRoom = parseMatrixRoomFromChannelPolicy(agentPolicyText);
+  if (agentRoom) return agentRoom;
+  return parseMatrixRoomFromChannelPolicy(worldPolicyText);
 }
 
 function runPyash({ rootDir, args }) {
@@ -143,6 +171,26 @@ async function matrixSendText({ homeserver, token, roomId, body }) {
     throw new Error(`matrix send failed: status=${response.status} error=${String(payload?.error || "")}`);
   }
   return String(payload?.event_id ?? "");
+}
+
+function isMatrixRateLimitedError(errorLike) {
+  const message = String(errorLike?.message ?? errorLike ?? "");
+  return /status=429|m_limit_exceeded/i.test(message);
+}
+
+async function matrixSendTextWithRetry(params, { attempts = 6, baseDelayMs = 1200 } = {}) {
+  let lastError = null;
+  const maxAttempts = Math.max(1, Math.floor(Number(attempts) || 1));
+  for (let i = 0; i < maxAttempts; i += 1) {
+    try {
+      return await matrixSendText(params);
+    } catch (err) {
+      lastError = err;
+      if (!isMatrixRateLimitedError(err) || i >= maxAttempts - 1) throw err;
+      await sleep(baseDelayMs * (i + 1));
+    }
+  }
+  throw lastError ?? new Error("matrix send failed");
 }
 
 async function matrixCreateRoom({ homeserver, token, invite = [], isDirect = false }) {
@@ -266,6 +314,9 @@ async function main() {
   requireOk(runPyash({ rootDir, args: ["calendar", "stop"] }), "calendar stop");
   summary.steps.schedulerStopped = true;
 
+  const originalRoom = await loadConfiguredMatrixRoom({ rootDir, agentName });
+  summary.steps.originalRoom = originalRoom;
+
   const housePath = path.join(rootDir, "world", "house", agentName);
   if (wipe) {
     await fs.rm(housePath, { recursive: true, force: true });
@@ -275,14 +326,16 @@ async function main() {
   const secretPath = path.join(rootDir, "configure", "secret.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const secret = parseSecretText(secretText);
-  if (!secret.homeserver || !secret.room) {
-    throw new Error("configure/secret.pya is missing matrix homeserver/room");
+  if (!secret.homeserver) {
+    throw new Error("configure/secret.pya is missing matrix homeserver");
+  }
+  if (!originalRoom) {
+    throw new Error("matrix room is missing from world/house channel policy");
   }
   if (!secret.sharedSecret) {
     throw new Error("configure/secret.pya is missing matrix registration shared secret");
   }
   const host = homeserverHost(secret.homeserver);
-  const originalRoom = secret.room;
   const executiveUserId = ensureMatrixUserServer(executiveInput, host);
   const agentUserId = ensureMatrixUserServer(agentName, host);
   const smokeHouseCandidates = [
@@ -411,15 +464,26 @@ async function main() {
   const marker = `smoke-${Date.now()}`;
   summary.steps.marker = marker;
 
-  const pollAgent = () => {
-    const run = runPyash({ rootDir, args: ["channel", "poll", "--agent", agentName, "--channel", "matrix"] });
-    requireOk(run, "channel poll");
+  const pollAgent = async ({ attempts = 6, baseDelayMs = 1200 } = {}) => {
+    const maxAttempts = Math.max(1, Math.floor(Number(attempts) || 1));
+    let lastRun = null;
+    for (let i = 0; i < maxAttempts; i += 1) {
+      const run = runPyash({ rootDir, args: ["channel", "poll", "--agent", agentName, "--channel", "matrix"] });
+      lastRun = run;
+      if (run.status === 0) return;
+      const errorText = `${String(run.stderr ?? "")}\n${String(run.stdout ?? "")}`;
+      if (!isMatrixRateLimitedError(errorText) || i >= maxAttempts - 1) {
+        requireOk(run, "channel poll");
+      }
+      await sleep(baseDelayMs * (i + 1));
+    }
+    requireOk(lastRun, "channel poll");
   };
 
   const pollAndRead = async (roomId, rounds = 1, pauseMs = 1200) => {
     let messages = [];
     for (let i = 0; i < rounds; i += 1) {
-      pollAgent();
+      await pollAgent();
       await new Promise((resolve) => setTimeout(resolve, pauseMs));
       messages = await matrixRoomMessages({
         homeserver: secret.homeserver,
@@ -444,7 +508,7 @@ async function main() {
     return false;
   };
 
-  const untaggedEventId = await matrixSendText({
+  const untaggedEventId = await matrixSendTextWithRetry({
     homeserver: secret.homeserver,
     token: smokeToken,
     roomId: smokePublicRoomId,
@@ -457,7 +521,7 @@ async function main() {
     agentUserId
   });
 
-  const taggedEventId = await matrixSendText({
+  const taggedEventId = await matrixSendTextWithRetry({
     homeserver: secret.homeserver,
     token: smokeToken,
     roomId: smokePublicRoomId,
@@ -468,7 +532,7 @@ async function main() {
     eventId: taggedEventId
   });
   if (!taggedReply) {
-    const taggedRetryEventId = await matrixSendText({
+    const taggedRetryEventId = await matrixSendTextWithRetry({
       homeserver: secret.homeserver,
       token: smokeToken,
       roomId: smokePublicRoomId,
@@ -511,7 +575,7 @@ async function main() {
     throw new Error("missing executive dm room id after bootstrap");
   }
   await matrixJoinRoom({ homeserver: secret.homeserver, token: smokeToken, room: dmRoomId });
-  const dmEventId = await matrixSendText({
+  const dmEventId = await matrixSendTextWithRetry({
     homeserver: secret.homeserver,
     token: smokeToken,
     roomId: dmRoomId,
@@ -522,7 +586,7 @@ async function main() {
     eventId: dmEventId
   });
   if (!dmReply) {
-    const dmRetryEventId = await matrixSendText({
+    const dmRetryEventId = await matrixSendTextWithRetry({
       homeserver: secret.homeserver,
       token: smokeToken,
       roomId: dmRoomId,

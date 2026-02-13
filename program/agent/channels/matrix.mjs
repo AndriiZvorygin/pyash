@@ -38,7 +38,7 @@ function authHeaders({ token, mode, headers = {} } = {}) {
   return next;
 }
 
-function normalizeLongPollMs(raw, fallback = 30000) {
+function normalizeLongPollMs(raw, fallback = 10000) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return fallback;
   const rounded = Math.trunc(value);
