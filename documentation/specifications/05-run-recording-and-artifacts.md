@@ -42,6 +42,15 @@ node command/replay_newspaper.mjs <run-id>
 
 Again mode means: require sufficient recording/verifiability so run outputs can be checked/replayed deterministically.
 
+Programmatic sentence-native profile:
+- a run surface marked with `vyah iterative` SHOULD enable equivalent strict recording/replay requirements.
+- this is runner policy derived from aspect intent, not a separate ad-hoc JSON mode.
+
+Example:
+```pyash
+su name run ob text "<program>" at filename "." vyah iterative be interpret do
+```
+
 ## 6. Source mapping
 
 Compiled JS/C paths should preserve source-map/line mapping for actionable diagnostics.

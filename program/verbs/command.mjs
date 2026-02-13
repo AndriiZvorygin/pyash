@@ -649,7 +649,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       if (entry.stop) entry.stop();
       commandStreamProcesses.delete(targetName);
     }
-    return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "sloh"] } }, be: "command", mood: "ya" };
+    return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "success"] } }, be: "command", mood: "ya" };
   }
   if (aspect && aspect !== "stream" && aspect !== "eval") {
     throwErrorSentence({

@@ -17,10 +17,13 @@ const ASPECT_ALIAS_MAP = new Map(
 const TENSE_SET = new Set(VYAH_TENSE_MODIFIERS);
 const OUTCOME_SET = new Set(VYAH_OUTCOME_MODIFIERS);
 const ATTITUDE_SET = new Set(VYAH_ATTITUDINAL_MODIFIERS);
+const OUTCOME_ALIAS_MAP = new Map([
+  ["sloh", "success"]
+]);
 
 export function normalizeVyahAspectToken(token) {
   const lower = String(token ?? "").toLowerCase();
-  return ASPECT_ALIAS_MAP.get(lower) ?? lower;
+  return ASPECT_ALIAS_MAP.get(lower) ?? OUTCOME_ALIAS_MAP.get(lower) ?? lower;
 }
 
 export function splitVyahModifiers(values = []) {

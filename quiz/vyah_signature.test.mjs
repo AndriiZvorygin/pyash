@@ -11,7 +11,7 @@ test("vyah aspect participates in signature derivation", () => {
 });
 
 test("vyah defaults to do when aspect missing", () => {
-  const sentence = parse("ob num 1 vyah sloh be plus do");
+  const sentence = parse("ob num 1 vyah success be plus do");
   const sig = deriveSignatureFromCall(sentence);
   assert.equal(joinSignatureWords(sig), "be plus ob num vyah eval");
 });

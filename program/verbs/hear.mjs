@@ -47,7 +47,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       if (entry.stopWatcher) entry.stopWatcher();
       hearStreamProcesses.delete(targetName);
     }
-    return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "sloh"] } }, be: "hear", mood: "ya" };
+    return { su: { name: targetName }, vyah: { ve: { type: "name", values: ["cancel", "success"] } }, be: "hear", mood: "ya" };
   }
   if (aspectKey !== "eval" && aspectKey !== "stream" && aspectKey !== "timebox") {
     throwErrorSentence({
