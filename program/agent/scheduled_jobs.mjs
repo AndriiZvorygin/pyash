@@ -108,7 +108,7 @@ function normalizeChannelMode(raw) {
   return "sync";
 }
 
-function normalizeLongPollMs(raw, fallback = 30000) {
+function normalizeLongPollMs(raw, fallback = 10000) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return fallback;
   const rounded = Math.trunc(value);
@@ -152,7 +152,7 @@ async function runChannelPollJob({ worldRoot, job }) {
     }
     let channelConfig = { ...rawConfig };
     const channelMode = normalizeChannelMode(channelConfig.mode);
-    const effectiveLongPollMs = normalizeLongPollMs(channelConfig.longPollMs, 30000);
+    const effectiveLongPollMs = normalizeLongPollMs(channelConfig.longPollMs, 10000);
     channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
     if (channelMode === "appservice-push" && channelConfig.warmStart == null) {
       channelConfig = { ...channelConfig, warmStart: true };

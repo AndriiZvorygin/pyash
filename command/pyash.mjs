@@ -43,8 +43,8 @@ const DEFAULT_CHANNEL_AGENT_NAME = "pyash-agent";
 const DEFAULT_MIND_RELAY_NAME = "default";
 const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice-push", "appservice"];
 const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
-const DEFAULT_MATRIX_LONG_POLL_MS = 30000;
-const DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS = 30;
+const DEFAULT_MATRIX_LONG_POLL_MS = 10000;
+const DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS = 10;
 const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "configure/secret/matrix.yaml";
 const MIND_BACKEND_CHOICES = [
   { key: "ollama", value: "ollama command mind", label: "Ollama" },
@@ -59,6 +59,15 @@ function parseArgValue(args, flag) {
   const idx = args.findIndex((arg) => arg === flag);
   if (idx < 0) return null;
   return args[idx + 1] ?? null;
+}
+
+function parseArgValues(args, flag) {
+  const values = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] !== flag) continue;
+    values.push(args[i + 1] ?? "");
+  }
+  return values;
 }
 
 function hasFlag(args, flag) {
@@ -90,7 +99,7 @@ function usage() {
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>] [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--mention-gate <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
@@ -991,6 +1000,14 @@ function buildChannelConductBlock({
   ].join("\n");
 }
 
+function buildAgentChannelConductBlock({
+  userId = ""
+}) {
+  const normalizedUserId = String(userId ?? "").trim();
+  if (!normalizedUserId) return "# no per-agent matrix overrides";
+  return `su name matrix user ob text ${quoteText(normalizedUserId)} ya`;
+}
+
 function buildMatrixLongPollCalendarLine({
   agentName,
   longPollMs = DEFAULT_MATRIX_LONG_POLL_MS
@@ -1071,10 +1088,10 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
       continue;
     }
     if (normalizedSchedule === "poll") {
-      if (new RegExp(`^su name channel poll for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
+      if (new RegExp(`^su name (channel|[a-z0-9_-]+)\\s+poll for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
         continue;
       }
-      if (/^su name channel poll lane ob text ".*" ya$/i.test(trimmed)) {
+      if (/^su name (channel|[a-z0-9_-]+)\s+poll lane ob text ".*" ya$/i.test(trimmed)) {
         continue;
       }
     }
@@ -1086,6 +1103,55 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
         continue;
       }
     }
+    kept.push(line);
+  }
+  let next = kept.join("\n").replace(/\n{3,}/g, "\n\n");
+  if (next && !next.endsWith("\n")) next = `${next}\n`;
+  return next;
+}
+
+function stripLegacySingleChannelScheduleText({
+  existing,
+  channelType = MATRIX_CATERER_NAME,
+  scheduleNames = ["poll", "probe", "input"]
+}) {
+  const normalizedChannel = String(channelType ?? "").trim().toLowerCase();
+  if (!normalizedChannel) return String(existing ?? "");
+  const accepted = new Set(
+    (Array.isArray(scheduleNames) ? scheduleNames : [])
+      .map((value) => String(value ?? "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (!accepted.size) return String(existing ?? "");
+
+  const lines = String(existing ?? "").split("\n");
+  const kept = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      kept.push(line);
+      continue;
+    }
+    let sentence;
+    try {
+      sentence = parse(trimmed);
+    } catch {
+      kept.push(line);
+      continue;
+    }
+    if (!sentence || sentence.mood !== "ya") {
+      kept.push(line);
+      continue;
+    }
+    const subject = String(sentence?.su?.name ?? "").trim().toLowerCase();
+    const parts = subject.split(/\s+/).filter(Boolean);
+    if (parts.length < 2 || parts[0] !== normalizedChannel) {
+      kept.push(line);
+      continue;
+    }
+    const action = parts.slice(1).join(" ");
+    const baseAction = action.endsWith(" lane") ? action.slice(0, -5) : action;
+    if (accepted.has(baseAction)) continue;
     kept.push(line);
   }
   let next = kept.join("\n").replace(/\n{3,}/g, "\n\n");
@@ -1416,6 +1482,30 @@ async function matrixSendRoomMessage({ homeserver, token, roomId, content, mode 
   return String(payload?.event_id || "");
 }
 
+async function matrixInviteRoomMember({ homeserver, token, roomId, inviteUserId, mode = "", userId = "" }) {
+  const endpoint = applyMatrixAuthToUrl(
+    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`,
+    { token, userId, mode }
+  );
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: matrixAuthHeaders({
+      token,
+      mode,
+      headers: { "Content-Type": "application/json" }
+    }),
+    body: JSON.stringify({
+      user_id: String(inviteUserId ?? "")
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
+    const message = payload?.error ? ` error=${payload.error}` : "";
+    throw new Error(`matrix invite failed: status=${response.status}${code}${message}`);
+  }
+}
+
 async function matrixCreateDirectRoom({ homeserver, token, executiveUsername, mode = "", userId = "" }) {
   const endpoint = applyMatrixAuthToUrl(
     `${normalizeHomeserver(homeserver)}/_matrix/client/v3/createRoom`,
@@ -1461,13 +1551,21 @@ async function ensureExecutiveDmRoom({ cfg, rootDir }) {
 
 async function matrixPostSetupTest(cfg, { rootDir } = {}) {
   const checks = [];
+  const executiveUsernames = Array.from(new Set(
+    [
+      ...(Array.isArray(cfg.executiveUsernames) ? cfg.executiveUsernames : []),
+      cfg.executiveUsername
+    ]
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean)
+  ));
   const live = await matrixLiveTest(cfg);
   checks.push(...(live.checks || []));
   if (!live.ok) return { ok: false, checks };
 
   if (!cfg.token) {
     checks.push({ name: "room join + greeting", ok: true, note: "skipped: no token available" });
-    if (cfg.executiveUsername) {
+    if (executiveUsernames.length > 0) {
       checks.push({ name: "executive dm greeting", ok: true, note: "skipped: no token available" });
     }
     return { ok: true, checks };
@@ -1496,30 +1594,32 @@ async function matrixPostSetupTest(cfg, { rootDir } = {}) {
     return { ok: false, checks };
   }
 
-  if (cfg.executiveUsername) {
-    try {
-      const dmRoomId = rootDir
-        ? await ensureExecutiveDmRoom({ cfg, rootDir })
-        : await matrixCreateDirectRoom({
+  if (executiveUsernames.length > 0) {
+    for (const executiveUsername of executiveUsernames) {
+      try {
+        const dmRoomId = rootDir
+          ? await ensureExecutiveDmRoom({ cfg: { ...cfg, executiveUsername }, rootDir })
+          : await matrixCreateDirectRoom({
+            homeserver: cfg.homeserver,
+            token: cfg.token,
+            executiveUsername,
+            mode: cfg.mode || "",
+            userId: cfg.userId || ""
+          });
+        checks.push({ name: "resolve executive dm room", ok: true, executiveUsername, roomId: dmRoomId });
+        const dmEventId = await matrixSendRoomMessage({
           homeserver: cfg.homeserver,
           token: cfg.token,
-          executiveUsername: cfg.executiveUsername,
+          roomId: dmRoomId,
+          content: "Pyash configure DM test greeting. Executive messaging is working.",
           mode: cfg.mode || "",
           userId: cfg.userId || ""
         });
-      checks.push({ name: "resolve executive dm room", ok: true, roomId: dmRoomId });
-      const dmEventId = await matrixSendRoomMessage({
-        homeserver: cfg.homeserver,
-        token: cfg.token,
-        roomId: dmRoomId,
-        content: "Pyash configure DM test greeting. Executive messaging is working.",
-        mode: cfg.mode || "",
-        userId: cfg.userId || ""
-      });
-      checks.push({ name: "send executive dm greeting", ok: true, eventId: dmEventId });
-    } catch (err) {
-      checks.push({ name: "executive dm greeting", ok: false, error: String(err?.message || err) });
-      return { ok: false, checks };
+        checks.push({ name: "send executive dm greeting", ok: true, executiveUsername, eventId: dmEventId });
+      } catch (err) {
+        checks.push({ name: "executive dm greeting", ok: false, executiveUsername, error: String(err?.message || err) });
+        return { ok: false, checks };
+      }
     }
   }
 
@@ -1637,7 +1737,16 @@ function collectMatrixFromFlags({ args, prior }) {
   const room = providedRoom
     ? ensureMatrixIdServer(providedRoom, host)
     : rewriteMatrixIdServer(prior.room ?? "", host);
-  const executiveUsername = ensureMatrixUserServer(parseArgValue(args, "--executive") ?? prior.executiveUsername ?? "", host);
+  const providedExecutives = parseArgValues(args, "--executive");
+  const priorExecutives = Array.isArray(prior.executiveUsernames) && prior.executiveUsernames.length
+    ? prior.executiveUsernames
+    : [prior.executiveUsername ?? ""];
+  const executiveUsernames = Array.from(new Set(
+    (providedExecutives.length ? providedExecutives : priorExecutives)
+      .map((value) => ensureMatrixUserServer(value, host))
+      .filter(Boolean)
+  ));
+  const executiveUsername = executiveUsernames[0] ?? "";
   const userId = ensureMatrixUserServer(parseArgValue(args, "--agent-user-id") ?? prior.userId ?? "", host);
   const authMode = String(parseArgValue(args, "--auth-mode") ?? prior.authMode ?? "password").trim().toLowerCase();
   const token = parseArgValue(args, "--token") ?? prior.token ?? "";
@@ -1659,12 +1768,13 @@ function collectMatrixFromFlags({ args, prior }) {
   ).trim();
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
-  const mentionGate = parseTruthy(parseArgValue(args, "--mention-gate"), false);
+  const mentionGate = parseTruthy(parseArgValue(args, "--mention-gate"), prior.mentionGate === true);
 
   return {
     homeserver,
     room,
     executiveUsername,
+    executiveUsernames,
     userId,
     authMode,
     token,
@@ -1805,8 +1915,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     if (!isAppserviceMode(channelMode)) {
       printer.header("A.3 Long Poll Rhythm");
       printer.why("Long-poll timeout controls receive wait time for sync delivery.");
-      printer.how("Use 30000 for normal sync, lower values for poll fallback.");
-      printer.examples("1000 | 30000 | 45000");
+      printer.how("Use 10000 for normal sync, lower values for faster fallback.");
+      printer.examples("1000 | 10000 | 45000");
       const enteredLongPollMs = await ask("Long poll ms", String(defaultLongPollMs));
       longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
       textOut(`- long poll set to ${longPollMs} ms`);
@@ -2010,13 +2120,21 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
 
     let executiveUsername = ensureMatrixUserServer(prior.executiveUsername || "", host);
     let writeAgentPolicy = true;
-    let mentionGate = false;
+    let mentionGate = prior.mentionGate === true;
 
     printer.header("D.1 Executive Test");
     printer.why("Optional executive user can receive a DM greeting test.");
     printer.how("Set a user id to test direct messaging; leave blank to skip.");
     printer.examples("@andrii:matrix.liberit.ca");
     executiveUsername = ensureMatrixUserServer(await ask("Executive user (optional DM target)", executiveUsername), host);
+    const executiveUsernames = Array.from(new Set(
+      [
+        executiveUsername,
+        ...(Array.isArray(prior.executiveUsernames) ? prior.executiveUsernames : [])
+      ]
+        .map((value) => ensureMatrixUserServer(value, host))
+        .filter(Boolean)
+    ));
     if (executiveUsername) {
       try {
         const dmRoomId = await ensureMatrixExecutiveDmRoom({
@@ -2042,11 +2160,10 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       printer.header("E.1 Agent Conduct Files");
       printer.why("Optional local channel conduct file can be generated per agent.");
       printer.how("Enable when you want the declared agent house conduct/channels.pya written.");
-      printer.examples(`agent=${DEFAULT_CHANNEL_AGENT_NAME}, mention gate=lie`);
+      printer.examples(`agent=${DEFAULT_CHANNEL_AGENT_NAME}`);
       writeAgentPolicy = await askYesNo("Write agent channel conduct file", true);
       if (writeAgentPolicy) {
         agentName = await ask("Agent name", agentName);
-        mentionGate = parseTruthy(await ask("Mention gate (truth/lie)", mentionGate ? "truth" : "lie"), mentionGate);
       }
     }
 
@@ -2054,6 +2171,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       homeserver,
       room,
       executiveUsername,
+      executiveUsernames,
       userId,
       authMode,
       token,
@@ -2077,6 +2195,14 @@ function normalizeMatrixCollected(cfg) {
   const homeserver = normalizeHomeserver(cfg.homeserver);
   const host = homeserverHost(homeserver);
   const room = ensureMatrixIdServer(cfg.room, host);
+  const executiveUsernames = Array.from(new Set(
+    [
+      ...(Array.isArray(cfg.executiveUsernames) ? cfg.executiveUsernames : []),
+      cfg.executiveUsername
+    ]
+      .map((value) => ensureMatrixUserServer(value, host))
+      .filter(Boolean)
+  ));
   const mode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
   const longPollMs = normalizeMatrixLongPollMs(
     cfg.longPollMs,
@@ -2090,7 +2216,8 @@ function normalizeMatrixCollected(cfg) {
     mode,
     longPollMs,
     appserviceRegistration,
-    executiveUsername: ensureMatrixUserServer(cfg.executiveUsername, host),
+    executiveUsername: executiveUsernames[0] || "",
+    executiveUsernames,
     userId: ensureMatrixUserServer(cfg.userId, host),
     authMode: String(cfg.authMode || "password").trim().toLowerCase()
   };
@@ -2147,7 +2274,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     blockName: MATRIX_WORLD_POLICY_BLOCK_NAME,
     content: buildChannelConductBlock({
       room: cfg.room,
-      executiveUsernames: cfg.executiveUsername ? [cfg.executiveUsername] : [],
+      executiveUsernames: Array.isArray(cfg.executiveUsernames) ? cfg.executiveUsernames : [],
       mentionGate: cfg.mentionGate,
       mode: cfg.mode
     })
@@ -2169,10 +2296,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     const policyPlan = planManagedUpsert({
       existing: channelSeedScrubbed,
       blockName: MATRIX_POLICY_BLOCK_NAME,
-      content: buildChannelConductBlock({
-        room: cfg.room,
-        mentionGate: cfg.mentionGate,
-        mode: cfg.mode,
+      content: buildAgentChannelConductBlock({
         userId: cfg.userId
       })
     });
@@ -2192,8 +2316,17 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     if (channelMode === "appservice-push") {
       const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
       const worldCalendarExisting = await readText(worldCalendarPath);
-      const worldInputPlan = planManagedUpsert({
+      const worldLegacyCleaned = stripLegacySingleChannelScheduleText({
         existing: worldCalendarExisting,
+        channelType: MATRIX_CATERER_NAME
+      });
+      const worldWithoutPoll = stripAgentChannelScheduleText({
+        existing: worldLegacyCleaned,
+        agentName: cfg.agentName,
+        scheduleName: "poll"
+      });
+      const worldInputPlan = planManagedUpsert({
+        existing: worldWithoutPoll,
         blockName: "channel input schedule",
         content: buildChannelInputCalendarBlock({
           agentName: cfg.agentName,
@@ -2210,9 +2343,12 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       });
       writes.push({
         path: worldCalendarPath,
-        changed: worldInputPlan.changed || worldTimingPlan.changed,
+        changed: worldInputPlan.changed
+          || worldTimingPlan.changed
+          || (worldLegacyCleaned !== worldCalendarExisting)
+          || (worldWithoutPoll !== worldLegacyCleaned),
         action: worldTimingPlan.action,
-        preview: ["channel input schedule", "matrix long poll timing"],
+        preview: ["channel poll schedule cleanup", "channel input schedule", "matrix long poll timing"],
         nextText: worldTimingPlan.nextText
       });
 
@@ -2233,8 +2369,17 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     } else {
       const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
       const worldCalendarExisting = await readText(worldCalendarPath);
-      const worldWithoutInput = stripAgentChannelScheduleText({
+      const worldLegacyCleaned = stripLegacySingleChannelScheduleText({
         existing: worldCalendarExisting,
+        channelType: MATRIX_CATERER_NAME
+      });
+      const worldWithoutPoll = stripAgentChannelScheduleText({
+        existing: worldLegacyCleaned,
+        agentName: cfg.agentName,
+        scheduleName: "poll"
+      });
+      const worldWithoutInput = stripAgentChannelScheduleText({
+        existing: worldWithoutPoll,
         agentName: cfg.agentName,
         scheduleName: "input"
       });
@@ -2247,9 +2392,12 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       });
       writes.push({
         path: worldCalendarPath,
-        changed: worldTimingPlan.changed || (worldWithoutInput !== worldCalendarExisting),
+        changed: worldTimingPlan.changed
+          || (worldLegacyCleaned !== worldCalendarExisting)
+          || (worldWithoutPoll !== worldLegacyCleaned)
+          || (worldWithoutInput !== worldWithoutPoll),
         action: worldTimingPlan.action,
-        preview: ["channel input schedule cleanup", "matrix long poll timing"],
+        preview: ["channel poll schedule cleanup", "channel input schedule cleanup", "matrix long poll timing"],
         nextText: worldTimingPlan.nextText
       });
 
@@ -3594,7 +3742,7 @@ async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsM
   };
 }
 
-async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentionGate = true, dryRun = false }) {
+async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, dryRun = false }) {
   const matrix = await loadMatrixConfigureDefaults({ rootDir, agentName });
   if (!matrix?.homeserver || !matrix?.room) {
     return {
@@ -3622,10 +3770,7 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   const plan = planManagedUpsert({
     existing,
     blockName: MATRIX_POLICY_BLOCK_NAME,
-    content: buildChannelConductBlock({
-      room: matrix.room,
-      mentionGate,
-      mode: matrix.mode,
+    content: buildAgentChannelConductBlock({
       userId
     })
   });
@@ -3737,13 +3882,54 @@ async function bootstrapAgentMatrixChannelConnection({
       userId: resolvedUserId
     });
   } catch (err) {
+    const joinMessage = String(err?.message || err);
+    const inviterToken = String(matrix.token || "").trim();
+    const inviterUserId = String(matrix.userId || "").trim();
+    const canInviteFallback = /M_FORBIDDEN/i.test(joinMessage)
+      && Boolean(inviterToken && inviterUserId)
+      && !matrixUsersMatch(inviterUserId, resolvedUserId, matrix.homeserver);
+    if (canInviteFallback) {
+      try {
+        const inviterRoomId = await matrixJoinRoom({
+          homeserver: matrix.homeserver,
+          token: inviterToken,
+          room: matrix.room,
+          mode,
+          userId: inviterUserId
+        });
+        await matrixInviteRoomMember({
+          homeserver: matrix.homeserver,
+          token: inviterToken,
+          roomId: inviterRoomId,
+          inviteUserId: resolvedUserId,
+          mode,
+          userId: inviterUserId
+        });
+        joinedRoomId = await matrixJoinRoom({
+          homeserver: matrix.homeserver,
+          token,
+          room: inviterRoomId,
+          mode,
+          userId: resolvedUserId
+        });
+      } catch (inviteErr) {
+        return {
+          ok: false,
+          skipped: false,
+          step: "join room",
+          userId: resolvedUserId,
+          error: `${joinMessage}; invite fallback failed: ${String(inviteErr?.message || inviteErr)}`
+        };
+      }
+    } else {
     return {
       ok: false,
       skipped: false,
       step: "join room",
       userId: resolvedUserId,
-      error: String(err?.message || err)
+      error: joinMessage
     };
+    }
   }
 
   const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
@@ -4373,7 +4559,6 @@ async function configureAgentApply({ args, mode = "establish" }) {
       rootDir,
       worldRoot,
       agentName: cfg.agentName,
-      mentionGate: true,
       dryRun
     })
     : { ok: false, reason: "channel binding disabled", path: null, changed: false, action: "none" };

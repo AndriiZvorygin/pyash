@@ -49,10 +49,10 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.equal(received.events[0]?.eventId, "$ev1");
   assert.equal(received.events[0]?.laneName, "main");
   assert.equal(received.checkpoint?.nextBatch, "tok2");
-  assert.equal(received.diagnostics?.timeoutMs, 30000);
+  assert.equal(received.diagnostics?.timeoutMs, 10000);
   assert.ok(calls.some(call => String(call.url).includes("/join/")));
   assert.ok(calls.some(call => String(call.url).includes("/sync?")));
-  assert.ok(calls.some(call => String(call.url).includes("timeout=30000")));
+  assert.ok(calls.some(call => String(call.url).includes("timeout=10000")));
 });
 
 test("matrix adapter receive keeps attachment metadata for m.file events", async () => {
