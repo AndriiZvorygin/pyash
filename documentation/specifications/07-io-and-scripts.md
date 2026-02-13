@@ -1,47 +1,61 @@
 # 07. IO And Scripts
 
-Purpose: define file/process/network IO verbs and script execution boundaries.
+Purpose: define filesystem/process/network IO surfaces and script execution boundaries.
 
-## 1. Canonical verbs in scope
+## 1. Verb keyword table
 
-- read/write/list/exists family
-- command execution (`be command`)
-- download (`be download`)
-- interpret script execution
-- date/time helpers used by runtime flows
+| Verb/family | Meaning | Application |
+| --- | --- | --- |
+| `be read` | ingest file/source into typed value | load text/map/json/etc. |
+| `be write` | persist typed value | file output and exports |
+| `be list` | directory listing | inspect workspace state |
+| `be exists` | path existence check | guards before IO |
+| `be command` | external command execution | shell/tool bridge |
+| `be download` | fetch from URL/source | web/media retrieval |
+| interpret script | execute `.pya` program source | batch run mode |
 
-## 2. IO determinism rules
+## 2. Canonical sentence patterns
 
-- sentence-shaped inputs/outputs only
-- stable output contracts for same inputs
-- explicit cwd/path semantics
-- no hidden mutation outside declared targets
+Read text file:
+```pyash
+from filename "note.txt" to name text out become text "text" be read do
+```
 
-## 3. Script execution
+Write text file:
+```pyash
+ob text "hello" to filename "note.txt" be write do
+```
 
-Interpreter execution from file/text must:
-- preserve sentence parsing invariants
-- surface file and parse errors as typed sentence errors
+List directory:
+```pyash
+at filename "." be list do
+```
 
-## 4. Download surface
+Run command:
+```pyash
+la ob text "ls -la" to name text output be command do
+```
 
-Download verbs must distinguish source scheme and intent via explicit cases (`as wo web`, etc.).
+Download web page:
+```pyash
+from filename "https://example.com" to filename "example.html" as wo web be download do
+```
 
-Output should include deterministic target metadata.
+## 3. Determinism and safety
 
-## 5. Command surface
+- sentence-shaped I/O only,
+- explicit path/cwd semantics,
+- no hidden mutations,
+- command safety policy governed by `19-ops-safety.md`.
 
-`be command` behavior is constrained by safety policies in `19-ops-safety.md`.
+## 4. Agent cwd note
 
-## 6. Agent cwd enforcement
+Agent runs may use task cwd while preserving policy-controlled access to agent house files.
 
-Agent runs may use task cwd while retaining access to agent-house paths under policy.
+## 5. Conformance
 
-## 7. Conformance
+Implementation conforms when IO surfaces are deterministic, sentence-shaped, and policy bounded.
 
-Implementation conforms when IO verbs are deterministic, sentence-shaped, and policy-bounded.
+## 6. Full draft reference
 
-## 8. Full draft reference
-
-Expanded verb-level details are preserved at:
 `documentation/recipes/spec-archive/07-io-and-scripts.full.md`

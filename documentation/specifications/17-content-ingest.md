@@ -1,43 +1,38 @@
 # 17. Content Ingest
 
-Purpose: define deterministic ingest pipeline from raw documents to structured chunks and abridgements.
+Purpose: define deterministic ingest from raw documents to structured chunks and abridgements.
 
-## 1. Pipeline stages
+## 1. Stage keyword table
 
-Recommended stages:
-- ingest source bytes/text
-- gross chips (coarse segmentation)
-- structure extraction
-- anchored segments
-- smart chunking
-- abridgement
+| Stage keyword | Meaning | Application |
+| --- | --- | --- |
+| ingest | source read/normalization | bring raw bytes/text into pipeline |
+| gross chips | coarse segment split | stable large-block partitioning |
+| structure | heading/anchor extraction | semantic section boundaries |
+| anchored segments | start/end anchored slices | deterministic segment identity |
+| smart chunks | downstream chunk units | retrieval/summarization input |
+| abridge | bounded compression | concise faithful output |
 
 ## 2. Invariants
 
-- deterministic segmentation for identical source + config
-- stable chunk identifiers
-- explicit provenance retained through stages
+- identical source + config -> deterministic segmentation,
+- stable chunk IDs/order,
+- provenance retained across stages.
 
-## 3. Data shape
+## 3. Canonical pipeline pattern
 
-Each stage output should map into canonical map/series structures and remain sentence-compatible.
+Use a refinery with one stage per ingest step and explicit stage outputs.
 
-## 4. Abridger profile
+## 4. Validation checklist
 
-Abridgement must be deterministic under fixed model/config profile and bounded by explicit limits.
+- no chunk loss across stage boundaries,
+- deterministic stage ordering,
+- reproducible final chunk set for identical input.
 
-## 5. Validation
+## 5. Conformance
 
-Required checks:
-- no chunk loss across stage boundaries
-- deterministic ordering
-- reproducible final chunk list for same inputs
+Implementation conforms when ingest outputs are deterministic, auditable, and replayable.
 
-## 6. Conformance
+## 6. Full draft reference
 
-Implementation conforms when ingest outputs are deterministic, auditable, and replayable through documented stage transforms.
-
-## 7. Full draft reference
-
-Detailed stage specs and examples are preserved at:
 `documentation/recipes/spec-archive/17-content-ingest.full.md`

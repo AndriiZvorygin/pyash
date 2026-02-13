@@ -192,7 +192,7 @@ Never:
 8) `do` executes; `ya` declares a fact.
 9) `be error ya` is data; `be error do` throws.
 10) Always introduce names before use.
-11) For lifecycle/aspect success, use `vyah ... success` (legacy `sloh` may be accepted on input only).
+11) For lifecycle/aspect outcomes, use `vyah ... success` or `vyah ... fail`.
 
 ## 9) Minimal grammar sketch
 

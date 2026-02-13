@@ -1,54 +1,55 @@
 # 05. Run Recording And Artifacts
 
-Purpose: define run newspaper events, ordering, and artifact exchange contracts.
+Purpose: define append-only run newspaper, event ordering, artifact records, and replay checks.
 
-## 1. Run newspaper baseline
+## 1. Event keyword map
 
-A run record is append-only and sentence-shaped.
-
-Minimum event kinds:
-- run start
-- evoke/step
-- result/state
-- tool call/produce
-- artifact record
-- run end
+| Event type | Meaning |
+| --- | --- |
+| run start | run boundary start marker |
+| evoke/step | action invocation record |
+| result/state | surfaced sentence outcome |
+| tool | tool call + produce record |
+| artifact | file/hash/provenance record |
+| run end | run boundary end marker |
 
 ## 2. Ordering rules
 
-- events must be ordered by append order within a run
-- deterministic runs must emit stable sequence for identical input and environment profile
-- replay/again mode relies on this ordering
+- events are append-ordered within run,
+- identical input/profile must produce stable event sequence,
+- replay/again verification depends on this deterministic order.
 
 ## 3. Artifact contract
 
-Artifacts must record:
-- locator/path
-- hash/check metadata (when available)
-- relation to producing action
+Each artifact record should include:
+- path/locator,
+- relation to producer action,
+- hash metadata when available.
 
-Artifact naming should be deterministic and collision-safe.
+## 4. Canonical application examples
 
-## 4. Exchange events
+Enable run recording and execute:
+```text
+node command/run_pya_program.mjs --newspaper examples/pyash/refinery-basic.pya
+```
 
-Exchange events must be sentence-shaped and replayable.
+Replay verification flow:
+```text
+node command/replay_newspaper.mjs <run-id>
+```
 
-## 5. Again/replay requirements
+## 5. Again/replay meaning
 
-Replay mode must validate deterministic subset:
-- inputs
-- selected outputs
-- event ordering
+Again mode means: require sufficient recording/verifiability so run outputs can be checked/replayed deterministically.
 
-## 6. Source mapping (compiled targets)
+## 6. Source mapping
 
-Compiled JS/C flows should preserve source mapping/line mapping sufficient for error tracing.
+Compiled JS/C paths should preserve source-map/line mapping for actionable diagnostics.
 
 ## 7. Conformance
 
-Implementation conforms when it emits append-only deterministic run/event/artifact records and supports replay checks.
+Implementation conforms when it emits deterministic append-only run + artifact records and supports replay verification.
 
 ## 8. Full draft reference
 
-Detailed schemas and golden examples are preserved at:
 `documentation/recipes/spec-archive/05-run-recording-and-artifacts.full.md`

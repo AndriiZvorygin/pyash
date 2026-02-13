@@ -1,107 +1,78 @@
 # 18. Pyash Agent
 
-Purpose: define agent loop, prompt context assembly, memory/session storage, scheduler hooks, and channel integration points.
+Purpose: define agent loop, session/memory storage, scheduler hooks, and channel integration.
 
-## 1. Agent house layout
+## 1. Agent house keyword table
 
-Each agent house should contain at least:
-- `identity/` (role/config prompt source files)
-- `session/` (active session series files)
-- `memory/` (long-memory + dated reminders)
-- `conduct/` (calendar/ratify/channel conduct)
+| Path | Meaning | Application |
+| --- | --- | --- |
+| `identity/` | role/config prompt sources | stable agent behavior seed |
+| `session/` | active session lines | conversation continuity |
+| `memory/` | long + dated memories | retrieval injection |
+| `conduct/` | policy/calendar/ratify/channel | run controls and approvals |
 
-Session files remain in agent house. Global operational logs belong to world newspaper.
+Session files stay in agent house; operational logs go to world newspaper.
 
 ## 2. Session model
 
-Session key format:
-- `yyyymmdd-<name>`
-- `<name>` sanitized: alphanumeric + underscore
+Session key: `yyyymmdd-<name>` (name sanitized to alnum + underscore).
 
-Session series header:
-
+Header:
 ```pyash
 su name <session key> since date <yyyy-mm-dd> be series def
 ```
 
-Entries append one sentence per line (no per-append file rewrite requirement).
-
-Required session entry facts:
-- `during date <timestamp>` append time
-- system prompt captured at session start as `su name system ob text ...`
-- model case recorded, and model change facts appended when model changes
-
-Default behavior:
-- reuse today's session for same session lane/name
-- window expansion may read previous day with same session name when needed
+Per-append line should include:
+- `during date <timestamp>`
+- system prompt start record (`su name system ob text ...`)
+- model marker and model-change records when model changes
 
 ## 3. Prompt context assembly
 
-Prompt assembly should include:
-- active config prompt from identity
-- relevant session tail (bounded window)
-- short memory injection (daily + always memories)
-- tool explainer (valid signatures only)
+Include:
+- active identity/config prompt,
+- bounded recent session tail,
+- bounded memory injection,
+- valid tool explainer/signatures.
 
-Non-essential runtime metadata should not be duplicated in prompt text.
+Avoid duplicating non-essential runtime metadata in prompt body.
 
-## 4. Memory model (`be memory` / `be remember`)
-
-Memory is file-backed and append-only.
+## 4. Memory (`be memory` / `be remember`)
 
 Retention semantics:
 - `during wo always` -> core long memory
 - `during date today|tomorrow|<future date>` -> dated reminders
 
-Retrieval (`be remember do`) should:
-- filter by retention validity
-- rank deterministically
-- inject bounded top-k items
+Retrieval should filter validity and return deterministic top-k.
 
 ## 5. Loop behavior
 
-Agent session loop must:
-- read user input
-- evoke mind with selected tools/context
-- execute tool calls
-- append session facts
-- return final response
-
-On tool defects, loop should emit typed error facts and continue unless fatal policy requires stop.
+Session loop cycle:
+1. read user input
+2. evoke mind with tools/context
+3. execute tool calls
+4. append session records
+5. surface response or typed error
 
 ## 6. Scheduler and heartbeat
 
-Scheduler supports calendar-driven services (for example heartbeat, channel probe).
+Scheduler controls recurring services.
 
-Heartbeat default interval profile: 24 minutes unless overridden.
+Default heartbeat profile: every 24 minutes unless overridden.
 
-Control surfaces should support begin/stop/restart/health/list for scheduler and individual services.
+Expected controls: begin / stop / restart / health / list.
 
-## 7. Channels
+## 7. Channels and sub-agents
 
-Channel adapters should route through canonical channel contract (`24-channel-contract.md`) and scheduler-driven intake.
+Channels route through `24-channel-contract.md` with dedup and auditable produce paths.
 
-Matrix MVP requirements:
-- deterministic input normalization
-- mention/reply routing
-- dedup by channel/event id
-- auditable produce results
+Sub-agents may run as servant/tool-like workers with explicit boundaries.
 
-## 8. Subprocess agents
+## 8. Conformance
 
-Sub-agents may be invoked as tool-like servants with explicit boundaries and auditable handoff.
+Implementation conforms when it provides deterministic session/memory behavior, valid tool exposure, scheduler-managed recurring runs, and channel routing via canonical contract.
 
-## 9. Conformance
+## 9. References
 
-Agent implementation conforms when it provides:
-- reproducible session files
-- deterministic memory injection
-- valid tool signature exposure
-- scheduler-managed recurring runs
-- channel I/O through canonical contract
-
-## 10. Full draft reference
-
-Detailed parity and integration notes are preserved at:
 - `documentation/recipes/spec-archive/18-pyash-agent.full.md`
 - `documentation/recipes/spec-archive/22-memory-and-remember.full.md`

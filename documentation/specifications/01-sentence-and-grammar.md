@@ -1,55 +1,73 @@
 # 01. Sentence And Grammar
 
-Purpose: define canonical sentence shape, case ordering, and parse invariants.
+Purpose: define canonical sentence shape, case meaning, and parse/emit invariants.
 
 ## 1. Canonical sentence skeleton
-
-Core form:
 
 ```pyash
 su name <subject> <cases...> be <verb> <mood>
 ```
 
-Moods:
-- `do` execution
-- `ya` fact/value
-- `def ... prah` block
-- `ko` clause block
+## 2. Core keyword meanings
 
-## 2. Required parser invariants
+| Keyword | Meaning | How to apply |
+| --- | --- | --- |
+| `su` | sentence subject | identity of the sentence/fact/action |
+| `ob` | primary object/payload | main value or command body |
+| `from*` | source axis | where data/input/context comes from |
+| `to*` | destination axis | where output/result is stored/sent |
+| `for` | target actor/consumer | who should receive/perform work |
+| `with` | companion/tool binding | attached helper/tool set |
+| `as` | mode/typing qualifier | execution/read/write mode marker |
+| `become` | conversion target | output state/format transformation |
+| `during` | temporal bound | duration/validity window |
+| `since` | start timestamp | provenance/start of validity |
+| `vyah` | aspect/tense/outcome modifiers | lifecycle/time/stance overlay |
+| `be` | predicate verb | action or fact predicate |
 
-- parsing is deterministic for identical bytes
-- quoted text remains opaque payload
-- case words are explicit; no positional inference by runtime
-- unknown/invalid forms surface typed `be error` sentences
+## 3. Mood table
 
-## 3. Case ordering
+| Mood | Meaning | Example |
+| --- | --- | --- |
+| `do` | execute | `ob num 1 by num 2 be plus do` |
+| `ya` | surfaced fact/value | `su name total ob num 3 be plus ya` |
+| `def ... prah` | definition block | `su name flow be refinery def ... prah` |
+| `ko` | embedded clause boundary | `ob la ... ko` |
 
-Normative ordering is the canonical emission order used for pretty output and stable hashing.
+## 4. Canonical ordering and normalization
 
 Rules:
-- preserve semantic roles (`su`, `ob`, `from*`, `to*`, `for`, `as`, `become`, `during`, `since`, `vyah`, etc.)
-- emit using canonical case order when serializing
-- accept flexible input order where parser supports it, then normalize on output
-
-## 4. Clause and composition
-
-`ob la ... ko` and related clause payloads are legal values.
-
-Compositional case keywords (for example `fromtext`, `fromstate`, `totext`) are first-class forms, not ad-hoc strings.
+- parser accepts valid flexible case order,
+- emitter normalizes to canonical case ordering,
+- quoted text stays opaque payload,
+- compositional cases (`fromtext`, `fromstate`, `totext`, ...) are first-class grammar tokens.
 
 ## 5. Defaults and matching
 
-Default sentences may target a clause pattern and contribute missing cases.
+Defaults may target clause patterns and fill missing cases only.
 
-Matching must be deterministic:
-- evaluate same clause matcher
-- fill only missing compatible slots
-- never overwrite explicitly provided call values
+A default must not overwrite explicitly supplied call values.
 
-## 6. Error surface
+## 6. Canonical usage examples
 
-Grammar/syntax defects must surface stable sentence-shaped errors.
+Basic fact:
+```pyash
+su name project ob text "pyash" be text ya
+```
+
+Execution with source and destination:
+```pyash
+ob text "hello" from filename "in.txt" to filename "out.txt" be write do
+```
+
+Clause payload:
+```pyash
+exists su name policy ob la be command fromstate text "safe" ko be default ya
+```
+
+## 7. Error surface
+
+Grammar defects surface sentence-shaped errors (`be error ya`), not raw parser strings.
 
 Minimum defect classes:
 - unknown keyword/case
@@ -57,15 +75,14 @@ Minimum defect classes:
 - malformed quote/clause
 - invalid block boundaries
 
-## 7. Conformance
+## 8. Conformance
 
-Implementation conforms when it can:
-- parse + emit canonical form deterministically
-- preserve quoted payloads
-- normalize case ordering on output
-- surface sentence-shaped errors for invalid forms
+Implementation conforms when it:
+- parses and emits canonical sentence forms deterministically,
+- preserves quoted payloads,
+- normalizes case ordering,
+- surfaces sentence-shaped errors.
 
-## 8. Full draft reference
+## 9. Full draft reference
 
-The full detailed draft is preserved at:
 `documentation/recipes/spec-archive/01-sentence-and-grammar.full.md`

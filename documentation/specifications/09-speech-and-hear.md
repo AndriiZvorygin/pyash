@@ -1,38 +1,49 @@
 # 09. Speech And Hear
 
-Purpose: define speech/hear contracts, speech artifacts, and whisper-oriented surface normalization.
+Purpose: define `say`/`hear` contracts, streaming behavior, and artifact/evidential recording.
 
-## 1. Scope
+## 1. Verb and keyword table
 
-This chapter covers:
-- `be say`
-- `be hear`
-- speech metadata/artifact records
-- spoken surface aliases mapped into canonical Pyash sentences
+| Surface | Meaning | Application |
+| --- | --- | --- |
+| `be say do` | synthesize/output speech | TTS or speech rendering |
+| `be hear do` | transcribe/input speech | STT ingestion |
+| `vyah stream` | incremental output mode | live transcript chunks |
+| `vyah cancel` | stop stream/listen process | deterministic interruption |
 
-## 2. Invocation contracts
+## 2. Canonical forms
 
-Speech/hear calls must produce sentence-shaped outputs with explicit payload/type fields.
+Hear text:
+```pyash
+from filename "audio.wav" to name text transcript be hear do
+```
 
-## 3. Streaming and artifacts
+Hear stream:
+```pyash
+su name mic stream vyah stream be hear do
+```
 
-Streaming speech/hear outputs should be chunked deterministically and linked to artifacts when persisted.
+Cancel hear stream:
+```pyash
+su name mic stream vyah cancel be hear do
+```
 
-## 4. Determinism and replay
+## 3. Metadata and artifacts
 
-For same audio/text input and configured model profile, output normalization should be reproducible within defined tolerance.
+Speech/hear runs should record:
+- source/target artifact paths,
+- model/backend metadata,
+- transcript result sentence,
+- evidential tags when content is observational/reported.
 
-Replay must rely on recorded metadata + artifacts.
+## 4. Determinism
 
-## 5. Evidential tags
+For same input bytes + same model/profile, normalization should be reproducible within documented tolerance.
 
-Outputs that describe observed/reported content should carry evidential categories for traceability.
+## 5. Conformance
 
-## 6. Conformance
+Implementation conforms when speech/hear surfaces are sentence-shaped, stream-safe, and artifact-linked for replay.
 
-Implementation conforms when speech/hear results are canonical sentence outputs with deterministic metadata and artifact linkage.
+## 6. Full draft reference
 
-## 7. Full draft reference
-
-Detailed whisper aliasing and evidential sections are preserved at:
 `documentation/recipes/spec-archive/09-speech-and-hear.full.md`

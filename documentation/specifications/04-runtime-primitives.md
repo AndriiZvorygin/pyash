@@ -1,43 +1,59 @@
 # 04. Runtime Primitives
 
-Purpose: define low-level runtime primitives and IR contracts used by interpreter and compiler paths.
+Purpose: define low-level runtime primitives and IR contracts used by interpreter and compiler targets.
 
-## 1. Primitive set
+## 1. Primitive keyword table
 
-Normative primitives:
-- `duty` (unit of work/lifecycle)
-- `stream` (incremental output/input)
-- `chip` (chunk unit for stream/data processing)
+| Primitive | Meaning | Application |
+| --- | --- | --- |
+| `duty` | task/work handle | long-running lifecycle state |
+| `stream` | ordered incremental output | chunked/ongoing transfer |
+| `chip` | one stream chunk | deterministic stream consumption unit |
 
-## 2. Global invariants
+## 2. Lifecycle concepts
 
-- deterministic lifecycle transitions
-- explicit ownership boundaries
-- sentence-shaped status/event reporting
-- compatibility between interpreter and compiled targets
+| Lifecycle concept | Typical marker |
+| --- | --- |
+| begin/start | `vyah start` |
+| ongoing stream | `vyah stream` |
+| await completion | `vyah await` |
+| clean complete | `vyah finish success` |
+| canceled | `vyah cancel success` |
+| failed | `vyah fail` |
 
 ## 3. IR boundary
 
-Runtime exposes value/sentence IR sufficient to:
-- represent parsed sentences
-- dispatch signatures
-- preserve case/value types
+Runtime IR must preserve:
+- sentence structure,
+- typed case values,
+- signature derivation inputs,
+- deterministic lowering parity between interpreter and compiled outputs.
 
-Lowering to compiled backends must preserve semantic equivalence.
+## 4. Canonical usage examples
 
-## 4. Lifecycle outcomes
+Duty fact:
+```pyash
+su name task_1 as name running be duty ya
+```
 
-Primitives must support begin, in-progress/stream, success/fail terminal outcomes.
+Stream fact:
+```pyash
+su name transcript as name open ob ve text hello world be stream ya
+```
+
+Read one chunk:
+```pyash
+su name transcript vyah eval be chip do
+```
 
 ## 5. Logging and traceability
 
-Primitive lifecycle transitions should be observable through run records/newspaper where enabled.
+Primitive transitions should be observable in run newspaper/event records when enabled.
 
 ## 6. Conformance
 
-Conforms when runtime primitives behave equivalently across interpreter and compiler targets for same input.
+Implementation conforms when primitive behavior is semantically equivalent across interpreter/JS/C targets for identical input.
 
 ## 7. Full draft reference
 
-Detailed primitive/IR sections are preserved at:
 `documentation/recipes/spec-archive/04-runtime-primitives.full.md`
