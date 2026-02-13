@@ -91,6 +91,7 @@ function usage() {
     "  pyash configure agent delete [--root <path>] [--non-interactive] [--json] [--agent <name>] [--yes <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
     "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
+    "  pyash channel bootstrap [--root <path>] [--agent <name>] [--channel <matrix>] [--executive <@user:server>] [--json]",
     "  pyash channel log [--root <path>] [--agent <name>] [--channel <matrix>] [--tail <n>] [--json]",
     "",
     "Notes:",
@@ -2511,10 +2512,57 @@ async function channelLogCommand(args) {
   for (const line of log.lines) textOut(line);
 }
 
+async function channelBootstrapCommand(args) {
+  const rootDir = await resolveRootDirFromArgs(args);
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
+  const channelType = (parseArgValue(args, "--channel") ?? "matrix").toLowerCase();
+  const executiveUsername = String(parseArgValue(args, "--executive") ?? "").trim();
+  if (channelType !== "matrix") {
+    throw new Error(`unsupported channel bootstrap type: ${channelType}`);
+  }
+  const bootstrap = await bootstrapAgentMatrixChannelConnection({
+    rootDir,
+    worldRoot,
+    agentName,
+    executiveUsernameOverride: executiveUsername
+  });
+  const payload = {
+    ok: bootstrap?.ok === true,
+    route: "channel bootstrap",
+    rootDir,
+    worldRoot,
+    agentName,
+    channelType,
+    bootstrap
+  };
+  if (json) {
+    jsonOut(payload);
+  } else if (payload.ok) {
+    textOut("channel bootstrap complete");
+    textOut(`- agent ${agentName}`);
+    if (bootstrap?.joinedRoomId) textOut(`- room joined ${bootstrap.joinedRoomId}`);
+    if (bootstrap?.executiveDm?.attempted) {
+      textOut(`- executive dm room ${bootstrap.executiveDm.roomId || "resolved"}`);
+    }
+  } else {
+    textOut("channel bootstrap failed");
+    textOut(`- agent ${agentName}`);
+    if (bootstrap?.reason) textOut(`- reason ${bootstrap.reason}`);
+    if (bootstrap?.step && bootstrap?.error) textOut(`- ${bootstrap.step}: ${bootstrap.error}`);
+  }
+  if (!payload.ok) process.exit(1);
+}
+
 async function channelCommand(args) {
   const sub = (args[0] ?? "poll").toLowerCase();
   if (sub === "poll") {
     await channelPollCommand(args.slice(1));
+    return;
+  }
+  if (sub === "bootstrap") {
+    await channelBootstrapCommand(args.slice(1));
     return;
   }
   if (sub === "log") {
@@ -3400,7 +3448,12 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
-async function bootstrapAgentMatrixChannelConnection({ rootDir, worldRoot, agentName }) {
+async function bootstrapAgentMatrixChannelConnection({
+  rootDir,
+  worldRoot,
+  agentName,
+  executiveUsernameOverride = ""
+}) {
   const matrix = await loadMatrixConfigFromSecret(rootDir);
   if (!matrix?.homeserver || !matrix?.room) {
     return {
@@ -3464,7 +3517,7 @@ async function bootstrapAgentMatrixChannelConnection({ rootDir, worldRoot, agent
     };
   }
 
-  const executiveUsername = String(matrix.executiveUsername || "").trim();
+  const executiveUsername = String(executiveUsernameOverride || matrix.executiveUsername || "").trim();
   if (!executiveUsername) {
     return {
       ok: true,

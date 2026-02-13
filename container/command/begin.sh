@@ -225,8 +225,32 @@ ensure_pyash_link() {
   return 0
 }
 
+ensure_calendar_running() {
+  if [[ "${PYASH_CALENDAR_AUTOSTART:-truth}" != "truth" ]]; then
+    return 0
+  fi
+
+  local health_json
+  health_json="$(
+    docker exec pyash bash -lc 'cd /workplace && pyash calendar health --root /workplace --json 2>/tmp/pyash-calendar-health.log' || true
+  )"
+  if [[ "$health_json" == *'"running": true'* ]]; then
+    return 0
+  fi
+
+  echo "Starting calendar scheduler..."
+  if ! docker exec pyash bash -lc 'cd /workplace && pyash calendar begin --root /workplace --json >/tmp/pyash-calendar-begin.log 2>&1'; then
+    echo "warning: unable to start calendar scheduler automatically." >&2
+    docker exec pyash bash -lc 'tail -n 40 /tmp/pyash-calendar-begin.log 2>/dev/null || true' >&2 || true
+    return 0
+  fi
+  echo "Calendar scheduler running."
+  return 0
+}
+
 ensure_node_modules
 ensure_pyash_link
+ensure_calendar_running
 
 echo "Container started. Entering..."
 exec docker exec -it pyash bash

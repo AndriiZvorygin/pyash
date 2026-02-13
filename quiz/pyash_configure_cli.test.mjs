@@ -1337,6 +1337,48 @@ maybeTest("calendar begin passes explicit world root to scheduler daemon", async
   assert.equal(stopRun.status, 0, stopRun.stderr);
 });
 
+maybeTest("channel bootstrap joins matrix room and resolves executive dm for a specific agent", async () => {
+  const root = await makeRoot();
+  const matrix = await startMatrixMockServer();
+  try {
+    const channelRun = runCli([
+      "configure", "channel", "matrix",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--homeserver", matrix.homeserver,
+      "--room", "#pyash:example.test",
+      "--auth-mode", "token",
+      "--token", "abc123",
+      "--write-agent-policy", "lie"
+    ]);
+    assert.equal(channelRun.status, 0, channelRun.stderr);
+
+    const bootstrapRun = await runCliAsync([
+      "channel", "bootstrap",
+      "--root", root,
+      "--agent", "accountant",
+      "--executive", "@boss:example.test",
+      "--json"
+    ]);
+    assert.equal(bootstrapRun.status, 0, bootstrapRun.stderr);
+    const payload = JSON.parse(bootstrapRun.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.agentName, "accountant");
+    assert.equal(payload.bootstrap?.joinedRoomId, "!main:example.test");
+    assert.equal(payload.bootstrap?.executiveDm?.roomId, "!dm:example.test");
+
+    const seenWhoAmI = matrix.calls.some((call) => call.method === "GET" && call.path === "/_matrix/client/v3/account/whoami");
+    const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
+    const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
+    assert.equal(seenWhoAmI, true);
+    assert.equal(seenJoin, true);
+    assert.equal(seenCreateRoom, true);
+  } finally {
+    await matrix.close();
+  }
+});
+
 maybeTest("channel log returns not found when no newspaper exists", async () => {
   const root = await makeRoot();
   const run = runCli([
