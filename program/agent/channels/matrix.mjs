@@ -520,6 +520,37 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       return { eventId: payload?.event_id ?? null };
     },
 
+    async markSeen({ config, event }) {
+      const homeserver = toBaseUrl(config?.homeserver);
+      const token = config?.token;
+      const userId = String(config?.user ?? "").trim();
+      const mode = String(config?.mode ?? "").trim().toLowerCase();
+      const roomId = event?.channelId;
+      const eventId = event?.eventId;
+      if (!homeserver || !token || !roomId || !eventId) {
+        throw new Error("matrix markSeen missing homeserver/token/room/event");
+      }
+      const encodedRoomId = encodeURIComponent(String(roomId));
+      const encodedEventId = encodeURIComponent(String(eventId));
+      const endpoint = applyAuthToUrl(
+        `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`,
+        { token, userId, mode }
+      );
+      const response = await fetchImpl(endpoint, {
+        method: "POST",
+        headers: authHeaders({
+          token,
+          mode,
+          headers: { "Content-Type": "application/json" }
+        }),
+        body: "{}"
+      });
+      if (!response.ok) {
+        throw new Error(`matrix markSeen failed: status=${response.status}`);
+      }
+      return { ok: true, status: response.status };
+    },
+
     async downloadAttachments({ config, event, targetDir }) {
       const homeserver = toBaseUrl(config?.homeserver);
       const token = config?.token;

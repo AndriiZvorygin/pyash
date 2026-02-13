@@ -636,6 +636,41 @@ async function dispatchChannelEvents({
       }
       continue;
     }
+
+    if (typeof adapter?.markSeen === "function") {
+      try {
+        const markSeenTask = adapter.markSeen({ config: channelConfig, event });
+        if (markSeenTask && typeof markSeenTask.then === "function") {
+          void markSeenTask.catch(async (err) => {
+            if (!debug) return;
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: "mark_seen_error",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              error: String(err?.stack ?? err?.message ?? err)
+            }, { channelType, agentName });
+          });
+        }
+      } catch (err) {
+        if (debug) {
+          await appendTelemetry(agentHouse, {
+            timestamp: nowIso(),
+            channelType,
+            event: "event",
+            decision: "mark_seen_error",
+            eventId: event.eventId,
+            sender: event.sender,
+            channelId: event.channelId,
+            error: String(err?.stack ?? err?.message ?? err)
+          }, { channelType, agentName });
+        }
+      }
+    }
+
     if (!listenersToRun.length) {
       skippedMention += 1;
       if (debug) {

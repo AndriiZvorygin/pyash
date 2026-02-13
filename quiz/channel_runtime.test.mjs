@@ -151,6 +151,63 @@ test("channel runtime lock prevents duplicate handling across concurrent polls",
   assert.equal((a.locked === true ? 1 : 0) + (b.locked === true ? 1 : 0), 1);
 });
 
+test("channel runtime marks matrix events seen before response generation", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-seen-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const order = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$seen-1",
+            sender: "@u:server",
+            text: "hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-seen" }
+      };
+    },
+    async markSeen() {
+      order.push("seen");
+      await sleep(5);
+      return { ok: true };
+    },
+    async send() {
+      order.push("send");
+      return { eventId: "$out-seen" };
+    }
+  };
+
+  const interpretFn = async () => {
+    order.push("interpret");
+    return { ob: { text: "reply" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      mentionGate: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(order[0], "seen");
+  assert.equal(order.includes("interpret"), true);
+  assert.equal(order.includes("send"), true);
+});
+
 test("channel runtime clears stale lock when lock owner pid is not alive", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-stale-lock-"));
   const agentHouse = path.join(root, "world", "house", "helper");
