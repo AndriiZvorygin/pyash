@@ -128,6 +128,29 @@ function defaultCalendarText({ agentName, intervalMinutes }) {
   return `# managed by agent_admin\n${lines.join("\n")}\n`;
 }
 
+function defaultImportConductText() {
+  const lines = [
+    "su name import be map def",
+    '  su name default do ob text "" ya',
+    '  su name photograph do ob text "" ya',
+    '  su name documentation do ob text "" ya',
+    '  su name audio do ob text "" ya',
+    '  su name text do ob text "" ya',
+    '  su name file do ob text "" ya',
+    '  su name no legend photograph do ob text "" ya',
+    "prah"
+  ];
+  return `${lines.join("\n")}\n`;
+}
+
+async function ensureImportConductFile({ worldRoot, agentName }) {
+  const importPath = path.join(worldRoot, "house", agentName, "conduct", "import.pya");
+  const exists = await pathExists(importPath);
+  if (exists) return { importPath, changed: false };
+  await fs.writeFile(importPath, defaultImportConductText(), "utf8");
+  return { importPath, changed: true };
+}
+
 async function writeManagedConductCalendar({ worldRoot, agentName, intervalMinutes }) {
   const calendarPath = path.join(worldRoot, "house", agentName, "conduct", "calendar.pya");
   const desired = defaultCalendarText({ agentName, intervalMinutes });
@@ -250,6 +273,8 @@ export async function establishAgent({
   const changes = [];
   let calendarResult = { calendarPath: null, changed: false };
   let purposeResult = { changed: false };
+  const importResult = await ensureImportConductFile({ worldRoot, agentName: normalized });
+  if (importResult.changed) changes.push("import_conduct");
   if (priorHash !== desiredHash) {
     calendarResult = await writeManagedConductCalendar({
       worldRoot,

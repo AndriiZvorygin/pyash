@@ -15,7 +15,8 @@ function buildPromptText(messages) {
   const lines = [];
   for (const msg of messages) {
     if (!msg) continue;
-    const role = String(msg.role ?? "assistant").toUpperCase();
+    const roleRaw = String(msg.role ?? "assistant").toLowerCase();
+    const role = roleRaw === "assistant" ? "AGENT" : roleRaw.toUpperCase();
     const content = msg.content ?? "";
     lines.push(`${role}: ${content}`);
   }

@@ -502,8 +502,9 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.equal(firstPayload.directoryLicenseWrite.changed, true);
   assert.equal(firstPayload.channelWrite.ok, true);
   assert.equal(firstPayload.channelScheduleWrite.ok, true);
-  assert.equal(firstPayload.config.startNow, true);
+  assert.equal(firstPayload.config.startNow, false);
   assert.equal(firstPayload.activation?.ok, true);
+  assert.equal(firstPayload.activation?.note, "start skipped");
 
   const runtimePath = path.join(root, "world", "house", "builder", "conduct", "runtime.pya");
   const policyPath = path.join(root, "world", "conduct", "agent.pya");

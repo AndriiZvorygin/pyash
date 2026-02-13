@@ -110,9 +110,9 @@ test("mind invocation includes recent history in prompt with per-mind window", a
     await interpret(parse('su question ob discourse "Hello" for name generator to name text generator-out be write do'));
 
     const payload = decodeMindPayload(records, "generator");
-    // With window 1, we keep at most 1 user+assistant pair
+    // With window 1, we keep at most 1 user+agent pair
     assert.match(payload.prompt ?? "", /USER: Hi/);
-    assert.match(payload.prompt ?? "", /ASSISTANT:/);
+    assert.match(payload.prompt ?? "", /AGENT:/);
     assert.match(payload.prompt ?? "", /Hello/);
   } finally {
     clearExchangeRecorder();
@@ -140,7 +140,7 @@ test("mind history can be injected from a series via accordingto", async () => {
 
     const payload = decodeMindPayload(records, "helper");
     assert.match(payload.prompt ?? "", /USER: Hi from series/);
-    assert.match(payload.prompt ?? "", /ASSISTANT: Series reply/);
+    assert.match(payload.prompt ?? "", /AGENT: Series reply/);
 
     const mem = allRemember();
     const session = mem.find(s => s.su?.name === "session");
