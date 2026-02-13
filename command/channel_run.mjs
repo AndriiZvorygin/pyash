@@ -7,111 +7,16 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
-import { resolveConfigMapText } from "../program/configure/env.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
 import { runChannelOnce } from "../program/agent/channels/index.mjs";
 import { createMatrixAdapter } from "../program/agent/channels/matrix.mjs";
 import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/scheduler.mjs";
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import { hydrateMatrixRuntimeConfig } from "../program/agent/channels/matrix_runtime.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 
 function usage() {
   return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once]";
-}
-
-function readRememberText(name) {
-  const fact = remember(name);
-  const value = fact?.ob?.text ?? fact?.ob?.name ?? fact?.ob?.filename ?? null;
-  if (value == null) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
-function homeserverHost(homeserver) {
-  const text = String(homeserver ?? "").trim();
-  if (!text) return "";
-  try {
-    return new URL(text).host.toLowerCase();
-  } catch {
-    return text.replace(/^https?:\/\//i, "").replace(/\/.*$/g, "").toLowerCase();
-  }
-}
-
-function normalizeMatrixLocalpart(raw) {
-  return String(raw ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._=-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function normalizeMatrixUserIdentity(raw, homeserver = "") {
-  const text = String(raw ?? "").trim();
-  if (!text) return "";
-  const host = homeserverHost(homeserver);
-  const withAt = text.startsWith("@") ? text : `@${text}`;
-  const lower = withAt.toLowerCase();
-  const body = lower.slice(1);
-  const idx = body.indexOf(":");
-  const localpart = normalizeMatrixLocalpart(idx === -1 ? body : body.slice(0, idx));
-  if (!localpart) return "";
-  const server = idx === -1 ? host : body.slice(idx + 1).trim().toLowerCase();
-  return server ? `@${localpart}:${server}` : `@${localpart}`;
-}
-
-function matrixUsersMatch(a, b, homeserver = "") {
-  const left = normalizeMatrixUserIdentity(a, homeserver);
-  const right = normalizeMatrixUserIdentity(b, homeserver);
-  return Boolean(left && right && left === right);
-}
-
-function resolveMatrixConfigWithRemember(rawConfig = {}) {
-  const mapName = "matrix channel";
-  const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
-  const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
-  const mapAdminToken = resolveConfigMapText(mapName, "admin token");
-  const mapToken = resolveConfigMapText(mapName, "token");
-  const mapUser = resolveConfigMapText(mapName, "user");
-  const mapExecutive = resolveConfigMapText(mapName, "executive username");
-  const homeserver =
-    rawConfig.homeserver ??
-    mapHomeserver ??
-    readRememberText("matrix homeserver") ??
-    readRememberText("matrix server") ??
-    null;
-  const user =
-    rawConfig.user ??
-    mapUser ??
-    readRememberText("matrix user") ??
-    null;
-  const allowGlobalToken = !mapToken
-    ? false
-    : !mapUser || matrixUsersMatch(user, mapUser, homeserver || "");
-  return {
-    ...rawConfig,
-    homeserver,
-    user,
-    registrationSharedSecret:
-      mapSharedSecret ??
-      rawConfig.registrationSharedSecret ??
-      readRememberText("matrix registration shared secret") ??
-      null,
-    adminToken:
-      mapAdminToken ??
-      rawConfig.adminToken ??
-      readRememberText("matrix admin token") ??
-      null,
-    token:
-      rawConfig.token ??
-      (allowGlobalToken ? mapToken : null) ??
-      null,
-    executiveUsername:
-      mapExecutive ??
-      rawConfig.executiveUsername ??
-      readRememberText("matrix executive username") ??
-      null
-  };
 }
 
 function selectChannelJobs(jobs, channelType, agentName) {
@@ -179,46 +84,18 @@ async function main() {
   }
   let channelConfig = { ...rawConfig };
   if (channelType === "matrix") {
-    channelConfig = resolveMatrixConfigWithRemember(channelConfig);
-    const credentials = await ensureMatrixCredentials({
+    const hydrated = await hydrateMatrixRuntimeConfig({
+      channelConfig,
       agentName,
       agentHouse,
-      config: channelConfig
+      channelType
     });
-    channelConfig = {
-      ...channelConfig,
-      homeserver: credentials.homeserver,
-      token: credentials.token,
-      user: credentials.user || channelConfig.user
-    };
-    try {
-      const executiveRoom = await ensureMatrixExecutiveDmRoom({
-        agentHouse,
-        homeserver: channelConfig.homeserver,
-        token: channelConfig.token,
-        user: channelConfig.user,
-        executiveUser: channelConfig.executiveUsername
-      });
-      if (executiveRoom) {
-        const hasRoom = Array.isArray(channelConfig.rooms) && channelConfig.rooms.some(room => room?.id === executiveRoom);
-        const nextRooms = Array.isArray(channelConfig.rooms) ? [...channelConfig.rooms] : [];
-        if (!hasRoom) {
-          nextRooms.push({
-            id: executiveRoom,
-            lane: "matrix_executive_dm"
-          });
-        }
-        const nextDmRooms = new Set(Array.isArray(channelConfig.dmRooms) ? channelConfig.dmRooms : []);
-        nextDmRooms.add(executiveRoom);
-        channelConfig = {
-          ...channelConfig,
-          rooms: nextRooms,
-          dmRooms: Array.from(nextDmRooms)
-        };
-      }
-    } catch (err) {
-      // DM room hydration is best-effort; channel polling should continue for configured rooms.
-      console.error(`[matrix executive dm skipped] ${String(err?.message ?? err)}`);
+    channelConfig = hydrated.channelConfig;
+    if (hydrated.dmBootstrapErrors.length > 0) {
+      const first = hydrated.dmBootstrapErrors[0];
+      const executive = String(first?.executiveUser ?? "").trim();
+      const detail = String(first?.error ?? "").trim();
+      console.error(`[matrix executive dm degraded] count=${hydrated.dmBootstrapErrors.length} first=${executive} ${detail}`);
     }
   }
   const adapter = createAdapter(channelType);

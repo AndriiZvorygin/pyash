@@ -209,17 +209,21 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
 
   const secretPath = path.join(root, "configure", "secret.pya");
   const worldChannelsPath = path.join(root, "world", "conduct", "channels.pya");
+  const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
   const channelsPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
   const calendarPath = path.join(root, "world", "house", "parity coder", "conduct", "calendar.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const worldChannelsText = await fs.readFile(worldChannelsPath, "utf8");
+  const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
   const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
+  assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
+  assert.match(worldCalendarText, /su name matrix long poll ms ob text "30000" be calendar ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
-  assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during minute 1 be calendar ya/);
+  assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during second 30 be calendar ya/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
@@ -330,16 +334,18 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   const channelsPath = path.join(root, "world", "house", "pyash-agent", "conduct", "channels.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  assert.match(secretText, /su name mode ob text "appservice-push" ya/);
-  assert.match(secretText, /su name long poll ms ob text "45000" ya/);
+  assert.doesNotMatch(secretText, /su name mode ob text "appservice-push" ya/);
+  assert.doesNotMatch(secretText, /su name long poll ms ob text "45000" ya/);
   assert.match(secretText, /su name bridge service file ob text/);
   assert.match(channelsText, /su name matrix mode ob text "appservice-push" ya/);
-  assert.match(channelsText, /su name matrix long poll ms ob text "45000" ya/);
+  assert.doesNotMatch(channelsText, /su name matrix long poll ms ob text/);
   assert.match(channelsText, /su name matrix user ob text "@pyash-agent:matrix\.liberit\.ca" ya/);
-  assert.match(channelsText, /su name matrix bridge service file ob text/);
+  assert.doesNotMatch(channelsText, /su name matrix bridge service file ob text/);
   const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
   const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
+  assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
+  assert.match(worldCalendarText, /su name matrix long poll ms ob text "45000" be calendar ya/);
   assert.match(worldCalendarText, /su name channel input for name pyash-agent/);
   assert.match(worldCalendarText, /su name channel input for name pyash-agent with ve text "matrix" vyah habit during second 1 be calendar ya/);
 });
@@ -584,7 +590,7 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
   assert.match(channelsText, /su name matrix mention gate ob bool truth ya/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
-  assert.match(calendarText, /su name matrix poll/);
+  assert.match(calendarText, /su name channel poll/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);

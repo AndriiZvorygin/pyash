@@ -41,6 +41,7 @@ function ensureChannel(channels, channelType) {
       appserviceRegistration: null,
       homeserver: null,
       user: null,
+      executiveUsernames: [],
       token: null,
       registrationSharedSecret: null,
       adminToken: null,
@@ -117,6 +118,21 @@ export function parseChannelPolicyText(text) {
     }
     if (action === "user") {
       cfg.user = readTextValue(sentence) ?? cfg.user;
+      continue;
+    }
+    if (action === "executive username") {
+      const executive = readTextValue(sentence);
+      if (!executive) continue;
+      if (!cfg.executiveUsernames.includes(executive)) cfg.executiveUsernames.push(executive);
+      continue;
+    }
+    if (action === "executive usernames") {
+      const executives = readNameVector(sentence);
+      for (const executive of executives) {
+        const value = String(executive ?? "").trim();
+        if (!value) continue;
+        if (!cfg.executiveUsernames.includes(value)) cfg.executiveUsernames.push(value);
+      }
       continue;
     }
     if (action === "token") {
@@ -196,6 +212,7 @@ export function parseChannelPolicyText(text) {
         lane: cfg.roomLanes.get(roomId) ?? cfg.defaultLane ?? laneFromRoomId(channelType, roomId)
       })),
       dmRooms: [...cfg.dmRooms],
+      executiveUsernames: [...cfg.executiveUsernames],
       listeners: Array.isArray(cfg.listeners) ? [...cfg.listeners] : [],
       roomListeners: Object.fromEntries(cfg.roomListeners.entries()),
       roomLanes: Object.fromEntries(cfg.roomLanes.entries())
@@ -247,13 +264,14 @@ function mergeChannelEntry(base = {}, override = {}) {
     ...override,
     enabled: override.enabled ?? base.enabled ?? false,
     mode: override.mode ?? base.mode ?? "sync",
-    longPollMs: override.longPollMs ?? base.longPollMs ?? 30000,
+    longPollMs: override.longPollMs ?? base.longPollMs ?? null,
     appserviceRegistration: override.appserviceRegistration ?? base.appserviceRegistration ?? null,
     homeserver: override.homeserver ?? base.homeserver ?? null,
     user: override.user ?? base.user ?? null,
     token: override.token ?? base.token ?? null,
     registrationSharedSecret: override.registrationSharedSecret ?? base.registrationSharedSecret ?? null,
     adminToken: override.adminToken ?? base.adminToken ?? null,
+    executiveUsernames: Array.from(new Set([...(base.executiveUsernames ?? []), ...(override.executiveUsernames ?? [])])),
     defaultLane: override.defaultLane ?? base.defaultLane ?? null,
     mentionGate: override.mentionGate ?? base.mentionGate ?? false,
     debug: override.debug ?? base.debug ?? false,

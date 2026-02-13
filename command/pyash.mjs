@@ -16,6 +16,11 @@ import {
   listWorldDeclaredAgentHouses,
   resolveWorldAgentHouseDirectory
 } from "../program/library/agent_command_policy.mjs";
+import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
+import {
+  loadChannelCalendarPolicyWithGlobal,
+  resolveChannelCalendarSetting
+} from "../program/agent/channels/calendar_policy.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 
@@ -39,6 +44,7 @@ const DEFAULT_MIND_RELAY_NAME = "default";
 const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice-push", "appservice"];
 const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
 const DEFAULT_MATRIX_LONG_POLL_MS = 30000;
+const DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS = 30;
 const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "configure/secret/matrix.yaml";
 const MIND_BACKEND_CHOICES = [
   { key: "ollama", value: "ollama command mind", label: "Ollama" },
@@ -784,16 +790,72 @@ async function loadMatrixConfigFromSecret(rootDir) {
   return {
     defaultCaterer,
     homeserver: matrixValues.homeserver || "",
-    room: matrixValues.room || "",
-    mode: normalizeMatrixMode(matrixValues.mode || "", DEFAULT_MATRIX_CHANNEL_MODE),
-    longPollMs: normalizeMatrixLongPollMs(matrixValues["long poll ms"] || "", DEFAULT_MATRIX_LONG_POLL_MS),
     appserviceRegistration: matrixValues["bridge service file"] || matrixValues["appservice registration"] || "",
-    executiveUsername: matrixValues["executive username"] || "",
     userId: matrixValues.user || "",
     authMode: matrixValues["auth mode"] || "",
     token: matrixValues.token || "",
     registrationSharedSecret: matrixValues["registration shared secret"] || "",
-    adminToken: matrixValues["admin token"] || ""
+    adminToken: matrixValues["admin token"] || "",
+    legacyRoom: matrixValues.room || "",
+    legacyMode: matrixValues.mode || "",
+    legacyLongPollMs: matrixValues["long poll ms"] || ""
+  };
+}
+
+async function loadMatrixPolicyConfig({ rootDir, agentName = DEFAULT_CHANNEL_AGENT_NAME } = {}) {
+  const worldRoot = path.join(rootDir, "world");
+  const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
+  const [allChannels, calendarPolicy] = await Promise.all([
+    loadChannelPolicyWithGlobal({ worldRoot, agentHouse }),
+    loadChannelCalendarPolicyWithGlobal({ worldRoot, agentHouse, agentName })
+  ]);
+  const matrix = allChannels?.matrix ?? {};
+  const matrixCalendar = resolveChannelCalendarSetting(calendarPolicy, {
+    channelType: MATRIX_CATERER_NAME,
+    agentName
+  });
+  const roomEntries = Array.isArray(matrix.rooms) ? matrix.rooms : [];
+  const dmRooms = new Set(Array.isArray(matrix.dmRooms) ? matrix.dmRooms.map((roomId) => String(roomId ?? "").trim()) : []);
+  const primaryRoom = roomEntries.find((entry) => {
+    const id = String(entry?.id ?? "").trim();
+    return id && !dmRooms.has(id);
+  })?.id ?? roomEntries[0]?.id ?? "";
+  const executives = Array.isArray(matrix.executiveUsernames)
+    ? matrix.executiveUsernames.map((value) => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  return {
+    room: String(primaryRoom ?? "").trim(),
+    mode: normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE),
+    longPollMs: normalizeMatrixLongPollMs(
+      matrixCalendar.longPollMs ?? matrix.longPollMs ?? "",
+      DEFAULT_MATRIX_LONG_POLL_MS
+    ),
+    mentionGate: matrix.mentionGate === true,
+    executiveUsername: executives[0] || "",
+    executiveUsernames: executives,
+    hasPolicy: Boolean(allChannels?.matrix),
+    hasCalendarLongPoll: matrixCalendar.hasLongPollMs,
+    hasLegacyChannelLongPoll: matrix.longPollMs != null
+  };
+}
+
+async function loadMatrixConfigureDefaults({ rootDir, agentName = DEFAULT_CHANNEL_AGENT_NAME } = {}) {
+  const [secret, policy] = await Promise.all([
+    loadMatrixConfigFromSecret(rootDir),
+    loadMatrixPolicyConfig({ rootDir, agentName })
+  ]);
+  const legacyMode = normalizeMatrixMode(secret.legacyMode || "", DEFAULT_MATRIX_CHANNEL_MODE);
+  const legacyLongPollMs = normalizeMatrixLongPollMs(secret.legacyLongPollMs || "", DEFAULT_MATRIX_LONG_POLL_MS);
+  return {
+    ...secret,
+    room: policy.room || secret.legacyRoom || "",
+    mode: policy.hasPolicy ? policy.mode : legacyMode,
+    longPollMs: (policy.hasPolicy || policy.hasCalendarLongPoll) ? policy.longPollMs : legacyLongPollMs,
+    mentionGate: policy.mentionGate === true,
+    executiveUsername: policy.executiveUsername || "",
+    executiveUsernames: policy.executiveUsernames || [],
+    hasCalendarLongPoll: policy.hasCalendarLongPoll === true,
+    hasLegacyChannelLongPoll: policy.hasLegacyChannelLongPoll === true
   };
 }
 
@@ -880,15 +942,11 @@ function buildOrchestratorConfigureBlock(cfg) {
 function buildMatrixMapBlock(cfg) {
   const lines = [
     "su name matrix channel be map def",
-    `  su name homeserver ob text ${quoteText(cfg.homeserver)} ya`,
-    `  su name room ob text ${quoteText(cfg.room)} ya`,
-    `  su name mode ob text ${quoteText(normalizeMatrixMode(cfg.mode, DEFAULT_MATRIX_CHANNEL_MODE))} ya`,
-    `  su name long poll ms ob text ${quoteText(String(normalizeMatrixLongPollMs(cfg.longPollMs, DEFAULT_MATRIX_LONG_POLL_MS)))} ya`
+    `  su name homeserver ob text ${quoteText(cfg.homeserver)} ya`
   ];
   if (cfg.appserviceRegistration) {
     lines.push(`  su name bridge service file ob text ${quoteText(String(cfg.appserviceRegistration))} ya`);
   }
-  if (cfg.executiveUsername) lines.push(`  su name executive username ob text ${quoteText(cfg.executiveUsername)} ya`);
   if (cfg.userId) lines.push(`  su name user ob text ${quoteText(cfg.userId)} ya`);
   lines.push(`  su name auth mode ob text ${quoteText(cfg.authMode)} ya`);
   if (cfg.token) lines.push(`  su name token ob text ${quoteText(cfg.token)} ya`);
@@ -910,34 +968,52 @@ function buildChannelConfigureBlock() {
 }
 
 function buildChannelConductBlock({
-  homeserver,
   room,
+  executiveUsernames = [],
   mentionGate = false,
   mode = DEFAULT_MATRIX_CHANNEL_MODE,
-  longPollMs = DEFAULT_MATRIX_LONG_POLL_MS,
-  appserviceRegistration = "",
   userId = ""
 }) {
   const normalizedMode = normalizeMatrixMode(mode, DEFAULT_MATRIX_CHANNEL_MODE);
-  const normalizedLongPollMs = normalizeMatrixLongPollMs(longPollMs, DEFAULT_MATRIX_LONG_POLL_MS);
   return [
     "su name matrix channel ob bool truth ya",
     `su name matrix mention gate ob bool ${mentionGate ? "truth" : "lie"} ya`,
     `su name matrix mode ob text ${quoteText(normalizedMode)} ya`,
-    `su name matrix long poll ms ob text ${quoteText(String(normalizedLongPollMs))} ya`,
-    `su name matrix homeserver ob text ${quoteText(homeserver)} ya`,
     `su name matrix room ob text ${quoteText(room)} ya`,
+    ...Array.from(new Set(
+      (Array.isArray(executiveUsernames) ? executiveUsernames : [])
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    )).map((executive) => `su name matrix executive username ob text ${quoteText(executive)} ya`),
     ...(userId
       ? [`su name matrix user ob text ${quoteText(userId)} ya`]
-      : []),
-    ...(appserviceRegistration
-      ? [`su name matrix bridge service file ob text ${quoteText(appserviceRegistration)} ya`]
       : [])
   ].join("\n");
 }
 
-function buildChannelPollCalendarBlock({ agentName, channels = [], intervalMinutes = 1 }) {
-  const interval = Math.max(1, Math.floor(Number(intervalMinutes) || 1));
+function buildMatrixLongPollCalendarLine({
+  agentName,
+  longPollMs = DEFAULT_MATRIX_LONG_POLL_MS
+}) {
+  const normalizedAgent = String(agentName ?? "").trim();
+  const normalizedLongPollMs = normalizeMatrixLongPollMs(longPollMs, DEFAULT_MATRIX_LONG_POLL_MS);
+  const subject = normalizedAgent
+    ? `su name matrix long poll ms for name ${normalizedAgent}`
+    : "su name matrix long poll ms";
+  return `${subject} ob text ${quoteText(String(normalizedLongPollMs))} be calendar ya`;
+}
+
+function buildChannelPollCalendarBlock({
+  agentName,
+  channels = [],
+  intervalMinutes = 1,
+  intervalSeconds = null
+}) {
+  const useSeconds = Number.isFinite(Number(intervalSeconds)) && Number(intervalSeconds) > 0;
+  const interval = useSeconds
+    ? Math.max(1, Math.floor(Number(intervalSeconds) || 1))
+    : Math.max(1, Math.floor(Number(intervalMinutes) || 1));
+  const duringUnit = useSeconds ? "second" : "minute";
   const orderedChannels = Array.from(new Set(
     (Array.isArray(channels) ? channels : [])
       .map((value) => String(value ?? "").trim().toLowerCase())
@@ -946,7 +1022,7 @@ function buildChannelPollCalendarBlock({ agentName, channels = [], intervalMinut
   const channelValues = orderedChannels.length ? orderedChannels : ["matrix"];
   const vectorLiteral = channelValues.map((value) => quoteText(value)).join(" ");
   return [
-    `su name channel poll for name ${agentName} with ve text ${vectorLiteral} vyah habit during minute ${interval} be calendar ya`,
+    `su name channel poll for name ${agentName} with ve text ${vectorLiteral} vyah habit during ${duringUnit} ${interval} be calendar ya`,
     "su name channel poll lane ob text \"channel_poll\" ya"
   ].join("\n");
 }
@@ -966,14 +1042,30 @@ function buildChannelInputCalendarBlock({ agentName, channels = [], intervalSeco
   ].join("\n");
 }
 
-function stripAgentChannelScheduleText({ existing, agentName, scheduleName }) {
+function stripAgentChannelScheduleText({ existing, agentName, scheduleName, includeManagedBlockLines = true }) {
   const normalizedAgent = String(agentName ?? "").trim();
   const normalizedSchedule = String(scheduleName ?? "").trim().toLowerCase();
   if (!normalizedAgent || !normalizedSchedule) return String(existing ?? "");
+  const managedMarkers = blockMarkers("agent channel schedule");
+  let insideManagedBlock = false;
   const lines = String(existing ?? "").split("\n");
   const kept = [];
   for (const line of lines) {
     const trimmed = line.trim();
+    if (trimmed === managedMarkers.start.trim()) {
+      insideManagedBlock = true;
+      kept.push(line);
+      continue;
+    }
+    if (trimmed === managedMarkers.end.trim()) {
+      insideManagedBlock = false;
+      kept.push(line);
+      continue;
+    }
+    if (!includeManagedBlockLines && insideManagedBlock) {
+      kept.push(line);
+      continue;
+    }
     if (!trimmed) {
       kept.push(line);
       continue;
@@ -1041,7 +1133,13 @@ function extractChannelPollVectorForAgent({ existing, agentName }) {
   return Array.from(new Set(collected));
 }
 
-function upsertChannelPollCalendarText({ existing, agentName, channelType, intervalMinutes = 1 }) {
+function upsertChannelPollCalendarText({
+  existing,
+  agentName,
+  channelType,
+  intervalMinutes = 1,
+  intervalSeconds = null
+}) {
   const priorVector = extractChannelPollVectorForAgent({ existing, agentName });
   const normalizedChannelType = String(channelType ?? "").trim().toLowerCase();
   const nextVector = normalizedChannelType
@@ -1050,7 +1148,8 @@ function upsertChannelPollCalendarText({ existing, agentName, channelType, inter
   const pollLines = buildChannelPollCalendarBlock({
     agentName,
     channels: nextVector,
-    intervalMinutes
+    intervalMinutes,
+    intervalSeconds
   }).split("\n");
   const lines = String(existing ?? "").split("\n");
   const pollPattern = /^su name (channel|[a-z0-9_-]+)\s+poll for name .* be calendar ya$/i;
@@ -1428,12 +1527,19 @@ async function matrixPostSetupTest(cfg, { rootDir } = {}) {
 }
 
 async function matrixDoctor({ rootDir }) {
-  const loaded = await loadMatrixConfigFromSecret(rootDir);
-  const configExists = Boolean(loaded.homeserver || loaded.room || loaded.token || loaded.userId || loaded.authMode || loaded.registrationSharedSecret);
+  const loaded = await loadMatrixConfigureDefaults({ rootDir, agentName: DEFAULT_CHANNEL_AGENT_NAME });
+  const configExists = Boolean(
+    loaded.homeserver
+    || loaded.room
+    || loaded.token
+    || loaded.userId
+    || loaded.authMode
+    || loaded.registrationSharedSecret
+  );
   if (!configExists) {
     return {
       ok: false,
-      issues: [{ code: "missing_config", kind: "missing", message: "matrix channel config is missing from configure/secret.pya" }],
+      issues: [{ code: "missing_config", kind: "missing", message: "matrix channel config is missing from configure/secret.pya + world/conduct/channels.pya" }],
       remedies: ["run: pyash configure channel matrix"]
     };
   }
@@ -1443,6 +1549,34 @@ async function matrixDoctor({ rootDir }) {
   const issues = [];
   for (const err of verification.errors) issues.push({ code: err.code, kind: "invalid", message: err.message });
   for (const warn of verification.warnings) issues.push({ code: warn.code, kind: "warning", message: warn.message });
+  if (loaded.legacyRoom) {
+    issues.push({
+      code: "legacy_secret_room",
+      kind: "warning",
+      message: "legacy room declaration found in configure/secret.pya; room now belongs in world/conduct/channels.pya"
+    });
+  }
+  if (loaded.legacyMode) {
+    issues.push({
+      code: "legacy_secret_mode",
+      kind: "warning",
+      message: "legacy mode declaration found in configure/secret.pya; mode now belongs in world/conduct/channels.pya"
+    });
+  }
+  if (loaded.legacyLongPollMs) {
+    issues.push({
+      code: "legacy_secret_long_poll_ms",
+      kind: "warning",
+      message: "legacy long poll ms found in configure/secret.pya; long poll ms now belongs in calendar policy"
+    });
+  }
+  if (loaded.hasLegacyChannelLongPoll && !loaded.hasCalendarLongPoll) {
+    issues.push({
+      code: "legacy_channel_long_poll_ms",
+      kind: "warning",
+      message: "legacy long poll ms found in channels policy; move it to conduct/calendar.pya"
+    });
+  }
   let appservice = null;
   if (isAppserviceMode(resolved.mode) && resolved.appserviceRegistration) {
     try {
@@ -1664,8 +1798,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       }
     }
     const defaultLongPollMs = normalizeMatrixLongPollMs(
-      prior.longPollMs || (channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS),
-      channelMode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
+      prior.longPollMs || DEFAULT_MATRIX_LONG_POLL_MS,
+      DEFAULT_MATRIX_LONG_POLL_MS
     );
     let longPollMs = defaultLongPollMs;
     if (!isAppserviceMode(channelMode)) {
@@ -2004,32 +2138,30 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     nextText: channelBlockPlan.nextText
   }];
 
+  const worldChannelPath = path.join(rootDir, "world", "conduct", "channels.pya");
+  const worldChannelExisting = await readText(worldChannelPath);
+  const worldChannelScrubbed = scrubLegacyMatrixChannelSeed(worldChannelExisting);
+  const worldChannelSeedChanged = worldChannelScrubbed !== worldChannelExisting;
+  const worldPolicyPlan = planManagedUpsert({
+    existing: worldChannelScrubbed,
+    blockName: MATRIX_WORLD_POLICY_BLOCK_NAME,
+    content: buildChannelConductBlock({
+      room: cfg.room,
+      executiveUsernames: cfg.executiveUsername ? [cfg.executiveUsername] : [],
+      mentionGate: cfg.mentionGate,
+      mode: cfg.mode
+    })
+  });
+  writes.push({
+    path: worldChannelPath,
+    changed: worldPolicyPlan.changed || worldChannelSeedChanged,
+    action: worldPolicyPlan.action,
+    preview: [MATRIX_WORLD_POLICY_BLOCK_NAME],
+    nextText: worldPolicyPlan.nextText
+  });
+
   if (cfg.writeAgentPolicy && cfg.agentName && cfg.agentName.trim()) {
     const configuredAgentHouse = resolveConfiguredAgentHouseFromRoot(rootDir, cfg.agentName);
-    const worldChannelPath = path.join(rootDir, "world", "conduct", "channels.pya");
-    const worldChannelExisting = await readText(worldChannelPath);
-    const worldChannelScrubbed = scrubLegacyMatrixChannelSeed(worldChannelExisting);
-    const worldChannelSeedChanged = worldChannelScrubbed !== worldChannelExisting;
-    const worldPolicyPlan = planManagedUpsert({
-      existing: worldChannelScrubbed,
-      blockName: MATRIX_WORLD_POLICY_BLOCK_NAME,
-      content: buildChannelConductBlock({
-        homeserver: cfg.homeserver,
-        room: cfg.room,
-        mentionGate: cfg.mentionGate,
-        mode: cfg.mode,
-        longPollMs: cfg.longPollMs,
-        appserviceRegistration: cfg.appserviceRegistration
-      })
-    });
-    writes.push({
-      path: worldChannelPath,
-      changed: worldPolicyPlan.changed || worldChannelSeedChanged,
-      action: worldPolicyPlan.action,
-      preview: [MATRIX_WORLD_POLICY_BLOCK_NAME],
-      nextText: worldPolicyPlan.nextText
-    });
-
     const channelPath = path.join(configuredAgentHouse, "conduct", "channels.pya");
     const channelExisting = await readText(channelPath);
     const channelSeedScrubbed = scrubLegacyMatrixChannelSeed(channelExisting);
@@ -2038,12 +2170,9 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       existing: channelSeedScrubbed,
       blockName: MATRIX_POLICY_BLOCK_NAME,
       content: buildChannelConductBlock({
-        homeserver: cfg.homeserver,
         room: cfg.room,
         mentionGate: cfg.mentionGate,
         mode: cfg.mode,
-        longPollMs: cfg.longPollMs,
-        appserviceRegistration: cfg.appserviceRegistration,
         userId: cfg.userId
       })
     });
@@ -2072,12 +2201,19 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
           intervalSeconds: 1
         })
       });
+      const worldTimingPlan = planManagedUpsert({
+        existing: worldInputPlan.nextText,
+        blockName: "matrix long poll timing",
+        content: buildMatrixLongPollCalendarLine({
+          longPollMs: cfg.longPollMs
+        })
+      });
       writes.push({
         path: worldCalendarPath,
-        changed: worldInputPlan.changed,
-        action: worldInputPlan.action,
-        preview: ["channel input schedule"],
-        nextText: worldInputPlan.nextText
+        changed: worldInputPlan.changed || worldTimingPlan.changed,
+        action: worldTimingPlan.action,
+        preview: ["channel input schedule", "matrix long poll timing"],
+        nextText: worldTimingPlan.nextText
       });
 
       const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
@@ -2102,12 +2238,19 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         agentName: cfg.agentName,
         scheduleName: "input"
       });
+      const worldTimingPlan = planManagedUpsert({
+        existing: worldWithoutInput,
+        blockName: "matrix long poll timing",
+        content: buildMatrixLongPollCalendarLine({
+          longPollMs: cfg.longPollMs
+        })
+      });
       writes.push({
         path: worldCalendarPath,
-        changed: worldWithoutInput !== worldCalendarExisting,
-        action: "replace",
-        preview: ["channel input schedule cleanup"],
-        nextText: worldWithoutInput
+        changed: worldTimingPlan.changed || (worldWithoutInput !== worldCalendarExisting),
+        action: worldTimingPlan.action,
+        preview: ["channel input schedule cleanup", "matrix long poll timing"],
+        nextText: worldTimingPlan.nextText
       });
 
       const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
@@ -2116,7 +2259,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         existing: calendarExisting,
         agentName: cfg.agentName,
         channelType: MATRIX_CATERER_NAME,
-        intervalMinutes: 1
+        intervalSeconds: DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS
       });
       writes.push({
         path: calendarPath,
@@ -2176,8 +2319,9 @@ async function configureMatrix({ args }) {
   const mode = hasFlag(args, "--advanced") ? "advanced" : "quickstart";
   const testNowFlag = parseArgValue(args, "--test-now");
   const startNowFlag = parseArgValue(args, "--start-now");
+  const configureAgentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
 
-  const prior = await loadMatrixConfigFromSecret(rootDir);
+  const prior = await loadMatrixConfigureDefaults({ rootDir, agentName: configureAgentName });
   const collected = nonInteractive
     ? collectMatrixFromFlags({ args, prior })
     : await collectMatrixInteractive({ prior, mode, rootDir });
@@ -2630,7 +2774,7 @@ async function configureMatrixTest({ args }) {
   const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
-  const loaded = await loadMatrixConfigFromSecret(rootDir);
+  const loaded = await loadMatrixConfigureDefaults({ rootDir, agentName });
   const resolved = await ensureSharedSecretToken({ cfg: { ...loaded, agentName }, rootDir });
   const verification = matrixVerification(resolved);
   if (!verification.ok) {
@@ -3421,25 +3565,13 @@ function buildAgentRuntimeBlock({ backend, model, toolsMap }) {
   ].join("\n");
 }
 
-function buildAgentChannelScheduleBlock({ agentName, intervalMinutes = 1 }) {
-  const everyMinute = normalizeIntervalMinutes(intervalMinutes, 1);
-  return [
-    sentenceToPyash({
-      mood: "ya",
-      su: { name: "matrix poll" },
-      for: { name: agentName },
-      with: { wo: "tools" },
-      vyah: { habit: true },
-      during: { minute: everyMinute },
-      be: "calendar"
-    }),
-    sentenceToPyash({
-      mood: "ya",
-      su: { name: "matrix poll lane" },
-      ob: { text: "matrix_poll" },
-      be: "text"
-    })
-  ].join("\n");
+function buildAgentChannelScheduleBlock({ agentName, intervalSeconds = DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS }) {
+  const everySecond = Math.max(1, Math.floor(Number(intervalSeconds) || DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS));
+  return buildChannelPollCalendarBlock({
+    agentName,
+    channels: [MATRIX_CATERER_NAME],
+    intervalSeconds: everySecond
+  });
 }
 
 async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsMap, dryRun = false }) {
@@ -3463,7 +3595,7 @@ async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsM
 }
 
 async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentionGate = true, dryRun = false }) {
-  const matrix = await loadMatrixConfigFromSecret(rootDir);
+  const matrix = await loadMatrixConfigureDefaults({ rootDir, agentName });
   if (!matrix?.homeserver || !matrix?.room) {
     return {
       ok: false,
@@ -3491,12 +3623,9 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
     existing,
     blockName: MATRIX_POLICY_BLOCK_NAME,
     content: buildChannelConductBlock({
-      homeserver: matrix.homeserver,
       room: matrix.room,
       mentionGate,
       mode: matrix.mode,
-      longPollMs: matrix.longPollMs,
-      appserviceRegistration: matrix.appserviceRegistration,
       userId
     })
   });
@@ -3515,13 +3644,30 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
   };
 }
 
+function orderedExecutiveUsernames({ override = "", channelConfig = {} } = {}) {
+  const ordered = [];
+  const seen = new Set();
+  const pushValue = (value) => {
+    const text = String(value ?? "").trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    ordered.push(text);
+  };
+  pushValue(override);
+  for (const value of Array.isArray(channelConfig?.executiveUsernames) ? channelConfig.executiveUsernames : []) {
+    pushValue(value);
+  }
+  if (channelConfig?.executiveUsername) pushValue(channelConfig.executiveUsername);
+  return ordered;
+}
+
 async function bootstrapAgentMatrixChannelConnection({
   rootDir,
   worldRoot,
   agentName,
   executiveUsernameOverride = ""
 }) {
-  const matrix = await loadMatrixConfigFromSecret(rootDir);
+  const matrix = await loadMatrixConfigureDefaults({ rootDir, agentName });
   if (!matrix?.homeserver || !matrix?.room) {
     return {
       ok: false,
@@ -3600,8 +3746,12 @@ async function bootstrapAgentMatrixChannelConnection({
     };
   }
 
-  const executiveUsername = String(executiveUsernameOverride || matrix.executiveUsername || "").trim();
-  if (!executiveUsername) {
+  const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
+  const executiveUsernames = orderedExecutiveUsernames({
+    override: executiveUsernameOverride,
+    channelConfig: allChannels?.matrix ?? {}
+  });
+  if (!executiveUsernames.length) {
     return {
       ok: true,
       mode,
@@ -3615,38 +3765,50 @@ async function bootstrapAgentMatrixChannelConnection({
     };
   }
 
-  try {
-    const dmRoomId = await ensureMatrixExecutiveDmRoom({
-      agentHouse,
-      homeserver: matrix.homeserver,
-      token,
-      user: resolvedUserId,
-      mode,
-      executiveUser: executiveUsername
-    });
-    return {
-      ok: true,
-      mode,
-      homeserver: matrix.homeserver,
-      room: matrix.room,
-      joinedRoomId,
-      userId: resolvedUserId,
-      executiveDm: {
-        attempted: true,
+  const dmRooms = [];
+  let lastError = null;
+  for (const executiveUsername of executiveUsernames) {
+    try {
+      const dmRoomId = await ensureMatrixExecutiveDmRoom({
+        agentHouse,
+        homeserver: matrix.homeserver,
+        token,
+        user: resolvedUserId,
+        mode,
+        executiveUser: executiveUsername
+      });
+      if (dmRoomId) dmRooms.push(dmRoomId);
+    } catch (err) {
+      lastError = {
         executiveUsername,
-        roomId: dmRoomId || ""
-      }
-    };
-  } catch (err) {
+        error: String(err?.message || err)
+      };
+    }
+  }
+  if (!dmRooms.length && lastError) {
     return {
       ok: false,
       skipped: false,
       step: "executive dm",
       userId: resolvedUserId,
       joinedRoomId,
-      error: String(err?.message || err)
+      error: `${lastError.executiveUsername}: ${lastError.error}`
     };
   }
+  return {
+    ok: true,
+    mode,
+    homeserver: matrix.homeserver,
+    room: matrix.room,
+    joinedRoomId,
+    userId: resolvedUserId,
+    executiveDm: {
+      attempted: true,
+      executiveUsernames,
+      roomIds: dmRooms,
+      roomId: dmRooms[0] || ""
+    }
+  };
 }
 
 function buildAgentDirectoryLicenseBlock({ rootDir, worldRoot, agentName }) {
@@ -3688,6 +3850,7 @@ async function upsertAgentChannelSchedule({
   agentName,
   channelType = "matrix",
   intervalMinutes = 1,
+  intervalSeconds = DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS,
   dryRun = false
 }) {
   if (String(channelType || "").trim().toLowerCase() !== "matrix") {
@@ -3705,12 +3868,18 @@ async function upsertAgentChannelSchedule({
   const calendarWithoutLegacyPoll = stripAgentChannelScheduleText({
     existing,
     agentName,
-    scheduleName: "poll"
+    scheduleName: "poll",
+    includeManagedBlockLines: false
   });
   const plan = planManagedUpsert({
     existing: calendarWithoutLegacyPoll,
     blockName: "agent channel schedule",
-    content: buildAgentChannelScheduleBlock({ agentName, intervalMinutes })
+    content: buildAgentChannelScheduleBlock({
+      agentName,
+      intervalSeconds: Number.isFinite(Number(intervalSeconds)) && Number(intervalSeconds) > 0
+        ? Number(intervalSeconds)
+        : Math.max(1, normalizeIntervalMinutes(intervalMinutes, 1) * 60)
+    })
   });
   const changed = plan.changed || (calendarWithoutLegacyPoll !== existing);
   if (!dryRun && changed) {
@@ -3959,7 +4128,7 @@ async function collectAgentInteractive({ rootDir, mindDefaults = {}, agentDefaul
     printer.examples("yes");
     const bindChannel = await askYesNo("Bind default channel to this agent", defaultBindChannel);
     if (bindChannel) {
-      const matrix = await loadMatrixConfigFromSecret(rootDir);
+      const matrix = await loadMatrixConfigureDefaults({ rootDir, agentName });
       if (!matrix?.homeserver || !matrix?.room) {
         textOut("- warning: default channel configure missing; binding will be skipped unless channel is configured.");
       } else {
@@ -4427,7 +4596,7 @@ async function configureIntro({ args }) {
   const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
   const loadStatus = async () => {
-    const channel = await loadMatrixConfigFromSecret(rootDir);
+    const channel = await loadMatrixConfigureDefaults({ rootDir, agentName: DEFAULT_CHANNEL_AGENT_NAME });
     const mind = await loadMindConfigFromSecret(rootDir);
     const worldRoot = path.join(rootDir, "world");
     const configuredAgents = await listConfiguredAgents({ worldRoot });
