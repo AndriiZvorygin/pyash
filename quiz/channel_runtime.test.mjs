@@ -360,10 +360,10 @@ test("channel runtime stores channel attachments and includes file hints in prom
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.writeFile(path.join(worldRoot, "conduct", "import.pya"), [
     "su name import be map def",
-    "  su name read tool do ob text \"be read from filename <path> ...\" ya",
-    "  su name see tool do ob text \"be see from filename <image> ...\" ya",
-    "  su name command tool do ob text \"be command ...\" ya",
-    "  su name repair tool do ob text \"be repair ...\" ya",
+    "  su name read tool ob text \"be read from filename <path> ...\" ya",
+    "  su name see tool ob text \"be see from filename <photograph> ...\" ya",
+    "  su name command tool ob text \"be command ...\" ya",
+    "  su name repair tool ob text \"be repair ...\" ya",
     "prah",
     ""
   ].join("\n"), "utf8");
@@ -518,7 +518,7 @@ test("channel runtime injects auto image task for upload-only events", async () 
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.writeFile(path.join(worldRoot, "conduct", "import.pya"), [
     "su name import be map def",
-    "  su name no caption image do ob text \"analyze image directly; if unavailable call be see from filename\" ya",
+    "  su name photograph ob text \"analyze photograph directly; if unavailable call be see from filename\" ya",
     "prah",
     ""
   ].join("\n"), "utf8");
@@ -584,8 +584,8 @@ test("channel runtime injects auto image task for upload-only events", async () 
 
   const prompt = String(calls[0]?.ob?.text ?? "");
   assert.match(prompt, /\[channel auto task\]/);
-  assert.match(prompt, /Image upload detected without caption/);
-  assert.match(prompt, /analyze image directly/);
+  assert.match(prompt, /Photograph upload detected/);
+  assert.match(prompt, /analyze photograph directly/);
   assert.match(prompt, /call be see from filename/);
 });
 
@@ -595,8 +595,7 @@ test("channel runtime uses import conduct actions for image attachments", async 
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
   await fs.writeFile(path.join(agentHouse, "conduct", "import.pya"), [
     "su name import be map def",
-    "  su name image do ob text \"receipt image refine\" ya",
-    "  su name no caption image do ob text \"receipt image auto\" ya",
+    "  su name photograph ob text \"receipt photograph refine\" ya",
     "prah",
     ""
   ].join("\n"), "utf8");
@@ -662,9 +661,9 @@ test("channel runtime uses import conduct actions for image attachments", async 
 
   const prompt = String(calls[0]?.ob?.text ?? "");
   assert.match(prompt, /\[channel auto task\]/);
-  assert.match(prompt, /do receipt image auto/);
+  assert.match(prompt, /do receipt photograph refine/);
   assert.match(prompt, /\[import do\]/);
-  assert.match(prompt, /do receipt image refine/);
+  assert.match(prompt, /do receipt photograph refine/);
 });
 
 test("channel runtime surfaces attachment download defects into prompt context", async () => {

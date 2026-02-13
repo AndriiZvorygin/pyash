@@ -131,13 +131,16 @@ function defaultCalendarText({ agentName, intervalMinutes }) {
 function defaultImportConductText() {
   const lines = [
     "su name import be map def",
-    '  su name default do ob text "" ya',
-    '  su name photograph do ob text "" ya',
-    '  su name documentation do ob text "" ya',
-    '  su name audio do ob text "" ya',
-    '  su name text do ob text "" ya',
-    '  su name file do ob text "" ya',
-    '  su name no legend photograph do ob text "" ya',
+    '  su name default ob text "" ya',
+    '  su name photograph ob text "" ya',
+    '  su name documentation ob text "" ya',
+    '  su name audio ob text "" ya',
+    '  su name text ob text "" ya',
+    '  su name file ob text "" ya',
+    '  su name read tool ob text "" ya',
+    '  su name see tool ob text "" ya',
+    '  su name command tool ob text "" ya',
+    '  su name repair tool ob text "" ya',
     "prah"
   ];
   return `${lines.join("\n")}\n`;
