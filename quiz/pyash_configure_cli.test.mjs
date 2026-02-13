@@ -361,6 +361,7 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
+  assert.match(worldChannelsText, /su name matrix dm tool summary ob bool truth ya/);
   assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
   assert.match(worldCalendarText, /su name matrix long poll ms ob text "10000" be calendar ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);

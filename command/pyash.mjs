@@ -980,6 +980,8 @@ function buildChannelConductBlock({
   room,
   executiveUsernames = [],
   mentionGate = false,
+  toolSummary = false,
+  dmToolSummary = true,
   mode = DEFAULT_MATRIX_CHANNEL_MODE,
   userId = ""
 }) {
@@ -987,6 +989,8 @@ function buildChannelConductBlock({
   return [
     "su name matrix channel ob bool truth ya",
     `su name matrix mention gate ob bool ${mentionGate ? "truth" : "lie"} ya`,
+    `su name matrix tool summary ob bool ${toolSummary ? "truth" : "lie"} ya`,
+    `su name matrix dm tool summary ob bool ${dmToolSummary ? "truth" : "lie"} ya`,
     `su name matrix mode ob text ${quoteText(normalizedMode)} ya`,
     `su name matrix room ob text ${quoteText(room)} ya`,
     ...Array.from(new Set(
