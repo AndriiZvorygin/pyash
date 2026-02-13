@@ -68,6 +68,44 @@ function readRememberText(name) {
   return text || null;
 }
 
+function homeserverHost(homeserver) {
+  const text = String(homeserver ?? "").trim();
+  if (!text) return "";
+  try {
+    return new URL(text).host.toLowerCase();
+  } catch {
+    return text.replace(/^https?:\/\//i, "").replace(/\/.*$/g, "").toLowerCase();
+  }
+}
+
+function normalizeMatrixLocalpart(raw) {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._=-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeMatrixUserIdentity(raw, homeserver = "") {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const host = homeserverHost(homeserver);
+  const withAt = text.startsWith("@") ? text : `@${text}`;
+  const lower = withAt.toLowerCase();
+  const body = lower.slice(1);
+  const idx = body.indexOf(":");
+  const localpart = normalizeMatrixLocalpart(idx === -1 ? body : body.slice(0, idx));
+  if (!localpart) return "";
+  const server = idx === -1 ? host : body.slice(idx + 1).trim().toLowerCase();
+  return server ? `@${localpart}:${server}` : `@${localpart}`;
+}
+
+function matrixUsersMatch(a, b, homeserver = "") {
+  const left = normalizeMatrixUserIdentity(a, homeserver);
+  const right = normalizeMatrixUserIdentity(b, homeserver);
+  return Boolean(left && right && left === right);
+}
+
 export function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
@@ -81,22 +119,27 @@ export function resolveMatrixConfigWithRemember(rawConfig = {}) {
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
   const mapToken = resolveConfigMapText(mapName, "token");
+  const homeserver =
+    rawConfig.homeserver ??
+    mapHomeserver ??
+    readRememberText("matrix homeserver") ??
+    readRememberText("matrix server") ??
+    null;
+  const user =
+    rawConfig.user ??
+    mapUser ??
+    readRememberText("matrix user") ??
+    null;
+  const allowGlobalToken = !mapToken
+    ? false
+    : !mapUser || matrixUsersMatch(user, mapUser, homeserver || "");
   return {
     ...rawConfig,
     mode: rawConfig.mode ?? mapMode ?? null,
     longPollMs: rawConfig.longPollMs ?? mapLongPollMs ?? null,
     appserviceRegistration: rawConfig.appserviceRegistration ?? mapAppserviceRegistration ?? null,
-    homeserver:
-      rawConfig.homeserver ??
-      mapHomeserver ??
-      readRememberText("matrix homeserver") ??
-      readRememberText("matrix server") ??
-      null,
-    user:
-      rawConfig.user ??
-      mapUser ??
-      readRememberText("matrix user") ??
-      null,
+    homeserver,
+    user,
     executiveUsername:
       rawConfig.executiveUsername ??
       mapExecutiveUsername ??
@@ -114,8 +157,7 @@ export function resolveMatrixConfigWithRemember(rawConfig = {}) {
       null,
     token:
       rawConfig.token ??
-      mapToken ??
-      readRememberText("matrix access token") ??
+      (allowGlobalToken ? mapToken : null) ??
       null
   };
 }
@@ -401,7 +443,7 @@ async function runChannelPollJob({ worldRoot, job }) {
 
 async function runMindScheduledJob({ worldRoot, job }) {
   const isHeartbeat = String(job.jobName ?? "").toLowerCase() === "heartbeat";
-  const agentHouse = path.join(worldRoot, "house", job.agentName);
+  const agentHouse = resolveAgentHouse({ mindName: job.agentName, rememberFn: remember });
   await ensureAgentDirs(agentHouse);
   let prompt = job.prompt;
   if (isHeartbeat) {

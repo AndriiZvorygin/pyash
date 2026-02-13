@@ -578,6 +578,7 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(runtimeText, /managed by pyash configure agent runtime:start/);
   assert.match(policyText, /managed by pyash configure agent directory license builder:start/);
+  assert.match(policyText, /su name builder house directory ob filename "world\/house\/builder" ya/);
   assert.match(policyText, /su name builder directory license be map def/);
   assert.match(policyText, /su name "world\/house\/builder" ob ve text "read" "write" "command" ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
@@ -591,6 +592,45 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
   assert.equal(secondPayload.directoryLicenseWrite.changed, false);
+});
+
+maybeTest("configure agent bind-channel writes per-agent matrix user when shared-secret provisioning is configured", async () => {
+  const root = await makeRoot();
+  const channelRun = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "shared-secret",
+    "--registration-shared-secret", "shared-secret-value",
+    "--token", "existing-token",
+    "--agent-user-id", "@mricge:matrix.liberit.ca",
+    "--write-agent-policy", "lie"
+  ]);
+  assert.equal(channelRun.status, 0, channelRun.stderr);
+
+  const run = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "accountant",
+    "--purpose", "Handle accounting tasks.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "truth",
+    "--smoke-test", "lie",
+    "--start-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+
+  const channelsPath = path.join(root, "world", "house", "accountant", "conduct", "channels.pya");
+  const channelsText = await fs.readFile(channelsPath, "utf8");
+  assert.match(channelsText, /su name matrix mention gate ob bool truth ya/);
+  assert.match(channelsText, /su name matrix user ob text "@accountant:matrix\.liberit\.ca" ya/);
 });
 
 maybeTest("configure agent start-now bootstraps matrix room and executive dm", async () => {
@@ -1287,6 +1327,11 @@ maybeTest("calendar list supports agent filter and returns available/stopped ser
   const agentConduct = path.join(root, "world", "house", "pyash-agent", "conduct");
   await fs.mkdir(worldConduct, { recursive: true });
   await fs.mkdir(agentConduct, { recursive: true });
+  await fs.writeFile(
+    path.join(worldConduct, "agent.pya"),
+    'su name pyash-agent house directory ob filename "world/house/pyash-agent" ya\n',
+    "utf8"
+  );
   await fs.writeFile(path.join(worldConduct, "calendar.pya"), "", "utf8");
   await fs.writeFile(path.join(agentConduct, "calendar.pya"), [
     "su name heartbeat with wo tools vyah habit during minute 24 for name pyash-agent be calendar ya",

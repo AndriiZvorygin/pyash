@@ -165,6 +165,64 @@ test("matrix bootstrap recovers cached token user via whoami when user is missin
   assert.equal(calls.length, 1);
 });
 
+test("matrix bootstrap ignores mismatched config token for explicit non-appservice user", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-token-mismatch-"));
+  const agentHouse = path.join(root, "world", "house", "accountant");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (String(url).endsWith("/_matrix/client/v3/account/whoami")) {
+      return {
+        ok: true,
+        async json() {
+          return { user_id: "@mricge:matrix.example.org" };
+        }
+      };
+    }
+    if (String(url).endsWith("/_synapse/admin/v1/register") && (!opts.method || opts.method === "GET")) {
+      return { ok: true, async json() { return { nonce: "nonce1" }; } };
+    }
+    if (String(url).endsWith("/_synapse/admin/v1/register") && opts.method === "POST") {
+      return { ok: true, async json() { return { user_id: "@accountant:matrix.example.org" }; } };
+    }
+    if (String(url).endsWith("/_matrix/client/v3/login")) {
+      const payload = JSON.parse(String(opts.body ?? "{}"));
+      assert.equal(payload?.identifier?.user, "@accountant:matrix.example.org");
+      return {
+        ok: true,
+        async json() {
+          return { access_token: "tok-accountant", user_id: "@accountant:matrix.example.org", device_id: "DEV1" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixCredentials({
+    agentName: "accountant",
+    agentHouse,
+    config: {
+      homeserver: "https://matrix.example.org",
+      user: "@accountant:matrix.example.org",
+      token: "tok-mricge",
+      registrationSharedSecret: "secret",
+      mode: "sync"
+    },
+    fetchImpl
+  });
+
+  assert.equal(resolved.user, "@accountant:matrix.example.org");
+  assert.equal(resolved.token, "tok-accountant");
+  assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/account/whoami")).length, 1);
+  assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/login")).length, 1);
+
+  const persisted = JSON.parse(await fs.readFile(path.join(agentHouse, "conduct", "matrix-auth.json"), "utf8"));
+  assert.equal(persisted.user, "@accountant:matrix.example.org");
+  assert.equal(persisted.accessToken, "tok-accountant");
+});
+
 test("matrix executive dm bootstrap reuses m.direct room when present", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-executive-dm-existing-"));
   const agentHouse = path.join(root, "world", "house", "helper");

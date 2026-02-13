@@ -12,6 +12,10 @@ import { schedulerBegin, schedulerStop, schedulerRestart, schedulerHealth, sched
 import { discoverScheduledJobs } from "../program/agent/scheduler.mjs";
 import { isServiceEnabled } from "../program/agent/scheduler_service_control.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import {
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentHouseDirectory
+} from "../program/library/agent_command_policy.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 
@@ -99,7 +103,7 @@ function usage() {
     "  - Canonical configure route is: pyash configure channel <caterer>",
     "  - Channel config writes managed blocks to configure/secret.pya",
     `  - Matrix appservice default registration path is ${DEFAULT_MATRIX_APPSERVICE_REGISTRATION}`,
-    "  - Optional channel conduct writes to world/house/<agent>/conduct/channels.pya"
+    "  - Optional channel conduct writes to declared agent house conduct/channels.pya"
   ].join("\n");
 }
 
@@ -123,6 +127,23 @@ function unquotePyashText(value) {
   return inner
     .replace(/\\\\/g, "\\")
     .replace(/\\\"/g, "\"");
+}
+
+function defaultAgentHouse(worldRoot, agentName) {
+  return path.join(worldRoot, "house", String(agentName ?? "").trim());
+}
+
+function resolveConfiguredAgentHouse(worldRoot, agentName) {
+  return resolveWorldAgentHouseDirectory({
+    worldRoot,
+    agentName,
+    includeFallback: true
+  }) ?? defaultAgentHouse(worldRoot, agentName);
+}
+
+function resolveConfiguredAgentHouseFromRoot(rootDir, agentName) {
+  const worldRoot = path.join(rootDir, "world");
+  return resolveConfiguredAgentHouse(worldRoot, agentName);
 }
 
 async function readText(filePath) {
@@ -230,6 +251,42 @@ function matrixLocalpartFromUserId(userId) {
   const withoutAt = text.slice(1);
   const colonIndex = withoutAt.indexOf(":");
   return colonIndex === -1 ? withoutAt : withoutAt.slice(0, colonIndex);
+}
+
+function normalizeMatrixUserIdentity(value, homeserver = "") {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const host = homeserverHost(homeserver);
+  let userId = "";
+  if (text.startsWith("@")) {
+    userId = ensureMatrixUserServer(text, host);
+  } else if (text.includes(":")) {
+    userId = `@${text}`;
+  } else {
+    userId = matrixUserIdFromLocalpart(text, homeserver);
+  }
+  const lowered = String(userId ?? "").trim().toLowerCase();
+  if (!lowered.startsWith("@")) return "";
+  const localpart = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(lowered));
+  const server = matrixServerFromId(lowered);
+  if (!localpart) return "";
+  return server ? `@${localpart}:${server}` : `@${localpart}`;
+}
+
+function matrixUsersMatch(a, b, homeserver = "") {
+  const left = normalizeMatrixUserIdentity(a, homeserver);
+  const right = normalizeMatrixUserIdentity(b, homeserver);
+  return Boolean(left && right && left === right);
+}
+
+function resolveAgentMatrixUserId({ agentName, homeserver, defaultUserId }) {
+  const derived = matrixUserIdFromLocalpart(agentName, homeserver);
+  if (!derived) return normalizeMatrixUserIdentity(defaultUserId, homeserver);
+  if (matrixUsersMatch(defaultUserId, derived, homeserver)) {
+    const ensured = ensureMatrixUserServer(defaultUserId, homeserverHost(homeserver));
+    return String(ensured || derived).trim();
+  }
+  return derived;
 }
 
 function canonicalizeMindBackend(raw) {
@@ -1191,7 +1248,7 @@ async function matrixLiveTest(cfg) {
 async function ensureSharedSecretToken({ cfg, rootDir }) {
   if (cfg.authMode !== "shared-secret" || cfg.token) return cfg;
   const agentName = String(cfg.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim() || DEFAULT_CHANNEL_AGENT_NAME;
-  const agentHouse = path.join(rootDir, "world", "house", agentName);
+  const agentHouse = resolveConfiguredAgentHouseFromRoot(rootDir, agentName);
   const credentials = await ensureMatrixCredentials({
     agentName,
     agentHouse,
@@ -1291,7 +1348,7 @@ async function matrixCreateDirectRoom({ homeserver, token, executiveUsername, mo
 
 async function ensureExecutiveDmRoom({ cfg, rootDir }) {
   const agentName = String(cfg.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim() || DEFAULT_CHANNEL_AGENT_NAME;
-  const agentHouse = path.join(rootDir, "world", "house", agentName);
+  const agentHouse = resolveConfiguredAgentHouseFromRoot(rootDir, agentName);
   const roomId = await ensureMatrixExecutiveDmRoom({
     agentHouse,
     homeserver: cfg.homeserver,
@@ -1829,7 +1886,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     if (executiveUsername) {
       try {
         const dmRoomId = await ensureMatrixExecutiveDmRoom({
-          agentHouse: path.join(rootDir, "world", "house", agentName),
+          agentHouse: resolveConfiguredAgentHouseFromRoot(rootDir, agentName),
           homeserver,
           token,
           user: userId,
@@ -1850,7 +1907,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     if (!quickstart) {
       printer.header("E.1 Agent Conduct Files");
       printer.why("Optional local channel conduct file can be generated per agent.");
-      printer.how("Enable when you want world/house/<agent>/conduct/channels.pya written.");
+      printer.how("Enable when you want the declared agent house conduct/channels.pya written.");
       printer.examples(`agent=${DEFAULT_CHANNEL_AGENT_NAME}, mention gate=lie`);
       writeAgentPolicy = await askYesNo("Write agent channel conduct file", true);
       if (writeAgentPolicy) {
@@ -1948,6 +2005,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
   }];
 
   if (cfg.writeAgentPolicy && cfg.agentName && cfg.agentName.trim()) {
+    const configuredAgentHouse = resolveConfiguredAgentHouseFromRoot(rootDir, cfg.agentName);
     const worldChannelPath = path.join(rootDir, "world", "conduct", "channels.pya");
     const worldChannelExisting = await readText(worldChannelPath);
     const worldChannelScrubbed = scrubLegacyMatrixChannelSeed(worldChannelExisting);
@@ -1972,7 +2030,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       nextText: worldPolicyPlan.nextText
     });
 
-    const channelPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "channels.pya");
+    const channelPath = path.join(configuredAgentHouse, "conduct", "channels.pya");
     const channelExisting = await readText(channelPath);
     const channelSeedScrubbed = scrubLegacyMatrixChannelSeed(channelExisting);
     const channelSeedChanged = channelSeedScrubbed !== channelExisting;
@@ -2000,6 +2058,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
   }
 
   if (cfg.agentName && cfg.agentName.trim()) {
+    const configuredAgentHouse = resolveConfiguredAgentHouseFromRoot(rootDir, cfg.agentName);
     const channelMode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
     if (channelMode === "appservice-push") {
       const worldCalendarPath = path.join(rootDir, "world", "conduct", "calendar.pya");
@@ -2021,7 +2080,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         nextText: worldInputPlan.nextText
       });
 
-      const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
+      const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
       const calendarExisting = await readText(calendarPath);
       const calendarWithoutPoll = stripAgentChannelScheduleText({
         existing: calendarExisting,
@@ -2051,7 +2110,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         nextText: worldWithoutInput
       });
 
-      const calendarPath = path.join(rootDir, "world", "house", cfg.agentName, "conduct", "calendar.pya");
+      const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
       const calendarExisting = await readText(calendarPath);
       const calendarPlan = upsertChannelPollCalendarText({
         existing: calendarExisting,
@@ -2304,18 +2363,13 @@ async function collectCalendarSentences(worldRoot) {
   const globalPath = path.join(worldRoot, "conduct", "calendar.pya");
   files.push({ path: globalPath, scope: "world", agentName: null });
 
-  const houseDir = path.join(worldRoot, "house");
-  let entries = [];
-  try {
-    entries = await fs.readdir(houseDir, { withFileTypes: true });
-  } catch (err) {
-    if (err?.code !== "ENOENT") throw err;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const agentName = entry.name;
+  const declared = listWorldDeclaredAgentHouses({ worldRoot });
+  for (const entry of declared) {
+    const agentName = String(entry?.agentName ?? "").trim();
+    const housePath = String(entry?.path ?? "").trim();
+    if (!agentName || !housePath) continue;
     files.push({
-      path: path.join(houseDir, agentName, "conduct", "calendar.pya"),
+      path: path.join(housePath, "conduct", "calendar.pya"),
       scope: "agent",
       agentName
     });
@@ -3389,7 +3443,8 @@ function buildAgentChannelScheduleBlock({ agentName, intervalMinutes = 1 }) {
 }
 
 async function upsertAgentRuntime({ worldRoot, agentName, backend, model, toolsMap, dryRun = false }) {
-  const runtimePath = path.join(worldRoot, "house", agentName, "conduct", "runtime.pya");
+  const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
+  const runtimePath = path.join(agentHouse, "conduct", "runtime.pya");
   const existing = await readText(runtimePath);
   const plan = planManagedUpsert({
     existing,
@@ -3418,7 +3473,19 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
       action: "none"
     };
   }
-  const channelPath = path.join(worldRoot, "house", agentName, "conduct", "channels.pya");
+  const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
+  const channelPath = path.join(agentHouse, "conduct", "channels.pya");
+  const canProvisionPerAgent = Boolean(
+    String(matrix.registrationSharedSecret || "").trim()
+    || String(matrix.adminToken || "").trim()
+  );
+  const userId = canProvisionPerAgent
+    ? resolveAgentMatrixUserId({
+      agentName,
+      homeserver: matrix.homeserver,
+      defaultUserId: matrix.userId
+    })
+    : String(matrix.userId || "").trim();
   const existing = await readText(channelPath);
   const plan = planManagedUpsert({
     existing,
@@ -3430,7 +3497,7 @@ async function bindAgentToDefaultChannel({ rootDir, worldRoot, agentName, mentio
       mode: matrix.mode,
       longPollMs: matrix.longPollMs,
       appserviceRegistration: matrix.appserviceRegistration,
-      userId: matrix.userId
+      userId
     })
   });
   if (!dryRun && plan.changed) {
@@ -3464,7 +3531,23 @@ async function bootstrapAgentMatrixChannelConnection({
   }
 
   const mode = normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
-  const agentHouse = path.join(worldRoot, "house", agentName);
+  const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
+  const canProvisionPerAgent = Boolean(
+    String(matrix.registrationSharedSecret || "").trim()
+    || String(matrix.adminToken || "").trim()
+  );
+  const userId = canProvisionPerAgent
+    ? resolveAgentMatrixUserId({
+      agentName,
+      homeserver: matrix.homeserver,
+      defaultUserId: matrix.userId
+    })
+    : String(matrix.userId || "").trim();
+  const reuseGlobalToken = Boolean(String(matrix.token || "").trim()) && (
+    !canProvisionPerAgent
+    || !String(matrix.userId || "").trim()
+    || matrixUsersMatch(userId, matrix.userId, matrix.homeserver)
+  );
   let credentials;
   try {
     credentials = await ensureMatrixCredentials({
@@ -3472,8 +3555,8 @@ async function bootstrapAgentMatrixChannelConnection({
       agentHouse,
       config: {
         homeserver: matrix.homeserver,
-        user: matrix.userId || null,
-        token: matrix.token || null,
+        user: userId || null,
+        token: reuseGlobalToken ? (matrix.token || null) : null,
         mode,
         registrationSharedSecret: matrix.registrationSharedSecret || null,
         adminToken: matrix.adminToken || null
@@ -3488,8 +3571,8 @@ async function bootstrapAgentMatrixChannelConnection({
     };
   }
 
-  const token = String(credentials?.token || matrix.token || "").trim();
-  const userId = String(credentials?.user || matrix.userId || "").trim();
+  const token = String(credentials?.token || (reuseGlobalToken ? matrix.token : "") || "").trim();
+  const resolvedUserId = String(credentials?.user || userId || matrix.userId || "").trim();
   if (!token) {
     return {
       ok: false,
@@ -3505,14 +3588,14 @@ async function bootstrapAgentMatrixChannelConnection({
       token,
       room: matrix.room,
       mode,
-      userId
+      userId: resolvedUserId
     });
   } catch (err) {
     return {
       ok: false,
       skipped: false,
       step: "join room",
-      userId,
+      userId: resolvedUserId,
       error: String(err?.message || err)
     };
   }
@@ -3525,7 +3608,7 @@ async function bootstrapAgentMatrixChannelConnection({
       homeserver: matrix.homeserver,
       room: matrix.room,
       joinedRoomId,
-      userId,
+      userId: resolvedUserId,
       executiveDm: {
         attempted: false
       }
@@ -3537,7 +3620,7 @@ async function bootstrapAgentMatrixChannelConnection({
       agentHouse,
       homeserver: matrix.homeserver,
       token,
-      user: userId,
+      user: resolvedUserId,
       mode,
       executiveUser: executiveUsername
     });
@@ -3547,7 +3630,7 @@ async function bootstrapAgentMatrixChannelConnection({
       homeserver: matrix.homeserver,
       room: matrix.room,
       joinedRoomId,
-      userId,
+      userId: resolvedUserId,
       executiveDm: {
         attempted: true,
         executiveUsername,
@@ -3559,7 +3642,7 @@ async function bootstrapAgentMatrixChannelConnection({
       ok: false,
       skipped: false,
       step: "executive dm",
-      userId,
+      userId: resolvedUserId,
       joinedRoomId,
       error: String(err?.message || err)
     };
@@ -3567,9 +3650,11 @@ async function bootstrapAgentMatrixChannelConnection({
 }
 
 function buildAgentDirectoryLicenseBlock({ rootDir, worldRoot, agentName }) {
+  const declaredHouse = path.join("world", "house", agentName);
   const lines = [
+    `su name ${agentName} house directory ob filename ${quoteText(declaredHouse)} ya`,
     `su name ${agentName} directory license be map def`,
-    `  su name ${quoteText(path.join("world", "house", agentName))} ob ve text "read" "write" "command" ya`
+    `  su name ${quoteText(declaredHouse)} ob ve text "read" "write" "command" ya`
   ];
   if (String(agentName).trim() === "parity coder") {
     lines.push(`  su name ${quoteText(path.resolve(rootDir))} ob ve text "read" "write" "command" ya`);
@@ -3614,21 +3699,28 @@ async function upsertAgentChannelSchedule({
       action: "none"
     };
   }
-  const calendarPath = path.join(worldRoot, "house", agentName, "conduct", "calendar.pya");
+  const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
+  const calendarPath = path.join(agentHouse, "conduct", "calendar.pya");
   const existing = await readText(calendarPath);
-  const plan = planManagedUpsert({
+  const calendarWithoutLegacyPoll = stripAgentChannelScheduleText({
     existing,
+    agentName,
+    scheduleName: "poll"
+  });
+  const plan = planManagedUpsert({
+    existing: calendarWithoutLegacyPoll,
     blockName: "agent channel schedule",
     content: buildAgentChannelScheduleBlock({ agentName, intervalMinutes })
   });
-  if (!dryRun && plan.changed) {
+  const changed = plan.changed || (calendarWithoutLegacyPoll !== existing);
+  if (!dryRun && changed) {
     await ensureDirForFile(calendarPath);
     await fs.writeFile(calendarPath, plan.nextText, "utf8");
   }
   return {
     ok: true,
     path: calendarPath,
-    changed: plan.changed,
+    changed,
     action: plan.action
   };
 }
@@ -3650,7 +3742,7 @@ function parseManagedNumField(text, fieldName) {
 
 async function loadAgentDefaults({ worldRoot, agentName }) {
   const normalizedAgentName = String(agentName || "").trim();
-  const houseRoot = path.join(worldRoot, "house", normalizedAgentName);
+  const houseRoot = resolveConfiguredAgentHouse(worldRoot, normalizedAgentName);
   let exists = true;
   try {
     const stat = await fs.stat(houseRoot);
@@ -3686,7 +3778,7 @@ async function listConfiguredAgents({ worldRoot }) {
   const names = await listAgents({ worldRoot });
   const configuredNames = [];
   for (const agentName of names) {
-    const conductDir = path.join(worldRoot, "house", agentName, "conduct");
+    const conductDir = path.join(resolveConfiguredAgentHouse(worldRoot, agentName), "conduct");
     const markerPaths = [
       path.join(conductDir, "managed.pya"),
       path.join(conductDir, "runtime.pya"),
@@ -3979,7 +4071,7 @@ async function configureAgentDelete({ args }) {
     }
   }
 
-  const housePath = path.join(worldRoot, "house", agentName);
+  const housePath = resolveConfiguredAgentHouse(worldRoot, agentName);
   let existed = true;
   try {
     const stat = await fs.stat(housePath);
@@ -4087,7 +4179,8 @@ async function configureAgentApply({ args, mode = "establish" }) {
       worldRoot,
       agentName: cfg.agentName,
       purpose: cfg.purpose,
-      intervalMinutes: cfg.intervalMinutes
+      intervalMinutes: cfg.intervalMinutes,
+      writePolicy: false
     });
   }
 
@@ -4250,7 +4343,7 @@ async function configureAgentApply({ args, mode = "establish" }) {
     textOut(`- start now enabled services ${activation.enabled.length}`);
   }
   if (print) {
-    const runtimePath = path.join(worldRoot, "house", cfg.agentName, "conduct", "runtime.pya");
+    const runtimePath = path.join(resolveConfiguredAgentHouse(worldRoot, cfg.agentName), "conduct", "runtime.pya");
     const runtimeText = await readText(runtimePath);
     if (runtimeText) {
       textOut("");
@@ -4336,12 +4429,9 @@ async function configureIntro({ args }) {
   const loadStatus = async () => {
     const channel = await loadMatrixConfigFromSecret(rootDir);
     const mind = await loadMindConfigFromSecret(rootDir);
-    let agentConfigured = false;
-    try {
-      const houseDir = path.join(rootDir, "world", "house");
-      const entries = await fs.readdir(houseDir, { withFileTypes: true });
-      agentConfigured = entries.some((entry) => entry.isDirectory() && entry.name !== "base");
-    } catch {}
+    const worldRoot = path.join(rootDir, "world");
+    const configuredAgents = await listConfiguredAgents({ worldRoot });
+    const agentConfigured = configuredAgents.length > 0;
     return {
       channel: Boolean(channel.homeserver && channel.room),
       mind: Boolean(mind.backend && mind.host && mind.model),
