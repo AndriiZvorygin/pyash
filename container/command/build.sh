@@ -14,6 +14,7 @@ push=false
 load=false
 no_restart=false
 codex_version=""
+codex_refresh=""
 
 while [[ $# -gt 0 ]]; do
   arg="$1"
@@ -91,6 +92,10 @@ EOF
       ;;
   esac
 done
+
+if [[ -n "$codex_version" ]]; then
+  codex_refresh="$(date +%s)"
+fi
 
 if ! pya_container_has_docker; then
   echo "error: $(pya_container_missing_docker_message)" >&2
@@ -199,6 +204,7 @@ if [[ "$use_buildx" == true ]]; then
   )
   if [[ -n "$codex_version" ]]; then
     buildx_args+=(--build-arg "CODEX_VERSION=$codex_version")
+    buildx_args+=(--build-arg "CODEX_REFRESH=$codex_refresh")
   fi
 
   if [[ "$push" == true ]]; then
@@ -221,6 +227,7 @@ else
   # Use docker compose build
   if [[ -n "$codex_version" ]]; then
     build_args+=(--build-arg "CODEX_VERSION=$codex_version")
+    build_args+=(--build-arg "CODEX_REFRESH=$codex_refresh")
   fi
   docker compose -f "$COMPOSE_FILE" build "${build_args[@]}"
   

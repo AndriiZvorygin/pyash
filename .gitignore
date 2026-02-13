@@ -34,6 +34,7 @@ configure/secret.pya
 configure/secret/
 .configure/secret/
 configure/workplace.pya
+configure/container.pya
 container/building/compose.override.yaml
 container/compose.override.yaml
 container/configure/ecology/searxng.env
