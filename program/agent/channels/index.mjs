@@ -878,13 +878,7 @@ async function dispatchChannelEvents({
           repliedToSelf
         }, { channelType, agentName });
       }
-      if (!responseText) {
-        if (eventIsDmRoom) {
-          responseText = emptyMindFallback();
-        } else {
-          continue;
-        }
-      }
+      if (!responseText) responseText = emptyMindFallback();
       const produceRequest = buildRouterProduceRequestSentence({
         channelType,
         event,
@@ -1028,9 +1022,7 @@ export async function runChannelPollOnce({
     const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
       ? runtimeState.checkpoint
       : {};
-    const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
     const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
-    const dedupIds = new Set(dedupState.order);
     const startMs = Date.now();
     const recv = await adapter.receive({ config: channelConfig, checkpoint });
     const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
@@ -1041,17 +1033,6 @@ export async function runChannelPollOnce({
     const debug = channelConfig?.debug === true;
 
     for (const event of events) {
-      if (dedupIds.has(event.eventId)) {
-        skippedDedup += 1;
-        continue;
-      }
-      dedupIds.add(event.eventId);
-      dedupState.order.push(event.eventId);
-      while (dedupState.order.length > dedupLimit) {
-        const removed = dedupState.order.shift();
-        if (!removed) break;
-        dedupIds.delete(removed);
-      }
       if (typeof adapter?.markSeen === "function") {
         try {
           const seenTask = adapter.markSeen({ config: channelConfig, event });
@@ -1075,7 +1056,7 @@ export async function runChannelPollOnce({
       agentHouse,
       channelType,
       checkpoint: newCheckpoint,
-      dedupOrder: dedupState.order,
+      dedupOrder: Array.isArray(runtimeState?.dedupOrder) ? runtimeState.dedupOrder : [],
       selfOrder: selfState.order,
       removeLegacy: true
     });

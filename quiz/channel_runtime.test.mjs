@@ -4,7 +4,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { runChannelOnce, buildChannelMindSentence } from "../program/agent/channels/index.mjs";
+import {
+  runChannelOnce,
+  runChannelPollOnce,
+  runChannelInputOnce,
+  runChannelProduceOnce,
+  buildChannelMindSentence
+} from "../program/agent/channels/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
@@ -930,6 +936,68 @@ test("channel runtime sends dm fallback when mind answer is empty", async () => 
   assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
 });
 
+test("channel runtime sends public fallback when tagged message yields empty mind answer", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-public-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$pub-empty-1",
+            sender: "@u:server",
+            text: "@helper hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-public" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-public" };
+    }
+  };
+
+  const interpretFn = async () => ({ be: "answer", ob: { text: "" } });
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
+});
+
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-listeners-"));
   const agentHouse = path.join(root, "world", "house", "postmaster");
@@ -1748,4 +1816,88 @@ test("channel runtime migrates legacy json state into managed .pya state", async
   await assert.rejects(fs.access(path.join(conductDir, "checkpoint-matrix.json")), { code: "ENOENT" });
   await assert.rejects(fs.access(path.join(conductDir, "dedup-matrix.json")), { code: "ENOENT" });
   await assert.rejects(fs.access(path.join(conductDir, "self-events-matrix.json")), { code: "ENOENT" });
+});
+
+test("channel queue mode dedups at input stage (not poll enqueue stage)", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-dedup-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCount = 0;
+  const sent = [];
+  const adapter = {
+    async receive() {
+      receiveCount += 1;
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$queue-dedup-1",
+            sender: "@u:server",
+            text: "@helper queue test"
+          }
+        ],
+        checkpoint: { nextBatch: `tok-queue-${receiveCount}` }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: `$out-queue-${sent.length}` };
+    }
+  };
+
+  const channelConfig = {
+    user: "@helper:server",
+    publicTagAnswer: true,
+    roomLanes: {},
+    dmRooms: []
+  };
+
+  const conductDir = path.join(agentHouse, "conduct");
+  await fs.writeFile(
+    path.join(conductDir, "channel-state-matrix.pya"),
+    [
+      "su name matrix channel state be map def",
+      "  su name checkpoint next batch ob text \"tok-before\" ya",
+      "  su name dedup event ob text \"$queue-dedup-1\" ya",
+      "prah",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  const poll = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    adapter,
+    agentHouse
+  });
+  assert.equal(poll.enqueued, 1);
+
+  const input = await runChannelInputOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    interpretFn: async () => ({ ob: { text: "queue reply" } }),
+    agentHouse,
+    maxItems: 4,
+    concurrency: 1
+  });
+  assert.equal(input.received, 1);
+  assert.equal(input.handled, 0);
+  assert.equal(input.skippedDedup, 1);
+  assert.equal(input.sent, 0);
+
+  const produce = await runChannelProduceOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    adapter,
+    agentHouse,
+    maxItems: 4
+  });
+  assert.equal(produce.sent, 0);
+  assert.equal(sent.length, 0);
 });
