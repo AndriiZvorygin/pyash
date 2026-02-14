@@ -54,6 +54,51 @@ Writers/readers:
 - `readSessionMessages` in `program/agent/session.mjs`
 - `readSessionMessagesWithFallback` (today + yesterday merge for named sessions)
 
+## Memory Unit Schema (Pyash)
+
+This is the canonical unit shape used by current runtime for agent session memory.
+
+Session header unit:
+
+```pyash
+su name <session name> since date YYYY-MM-DD be series def
+su name system ob text "<system prompt>" as name <model> during date <iso timestamp> ya
+```
+
+Turn units (append-only):
+
+```pyash
+su name user ob text "<user message>" during date <iso timestamp> ya
+su name assistant ob text "<assistant message>" during date <iso timestamp> ya
+```
+
+Optional system/model update unit (when model marker changes):
+
+```pyash
+su name system ob text "<system prompt>" as name <model> during date <iso timestamp> ya
+```
+
+In-memory compatibility units (runtime remember store, not file-backed transcript):
+
+```pyash
+su name <mind> <dialogue> question <N> from name user ob text "<prompt>" be write ya
+su name <mind> <dialogue> answer <N> from name <mind> ob text "<reply>" be answer ya
+su name result from name <mind> ob text "<reply>" be answer ya
+```
+
+Mind session map units (runtime projection for inspectability):
+
+```pyash
+su name mind session map be map ya
+su name <dialogue> ob name "<dialogue> session" be series ya
+```
+
+Notes:
+
+- `session/*.pya` is the durable Pyash session log.
+- `memory/SUMMARY.md`, `memory/MEMORY.md`, and `memory/YYYY-MM-DD.md` are Markdown memory artifacts, not sentence units.
+- Session key format is `YYYYMMDD-<name>` (see `documentation/specifications/18-pyash-agent.md`).
+
 ## Prompt Assembly
 
 Agent system prompt is built by `buildAgentSystemPrompt` in `program/agent/context.mjs`.
