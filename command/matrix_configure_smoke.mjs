@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import {
+  ensureMatrixCredentials,
+  ensureMatrixExecutiveDmRoom,
+  readMatrixAuthCache,
+  writeMatrixAuthCache
+} from "../program/agent/channels/bootstrap.mjs";
 
 function readFlagValue(args, flag) {
   const idx = args.indexOf(flag);
@@ -26,6 +31,7 @@ function usage() {
     "  --root <path>             Root directory (default: current working directory)",
     "  --agent <name>            Agent name (default: mricge)",
     "  --executive <@user:id>    Executive Matrix user (default: @mricge-smoke:matrix.liberit.ca)",
+    "  --token <token>           Reuse existing Matrix access token for wiped-house bootstrap",
     "  --wipe <truth|lie>        Remove world/house/<agent> before configure (default: truth)",
     "  --restart-calendar <truth|lie>  Restore scheduler running state at end (default: truth)",
     "  --restore-room <truth|lie>  Restore original configured room after smoke run (default: truth)",
@@ -289,6 +295,7 @@ async function main() {
   const agentName = String(readFlagValue(args, "--agent") ?? "mricge").trim();
   const executiveInput = String(readFlagValue(args, "--executive") ?? "@mricge-smoke:matrix.liberit.ca").trim();
   const wipe = parseTruthy(readFlagValue(args, "--wipe"), true);
+  const providedToken = String(readFlagValue(args, "--token") ?? "").trim();
   const restartCalendar = parseTruthy(readFlagValue(args, "--restart-calendar"), true);
   const restoreRoom = parseTruthy(readFlagValue(args, "--restore-room"), true);
   const json = hasFlag(args, "--json");
@@ -318,6 +325,18 @@ async function main() {
   summary.steps.originalRoom = originalRoom;
 
   const housePath = path.join(rootDir, "world", "house", agentName);
+  let preservedToken = providedToken;
+  try {
+    if (!preservedToken) {
+      const authData = await readMatrixAuthCache(housePath);
+      preservedToken = String(authData?.accessToken ?? "").trim();
+    }
+  } catch {
+    // best effort only
+  }
+  if (wipe && !preservedToken) {
+    throw new Error("wipe requires an existing agent matrix token; rerun with --wipe lie or pass --token");
+  }
   if (wipe) {
     await fs.rm(housePath, { recursive: true, force: true });
     summary.steps.houseWiped = true;
@@ -346,7 +365,11 @@ async function main() {
   let smokeHouse = smokeHouseCandidates[0];
   for (const candidate of smokeHouseCandidates) {
     try {
-      await fs.access(path.join(candidate, "conduct", "matrix-auth.json"));
+      const pyaPath = path.join(candidate, "conduct", "matrix-auth.pya");
+      const jsonPath = path.join(candidate, "conduct", "matrix-auth.json");
+      await fs.access(pyaPath).catch(async () => {
+        await fs.access(jsonPath);
+      });
       smokeHouse = candidate;
       break;
     } catch {
@@ -384,6 +407,7 @@ async function main() {
         "--agent", agentName,
         "--room", smokePublicRoomId,
         "--agent-user-id", agentUserId,
+        ...(preservedToken ? ["--token", preservedToken] : []),
         "--executive", executiveUserId,
         "--public-tag-answer", "truth",
         "--write-agent-policy", "truth",
@@ -429,12 +453,10 @@ async function main() {
     && houseFiles.includes("channels.pya")
     && houseFiles.includes("calendar.pya");
 
-  const agentAuthPath = path.join(housePath, "conduct", "matrix-auth.json");
   const knownExecutiveDmRoom = summary.steps.bootstrap.executiveDmRoomId || "";
   if (knownExecutiveDmRoom) {
     try {
-      const authText = await fs.readFile(agentAuthPath, "utf8");
-      const authData = JSON.parse(authText);
+      const authData = await readMatrixAuthCache(housePath);
       const executiveDmRooms = {
         ...(authData?.executiveDmRooms ?? {}),
         [executiveUserId]: knownExecutiveDmRoom
@@ -443,7 +465,7 @@ async function main() {
         ...(authData ?? {}),
         executiveDmRooms
       };
-      await fs.writeFile(agentAuthPath, JSON.stringify(patchedAuth, null, 2) + "\n", "utf8");
+      await writeMatrixAuthCache(housePath, patchedAuth);
       const agentToken = String(patchedAuth?.accessToken ?? "");
       if (agentToken) {
         try {
@@ -544,8 +566,7 @@ async function main() {
     });
   }
 
-  const authPath = path.join(rootDir, "world", "house", agentName, "conduct", "matrix-auth.json");
-  const agentAuth = JSON.parse(await fs.readFile(authPath, "utf8"));
+  const agentAuth = await readMatrixAuthCache(housePath);
   let dmRoomId = String(agentAuth?.executiveDmRooms?.[executiveUserId] || summary.steps.bootstrap.executiveDmRoomId || "");
   const agentToken = String(agentAuth?.accessToken ?? "");
   const agentUser = String(agentAuth?.user ?? agentUserId);

@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import {
+  ensureMatrixCredentials,
+  ensureMatrixExecutiveDmRoom,
+  readMatrixAuthCache,
+  writeMatrixAuthCache
+} from "../program/agent/channels/bootstrap.mjs";
 import { establishAgent, beginAgent, stopAgent, listAgents } from "../program/agent/admin.mjs";
 import { schedulerBegin, schedulerStop, schedulerRestart, schedulerHealth, schedulerList } from "../program/agent/scheduler_control.mjs";
 import { discoverScheduledJobs } from "../program/agent/scheduler.mjs";
@@ -800,9 +805,9 @@ async function loadMatrixConfigFromSecret(rootDir) {
     defaultCaterer,
     homeserver: matrixValues.homeserver || "",
     appserviceRegistration: matrixValues["bridge service file"] || matrixValues["appservice registration"] || "",
-    userId: matrixValues.user || "",
+    userId: "",
     authMode: matrixValues["auth mode"] || "",
-    token: matrixValues.token || "",
+    token: "",
     registrationSharedSecret: matrixValues["registration shared secret"] || "",
     adminToken: matrixValues["admin token"] || "",
     legacyRoom: matrixValues.room || "",
@@ -956,9 +961,7 @@ function buildMatrixMapBlock(cfg) {
   if (cfg.appserviceRegistration) {
     lines.push(`  su name bridge service file ob text ${quoteText(String(cfg.appserviceRegistration))} ya`);
   }
-  if (cfg.userId) lines.push(`  su name user ob text ${quoteText(cfg.userId)} ya`);
   lines.push(`  su name auth mode ob text ${quoteText(cfg.authMode)} ya`);
-  if (cfg.token) lines.push(`  su name token ob text ${quoteText(cfg.token)} ya`);
   if (cfg.registrationSharedSecret) {
     lines.push(`  su name registration shared secret ob text ${quoteText(cfg.registrationSharedSecret)} ya`);
   }
@@ -2612,6 +2615,19 @@ async function configureMatrix({ args }) {
     cfg = { ...cfg, token: login.token, userId: login.userId || cfg.userId };
   }
   cfg = await ensureSharedSecretToken({ cfg, rootDir });
+
+  if (!dryRun && cfg.writeAgentPolicy && cfg.userId && cfg.token) {
+    const agentNameForAuth = String(cfg.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim() || DEFAULT_CHANNEL_AGENT_NAME;
+    const agentHouseForAuth = resolveConfiguredAgentHouseFromRoot(rootDir, agentNameForAuth);
+    const cachedAuth = await readMatrixAuthCache(agentHouseForAuth);
+    await writeMatrixAuthCache(agentHouseForAuth, {
+      ...(cachedAuth ?? {}),
+      homeserver: cfg.homeserver,
+      user: cfg.userId,
+      accessToken: cfg.token,
+      executiveDmRooms: cachedAuth?.executiveDmRooms ?? {}
+    });
+  }
 
   const runTestNow = testNowFlag == null ? !nonInteractive : parseTruthy(testNowFlag, false);
   const startSchedulerDefault = ephemeralRoot ? false : !nonInteractive;
