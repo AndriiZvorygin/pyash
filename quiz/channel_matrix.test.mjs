@@ -55,6 +55,113 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.ok(calls.some(call => String(call.url).includes("timeout=10000")));
 });
 
+test("matrix adapter receive skips join when already joined room is known", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    calls.push(text);
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server"] };
+        }
+      };
+    }
+    if (text.includes("/_matrix/client/v3/join/")) {
+      throw new Error("unexpected join call");
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$ev-joined",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: { body: "hello", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$ev-joined");
+  assert.equal(received.diagnostics?.joinDiagnostics?.length, 0);
+  assert.equal(calls.some((call) => call.includes("/joined_rooms")), true);
+  assert.equal(calls.some((call) => call.includes("/_matrix/client/v3/join/")), false);
+});
+
+test("matrix adapter receive tolerates join rate limiting and continues polling", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: false, status: 429, async json() { return { errcode: "M_LIMIT_EXCEEDED" }; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$ev429",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: { body: "hello", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$ev429");
+  assert.equal(received.diagnostics?.joinDiagnostics?.[0]?.status, 429);
+  assert.equal(received.diagnostics?.joinDiagnostics?.[0]?.ok, true);
+});
+
 test("matrix adapter receive keeps attachment metadata for m.file events", async () => {
   const fetchImpl = async (url) => {
     if (String(url).includes("/_matrix/client/v3/join/")) {

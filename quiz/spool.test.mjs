@@ -143,3 +143,24 @@ test("spool complete and fail/requeue move files to expected destinations", asyn
   });
   assert.match(failedPath, /produce\/fail\//);
 });
+
+test("spool requeue strips accumulated worker suffixes", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-spool-worker-suffix-"));
+  const runtimeDir = path.join(root, "runtime");
+  const inputDir = path.join(root, "input");
+  const failDir = path.join(root, "fail");
+  await ensureSpoolDirs(root, [runtimeDir, inputDir, failDir]);
+  const bloatedName = "20260214-002952-matrix-mricge-room-produce-hash--mricge-produce--mricge-produce--mricge-produce.pya";
+  const runtimePath = path.join(runtimeDir, bloatedName);
+  await fs.writeFile(runtimePath, "x\n", "utf8");
+  const requeued = await failSpoolItem({
+    runtimePath,
+    failDir,
+    requeueDir: inputDir,
+    retryCount: 0,
+    maxRetries: 2
+  });
+  const base = path.basename(requeued);
+  assert.equal(base.includes("--mricge-produce"), false);
+  assert.match(base, /^20260214-002952-matrix-mricge-room-produce-hash\.pya$/);
+});

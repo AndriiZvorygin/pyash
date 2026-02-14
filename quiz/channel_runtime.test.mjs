@@ -867,6 +867,69 @@ test("channel runtime sends configure-mind fallback when mind answer is empty an
   assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
 });
 
+test("channel runtime sends dm fallback when mind answer is empty", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-dm-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!dm:server",
+            eventId: "$dm-empty-1",
+            sender: "@u:server",
+            text: "hello dm",
+            dmRoom: true
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-dm" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-dm" };
+    }
+  };
+
+  const interpretFn = async () => ({ be: "answer", ob: { text: "" } });
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
+});
+
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-listeners-"));
   const agentHouse = path.join(root, "world", "house", "postmaster");

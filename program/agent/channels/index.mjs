@@ -394,6 +394,10 @@ function mindErrorFallback(err) {
   return `mind defective: ${message}`;
 }
 
+function emptyMindFallback() {
+  return "I received your message, but I could not generate a reply. Please retry.";
+}
+
 function isMindUnavailableError(err) {
   if (!err) return false;
   const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
@@ -874,7 +878,13 @@ async function dispatchChannelEvents({
           repliedToSelf
         }, { channelType, agentName });
       }
-      if (!responseText) continue;
+      if (!responseText) {
+        if (eventIsDmRoom) {
+          responseText = emptyMindFallback();
+        } else {
+          continue;
+        }
+      }
       const produceRequest = buildRouterProduceRequestSentence({
         channelType,
         event,
