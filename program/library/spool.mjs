@@ -33,6 +33,23 @@ function hash12(text) {
     .slice(0, 12);
 }
 
+function stripWorkerSuffixes(name) {
+  const text = String(name ?? "").trim();
+  if (!text) return "";
+  return text.replace(/(?:--[a-z0-9._-]+)+(?=\.pya$)/gi, "");
+}
+
+function clampFilenameLength(name, maxLen = 220) {
+  const text = String(name ?? "").trim();
+  if (text.length <= maxLen) return text;
+  const ext = text.toLowerCase().endsWith(".pya") ? ".pya" : "";
+  const stem = ext ? text.slice(0, -ext.length) : text;
+  const digest = hash12(stem);
+  const headLen = Math.max(24, maxLen - (digest.length + ext.length + 1));
+  const head = stem.slice(0, headLen).replace(/-+$/g, "");
+  return `${head}-${digest}${ext}`;
+}
+
 function toArrayLayout(layout = []) {
   if (Array.isArray(layout)) return layout;
   if (layout && typeof layout === "object") return Object.values(layout);
@@ -126,22 +143,25 @@ export async function claimSpoolItem({
   await ensureSpoolDirs("", [sourceDir, runDir]);
 
   const sourcePath = path.join(sourceDir, name);
+  const baseName = stripWorkerSuffixes(name);
   const claimedName = workerTag
-    ? `${name.replace(/\.pya$/i, "")}--${sanitizeSegment(workerTag, "worker")}.pya`
-    : name;
-  const runtimePath = path.join(runDir, claimedName);
+    ? `${baseName.replace(/\.pya$/i, "")}--${sanitizeSegment(workerTag, "worker")}.pya`
+    : baseName;
+  const safeClaimedName = clampFilenameLength(claimedName);
+  const runtimePath = path.join(runDir, safeClaimedName);
   try {
     await fs.rename(sourcePath, runtimePath);
-    return { path: runtimePath, filename: claimedName };
+    return { path: runtimePath, filename: safeClaimedName };
   } catch (err) {
     if (err?.code === "ENOENT") return null;
     throw err;
   }
 }
 
-async function moveWithUniqueName(sourcePath, targetDir) {
+async function moveWithUniqueName(sourcePath, targetDir, { preferredName = "" } = {}) {
   await fs.mkdir(targetDir, { recursive: true });
-  const base = path.basename(sourcePath);
+  const fallbackBase = path.basename(sourcePath);
+  const base = clampFilenameLength(String(preferredName || fallbackBase));
   const candidate = path.join(targetDir, base);
   if (!(await pathExists(candidate))) {
     await fs.rename(sourcePath, candidate);
@@ -177,7 +197,8 @@ export async function failSpoolItem({
   const retries = Math.max(0, Math.trunc(Number(retryCount) || 0));
   const max = Math.max(0, Math.trunc(Number(maxRetries) || 0));
   if (requeueDir && retries < max) {
-    return moveWithUniqueName(sourcePath, String(requeueDir));
+    const requeueName = clampFilenameLength(stripWorkerSuffixes(path.basename(sourcePath)));
+    return moveWithUniqueName(sourcePath, String(requeueDir), { preferredName: requeueName });
   }
   const targetDir = String(failDir ?? "").trim();
   if (!targetDir) throw new Error("spool fail defective: missing fail dir");

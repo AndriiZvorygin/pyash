@@ -140,9 +140,10 @@ async function ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetch
     });
     const payload = await response.json().catch(() => ({}));
     // Ignore join failures so polling can continue for already-joined rooms.
-    // Typical non-fatal cases: already joined, invite-only without invite.
+    // Typical non-fatal cases: already joined, invite-only without invite,
+    // or temporary rate limiting while joins are retried by later polls.
     const status = response.status;
-    const ok = response.ok || status === 403 || status === 404;
+    const ok = response.ok || status === 403 || status === 404 || status === 429;
     const joinedRoomId = typeof payload?.room_id === "string" ? payload.room_id : null;
     diagnostics.push({ room: String(roomIdOrAlias), status, ok, joinedRoomId });
     if (!ok) throw new Error(`matrix join failed: room=${roomIdOrAlias} status=${response.status}`);
@@ -380,7 +381,25 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         };
       }
 
-      const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetchImpl });
+      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
+      const joinedRoomIdsKnown = new Set(
+        (Array.isArray(joinedRoomSnapshot?.rooms) ? joinedRoomSnapshot.rooms : [])
+          .map((roomId) => String(roomId ?? "").trim())
+          .filter(Boolean)
+      );
+      const roomsToJoin = rooms.filter((room) => {
+        const roomIdOrAlias = String(room?.id ?? "").trim();
+        if (!roomIdOrAlias) return false;
+        if (roomIdOrAlias.startsWith("!") && joinedRoomIdsKnown.has(roomIdOrAlias)) return false;
+        return true;
+      });
+      const joinDiagnostics = roomsToJoin.length
+        ? await ensureJoinedRooms({ homeserver, token, userId, mode, rooms: roomsToJoin, fetchImpl })
+        : [];
+      for (const entry of joinDiagnostics) {
+        const joinedRoomId = String(entry?.joinedRoomId ?? "").trim();
+        if (joinedRoomId) joinedRoomIdsKnown.add(joinedRoomId);
+      }
 
       const params = new URLSearchParams();
       const longPollMs = normalizeLongPollMs(config?.longPollMs);
@@ -404,7 +423,10 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const inviteJoinDiagnostics = inviteRooms.length
         ? await ensureJoinedRooms({ homeserver, token, userId, mode, rooms: inviteRooms, fetchImpl })
         : [];
-      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
+      for (const entry of inviteJoinDiagnostics) {
+        const joinedRoomId = String(entry?.joinedRoomId ?? "").trim();
+        if (joinedRoomId) joinedRoomIdsKnown.add(joinedRoomId);
+      }
       const directRoomsSnapshot = includeDirectRooms && userId
         ? await fetchDirectRooms({ homeserver, token, userId, mode, fetchImpl })
         : { ok: false, status: null, rooms: [] };
@@ -415,7 +437,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         return Array.isArray(timelineEvents) && timelineEvents.some((event) => event?.type === "m.room.message");
       });
       const joinedRoomIds = [...new Set([
-        ...(Array.isArray(joinedRoomSnapshot?.rooms) ? joinedRoomSnapshot.rooms : []),
+        ...joinedRoomIdsKnown,
         ...syncJoinedRoomIds
       ])];
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
