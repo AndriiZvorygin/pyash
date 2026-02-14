@@ -1,6 +1,7 @@
 // pyash/verbs/mind.mjs
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { remember, doRemember, getDefinitionEntry, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
@@ -34,7 +35,10 @@ import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
-const DEFAULT_TOOL_MAP_PATH = path.resolve(process.cwd(), "module", "agent_tools.pya");
+const DEFAULT_TOOL_MAP_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../module/agent_tools.pya"
+);
 
 async function ensureDefaultToolMapLoaded() {
   const existing = remember(DEFAULT_TOOL_MAP_NAME);

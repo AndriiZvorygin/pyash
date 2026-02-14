@@ -59,6 +59,29 @@ test("spool writes atomically and lists oldest first", async () => {
   assert.deepEqual(names, [first, second]);
 });
 
+test("spool write does not overwrite when filename collides", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-spool-collision-"));
+  const tmpDir = path.join(root, "tmp");
+  const inputDir = path.join(root, "input");
+  await ensureSpoolDirs(root, [tmpDir, inputDir]);
+
+  const filename = makeSpoolFilename({
+    at: "2026-02-13T18:30:10.000Z",
+    channelType: "matrix",
+    agentName: "a",
+    roomName: "r",
+    kind: "produce",
+    hash: "samehash"
+  });
+  const first = await writeSpoolItem({ tmpDir, targetDir: inputDir, filename, text: "one\n" });
+  const second = await writeSpoolItem({ tmpDir, targetDir: inputDir, filename, text: "two\n" });
+
+  assert.equal(first.filename, filename);
+  assert.notEqual(second.filename, filename);
+  const names = await listSpoolItemsOldestFirst(inputDir);
+  assert.equal(names.length, 2);
+});
+
 test("spool claim moves one item into runtime and prevents double claim", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-spool-claim-"));
   const tmpDir = path.join(root, "tmp");
