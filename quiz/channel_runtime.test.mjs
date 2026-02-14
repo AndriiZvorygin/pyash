@@ -413,6 +413,58 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
   assert.equal(sent.length, 1);
 });
 
+test("channel queue poll warm-start primes checkpoint and skips enqueue on first poll", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-poll-warm-start-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCalls = 0;
+  const adapter = {
+    async receive() {
+      receiveCalls += 1;
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$old1", sender: "@u:server", text: "old backlog message" }
+        ],
+        checkpoint: { nextBatch: "tok-after-warm" }
+      };
+    }
+  };
+
+  const first = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    agentHouse
+  });
+  assert.equal(first.warmed, true);
+  assert.equal(first.received, 0);
+  assert.equal(first.enqueued, 0);
+
+  const second = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    agentHouse
+  });
+  assert.equal(second.warmed, undefined);
+  assert.equal(second.received, 1);
+  assert.equal(second.enqueued, 1);
+  assert.equal(receiveCalls, 2);
+});
+
 test("channel runtime sends configure-mind fallback when mind backend is missing", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-no-mind-"));
   const agentHouse = path.join(root, "world", "house", "helper");

@@ -119,8 +119,11 @@ async function runLoop(worldRoot) {
     }
   }
 
-  await scheduler.runNow();
   scheduler.start();
+  void scheduler.runNow().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error(`[scheduler runNow error] ${String(err?.stack ?? err?.message ?? err)}`);
+  });
   const interval = setInterval(async () => {
     const alive = await ensureWorldRootAlive();
     if (!alive) {

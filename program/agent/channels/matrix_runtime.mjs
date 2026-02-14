@@ -39,8 +39,10 @@ export function resolveMatrixConfigWithMap(rawConfig = {}) {
     ?? resolveConfigMapText(mapName, "appservice registration");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
+  const mapUser = resolveConfigMapText(mapName, "user");
+  const mapToken = resolveConfigMapText(mapName, "token");
   const homeserver = rawConfig.homeserver ?? mapHomeserver ?? null;
-  const user = rawConfig.user ?? null;
+  const user = rawConfig.user ?? mapUser ?? null;
   return {
     ...rawConfig,
     mode: rawConfig.mode ?? null,
@@ -50,7 +52,7 @@ export function resolveMatrixConfigWithMap(rawConfig = {}) {
     user,
     registrationSharedSecret: rawConfig.registrationSharedSecret ?? mapSharedSecret ?? null,
     adminToken: rawConfig.adminToken ?? mapAdminToken ?? null,
-    token: rawConfig.token ?? null
+    token: rawConfig.token ?? mapToken ?? null
   };
 }
 

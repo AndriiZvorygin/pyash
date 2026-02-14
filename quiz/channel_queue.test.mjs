@@ -156,3 +156,76 @@ test("channel queue fail ack can requeue then fail out", async () => {
   const failed = await fs.readdir(paths.produceFailDir);
   assert.equal(failed.length, 1);
 });
+
+test("channel queue claim scopes input envelopes by agent and channel", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-scope-input-"));
+  const worldRoot = path.join(root, "world");
+  const payload = eventToSentence({
+    payloadId: "news-20260213-0101",
+    fromEndpoint: "channel matrix room !room:server",
+    toEndpoint: "agent accountant",
+    payloadText: "scoped input",
+    targetAgentName: "accountant",
+    sessionId: "session name matrix_room"
+  });
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-02-13T18:40:10.000Z",
+    channelType: "matrix",
+    identity: "@accountant:matrix.liberit.ca",
+    agentName: "accountant",
+    roomName: "!room:server",
+    eventId: "$scope-input-1",
+    payloadSentence: payload
+  });
+
+  const wrongAgentClaim = await claimOldestInputEnvelope(worldRoot, {
+    workerTag: "mricge-input",
+    channelType: "matrix",
+    agentName: "mricge"
+  });
+  assert.equal(wrongAgentClaim, null);
+
+  const rightAgentClaim = await claimOldestInputEnvelope(worldRoot, {
+    workerTag: "accountant-input",
+    channelType: "matrix",
+    agentName: "accountant"
+  });
+  assert.equal(rightAgentClaim?.envelope?.eventId, "$scope-input-1");
+});
+
+test("channel queue claim scopes produce envelopes by agent and channel", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-scope-produce-"));
+  const worldRoot = path.join(root, "world");
+  const payload = ackToSentence({
+    messageId: "matrix-event-20260213-0102",
+    fromEndpoint: "agent accountant",
+    toEndpoint: "channel matrix room !room:server",
+    payloadId: "news-20260213-0102",
+    success: true
+  });
+
+  await enqueueProduceEnvelope(worldRoot, {
+    queuedAt: "2026-02-13T18:41:12.000Z",
+    channelType: "matrix",
+    identity: "@accountant:matrix.liberit.ca",
+    agentName: "accountant",
+    roomName: "!room:server",
+    payloadId: "news-20260213-0102",
+    payloadSentence: payload
+  });
+
+  const wrongAgentClaim = await claimOldestProduceEnvelope(worldRoot, {
+    workerTag: "mricge-produce",
+    channelType: "matrix",
+    agentName: "mricge"
+  });
+  assert.equal(wrongAgentClaim, null);
+
+  const rightAgentClaim = await claimOldestProduceEnvelope(worldRoot, {
+    workerTag: "accountant-produce",
+    channelType: "matrix",
+    agentName: "accountant"
+  });
+  assert.equal(rightAgentClaim?.envelope?.payloadId, "news-20260213-0102");
+});

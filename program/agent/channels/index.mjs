@@ -1028,9 +1028,48 @@ export async function runChannelPollOnce({
     const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
     const events = rawEvents.map(event => normalizeEvent(event, channelType)).filter(Boolean);
     const newCheckpoint = recv?.checkpoint ?? checkpoint;
+    const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+    const shouldWarmStart = channelConfig?.warmStart === true
+      && !checkpointText
+      && Array.isArray(runtimeState?.dedupOrder)
+      && runtimeState.dedupOrder.length === 0
+      && Array.isArray(runtimeState?.selfOrder)
+      && runtimeState.selfOrder.length === 0;
     let enqueued = 0;
     let skippedDedup = 0;
     const debug = channelConfig?.debug === true;
+
+    if (shouldWarmStart) {
+      await writeChannelRuntimeState({
+        agentHouse,
+        channelType,
+        checkpoint: newCheckpoint,
+        dedupOrder: Array.isArray(runtimeState?.dedupOrder) ? runtimeState.dedupOrder : [],
+        selfOrder: selfState.order,
+        removeLegacy: true
+      });
+      const depth = await queueDepth(worldRoot);
+      const durationMs = Date.now() - startMs;
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "poll_enqueue",
+        decision: "warm_start",
+        durationMs,
+        received: 0,
+        enqueued: 0,
+        skippedDedup: 0,
+        queueDepth: depth.total
+      }, { channelType, agentName });
+      return {
+        received: 0,
+        enqueued: 0,
+        skippedDedup: 0,
+        durationMs,
+        queueDepth: depth.total,
+        warmed: true
+      };
+    }
 
     for (const event of events) {
       if (typeof adapter?.markSeen === "function") {
@@ -1120,7 +1159,11 @@ export async function runChannelInputOnce({
   const claims = [];
   const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
   for (let i = 0; i < limit; i += 1) {
-    const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: `${agentName}-input` });
+    const claimed = await claimOldestInputEnvelope(worldRoot, {
+      workerTag: `${agentName}-input`,
+      channelType,
+      agentName
+    });
     if (!claimed) break;
     claims.push(claimed);
   }
@@ -1256,7 +1299,11 @@ export async function runChannelProduceOnce({
   const startMs = Date.now();
 
   for (let i = 0; i < limit; i += 1) {
-    const claim = await claimOldestProduceEnvelope(worldRoot, { workerTag: `${agentName}-produce` });
+    const claim = await claimOldestProduceEnvelope(worldRoot, {
+      workerTag: `${agentName}-produce`,
+      channelType,
+      agentName
+    });
     if (!claim) break;
     const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));
     const payloadSentence = claim?.envelope?.payloadSentence ?? {};

@@ -9,6 +9,10 @@ import { remember } from "../remember/index.mjs";
 import { splitSentencesWithLines } from "../library/sentenceSplitter.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "./session.mjs";
 import { loadServiceDefinition, resolveServiceModulePath } from "./service_definition.mjs";
+import {
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentHouseDirectory
+} from "../library/agent_command_policy.mjs";
 import { loadChannelPolicyWithGlobal } from "./channels/policy.mjs";
 import {
   runChannelOnce,
@@ -135,164 +139,139 @@ function shortError(err) {
 async function runChannelPollJob({ worldRoot, job }) {
   const parsed = parseChannelPollJob(job.jobName);
   if (!parsed) return null;
-  const agentHouse = resolveAgentHouse({ mindName: job.agentName, rememberFn: remember });
-  await ensureAgentDirs(agentHouse);
-  const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
-  const availableChannelTypes = normalizeChannelOrder(Object.keys(allChannels));
-  const channelTypes = parsed.mode === "multi"
-    ? channelTypesFromJobWithCase(job.withCase, availableChannelTypes)
-    : [parsed.channelType];
-  if (!channelTypes.length) return { status: "skipped:no_channels" };
+  const declared = listWorldDeclaredAgentHouses({ worldRoot });
+  const agentNames = Array.from(new Set(
+    declared.map((entry) => String(entry?.agentName ?? "").trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, "en"));
+  if (!agentNames.length) return { status: "skipped:no_agents" };
 
   let totalReceived = 0;
   let totalHandled = 0;
   let totalSent = 0;
   const channelStatus = [];
 
-  for (const channelType of channelTypes) {
-    const rawConfig = allChannels[channelType];
-    if (!rawConfig?.enabled) {
-      channelStatus.push(`${channelType}:disabled`);
-      continue;
-    }
-    let channelConfig = { ...rawConfig };
-    const channelMode = normalizeChannelMode(channelConfig.mode);
-    const effectiveLongPollMs = normalizeLongPollMs(channelConfig.longPollMs, 10000);
-    channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
-    if (channelMode === "appservice-push" && channelConfig.warmStart == null) {
+  for (const targetAgentName of agentNames) {
+    const agentHouse = resolveWorldAgentHouseDirectory({
+      worldRoot,
+      agentName: targetAgentName,
+      includeFallback: true
+    }) ?? resolveAgentHouse({ mindName: targetAgentName, rememberFn: remember });
+    await ensureAgentDirs(agentHouse);
+    const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
+    const availableChannelTypes = normalizeChannelOrder(Object.keys(allChannels));
+    const channelTypes = parsed.mode === "multi"
+      ? channelTypesFromJobWithCase(job.withCase, availableChannelTypes)
+      : [parsed.channelType];
+    if (!channelTypes.length) continue;
+
+    for (const channelType of channelTypes) {
+      const rawConfig = allChannels[channelType];
+      if (!rawConfig?.enabled) continue;
+      let channelConfig = { ...rawConfig };
+      const channelMode = normalizeChannelMode(channelConfig.mode);
+      const effectiveLongPollMs = normalizeLongPollMs(channelConfig.longPollMs, 10000);
+      channelConfig = { ...channelConfig, mode: channelMode, longPollMs: effectiveLongPollMs };
+    if (channelConfig.warmStart == null) {
       channelConfig = { ...channelConfig, warmStart: true };
     }
-    if (channelMode === "appservice-push" && (parsed.kind === "poll" || parsed.kind === "probe")) {
-      channelStatus.push(`${channelType}:skipped=push_mode`);
-      continue;
-    }
-    let dmBootstrapDefect = "";
-    if (channelType === "matrix") {
-      const hydrated = await hydrateMatrixRuntimeConfig({
-        channelConfig,
-        agentName: job.agentName,
-        agentHouse,
-        channelType
-      });
-      channelConfig = hydrated.channelConfig;
-      if (hydrated.dmBootstrapErrors.length > 0) {
-        const first = hydrated.dmBootstrapErrors[0];
-        dmBootstrapDefect = `executive_dm_bootstrap_failed:${String(first.executiveUser ?? "").trim()}:${shortError(first.error)}`;
-        channelStatus.push(`${channelType}:dm_bootstrap_error=${hydrated.dmBootstrapErrors.length}`);
-      }
-    }
-    const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
-    if (!adapter) {
-      channelStatus.push(`${channelType}:unsupported`);
-      await writeRouterHealthState({
-        worldRoot,
-        channelType,
-        activeMode: channelMode,
-        fallbackActive: false,
-        fallbackReason: "unsupported channel adapter",
-        queueDepth: 0,
-        lastInputAt: "",
-        updatedAt: nowIso(),
-        healthy: false,
-        statusText: "defective"
-      });
-      continue;
-    }
-    let result = null;
-    let activeMode = channelMode;
-    let fallbackActive = false;
-    let fallbackReason = "";
-    const runChannelPhase = async (configToRun) => {
-      if (parsed.kind === "poll" || parsed.kind === "probe") {
-        return runChannelPollOnce({
-          agentName: job.agentName,
-          channelType,
-          channelConfig: configToRun,
-          adapter,
-          agentHouse
+      if (channelMode === "appservice-push" && (parsed.kind === "poll" || parsed.kind === "probe")) continue;
+      let dmBootstrapDefect = "";
+      if (channelType === "matrix") {
+        const hydrated = await hydrateMatrixRuntimeConfig({
+          channelConfig,
+          agentName: targetAgentName,
+          agentHouse,
+          channelType
         });
+        channelConfig = hydrated.channelConfig;
+        if (hydrated.dmBootstrapErrors.length > 0) {
+          const first = hydrated.dmBootstrapErrors[0];
+          dmBootstrapDefect = `executive_dm_bootstrap_failed:${String(first.executiveUser ?? "").trim()}:${shortError(first.error)}`;
+          channelStatus.push(`${targetAgentName}/${channelType}:dm_bootstrap_error=${hydrated.dmBootstrapErrors.length}`);
+        }
       }
-      if (parsed.kind === "input") {
-        return runChannelInputOnce({
-          agentName: job.agentName,
+      const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
+      if (!adapter) continue;
+      let result = null;
+      let activeMode = channelMode;
+      let fallbackActive = false;
+      let fallbackReason = "";
+      const runChannelPhase = async (configToRun) => {
+        if (parsed.kind === "poll" || parsed.kind === "probe") {
+          return runChannelPollOnce({
+            agentName: targetAgentName,
+            channelType,
+            channelConfig: configToRun,
+            adapter,
+            agentHouse
+          });
+        }
+        if (parsed.kind === "input") {
+          return runChannelInputOnce({
+            agentName: targetAgentName,
+            channelType,
+            channelConfig: configToRun,
+            adapter,
+            interpretFn: interpret,
+            agentHouse,
+            maxItems: 10,
+            concurrency: 2
+          });
+        }
+        if (parsed.kind === "produce") {
+          return runChannelProduceOnce({
+            agentName: targetAgentName,
+            channelType,
+            channelConfig: configToRun,
+            adapter,
+            agentHouse,
+            maxItems: 10
+          });
+        }
+        return runChannelOnce({
+          agentName: targetAgentName,
           channelType,
           channelConfig: configToRun,
           adapter,
           interpretFn: interpret,
-          agentHouse,
-          maxItems: 10,
-          concurrency: 2
+          agentHouse
         });
-      }
-      if (parsed.kind === "produce") {
-        return runChannelProduceOnce({
-          agentName: job.agentName,
-          channelType,
-          channelConfig: configToRun,
-          adapter,
-          agentHouse,
-          maxItems: 10
-        });
-      }
-      return runChannelOnce({
-        agentName: job.agentName,
-        channelType,
-        channelConfig: configToRun,
-        adapter,
-        interpretFn: interpret,
-        agentHouse
-      });
-    };
-    try {
-      result = await runChannelPhase(channelConfig);
-    } catch (err) {
-      if (channelMode === "appservice-push") {
-        const configuredFallbackMode = normalizeChannelMode(
-          channelConfig.fallbackMode || channelConfig.alternateMode || "poll"
-        );
-        if (configuredFallbackMode && configuredFallbackMode !== channelMode) {
-          const fallbackConfig = { ...channelConfig, mode: configuredFallbackMode };
-          try {
-            result = await runChannelPhase(fallbackConfig);
-            activeMode = configuredFallbackMode;
-            fallbackActive = true;
+      };
+      try {
+        result = await runChannelPhase(channelConfig);
+      } catch (err) {
+        if (channelMode === "appservice-push") {
+          const configuredFallbackMode = normalizeChannelMode(
+            channelConfig.fallbackMode || channelConfig.alternateMode || "poll"
+          );
+          if (configuredFallbackMode && configuredFallbackMode !== channelMode) {
+            const fallbackConfig = { ...channelConfig, mode: configuredFallbackMode };
+            try {
+              result = await runChannelPhase(fallbackConfig);
+              activeMode = configuredFallbackMode;
+              fallbackActive = true;
+              fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
+            } catch (fallbackErr) {
+              const message = shortError(fallbackErr);
+              fallbackReason = `primary ${channelMode} defective: ${shortError(err)}; fallback ${configuredFallbackMode} defective: ${message}`;
+            }
+          } else {
             fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
-          } catch (fallbackErr) {
-            const message = shortError(fallbackErr);
-            fallbackReason = `primary ${channelMode} defective: ${shortError(err)}; fallback ${configuredFallbackMode} defective: ${message}`;
           }
-        } else {
-          fallbackReason = `primary ${channelMode} defective: ${shortError(err)}`;
+        }
+        if (!result) {
+          const message = fallbackReason || shortError(err);
+          channelStatus.push(`${targetAgentName}/${channelType}:error=${message}`);
+          continue;
         }
       }
-      if (!result) {
-        const message = fallbackReason || shortError(err);
-        channelStatus.push(`${channelType}:error=${message}`);
-        await writeRouterHealthState({
-          worldRoot,
-          channelType,
-          activeMode,
-          fallbackActive,
-          fallbackReason: message,
-          queueDepth: 0,
-          lastInputAt: "",
-          updatedAt: nowIso(),
-          healthy: false,
-          statusText: "defective"
-        });
-        continue;
-      }
-    }
-    if (result) {
+      if (!result) continue;
       totalReceived += Number(result?.received ?? 0);
       totalHandled += Number(result?.handled ?? 0);
       totalSent += Number(result?.sent ?? 0);
       const modeSuffix = `mode=${activeMode}`;
       const fallbackSuffix = fallbackActive ? ":fallback=active" : "";
-      channelStatus.push(`${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}:${modeSuffix}`);
-      if (fallbackSuffix) {
-        channelStatus[channelStatus.length - 1] += `${fallbackSuffix}`;
-      }
+      channelStatus.push(`${targetAgentName}/${channelType}:received=${result.received}:handled=${result.handled}:sent=${result.sent}:${modeSuffix}${fallbackSuffix}`);
       const healthReason = [fallbackReason, dmBootstrapDefect].filter(Boolean).join("; ");
       const healthy = !dmBootstrapDefect;
       await writeRouterHealthState({
@@ -309,11 +288,8 @@ async function runChannelPollJob({ worldRoot, job }) {
       });
     }
   }
-
   if (!channelStatus.length) return { status: "skipped:no_enabled_channels" };
-  return {
-    status: `channel:received=${totalReceived}:handled=${totalHandled}:sent=${totalSent} [${channelStatus.join(", ")}]`
-  };
+  return { status: `channel:received=${totalReceived}:handled=${totalHandled}:sent=${totalSent} [${channelStatus.join(", ")}]` };
 }
 
 async function runMindScheduledJob({ worldRoot, job }) {
@@ -403,6 +379,8 @@ async function runServiceDefinitionJob({ worldRoot, job }) {
 }
 
 export async function runScheduledJob({ worldRoot, job }) {
+  const channelResult = await runChannelPollJob({ worldRoot, job });
+  if (channelResult) return channelResult;
   if (!job?.agentName) return { status: "skipped:missing_agent" };
   const nowIso = new Date().toISOString();
   await updateAgentPresence({
@@ -420,12 +398,7 @@ export async function runScheduledJob({ worldRoot, job }) {
   if (serviceResult) {
     result = serviceResult;
   } else {
-    const channelResult = await runChannelPollJob({ worldRoot, job });
-    if (channelResult) {
-      result = channelResult;
-    } else {
-      result = await runMindScheduledJob({ worldRoot, job });
-    }
+    result = await runMindScheduledJob({ worldRoot, job });
   }
   await updateAgentPresence({
     worldRoot,
