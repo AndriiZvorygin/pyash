@@ -122,7 +122,7 @@ async function main() {
     path.join(housePath, "conduct", "runtime.pya"),
     path.join(housePath, "conduct", "channels.pya"),
     path.join(housePath, "conduct", "calendar.pya"),
-    path.join(housePath, "conduct", "matrix-auth.json"),
+    path.join(housePath, "conduct", "matrix-auth.pya"),
     path.join(housePath, "identity", "IDENTITY.md"),
     path.join(housePath, "identity", "SOUL.md"),
     path.join(housePath, "identity", "TOOLS.md"),

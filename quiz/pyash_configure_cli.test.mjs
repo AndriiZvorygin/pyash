@@ -41,12 +41,19 @@ async function makeRoot() {
 
 async function startMatrixMockServer() {
   const calls = [];
+  const tokenUser = new Map();
+  const readToken = (req) => {
+    const auth = String(req.headers.authorization ?? "").trim();
+    const match = auth.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : "";
+  };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || "/", "http://127.0.0.1");
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       const bodyText = Buffer.concat(chunks).toString("utf8");
+      const token = readToken(req);
       calls.push({
         method: req.method,
         path: url.pathname,
@@ -54,9 +61,30 @@ async function startMatrixMockServer() {
         body: bodyText
       });
 
-      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/account/whoami") {
+      if (req.method === "GET" && url.pathname === "/_synapse/admin/v1/register") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ user_id: "@builder:example.test" }));
+        res.end(JSON.stringify({ nonce: "nonce-1" }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_synapse/admin/v1/register") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/login") {
+        const payload = JSON.parse(bodyText || "{}");
+        const loginUser = String(payload?.identifier?.user ?? payload?.user ?? "builder");
+        const normalizedUser = loginUser.startsWith("@") ? loginUser : `@${loginUser}:example.test`;
+        const accessToken = `token-${normalizedUser.replace(/[^a-z0-9]/gi, "_")}`;
+        tokenUser.set(accessToken, normalizedUser);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ access_token: accessToken, user_id: normalizedUser, device_id: "DEV1" }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/account/whoami") {
+        const userId = tokenUser.get(token) || "@builder:example.test";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ user_id: userId }));
         return;
       }
       if (req.method === "POST" && url.pathname === "/_matrix/client/v3/join/%23pyash%3Aexample.test") {
@@ -855,15 +883,15 @@ maybeTest("configure agent start-now bootstraps matrix room and executive dm", a
   const root = await makeRoot();
   const matrix = await startMatrixMockServer();
   try {
-    const channelRun = runCli([
+    const channelRun = await runCliAsync([
       "configure", "channel", "matrix",
       "--root", root,
       "--non-interactive",
       "--json",
       "--homeserver", matrix.homeserver,
       "--room", "#pyash:example.test",
-      "--auth-mode", "token",
-      "--token", "abc123",
+      "--auth-mode", "shared-secret",
+      "--registration-shared-secret", "shared-secret-value",
       "--executive", "@boss:example.test",
       "--write-agent-policy", "lie"
     ]);
@@ -891,10 +919,16 @@ maybeTest("configure agent start-now bootstraps matrix room and executive dm", a
     assert.equal(payload.channelBootstrap?.joinedRoomId, "!main:example.test");
     assert.equal(payload.channelBootstrap?.executiveDm?.roomId, "!dm:example.test");
 
-    const seenWhoAmI = matrix.calls.some((call) => call.method === "GET" && call.path === "/_matrix/client/v3/account/whoami");
+    const seenRegister = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_synapse/admin/v1/register"
+    );
+    const seenLogin = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_matrix/client/v3/login"
+    );
     const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
     const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
-    assert.equal(seenWhoAmI, true);
+    assert.equal(seenRegister, true);
+    assert.equal(seenLogin, true);
     assert.equal(seenJoin, true);
     assert.equal(seenCreateRoom, true);
   } finally {
@@ -904,11 +938,11 @@ maybeTest("configure agent start-now bootstraps matrix room and executive dm", a
   }
 });
 
-maybeTest("configure agent start-now invites target matrix user when join is forbidden", async () => {
+maybeTest("configure agent start-now surfaces join forbidden when bootstrap identity cannot invite", async () => {
   const root = await makeRoot();
   const matrix = await startMatrixInviteFallbackMockServer();
   try {
-    const channelRun = runCli([
+    const channelRun = await runCliAsync([
       "configure", "channel", "matrix",
       "--root", root,
       "--non-interactive",
@@ -917,7 +951,6 @@ maybeTest("configure agent start-now invites target matrix user when join is for
       "--room", "#pyash:example.test",
       "--auth-mode", "shared-secret",
       "--registration-shared-secret", "shared-secret-value",
-      "--token", "inviter-token",
       "--agent-user-id", "@mricge:example.test",
       "--write-agent-policy", "lie"
     ]);
@@ -940,15 +973,9 @@ maybeTest("configure agent start-now invites target matrix user when join is for
     assert.equal(agentRun.status, 0, agentRun.stderr);
     const payload = JSON.parse(agentRun.stdout);
     assert.equal(payload.ok, true);
-    assert.equal(payload.channelBootstrap?.ok, true);
-    assert.equal(payload.channelBootstrap?.userId, "@accountant:example.test");
-    assert.equal(payload.channelBootstrap?.joinedRoomId, "!main:example.test");
-    assert.equal(payload.channelBootstrap?.executiveDm?.attempted, false);
-
-    const inviteCall = matrix.calls.find((call) =>
-      call.method === "POST" && /\/_matrix\/client\/v3\/rooms\/.+\/invite$/.test(call.path)
-    );
-    assert.ok(inviteCall, "expected invite fallback call");
+    assert.equal(payload.channelBootstrap?.ok, false);
+    assert.equal(payload.channelBootstrap?.step, "join room");
+    assert.match(String(payload.channelBootstrap?.error || ""), /M_FORBIDDEN/);
   } finally {
     const stopRun = runCli(["calendar", "stop", "--root", root, "--json"]);
     assert.equal(stopRun.status, 0, stopRun.stderr);
@@ -1656,15 +1683,15 @@ maybeTest("channel bootstrap joins matrix room and resolves executive dm for a s
   const root = await makeRoot();
   const matrix = await startMatrixMockServer();
   try {
-    const channelRun = runCli([
+    const channelRun = await runCliAsync([
       "configure", "channel", "matrix",
       "--root", root,
       "--non-interactive",
       "--json",
       "--homeserver", matrix.homeserver,
       "--room", "#pyash:example.test",
-      "--auth-mode", "token",
-      "--token", "abc123",
+      "--auth-mode", "shared-secret",
+      "--registration-shared-secret", "shared-secret-value",
       "--write-agent-policy", "lie"
     ]);
     assert.equal(channelRun.status, 0, channelRun.stderr);
@@ -1683,10 +1710,16 @@ maybeTest("channel bootstrap joins matrix room and resolves executive dm for a s
     assert.equal(payload.bootstrap?.joinedRoomId, "!main:example.test");
     assert.equal(payload.bootstrap?.executiveDm?.roomId, "!dm:example.test");
 
-    const seenWhoAmI = matrix.calls.some((call) => call.method === "GET" && call.path === "/_matrix/client/v3/account/whoami");
+    const seenRegister = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_synapse/admin/v1/register"
+    );
+    const seenLogin = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_matrix/client/v3/login"
+    );
     const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
     const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
-    assert.equal(seenWhoAmI, true);
+    assert.equal(seenRegister, true);
+    assert.equal(seenLogin, true);
     assert.equal(seenJoin, true);
     assert.equal(seenCreateRoom, true);
   } finally {

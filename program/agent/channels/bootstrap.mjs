@@ -55,23 +55,100 @@ function generateCredentials({ agentName, localpart, withSuffix = false }) {
   return { localpart: resolved, password };
 }
 
-async function readJsonFile(filePath, fallback) {
+async function readTextFile(filePath) {
   try {
-    const text = await fs.readFile(filePath, "utf8");
-    return JSON.parse(text);
+    return await fs.readFile(filePath, "utf8");
   } catch (err) {
-    if (err?.code === "ENOENT") return fallback;
+    if (err?.code === "ENOENT") return "";
     throw err;
   }
 }
 
-async function writeJsonFile(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+function authPath(agentHouse) {
+  return path.join(agentHouse, "conduct", "matrix-auth.pya");
 }
 
-function authPath(agentHouse) {
+function legacyAuthPath(agentHouse) {
   return path.join(agentHouse, "conduct", "matrix-auth.json");
+}
+
+function quotePyashText(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+}
+
+function unquotePyashText(value) {
+  const text = String(value ?? "").trim();
+  if (!(text.startsWith("\"") && text.endsWith("\""))) return text;
+  const inner = text.slice(1, -1);
+  return inner
+    .replace(/\\\"/g, "\"")
+    .replace(/\\\\/g, "\\");
+}
+
+function normalizeAuthCache(raw = {}) {
+  const executiveDmRooms = {};
+  for (const [key, value] of Object.entries(raw?.executiveDmRooms ?? {})) {
+    const userId = String(key ?? "").trim();
+    const roomId = String(value ?? "").trim();
+    if (!userId || !roomId) continue;
+    executiveDmRooms[userId] = roomId;
+  }
+  return {
+    homeserver: String(raw?.homeserver ?? "").trim(),
+    user: String(raw?.user ?? "").trim(),
+    localpart: String(raw?.localpart ?? "").trim(),
+    password: String(raw?.password ?? "").trim(),
+    accessToken: String(raw?.accessToken ?? "").trim(),
+    deviceId: raw?.deviceId == null ? null : String(raw.deviceId).trim(),
+    executiveDmRooms
+  };
+}
+
+function parseMatrixAuthPyash(text = "") {
+  const cache = normalizeAuthCache({});
+  const dmPattern = /su name executive dm room for name ("(?:[^"\\]|\\.)*") ob text ("(?:[^"\\]|\\.)*") ya/gi;
+  for (const match of String(text).matchAll(dmPattern)) {
+    const userId = unquotePyashText(match[1]);
+    const roomId = unquotePyashText(match[2]);
+    if (!userId || !roomId) continue;
+    cache.executiveDmRooms[userId] = roomId;
+  }
+
+  const fieldPattern = /su name (homeserver|user|localpart|password|access token|device id) ob text ("(?:[^"\\]|\\.)*") ya/gi;
+  for (const match of String(text).matchAll(fieldPattern)) {
+    const key = String(match[1] ?? "").trim().toLowerCase();
+    const value = unquotePyashText(match[2]);
+    if (key === "homeserver") cache.homeserver = value;
+    else if (key === "user") cache.user = value;
+    else if (key === "localpart") cache.localpart = value;
+    else if (key === "password") cache.password = value;
+    else if (key === "access token") cache.accessToken = value;
+    else if (key === "device id") cache.deviceId = value;
+  }
+  return cache;
+}
+
+function renderMatrixAuthPyash(raw = {}) {
+  const cache = normalizeAuthCache(raw);
+  const lines = ["# managed by pyash matrix auth cache"];
+  if (cache.homeserver) lines.push(`su name homeserver ob text ${quotePyashText(cache.homeserver)} ya`);
+  if (cache.user) lines.push(`su name user ob text ${quotePyashText(cache.user)} ya`);
+  if (cache.localpart) lines.push(`su name localpart ob text ${quotePyashText(cache.localpart)} ya`);
+  if (cache.password) lines.push(`su name password ob text ${quotePyashText(cache.password)} ya`);
+  if (cache.accessToken) lines.push(`su name access token ob text ${quotePyashText(cache.accessToken)} ya`);
+  if (cache.deviceId) lines.push(`su name device id ob text ${quotePyashText(cache.deviceId)} ya`);
+  for (const [userId, roomId] of Object.entries(cache.executiveDmRooms)) {
+    lines.push(`su name executive dm room for name ${quotePyashText(userId)} ob text ${quotePyashText(roomId)} ya`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export async function writeMatrixAuthCache(agentHouse, value) {
+  if (!agentHouse) throw new Error("writeMatrixAuthCache requires agentHouse");
+  const filePath = authPath(agentHouse);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, renderMatrixAuthPyash(value), "utf8");
 }
 
 function sanitizeUserId(raw, homeserver) {
@@ -302,7 +379,20 @@ function envHomeserver() {
 
 export async function readMatrixAuthCache(agentHouse) {
   if (!agentHouse) return null;
-  return readJsonFile(authPath(agentHouse), null);
+  const text = await readTextFile(authPath(agentHouse));
+  if (String(text).trim()) return parseMatrixAuthPyash(text);
+  const legacyText = await readTextFile(legacyAuthPath(agentHouse));
+  if (!String(legacyText).trim()) return null;
+  let legacy = null;
+  try {
+    legacy = JSON.parse(legacyText);
+  } catch {
+    return null;
+  }
+  const migrated = normalizeAuthCache(legacy);
+  await writeMatrixAuthCache(agentHouse, migrated);
+  await fs.rm(legacyAuthPath(agentHouse), { force: true }).catch(() => {});
+  return migrated;
 }
 
 export async function ensureMatrixCredentials({
@@ -328,7 +418,7 @@ export async function ensureMatrixCredentials({
         ?? parseLocalpartFromUserId(desiredUserNormalized)
         ?? null;
       if (!userIdsMatch(cached.user, desiredUserNormalized)) {
-        await writeJsonFile(authPath(agentHouse), {
+        await writeMatrixAuthCache(agentHouse, {
           ...cached,
           homeserver,
           user: desiredUserNormalized,
@@ -366,7 +456,7 @@ export async function ensureMatrixCredentials({
         ?? parseLocalpartFromUserId(resolvedCachedUser)
         ?? null;
       if (resolvedCachedUser && !userIdsMatch(resolvedCachedUser, cached.user)) {
-        await writeJsonFile(authPath(agentHouse), {
+        await writeMatrixAuthCache(agentHouse, {
           ...cached,
           homeserver,
           user: resolvedCachedUser,
@@ -386,7 +476,7 @@ export async function ensureMatrixCredentials({
 
   if (config?.token) {
     if (isAppserviceMode(mode) && desiredUserNormalized) {
-      await writeJsonFile(authPath(agentHouse), {
+      await writeMatrixAuthCache(agentHouse, {
         ...(cached ?? {}),
         homeserver,
         user: desiredUserNormalized,
@@ -416,7 +506,7 @@ export async function ensureMatrixCredentials({
     }
     if (!requireTokenUserValidation || resolvedTokenUser) {
       if (resolvedTokenUser) {
-        await writeJsonFile(authPath(agentHouse), {
+        await writeMatrixAuthCache(agentHouse, {
           ...(cached ?? {}),
           homeserver,
           user: resolvedTokenUser,
@@ -521,7 +611,7 @@ export async function ensureMatrixCredentials({
     deviceId: loginPayload?.device_id ?? null,
     executiveDmRooms: cached?.executiveDmRooms ?? {}
   };
-  await writeJsonFile(authPath(agentHouse), record);
+  await writeMatrixAuthCache(agentHouse, record);
   return {
     homeserver,
     token: accessToken,
@@ -547,7 +637,7 @@ export async function ensureMatrixExecutiveDmRoom({
   const executiveUserId = sanitizeUserId(executiveUser, homeserver);
   if (!executiveUserId) return null;
 
-  const cached = await readJsonFile(authPath(agentHouse), null);
+  const cached = await readMatrixAuthCache(agentHouse);
   const joinedRooms = await fetchJoinedRoomSet({
     homeserver,
     token,
@@ -583,7 +673,7 @@ export async function ensureMatrixExecutiveDmRoom({
         [executiveUserId]: directRoom
       }
     };
-    await writeJsonFile(authPath(agentHouse), next);
+    await writeMatrixAuthCache(agentHouse, next);
     return directRoom;
   }
 
@@ -605,6 +695,6 @@ export async function ensureMatrixExecutiveDmRoom({
       [executiveUserId]: createdRoom
     }
   };
-  await writeJsonFile(authPath(agentHouse), next);
+  await writeMatrixAuthCache(agentHouse, next);
   return createdRoom;
 }

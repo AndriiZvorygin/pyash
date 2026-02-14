@@ -4,7 +4,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import {
+  ensureMatrixCredentials,
+  ensureMatrixExecutiveDmRoom,
+  readMatrixAuthCache,
+  writeMatrixAuthCache
+} from "../program/agent/channels/bootstrap.mjs";
 
 test("matrix bootstrap registers, logs in, and caches token", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-"));
@@ -62,15 +67,14 @@ test("matrix bootstrap with explicit user is idempotent when user already exists
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-idempotent-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.example.org",
     user: "@helper:example.org",
     localpart: "helper",
     password: "pw0",
     accessToken: "",
     deviceId: "DEV0"
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
@@ -113,8 +117,7 @@ test("matrix bootstrap with explicit user is idempotent when user already exists
   });
   assert.equal(resolved.user, "@helper:example.org");
   assert.equal(resolved.token, "tok-new");
-  const postText = await fs.readFile(cachedAuthPath, "utf8");
-  const post = JSON.parse(postText);
+  const post = await readMatrixAuthCache(agentHouse);
   assert.equal(post.user, "@helper:example.org");
   assert.equal(post.localpart, "helper");
   assert.equal(post.accessToken, "tok-new");
@@ -124,15 +127,14 @@ test("matrix bootstrap recovers cached token user via whoami when user is missin
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-whoami-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.example.org",
     user: null,
     accessToken: "tok-cached",
     executiveDmRooms: {
       "@andrii:matrix.example.org": "!dm:matrix.example.org"
     }
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
@@ -160,7 +162,7 @@ test("matrix bootstrap recovers cached token user via whoami when user is missin
     "@andrii:matrix.example.org": "!dm:matrix.example.org"
   });
 
-  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  const persisted = await readMatrixAuthCache(agentHouse);
   assert.equal(persisted.user, "@helper:matrix.example.org");
   assert.equal(calls.length, 1);
 });
@@ -218,7 +220,7 @@ test("matrix bootstrap ignores mismatched config token for explicit non-appservi
   assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/account/whoami")).length, 1);
   assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/login")).length, 1);
 
-  const persisted = JSON.parse(await fs.readFile(path.join(agentHouse, "conduct", "matrix-auth.json"), "utf8"));
+  const persisted = await readMatrixAuthCache(agentHouse);
   assert.equal(persisted.user, "@accountant:matrix.example.org");
   assert.equal(persisted.accessToken, "tok-accountant");
 });
@@ -367,8 +369,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-user-switch-"));
   const agentHouse = path.join(root, "world", "house", "pyash-agent");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.liberit.ca",
     user: "@agentbot:matrix.liberit.ca",
     localpart: "agentbot",
@@ -376,7 +377,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
     executiveDmRooms: {
       "@andrii:matrix.liberit.ca": "!old:matrix.liberit.ca"
     }
-  }, null, 2));
+  });
 
   const resolved = await ensureMatrixCredentials({
     agentName: "pyash-agent",
@@ -392,7 +393,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
   });
 
   assert.equal(resolved.user, "@pyash-agent:matrix.liberit.ca");
-  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  const persisted = await readMatrixAuthCache(agentHouse);
   assert.equal(persisted.user, "@pyash-agent:matrix.liberit.ca");
   assert.deepEqual(persisted.executiveDmRooms, {});
 });
@@ -401,15 +402,14 @@ test("matrix executive dm bootstrap ignores stale cached room when not joined", 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-dm-stale-room-"));
   const agentHouse = path.join(root, "world", "house", "pyash-agent");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.liberit.ca",
     user: "@agentbot:matrix.liberit.ca",
     accessToken: "tok",
     executiveDmRooms: {
       "@andrii:matrix.liberit.ca": "!stale:matrix.liberit.ca"
     }
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
