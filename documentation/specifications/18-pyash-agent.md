@@ -62,6 +62,11 @@ Default heartbeat profile: every 24 minutes unless overridden.
 
 Expected controls: begin / stop / restart / health / list.
 
+Channel runtime scheduler rules:
+- shared channel services are declared globally in `world/conduct/calendar.pya`.
+- channel polling is channel-scoped (one `channel poll` job per channel type), then fans out in runtime.
+- channel spool/runtime artifacts are stored under `world/holding/channel/*` and are not conduct policy files.
+
 ## 7. Channels and sub-agents
 
 Channels route through `24-channel-contract.md` with dedup and auditable produce paths.

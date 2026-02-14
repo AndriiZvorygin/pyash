@@ -385,19 +385,23 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   const worldChannelsText = await fs.readFile(worldChannelsPath, "utf8");
   const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  const calendarText = await fs.readFile(calendarPath, "utf8");
+  const calendarText = await fs.readFile(calendarPath, "utf8").catch(() => "");
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
   assert.match(worldChannelsText, /su name matrix dm tool summary ob bool truth ya/);
   assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
   assert.match(worldCalendarText, /su name matrix long poll ms ob text "10000" be calendar ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel poll schedule:start/);
+  assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
+  assert.match(worldCalendarText, /su name channel input with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel produce schedule:start/);
+  assert.match(worldCalendarText, /su name channel produce with ve text "matrix" vyah habit during second 1 be calendar ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
-  assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during second 10 be calendar ya/);
-  assert.match(calendarText, /managed by pyash configure channel input schedule:start/);
-  assert.match(calendarText, /su name channel input for name parity coder with ve text "matrix" vyah habit during second 1 be calendar ya/);
-  assert.match(calendarText, /managed by pyash configure channel produce schedule:start/);
-  assert.match(calendarText, /su name channel produce for name parity coder with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.doesNotMatch(calendarText, /su name channel poll for name parity coder/i);
+  assert.doesNotMatch(calendarText, /su name channel input for name parity coder/i);
+  assert.doesNotMatch(calendarText, /su name channel produce for name parity coder/i);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
@@ -550,8 +554,8 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
   assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
   assert.match(worldCalendarText, /su name matrix long poll ms ob text "45000" be calendar ya/);
-  assert.match(worldCalendarText, /su name channel input for name pyash-agent/);
-  assert.match(worldCalendarText, /su name channel input for name pyash-agent with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
+  assert.match(worldCalendarText, /su name channel input with ve text "matrix" vyah habit during second 1 be calendar ya/);
 });
 
 maybeTest("configure channel matrix appservice mode defaults registration path to configure/secret/matrix.yaml", async () => {
@@ -830,7 +834,7 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
   assert.doesNotMatch(channelsText, /su name matrix public tag answer ob bool/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
-  assert.match(calendarText, /su name channel poll/);
+  assert.match(calendarText, /su name matrix poll/);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);

@@ -1028,8 +1028,7 @@ function buildMatrixLongPollCalendarLine({
 }
 
 function buildChannelPollCalendarBlock({
-  agentName,
-  channels = [],
+  channelType = MATRIX_CATERER_NAME,
   intervalMinutes = 1,
   intervalSeconds = null
 }) {
@@ -1038,20 +1037,11 @@ function buildChannelPollCalendarBlock({
     ? Math.max(1, Math.floor(Number(intervalSeconds) || 1))
     : Math.max(1, Math.floor(Number(intervalMinutes) || 1));
   const duringUnit = useSeconds ? "second" : "minute";
-  const orderedChannels = Array.from(new Set(
-    (Array.isArray(channels) ? channels : [])
-      .map((value) => String(value ?? "").trim().toLowerCase())
-      .filter(Boolean)
-  ));
-  const channelValues = orderedChannels.length ? orderedChannels : ["matrix"];
-  const vectorLiteral = channelValues.map((value) => quoteText(value)).join(" ");
-  const normalizedAgent = String(agentName ?? "").trim();
-  const subject = normalizedAgent
-    ? `su name channel poll for name ${normalizedAgent}`
-    : "su name channel poll";
+  const normalizedChannelType = String(channelType ?? "").trim().toLowerCase() || MATRIX_CATERER_NAME;
+  const subject = `su name ${normalizedChannelType} poll`;
   return [
-    `${subject} with ve text ${vectorLiteral} vyah habit during ${duringUnit} ${interval} be calendar ya`,
-    "su name channel poll lane ob text \"channel_poll\" ya"
+    `${subject} vyah habit during ${duringUnit} ${interval} be calendar ya`,
+    `su name ${normalizedChannelType} poll lane ob text ${quoteText(`${normalizedChannelType}_poll`)} ya`
   ].join("\n");
 }
 
@@ -1125,7 +1115,7 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
       if (new RegExp(`^su name (channel|[a-z0-9_-]+)\\s+poll for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
         continue;
       }
-      if (/^su name (channel|[a-z0-9_-]+)\s+poll lane ob text ".*" ya$/i.test(trimmed)) {
+      if (insideManagedBlock && /^su name (channel|[a-z0-9_-]+)\s+poll lane ob text ".*" ya$/i.test(trimmed)) {
         continue;
       }
     }
@@ -1133,7 +1123,7 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
       if (new RegExp(`^su name channel input for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
         continue;
       }
-      if (/^su name channel input lane ob text ".*" ya$/i.test(trimmed)) {
+      if (insideManagedBlock && /^su name channel input lane ob text ".*" ya$/i.test(trimmed)) {
         continue;
       }
     }
@@ -1141,7 +1131,7 @@ function stripAgentChannelScheduleText({ existing, agentName, scheduleName, incl
       if (new RegExp(`^su name channel produce for name ${escapeRegex(normalizedAgent)}\\b.*be calendar ya$`, "i").test(trimmed)) {
         continue;
       }
-      if (/^su name channel produce lane ob text ".*" ya$/i.test(trimmed)) {
+      if (insideManagedBlock && /^su name channel produce lane ob text ".*" ya$/i.test(trimmed)) {
         continue;
       }
     }
@@ -2358,7 +2348,8 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
     const worldCalendarExisting = await readText(worldCalendarPath);
     const worldLegacyCleaned = stripLegacySingleChannelScheduleText({
       existing: worldCalendarExisting,
-      channelType: MATRIX_CATERER_NAME
+      channelType: MATRIX_CATERER_NAME,
+      scheduleNames: ["probe", "input", "produce"]
     });
     const worldWithoutPoll = stripAgentChannelScheduleText({
       existing: worldLegacyCleaned,
@@ -2379,7 +2370,7 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       existing: worldWithoutProduce,
       blockName: "channel poll schedule",
       content: buildChannelPollCalendarBlock({
-        channels: [MATRIX_CATERER_NAME],
+        channelType: MATRIX_CATERER_NAME,
         intervalSeconds: DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS
       })
     });
