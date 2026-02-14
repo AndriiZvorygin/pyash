@@ -70,6 +70,46 @@ function sanitizeRoomName(raw = "") {
     .toLowerCase() || "room";
 }
 
+function sanitizeScopeSegment(raw = "", fallback = "") {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "") || fallback;
+}
+
+function filenameMatchesScope(filename, { channelType = "", agentName = "" } = {}) {
+  const name = String(filename ?? "").trim().toLowerCase();
+  if (!name) return false;
+  const channel = sanitizeScopeSegment(channelType);
+  const agent = sanitizeScopeSegment(agentName);
+  if (channel && !name.includes(`-${channel}-`)) return false;
+  if (agent && !name.includes(`-${agent}-`)) return false;
+  return true;
+}
+
+function envelopeMatchesScope(envelope = {}, { channelType = "", agentName = "" } = {}) {
+  const wantChannel = sanitizeScopeSegment(channelType);
+  const wantAgent = sanitizeScopeSegment(agentName);
+  const hasChannel = sanitizeScopeSegment(envelope?.channelType);
+  const hasAgent = sanitizeScopeSegment(envelope?.agentName);
+  if (wantChannel && hasChannel !== wantChannel) return false;
+  if (wantAgent && hasAgent !== wantAgent) return false;
+  return true;
+}
+
+async function requeueClaim(paths, claim, phase = "input") {
+  const requeueDir = phase === "produce" ? paths.produceDir : paths.inputDir;
+  await failSpoolItem({
+    runtimePath: claim?.path,
+    failDir: paths.produceFailDir,
+    requeueDir,
+    retryCount: 0,
+    maxRetries: 1
+  });
+}
+
 export function channelQueuePaths(worldRoot) {
   const root = path.join(worldRoot, "holding", "channel");
   return {
@@ -201,10 +241,14 @@ async function readEnvelopeFile(targetPath) {
   return envelopeFromText(text);
 }
 
-export async function claimOldestInputEnvelope(worldRoot, { workerTag = "" } = {}) {
+export async function claimOldestInputEnvelope(
+  worldRoot,
+  { workerTag = "", channelType = "", agentName = "" } = {}
+) {
   const paths = await ensureChannelQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.inputDir);
   for (const filename of pending) {
+    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
     const claim = await claimSpoolItem({
       fromDir: paths.inputDir,
       runtimeDir: paths.runtimeDir,
@@ -213,15 +257,23 @@ export async function claimOldestInputEnvelope(worldRoot, { workerTag = "" } = {
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
+    if (!envelopeMatchesScope(envelope, { channelType, agentName })) {
+      await requeueClaim(paths, claim, "input");
+      continue;
+    }
     return { ...claim, envelope };
   }
   return null;
 }
 
-export async function claimOldestProduceEnvelope(worldRoot, { workerTag = "" } = {}) {
+export async function claimOldestProduceEnvelope(
+  worldRoot,
+  { workerTag = "", channelType = "", agentName = "" } = {}
+) {
   const paths = await ensureChannelQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.produceDir);
   for (const filename of pending) {
+    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
     const claim = await claimSpoolItem({
       fromDir: paths.produceDir,
       runtimeDir: paths.runtimeDir,
@@ -230,6 +282,10 @@ export async function claimOldestProduceEnvelope(worldRoot, { workerTag = "" } =
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
+    if (!envelopeMatchesScope(envelope, { channelType, agentName })) {
+      await requeueClaim(paths, claim, "produce");
+      continue;
+    }
     return { ...claim, envelope };
   }
   return null;

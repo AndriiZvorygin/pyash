@@ -123,7 +123,6 @@ export function parseSchedulePolicyText(text, { defaultAgentName } = {}) {
         laneName: sanitizeLaneName(laneRaw)
       };
     })
-    .filter(job => job.agentName)
     .sort((a, b) => a.jobName.localeCompare(b.jobName, "en"));
 
   return parsedJobs;
@@ -192,6 +191,10 @@ function listDeclaredAgentNames(worldRoot) {
 
 export async function discoverScheduledJobs({ worldRoot } = {}) {
   if (!worldRoot) return [];
+  const globalConductDir = path.join(worldRoot, "conduct");
+  const globalJobs = await loadSchedulePolicyFromConductDir(globalConductDir, { defaultAgentName: null });
+  const sharedGlobalJobs = globalJobs.filter((job) => !String(job?.agentName ?? "").trim());
+  const sharedChannelJobPattern = /^channel\s+(poll|probe|input|produce)$/i;
   const allAgentNames = [...new Set(listDeclaredAgentNames(worldRoot))]
     .sort((a, b) => a.localeCompare(b, "en"));
   const mergedJobs = [];
@@ -201,10 +204,20 @@ export async function discoverScheduledJobs({ worldRoot } = {}) {
       agentName,
       includeFallback: true
     }) ?? path.join(worldRoot, "house", agentName);
-    const jobs = await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName });
+    const scopedGlobal = globalJobs.filter((job) => String(job?.agentName ?? "").trim() === agentName);
+    const agentJobs = await loadSchedulePolicy({ agentHouse, agentName });
+    const filteredAgentJobs = agentJobs.filter((job) => {
+      const name = String(job?.jobName ?? "").trim();
+      if (!name) return false;
+      return !sharedChannelJobPattern.test(name);
+    });
+    const jobs = mergeSchedulePolicies(scopedGlobal, filteredAgentJobs);
     mergedJobs.push(...jobs);
   }
-  return mergedJobs.sort((a, b) => {
+  return [...sharedGlobalJobs, ...mergedJobs].sort((a, b) => {
+    const sharedA = String(a.agentName ?? "").trim() ? 1 : 0;
+    const sharedB = String(b.agentName ?? "").trim() ? 1 : 0;
+    if (sharedA !== sharedB) return sharedA - sharedB;
     const agentCmp = String(a.agentName).localeCompare(String(b.agentName), "en");
     if (agentCmp !== 0) return agentCmp;
     return String(a.jobName).localeCompare(String(b.jobName), "en");
