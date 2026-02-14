@@ -139,11 +139,14 @@ test("mind tool adapter loads default tools for with wo tools", async () => {
   forget();
   resetMindLogs();
   const original = process.env.PYA_MIND_RESPONSE;
+  const originalCwd = process.cwd();
+  const tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-cwd-"));
   process.env.PYA_MIND_RESPONSE = "ok";
   const records = [];
   setExchangeRecorder({ record: (sentence) => records.push(sentence) });
 
   try {
+    process.chdir(tmpCwd);
     await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
     await interpret(parse("ob text \"use tools\" for name helper to name text helper-out with wo tools be write do"));
 
@@ -154,7 +157,13 @@ test("mind tool adapter loads default tools for with wo tools", async () => {
     assert.ok(names.includes("be_write_ob_text_to_filename"), "default tools should include write");
     assert.ok(names.includes("be_repair_ob_text_to_name_map"), "default tools should include repair");
     assert.ok(names.includes("be_repair_as_wo_check_ob_text_to_name_map"), "default tools should include repair check");
+    assert.ok(
+      String(payload.prompt ?? "").includes("TOOL USAGE RULES:"),
+      "chat prompt should include tool usage directive"
+    );
   } finally {
+    process.chdir(originalCwd);
+    await fs.rm(tmpCwd, { recursive: true, force: true });
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;

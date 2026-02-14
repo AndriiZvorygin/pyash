@@ -1050,6 +1050,74 @@ test("channel runtime sends public fallback when tagged message yields empty min
   assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
 });
 
+test("channel runtime retries once when mind answer is empty", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-retry-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!retry:server",
+            eventId: "$retry-empty-1",
+            sender: "@u:server",
+            text: "@helper hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-retry" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-retry" };
+    }
+  };
+
+  let calls = 0;
+  const interpretFn = async () => {
+    calls += 1;
+    if (calls === 1) return { be: "answer", ob: { text: "" } };
+    return { be: "answer", ob: { text: "Recovered response" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(calls, 2);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "Recovered response");
+});
+
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-listeners-"));
   const agentHouse = path.join(root, "world", "house", "postmaster");

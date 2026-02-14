@@ -41,6 +41,23 @@ function normalizeVisionInput(input) {
   };
 }
 
+function buildToolUseDirective(tools = []) {
+  const names = Array.isArray(tools)
+    ? tools
+      .map((entry) => String(entry?.function?.name ?? "").trim())
+      .filter(Boolean)
+    : [];
+  const list = names.length ? names.join(", ") : "(none)";
+  return [
+    "TOOL USAGE RULES:",
+    "- You can call tools in this turn.",
+    `- Available tool function names: ${list}.`,
+    "- Do not claim tools are unavailable when a matching tool exists.",
+    "- If user asks to search/download/read files/execute commands, call the matching tool first.",
+    "- If a tool fails, report the failure reason and continue with best effort."
+  ].join("\n");
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -90,6 +107,7 @@ export async function runToolChat({
   const messages = [];
   if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
   if (toolBlock) messages.push({ role: "system", content: toolBlock });
+  if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective(tools) });
   if (historyMessages.length) messages.push(...historyMessages);
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
   const userMessage = { role: "user", content: userContent };

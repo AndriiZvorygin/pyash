@@ -109,10 +109,17 @@ export async function writeSpoolItem({
   await ensureSpoolDirs("", [tmp, target]);
   const tmpName = `${name}.tmp-${process.pid}-${Date.now()}`;
   const tmpPath = path.join(tmp, tmpName);
-  const targetPath = path.join(target, name);
   await fs.writeFile(tmpPath, String(text ?? ""), "utf8");
+  const base = clampFilenameLength(name);
+  let finalName = base;
+  let targetPath = path.join(target, finalName);
+  if (await pathExists(targetPath)) {
+    const stamp = `${Date.now()}-${process.pid}`;
+    finalName = clampFilenameLength(`${base.replace(/\.pya$/i, "")}-${stamp}.pya`);
+    targetPath = path.join(target, finalName);
+  }
   await fs.rename(tmpPath, targetPath);
-  return { filename: name, path: targetPath };
+  return { filename: finalName, path: targetPath };
 }
 
 export async function listSpoolItemsOldestFirst(dirPath) {

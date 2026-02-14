@@ -398,6 +398,15 @@ function emptyMindFallback() {
   return "I received your message, but I could not generate a reply. Please retry.";
 }
 
+function buildRetrySentence(sentence = {}) {
+  const original = String(sentence?.ob?.text ?? "");
+  const retrySuffix = "\n\n[reply rule]\nReply with at least one short plain-text sentence.";
+  return {
+    ...sentence,
+    ob: { text: `${original}${retrySuffix}` }
+  };
+}
+
 function isMindUnavailableError(err) {
   if (!err) return false;
   const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
@@ -806,7 +815,33 @@ async function dispatchChannelEvents({
       const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
       let toolEventCount = 0;
       const sendChannelMessage = async (content) => {
-        if (outputMode !== "direct") return;
+        if (outputMode === "queue") {
+          const produceRequest = buildRouterProduceRequestSentence({
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await routeChannelProduce({
+            routerInterpretFn,
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await enqueueProduceEnvelope(worldRootResolved, {
+            channelType,
+            identity: String(channelConfig?.user ?? "").trim(),
+            agentName: targetAgent,
+            roomName: event.channelId,
+            payloadId: orchestratorDirective.payloadId,
+            payloadSentence: produceRequest
+          });
+          sent += 1;
+          return;
+        }
         const sendResult = await adapter.send({ config: channelConfig, event, content });
         if (sendResult?.eventId) {
           selfEventIds.add(sendResult.eventId);
@@ -834,6 +869,26 @@ async function dispatchChannelEvents({
         responseText = String(result?.ob?.text ?? "").trim();
         if (!responseText && !isMindConfigured()) {
           responseText = noMindConfiguredFallback();
+        }
+        if (!responseText) {
+          const retrySentence = buildRetrySentence(sentence);
+          const retryResult = (interpretFn === bridgeInterpret)
+            ? await mind_to_name_text(retrySentence, { inputs: mindInputs })
+            : await interpretFn(retrySentence);
+          responseText = String(retryResult?.ob?.text ?? "").trim();
+          if (debug) {
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: responseText ? "mind_retry_success" : "mind_retry_empty",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              listener: targetAgent,
+              payloadId: orchestratorDirective.payloadId
+            }, { channelType, agentName });
+          }
         }
       } catch (err) {
         if (isMindUnavailableError(err)) {
