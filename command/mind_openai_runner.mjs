@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   resolveHost,
   resolveApiKey,
@@ -97,14 +98,22 @@ function parseJsonLines(text = "") {
 }
 
 function clipText(value, limit = 4000) {
-  const text = String(value ?? "").replace(/\r/g, "").trim();
+  let base = value;
+  if (base && typeof base === "object") {
+    try {
+      base = JSON.stringify(base);
+    } catch {
+      base = String(base);
+    }
+  }
+  const text = String(base ?? "").replace(/\r/g, "").trim();
   if (!text) return "";
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}...`;
 }
 
 function normalizeCodexToolName(item = {}) {
-  return String(item?.tool_name ?? item?.name ?? item?.type ?? "tool").trim() || "tool";
+  return String(item?.tool ?? item?.tool_name ?? item?.name ?? item?.type ?? "tool").trim() || "tool";
 }
 
 function normalizeToolCallPayload(item = {}) {
@@ -123,6 +132,7 @@ function normalizeToolCallPayload(item = {}) {
 function mapCodexEvents(events = []) {
   const observedToolEvents = [];
   const agentMessages = [];
+  const seenCallIds = new Set();
   for (const event of events) {
     const type = String(event?.type ?? "").trim();
     const item = event?.item ?? {};
@@ -136,6 +146,8 @@ function mapCodexEvents(events = []) {
 
     if (itemType === "command_execution") {
       if (type === "item.started") {
+        const callId = String(item?.id ?? "").trim();
+        if (callId) seenCallIds.add(callId);
         observedToolEvents.push({
           stage: "call",
           toolName: "command",
@@ -167,6 +179,8 @@ function mapCodexEvents(events = []) {
     if (!looksLikeToolItem) continue;
     const toolName = normalizeCodexToolName(item);
     if (type === "item.started") {
+      const callId = String(item?.id ?? "").trim();
+      if (callId) seenCallIds.add(callId);
       observedToolEvents.push({
         stage: "call",
         toolName,
@@ -174,7 +188,9 @@ function mapCodexEvents(events = []) {
         toolText: clipText(item?.text ?? "")
       });
     } else if (type === "item.completed") {
-      if (item?.arguments || item?.input || item?.params) {
+      const callId = String(item?.id ?? "").trim();
+      const shouldEmitCall = !callId || !seenCallIds.has(callId);
+      if (shouldEmitCall && (item?.arguments || item?.input || item?.params)) {
         observedToolEvents.push({
           stage: "call",
           toolName,
@@ -193,12 +209,26 @@ function mapCodexEvents(events = []) {
   return { responseText, observedToolEvents };
 }
 
+function tomlString(value = "") {
+  return JSON.stringify(String(value ?? ""));
+}
+
+function tomlArray(values = []) {
+  const out = Array.isArray(values) ? values : [];
+  return `[${out.map((value) => tomlString(value)).join(", ")}]`;
+}
+
 async function runCodexFallback(payload = {}, { stream = false } = {}) {
   const model = String(payload?.model || "gpt-5-codex").trim() || "gpt-5-codex";
   const prompt = buildCodexPrompt(payload);
+  const runnerDir = path.dirname(fileURLToPath(import.meta.url));
+  const mcpServerPath = path.resolve(runnerDir, "pyash_mcp_server.mjs");
+  const mcpServerArgs = [mcpServerPath, "--root", process.cwd(), "--tools-map", "agent tools"];
   const args = [
     "exec",
     "--json",
+    "-c", `mcp_servers.pyash.command=${tomlString("node")}`,
+    "-c", `mcp_servers.pyash.args=${tomlArray(mcpServerArgs)}`,
     "--model", model,
     "--color", "never",
     "--ephemeral",
