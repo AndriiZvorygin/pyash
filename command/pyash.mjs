@@ -32,6 +32,38 @@ import {
   ensureDirForFile
 } from "./pyash/fs_paths.mjs";
 import {
+  normalizeHomeserver,
+  isAppserviceMode,
+  sanitizeMatrixLocalpart,
+  matrixUserIdFromLocalpart,
+  matrixLocalpartFromUserId,
+  normalizeMatrixUserIdentity,
+  matrixUsersMatch,
+  resolveAgentMatrixUserId,
+  homeserverHost,
+  matrixSupportsSharedSecret,
+  matrixServerFromId,
+  ensureMatrixIdServer,
+  rewriteMatrixIdServer,
+  ensureMatrixUserServer,
+  redactText,
+  redactMatrixConfig,
+  normalizeMatrixMode,
+  stripYamlScalarQuotes,
+  parseTopLevelYamlScalars,
+  resolveConfigPath,
+  readMatrixAppserviceRegistration
+} from "./pyash/matrix_helpers.mjs";
+import {
+  loginMatrixWithPassword,
+  matrixWhoAmI,
+  matrixVersions,
+  matrixJoinRoom,
+  matrixSendRoomMessage,
+  matrixInviteRoomMember,
+  matrixCreateDirectRoom
+} from "./pyash/matrix_api.mjs";
+import {
   ensureMatrixCredentials,
   ensureMatrixExecutiveDmRoom,
   readMatrixAuthCache,
@@ -160,95 +192,6 @@ function resolveConfiguredAgentHouse(worldRoot, agentName) {
 function resolveConfiguredAgentHouseFromRoot(rootDir, agentName) {
   const worldRoot = path.join(rootDir, "world");
   return resolveConfiguredAgentHouse(worldRoot, agentName);
-}
-
-function normalizeHomeserver(raw) {
-  const text = String(raw ?? "").trim().replace(/\/+$/g, "");
-  if (!text) return "";
-  if (!/^https?:\/\//i.test(text)) return `https://${text}`;
-  return text;
-}
-
-function isAppserviceMode(mode) {
-  const value = String(mode ?? "").trim().toLowerCase();
-  return value === "appservice" || value === "appservice-push";
-}
-
-function applyMatrixAuthToUrl(url, { token, userId, mode } = {}) {
-  const text = String(url ?? "");
-  if (!isAppserviceMode(mode)) return text;
-  const parsed = new URL(text);
-  if (token) parsed.searchParams.set("access_token", String(token));
-  if (userId) parsed.searchParams.set("user_id", String(userId));
-  return parsed.toString();
-}
-
-function matrixAuthHeaders({ token, mode, headers = {} } = {}) {
-  const next = { ...headers };
-  if (!isAppserviceMode(mode) && token) {
-    next.Authorization = `Bearer ${token}`;
-  }
-  return next;
-}
-
-function sanitizeMatrixLocalpart(raw) {
-  return String(raw ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._=-]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function matrixUserIdFromLocalpart(localpart, homeserver) {
-  const cleaned = sanitizeMatrixLocalpart(localpart);
-  if (!cleaned) return "";
-  const host = homeserverHost(homeserver);
-  if (!host) return `@${cleaned}`;
-  return `@${cleaned}:${host}`;
-}
-
-function matrixLocalpartFromUserId(userId) {
-  const text = String(userId ?? "").trim();
-  if (!text.startsWith("@")) return "";
-  const withoutAt = text.slice(1);
-  const colonIndex = withoutAt.indexOf(":");
-  return colonIndex === -1 ? withoutAt : withoutAt.slice(0, colonIndex);
-}
-
-function normalizeMatrixUserIdentity(value, homeserver = "") {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  const host = homeserverHost(homeserver);
-  let userId = "";
-  if (text.startsWith("@")) {
-    userId = ensureMatrixUserServer(text, host);
-  } else if (text.includes(":")) {
-    userId = `@${text}`;
-  } else {
-    userId = matrixUserIdFromLocalpart(text, homeserver);
-  }
-  const lowered = String(userId ?? "").trim().toLowerCase();
-  if (!lowered.startsWith("@")) return "";
-  const localpart = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(lowered));
-  const server = matrixServerFromId(lowered);
-  if (!localpart) return "";
-  return server ? `@${localpart}:${server}` : `@${localpart}`;
-}
-
-function matrixUsersMatch(a, b, homeserver = "") {
-  const left = normalizeMatrixUserIdentity(a, homeserver);
-  const right = normalizeMatrixUserIdentity(b, homeserver);
-  return Boolean(left && right && left === right);
-}
-
-function resolveAgentMatrixUserId({ agentName, homeserver, defaultUserId }) {
-  const derived = matrixUserIdFromLocalpart(agentName, homeserver);
-  if (!derived) return normalizeMatrixUserIdentity(defaultUserId, homeserver);
-  if (matrixUsersMatch(defaultUserId, derived, homeserver)) {
-    const ensured = ensureMatrixUserServer(defaultUserId, homeserverHost(homeserver));
-    return String(ensured || derived).trim();
-  }
-  return derived;
 }
 
 function canonicalizeMindBackend(raw) {
@@ -463,131 +406,6 @@ function defaultMindModelForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "openai-codex") return "gpt-5-codex";
   return "gpt-oss:latest";
-}
-
-function homeserverHost(homeserver) {
-  const text = normalizeHomeserver(homeserver);
-  if (!text) return "";
-  const withoutProto = text.replace(/^https?:\/\//i, "");
-  return withoutProto.replace(/\/.*$/g, "").trim().toLowerCase();
-}
-
-function matrixSupportsSharedSecret(homeserver) {
-  const host = homeserverHost(homeserver);
-  // matrix.org is not a self-hosted Synapse admin endpoint for shared-secret registration.
-  return host !== "matrix.org";
-}
-
-function matrixServerFromId(value) {
-  const text = String(value ?? "").trim();
-  const idx = text.lastIndexOf(":");
-  if (idx <= 0 || idx === text.length - 1) return "";
-  return text.slice(idx + 1).trim().toLowerCase();
-}
-
-function ensureMatrixIdServer(value, host) {
-  const text = String(value ?? "").trim();
-  const trimmedHost = String(host ?? "").trim().toLowerCase();
-  if (!text || !trimmedHost) return text;
-  if (!text.startsWith("#") && !text.startsWith("!")) return text;
-  if (matrixServerFromId(text)) return text;
-  return `${text}:${trimmedHost}`;
-}
-
-function rewriteMatrixIdServer(value, host) {
-  const text = String(value ?? "").trim();
-  const trimmedHost = String(host ?? "").trim().toLowerCase();
-  if (!text || !trimmedHost) return text;
-  if (!text.startsWith("#") && !text.startsWith("!")) return text;
-  if (!matrixServerFromId(text)) return `${text}:${trimmedHost}`;
-  const local = text.slice(0, text.lastIndexOf(":"));
-  return `${local}:${trimmedHost}`;
-}
-
-function ensureMatrixUserServer(value, host) {
-  const text = String(value ?? "").trim();
-  const trimmedHost = String(host ?? "").trim().toLowerCase();
-  if (!text || !trimmedHost) return text;
-  if (!text.startsWith("@")) return text;
-  if (matrixServerFromId(text)) return text;
-  return `${text}:${trimmedHost}`;
-}
-
-function redactText(value) {
-  if (!value) return "";
-  return "[redacted]";
-}
-
-function redactMatrixConfig(cfg) {
-  return {
-    ...cfg,
-    token: redactText(cfg.token),
-    password: redactText(cfg.password),
-    registrationSharedSecret: redactText(cfg.registrationSharedSecret),
-    adminToken: redactText(cfg.adminToken)
-  };
-}
-
-function normalizeMatrixMode(raw, fallback = DEFAULT_MATRIX_CHANNEL_MODE) {
-  const value = String(raw ?? "").trim().toLowerCase();
-  if (value === "appservice") return "appservice-push";
-  if (MATRIX_CHANNEL_MODES.includes(value)) return value;
-  return fallback;
-}
-
-function stripYamlScalarQuotes(value) {
-  const text = String(value ?? "").trim();
-  if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) {
-    return text.slice(1, -1);
-  }
-  return text;
-}
-
-function parseTopLevelYamlScalars(text) {
-  const out = {};
-  const lines = String(text ?? "").split("\n");
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\s+#.*$/u, "");
-    const match = line.match(/^\s*([a-zA-Z0-9_]+)\s*:\s*(.*?)\s*$/u);
-    if (!match) continue;
-    out[match[1]] = stripYamlScalarQuotes(match[2]);
-  }
-  return out;
-}
-
-function resolveConfigPath(rootDir, candidate) {
-  const text = String(candidate ?? "").trim();
-  if (!text) return "";
-  if (path.isAbsolute(text)) return text;
-  return path.resolve(rootDir, text);
-}
-
-async function readMatrixAppserviceRegistration({ rootDir, registrationPath }) {
-  const resolvedPath = resolveConfigPath(rootDir, registrationPath);
-  if (!resolvedPath) throw new Error("appservice registration path is required");
-  const raw = await fs.readFile(resolvedPath, "utf8");
-  const parsed = parseTopLevelYamlScalars(raw);
-  const asToken = String(parsed.as_token ?? "").trim();
-  const hsToken = String(parsed.hs_token ?? "").trim();
-  const senderLocalpart = String(parsed.sender_localpart ?? "").trim();
-  const url = String(parsed.url ?? "").trim();
-  const id = String(parsed.id ?? "").trim();
-  const missing = [];
-  if (!asToken) missing.push("as_token");
-  if (!hsToken) missing.push("hs_token");
-  if (!senderLocalpart) missing.push("sender_localpart");
-  if (!url) missing.push("url");
-  if (missing.length) {
-    throw new Error(`appservice registration missing required keys: ${missing.join(", ")}`);
-  }
-  return {
-    path: resolvedPath,
-    id,
-    asToken,
-    hsToken,
-    senderLocalpart,
-    url
-  };
 }
 
 function sectionPrinter() {
@@ -880,61 +698,6 @@ function buildAgentChannelConductBlock({
 }
 
 
-async function loginMatrixWithPassword({ homeserver, userId, password }) {
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/v3/login`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: "m.login.password",
-      identifier: {
-        type: "m.id.user",
-        user: String(userId ?? "")
-      },
-      password: String(password ?? "")
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix password login failed: status=${response.status}${code}${message}`);
-  }
-  const token = payload?.access_token;
-  if (!token) throw new Error("matrix password login missing access_token");
-  return {
-    token: String(token),
-    userId: String(payload?.user_id ?? userId ?? "")
-  };
-}
-
-async function matrixWhoAmI({ homeserver, token, userId = "", mode = "" }) {
-  const endpoint = applyMatrixAuthToUrl(
-    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/account/whoami`,
-    { token, userId, mode }
-  );
-  const response = await fetch(endpoint, {
-    method: "GET",
-    headers: matrixAuthHeaders({ token, mode })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix whoami failed: status=${response.status}${code}${message}`);
-  }
-  return { userId: String(payload?.user_id ?? "") };
-}
-
-async function matrixVersions({ homeserver }) {
-  const endpoint = `${normalizeHomeserver(homeserver)}/_matrix/client/versions`;
-  const response = await fetch(endpoint, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(`matrix versions failed: status=${response.status}`);
-  }
-  return await response.json().catch(() => ({}));
-}
-
 function matrixVerification(cfg) {
   const errors = [];
   const warnings = [];
@@ -1075,109 +838,6 @@ async function ensureSharedSecretToken({ cfg, rootDir }) {
     token: credentials.token || cfg.token,
     userId: cfg.userId || credentials.user || ""
   };
-}
-
-async function matrixJoinRoom({ homeserver, token, room, mode = "", userId = "" }) {
-  const endpoint = applyMatrixAuthToUrl(
-    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/join/${encodeURIComponent(room)}`,
-    { token, userId, mode }
-  );
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: matrixAuthHeaders({
-      token,
-      mode,
-      headers: { "Content-Type": "application/json" }
-    }),
-    body: JSON.stringify({})
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix join failed: status=${response.status}${code}${message}`);
-  }
-  return String(payload?.room_id || room);
-}
-
-async function matrixSendRoomMessage({ homeserver, token, roomId, content, mode = "", userId = "" }) {
-  const txnId = `pyash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const endpoint = applyMatrixAuthToUrl(
-    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.message/${encodeURIComponent(txnId)}`,
-    { token, userId, mode }
-  );
-  const response = await fetch(endpoint, {
-    method: "PUT",
-    headers: matrixAuthHeaders({
-      token,
-      mode,
-      headers: { "Content-Type": "application/json" }
-    }),
-    body: JSON.stringify({
-      msgtype: "m.text",
-      body: String(content ?? "")
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix send failed: status=${response.status}${code}${message}`);
-  }
-  return String(payload?.event_id || "");
-}
-
-async function matrixInviteRoomMember({ homeserver, token, roomId, inviteUserId, mode = "", userId = "" }) {
-  const endpoint = applyMatrixAuthToUrl(
-    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`,
-    { token, userId, mode }
-  );
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: matrixAuthHeaders({
-      token,
-      mode,
-      headers: { "Content-Type": "application/json" }
-    }),
-    body: JSON.stringify({
-      user_id: String(inviteUserId ?? "")
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix invite failed: status=${response.status}${code}${message}`);
-  }
-}
-
-async function matrixCreateDirectRoom({ homeserver, token, executiveUsername, mode = "", userId = "" }) {
-  const endpoint = applyMatrixAuthToUrl(
-    `${normalizeHomeserver(homeserver)}/_matrix/client/v3/createRoom`,
-    { token, userId, mode }
-  );
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: matrixAuthHeaders({
-      token,
-      mode,
-      headers: { "Content-Type": "application/json" }
-    }),
-    body: JSON.stringify({
-      is_direct: true,
-      invite: [String(executiveUsername ?? "")],
-      preset: "trusted_private_chat"
-    })
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const code = payload?.errcode ? ` code=${payload.errcode}` : "";
-    const message = payload?.error ? ` error=${payload.error}` : "";
-    throw new Error(`matrix createRoom failed: status=${response.status}${code}${message}`);
-  }
-  const roomId = String(payload?.room_id || "");
-  if (!roomId) throw new Error("matrix createRoom missing room_id");
-  return roomId;
 }
 
 async function ensureExecutiveDmRoom({ cfg, rootDir }) {
