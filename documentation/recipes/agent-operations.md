@@ -100,7 +100,7 @@ Notes:
 Scheduler telemetry:
 
 ```text
-world/newspaper/YYYYMMDD-scheduler.pya
+world/newspaper/YYYYMMDD-calendar.pya
 ```
 
 Channel telemetry:

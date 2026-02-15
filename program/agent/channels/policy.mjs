@@ -36,6 +36,7 @@ function ensureChannel(channels, channelType) {
     channels.set(channelType, {
       type: channelType,
       enabled: undefined,
+      authMode: null,
       mode: null,
       longPollMs: null,
       appserviceRegistration: null,
@@ -43,6 +44,7 @@ function ensureChannel(channels, channelType) {
       user: null,
       executiveUsernames: [],
       token: null,
+      password: null,
       registrationSharedSecret: null,
       adminToken: null,
       debug: undefined,
@@ -106,6 +108,10 @@ export function parseChannelPolicyText(text) {
       cfg.mode = readTextValue(sentence) ?? cfg.mode;
       continue;
     }
+    if (action === "auth mode") {
+      cfg.authMode = readTextValue(sentence) ?? cfg.authMode;
+      continue;
+    }
     if (action === "long poll ms") {
       const raw = readTextValue(sentence);
       const num = Number(raw);
@@ -137,6 +143,10 @@ export function parseChannelPolicyText(text) {
     }
     if (action === "token") {
       cfg.token = readTextValue(sentence) ?? cfg.token;
+      continue;
+    }
+    if (action === "password") {
+      cfg.password = readTextValue(sentence) ?? cfg.password;
       continue;
     }
     if (action === "registration shared secret") {
@@ -264,11 +274,13 @@ function mergeChannelEntry(base = {}, override = {}) {
     ...override,
     enabled: override.enabled ?? base.enabled ?? false,
     mode: override.mode ?? base.mode ?? "sync",
+    authMode: override.authMode ?? base.authMode ?? null,
     longPollMs: override.longPollMs ?? base.longPollMs ?? null,
     appserviceRegistration: override.appserviceRegistration ?? base.appserviceRegistration ?? null,
     homeserver: override.homeserver ?? base.homeserver ?? null,
     user: override.user ?? base.user ?? null,
     token: override.token ?? base.token ?? null,
+    password: override.password ?? base.password ?? null,
     registrationSharedSecret: override.registrationSharedSecret ?? base.registrationSharedSecret ?? null,
     adminToken: override.adminToken ?? base.adminToken ?? null,
     executiveUsernames: Array.from(new Set([...(base.executiveUsernames ?? []), ...(override.executiveUsernames ?? [])])),

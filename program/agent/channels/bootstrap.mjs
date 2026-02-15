@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { appendChannelOutcome } from "./outcome.mjs";
 
 function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
@@ -171,6 +172,12 @@ function userIdsMatch(a, b) {
   return Boolean(left && right && left === right);
 }
 
+function shortError(err) {
+  return String(err?.message ?? err ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function matrixWhoAmI({ homeserver, token, fetchImpl, userId = "", mode = "" }) {
   const response = await fetchImpl(
     applyAuthToUrl(`${homeserver}/_matrix/client/v3/account/whoami`, { token, userId, mode }),
@@ -203,13 +210,21 @@ async function resolveTokenUserId({
       mode,
       fetchImpl
     });
-    if (!resolved) return isAppserviceMode(mode) ? normalizedPreferred : null;
-    if (normalizedPreferred && !isAppserviceMode(mode) && !userIdsMatch(resolved, normalizedPreferred)) {
-      return null;
+    if (!resolved) {
+      return {
+        userId: isAppserviceMode(mode) ? normalizedPreferred : null,
+        reason: "empty"
+      };
     }
-    return resolved;
+    if (normalizedPreferred && !isAppserviceMode(mode) && !userIdsMatch(resolved, normalizedPreferred)) {
+      return { userId: null, reason: "mismatch" };
+    }
+    return { userId: resolved, reason: "ok" };
   } catch {
-    return isAppserviceMode(mode) ? normalizedPreferred : null;
+    return {
+      userId: isAppserviceMode(mode) ? normalizedPreferred : null,
+      reason: "unreachable"
+    };
   }
 }
 
@@ -404,15 +419,30 @@ export async function ensureMatrixCredentials({
   if (!agentName) throw new Error("ensureMatrixCredentials requires agentName");
   if (!agentHouse) throw new Error("ensureMatrixCredentials requires agentHouse");
   if (typeof fetchImpl !== "function") throw new Error("ensureMatrixCredentials requires fetch");
+  const report = async ({ stage = "status", outcome = "success", message = "" } = {}) => {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType: "matrix",
+        agentName,
+        area: "credentials",
+        stage,
+        outcome,
+        message
+      });
+    } catch {
+      // non-blocking debug log
+    }
+  };
 
-  const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
-  if (!homeserver) throw new Error("matrix homeserver missing");
+  try {
+    const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
+    if (!homeserver) throw new Error("matrix homeserver missing");
 
-  const cached = await readMatrixAuthCache(agentHouse);
-  const desiredUserFromConfig = config?.user ? String(config.user) : null;
-  const desiredUserNormalized = normalizeConfiguredUserId(desiredUserFromConfig, homeserver);
-  const mode = config?.mode ? String(config.mode) : "";
-  if (cached?.accessToken) {
+    const cached = await readMatrixAuthCache(agentHouse);
+    const desiredUserFromConfig = config?.user ? String(config.user) : null;
+    const desiredUserNormalized = normalizeConfiguredUserId(desiredUserFromConfig, homeserver);
+    const mode = config?.mode ? String(config.mode) : "";
+    if (cached?.accessToken) {
     if (isAppserviceMode(mode) && desiredUserNormalized) {
       const resolvedLocalpart = cached.localpart
         ?? parseLocalpartFromUserId(desiredUserNormalized)
@@ -426,7 +456,7 @@ export async function ensureMatrixCredentials({
           executiveDmRooms: {}
         });
       }
-      return {
+      const resolved = {
         homeserver,
         token: cached.accessToken,
         user: desiredUserNormalized,
@@ -435,22 +465,42 @@ export async function ensureMatrixCredentials({
           ? (cached?.executiveDmRooms ?? {})
           : {}
       };
+      await report({ stage: "cache_appservice", outcome: "success", message: "cached token active for configured appservice user" });
+      return resolved;
     }
 
     const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
     let preferredUser = desiredUserNormalized ?? cached.user;
     let resolvedCachedUser = normalizeConfiguredUserId(cached.user, homeserver);
+    let resolvedCachedReason = "ok";
     if (requireTokenUserValidation || !resolvedCachedUser) {
-      resolvedCachedUser = await resolveTokenUserId({
+      const resolved = await resolveTokenUserId({
         homeserver,
         token: cached.accessToken,
         preferredUser,
         mode,
         fetchImpl
       });
+      resolvedCachedUser = resolved.userId;
+      resolvedCachedReason = resolved.reason;
     }
     if (requireTokenUserValidation && !resolvedCachedUser) {
-      // Cached token is stale or belongs to a different user; continue with login/register flow.
+      if (resolvedCachedReason === "mismatch") {
+        // Cached token belongs to a different user; continue with login/register flow.
+      } else {
+      const fallbackUser = desiredUserNormalized || cached.user || null;
+        const resolved = {
+          homeserver,
+          token: cached.accessToken,
+          user: fallbackUser,
+        localpart: cached.localpart
+          ?? parseLocalpartFromUserId(fallbackUser)
+          ?? null,
+          executiveDmRooms: cached?.executiveDmRooms ?? {}
+        };
+        await report({ stage: "cache_fallback", outcome: "success", message: "cached token used while whoami unavailable" });
+        return resolved;
+      }
     } else {
       const resolvedLocalpart = cached.localpart
         ?? parseLocalpartFromUserId(resolvedCachedUser)
@@ -464,13 +514,15 @@ export async function ensureMatrixCredentials({
           executiveDmRooms: {}
         });
       }
-      return {
+      const resolved = {
         homeserver,
         token: cached.accessToken,
         user: resolvedCachedUser,
         localpart: resolvedLocalpart,
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       };
+      await report({ stage: "cache", outcome: "success", message: "cached token accepted" });
+      return resolved;
     }
   }
 
@@ -484,25 +536,30 @@ export async function ensureMatrixCredentials({
         accessToken: config.token,
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       });
-      return {
+      const resolved = {
         homeserver,
         token: config.token,
         user: desiredUserNormalized,
         localpart: parseLocalpartFromUserId(desiredUserNormalized),
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       };
+      await report({ stage: "config_token_appservice", outcome: "success", message: "configured token accepted for appservice user" });
+      return resolved;
     }
 
     const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
     let resolvedTokenUser = desiredUserNormalized ?? null;
+    let resolvedTokenReason = "ok";
     if (requireTokenUserValidation || !resolvedTokenUser) {
-      resolvedTokenUser = await resolveTokenUserId({
+      const resolved = await resolveTokenUserId({
         homeserver,
         token: config.token,
         preferredUser: desiredUserNormalized,
         mode,
         fetchImpl
       });
+      resolvedTokenUser = resolved.userId;
+      resolvedTokenReason = resolved.reason;
     }
     if (!requireTokenUserValidation || resolvedTokenUser) {
       if (resolvedTokenUser) {
@@ -515,13 +572,29 @@ export async function ensureMatrixCredentials({
           executiveDmRooms: cached?.executiveDmRooms ?? {}
         });
       }
-      return {
+      const resolved = {
         homeserver,
         token: config.token,
         user: resolvedTokenUser,
         localpart: parseLocalpartFromUserId(resolvedTokenUser),
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       };
+      await report({ stage: "config_token", outcome: "success", message: "configured token accepted" });
+      return resolved;
+    }
+    if (resolvedTokenReason === "mismatch") {
+      // Token exists but cannot be used for the configured user in non-appservice mode.
+    } else {
+    const fallbackUser = desiredUserNormalized || cached?.user || null;
+    const resolved = {
+      homeserver,
+      token: config.token,
+      user: fallbackUser,
+      localpart: parseLocalpartFromUserId(fallbackUser),
+      executiveDmRooms: cached?.executiveDmRooms ?? {}
+    };
+    await report({ stage: "config_token_fallback", outcome: "success", message: "configured token used while whoami unavailable" });
+    return resolved;
     }
     // Token exists but cannot be used for the configured user in non-appservice mode.
   }
@@ -544,7 +617,7 @@ export async function ensureMatrixCredentials({
     password = generated.password;
   }
 
-  if (sharedSecret) {
+    if (sharedSecret) {
     let registerResult = await registerWithSharedSecret({
       homeserver,
       sharedSecret,
@@ -581,7 +654,7 @@ export async function ensureMatrixCredentials({
           throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
         }
       } else {
-        throw new Error("matrix user already exists; reuse cached token or configure token/password for this user");
+          throw new Error("matrix user already exists; reuse cached token or configure token/password for this user");
       }
     } else if (!registerResult.ok) {
       throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
@@ -593,7 +666,7 @@ export async function ensureMatrixCredentials({
       : `@${localpart}:${String(userFromConfig).split(":").slice(1).join(":") || homeserver.replace(/^https?:\/\//, "")}`)
     : localpart;
 
-  const loginPayload = await loginPassword({
+    const loginPayload = await loginPassword({
     homeserver,
     user: resolvedLoginUser,
     password,
@@ -611,14 +684,20 @@ export async function ensureMatrixCredentials({
     deviceId: loginPayload?.device_id ?? null,
     executiveDmRooms: cached?.executiveDmRooms ?? {}
   };
-  await writeMatrixAuthCache(agentHouse, record);
-  return {
-    homeserver,
-    token: accessToken,
-    user: resolvedUser,
-    localpart,
-    executiveDmRooms: record.executiveDmRooms
-  };
+    await writeMatrixAuthCache(agentHouse, record);
+    const resolved = {
+      homeserver,
+      token: accessToken,
+      user: resolvedUser,
+      localpart,
+      executiveDmRooms: record.executiveDmRooms
+    };
+    await report({ stage: "password_login", outcome: "success", message: "password flow token issued and cached" });
+    return resolved;
+  } catch (err) {
+    await report({ stage: "defect", outcome: "fail", message: shortError(err) || "credential flow defective" });
+    throw err;
+  }
 }
 
 export async function ensureMatrixExecutiveDmRoom({
@@ -633,28 +712,56 @@ export async function ensureMatrixExecutiveDmRoom({
   if (!agentHouse) throw new Error("ensureMatrixExecutiveDmRoom requires agentHouse");
   if (!homeserver || !token) throw new Error("ensureMatrixExecutiveDmRoom requires homeserver/token");
   if (typeof fetchImpl !== "function") throw new Error("ensureMatrixExecutiveDmRoom requires fetch");
+  const report = async ({ stage = "status", outcome = "success", message = "" } = {}) => {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType: "matrix",
+        agentName: parseLocalpartFromUserId(user) || "agent",
+        area: "executive_dm",
+        stage,
+        outcome,
+        message
+      });
+    } catch {
+      // non-blocking debug log
+    }
+  };
 
   const executiveUserId = sanitizeUserId(executiveUser, homeserver);
   if (!executiveUserId) return null;
 
-  const cached = await readMatrixAuthCache(agentHouse);
-  const joinedRooms = await fetchJoinedRoomSet({
-    homeserver,
-    token,
-    userId: user,
-    mode,
-    fetchImpl
-  });
-  const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
-  if (
-    typeof cachedRoom === "string"
-    && cachedRoom.startsWith("!")
-    && (!joinedRooms || joinedRooms.has(cachedRoom))
-  ) {
-    return cachedRoom;
-  }
+  try {
+    const cached = await readMatrixAuthCache(agentHouse);
+    const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
+    let joinedRooms = null;
+    if (typeof cachedRoom === "string" && cachedRoom.startsWith("!")) {
+      try {
+        joinedRooms = await fetchJoinedRoomSet({
+          homeserver,
+          token,
+          userId: user,
+          mode,
+          fetchImpl
+        });
+        if (!joinedRooms || joinedRooms.has(cachedRoom)) {
+          await report({ stage: "cache", outcome: "success", message: `reused cached room ${cachedRoom}` });
+          return cachedRoom;
+        }
+      } catch {
+        await report({ stage: "cache_fallback", outcome: "success", message: `reused cached room ${cachedRoom} while joined_rooms unavailable` });
+        return cachedRoom;
+      }
+    } else {
+      joinedRooms = await fetchJoinedRoomSet({
+        homeserver,
+        token,
+        userId: user,
+        mode,
+        fetchImpl
+      });
+    }
 
-  const directRoom = await readDirectRoomFromAccountData({
+    const directRoom = await readDirectRoomFromAccountData({
     homeserver,
     token,
     userId: user,
@@ -662,8 +769,8 @@ export async function ensureMatrixExecutiveDmRoom({
     mode,
     fetchImpl
   });
-  if (directRoom && (!joinedRooms || joinedRooms.has(directRoom))) {
-    const next = {
+    if (directRoom && (!joinedRooms || joinedRooms.has(directRoom))) {
+      const next = {
       ...(cached ?? {}),
       homeserver,
       user,
@@ -673,11 +780,12 @@ export async function ensureMatrixExecutiveDmRoom({
         [executiveUserId]: directRoom
       }
     };
-    await writeMatrixAuthCache(agentHouse, next);
-    return directRoom;
-  }
+      await writeMatrixAuthCache(agentHouse, next);
+      await report({ stage: "account_data", outcome: "success", message: `resolved direct room ${directRoom}` });
+      return directRoom;
+    }
 
-  const createdRoom = await createDirectRoom({
+    const createdRoom = await createDirectRoom({
     homeserver,
     token,
     executiveUserId,
@@ -685,7 +793,7 @@ export async function ensureMatrixExecutiveDmRoom({
     actingUserId: user,
     fetchImpl
   });
-  const next = {
+    const next = {
     ...(cached ?? {}),
     homeserver,
     user,
@@ -695,6 +803,11 @@ export async function ensureMatrixExecutiveDmRoom({
       [executiveUserId]: createdRoom
     }
   };
-  await writeMatrixAuthCache(agentHouse, next);
-  return createdRoom;
+    await writeMatrixAuthCache(agentHouse, next);
+    await report({ stage: "create_room", outcome: "success", message: `created direct room ${createdRoom}` });
+    return createdRoom;
+  } catch (err) {
+    await report({ stage: "defect", outcome: "fail", message: shortError(err) || "executive dm bootstrap defective" });
+    throw err;
+  }
 }

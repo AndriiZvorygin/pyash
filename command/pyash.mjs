@@ -112,6 +112,14 @@ const MIND_BACKEND_CHOICES = [
   { key: "vllm", value: "vllm command mind", label: "vLLM" }
 ];
 
+function normalizeChannelAgentName(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const localpart = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(text));
+  if (localpart) return localpart;
+  return text.replace(/^@+/, "").trim();
+}
+
 function isEphemeralRootDir(rootDir) {
   const resolved = path.resolve(String(rootDir ?? ""));
   if (!resolved) return false;
@@ -470,10 +478,11 @@ async function loadMatrixConfigFromSecret(rootDir) {
     homeserver: matrixValues.homeserver || "",
     appserviceRegistration: matrixValues["bridge service file"] || matrixValues["appservice registration"] || "",
     userId: "",
-    authMode: matrixValues["auth mode"] || "",
+    authMode: "",
     token: "",
+    password: "",
     registrationSharedSecret: matrixValues["registration shared secret"] || "",
-    adminToken: matrixValues["admin token"] || "",
+    adminToken: "",
     legacyRoom: matrixValues.room || "",
     legacyMode: matrixValues.mode || ""
   };
@@ -496,9 +505,13 @@ async function loadMatrixPolicyConfig({ rootDir, agentName = DEFAULT_CHANNEL_AGE
   return {
     room: String(primaryRoom ?? "").trim(),
     mode: normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE),
+    authMode: String(matrix.authMode || "").trim().toLowerCase(),
     publicTagAnswer: matrix.publicTagAnswer === true,
     executiveUsername: executives[0] || "",
     executiveUsernames: executives,
+    userId: String(matrix.user || "").trim(),
+    token: String(matrix.token || "").trim(),
+    password: String(matrix.password || "").trim(),
     hasPolicy: Boolean(allChannels?.matrix)
   };
 }
@@ -513,9 +526,13 @@ async function loadMatrixConfigureDefaults({ rootDir, agentName = DEFAULT_CHANNE
     ...secret,
     room: policy.room || secret.legacyRoom || "",
     mode: policy.hasPolicy ? policy.mode : legacyMode,
+    authMode: policy.authMode || secret.authMode || "password",
     publicTagAnswer: policy.publicTagAnswer === true,
     executiveUsername: policy.executiveUsername || "",
-    executiveUsernames: policy.executiveUsernames || []
+    executiveUsernames: policy.executiveUsernames || [],
+    userId: policy.userId || secret.userId || "",
+    token: policy.token || secret.token || "",
+    password: policy.password || secret.password || ""
   };
 }
 
@@ -607,11 +624,9 @@ function buildMatrixMapBlock(cfg) {
   if (cfg.appserviceRegistration) {
     lines.push(`  su name bridge service file ob text ${quoteText(String(cfg.appserviceRegistration))} ya`);
   }
-  lines.push(`  su name auth mode ob text ${quoteText(cfg.authMode)} ya`);
   if (cfg.registrationSharedSecret) {
     lines.push(`  su name registration shared secret ob text ${quoteText(cfg.registrationSharedSecret)} ya`);
   }
-  if (cfg.adminToken) lines.push(`  su name admin token ob text ${quoteText(cfg.adminToken)} ya`);
   lines.push("prah");
   return lines.join("\n");
 }
@@ -654,11 +669,22 @@ function buildChannelConductBlock({
 }
 
 function buildAgentChannelConductBlock({
-  userId = ""
+  userId = "",
+  authMode = "",
+  token = "",
+  password = ""
 }) {
+  const lines = [];
   const normalizedUserId = String(userId ?? "").trim();
-  if (!normalizedUserId) return "# no per-agent matrix overrides";
-  return `su name matrix user ob text ${quoteText(normalizedUserId)} ya`;
+  const normalizedAuthMode = String(authMode ?? "").trim().toLowerCase();
+  const normalizedToken = String(token ?? "").trim();
+  const normalizedPassword = String(password ?? "").trim();
+  if (normalizedAuthMode) lines.push(`su name matrix auth mode ob text ${quoteText(normalizedAuthMode)} ya`);
+  if (normalizedUserId) lines.push(`su name matrix user ob text ${quoteText(normalizedUserId)} ya`);
+  if (normalizedToken) lines.push(`su name matrix token ob text ${quoteText(normalizedToken)} ya`);
+  if (normalizedPassword) lines.push(`su name matrix password ob text ${quoteText(normalizedPassword)} ya`);
+  if (!lines.length) return "# no per-agent matrix overrides";
+  return lines.join("\n");
 }
 
 
@@ -1002,7 +1028,8 @@ function collectMatrixFromFlags({ args, prior }) {
       .filter(Boolean)
   ));
   const executiveUsername = executiveUsernames[0] ?? "";
-  const userId = ensureMatrixUserServer(parseArgValue(args, "--agent-user-id") ?? prior.userId ?? "", host);
+  const providedUserId = parseArgValue(args, "--agent-user-id");
+  const userId = ensureMatrixUserServer(providedUserId ?? prior.userId ?? "", host);
   const authMode = String(parseArgValue(args, "--auth-mode") ?? prior.authMode ?? "password").trim().toLowerCase();
   const token = parseArgValue(args, "--token") ?? prior.token ?? "";
   const password = parseArgValue(args, "--password") ?? "";
@@ -1017,7 +1044,8 @@ function collectMatrixFromFlags({ args, prior }) {
       ?? prior.appserviceRegistration
       ?? (isAppserviceMode(mode) ? DEFAULT_MATRIX_APPSERVICE_REGISTRATION : "")
   ).trim();
-  const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
+  const explicitAgentName = parseArgValue(args, "--agent");
+  const agentName = normalizeChannelAgentName(explicitAgentName ?? (providedUserId ? "" : (prior.agentName ?? "")));
   const writeAgentPolicy = parseTruthy(parseArgValue(args, "--write-agent-policy"), true);
   const publicTagAnswer = parseTruthy(parseArgValue(args, "--public-tag-answer"), prior.publicTagAnswer !== false);
 
@@ -1040,7 +1068,7 @@ function collectMatrixFromFlags({ args, prior }) {
   };
 }
 
-async function collectMatrixInteractive({ prior, mode, rootDir }) {
+async function collectMatrixInteractive({ prior, mode, rootDir, explicitAgentName = "" }) {
   const quickstart = mode !== "advanced";
   const printer = sectionPrinter();
   const muteOutput = new MuteWritable(process.stdout);
@@ -1204,7 +1232,7 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
     }
 
     let userId = ensureMatrixUserServer(prior.userId || "", host);
-    let agentName = String(prior.agentName || DEFAULT_CHANNEL_AGENT_NAME).trim() || DEFAULT_CHANNEL_AGENT_NAME;
+    let agentName = normalizeChannelAgentName(explicitAgentName || prior.agentName || DEFAULT_CHANNEL_AGENT_NAME) || DEFAULT_CHANNEL_AGENT_NAME;
     let token = prior.token || "";
     let password = "";
     let registrationSharedSecret = prior.registrationSharedSecret || "";
@@ -1398,8 +1426,12 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       printer.examples(`agent=${DEFAULT_CHANNEL_AGENT_NAME}`);
       writeAgentPolicy = await askYesNo("Write agent channel conduct file", true);
       if (writeAgentPolicy) {
-        agentName = await ask("Agent name", agentName);
+        agentName = normalizeChannelAgentName(await ask("Agent name", agentName)) || agentName;
       }
+    }
+    if (quickstart && !String(explicitAgentName || "").trim()) {
+      const inferred = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(userId));
+      if (inferred) agentName = inferred;
     }
 
     return {
@@ -1439,6 +1471,10 @@ function normalizeMatrixCollected(cfg) {
   ));
   const mode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
   const appserviceRegistration = String(cfg.appserviceRegistration || "").trim();
+  const inferredFromUserId = sanitizeMatrixLocalpart(matrixLocalpartFromUserId(cfg.userId || ""));
+  const normalizedAgentName = normalizeChannelAgentName(cfg.agentName)
+    || inferredFromUserId
+    || DEFAULT_CHANNEL_AGENT_NAME;
   return {
     ...cfg,
     homeserver,
@@ -1448,7 +1484,8 @@ function normalizeMatrixCollected(cfg) {
     executiveUsername: executiveUsernames[0] || "",
     executiveUsernames,
     userId: ensureMatrixUserServer(cfg.userId, host),
-    authMode: String(cfg.authMode || "password").trim().toLowerCase()
+    authMode: String(cfg.authMode || "password").trim().toLowerCase(),
+    agentName: normalizedAgentName
   };
 }
 
@@ -1526,7 +1563,10 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       existing: channelSeedScrubbed,
       blockName: MATRIX_POLICY_BLOCK_NAME,
       content: buildAgentChannelConductBlock({
-        userId: cfg.userId
+        userId: cfg.userId,
+        authMode: cfg.authMode,
+        token: cfg.token,
+        password: cfg.password
       })
     });
     writes.push({
@@ -1672,14 +1712,18 @@ async function configureMatrix({ args }) {
   const mode = hasFlag(args, "--advanced") ? "advanced" : "quickstart";
   const testNowFlag = parseArgValue(args, "--test-now");
   const startNowFlag = parseArgValue(args, "--start-now");
-  const configureAgentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
+  const explicitAgentName = parseArgValue(args, "--agent");
+  const configureAgentName = explicitAgentName ?? DEFAULT_CHANNEL_AGENT_NAME;
 
   const prior = await loadMatrixConfigureDefaults({ rootDir, agentName: configureAgentName });
   const collected = nonInteractive
     ? collectMatrixFromFlags({ args, prior })
-    : await collectMatrixInteractive({ prior, mode, rootDir });
+    : await collectMatrixInteractive({ prior, mode, rootDir, explicitAgentName });
 
   let cfg = normalizeMatrixCollected(collected);
+  if (cfg.userId || cfg.token || cfg.password || cfg.authMode) {
+    cfg = { ...cfg, writeAgentPolicy: true };
+  }
 
   let verification = matrixVerification(cfg);
   let appservice = null;
@@ -1759,12 +1803,21 @@ async function configureMatrix({ args }) {
   }
 
   const plan = await createMatrixWritePlan({ rootDir, cfg });
+  const worldRoot = path.join(rootDir, "world");
+  let establish = null;
+  if (!dryRun && cfg.agentName && String(cfg.agentName).trim()) {
+    establish = await establishAgent({
+      worldRoot,
+      agentName: cfg.agentName,
+      writePolicy: true
+    });
+  }
   if (!dryRun) {
     await applyWritePlan(plan);
   }
   let runtime = null;
   if (!dryRun && cfg.writeAgentPolicy && startSchedulerNow) {
-    runtime = await schedulerRestart({ worldRoot: path.join(rootDir, "world") });
+    runtime = await schedulerRestart({ worldRoot });
   }
 
   const out = {
@@ -1773,8 +1826,9 @@ async function configureMatrix({ args }) {
     rootDir,
     mode: nonInteractive ? "non-interactive" : cfg.mode || mode,
     dryRun,
-    changed: plan.changed,
+    changed: Boolean(plan.changed || establish?.changed),
     writes: writePlanSummary(plan),
+    establish,
     verification,
     live,
     startSchedulerNow,
@@ -1868,6 +1922,58 @@ async function readChannelLog({ worldRoot, agentName, channelType, tailCount }) 
   };
 }
 
+async function readTailFile(filePath, tailCount) {
+  const text = await readText(filePath);
+  if (!text) {
+    return {
+      found: false,
+      path: filePath,
+      totalLines: 0,
+      lines: []
+    };
+  }
+  const lines = text.split("\n");
+  if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  return {
+    found: true,
+    path: filePath,
+    totalLines: lines.length,
+    lines: lines.slice(-tailCount)
+  };
+}
+
+async function readSchedulerNewspaperLog({ worldRoot, tailCount }) {
+  const newspaperDir = path.join(worldRoot, "newspaper");
+  const suffix = "-calendar.pya";
+  let names = [];
+  try {
+    names = await fs.readdir(newspaperDir);
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+  }
+  const matches = names
+    .filter((name) => name.endsWith(suffix))
+    .sort((a, b) => a.localeCompare(b, "en"));
+  const fileName = matches[matches.length - 1] || null;
+  const filePath = fileName
+    ? path.join(newspaperDir, fileName)
+    : path.join(newspaperDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-calendar.pya`);
+  const log = await readTailFile(filePath, tailCount);
+  return {
+    ...log,
+    expectedPattern: path.join(worldRoot, "newspaper", "YYYYMMDD-calendar.pya")
+  };
+}
+
+async function readSchedulerCalendarDebug({ worldRoot, tailCount }) {
+  const schedulerNewspaper = await readSchedulerNewspaperLog({ worldRoot, tailCount });
+  const schedulerDaemonLog = await readTailFile(path.join(worldRoot, "conduct", "scheduler.log"), tailCount);
+  return {
+    schedulerNewspaper,
+    schedulerDaemonLog
+  };
+}
+
 async function collectCalendarSentences(worldRoot) {
   const files = [];
   const globalPath = path.join(worldRoot, "conduct", "calendar.pya");
@@ -1952,6 +2058,34 @@ function renderServiceMap(name, items) {
   return lines.join("\n");
 }
 
+function hasCalendarHealthFailure(result) {
+  if (!result || result.running !== true) return true;
+  const jobs = Array.isArray(result?.status?.jobs) ? result.status.jobs : [];
+  for (const job of jobs) {
+    const errorCount = Number(job?.errorCount ?? 0);
+    const consecutiveErrors = Number(job?.consecutiveErrors ?? 0);
+    const lastError = String(job?.lastError ?? "").trim();
+    if (errorCount > 0 || consecutiveErrors > 0 || lastError) return true;
+  }
+  return false;
+}
+
+function renderCalendarDebugLog(name, log) {
+  const filePath = String(log?.path ?? "").trim() || "(unknown)";
+  textOut(`- ${name} ${filePath}`);
+  if (!log?.found) {
+    textOut("  (not found)");
+    return;
+  }
+  const lines = Array.isArray(log?.lines) ? log.lines : [];
+  const totalLines = Number(log?.totalLines ?? 0) || 0;
+  textOut(`  total lines ${totalLines}`);
+  textOut(`  showing ${lines.length}`);
+  for (const line of lines) {
+    textOut(`  ${line}`);
+  }
+}
+
 async function calendarCommand(args) {
   const sub = (args[0] ?? "health").toLowerCase();
   const rootDir = await resolveRootDirFromArgs(args);
@@ -2007,6 +2141,19 @@ async function calendarCommand(args) {
   textOut(`calendar ${sub} complete`);
   textOut(`- scheduler ${result?.running ? "running" : "stopped"}`);
   if (result?.pid) textOut(`- pid ${result.pid}`);
+  if (sub === "health") {
+    const failure = hasCalendarHealthFailure(result);
+    const debugLogs = await readSchedulerCalendarDebug({ worldRoot, tailCount: 80 });
+    textOut(`- scheduler newspaper ${debugLogs.schedulerNewspaper.path}`);
+    if (!debugLogs.schedulerNewspaper.found && debugLogs.schedulerNewspaper.expectedPattern) {
+      textOut(`  expected pattern ${debugLogs.schedulerNewspaper.expectedPattern}`);
+    }
+    if (failure) {
+      textOut("- calendar debug tail");
+      renderCalendarDebugLog("scheduler newspaper", debugLogs.schedulerNewspaper);
+      renderCalendarDebugLog("scheduler daemon log", debugLogs.schedulerDaemonLog);
+    }
+  }
   if (sub === "list") {
     const services = Array.isArray(payload?.services) ? payload.services : [];
     textOut(`- services ${services.length}`);

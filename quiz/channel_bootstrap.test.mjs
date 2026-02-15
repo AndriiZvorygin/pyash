@@ -61,6 +61,14 @@ test("matrix bootstrap registers, logs in, and caches token", async () => {
   });
   assert.equal(second.token, "tok123");
   assert.equal(callsAfterCache.length, 0);
+  const newspaperDir = path.join(root, "world", "newspaper");
+  const files = await fs.readdir(newspaperDir);
+  const channelLog = files.find((entry) => entry.includes("-channel-matrix-helper.pya"));
+  assert.ok(channelLog, "channel newspaper log should exist");
+  const channelText = await fs.readFile(path.join(newspaperDir, channelLog), "utf8");
+  assert.match(channelText, /be channel outcome/);
+  assert.match(channelText, /as name password_login/);
+  assert.match(channelText, /vyah success/);
 });
 
 test("matrix bootstrap with explicit user is idempotent when user already exists", async () => {

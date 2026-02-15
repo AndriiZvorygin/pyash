@@ -408,6 +408,117 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   assert.equal(secondPayload.changed, false);
 });
 
+maybeTest("configure channel matrix establishes default agent by default", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.org",
+    "--room", "#pyash:matrix.org",
+    "--auth-mode", "token",
+    "--token", "abc123"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.route, "configure channel matrix");
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.count, 1);
+  assert.equal(listPayload.agents[0]?.agentName, "pyash-agent");
+});
+
+maybeTest("configure channel matrix infers default agent name from agent user id when --agent is omitted", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "ccrc"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.userId, "[redacted]");
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.count, 1);
+  assert.equal(listPayload.agents[0]?.agentName, "ccrc");
+});
+
+maybeTest("configure channel matrix infers agent from --agent-user-id even when prior default agent exists", async () => {
+  const root = await makeRoot();
+  const seed = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "seed-token",
+    "--agent", "pyash-agent"
+  ]);
+  assert.equal(seed.status, 0, seed.stderr);
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "ccrc"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.agents.some((item) => item.agentName === "ccrc"), true);
+});
+
+maybeTest("configure channel matrix accepts @style --agent and normalizes to local agent name", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent", "@ccrc:matrix.liberit.ca",
+    "--agent-user-id", "@ccrc:matrix.liberit.ca"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.agents.some((item) => item.agentName === "ccrc"), true);
+});
+
 maybeTest("configure channel matrix scrubs legacy matrix seed lines from agent policy", async () => {
   const root = await makeRoot();
   const channelPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
@@ -1614,6 +1725,33 @@ maybeTest("calendar health and list return json payload", async () => {
   assert.equal(listPayload.ok, true);
   assert.equal(listPayload.route, "calendar list");
   assert.equal(Array.isArray(listPayload.result.services), true);
+});
+
+maybeTest("calendar health reports scheduler newspaper path and debug tail when unhealthy", async () => {
+  const root = await makeRoot();
+  const worldRoot = path.join(root, "world");
+  const newspaperDir = path.join(worldRoot, "newspaper");
+  const conductDir = path.join(worldRoot, "conduct");
+  await fs.mkdir(newspaperDir, { recursive: true });
+  await fs.mkdir(conductDir, { recursive: true });
+  const schedulerNewspaperPath = path.join(newspaperDir, "20260115-calendar.pya");
+  await fs.writeFile(schedulerNewspaperPath, [
+    "su name scheduler be scheduler telemetry as name start ya",
+    "su name scheduler be scheduler telemetry as name error ya"
+  ].join("\n") + "\n", "utf8");
+  const schedulerDaemonLogPath = path.join(conductDir, "scheduler.log");
+  await fs.writeFile(schedulerDaemonLogPath, [
+    "[scheduler daemon error] boom",
+    "[scheduler runNow error] crash"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli(["calendar", "health", "--root", root]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /scheduler newspaper/);
+  assert.match(run.stdout, new RegExp(schedulerNewspaperPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(run.stdout, /scheduler telemetry as name error/);
+  assert.match(run.stdout, /scheduler daemon log/);
+  assert.match(run.stdout, /\[scheduler daemon error\] boom/);
 });
 
 maybeTest("calendar list supports agent filter and returns available/stopped service maps", async () => {

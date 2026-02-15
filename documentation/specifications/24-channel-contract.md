@@ -203,3 +203,20 @@ Current implementation surface:
 5. `during date` carries last input timestamp
 
 Implementations MAY add extra health facts, but these required fields MUST remain present.
+
+## 9. Channel outcome newspaper sentences (Normative)
+
+Channel adapters/runtime MUST chronicle critical step outcomes in channel newspapers as Pyash sentences.
+
+Examples:
+
+```pyash
+su name matrix credentials as name cache vyah success ob text "cached token accepted" during date 2026-02-15T05:00:00.000Z be channel outcome ya
+su name matrix executive_dm as name defect vyah fail ob text "fetch failed" during date 2026-02-15T05:00:01.000Z be channel outcome ya
+```
+
+Required behavior:
+1. Use `vyah success|fail` as the primary machine-readable outcome marker.
+2. Keep `ob text` short and operator-readable.
+3. Write outcomes to the same per-agent channel newspaper (`YYYYMMDD-channel-<channel>-<agent>.pya`).
+4. Outcome logging MUST be best-effort and MUST NOT crash channel runtime if newspaper append fails.
