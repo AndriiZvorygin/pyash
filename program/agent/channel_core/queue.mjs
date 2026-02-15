@@ -112,16 +112,36 @@ async function requeueClaim(paths, claim, phase = "input") {
 
 export function channelQueuePaths(worldRoot) {
   const root = path.join(worldRoot, "holding", "channel");
+  const produceRoot = path.join(root, "produce");
   return {
     root,
     inputDir: path.join(root, "input"),
     runtimeDir: path.join(root, "runtime"),
-    produceDir: path.join(root, "produce"),
-    produceSuccessDir: path.join(root, "produce", "success"),
-    produceFailDir: path.join(root, "produce", "fail"),
+    produceDir: path.join(produceRoot, "waiting"),
+    produceSuccessDir: path.join(produceRoot, "success"),
+    produceFailDir: path.join(produceRoot, "fail"),
     artifactsDir: path.join(root, "artifacts"),
     tmpDir: path.join(root, "tmp")
   };
+}
+
+async function migrateLegacyProduceWaiting(paths) {
+  const legacyDir = path.join(paths.root, "produce");
+  let entries = [];
+  try {
+    entries = await fs.readdir(legacyDir, { withFileTypes: true });
+  } catch (err) {
+    if (err?.code === "ENOENT") return;
+    throw err;
+  }
+  const moves = [];
+  for (const entry of entries) {
+    if (!entry?.isFile?.()) continue;
+    const fromPath = path.join(legacyDir, entry.name);
+    const toPath = path.join(paths.produceDir, entry.name);
+    moves.push(fs.rename(fromPath, toPath).catch(() => {}));
+  }
+  await Promise.all(moves);
 }
 
 export async function ensureChannelQueueDirs(worldRoot) {
@@ -135,6 +155,7 @@ export async function ensureChannelQueueDirs(worldRoot) {
     paths.artifactsDir,
     paths.tmpDir
   ]);
+  await migrateLegacyProduceWaiting(paths);
   return paths;
 }
 

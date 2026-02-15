@@ -1878,3 +1878,51 @@ maybeTest("channel log returns not found when no newspaper exists", async () => 
   assert.equal(payload.route, "channel log");
   assert.equal(payload.log.found, false);
 });
+
+maybeTest("channel cli send and read routes through channel poll runtime", async () => {
+  const root = await makeRoot();
+  await fs.mkdir(path.join(root, "world", "conduct"), { recursive: true });
+  const worldConductPath = path.join(root, "world", "conduct", "channels.pya");
+  await fs.writeFile(worldConductPath, [
+    "su name cli channel ob bool truth ya",
+    "su name cli room ob text \"terminal\" ya"
+  ].join("\n") + "\n", "utf8");
+
+  const sendRun = runCli([
+    "channel", "cli", "send",
+    "--root", root,
+    "--agent", "ccrc",
+    "--room", "terminal",
+    "--sender", "andrii",
+    "--text", "hello from cli",
+    "--json"
+  ]);
+  assert.equal(sendRun.status, 0, sendRun.stderr);
+  const sendPayload = JSON.parse(sendRun.stdout);
+  assert.equal(sendPayload.ok, true);
+  assert.equal(sendPayload.route, "channel cli send");
+
+  const pollRun = runCli([
+    "channel", "poll",
+    "--root", root,
+    "--agent", "ccrc",
+    "--channel", "cli",
+    "--json"
+  ]);
+  assert.equal(pollRun.status, 0, pollRun.stderr);
+  assert.match(pollRun.stdout, /"route"\s*:\s*"channel poll"/);
+
+  const readRun = runCli([
+    "channel", "cli", "read",
+    "--root", root,
+    "--agent", "ccrc",
+    "--json"
+  ]);
+  assert.equal(readRun.status, 0, readRun.stderr);
+  const readPayload = JSON.parse(readRun.stdout);
+  assert.equal(readPayload.ok, true);
+  assert.equal(readPayload.route, "channel cli read");
+  assert.equal(readPayload.consumed > 0, true);
+  assert.equal(Array.isArray(readPayload.rows), true);
+  assert.equal(readPayload.rows.some((row) => String(row?.text ?? "").trim().length > 0), true);
+});

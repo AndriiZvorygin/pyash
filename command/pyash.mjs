@@ -81,6 +81,12 @@ import {
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
+import { enqueueCliInbound } from "../program/agent/channels/cli.mjs";
+import {
+  claimOldestProduceEnvelope,
+  ackRuntimeEnvelopeSuccess,
+  ackRuntimeEnvelopeFail
+} from "../program/agent/channel_core/queue.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..");
@@ -150,9 +156,11 @@ function usage() {
     "  pyash configure agent improve [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--agent <name>] [--purpose <text>] [--interval-minutes <n>] [--relay <name|number>] [--backend <name>] [--model <name>] [--tools-map <name>] [--bind-channel <truth|lie>] [--smoke-test <truth|lie>] [--start-now <truth|lie>]",
     "  pyash configure agent delete [--root <path>] [--non-interactive] [--json] [--agent <name>] [--yes <truth|lie>]",
     "  pyash calendar <health|begin|stop|restart|list> [--root <path>] [--agent <name>] [--json]",
-    "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix>] [--json]",
+    "  pyash channel poll [--root <path>] [--agent <name>] [--channel <matrix|cli>] [--json]",
     "  pyash channel bootstrap [--root <path>] [--agent <name>] [--channel <matrix>] [--executive <@user:server>] [--json]",
-    "  pyash channel log [--root <path>] [--agent <name>] [--channel <matrix>] [--tail <n>] [--json]",
+    "  pyash channel log [--root <path>] [--agent <name>] [--channel <matrix|cli>] [--tail <n>] [--json]",
+    "  pyash channel cli send [--root <path>] [--agent <name>] [--room <name>] [--sender <name>] --text <text> [--json]",
+    "  pyash channel cli read [--root <path>] [--agent <name>] [--tail <n>] [--json]",
     "",
     "Notes:",
     "  - Recommended onboarding route is: pyash configure intro",
@@ -1542,6 +1550,8 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
       room: cfg.room,
       executiveUsernames: Array.isArray(cfg.executiveUsernames) ? cfg.executiveUsernames : [],
       publicTagAnswer: cfg.publicTagAnswer,
+      toolSummary: false,
+      dmToolSummary: true,
       mode: cfg.mode
     })
   });
@@ -2171,11 +2181,13 @@ async function channelPollCommand(args) {
   const json = hasFlag(args, "--json");
   const agentName = parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME;
   const channelType = parseArgValue(args, "--channel") ?? "matrix";
-  const code = await runNodeScript(path.join(installRoot, "command", "channel_run.mjs"), [
+  const runArgs = [
     "--agent", agentName,
     "--channel", channelType,
     "--once"
-  ], { cwd: rootDir });
+  ];
+  if (String(channelType).toLowerCase() === "cli") runArgs.push("--ingest-only");
+  const code = await runNodeScript(path.join(installRoot, "command", "channel_run.mjs"), runArgs, { cwd: rootDir });
   const payload = {
     ok: code === 0,
     route: "channel poll",
@@ -2266,6 +2278,125 @@ async function channelBootstrapCommand(args) {
   if (!payload.ok) process.exit(1);
 }
 
+async function channelCliSendCommand(args) {
+  const rootDir = await resolveRootDirFromArgs(args);
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const agentName = normalizeChannelAgentName(parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME);
+  const channelId = String(parseArgValue(args, "--room") ?? "cli").trim() || "cli";
+  const sender = String(parseArgValue(args, "--sender") ?? "cli").trim() || "cli";
+  const text = String(parseArgValue(args, "--text") ?? "").trim();
+  if (!text) {
+    throw new Error("channel cli send requires --text");
+  }
+  const enqueue = await enqueueCliInbound({
+    worldRoot,
+    agentName,
+    channelId,
+    sender,
+    text
+  });
+  const payload = {
+    ok: true,
+    route: "channel cli send",
+    worldRoot,
+    agentName,
+    channelId,
+    sender,
+    eventId: enqueue.eventId,
+    filePath: enqueue.filePath
+  };
+  if (json) {
+    jsonOut(payload);
+    return;
+  }
+  textOut("channel cli send complete");
+  textOut(`- agent ${agentName}`);
+  textOut(`- room ${channelId}`);
+  textOut(`- sender ${sender}`);
+  textOut(`- event ${enqueue.eventId}`);
+}
+
+async function channelCliReadCommand(args) {
+  const rootDir = await resolveRootDirFromArgs(args);
+  const worldRoot = path.join(rootDir, "world");
+  const json = hasFlag(args, "--json");
+  const agentName = normalizeChannelAgentName(parseArgValue(args, "--agent") ?? DEFAULT_CHANNEL_AGENT_NAME);
+  const maxItems = normalizeTailCount(parseArgValue(args, "--tail"), 20);
+  const rows = [];
+
+  function parseChannelIdFromEndpoint(endpoint) {
+    const text = String(endpoint ?? "").trim();
+    const match = text.match(/^channel\s+\S+\s+room\s+(.+)$/i);
+    if (!match) return "cli";
+    return String(match[1] ?? "").trim() || "cli";
+  }
+
+  for (let i = 0; i < maxItems; i += 1) {
+    const claim = await claimOldestProduceEnvelope(worldRoot, {
+      workerTag: `${agentName}-cli-read`,
+      channelType: "cli",
+      agentName
+    });
+    if (!claim) break;
+    try {
+      const payloadSentence = claim?.envelope?.payloadSentence ?? {};
+      const text = String(payloadSentence?.ob?.text ?? "").trim();
+      const channelId = parseChannelIdFromEndpoint(payloadSentence?.to?.name);
+      rows.push({
+        channelId,
+        eventId: String(claim?.envelope?.eventId ?? "").trim(),
+        payloadId: String(claim?.envelope?.payloadId ?? "").trim(),
+        queuedAt: String(claim?.envelope?.queuedAt ?? "").trim(),
+        text
+      });
+      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+    } catch {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount: 1,
+        maxRetries: 1,
+        requeuePhase: "produce"
+      });
+    }
+  }
+
+  const payload = {
+    ok: true,
+    route: "channel cli read",
+    worldRoot,
+    agentName,
+    consumed: rows.length,
+    rows
+  };
+  if (json) {
+    jsonOut(payload);
+    return;
+  }
+  if (!rows.length) {
+    textOut("channel cli read no pending messages");
+    return;
+  }
+  textOut(`channel cli read consumed ${rows.length}`);
+  for (const row of rows) {
+    const prefix = row.queuedAt ? `[${row.queuedAt}]` : "[message]";
+    textOut(`${prefix} room=${row.channelId} ${row.text}`);
+  }
+}
+
+async function channelCliCommand(args) {
+  const sub = (args[0] ?? "read").toLowerCase();
+  if (sub === "send") {
+    await channelCliSendCommand(args.slice(1));
+    return;
+  }
+  if (sub === "read") {
+    await channelCliReadCommand(args.slice(1));
+    return;
+  }
+  throw new Error(`unknown channel cli command: ${sub}`);
+}
+
 async function channelCommand(args) {
   const sub = (args[0] ?? "poll").toLowerCase();
   if (sub === "poll") {
@@ -2278,6 +2409,10 @@ async function channelCommand(args) {
   }
   if (sub === "log") {
     await channelLogCommand(args.slice(1));
+    return;
+  }
+  if (sub === "cli") {
+    await channelCliCommand(args.slice(1));
     return;
   }
   throw new Error(`unknown channel command: ${sub}`);
