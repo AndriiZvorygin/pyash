@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
@@ -161,6 +162,7 @@ function usage() {
     "  pyash channel log [--root <path>] [--agent <name>] [--channel <matrix|cli>] [--tail <n>] [--json]",
     "  pyash channel cli send [--root <path>] [--agent <name>] [--room <name>] [--sender <name>] --text <text> [--json]",
     "  pyash channel cli read [--root <path>] [--agent <name>] [--tail <n>] [--json]",
+    "  pyash codex [--root <path>] [--tools-map <name>] [--no-mcp] [-- <codex args...>]",
     "",
     "Notes:",
     "  - Recommended onboarding route is: pyash configure intro",
@@ -184,6 +186,15 @@ function quoteText(value) {
   return `\"${text.replace(/\\/g, "\\\\").replace(/\"/g, "\\\"")}"`;
 }
 
+function tomlString(value = "") {
+  return JSON.stringify(String(value ?? ""));
+}
+
+function tomlArray(values = []) {
+  const out = Array.isArray(values) ? values : [];
+  return `[${out.map((value) => tomlString(value)).join(", ")}]`;
+}
+
 function unquotePyashText(value) {
   const text = String(value ?? "").trim();
   if (!(text.startsWith("\"") && text.endsWith("\""))) return text;
@@ -191,6 +202,46 @@ function unquotePyashText(value) {
   return inner
     .replace(/\\\\/g, "\\")
     .replace(/\\\"/g, "\"");
+}
+
+function parseCodexWrapperArgs(args = []) {
+  const out = {
+    root: "",
+    toolsMap: "agent tools",
+    noMcp: false,
+    passthrough: []
+  };
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = String(args[i] ?? "");
+    if (arg === "--") {
+      out.passthrough.push(...args.slice(i + 1));
+      break;
+    }
+    if (arg === "--no-mcp") {
+      out.noMcp = true;
+      continue;
+    }
+    if (arg === "--root") {
+      out.root = String(args[i + 1] ?? "").trim();
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--root=")) {
+      out.root = String(arg.slice("--root=".length)).trim();
+      continue;
+    }
+    if (arg === "--tools-map") {
+      out.toolsMap = String(args[i + 1] ?? "").trim() || out.toolsMap;
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith("--tools-map=")) {
+      out.toolsMap = String(arg.slice("--tools-map=".length)).trim() || out.toolsMap;
+      continue;
+    }
+    out.passthrough.push(arg);
+  }
+  return out;
 }
 
 function defaultAgentHouse(worldRoot, agentName) {
@@ -2418,6 +2469,32 @@ async function channelCommand(args) {
   throw new Error(`unknown channel command: ${sub}`);
 }
 
+async function codexCommand(args) {
+  const parsed = parseCodexWrapperArgs(args);
+  const rootDir = parsed.root
+    ? path.resolve(parsed.root)
+    : await resolveRootDirFromArgs([]);
+  const finalArgs = [];
+  if (!parsed.noMcp) {
+    const serverPath = path.join(installRoot, "command", "pyash_mcp_server.mjs");
+    const serverArgs = [serverPath, "--root", rootDir, "--tools-map", parsed.toolsMap || "agent tools"];
+    finalArgs.push("-c", `mcp_servers.pyash.command=${tomlString("node")}`);
+    finalArgs.push("-c", `mcp_servers.pyash.args=${tomlArray(serverArgs)}`);
+  }
+  finalArgs.push(...parsed.passthrough);
+
+  const code = await new Promise((resolve, reject) => {
+    const child = spawn("codex", finalArgs, {
+      cwd: rootDir,
+      stdio: "inherit",
+      env: process.env
+    });
+    child.on("error", reject);
+    child.on("close", (status) => resolve(Number(status ?? 0)));
+  });
+  process.exit(code);
+}
+
 async function configureMatrixTest({ args }) {
   const rootDir = await resolveRootDirFromArgs(args);
   const json = hasFlag(args, "--json");
@@ -4483,6 +4560,11 @@ async function main() {
 
   if (first === "channel") {
     await channelCommand(args.slice(1));
+    return;
+  }
+
+  if (first === "codex") {
+    await codexCommand(args.slice(1));
     return;
   }
 
