@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
 import { parseArgValue, parseArgValues, hasFlag, parseTruthy } from "./pyash/cli_args.mjs";
@@ -63,6 +62,7 @@ import {
   matrixInviteRoomMember,
   matrixCreateDirectRoom
 } from "./pyash/matrix_api.mjs";
+import { runNodeScript, runCodexAccountCommand } from "./pyash/process_exec.mjs";
 import {
   ensureMatrixCredentials,
   ensureMatrixExecutiveDmRoom,
@@ -251,7 +251,8 @@ async function fetchCodexModels({ rootDir, codexBin = "" } = {}) {
     action: "models",
     codexBin: String(codexBin || "").trim(),
     cwd: rootDir || process.cwd(),
-    json: true
+    json: true,
+    codexAccountPath
   });
   if (run.code !== 0) {
     return { ok: false, models: [], error: String(run.stderr || run.stdout || "codex model listing failed").trim() };
@@ -440,43 +441,6 @@ class MuteWritable extends Writable {
     if (!this.muted) this.target.write(chunk, encoding);
     callback();
   }
-}
-
-async function runNodeScript(scriptPath, args, { cwd = process.cwd() } = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [scriptPath, ...args], {
-      stdio: "inherit",
-      cwd,
-      env: process.env
-    });
-    child.on("exit", (code, signal) => {
-      if (signal) process.kill(process.pid, signal);
-      resolve(code ?? 0);
-    });
-  });
-}
-
-async function runCodexAccountCommand({ action, codexBin = "", cwd = process.cwd(), json = false }) {
-  const args = [action];
-  if (json) args.push("--json");
-  if (codexBin) args.push("--codex-bin", codexBin);
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [codexAccountPath, ...args], {
-      stdio: json ? ["ignore", "pipe", "pipe"] : "inherit",
-      cwd,
-      env: process.env
-    });
-    let stdout = "";
-    let stderr = "";
-    if (json) {
-      child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
-    }
-    child.on("exit", (code, signal) => {
-      if (signal) process.kill(process.pid, signal);
-      resolve({ code: code ?? 0, stdout, stderr });
-    });
-  });
 }
 
 function parseMapBlock(blockText) {
@@ -2547,7 +2511,8 @@ async function collectMindInteractive({ prior, rootDir }) {
           action: "login",
           codexBin,
           cwd: rootDir,
-          json: false
+          json: false,
+          codexAccountPath
         });
         if (codexRun.code !== 0) {
           textOut("- codex auth failed");
@@ -2849,7 +2814,8 @@ async function configureMind({ args }) {
         action: "login",
         codexBin: cfg.codexBin,
         cwd: rootDir,
-        json: codexJsonMode
+        json: codexJsonMode,
+        codexAccountPath
       });
       if (codexRun.code !== 0) {
         const errorText = codexJsonMode ? (codexRun.stderr || codexRun.stdout || "codex login failed") : "codex login failed";
