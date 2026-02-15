@@ -6,6 +6,14 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { Writable } from "node:stream";
+import { parseArgValue, parseArgValues, hasFlag, parseTruthy } from "./pyash/cli_args.mjs";
+import {
+  blockMarkers,
+  escapeRegex,
+  renderManagedBlock,
+  planManagedUpsert,
+  extractManagedBlock
+} from "./pyash/managed_blocks.mjs";
 import {
   ensureMatrixCredentials,
   ensureMatrixExecutiveDmRoom,
@@ -54,30 +62,6 @@ const MIND_BACKEND_CHOICES = [
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
   { key: "vllm", value: "vllm command mind", label: "vLLM" }
 ];
-
-function parseArgValue(args, flag) {
-  const idx = args.findIndex((arg) => arg === flag);
-  if (idx < 0) return null;
-  return args[idx + 1] ?? null;
-}
-
-function parseArgValues(args, flag) {
-  const values = [];
-  for (let i = 0; i < args.length; i += 1) {
-    if (args[i] !== flag) continue;
-    values.push(args[i + 1] ?? "");
-  }
-  return values;
-}
-
-function hasFlag(args, flag) {
-  return args.includes(flag);
-}
-
-function parseTruthy(value, fallback = false) {
-  if (value == null || value === "") return fallback;
-  return /^(truth|true|yes|1|y)$/i.test(String(value).trim());
-}
 
 function isEphemeralRootDir(rootDir) {
   const resolved = path.resolve(String(rootDir ?? ""));
@@ -714,50 +698,6 @@ async function runCodexAccountCommand({ action, codexBin = "", cwd = process.cwd
   });
 }
 
-function blockMarkers(blockName) {
-  return {
-    start: `# managed by pyash configure ${blockName}:start`,
-    end: `# managed by pyash configure ${blockName}:end`
-  };
-}
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function renderManagedBlock({ blockName, content }) {
-  const markers = blockMarkers(blockName);
-  return `${markers.start}\n${content.trim()}\n${markers.end}\n`;
-}
-
-function planManagedUpsert({ existing, blockName, content }) {
-  const markers = blockMarkers(blockName);
-  const block = renderManagedBlock({ blockName, content });
-  const pattern = new RegExp(`${escapeRegex(markers.start)}[\\s\\S]*?${escapeRegex(markers.end)}\\n?`, "m");
-
-  let nextText;
-  let action;
-  if (pattern.test(existing)) {
-    nextText = existing.replace(pattern, block);
-    action = "replace";
-  } else if (existing.trim()) {
-    nextText = `${existing.trimEnd()}\n\n${block}`;
-    action = "append";
-  } else {
-    nextText = block;
-    action = "create";
-  }
-
-  const changed = nextText !== existing;
-  return {
-    changed,
-    action,
-    nextText,
-    block,
-    blockName
-  };
-}
-
 function parseMapBlock(blockText) {
   const out = {};
   const linePattern = /su name (.+?)\s+ob text\s+("[^"\\]*(?:\\.[^"\\]*)*")\s+ya/g;
@@ -765,13 +705,6 @@ function parseMapBlock(blockText) {
     out[match[1]] = unquotePyashText(match[2]);
   }
   return out;
-}
-
-function extractManagedBlock(text, blockName) {
-  const markers = blockMarkers(blockName);
-  const pattern = new RegExp(`${escapeRegex(markers.start)}([\\s\\S]*?)${escapeRegex(markers.end)}`, "m");
-  const match = text.match(pattern);
-  return match ? match[1] : "";
 }
 
 async function loadMatrixConfigFromSecret(rootDir) {
