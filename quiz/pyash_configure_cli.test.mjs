@@ -390,8 +390,6 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
   assert.match(worldChannelsText, /su name matrix dm tool summary ob bool truth ya/);
-  assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
-  assert.match(worldCalendarText, /su name matrix long poll ms ob text "10000" be calendar ya/);
   assert.match(worldCalendarText, /managed by pyash configure channel poll schedule:start/);
   assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
@@ -469,7 +467,7 @@ maybeTest("configure channel matrix scrubs legacy matrix probe jobs from world c
   assert.doesNotMatch(text, /su name matrix probe for name confederation-priest/);
   assert.doesNotMatch(text, /su name matrix probe lane ob text "matrix_public"/);
   assert.match(text, /su name keeper heartbeat for name keeper vyah habit during minute 5 be calendar ya/);
-  assert.match(text, /su name matrix long poll ms ob text "10000" be calendar ya/);
+  assert.doesNotMatch(text, /su name matrix long poll ms ob text/);
 });
 
 maybeTest("configure channel matrix shared-secret mode reuses provided token idempotently", async () => {
@@ -522,7 +520,6 @@ maybeTest("configure channel matrix appservice mode validates registration and p
     "--homeserver", "https://matrix.liberit.ca",
     "--room", "#pyash:matrix.liberit.ca",
     "--mode", "appservice",
-    "--long-poll-ms", "45000",
     "--appservice-registration", registrationPath,
     "--auth-mode", "token",
     "--token", "abc123",
@@ -533,7 +530,6 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.config.mode, "appservice-push");
-  assert.equal(payload.config.longPollMs, 45000);
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
   assert.equal(payload.appservice?.hasAsToken, true);
   assert.equal(payload.appservice?.hasHsToken, true);
@@ -552,8 +548,6 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
   const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
-  assert.match(worldCalendarText, /managed by pyash configure matrix long poll timing:start/);
-  assert.match(worldCalendarText, /su name matrix long poll ms ob text "45000" be calendar ya/);
   assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
   assert.match(worldCalendarText, /su name channel input with ve text "matrix" vyah habit during second 1 be calendar ya/);
 });

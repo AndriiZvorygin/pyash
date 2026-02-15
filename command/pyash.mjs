@@ -22,10 +22,6 @@ import {
   resolveWorldAgentHouseDirectory
 } from "../program/library/agent_command_policy.mjs";
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
-import {
-  loadChannelCalendarPolicyWithGlobal,
-  resolveChannelCalendarSetting
-} from "../program/agent/channels/calendar_policy.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 
@@ -47,8 +43,7 @@ const MIND_DEFAULTS_BLOCK_NAME = "mind defaults";
 const DEFAULT_CHANNEL_AGENT_NAME = "pyash-agent";
 const DEFAULT_MIND_RELAY_NAME = "default";
 const MATRIX_CHANNEL_MODES = ["poll", "sync", "appservice-push", "appservice"];
-const DEFAULT_MATRIX_CHANNEL_MODE = "sync";
-const DEFAULT_MATRIX_LONG_POLL_MS = 10000;
+const DEFAULT_MATRIX_CHANNEL_MODE = "poll";
 const DEFAULT_CHANNEL_POLL_INTERVAL_SECONDS = 10;
 const DEFAULT_MATRIX_APPSERVICE_REGISTRATION = "configure/secret/matrix.yaml";
 const MIND_BACKEND_CHOICES = [
@@ -104,7 +99,7 @@ function usage() {
     "  pyash configure orchestrator [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--mode <container|local>] [--host <hostname>] [--port <n>] [--autostart <truth|lie>] [--health-rhythm-minute <n>]",
     "  pyash configure channel",
     "  pyash configure channel list [--json]",
-    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--long-poll-ms <n>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--public-tag-answer <truth|lie>]",
+    "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--public-tag-answer <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
@@ -593,15 +588,6 @@ function normalizeMatrixMode(raw, fallback = DEFAULT_MATRIX_CHANNEL_MODE) {
   return fallback;
 }
 
-function normalizeMatrixLongPollMs(raw, fallback = DEFAULT_MATRIX_LONG_POLL_MS) {
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) return fallback;
-  const rounded = Math.trunc(value);
-  if (rounded < 1000) return 1000;
-  if (rounded > 120000) return 120000;
-  return rounded;
-}
-
 function stripYamlScalarQuotes(value) {
   const text = String(value ?? "").trim();
   if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) {
@@ -811,23 +797,15 @@ async function loadMatrixConfigFromSecret(rootDir) {
     registrationSharedSecret: matrixValues["registration shared secret"] || "",
     adminToken: matrixValues["admin token"] || "",
     legacyRoom: matrixValues.room || "",
-    legacyMode: matrixValues.mode || "",
-    legacyLongPollMs: matrixValues["long poll ms"] || ""
+    legacyMode: matrixValues.mode || ""
   };
 }
 
 async function loadMatrixPolicyConfig({ rootDir, agentName = DEFAULT_CHANNEL_AGENT_NAME } = {}) {
   const worldRoot = path.join(rootDir, "world");
   const agentHouse = resolveConfiguredAgentHouse(worldRoot, agentName);
-  const [allChannels, calendarPolicy] = await Promise.all([
-    loadChannelPolicyWithGlobal({ worldRoot, agentHouse }),
-    loadChannelCalendarPolicyWithGlobal({ worldRoot, agentHouse, agentName })
-  ]);
+  const allChannels = await loadChannelPolicyWithGlobal({ worldRoot, agentHouse });
   const matrix = allChannels?.matrix ?? {};
-  const matrixCalendar = resolveChannelCalendarSetting(calendarPolicy, {
-    channelType: MATRIX_CATERER_NAME,
-    agentName
-  });
   const roomEntries = Array.isArray(matrix.rooms) ? matrix.rooms : [];
   const dmRooms = new Set(Array.isArray(matrix.dmRooms) ? matrix.dmRooms.map((roomId) => String(roomId ?? "").trim()) : []);
   const primaryRoom = roomEntries.find((entry) => {
@@ -840,16 +818,10 @@ async function loadMatrixPolicyConfig({ rootDir, agentName = DEFAULT_CHANNEL_AGE
   return {
     room: String(primaryRoom ?? "").trim(),
     mode: normalizeMatrixMode(matrix.mode || "", DEFAULT_MATRIX_CHANNEL_MODE),
-    longPollMs: normalizeMatrixLongPollMs(
-      matrixCalendar.longPollMs ?? matrix.longPollMs ?? "",
-      DEFAULT_MATRIX_LONG_POLL_MS
-    ),
     publicTagAnswer: matrix.publicTagAnswer === true,
     executiveUsername: executives[0] || "",
     executiveUsernames: executives,
-    hasPolicy: Boolean(allChannels?.matrix),
-    hasCalendarLongPoll: matrixCalendar.hasLongPollMs,
-    hasLegacyChannelLongPoll: matrix.longPollMs != null
+    hasPolicy: Boolean(allChannels?.matrix)
   };
 }
 
@@ -859,17 +831,13 @@ async function loadMatrixConfigureDefaults({ rootDir, agentName = DEFAULT_CHANNE
     loadMatrixPolicyConfig({ rootDir, agentName })
   ]);
   const legacyMode = normalizeMatrixMode(secret.legacyMode || "", DEFAULT_MATRIX_CHANNEL_MODE);
-  const legacyLongPollMs = normalizeMatrixLongPollMs(secret.legacyLongPollMs || "", DEFAULT_MATRIX_LONG_POLL_MS);
   return {
     ...secret,
     room: policy.room || secret.legacyRoom || "",
     mode: policy.hasPolicy ? policy.mode : legacyMode,
-    longPollMs: (policy.hasPolicy || policy.hasCalendarLongPoll) ? policy.longPollMs : legacyLongPollMs,
     publicTagAnswer: policy.publicTagAnswer === true,
     executiveUsername: policy.executiveUsername || "",
-    executiveUsernames: policy.executiveUsernames || [],
-    hasCalendarLongPoll: policy.hasCalendarLongPoll === true,
-    hasLegacyChannelLongPoll: policy.hasLegacyChannelLongPoll === true
+    executiveUsernames: policy.executiveUsernames || []
   };
 }
 
@@ -1013,18 +981,6 @@ function buildAgentChannelConductBlock({
   const normalizedUserId = String(userId ?? "").trim();
   if (!normalizedUserId) return "# no per-agent matrix overrides";
   return `su name matrix user ob text ${quoteText(normalizedUserId)} ya`;
-}
-
-function buildMatrixLongPollCalendarLine({
-  agentName,
-  longPollMs = DEFAULT_MATRIX_LONG_POLL_MS
-}) {
-  const normalizedAgent = String(agentName ?? "").trim();
-  const normalizedLongPollMs = normalizeMatrixLongPollMs(longPollMs, DEFAULT_MATRIX_LONG_POLL_MS);
-  const subject = normalizedAgent
-    ? `su name matrix long poll ms for name ${normalizedAgent}`
-    : "su name matrix long poll ms";
-  return `${subject} ob text ${quoteText(String(normalizedLongPollMs))} be calendar ya`;
 }
 
 function buildChannelPollCalendarBlock({
@@ -1326,7 +1282,6 @@ function matrixVerification(cfg) {
   const room = String(cfg.room || "").trim();
   const authMode = String(cfg.authMode || "").trim();
   const channelMode = normalizeMatrixMode(cfg.mode || "", "");
-  const longPollMs = Number(cfg.longPollMs);
   const appserviceRegistration = String(cfg.appserviceRegistration || "").trim();
 
   if (!homeserver) errors.push({ code: "missing_homeserver", message: "homeserver is required" });
@@ -1344,9 +1299,6 @@ function matrixVerification(cfg) {
   }
   if (!MATRIX_CHANNEL_MODES.includes(channelMode)) {
     errors.push({ code: "invalid_channel_mode", message: `mode must be ${MATRIX_CHANNEL_MODES.join(", ")}` });
-  }
-  if (!Number.isFinite(longPollMs) || longPollMs <= 0) {
-    errors.push({ code: "invalid_long_poll_ms", message: "long poll ms must be a positive number" });
   }
   if (isAppserviceMode(channelMode) && !appserviceRegistration) {
     errors.push({
@@ -1695,20 +1647,6 @@ async function matrixDoctor({ rootDir }) {
       message: "legacy mode declaration found in configure/secret.pya; mode now belongs in world/conduct/channels.pya"
     });
   }
-  if (loaded.legacyLongPollMs) {
-    issues.push({
-      code: "legacy_secret_long_poll_ms",
-      kind: "warning",
-      message: "legacy long poll ms found in configure/secret.pya; long poll ms now belongs in calendar policy"
-    });
-  }
-  if (loaded.hasLegacyChannelLongPoll && !loaded.hasCalendarLongPoll) {
-    issues.push({
-      code: "legacy_channel_long_poll_ms",
-      kind: "warning",
-      message: "legacy long poll ms found in channels policy; move it to conduct/calendar.pya"
-    });
-  }
   let appservice = null;
   if (isAppserviceMode(resolved.mode) && resolved.appserviceRegistration) {
     try {
@@ -1789,10 +1727,6 @@ function collectMatrixFromFlags({ args, prior }) {
     parseArgValue(args, "--mode") ?? prior.mode ?? DEFAULT_MATRIX_CHANNEL_MODE,
     DEFAULT_MATRIX_CHANNEL_MODE
   );
-  const longPollMs = normalizeMatrixLongPollMs(
-    parseArgValue(args, "--long-poll-ms") ?? prior.longPollMs ?? DEFAULT_MATRIX_LONG_POLL_MS,
-    DEFAULT_MATRIX_LONG_POLL_MS
-  );
   const appserviceRegistration = String(
     parseArgValue(args, "--appservice-registration")
       ?? prior.appserviceRegistration
@@ -1814,7 +1748,6 @@ function collectMatrixFromFlags({ args, prior }) {
     registrationSharedSecret,
     adminToken,
     mode,
-    longPollMs,
     appserviceRegistration,
     agentName,
     writeAgentPolicy,
@@ -1939,23 +1872,8 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
         channelMode = enteredMode;
       }
     }
-    const defaultLongPollMs = normalizeMatrixLongPollMs(
-      prior.longPollMs || DEFAULT_MATRIX_LONG_POLL_MS,
-      DEFAULT_MATRIX_LONG_POLL_MS
-    );
-    let longPollMs = defaultLongPollMs;
-    if (!isAppserviceMode(channelMode)) {
-      printer.header("A.3 Long Poll Rhythm");
-      printer.why("Long-poll timeout controls receive wait time for sync delivery.");
-      printer.how("Use 10000 for normal sync, lower values for faster fallback.");
-      printer.examples("1000 | 10000 | 45000");
-      const enteredLongPollMs = await ask("Long poll ms", String(defaultLongPollMs));
-      longPollMs = normalizeMatrixLongPollMs(enteredLongPollMs, defaultLongPollMs);
-      textOut(`- long poll set to ${longPollMs} ms`);
-    }
-
     if (isAppserviceMode(channelMode)) {
-      printer.header("A.4 Appservice Registration");
+      printer.header("A.3 Appservice Registration");
       printer.why("Registration file contains service tokens and sender namespace for Matrix push routing.");
       printer.how("Put the file at configure/secret/matrix.yaml (recommended) or provide another local YAML path.");
       printer.examples("configure/secret/matrix.yaml");
@@ -2211,7 +2129,6 @@ async function collectMatrixInteractive({ prior, mode, rootDir }) {
       registrationSharedSecret,
       adminToken,
       mode: channelMode,
-      longPollMs,
       appserviceRegistration,
       writeAgentPolicy,
       agentName,
@@ -2236,17 +2153,12 @@ function normalizeMatrixCollected(cfg) {
       .filter(Boolean)
   ));
   const mode = normalizeMatrixMode(cfg.mode || "", DEFAULT_MATRIX_CHANNEL_MODE);
-  const longPollMs = normalizeMatrixLongPollMs(
-    cfg.longPollMs,
-    mode === "poll" ? 1000 : DEFAULT_MATRIX_LONG_POLL_MS
-  );
   const appserviceRegistration = String(cfg.appserviceRegistration || "").trim();
   return {
     ...cfg,
     homeserver,
     room,
     mode,
-    longPollMs,
     appserviceRegistration,
     executiveUsername: executiveUsernames[0] || "",
     executiveUsernames,
@@ -2390,23 +2302,15 @@ async function createMatrixWritePlan({ rootDir, cfg }) {
         intervalSeconds: 1
       })
     });
-    const worldTimingPlan = planManagedUpsert({
-      existing: worldProducePlan.nextText,
-      blockName: "matrix long poll timing",
-      content: buildMatrixLongPollCalendarLine({
-        longPollMs: cfg.longPollMs
-      })
-    });
     writes.push({
       path: worldCalendarPath,
       changed: worldPollPlan.changed
         || worldInputPlan.changed
         || worldProducePlan.changed
-        || worldTimingPlan.changed
         || (worldLegacyCleaned !== worldCalendarExisting),
-      action: worldTimingPlan.action,
-      preview: ["channel poll schedule", "channel input schedule", "channel produce schedule", "matrix long poll timing"],
-      nextText: worldTimingPlan.nextText
+      action: worldProducePlan.action,
+      preview: ["channel poll schedule", "channel input schedule", "channel produce schedule"],
+      nextText: worldProducePlan.nextText
     });
 
     const calendarPath = path.join(configuredAgentHouse, "conduct", "calendar.pya");
