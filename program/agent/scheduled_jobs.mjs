@@ -21,6 +21,7 @@ import {
   runChannelProduceOnce
 } from "./channels/index.mjs";
 import { createMatrixAdapter } from "./channels/matrix.mjs";
+import { createCliAdapter } from "./channels/cli.mjs";
 import {
   resolveMatrixConfigWithMap,
   mergeMatrixDmRooms as mergeMatrixDmRoomsFromRuntime,
@@ -190,7 +191,9 @@ async function runChannelPollJob({ worldRoot, job }) {
           channelStatus.push(`${targetAgentName}/${channelType}:dm_bootstrap_error=${hydrated.dmBootstrapErrors.length}`);
         }
       }
-      const adapter = channelType === "matrix" ? createMatrixAdapter() : null;
+      const adapter = channelType === "matrix"
+        ? createMatrixAdapter()
+        : (channelType === "cli" ? createCliAdapter({ worldRoot, agentName: targetAgentName }) : null);
       if (!adapter) continue;
       let result = null;
       let activeMode = channelMode;

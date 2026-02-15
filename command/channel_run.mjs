@@ -9,14 +9,15 @@ import { registerSignatureHandler, clearSignatureHandlers } from "../program/bri
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
-import { runChannelOnce } from "../program/agent/channels/index.mjs";
+import { runChannelOnce, runChannelPollOnce, runChannelInputOnce } from "../program/agent/channels/index.mjs";
 import { createMatrixAdapter } from "../program/agent/channels/matrix.mjs";
+import { createCliAdapter } from "../program/agent/channels/cli.mjs";
 import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/scheduler.mjs";
 import { hydrateMatrixRuntimeConfig } from "../program/agent/channels/matrix_runtime.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 
 function usage() {
-  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once]";
+  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once] [--ingest-only]";
 }
 
 function selectChannelJobs(jobs, channelType, agentName) {
@@ -56,8 +57,9 @@ async function ensureWorldChannelSeed(worldRoot) {
   }
 }
 
-function createAdapter(channelType) {
+function createAdapter(channelType, { worldRoot, agentName } = {}) {
   if (channelType === "matrix") return createMatrixAdapter();
+  if (channelType === "cli") return createCliAdapter({ worldRoot, agentName });
   throw new Error(`unsupported channel type: ${channelType}`);
 }
 
@@ -70,6 +72,7 @@ async function main() {
     process.exit(1);
   }
   const once = args.includes("--once");
+  const ingestOnly = args.includes("--ingest-only");
 
   await initializeRuntime({ cwd: process.cwd(), agentName });
   const worldRoot = resolveWorldRoot({ rememberFn: remember }) ?? path.resolve(process.cwd(), "world");
@@ -98,15 +101,41 @@ async function main() {
       console.error(`[matrix executive dm degraded] count=${hydrated.dmBootstrapErrors.length} first=${executive} ${detail}`);
     }
   }
-  const adapter = createAdapter(channelType);
-  const runTick = () => runChannelOnce({
-    agentName,
-    channelType,
-    channelConfig,
-    adapter,
-    interpretFn: interpret,
-    agentHouse
-  });
+  const adapter = createAdapter(channelType, { worldRoot, agentName });
+  const runTick = async () => {
+    if (!ingestOnly) {
+      return runChannelOnce({
+        agentName,
+        channelType,
+        channelConfig,
+        adapter,
+        interpretFn: interpret,
+        agentHouse
+      });
+    }
+    const poll = await runChannelPollOnce({
+      agentName,
+      channelType,
+      channelConfig,
+      adapter,
+      agentHouse
+    });
+    const input = await runChannelInputOnce({
+      agentName,
+      channelType,
+      channelConfig,
+      adapter,
+      interpretFn: interpret,
+      agentHouse,
+      maxItems: 10,
+      concurrency: 2
+    });
+    return {
+      received: Number(poll?.received ?? 0),
+      handled: Number(input?.handled ?? 0),
+      sent: 0
+    };
+  };
 
   if (once) {
     const result = await runTick();

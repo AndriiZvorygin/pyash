@@ -81,47 +81,156 @@ function buildCodexPrompt(payload = {}) {
   return lines.join("\n\n");
 }
 
+function parseJsonLines(text = "") {
+  const out = [];
+  const lines = String(text ?? "").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || !(trimmed.startsWith("{") || trimmed.startsWith("["))) continue;
+    try {
+      out.push(JSON.parse(trimmed));
+    } catch {
+      // ignore non-JSONL diagnostics
+    }
+  }
+  return out;
+}
+
+function clipText(value, limit = 4000) {
+  const text = String(value ?? "").replace(/\r/g, "").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}...`;
+}
+
+function normalizeCodexToolName(item = {}) {
+  return String(item?.tool_name ?? item?.name ?? item?.type ?? "tool").trim() || "tool";
+}
+
+function normalizeToolCallPayload(item = {}) {
+  const rawArgs = item?.arguments ?? item?.input ?? item?.params ?? {};
+  const args = (rawArgs && typeof rawArgs === "object") ? rawArgs : { value: String(rawArgs ?? "") };
+  return {
+    id: String(item?.id ?? ""),
+    type: "function",
+    function: {
+      name: normalizeCodexToolName(item),
+      arguments: JSON.stringify(args)
+    }
+  };
+}
+
+function mapCodexEvents(events = []) {
+  const observedToolEvents = [];
+  const agentMessages = [];
+  for (const event of events) {
+    const type = String(event?.type ?? "").trim();
+    const item = event?.item ?? {};
+    const itemType = String(item?.type ?? "").trim();
+
+    if (type === "item.completed" && itemType === "agent_message") {
+      const text = clipText(item?.text ?? item?.content ?? "");
+      if (text) agentMessages.push(text);
+      continue;
+    }
+
+    if (itemType === "command_execution") {
+      if (type === "item.started") {
+        observedToolEvents.push({
+          stage: "call",
+          toolName: "command",
+          toolCall: {
+            id: String(item?.id ?? ""),
+            type: "function",
+            function: {
+              name: "command",
+              arguments: JSON.stringify({ command: String(item?.command ?? "") })
+            }
+          },
+          toolText: clipText(item?.command ?? "")
+        });
+      } else if (type === "item.completed") {
+        const exitCode = Number(item?.exit_code);
+        const output = clipText(item?.aggregated_output ?? item?.output ?? "");
+        observedToolEvents.push({
+          stage: "result",
+          toolName: "command",
+          toolText: clipText(`exit=${Number.isFinite(exitCode) ? exitCode : "unknown"}${output ? ` output=${output}` : ""}`)
+        });
+      }
+      continue;
+    }
+
+    const looksLikeToolItem = /tool|mcp|function/i.test(itemType)
+      && itemType !== "agent_message"
+      && itemType !== "reasoning";
+    if (!looksLikeToolItem) continue;
+    const toolName = normalizeCodexToolName(item);
+    if (type === "item.started") {
+      observedToolEvents.push({
+        stage: "call",
+        toolName,
+        toolCall: normalizeToolCallPayload(item),
+        toolText: clipText(item?.text ?? "")
+      });
+    } else if (type === "item.completed") {
+      if (item?.arguments || item?.input || item?.params) {
+        observedToolEvents.push({
+          stage: "call",
+          toolName,
+          toolCall: normalizeToolCallPayload(item),
+          toolText: clipText(item?.text ?? "")
+        });
+      }
+      observedToolEvents.push({
+        stage: "result",
+        toolName,
+        toolText: clipText(item?.output ?? item?.result ?? item?.text ?? "")
+      });
+    }
+  }
+  const responseText = clipText(agentMessages.at(-1) ?? "");
+  return { responseText, observedToolEvents };
+}
+
 async function runCodexFallback(payload = {}, { stream = false } = {}) {
   const model = String(payload?.model || "gpt-5-codex").trim() || "gpt-5-codex";
   const prompt = buildCodexPrompt(payload);
-  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "pyash-codex-runner-"));
-  const outputPath = path.join(tmpDir, "last-message.txt");
-  try {
-    const args = [
-      "exec",
-      "--model", model,
-      "--color", "never",
-      "--ephemeral",
-      "--output-last-message", outputPath,
-      "-"
-    ];
-    const proc = spawnSync("codex", args, {
-      input: prompt,
-      encoding: "utf8",
-      env: process.env,
-      maxBuffer: 8 * 1024 * 1024
-    });
-    if (proc.error) throw proc.error;
-    if (proc.status !== 0) {
-      const stderr = String(proc.stderr || "").trim();
-      throw new Error(`codex exec failed: status=${proc.status}${stderr ? ` stderr=${JSON.stringify(stderr)}` : ""}`);
-    }
-    const responseText = String(await fs.promises.readFile(outputPath, "utf8")).trim();
-    if (stream) {
-      const chunks = responseText.split(/\s+/).filter(Boolean);
-      for (const chunk of chunks) {
-        process.stdout.write(`${JSON.stringify(`${chunk} `)}\n`);
-      }
-      process.stdout.write("[STREAM_END]\n");
-      return null;
-    }
-    return {
-      response: responseText,
-      message: { content: responseText }
-    };
-  } finally {
-    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  const args = [
+    "exec",
+    "--json",
+    "--model", model,
+    "--color", "never",
+    "--ephemeral",
+    prompt
+  ];
+  const proc = spawnSync("codex", args, {
+    encoding: "utf8",
+    env: process.env,
+    maxBuffer: 16 * 1024 * 1024
+  });
+  if (proc.error) throw proc.error;
+  if (proc.status !== 0) {
+    const stderr = String(proc.stderr || "").trim();
+    throw new Error(`codex exec failed: status=${proc.status}${stderr ? ` stderr=${JSON.stringify(stderr)}` : ""}`);
   }
+  const events = parseJsonLines(proc.stdout);
+  const { responseText, observedToolEvents } = mapCodexEvents(events);
+  if (stream) {
+    const chunks = responseText.split(/\s+/).filter(Boolean);
+    for (const chunk of chunks) {
+      process.stdout.write(`${JSON.stringify(`${chunk} `)}\n`);
+    }
+    process.stdout.write("[STREAM_END]\n");
+    return null;
+  }
+  return {
+    response: responseText,
+    message: {
+      content: responseText,
+      observed_tool_events: observedToolEvents
+    }
+  };
 }
 
 async function main() {

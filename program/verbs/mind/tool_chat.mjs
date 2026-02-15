@@ -176,6 +176,24 @@ export async function runToolChat({
       console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(lastResponse?.message?.tool_calls), contentLength: (lastResponse?.message?.content ?? "").length })}`);
     }
 
+    const observedToolEvents = Array.isArray(lastResponse?.message?.observed_tool_events)
+      ? lastResponse.message.observed_tool_events
+      : [];
+    for (const observed of observedToolEvents) {
+      const stage = String(observed?.stage ?? "").trim().toLowerCase();
+      const toolName = String(observed?.toolName ?? observed?.tool_name ?? "").trim();
+      if (!stage || !toolName) continue;
+      await emitToolCall({
+        stage,
+        toolName,
+        toolCall: observed?.toolCall ?? observed?.tool_call ?? null,
+        toolText: observed?.toolText ?? observed?.tool_text ?? ""
+      });
+      if (stage === "result") {
+        lastToolText = String(observed?.toolText ?? observed?.tool_text ?? "").trim();
+      }
+    }
+
     const toolCalls = lastResponse?.message?.tool_calls;
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
       responseText = lastResponse?.message?.content ?? "";
