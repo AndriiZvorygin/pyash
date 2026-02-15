@@ -113,7 +113,7 @@ async function main() {
   const agentHouse = resolveAgentHouse({ mindName: agentName, rememberFn: null });
   await ensureAgentDirs(agentHouse);
   const heartbeatPath = path.join(agentHouse, "HEARTBEAT.md");
-  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "scheduler" });
+  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "calendar" });
 
   let jobs = await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName });
   if (!jobs.length) {

@@ -110,10 +110,11 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       { defaultPairs: 8, maxPairs: 200 }
     );
 
-  // Model resolution: explicit on call or from config via state (keyword "as")
+  // Model resolution: explicit on call, then per-mind config, then configured default.
   const explicitModel = sentence?.ob?.model ?? ob?.model ?? null;
   const configModel = configSentence?.as?.name ?? null;
-  const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
+  const configuredModel = resolveConfigText("mind model", { rememberFn: remember }) ?? null;
+  const model = explicitModel ?? configModel ?? configuredModel ?? "qwen3-vl:8b-instruct";
 
   // Prompt resolution: config/call fromtext (discourse source) + call prompt/text
   const configPromptValue = configSentence?.fromtext ?? null;

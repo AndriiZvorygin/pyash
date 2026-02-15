@@ -54,7 +54,7 @@ async function runAction(action, worldRoot) {
 async function runLoop(worldRoot) {
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   const jobs = await discoverScheduledJobs({ worldRoot });
-  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "scheduler" });
+  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "calendar" });
   const scheduler = createScheduler({
     jobs,
     telemetryPath,
