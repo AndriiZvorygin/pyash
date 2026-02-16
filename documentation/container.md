@@ -6,7 +6,7 @@ Container assets live under `container/` (Dockerfile, orchestrate file, VNC help
 ## Build the image
 
 ```bash
-docker build -t pyash-dev -f container/Dockerfile .
+docker build -t pyash-dev -f container/pyash/Dockerfile .
 ```
 
 ## Configure + start
@@ -14,7 +14,7 @@ docker build -t pyash-dev -f container/Dockerfile .
 Set container options in `configure/container.pya` (and private overrides in `configure/secret.pya`), then start:
 
 ```bash
-./container/command/begin.sh --restart
+./container/pyash/command/begin.sh --restart
 ```
 
 ## Run the container (base)
@@ -72,20 +72,20 @@ For sites that block headless browsers, run a headed Chromium under Xvfb and acc
 Start the display stack in the container:
 
 ```bash
-./container/command/run_vnc_novnc.sh
+./container/pyash/command/run_vnc_novnc.sh
 ```
 
 By default, the container starts with VNC/noVNC enabled (for Playwright and headed browsers).
 You can also explicitly enable it:
 
 ```bash
-./container/command/begin.sh --vnc
+./container/pyash/command/begin.sh --vnc
 ```
 
 To disable VNC/noVNC:
 
 ```bash
-./container/command/begin.sh --no-vnc
+./container/pyash/command/begin.sh --no-vnc
 ```
 
 Default ports:
@@ -131,7 +131,7 @@ docker run --rm -it \
 
 Notes:
 - `hear-stream-keyboard.pya` and `hear-eval-keyboard.pya` require `DISPLAY` and `xdotool`.
-- For a headless setup, start Xvfb/noVNC via `./container/command/run_vnc_novnc.sh` and use `DISPLAY=:1`.
+- For a headless setup, start Xvfb/noVNC via `./container/pyash/command/run_vnc_novnc.sh` and use `DISPLAY=:1`.
 
 ## Ollama (host service)
 
@@ -156,13 +156,13 @@ exists su name openai base url ob text "http://host.docker.internal:11434" be de
 ## Docker compose (orchestrate)
 
 ```bash
-docker compose -f container/service/pyash.yaml up --build
+docker compose -f container/pyash/service/compose.yaml up --build
 ```
 
 ### Build + restart helper
 
 ```bash
-./container/command/build.sh [--no-cache] [-- <docker compose build args>]
+./container/pyash/command/build.sh [--no-cache] [-- <docker compose build args>]
 ```
 
 `container/build.sh` is kept as a wrapper to call the command script.

@@ -2,5 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+COMPOSE_FILE="$ROOT_DIR/service/compose.yaml"
 
-"$ROOT_DIR/container/pyash/command/build.sh" "$@"
+docker compose -f "$COMPOSE_FILE" down
