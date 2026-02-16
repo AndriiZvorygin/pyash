@@ -9,7 +9,7 @@ Use a refinery when you need:
 - explicit intermediate artifacts (plan, draft, check),
 - easy replay/newspaper visibility.
 
-Use `review loop` when you need bounded retries with guarantee checks.
+Use `verify loop` when you need bounded retries with guarantee checks.
 
 ## 2. Generation contract for the LLM
 

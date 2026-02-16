@@ -401,9 +401,9 @@ If a `session name` override is present and today’s file does not provide enou
 history, the previous day’s file with the same name may be used to fill the
 window.
 
-### 6.4 Iterative review-loop compaction (normative)
+### 6.4 Iterative verify-loop compaction (normative)
 
-For sessions running reviewer/generator retries, context assembly MUST prefer a
+For sessions running verifier/generator retries, context assembly MUST prefer a
 golden compact set instead of raw retry history:
 
 1. original prompt/task,
@@ -487,7 +487,7 @@ Agents MAY enter sleep mode when context pressure is high.
 Sleep mode SHOULD perform deterministic compaction:
 
 1. keep original task,
-2. keep latest successful bundle (draft + guarantee + optional reviewer),
+2. keep latest successful bundle (draft + guarantee + optional verifier),
 3. keep latest failed bundle,
 4. write/update session summary,
 5. archive excess retry chatter outside active prompt context.

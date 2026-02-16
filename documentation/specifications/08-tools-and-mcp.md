@@ -9,7 +9,7 @@ Purpose: define mind invocation, tool-calling envelope, and MCP integration cont
 | `for name <target>` | mind/helper target | choose mind/refinery target |
 | `with name <tools>` | explicit tools map | restricted tool exposure |
 | `with wo tools` | default tools set | stable standard tools |
-| `under name <conduct>` | run-scoped policy/config | review loop / guardrails |
+| `under name <conduct>` | run-scoped policy/config | verify loop / guardrails |
 | `to name text <out>` | bind output fact | deterministic downstream use |
 
 ## 2. Canonical invocation forms
@@ -26,7 +26,7 @@ ob text "task" for name helper with name saddle tools to name text output be evo
 
 Mind invoke with conduct:
 ```pyash
-ob text "task" for name helper with name saddle tools under name review loop configure to name text output be evoke do
+ob text "task" for name helper with name saddle tools under name verify loop configure to name text output be evoke do
 ```
 
 ## 3. Tool envelope requirements

@@ -201,11 +201,11 @@ ob text "task" for name coding saddle with name saddle tools to name text result
 3. Run-scoped conduct on invoke
 Bad (JSON):
 ```json
-{"input":"task","target":"helper","conduct":"review loop configure"}
+{"input":"task","target":"helper","conduct":"verify loop configure"}
 ```
 Use (Pyash):
 ```pyash
-ob text "task" for name helper under name review loop configure to name text result be evoke do
+ob text "task" for name helper under name verify loop configure to name text result be evoke do
 ```
 
 4. Error surface

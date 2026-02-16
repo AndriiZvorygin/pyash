@@ -66,7 +66,7 @@ Common non-compositional/high-frequency cases:
 | `for` | target actor/recipient | `for name helper` |
 | `with` | companion/tool binding | `with name saddle tools` |
 | `evidential` | evidence/provenance qualifier | `evidential text "direct"` |
-| `under` | policy/conduct context | `under name review loop configure` |
+| `under` | policy/conduct context | `under name verify loop configure` |
 | `as` | way/state qualifier | `as wo web` |
 | `become` | destination-state transform | `become wo markdown` |
 | `at` | location/cwd context | `at filename "/workplace"` |
