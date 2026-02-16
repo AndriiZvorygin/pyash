@@ -142,8 +142,10 @@ export function redactText(value) {
 }
 
 export function redactMatrixConfig(cfg) {
+  const exposeUserId = isAppserviceMode(cfg?.mode);
   return {
     ...cfg,
+    userId: exposeUserId ? cfg.userId : redactText(cfg.userId),
     token: redactText(cfg.token),
     password: redactText(cfg.password),
     registrationSharedSecret: redactText(cfg.registrationSharedSecret),
