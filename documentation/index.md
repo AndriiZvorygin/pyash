@@ -9,6 +9,7 @@
 - `documentation/recipes/agent-operations.md` — scheduler, channel, and runtime operations runbook.
 - `documentation/recipes/pyash-agent-admin.md` — configure/reconcile/debug recipe for Pyash agent administration.
 - `documentation/agent-memory.md` — current agent memory model (session files, summary, and runtime memory).
+- `documentation/reference/pyash-cli-modules.md` — module ownership, low-churn update checklist, and CLI regression guardrails.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
