@@ -1,18 +1,74 @@
-# SearXNG Container
+# SearXNG For Agent Web Search
 
-Self-contained SearXNG + Redis stack.
+This is a standalone SearXNG + Redis stack you can run locally and point agents at for web search.
 
-## Main Files
+## What This Provides
+
+- HTTP search endpoint on `http://localhost:60490`
+- JSON search output via `/search?format=json`
+- Local config in `configure/searxng/settings.yml`
+- Auto-generated secret in `configure/ecology/searxng.env`
+
+## Files
 
 - `service/compose.yaml`
 - `configure/searxng/settings.yml`
 - `command/begin.sh`
 - `command/stop.sh`
-- `configure/ecology/searxng.env` (generated at first start)
+- `.gitignore` (ignores generated secret env file)
 
-## Usage
+## Quick Start
 
-- Start: `./container/searxng/command/begin.sh`
-- Stop: `./container/searxng/command/stop.sh`
+From this folder:
 
-This folder is ready to become an independent git repository.
+```bash
+./command/begin.sh
+```
+
+Stop:
+
+```bash
+./command/stop.sh
+```
+
+## Verify Search API
+
+```bash
+curl "http://localhost:60490/search?q=site%3Awikipedia.org+large+language+model&format=json"
+```
+
+If healthy, response includes a `results` array.
+
+## Using With Agents
+
+Point your agent web-search tool to:
+
+- Base URL: `http://localhost:60490/search`
+- Required query params:
+  - `q=<query>`
+  - `format=json`
+
+Optional params:
+
+- `language=en`
+- `safesearch=0`
+- `pageno=1`
+
+Example tool request:
+
+```text
+GET http://localhost:60490/search?q=containerized+searxng+setup&format=json
+```
+
+## URL By Runtime Context
+
+- Host machine process:
+  - `http://localhost:60490/search?format=json&q=...`
+- Pyash/container network process:
+  - `http://searxng:8080/search?format=json&q=...`
+
+Use `searxng:8080` when the caller runs inside the same Docker compose network (the standard Pyash container flow).
+
+## Pyash Integration Note
+
+If using Pyash search tooling, set web search motor to this endpoint and restart your Pyash container runtime so search requests route here.
