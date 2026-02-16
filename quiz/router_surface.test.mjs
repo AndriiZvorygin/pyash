@@ -19,7 +19,7 @@ test("router input returns normalized payload with payload id", async () => {
     'su name router as wo input from name channel matrix room pyash to name agent pyash-agent ob text "hi" be router do'
   );
   assert.equal(result?.be, "input");
-  assert.match(String(result?.su?.name ?? ""), /^news-\d{8}-\d{4}$/);
+  assert.match(String(result?.su?.name ?? ""), /^matrix-news-\d{8}-\d{6}-[a-f0-9]{8}$/);
   assert.equal(result?.from?.name, "channel matrix room pyash");
   assert.equal(result?.to?.name, "agent pyash-agent");
   assert.equal(result?.for?.text, "pyash-agent");

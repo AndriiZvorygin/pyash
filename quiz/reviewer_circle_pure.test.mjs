@@ -40,7 +40,7 @@ test("pure reviewer module matches builtin output shape", async () => {
 
   forget();
   await setupRetryFixtures();
-  await run('ob text "Task." for name author by name reviewer atleast num 0.8 atmost num 3 to name text builtin result be review loop do');
+  await run('ob text "Task." for name author by name reviewer atleast num 0.8 atmost num 3 to name text builtin result be verify loop do');
   const builtinResult = remember("builtin result")?.ob?.text;
 
   assert.match(pureResult ?? "", /PASS/);
@@ -75,9 +75,9 @@ test("pure reviewer matches builtin score parsing behavior", async () => {
 
   forget();
   await setupScoreRetryCeremonies();
-  await run('ob text "Task." for name author by name reviewer atleast num 0.95 atmost num 1 to name text builtin result be review loop do');
+  await run('ob text "Task." for name author by name reviewer atleast num 0.95 atmost num 1 to name text builtin result be verify loop do');
   const builtinResult = remember("builtin result")?.ob?.text;
-  const builtinScore = remember("review loop score")?.ob?.num;
+  const builtinScore = remember("verify loop score")?.ob?.num;
 
   assert.equal(pureResult, builtinResult);
   assert.match(pureResult ?? "", /0\.9/);
@@ -98,9 +98,9 @@ test("pure reviewer matches builtin last-line-only verdict behavior", async () =
 
   forget();
   await setupLastLineCeremonies();
-  await run('ob text "Task." for name author by name reviewer atleast num 0.8 atmost num 3 to name text builtin result be review loop do');
+  await run('ob text "Task." for name author by name reviewer atleast num 0.8 atmost num 3 to name text builtin result be verify loop do');
   const builtinResult = remember("builtin result")?.ob?.text;
-  const builtinVerdict = remember("review loop verdict")?.ob?.text;
+  const builtinVerdict = remember("verify loop verdict")?.ob?.text;
 
   assert.equal(pureResult, builtinResult);
   assert.match(pureResult ?? "", /PASS/);

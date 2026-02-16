@@ -9,7 +9,7 @@ import { callMindBackend } from "../verbs/mind/backend.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy.mjs";
 
-const SESSION_ROLE_NAMES = new Set(["user", "assistant", "tool"]);
+const SESSION_ROLE_NAMES = new Set(["user", "assistant", "agent", "tool"]);
 
 export function normalizeHistoryWindow(historyWindow, {
   defaultPairs = 50,
@@ -393,18 +393,27 @@ export async function appendSessionEntry({
   sessionFile,
   role,
   content,
-  model
+  model,
+  metadata
 } = {}) {
   if (!sessionFile || !role) return;
+  const meta = metadata && typeof metadata === "object" ? metadata : {};
   const sentence = {
     su: { name: role },
     ob: { text: String(content ?? "") },
-    during: { date: nowIso() },
+    during: { date: String(meta.timestamp || nowIso()) },
     mood: "ya"
   };
   if (role === "system" && model) {
     sentence.as = { name: model };
   }
+  if (meta.sender) sentence.from = { name: String(meta.sender) };
+  if (meta.channelId) sentence.to = { name: String(meta.channelId) };
+  if (meta.channelType) {
+    if (role === "assistant" || role === "agent") sentence.become = { text: String(meta.channelType) };
+    else sentence.fromstate = { text: String(meta.channelType) };
+  }
+  if (meta.payloadId) sentence.accordingto = { text: String(meta.payloadId) };
   const line = sentenceToPyash(sentence);
   await fs.appendFile(sessionFile, `${line}\n`, "utf8");
 }
@@ -425,12 +434,13 @@ export async function readSessionMessages({ sessionFile, historyWindow = 50 } = 
     const trimmed = raw.trim();
     if (!trimmed) continue;
     const sentence = parse(trimmed);
-    const role = sentence?.su?.name;
-    if (role === "system") {
+    const roleRaw = sentence?.su?.name;
+    if (roleRaw === "system") {
       const model = sentence?.as?.name ?? sentence?.as?.text ?? null;
       if (model) lastSystemModel = model;
       continue;
     }
+    const role = roleRaw === "agent" ? "assistant" : roleRaw;
     if (!SESSION_ROLE_NAMES.has(role)) continue;
     const content = sentence?.ob?.text ?? "";
     messages.push({ role, content: String(content) });

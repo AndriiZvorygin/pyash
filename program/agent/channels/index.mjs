@@ -228,9 +228,9 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence, too
   }
   if (stage === "ratify") {
     const decision = ratifySentence?.ob?.boolean;
-    if (decision === true) return `tool review: ${name} allowed`;
-    if (decision === false) return `tool review: ${name} denied`;
-    return `tool review: ${name}`;
+    if (decision === true) return `tool verify: ${name} allowed`;
+    if (decision === false) return `tool verify: ${name} denied`;
+    return `tool verify: ${name}`;
   }
   if (stage === "result") {
     const summary = shortToolSummary(toolText);
@@ -864,7 +864,24 @@ async function dispatchChannelEvents({
         : null;
       try {
         const result = (interpretFn === bridgeInterpret)
-          ? await mind_to_name_text(sentence, { onToolCall, inputs: mindInputs })
+          ? await mind_to_name_text(sentence, {
+            onToolCall,
+            inputs: mindInputs,
+            sessionUserContent: String(event?.text ?? ""),
+            sessionUserMetadata: {
+              channelType: String(event?.channelType ?? ""),
+              channelId: String(event?.channelId ?? ""),
+              sender: String(event?.sender ?? ""),
+              payloadId: String(orchestratorDirective?.payloadId ?? ""),
+              timestamp: String(event?.timestamp ?? "")
+            },
+            sessionAssistantMetadata: {
+              channelType: String(event?.channelType ?? ""),
+              channelId: String(event?.channelId ?? ""),
+              sender: String(targetAgent ?? agentName ?? ""),
+              payloadId: String(orchestratorDirective?.payloadId ?? "")
+            }
+          })
           : await interpretFn(sentence);
         responseText = String(result?.ob?.text ?? "").trim();
         if (!responseText && !isMindConfigured()) {
@@ -873,7 +890,23 @@ async function dispatchChannelEvents({
         if (!responseText) {
           const retrySentence = buildRetrySentence(sentence);
           const retryResult = (interpretFn === bridgeInterpret)
-            ? await mind_to_name_text(retrySentence, { inputs: mindInputs })
+            ? await mind_to_name_text(retrySentence, {
+              inputs: mindInputs,
+              sessionUserContent: String(event?.text ?? ""),
+              sessionUserMetadata: {
+                channelType: String(event?.channelType ?? ""),
+                channelId: String(event?.channelId ?? ""),
+                sender: String(event?.sender ?? ""),
+                payloadId: String(orchestratorDirective?.payloadId ?? ""),
+                timestamp: String(event?.timestamp ?? "")
+              },
+              sessionAssistantMetadata: {
+                channelType: String(event?.channelType ?? ""),
+                channelId: String(event?.channelId ?? ""),
+                sender: String(targetAgent ?? agentName ?? ""),
+                payloadId: String(orchestratorDirective?.payloadId ?? "")
+              }
+            })
             : await interpretFn(retrySentence);
           responseText = String(retryResult?.ob?.text ?? "").trim();
           if (debug) {
