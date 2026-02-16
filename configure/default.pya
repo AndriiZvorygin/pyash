@@ -5,6 +5,7 @@ from filename "./module/mind_openai.pya" ob name openai command mind be import d
 from filename "./module/mind_openai.pya" ob name litellm command mind be import do
 from filename "./module/mind_openai.pya" ob name openrouter command mind be import do
 from filename "./module/mind_openai.pya" ob name vllm command mind be import do
+from filename "./module/verify.pya" ob name verify be import do
 from filename "./module/keyboard_write.pya" ob name keyboard write be import do
 from filename "./module/piper_say_command.pya" ob name say to name piper command say be import do
 from filename "./module/read_html.pya" ob name read to name read be import do
@@ -62,6 +63,8 @@ su name sandbox configure be map def
   su name command env allowlist ob ve text "HOME" "LANG" "LC_ALL" "PATH" "PWD" "SHELL" "TERM" "TMPDIR" "USER" ya
 prah
 exists su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
+exists su name verify brief prompter ob text "Verify TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
+exists su name verify mind brief be mind as name "bespoke-minicheck:latest" fromtext name verify brief prompter ya
 exists su name review brief prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
 exists su name review long prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT for factual support and contradictions. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
 exists su name review mind brief be mind as name "bespoke-minicheck:latest" fromtext name review brief prompter ya

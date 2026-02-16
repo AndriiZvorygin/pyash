@@ -114,6 +114,28 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
     if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
     const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
     if (resolved === null || resolved === undefined) continue;
+    if (tail === "name") {
+      value.name = String(resolved);
+      const parentChain = chainArr.slice(0, -1);
+      if (parentChain.length) {
+        const parentResolved = resolveGenitiveLiteral({ chain: parentChain }, { state, memory });
+        if (parentResolved && typeof parentResolved === "object") {
+          const typeWords = Array.isArray(parentResolved.nameTypeWords)
+            ? parentResolved.nameTypeWords.map((word) => String(word))
+            : null;
+          if (typeWords && typeWords.length) {
+            value.nameTypeWords = typeWords;
+            continue;
+          }
+        }
+      }
+      const fact = memory?.remember?.(value.name);
+      const be = String(fact?.be ?? "").trim();
+      if (be === "mind") value.nameTypeWords = ["mind"];
+      else if (be === "refinery") value.nameTypeWords = ["refinery"];
+      else if (be === "map") value.nameTypeWords = ["map"];
+      continue;
+    }
     applyResolvedTypedValue(value, tail, resolved);
   }
 }
