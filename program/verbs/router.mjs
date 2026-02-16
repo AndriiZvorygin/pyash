@@ -20,6 +20,26 @@ function padSerial(value) {
   return String(value).padStart(4, "0");
 }
 
+function timeStamp(now = new Date()) {
+  return now.toISOString().slice(11, 19).replace(/:/g, "");
+}
+
+function resolveChannelType(endpoint = "") {
+  const text = String(endpoint ?? "").trim().toLowerCase();
+  const match = text.match(/^channel\s+([a-z0-9_-]+)\s+room\b/);
+  return match?.[1] || "channel";
+}
+
+function hashPayloadParts(payload = "", fromEndpoint = "", toEndpoint = "") {
+  const input = `${payload}\n${fromEndpoint}\n${toEndpoint}`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
 function resolveText(value, { rememberFn = remember } = {}) {
   if (!value || typeof value !== "object") return "";
   if (typeof value.text === "string") return value.text.trim();
@@ -52,9 +72,10 @@ function nextSerial(name, { rememberFn = remember } = {}) {
   return next;
 }
 
-function buildPayloadId() {
-  const serial = nextSerial("router input serial");
-  return `news-${dayStamp()}-${padSerial(serial)}`;
+function buildPayloadId({ payload = "", fromEndpoint = "", toEndpoint = "" } = {}) {
+  const channelType = resolveChannelType(fromEndpoint);
+  const hash = hashPayloadParts(payload, fromEndpoint, toEndpoint);
+  return `${channelType}-news-${dayStamp()}-${timeStamp()}-${hash}`;
 }
 
 function buildMessageId(toEndpoint = "") {
@@ -126,7 +147,7 @@ function routeInput(sentence, { rememberFn = remember } = {}) {
   const payload = ensureInputPayload(resolveText(sentence?.ob, { rememberFn }), sentence);
   const fromEndpoint = ensureInputEndpoint(resolveText(sentence?.from, { rememberFn }), sentence);
   const toEndpoint = ensureRouteEndpoint(resolveText(sentence?.to, { rememberFn }), sentence);
-  const payloadId = buildPayloadId();
+  const payloadId = buildPayloadId({ payload, fromEndpoint, toEndpoint });
   const explicitSession = resolveText(sentence?.fromtext, { rememberFn });
   const resolvedAgent = resolveAgentName(toEndpoint);
   const sessionId = explicitSession || buildSessionId(fromEndpoint, toEndpoint);

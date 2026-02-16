@@ -131,7 +131,13 @@ async function ensureDefaultToolMapLoaded() {
   });
 }
 
-export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = {}) {
+export async function mind_to_name_text(sentence, {
+  inputs = [],
+  onToolCall,
+  sessionUserContent = "",
+  sessionUserMetadata = null,
+  sessionAssistantMetadata = null
+} = {}) {
   const ob = sentence?.ob ?? {};
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
@@ -498,8 +504,19 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   }
 
   if (sessionAgentEnabled && sessionFile) {
-    await appendSessionEntry({ sessionFile, role: "user", content: callPrompt || "" });
-    await appendSessionEntry({ sessionFile, role: "assistant", content: responseText || "" });
+    const userContent = String(sessionUserContent || callPrompt || "");
+    await appendSessionEntry({
+      sessionFile,
+      role: "user",
+      content: userContent,
+      metadata: sessionUserMetadata
+    });
+    await appendSessionEntry({
+      sessionFile,
+      role: "agent",
+      content: responseText || "",
+      metadata: sessionAssistantMetadata
+    });
     const agentHouse = resolvedSessionAgentHouse;
     await updateSessionSummary({
       agentHouse,
