@@ -1,0 +1,20 @@
+services:
+  pyash:
+    container_name: pyash
+    build:
+      context: ../../..
+      dockerfile: container/pyash/Dockerfile
+    image: pyash-dev
+    user: "${PYASH_UID}:${PYASH_GID}"
+    working_dir: /workplace
+    volumes:
+      - ../../..:/workplace
+      - ../minds:/minds
+    stdin_open: true
+    tty: true
+    environment:
+      - AI_HOST=${AI_HOST:-http://mriczo:11434}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://mriczo:11434}
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+    extra_hosts:
+      - host.docker.internal:host-gateway

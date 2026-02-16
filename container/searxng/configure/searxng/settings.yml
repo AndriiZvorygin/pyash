@@ -1,0 +1,49 @@
+# /etc/searxng/settings.yml
+use_default_settings: true
+
+server:
+  bind_address: "::"
+
+search:
+  # enable JSON output for API-based search (/search?format=json)
+  formats:
+    - html
+    - json
+
+engines:
+  # grokipedia (present in default settings.yml, usually disabled + inactive)
+  - name: grokipedia
+    engine: grokipedia
+    shortcut: gp
+    disabled: false
+    inactive: false
+
+  # z-library (present in default settings.yml, usually disabled + inactive)
+  - name: z-library
+    engine: zlibrary
+    shortcut: zlib
+    disabled: false
+    inactive: false
+
+  # Library Genesis (present in default settings.yml, usually disabled)
+  - name: library genesis
+    engine: xpath
+    shortcut: lg
+    disabled: false
+
+  # Mojeek (present in default settings.yml, usually disabled)
+  - name: mojeek
+    engine: mojeek
+    shortcut: mjk
+    categories: [general, web]
+    disabled: false
+
+  # PeerTube (present in default settings.yml, usually disabled)
+  - name: peertube
+    engine: peertube
+    shortcut: ptb
+    categories: [videos]
+    paging: true
+    base_url: https://sepiasearch.org
+    disabled: false
+
