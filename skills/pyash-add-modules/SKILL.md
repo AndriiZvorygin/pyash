@@ -20,6 +20,7 @@ Add Pyash modules in `module/`, wire them into the default config, and verify be
 - Use compositional roles (`fromtext`, `fromfilename`, `become`, `totext`, etc.).
 - Keep modules concise and rely on existing verbs where possible.
 - When resolving typed genitives in interpreter code, use `applyResolvedTypedValue` (from `program/bridge/imperative_helpers.mjs`) so genitive lvalues remain intact.
+- For wrapper ceremonies that forward typed cases (especially `for name mind`), ensure `nameTypeWords` survives genitive resolution (for example `for name of for of this`). If `nameTypeWords` is lost, signature derivation may fall back to `num` and dispatch will fail.
 
 3. **Wire the module into defaults**
 - Import the module in `configure/default.pya`.
@@ -29,6 +30,7 @@ Add Pyash modules in `module/`, wire them into the default config, and verify be
 - Add a quiz in `quiz/` mirroring real REPL usage.
 - Include a happy path and at least one guard/edge path.
 - Reset memory between cases.
+- For wrapper modules that call `be write do`, include tests for both fixed-target and forwarded-target forms (for example: `for name mind ...` and `with wo tools`) to catch typed-case regressions.
 
 5. **Update docs/examples when needed**
 - Update `documentation/specifications/` if the new module affects language or pipelines.
