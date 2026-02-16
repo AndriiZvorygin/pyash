@@ -437,7 +437,7 @@ Recommended interactive order:
 
 Advanced-only step (optional):
 
-1. Session/runtime tuning (history window, retries, guarantee/reviewer toggles).
+1. Session/runtime tuning (history window, retries, guarantee/verifier toggles).
 
 Managed outputs SHOULD include:
 

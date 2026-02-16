@@ -48,7 +48,7 @@ Exit criteria (alpha):
 
 * Mind backend payload handling hardened; curl fallback and debug toggles added.
 * Container dev ergonomics improved (auto-load container config; host git config mounts).
-* Re-entry cycle fixture updated to inline the flow and use reviewer dialogue history.
+* Re-entry cycle fixture updated to inline the flow and use verifier dialogue history.
 
 
 ## Timeline summary (from the commits you pasted)
