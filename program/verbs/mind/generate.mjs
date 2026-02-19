@@ -58,7 +58,8 @@ export async function runGenerate({
   historySeriesName,
   aspect,
   inputText,
-  inputs = []
+  inputs = [],
+  checkInterrupted
 } = {}) {
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
@@ -84,6 +85,9 @@ export async function runGenerate({
   const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
 
   if (aspect === "stream") {
+    if (typeof checkInterrupted === "function") {
+      await checkInterrupted();
+    }
     const streamOutputPath = resolveStreamOutputPath(sentence, outputName);
     startStreamFile(streamOutputPath);
     const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
@@ -181,6 +185,9 @@ export async function runGenerate({
   }
 
   let responseText = "";
+  if (typeof checkInterrupted === "function") {
+    await checkInterrupted();
+  }
   if (mockResponse) {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
@@ -203,6 +210,9 @@ export async function runGenerate({
         from: { name: "mind" },
         raw: { requestPayload }
       });
+    }
+    if (typeof checkInterrupted === "function") {
+      await checkInterrupted();
     }
     const backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
     responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";

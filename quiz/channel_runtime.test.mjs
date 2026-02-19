@@ -511,6 +511,184 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
   assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
 });
 
+test("channel runtime treats single-word stop as interrupt control message", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-stop-control-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  let calls = 0;
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$stop-1",
+            sender: "@u:server",
+            text: "stop"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-stop" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-stop-1" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => {
+      calls += 1;
+      return { ob: { text: "unexpected" } };
+    },
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(calls, 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "no active run for helper");
+});
+
+test("channel runtime treats mention stop forms as interrupt control message", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-stop-mention-control-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  let calls = 0;
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$stop-mention-1",
+            sender: "@u:server",
+            text: "@helper stop"
+          },
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$stop-mention-2",
+            sender: "@u:server",
+            text: "stop @helper"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-stop-mention" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: `$out-stop-mention-${sent.length}` };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn: async () => {
+      calls += 1;
+      return { ob: { text: "unexpected" } };
+    },
+    agentHouse
+  });
+
+  assert.equal(result.received, 2);
+  assert.equal(result.handled, 2);
+  assert.equal(result.sent, 2);
+  assert.equal(calls, 0);
+  assert.deepEqual(sent, ["no active run for helper", "no active run for helper"]);
+});
+
+test("channel runtime surfaces cooperative interruption as stop message", async () => {
+  const originalMock = process.env.PYA_MIND_RESPONSE;
+  try {
+    forget();
+    resetMindLogs();
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-stop-interrupted-"));
+    const worldRoot = path.join(root, "world");
+    const agentHouse = path.join(worldRoot, "house", "helper");
+    const presenceDir = path.join(worldRoot, "presence");
+    await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+    await fs.mkdir(presenceDir, { recursive: true });
+
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+    await interpret(parse('exists su name helper be mind via state "qwen3" ya'));
+    await fs.writeFile(
+      path.join(presenceDir, "helper-mind-interrupt.pya"),
+      `su name helper be mind interrupt from name matrix ob text "stop" during date ${new Date().toISOString()} ya\n`,
+      "utf8"
+    );
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([{ message: { content: "should not run" } }]);
+
+    const sent = [];
+    const adapter = {
+      async receive() {
+        return {
+          events: [
+            {
+              channelType: "matrix",
+              channelId: "!dm:server",
+              eventId: "$interrupt-1",
+              sender: "@u:server",
+              text: "hello"
+            }
+          ],
+          checkpoint: { nextBatch: "tok-interrupt" }
+        };
+      },
+      async send({ content }) {
+        sent.push(content);
+        return { eventId: "$out-interrupt-1" };
+      }
+    };
+
+    const result = await runChannelOnce({
+      agentName: "helper",
+      channelType: "matrix",
+      channelConfig: {
+        user: "@helper:server",
+        publicTagAnswer: false,
+        dmRooms: ["!dm:server"],
+        roomLanes: {}
+      },
+      adapter,
+      interpretFn: interpret,
+      agentHouse
+    });
+
+    assert.equal(result.handled, 1);
+    assert.equal(result.sent, 1);
+    assert.equal(sent[0], "stop requested; run interrupted");
+  } finally {
+    if (originalMock === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = originalMock;
+    forget();
+    resetMindLogs();
+  }
+});
+
 test("channel runtime stores channel attachments and includes file hints in prompt", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-attachments-"));
   const worldRoot = path.join(root, "world");

@@ -76,7 +76,8 @@ export async function runToolChat({
   mindDebug,
   debugMind,
   inputs,
-  onToolCall
+  onToolCall,
+  checkInterrupted
 } = {}) {
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
@@ -141,6 +142,9 @@ export async function runToolChat({
   };
 
   while (turns < maxToolTurns) {
+    if (typeof checkInterrupted === "function") {
+      await checkInterrupted();
+    }
     turns += 1;
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
     requestPayload.prompt = buildPromptText(messages);
@@ -209,6 +213,9 @@ export async function runToolChat({
     appendLog(dialogue, { role: "assistant", content: assistantMessage.content });
 
     for (const call of toolCalls) {
+      if (typeof checkInterrupted === "function") {
+        await checkInterrupted();
+      }
       const toolName = call?.function?.name ?? call?.name;
       const toolCallId = call?.id ?? null;
       if (!toolName || !toolMap.has(toolName)) {

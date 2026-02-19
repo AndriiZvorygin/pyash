@@ -33,6 +33,7 @@ import { runToolChat } from "./tool_chat.mjs";
 import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
+import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
 const DEFAULT_TOOL_MAP_PATH = path.resolve(
@@ -295,6 +296,22 @@ export async function mind_to_name_text(sentence, {
   const resolvedSessionAgentHouse = explicitAgentHouse
     ? path.resolve(explicitAgentHouse)
     : resolveAgentHouse({ mindName, rememberFn: remember });
+  const interruptAgentHouse = resolvedSessionAgentHouse || (explicitAgentHouse ? path.resolve(explicitAgentHouse) : "");
+  const assertNotInterrupted = async () => {
+    if (!interruptAgentHouse) return;
+    const interrupt = await consumeMindInterrupt({
+      agentHouse: interruptAgentHouse,
+      agentName: mindName
+    });
+    if (!interrupt) return;
+    throwErrorSentence({
+      name: "mind interrupted",
+      message: "mind interrupted by stop request",
+      from: { name: "mind" },
+      raw: { interruptAt: interrupt.at, agentName: mindName }
+    });
+  };
+  await assertNotInterrupted();
   if (agentEnabled) {
     doRemember({ mood: "ya", su: { name: "agent name" }, ob: { text: mindName }, be: "text" });
   }
@@ -471,7 +488,8 @@ export async function mind_to_name_text(sentence, {
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
-      onToolCall
+      onToolCall,
+      checkInterrupted: assertNotInterrupted
     });
   } else {
     const { responseText: text, stream } = await runGenerate({
@@ -493,7 +511,8 @@ export async function mind_to_name_text(sentence, {
       historySeriesName,
       aspect,
       inputText,
-      inputs
+      inputs,
+      checkInterrupted: assertNotInterrupted
     });
     if (stream) return stream;
     responseText = text ?? "";

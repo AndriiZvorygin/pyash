@@ -73,6 +73,9 @@ import {
 } from "./configure_agent_runtime.mjs";
 import { createConfigureAgentCommand } from "./configure_agent_command.mjs";
 import { createConfigureMindCommand } from "./configure_mind_command.mjs";
+import { createVerifyCommand } from "./verify_command.mjs";
+import { createAgentCommand } from "./agent_command.mjs";
+import { projectCodexRunToPyash } from "./agent_codex_projection.mjs";
 import {
   MIND_BACKEND_CHOICES,
   canonicalizeMindBackend,
@@ -441,6 +444,16 @@ const upsertAgentChannelSchedule = async (args) => await upsertAgentChannelSched
 const configureAgent = createConfigureAgentCommand({ resolveRootDirFromArgs, hasFlag, parseArgValue, parseTruthy, readText, pathExists, resolveConfiguredAgentHouse, isEphemeralRootDir, loadMindConfigFromSecret, loadMatrixConfigureDefaults, parseMapBlock, blockMarkers, escapeRegex, extractManagedBlock, normalizeIntervalMinutes, canonicalizeMindBackend, DEFAULT_CHANNEL_AGENT_NAME, MATRIX_POLICY_BLOCK_NAME, MIND_BACKEND_CHOICES, findMindBackendChoice, resolveMindBackendSource, resolveMindBackendSelection, backendChoiceKey, displayMindBackendKey, relayMatchesBackendSource, formatNumberedRows, resolveModelSelection, sectionPrinter, establishAgent, beginAgent, stopAgent, listAgents, upsertAgentRuntime, upsertAgentDirectoryLicense, bindAgentToDefaultChannel, upsertAgentChannelSchedule, bootstrapAgentMatrixChannelConnection, renderShortPreview, quoteText, jsonOut, textOut });
 
 const { configureMenu } = createConfigureMenu({ resolveRootDirFromArgs, hasFlag, listAgents, pathExists, resolveConfiguredAgentHouse, loadMatrixConfigureDefaults, DEFAULT_CHANNEL_AGENT_NAME, loadMindConfigFromSecret, configureMatrix, configureMatrixTest, configureMatrixDoctor, MATRIX_CATERER_NAME, configureChannelList, configureMind, configureAgent, configureOrchestrator, textOut, jsonOut });
+const verifyCommand = createVerifyCommand({ resolveRootDirFromArgs, hasFlag, parseArgValue, jsonOut, textOut });
+const agentCommand = createAgentCommand({
+  resolveRootDirFromArgs,
+  resolveConfiguredAgentHouse,
+  pathExists,
+  codexCommand,
+  projectCodexRunToPyash,
+  installRoot,
+  textOut
+});
 
 export async function main() {
   const args=process.argv.slice(2);
@@ -451,7 +464,9 @@ export async function main() {
   if (first === "configure") return void await configureMenu(args.slice(1));
   if (first === "calendar") return void await calendarCommand(args.slice(1));
   if (first === "channel") return void await channelCommand(args.slice(1));
-  if (first === "codex") return void await codexCommand(args.slice(1));
+  if (first === "codex") return void process.exit(await codexCommand(args.slice(1), { installRoot }));
+  if (first === "agent") return void process.exit(await agentCommand(args.slice(1)));
+  if (first === "verify") return void await verifyCommand(args.slice(1));
   const code=await runNodeScript(runProgramPath,args);
   process.exit(code);
 }

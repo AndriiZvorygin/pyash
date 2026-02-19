@@ -9,6 +9,7 @@ import { resolveWorldAgentHouseDirectory } from "../../library/agent_command_pol
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
+import { beginActiveMindRun, requestMindInterrupt } from "../interrupt.mjs";
 import { buildRouterProduceRequestSentence } from "../channel_core/contract.mjs";
 import {
   readChannelRuntimeState,
@@ -552,6 +553,42 @@ function emptyMindFallback() {
   return "I received your message, but I could not generate a reply. Please retry.";
 }
 
+function cleanToken(value = "") {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^[\s.,:;!?()[\]{}"'`]+/, "")
+    .replace(/[\s.,:;!?()[\]{}"'`]+$/, "");
+}
+
+function stopTokensForAgent(agentName = "") {
+  const name = cleanToken(agentName).replace(/^@/, "");
+  if (!name) return new Set(["stop"]);
+  const dashed = name.replace(/_/g, "-");
+  return new Set([
+    "stop",
+    name,
+    `@${name}`,
+    dashed,
+    `@${dashed}`
+  ]);
+}
+
+function isStopCommand(text = "", agentName = "") {
+  const words = String(text ?? "").trim().split(/\s+/).map(cleanToken).filter(Boolean);
+  if (words.length === 1) {
+    return words[0] === "stop";
+  }
+  if (words.length !== 2) {
+    return false;
+  }
+  const allowed = stopTokensForAgent(agentName);
+  return (
+    (words[0] === "stop" && allowed.has(words[1]))
+    || (words[1] === "stop" && allowed.has(words[0]))
+  );
+}
+
 function buildRetrySentence(sentence = {}) {
   const original = String(sentence?.ob?.text ?? "");
   const retrySuffix = "\n\n[reply rule]\nReply with at least one short plain-text sentence.";
@@ -569,6 +606,14 @@ function isMindUnavailableError(err) {
   if (sentenceName === "mind defective" && message.includes("mind backend missing")) return true;
   if (sentenceName === "variable as not exists" && message.includes("mind")) return true;
   return message.includes("mind backend missing");
+}
+
+function isMindInterruptedError(err) {
+  if (!err) return false;
+  const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
+  const message = String(err?.message ?? "").trim().toLowerCase();
+  if (sentenceName === "mind interrupted") return true;
+  return message.includes("mind interrupted");
 }
 
 function isMindConfigured() {
@@ -917,13 +962,13 @@ async function dispatchChannelEvents({
       });
       const targetAgent = orchestratorDirective.agentName || listener;
       const importPolicy = await loadImportPolicyForAgent(targetAgent);
+      const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, targetAgent);
       const routedEvent = {
         ...event,
         text: orchestratorDirective.payloadText || event.text
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
-        const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, targetAgent);
         const targetDir = path.join(targetAgentHouse, "artifacts", dayStamp);
         try {
           routedEvent.attachmentsSaved = await adapter.downloadAttachments({
@@ -963,7 +1008,7 @@ async function dispatchChannelEvents({
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
         payloadId: orchestratorDirective.payloadId,
-        agentCwd: resolveTargetAgentHouse(worldRootResolved, targetAgent)
+        agentCwd: targetAgentHouse
       });
       handled += 1;
       let responseText = "";
@@ -975,6 +1020,72 @@ async function dispatchChannelEvents({
       const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
       const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
       let toolEventCount = 0;
+      const sendControlMessage = async (content) => {
+        if (outputMode === "queue") {
+          const produceRequest = buildRouterProduceRequestSentence({
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await routeChannelProduce({
+            routerInterpretFn,
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await enqueueProduceEnvelope(worldRootResolved, {
+            channelType,
+            identity: String(channelConfig?.user ?? "").trim(),
+            agentName: targetAgent,
+            roomName: event.channelId,
+            payloadId: orchestratorDirective.payloadId,
+            payloadSentence: produceRequest
+          });
+          sent += 1;
+          return;
+        }
+        const sendResult = await adapter.send({ config: channelConfig, event, content });
+        if (sendResult?.eventId) {
+          selfEventIds.add(sendResult.eventId);
+          selfState.order.push(sendResult.eventId);
+          while (selfState.order.length > dedupLimit) {
+            const removed = selfState.order.shift();
+            if (!removed) break;
+            selfEventIds.delete(removed);
+          }
+        }
+        sent += 1;
+      };
+      if (isStopCommand(routedEvent.text, targetAgent)) {
+        const stopResult = await requestMindInterrupt({
+          worldRoot: worldRootResolved,
+          agentName: targetAgent,
+          source: event.sender,
+          reason: "stop"
+        });
+        const controlText = stopResult.requested
+          ? `stop requested for ${targetAgent}`
+          : `no active run for ${targetAgent}`;
+        await sendControlMessage(controlText);
+        if (debug) {
+          await appendTelemetry(agentHouse, {
+            timestamp: nowIso(),
+            channelType,
+            event: "event",
+            decision: stopResult.requested ? "stop_requested" : "stop_no_active_run",
+            eventId: event.eventId,
+            sender: event.sender,
+            channelId: event.channelId,
+            listener: targetAgent,
+            payloadId: orchestratorDirective.payloadId
+          }, { channelType, agentName });
+        }
+        continue;
+      }
       const sendChannelMessage = async (content) => {
         if (outputMode === "queue") {
           const produceRequest = buildRouterProduceRequestSentence({
@@ -1024,9 +1135,48 @@ async function dispatchChannelEvents({
         }
         : null;
       try {
-        const result = (interpretFn === bridgeInterpret)
-          ? await mind_to_name_text(sentence, {
-            onToolCall,
+        const mindCallOptions = {
+          onToolCall,
+          inputs: mindInputs,
+          sessionUserContent: String(event?.text ?? ""),
+          sessionUserMetadata: {
+            channelType: String(event?.channelType ?? ""),
+            channelId: String(event?.channelId ?? ""),
+            sender: String(event?.sender ?? ""),
+            payloadId: String(orchestratorDirective?.payloadId ?? ""),
+            timestamp: String(event?.timestamp ?? "")
+          },
+          sessionAssistantMetadata: {
+            channelType: String(event?.channelType ?? ""),
+            channelId: String(event?.channelId ?? ""),
+            sender: String(targetAgent ?? agentName ?? ""),
+            payloadId: String(orchestratorDirective?.payloadId ?? "")
+          }
+        };
+        let finishActiveRun = null;
+        if (interpretFn === bridgeInterpret) {
+          finishActiveRun = await beginActiveMindRun({
+            worldRoot: worldRootResolved,
+            agentName: targetAgent
+          });
+        }
+        const result = await (async () => {
+          try {
+            if (interpretFn === bridgeInterpret) {
+              return await mind_to_name_text(sentence, mindCallOptions);
+            }
+            return await interpretFn(sentence);
+          } finally {
+            if (typeof finishActiveRun === "function") await finishActiveRun();
+          }
+        })();
+        responseText = String(result?.ob?.text ?? "").trim();
+        if (!responseText && !isMindConfigured()) {
+          responseText = noMindConfiguredFallback();
+        }
+        if (!responseText) {
+          const retrySentence = buildRetrySentence(sentence);
+          const retryCallOptions = {
             inputs: mindInputs,
             sessionUserContent: String(event?.text ?? ""),
             sessionUserMetadata: {
@@ -1042,33 +1192,24 @@ async function dispatchChannelEvents({
               sender: String(targetAgent ?? agentName ?? ""),
               payloadId: String(orchestratorDirective?.payloadId ?? "")
             }
-          })
-          : await interpretFn(sentence);
-        responseText = String(result?.ob?.text ?? "").trim();
-        if (!responseText && !isMindConfigured()) {
-          responseText = noMindConfiguredFallback();
-        }
-        if (!responseText) {
-          const retrySentence = buildRetrySentence(sentence);
-          const retryResult = (interpretFn === bridgeInterpret)
-            ? await mind_to_name_text(retrySentence, {
-              inputs: mindInputs,
-              sessionUserContent: String(event?.text ?? ""),
-              sessionUserMetadata: {
-                channelType: String(event?.channelType ?? ""),
-                channelId: String(event?.channelId ?? ""),
-                sender: String(event?.sender ?? ""),
-                payloadId: String(orchestratorDirective?.payloadId ?? ""),
-                timestamp: String(event?.timestamp ?? "")
-              },
-              sessionAssistantMetadata: {
-                channelType: String(event?.channelType ?? ""),
-                channelId: String(event?.channelId ?? ""),
-                sender: String(targetAgent ?? agentName ?? ""),
-                payloadId: String(orchestratorDirective?.payloadId ?? "")
+          };
+          let finishRetryRun = null;
+          if (interpretFn === bridgeInterpret) {
+            finishRetryRun = await beginActiveMindRun({
+              worldRoot: worldRootResolved,
+              agentName: targetAgent
+            });
+          }
+          const retryResult = await (async () => {
+            try {
+              if (interpretFn === bridgeInterpret) {
+                return await mind_to_name_text(retrySentence, retryCallOptions);
               }
-            })
-            : await interpretFn(retrySentence);
+              return await interpretFn(retrySentence);
+            } finally {
+              if (typeof finishRetryRun === "function") await finishRetryRun();
+            }
+          })();
           responseText = String(retryResult?.ob?.text ?? "").trim();
           if (debug) {
             await appendTelemetry(agentHouse, {
@@ -1087,6 +1228,8 @@ async function dispatchChannelEvents({
       } catch (err) {
         if (isMindUnavailableError(err)) {
           responseText = noMindConfiguredFallback();
+        } else if (isMindInterruptedError(err)) {
+          responseText = "stop requested; run interrupted";
         } else {
           responseText = mindErrorFallback(err);
           if (debug) {

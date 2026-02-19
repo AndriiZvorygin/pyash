@@ -21,21 +21,10 @@ Nice-to-have:
 Goal: ship a narrow but reliable multi-agent runtime for real users (single workspace, scheduler + Matrix + file/tool workflows).
 
 Must-have:
-* Single scheduler daemon running calendar jobs for all agents.
-* Channel runtime stable on Matrix:
 * mention gate policy and dedup/checkpoint behavior proven in real runs.
-* channel polling routed through scheduler (no per-agent manual polling required in normal ops).
-* Logging and observability:
-* scheduler/channel runtime logs in `world/newspaper/YYYYMMDD-<name>.pya`.
-* actionable `health` output for daemon + services.
-* Approval safety baseline:
-* `propose` tool paths gate through ratify policy (`conduct/ratify.pya`) in scheduler/channel-triggered runs.
-* Launch docs:
-* one operator runbook (bootstrap, start, stop, restart, health, logs).
 * one user runbook (how to interact with agents in Matrix and expected response model).
 
 Nice-to-have:
-* matrix DM + shared-room routing presets and templates.
 * service-definition helpers (sentence <-> map <-> systemd INI) with cookbook examples.
 * lightweight load dashboard derived from scheduler telemetry.
 

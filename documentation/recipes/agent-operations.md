@@ -149,6 +149,18 @@ If queue behavior looks wrong:
 3. Inspect most recent runtime/produce records to confirm current timestamps.
 4. If old backlog is wedged, stop scheduler, archive stale spool files, then restart.
 
+## 6.2 Channel stop control
+
+Channel runtime supports interrupt control from inbound text:
+
+- `stop`
+- `@<agent> stop`
+- `<agent> stop`
+- `stop @<agent>`
+- `stop <agent>`
+
+See `documentation/recipes/channel-stop-control.md` for behavior and verification steps.
+
 ## 7. Fast sanity checklist
 
 1. `channels.pya` enables the channel (`matrix channel ob bool truth`).

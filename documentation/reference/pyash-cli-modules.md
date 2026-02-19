@@ -16,6 +16,7 @@ This document describes the modular CLI layout under `command/pyash/` and the lo
 - `command/pyash/calendar_command.mjs`: `pyash calendar ...`.
 - `command/pyash/channel_command.mjs`: `pyash channel ...`.
 - `command/pyash/codex_cli.mjs`: `pyash codex ...`.
+- `command/pyash/agent_command.mjs`: `pyash agent <name> --codex ...`.
 
 ## Configure Modules
 
