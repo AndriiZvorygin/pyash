@@ -1,57 +1,133 @@
 ---
 name: pyash-parity
-description: "Check parity across ./run, ./runjs, and ./runc using examples; use when validating runner consistency or investigating parity regressions."
+description: "Iterate on true parity gaps only (run passes, runjs/runc fail), track progress in a dedicated report file, and stop on parity plateau or high-churn risk."
 ---
 
-# Pyash Parity
+# Pyash Parity Gap Loop
 
-Use this skill to validate parity across the interpreter and compiled runners.
+Use this skill when parity status already exists and the task is to improve parity with targeted, low-noise iterations.
 
-## Quick checklist
+## Scope
 
-1. Run interpreter examples:
-   - `command/run_examples.sh`
-2. Run parity-focused quizzes:
-   - `node --test \"quiz/*parity*.test.mjs\" \"quiz/*runjs*.test.mjs\" \"quiz/*runc*.test.mjs\"`
-3. If failures occur, classify them:
-   - Missing external tools (ffmpeg, pdftotext/pandoc, ytdlp, whisper)
-   - Runner behavior differences
-   - Example fixture issues
+- Work only on files where `run=success` and (`runjs=failed` or `runc=failed`).
+- Never run a full parity sweep in this workflow.
+  - Do not run `./parity-run-and-report.sh`.
+  - Do not run `./parity-run.sh`.
+  - Do not run `command/run_examples.sh` or `command/run_examples.mjs` for parity iteration.
+- Do not spend iteration time on:
+  - `run` failures
+  - `missing`, `skipped`, or `timeouts`
+  - environment-only prerequisites unless user asked to provision them
 
-## Status check (no new runs)
+## Required artifacts
 
-Use this when you must not execute the examples yourself.
+Generate and maintain both files on each parity-improvement session:
 
-1. Read the latest report:
-   - `documentation/parity/status.json`
-2. Summarize pass/fail counts:
-   - `node -e "const s=require('./documentation/parity/status.json'); const c=o=>o.length; console.log('run',c(s.run.successes),c(s.run.failures),c(s.run.missing),c(s.run.timeouts),c(s.run.skipped)); console.log('runjs',c(s.runjs.successes),c(s.runjs.failures),c(s.runjs.timeouts)); console.log('runc',c(s.runc.successes),c(s.runc.failures),c(s.runc.timeouts));"`
-3. Identify parity deltas (runjs/runc failing while run passes):
-   - `node -e "const s=require('./documentation/parity/status.json'); const run=new Set(s.run.successes); const runjs=s.runjs.failures.filter(f=>run.has(f)); const runc=s.runc.failures.filter(f=>run.has(f)); console.log('runjs parity fails', runjs.length); console.log(runjs.join('\\n')); console.log('runc parity fails', runc.length); console.log(runc.join('\\n'));"`
-4. If you have evidence that the report is stale (e.g., a runjs/runc test now passes locally but is still listed as failing), do not re-run. Ask the user to re-run the parity sweep and stop.
+- `documentation/parity/gap-targets.json`
+  - Machine-readable parity-gap target set.
+- `documentation/parity/gap-iteration-report.md`
+  - Human-readable iteration log, decisions, and remaining gaps.
 
-## Running examples (individual only)
+## Build parity-gap target file
 
-When the user asks you to run examples, do NOT use `command/run_examples.sh` or `command/run_examples.mjs`.
-Instead, run individual examples directly with:
+Run from repo root:
 
-- `./run <file>`
-- `./runjs <file>`
-- `./runc <file>`
+```bash
+node - <<'NODE'
+const fs = require("node:fs");
+const s = require("./documentation/parity/status.json");
+const details = s.details || {};
+const red = s.parity?.red || [];
+const targets = red
+  .map((file) => ({ file, info: details[file] || {} }))
+  .filter(({ info }) =>
+    info?.run?.status === "success" &&
+    (info?.runjs?.status === "failed" || info?.runc?.status === "failed")
+  )
+  .map(({ file, info }) => ({
+    file,
+    runjsFailed: info?.runjs?.status === "failed",
+    runcFailed: info?.runc?.status === "failed",
+    runjsTail: info?.runjs?.tail || "",
+    runcTail: info?.runc?.tail || ""
+  }));
+const out = {
+  generatedAt: new Date().toISOString(),
+  source: "documentation/parity/status.json",
+  count: targets.length,
+  targets
+};
+fs.mkdirSync("documentation/parity", { recursive: true });
+fs.writeFileSync("documentation/parity/gap-targets.json", JSON.stringify(out, null, 2));
+console.log(`wrote documentation/parity/gap-targets.json (${targets.length} targets)`);
+NODE
+```
 
-## Full example sweep
+## Iteration loop (targeted only)
 
-1. List examples:
-   - `rg --files -g \"*.pya\" examples/pyash | rg -v \"^examples/pyash/modules/\"`
-2. Run each file with:
-   - `./run <file>`
-   - `./runjs <file>`
-   - `./runc <file>`
-3. Skip examples that depend on external tools unless installed.
+Repeat until stop criteria are met:
 
-## Report format
+1. Pick a coherent failure cluster from `gap-targets.json` (shared error signature or module).
+2. Implement minimal code/test change for that cluster.
+3. Re-run only affected targets:
+   - `./run "<file>"` (sanity check baseline still passes)
+   - `./runjs "<file>"` only if `runjsFailed` is true
+   - `./runc "<file>"` only if `runcFailed` is true
+   - Optional batch form (targeted only):
 
-- Runner name
-- Failing example file
-- Tail of error output
-- Whether the failure is env/tooling vs. behavior regression
+```bash
+node - <<'NODE'
+const fs = require("node:fs");
+const cp = require("node:child_process");
+const targets = JSON.parse(fs.readFileSync("documentation/parity/gap-targets.json", "utf8")).targets || [];
+for (const t of targets) {
+  const file = t.file;
+  cp.spawnSync("./run", [file], { stdio: "inherit" });
+  if (t.runjsFailed) cp.spawnSync("./runjs", [file], { stdio: "inherit" });
+  if (t.runcFailed) cp.spawnSync("./runc", [file], { stdio: "inherit" });
+}
+NODE
+```
+4. Update `documentation/parity/gap-iteration-report.md` with:
+   - iteration number
+   - files attempted
+   - before/after counts for targeted failures
+   - what changed
+   - why this change should reduce parity gaps
+5. Regenerate `gap-targets.json` from the current `documentation/parity/status.json` snapshot when needed.
+   - If the snapshot is stale, ask the user before any full parity rerun.
+
+## Stop criteria
+
+Stop iterating when either condition is true:
+
+1. **Parity plateau**
+   - No net decrease in parity-gap failures after one full iteration cycle.
+   - Or failure count regresses and root cause is not from the latest patch.
+2. **Massive churn risk**
+   - Fix clearly requires broad architecture churn (for example, cross-cutting compiler/runtime redesign, heavy refactor across many modules, or external dependency migration).
+
+When stopping, explicitly document why in `gap-iteration-report.md`.
+
+## Required gap explanation quality
+
+For every remaining gap, include:
+
+- failing file
+- failing runner(s): `runjs`, `runc`, or both
+- concise root-cause hypothesis from error tails
+- confidence level (`high`, `medium`, `low`)
+- remediation path:
+  - code fix in existing module, or
+  - new/shared module extraction, or
+  - external library/tool recommendation (with why it reduces churn/risk)
+
+## Report template (minimum sections)
+
+`documentation/parity/gap-iteration-report.md` must include:
+
+1. Baseline parity gap count and timestamp
+2. Iteration history table
+3. Remaining gaps grouped by root cause
+4. Plateau/churn stop decision
+5. Recommended next actions (smallest-first ordering)
