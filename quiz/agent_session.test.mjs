@@ -57,7 +57,7 @@ test("agent session writes append-only session file with system entry", async ()
     assert.match(content, /su name system ob text/);
     assert.match(content, /as name qwen3-vl:8b-instruct/);
     assert.match(content, /su name user ob text/);
-    assert.match(content, /su name assistant ob text/);
+    assert.match(content, /su name agent ob text/);
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
@@ -94,10 +94,10 @@ test("agent session appends subsequent turns without rewriting header", async ()
     const content = await fs.readFile(sessionFile, "utf8");
     const headerMatches = content.match(new RegExp(`su name ${sessionName} since date ${todayDate()} be series def`, "g")) ?? [];
     const userMatches = content.match(/su name user ob text/g) ?? [];
-    const assistantMatches = content.match(/su name assistant ob text/g) ?? [];
+    const agentMatches = content.match(/su name agent ob text/g) ?? [];
     assert.equal(headerMatches.length, 1);
     assert.equal(userMatches.length, 2);
-    assert.equal(assistantMatches.length, 2);
+    assert.equal(agentMatches.length, 2);
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;

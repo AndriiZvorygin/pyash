@@ -100,7 +100,7 @@ Notes:
 Scheduler telemetry:
 
 ```text
-world/newspaper/YYYYMMDD-scheduler.pya
+world/newspaper/YYYYMMDD-calendar.pya
 ```
 
 Channel telemetry:
@@ -120,14 +120,44 @@ Look for:
 - channel `received/handled/sent`
 - `skippedDedup`, `skippedMention`, `skippedSelf`
 
+## 6.1 Holding area (channel spool) layout
+
+Channel runtime uses file-backed spool directories under:
+
+```text
+world/holding/channel/
+```
+
+Layout:
+
+```text
+world/holding/channel/input/            # normalized inbound items waiting for routing
+world/holding/channel/runtime/          # claimed/in-flight items
+world/holding/channel/produce/success/  # completed outbound delivery records
+world/holding/channel/produce/fail/     # failed outbound delivery records
+```
+
+Operational invariants:
+1. Runtime data belongs in `world/holding/channel/*`, not `world/conduct/*`.
+2. Files move `input -> runtime -> produce/*` as they advance.
+3. Claims are scoped by channel + agent; one agent must not steal another agent's work.
+4. Channel polls warm-start from checkpoints on first run to avoid replaying historical backlog.
+
+If queue behavior looks wrong:
+1. Check scheduler health/list first (`pyash calendar health`, `pyash calendar list`).
+2. Inspect spool depth (`find world/holding/channel -type f | wc -l`).
+3. Inspect most recent runtime/produce records to confirm current timestamps.
+4. If old backlog is wedged, stop scheduler, archive stale spool files, then restart.
+
 ## 7. Fast sanity checklist
 
 1. `channels.pya` enables the channel (`matrix channel ob bool truth`).
 2. `matrix channel` config map has valid homeserver + token (or shared secret path).
-3. scheduler health shows running.
-4. channel telemetry shows `received > 0`.
-5. session file appends user/assistant lines.
-6. if tool not executed, check `be ratify ya` and `ratify.pya`.
+3. `world/conduct/calendar.pya` declares shared channel jobs (`channel poll`, `channel input`, `channel produce`).
+4. scheduler health shows running.
+5. channel telemetry shows `received > 0`.
+6. session file appends user/assistant lines.
+7. if tool not executed, check `be ratify ya` and `ratify.pya`.
 
 ## 8. Authoring guardrails (for agent/mind updates)
 
@@ -171,11 +201,11 @@ ob text "task" for name coding saddle with name saddle tools to name text result
 3. Run-scoped conduct on invoke
 Bad (JSON):
 ```json
-{"input":"task","target":"helper","conduct":"review loop configure"}
+{"input":"task","target":"helper","conduct":"verify loop configure"}
 ```
 Use (Pyash):
 ```pyash
-ob text "task" for name helper under name review loop configure to name text result be evoke do
+ob text "task" for name helper under name verify loop configure to name text result be evoke do
 ```
 
 4. Error surface

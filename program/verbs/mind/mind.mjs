@@ -1,6 +1,7 @@
 // pyash/verbs/mind.mjs
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { remember, doRemember, getDefinitionEntry, allRemember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
@@ -34,7 +35,59 @@ import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
-const DEFAULT_TOOL_MAP_PATH = path.resolve(process.cwd(), "module", "agent_tools.pya");
+const DEFAULT_TOOL_MAP_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../module/agent_tools.pya"
+);
+const CHANNEL_EMPTY_REPLY_FALLBACK = "I received your message, but I could not generate a reply. Please retry.";
+
+function unescapeQuotedText(value) {
+  return String(value ?? "")
+    .replace(/\\\\/g, "\\")
+    .replace(/\\"/g, "\"");
+}
+
+function extractAgentRuntimeMapText(text) {
+  const source = String(text ?? "");
+  const blockMatch = source.match(/su name agent runtime be map def([\s\S]*?)\n\s*prah\b/i);
+  if (!blockMatch) return {};
+  const block = blockMatch[1] ?? "";
+  const values = {};
+  const lineRegex = /^\s*su name ([^"\n]+?)\s+ob text\s+"((?:[^"\\]|\\.)*)"\s+ya\s*$/gim;
+  for (const match of block.matchAll(lineRegex)) {
+    const key = String(match[1] ?? "").trim().toLowerCase();
+    const rawValue = String(match[2] ?? "");
+    if (!key) continue;
+    values[key] = unescapeQuotedText(rawValue).trim();
+  }
+  return values;
+}
+
+async function loadAgentRuntimeConfig(agentCwd) {
+  const cwd = String(agentCwd ?? "").trim();
+  if (!cwd) return {};
+  const runtimePath = path.join(cwd, "conduct", "runtime.pya");
+  let text = "";
+  try {
+    text = await fs.readFile(runtimePath, "utf8");
+  } catch (err) {
+    if (err?.code === "ENOENT") return {};
+    throw err;
+  }
+  const map = extractAgentRuntimeMapText(text);
+  const backend = String(map.backend ?? "").trim();
+  const model = String(map.model ?? "").trim();
+  const host = String(map.host ?? map["ollama host"] ?? map["mind host"] ?? "").trim();
+  const reasoningEffort = String(map["reasoning effort"] ?? map["mind reasoning effort"] ?? "").trim();
+  const toolsMap = String(map["tools map"] ?? "").trim();
+  return {
+    backend,
+    model,
+    host,
+    reasoningEffort,
+    toolsMap
+  };
+}
 
 async function ensureDefaultToolMapLoaded() {
   const existing = remember(DEFAULT_TOOL_MAP_NAME);
@@ -78,7 +131,13 @@ async function ensureDefaultToolMapLoaded() {
   });
 }
 
-export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = {}) {
+export async function mind_to_name_text(sentence, {
+  inputs = [],
+  onToolCall,
+  sessionUserContent = "",
+  sessionUserMetadata = null,
+  sessionAssistantMetadata = null
+} = {}) {
   const ob = sentence?.ob ?? {};
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const outputName = sentence?.for?.name ? sentence?.to?.name : sentence?.totext?.name;
@@ -106,10 +165,15 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       { defaultPairs: 8, maxPairs: 200 }
     );
 
-  // Model resolution: explicit on call or from config via state (keyword "as")
+  const sentenceAgentCwd = sentence?.at?.filename ?? sentence?.at?.text ?? sentence?.at?.name ?? "";
+  const agentRuntime = await loadAgentRuntimeConfig(sentenceAgentCwd);
+
+  // Model resolution: explicit on call, then agent runtime, then per-mind config, then configured default.
   const explicitModel = sentence?.ob?.model ?? ob?.model ?? null;
   const configModel = configSentence?.as?.name ?? null;
-  const model = explicitModel ?? configModel ?? "qwen3-vl:8b-instruct";
+  const runtimeModel = agentRuntime?.model ? String(agentRuntime.model).trim() : null;
+  const configuredModel = resolveConfigText("mind model", { rememberFn: remember }) ?? null;
+  const model = explicitModel ?? runtimeModel ?? configModel ?? configuredModel ?? "qwen3-vl:8b-instruct";
 
   // Prompt resolution: config/call fromtext (discourse source) + call prompt/text
   const configPromptValue = configSentence?.fromtext ?? null;
@@ -122,8 +186,13 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     rememberFn: remember
   });
 
+  const runtimeToolsMap = agentRuntime?.toolsMap ? String(agentRuntime.toolsMap).trim() : "";
   const toolMapName = sentence?.with?.name
-    ?? (sentence?.with?.wo === "tools" || sentence?.with?.text === "tools" ? DEFAULT_TOOL_MAP_NAME : null);
+    ?? (
+      sentence?.with?.wo === "tools" || sentence?.with?.text === "tools"
+        ? (runtimeToolsMap || DEFAULT_TOOL_MAP_NAME)
+        : null
+    );
   if (toolMapName === DEFAULT_TOOL_MAP_NAME) {
     await ensureDefaultToolMapLoaded();
   }
@@ -221,6 +290,11 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     if (typeof fact?.ob?.name === "string") return fact.ob.name;
     return null;
   })();
+  const explicitAgentHouse = String(sentenceAgentCwd ?? "").trim();
+  const sessionAgentEnabled = agentEnabled || Boolean(explicitAgentHouse);
+  const resolvedSessionAgentHouse = explicitAgentHouse
+    ? path.resolve(explicitAgentHouse)
+    : resolveAgentHouse({ mindName, rememberFn: remember });
   if (agentEnabled) {
     doRemember({ mood: "ya", su: { name: "agent name" }, ob: { text: mindName }, be: "text" });
   }
@@ -234,9 +308,12 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     resolveGenitiveText,
     resolvePromptFromName
   });
-  const backendName = resolveConfigText("mind backend", { rememberFn: remember }) ?? null;
-  const ollamaHost = resolveConfigText("ollama host", { rememberFn: remember }) ?? null;
-  const mindReasoningEffort = resolveConfigText("mind reasoning effort", { rememberFn: remember }) ?? null;
+  const runtimeBackend = agentRuntime?.backend ? String(agentRuntime.backend).trim() : null;
+  const runtimeHost = agentRuntime?.host ? String(agentRuntime.host).trim() : null;
+  const runtimeReasoningEffort = agentRuntime?.reasoningEffort ? String(agentRuntime.reasoningEffort).trim() : null;
+  const backendName = runtimeBackend || resolveConfigText("mind backend", { rememberFn: remember }) || null;
+  const ollamaHost = runtimeHost || resolveConfigText("ollama host", { rememberFn: remember }) || null;
+  const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
 
   const debugMind = (label, payload) => {
@@ -274,8 +351,8 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
   let sessionFile = null;
   let agentSystemPrompt = resolvedConfigPrompt;
   const systemLogPrompt = resolvedConfigPrompt ?? "";
-  if (agentEnabled) {
-    const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
+  if (sessionAgentEnabled) {
+    const agentHouse = resolvedSessionAgentHouse;
     const { sessionDir } = await ensureAgentDirs(agentHouse);
     agentSystemPrompt = await buildAgentSystemPrompt({
       agentHouse,
@@ -283,10 +360,10 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
       configPrompt: resolvedConfigPrompt
     });
     const namingPrompt = resolvedConfigPrompt ?? "";
-    if (!historySeriesName) {
+    const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
+    if (sessionFileOverride || sessionNameSeed || !historySeriesName) {
       const promptText = namingPrompt || [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
       const datePrefix = buildSessionNamePrefix();
-      const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
       if (sessionFileOverride) {
         const resolvedPath = path.isAbsolute(sessionFileOverride)
           ? sessionFileOverride
@@ -422,10 +499,25 @@ export async function mind_to_name_text(sentence, { inputs = [], onToolCall } = 
     responseText = text ?? "";
   }
 
-  if (agentEnabled && sessionFile && !historySeriesName) {
-    await appendSessionEntry({ sessionFile, role: "user", content: callPrompt || "" });
-    await appendSessionEntry({ sessionFile, role: "assistant", content: responseText || "" });
-    const agentHouse = resolveAgentHouse({ mindName, rememberFn: remember });
+  if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {
+    responseText = CHANNEL_EMPTY_REPLY_FALLBACK;
+  }
+
+  if (sessionAgentEnabled && sessionFile) {
+    const userContent = String(sessionUserContent || callPrompt || "");
+    await appendSessionEntry({
+      sessionFile,
+      role: "user",
+      content: userContent,
+      metadata: sessionUserMetadata
+    });
+    await appendSessionEntry({
+      sessionFile,
+      role: "agent",
+      content: responseText || "",
+      metadata: sessionAssistantMetadata
+    });
+    const agentHouse = resolvedSessionAgentHouse;
     await updateSessionSummary({
       agentHouse,
       mindName,

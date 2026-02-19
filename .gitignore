@@ -25,6 +25,18 @@ world/conduct/*
 world/house/*
 !world/house/base/
 !world/house/base/**
+!world/holding/
+world/holding/**
+!world/holding/**/
+!world/holding/.gitkeep
+!world/holding/channel/.gitkeep
+!world/holding/channel/input/.gitkeep
+!world/holding/channel/runtime/.gitkeep
+!world/holding/channel/produce/.gitkeep
+!world/holding/channel/produce/success/.gitkeep
+!world/holding/channel/produce/fail/.gitkeep
+!world/holding/channel/artifacts/.gitkeep
+!world/holding/channel/tmp/.gitkeep
 .config/
 *.log
 newspaper/
@@ -34,6 +46,7 @@ configure/secret.pya
 configure/secret/
 .configure/secret/
 configure/workplace.pya
+configure/container.pya
 container/building/compose.override.yaml
 container/compose.override.yaml
 container/configure/ecology/searxng.env

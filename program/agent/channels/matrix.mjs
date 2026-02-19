@@ -38,7 +38,7 @@ function authHeaders({ token, mode, headers = {} } = {}) {
   return next;
 }
 
-function normalizeLongPollMs(raw, fallback = 30000) {
+function normalizeLongPollMs(raw, fallback = 10000) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value <= 0) return fallback;
   const rounded = Math.trunc(value);
@@ -140,9 +140,10 @@ async function ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetch
     });
     const payload = await response.json().catch(() => ({}));
     // Ignore join failures so polling can continue for already-joined rooms.
-    // Typical non-fatal cases: already joined, invite-only without invite.
+    // Typical non-fatal cases: already joined, invite-only without invite,
+    // or temporary rate limiting while joins are retried by later polls.
     const status = response.status;
-    const ok = response.ok || status === 403 || status === 404;
+    const ok = response.ok || status === 403 || status === 404 || status === 429;
     const joinedRoomId = typeof payload?.room_id === "string" ? payload.room_id : null;
     diagnostics.push({ room: String(roomIdOrAlias), status, ok, joinedRoomId });
     if (!ok) throw new Error(`matrix join failed: room=${roomIdOrAlias} status=${response.status}`);
@@ -178,6 +179,81 @@ function buildResolvedRoomConfig(rooms, joinDiagnostics) {
     roomIds: [...new Set(resolvedRoomIds)],
     laneByRoomId
   };
+}
+
+function summaryCount(summary, key) {
+  const value = Number(summary?.[key]);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.trunc(value);
+}
+
+function isLikelyDirectRoomFromSummary(summary) {
+  const joinedCount = summaryCount(summary, "m.joined_member_count");
+  const invitedCount = summaryCount(summary, "m.invited_member_count");
+  if (joinedCount == null && invitedCount == null) return false;
+  const total = (joinedCount ?? 0) + (invitedCount ?? 0);
+  return total > 0 && total <= 2;
+}
+
+async function fetchJoinedMemberCount({
+  homeserver,
+  token,
+  userId,
+  mode,
+  roomId,
+  fetchImpl
+}) {
+  const encodedRoomId = encodeURIComponent(String(roomId ?? "").trim());
+  if (!encodedRoomId) return null;
+  const url = applyAuthToUrl(
+    `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/joined_members`,
+    { token, userId, mode }
+  );
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: authHeaders({ token, mode })
+  });
+  if (!response.ok) return null;
+  const payload = await response.json().catch(() => ({}));
+  const members = payload?.joined;
+  if (!members || typeof members !== "object") return null;
+  return Object.keys(members).length;
+}
+
+async function inferDmRoomsFromMembership({
+  homeserver,
+  token,
+  userId,
+  mode,
+  joinedRoomIds,
+  configuredRoomIds,
+  knownDmRoomIds,
+  fetchImpl,
+  maxProbeRooms = 20
+}) {
+  const inferred = [];
+  const probes = [];
+  const configured = configuredRoomIds instanceof Set ? configuredRoomIds : new Set();
+  const knownDm = knownDmRoomIds instanceof Set ? knownDmRoomIds : new Set();
+  const candidates = (Array.isArray(joinedRoomIds) ? joinedRoomIds : [])
+    .map((roomId) => String(roomId ?? "").trim())
+    .filter((roomId) => roomId && !configured.has(roomId) && !knownDm.has(roomId))
+    .slice(0, maxProbeRooms);
+  for (const roomId of candidates) {
+    const memberCount = await fetchJoinedMemberCount({
+      homeserver,
+      token,
+      userId,
+      mode,
+      roomId,
+      fetchImpl
+    });
+    probes.push({ roomId, memberCount });
+    if (Number.isFinite(memberCount) && memberCount > 0 && memberCount <= 2) {
+      inferred.push(roomId);
+    }
+  }
+  return { inferred, probes };
 }
 
 function normalizeMatrixEvent(event, { roomId }) {
@@ -305,7 +381,25 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
         };
       }
 
-      const joinDiagnostics = await ensureJoinedRooms({ homeserver, token, userId, mode, rooms, fetchImpl });
+      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
+      const joinedRoomIdsKnown = new Set(
+        (Array.isArray(joinedRoomSnapshot?.rooms) ? joinedRoomSnapshot.rooms : [])
+          .map((roomId) => String(roomId ?? "").trim())
+          .filter(Boolean)
+      );
+      const roomsToJoin = rooms.filter((room) => {
+        const roomIdOrAlias = String(room?.id ?? "").trim();
+        if (!roomIdOrAlias) return false;
+        if (roomIdOrAlias.startsWith("!") && joinedRoomIdsKnown.has(roomIdOrAlias)) return false;
+        return true;
+      });
+      const joinDiagnostics = roomsToJoin.length
+        ? await ensureJoinedRooms({ homeserver, token, userId, mode, rooms: roomsToJoin, fetchImpl })
+        : [];
+      for (const entry of joinDiagnostics) {
+        const joinedRoomId = String(entry?.joinedRoomId ?? "").trim();
+        if (joinedRoomId) joinedRoomIdsKnown.add(joinedRoomId);
+      }
 
       const params = new URLSearchParams();
       const longPollMs = normalizeLongPollMs(config?.longPollMs);
@@ -329,18 +423,48 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       const inviteJoinDiagnostics = inviteRooms.length
         ? await ensureJoinedRooms({ homeserver, token, userId, mode, rooms: inviteRooms, fetchImpl })
         : [];
-      const joinedRoomSnapshot = await fetchJoinedRooms({ homeserver, token, userId, mode, fetchImpl });
+      for (const entry of inviteJoinDiagnostics) {
+        const joinedRoomId = String(entry?.joinedRoomId ?? "").trim();
+        if (joinedRoomId) joinedRoomIdsKnown.add(joinedRoomId);
+      }
       const directRoomsSnapshot = includeDirectRooms && userId
         ? await fetchDirectRooms({ homeserver, token, userId, mode, fetchImpl })
         : { ok: false, status: null, rooms: [] };
       const eventTypeCounts = {};
-      const joinedRoomIds = Object.keys(joined);
+      const syncJoinedRoomIds = Object.keys(joined);
+      const syncMessageRoomIds = syncJoinedRoomIds.filter((roomId) => {
+        const timelineEvents = joined?.[roomId]?.timeline?.events;
+        return Array.isArray(timelineEvents) && timelineEvents.some((event) => event?.type === "m.room.message");
+      });
+      const joinedRoomIds = [...new Set([
+        ...joinedRoomIdsKnown,
+        ...syncJoinedRoomIds
+      ])];
       const resolvedRooms = buildResolvedRoomConfig(rooms, joinDiagnostics);
       const roomLane = resolvedRooms.laneByRoomId;
       const directRoomIds = Array.isArray(directRoomsSnapshot?.rooms) ? directRoomsSnapshot.rooms : [];
+      const configuredDmRoomIds = Array.isArray(config?.dmRooms)
+        ? config.dmRooms.map((roomId) => String(roomId ?? "").trim()).filter(Boolean)
+        : [];
+      const inferredDmFromSummary = syncJoinedRoomIds
+        .filter((roomId) => isLikelyDirectRoomFromSummary(joined?.[roomId]?.summary));
+      const dmRoomIds = new Set([...directRoomIds, ...configuredDmRoomIds, ...inferredDmFromSummary]);
+      const inferredFromMembership = await inferDmRoomsFromMembership({
+        homeserver,
+        token,
+        userId,
+        mode,
+        joinedRoomIds: syncMessageRoomIds,
+        configuredRoomIds: new Set(resolvedRooms.roomIds),
+        knownDmRoomIds: dmRoomIds,
+        fetchImpl
+      });
+      const inferredDmRoomIds = [...new Set([...inferredDmFromSummary, ...inferredFromMembership.inferred])];
+      for (const roomId of inferredFromMembership.inferred) dmRoomIds.add(roomId);
       const roomIdsToRead = [...new Set([
         ...resolvedRooms.roomIds,
         ...directRoomIds,
+        ...inferredDmRoomIds,
         ...(includeJoinedRooms ? joinedRoomIds : [])
       ])];
       const events = [];
@@ -355,6 +479,7 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
           const normalized = normalizeMatrixEvent(event, { roomId });
           if (!normalized) continue;
           normalized.laneName = roomLane.get(roomId) ?? null;
+          normalized.dmRoom = dmRoomIds.has(roomId);
           events.push(normalized);
         }
       }
@@ -369,6 +494,8 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
           joinDiagnostics,
           inviteJoinDiagnostics,
           directRoomsSnapshot,
+          inferredDmRooms: inferredDmRoomIds,
+          inferredDmMembershipProbes: inferredFromMembership.probes,
           includeJoinedRooms,
           joinedRoomsSnapshot: joinedRoomSnapshot,
           joinedRooms: joinedRoomIds,
@@ -413,6 +540,37 @@ export function createMatrixAdapter({ fetchImpl = globalThis.fetch } = {}) {
       }
       const payload = await sendRes.json().catch(() => ({}));
       return { eventId: payload?.event_id ?? null };
+    },
+
+    async markSeen({ config, event }) {
+      const homeserver = toBaseUrl(config?.homeserver);
+      const token = config?.token;
+      const userId = String(config?.user ?? "").trim();
+      const mode = String(config?.mode ?? "").trim().toLowerCase();
+      const roomId = event?.channelId;
+      const eventId = event?.eventId;
+      if (!homeserver || !token || !roomId || !eventId) {
+        throw new Error("matrix markSeen missing homeserver/token/room/event");
+      }
+      const encodedRoomId = encodeURIComponent(String(roomId));
+      const encodedEventId = encodeURIComponent(String(eventId));
+      const endpoint = applyAuthToUrl(
+        `${homeserver}/_matrix/client/v3/rooms/${encodedRoomId}/receipt/m.read/${encodedEventId}`,
+        { token, userId, mode }
+      );
+      const response = await fetchImpl(endpoint, {
+        method: "POST",
+        headers: authHeaders({
+          token,
+          mode,
+          headers: { "Content-Type": "application/json" }
+        }),
+        body: "{}"
+      });
+      if (!response.ok) {
+        throw new Error(`matrix markSeen failed: status=${response.status}`);
+      }
+      return { ok: true, status: response.status };
     },
 
     async downloadAttachments({ config, event, targetDir }) {

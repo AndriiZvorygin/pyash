@@ -7,65 +7,17 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
-import { resolveConfigMapText } from "../program/configure/env.mjs";
 import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
 import { loadChannelPolicyWithGlobal } from "../program/agent/channels/policy.mjs";
-import { runChannelOnce } from "../program/agent/channels/index.mjs";
+import { runChannelOnce, runChannelPollOnce, runChannelInputOnce } from "../program/agent/channels/index.mjs";
 import { createMatrixAdapter } from "../program/agent/channels/matrix.mjs";
+import { createCliAdapter } from "../program/agent/channels/cli.mjs";
 import { loadSchedulePolicyWithGlobal, createScheduler } from "../program/agent/scheduler.mjs";
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import { hydrateMatrixRuntimeConfig } from "../program/agent/channels/matrix_runtime.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 
-const DEFAULT_INTERVAL_MS = 60 * 1000;
-
 function usage() {
-  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once] [--interval <seconds>]";
-}
-
-function readRememberText(name) {
-  const fact = remember(name);
-  const value = fact?.ob?.text ?? fact?.ob?.name ?? fact?.ob?.filename ?? null;
-  if (value == null) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
-function resolveMatrixConfigWithRemember(rawConfig = {}) {
-  const mapName = "matrix channel";
-  const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
-  const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
-  const mapAdminToken = resolveConfigMapText(mapName, "admin token");
-  const mapToken = resolveConfigMapText(mapName, "token");
-  const mapExecutive = resolveConfigMapText(mapName, "executive username");
-  return {
-    ...rawConfig,
-    homeserver:
-      mapHomeserver ??
-      rawConfig.homeserver ??
-      readRememberText("matrix homeserver") ??
-      readRememberText("matrix server") ??
-      null,
-    registrationSharedSecret:
-      mapSharedSecret ??
-      rawConfig.registrationSharedSecret ??
-      readRememberText("matrix registration shared secret") ??
-      null,
-    adminToken:
-      mapAdminToken ??
-      rawConfig.adminToken ??
-      readRememberText("matrix admin token") ??
-      null,
-    token:
-      mapToken ??
-      rawConfig.token ??
-      readRememberText("matrix access token") ??
-      null,
-    executiveUsername:
-      mapExecutive ??
-      rawConfig.executiveUsername ??
-      readRememberText("matrix executive username") ??
-      null
-  };
+  return "Usage: node command/channel_run.mjs --agent <name> --channel <type> [--once] [--ingest-only]";
 }
 
 function selectChannelJobs(jobs, channelType, agentName) {
@@ -76,17 +28,6 @@ function selectChannelJobs(jobs, channelType, agentName) {
     const name = job.jobName.toLowerCase();
     return name.startsWith(prefixPoll) || name.startsWith(prefixProbe);
   });
-}
-
-function defaultChannelJob({ channelType, agentName, intervalMs }) {
-  return [{
-    jobName: `${channelType} poll`,
-    laneName: `${channelType}_poll`,
-    intervalMs,
-    agentName,
-    prompt: "",
-    withCase: { wo: "tools" }
-  }];
 }
 
 async function initializeRuntime({ cwd, agentName }) {
@@ -116,8 +57,9 @@ async function ensureWorldChannelSeed(worldRoot) {
   }
 }
 
-function createAdapter(channelType) {
+function createAdapter(channelType, { worldRoot, agentName } = {}) {
   if (channelType === "matrix") return createMatrixAdapter();
+  if (channelType === "cli") return createCliAdapter({ worldRoot, agentName });
   throw new Error(`unsupported channel type: ${channelType}`);
 }
 
@@ -130,12 +72,7 @@ async function main() {
     process.exit(1);
   }
   const once = args.includes("--once");
-  const intervalSecondsRaw = readFlagValue(args, "--interval");
-  const intervalMs = intervalSecondsRaw ? Number(intervalSecondsRaw) * 1000 : DEFAULT_INTERVAL_MS;
-  if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
-    console.error("Invalid --interval value");
-    process.exit(1);
-  }
+  const ingestOnly = args.includes("--ingest-only");
 
   await initializeRuntime({ cwd: process.cwd(), agentName });
   const worldRoot = resolveWorldRoot({ rememberFn: remember }) ?? path.resolve(process.cwd(), "world");
@@ -150,52 +87,55 @@ async function main() {
   }
   let channelConfig = { ...rawConfig };
   if (channelType === "matrix") {
-    channelConfig = resolveMatrixConfigWithRemember(channelConfig);
-    const credentials = await ensureMatrixCredentials({
+    const hydrated = await hydrateMatrixRuntimeConfig({
+      channelConfig,
       agentName,
       agentHouse,
-      config: channelConfig
+      channelType
     });
-    channelConfig = {
-      ...channelConfig,
-      homeserver: credentials.homeserver,
-      token: credentials.token,
-      user: channelConfig.user ?? credentials.user
-    };
-    const executiveRoom = await ensureMatrixExecutiveDmRoom({
-      agentHouse,
-      homeserver: channelConfig.homeserver,
-      token: channelConfig.token,
-      user: channelConfig.user,
-      executiveUser: channelConfig.executiveUsername
-    });
-    if (executiveRoom) {
-      const hasRoom = Array.isArray(channelConfig.rooms) && channelConfig.rooms.some(room => room?.id === executiveRoom);
-      const nextRooms = Array.isArray(channelConfig.rooms) ? [...channelConfig.rooms] : [];
-      if (!hasRoom) {
-        nextRooms.push({
-          id: executiveRoom,
-          lane: "matrix_executive_dm"
-        });
-      }
-      const nextDmRooms = new Set(Array.isArray(channelConfig.dmRooms) ? channelConfig.dmRooms : []);
-      nextDmRooms.add(executiveRoom);
-      channelConfig = {
-        ...channelConfig,
-        rooms: nextRooms,
-        dmRooms: Array.from(nextDmRooms)
-      };
+    channelConfig = hydrated.channelConfig;
+    if (hydrated.dmBootstrapErrors.length > 0) {
+      const first = hydrated.dmBootstrapErrors[0];
+      const executive = String(first?.executiveUser ?? "").trim();
+      const detail = String(first?.error ?? "").trim();
+      console.error(`[matrix executive dm degraded] count=${hydrated.dmBootstrapErrors.length} first=${executive} ${detail}`);
     }
   }
-  const adapter = createAdapter(channelType);
-  const runTick = () => runChannelOnce({
-    agentName,
-    channelType,
-    channelConfig,
-    adapter,
-    interpretFn: interpret,
-    agentHouse
-  });
+  const adapter = createAdapter(channelType, { worldRoot, agentName });
+  const runTick = async () => {
+    if (!ingestOnly) {
+      return runChannelOnce({
+        agentName,
+        channelType,
+        channelConfig,
+        adapter,
+        interpretFn: interpret,
+        agentHouse
+      });
+    }
+    const poll = await runChannelPollOnce({
+      agentName,
+      channelType,
+      channelConfig,
+      adapter,
+      agentHouse
+    });
+    const input = await runChannelInputOnce({
+      agentName,
+      channelType,
+      channelConfig,
+      adapter,
+      interpretFn: interpret,
+      agentHouse,
+      maxItems: 10,
+      concurrency: 2
+    });
+    return {
+      received: Number(poll?.received ?? 0),
+      handled: Number(input?.handled ?? 0),
+      sent: 0
+    };
+  };
 
   if (once) {
     const result = await runTick();
@@ -203,9 +143,10 @@ async function main() {
     return;
   }
 
-  let jobs = selectChannelJobs(await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName }), channelType, agentName);
+  const jobs = selectChannelJobs(await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName }), channelType, agentName);
   if (!jobs.length) {
-    jobs = defaultChannelJob({ channelType, agentName, intervalMs });
+    console.error(`no calendar job configured for ${agentName} ${channelType} poll/probe`);
+    process.exit(1);
   }
   const scheduler = createScheduler({
     jobs,

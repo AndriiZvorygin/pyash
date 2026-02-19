@@ -62,7 +62,7 @@ import refinery, { signatures as refinerySignatures } from "./refinery.mjs";
 import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
-import reviewLoop, { signatures as reviewLoopSignatures } from "./review_loop.mjs";
+import verifyLoop, { signatures as verifyLoopSignatures } from "./verify_loop.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 import lineTail, { signatures as lineTailSignatures } from "./line_tail.mjs";
 import cast, { signatures as castSignatures } from "./cast.mjs";
@@ -127,7 +127,7 @@ export {
   reporter,
   errorSieve,
   successSieve,
-  reviewLoop,
+  verifyLoop,
   rememberPersistent,
   lineTail,
   cast,
@@ -206,7 +206,7 @@ export const builtInSignatures = [
   ...reporterSignatures,
   ...errorSieveSignatures,
   ...successSieveSignatures,
-  ...reviewLoopSignatures,
+  ...verifyLoopSignatures,
   ...rememberSignatures,
   ...lineTailSignatures,
   ...castSignatures,

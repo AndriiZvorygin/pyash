@@ -14,6 +14,11 @@ test("scheduler control surface supports begin health restart stop", async () =>
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
   await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    'su name helper house directory ob filename "world/house/helper" ya\n',
+    "utf8"
+  );
+  await fs.writeFile(
     path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
     [
       "su name heartbeat for name helper with wo tools vyah habit during minute 24 be calendar ya",
@@ -69,6 +74,11 @@ test("scheduler control surface supports from wo calendar forms", async () => {
   const worldRoot = path.join(root, "world");
   await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
   await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    'su name helper house directory ob filename "world/house/helper" ya\n',
+    "utf8"
+  );
   await fs.writeFile(
     path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
     [
@@ -126,5 +136,64 @@ test("scheduler control surface supports from wo calendar forms", async () => {
   assert.equal(restartRes?.value?.boolean, true);
 
   const stopRes = await interpret(parse("from wo calendar su name scheduler be stop do"));
+  assert.equal(stopRes?.value?.boolean, true);
+});
+
+test("scheduler restart clears stale channel input locks", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-lock-cleanup-"));
+  const worldRoot = path.join(root, "world");
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "house", "helper", "conduct"), { recursive: true });
+  await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    'su name helper house directory ob filename "world/house/helper" ya\n',
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(worldRoot, "house", "helper", "conduct", "calendar.pya"),
+    "su name matrix probe for name helper with wo tools vyah habit during minute 1 be calendar ya\n",
+    "utf8"
+  );
+
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "world tools" },
+    be: "bool",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "world root" },
+    be: "filename",
+    ob: { filename: worldRoot }
+  });
+
+  const beginRes = await interpret(parse('be begin ob text "scheduler" as wo scheduler do'));
+  assert.equal(beginRes?.value?.boolean, true);
+
+  const staleLockPath = path.join(worldRoot, "presence", "stale-fake-channel-input.lock");
+  await fs.mkdir(path.dirname(staleLockPath), { recursive: true });
+  await fs.writeFile(staleLockPath, "pid=999999\nstartedAt=now\nagent=stale\nchannel=fake\n", "utf8");
+
+  const restartRes = await interpret(parse('be restart ob text "scheduler" as wo scheduler do'));
+  assert.equal(restartRes?.value?.boolean, true);
+
+  let staleRemoved = false;
+  for (let i = 0; i < 20; i += 1) {
+    try {
+      await fs.access(staleLockPath);
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        staleRemoved = true;
+        break;
+      }
+      throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(staleRemoved, true);
+
+  const stopRes = await interpret(parse('be stop ob text "scheduler" as wo scheduler do'));
   assert.equal(stopRes?.value?.boolean, true);
 });

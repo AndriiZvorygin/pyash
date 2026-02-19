@@ -4,7 +4,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { ensureMatrixCredentials, ensureMatrixExecutiveDmRoom } from "../program/agent/channels/bootstrap.mjs";
+import {
+  ensureMatrixCredentials,
+  ensureMatrixExecutiveDmRoom,
+  readMatrixAuthCache,
+  writeMatrixAuthCache
+} from "../program/agent/channels/bootstrap.mjs";
 
 test("matrix bootstrap registers, logs in, and caches token", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-"));
@@ -56,21 +61,28 @@ test("matrix bootstrap registers, logs in, and caches token", async () => {
   });
   assert.equal(second.token, "tok123");
   assert.equal(callsAfterCache.length, 0);
+  const newspaperDir = path.join(root, "world", "newspaper");
+  const files = await fs.readdir(newspaperDir);
+  const channelLog = files.find((entry) => entry.includes("-channel-matrix-helper.pya"));
+  assert.ok(channelLog, "channel newspaper log should exist");
+  const channelText = await fs.readFile(path.join(newspaperDir, channelLog), "utf8");
+  assert.match(channelText, /be channel outcome/);
+  assert.match(channelText, /as name password_login/);
+  assert.match(channelText, /vyah success/);
 });
 
 test("matrix bootstrap with explicit user is idempotent when user already exists", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-idempotent-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.example.org",
     user: "@helper:example.org",
     localpart: "helper",
     password: "pw0",
     accessToken: "",
     deviceId: "DEV0"
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
@@ -113,8 +125,7 @@ test("matrix bootstrap with explicit user is idempotent when user already exists
   });
   assert.equal(resolved.user, "@helper:example.org");
   assert.equal(resolved.token, "tok-new");
-  const postText = await fs.readFile(cachedAuthPath, "utf8");
-  const post = JSON.parse(postText);
+  const post = await readMatrixAuthCache(agentHouse);
   assert.equal(post.user, "@helper:example.org");
   assert.equal(post.localpart, "helper");
   assert.equal(post.accessToken, "tok-new");
@@ -124,15 +135,14 @@ test("matrix bootstrap recovers cached token user via whoami when user is missin
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-whoami-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.example.org",
     user: null,
     accessToken: "tok-cached",
     executiveDmRooms: {
       "@andrii:matrix.example.org": "!dm:matrix.example.org"
     }
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
@@ -160,9 +170,67 @@ test("matrix bootstrap recovers cached token user via whoami when user is missin
     "@andrii:matrix.example.org": "!dm:matrix.example.org"
   });
 
-  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  const persisted = await readMatrixAuthCache(agentHouse);
   assert.equal(persisted.user, "@helper:matrix.example.org");
   assert.equal(calls.length, 1);
+});
+
+test("matrix bootstrap ignores mismatched config token for explicit non-appservice user", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-bootstrap-token-mismatch-"));
+  const agentHouse = path.join(root, "world", "house", "accountant");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url, opts });
+    if (String(url).endsWith("/_matrix/client/v3/account/whoami")) {
+      return {
+        ok: true,
+        async json() {
+          return { user_id: "@mricge:matrix.example.org" };
+        }
+      };
+    }
+    if (String(url).endsWith("/_synapse/admin/v1/register") && (!opts.method || opts.method === "GET")) {
+      return { ok: true, async json() { return { nonce: "nonce1" }; } };
+    }
+    if (String(url).endsWith("/_synapse/admin/v1/register") && opts.method === "POST") {
+      return { ok: true, async json() { return { user_id: "@accountant:matrix.example.org" }; } };
+    }
+    if (String(url).endsWith("/_matrix/client/v3/login")) {
+      const payload = JSON.parse(String(opts.body ?? "{}"));
+      assert.equal(payload?.identifier?.user, "@accountant:matrix.example.org");
+      return {
+        ok: true,
+        async json() {
+          return { access_token: "tok-accountant", user_id: "@accountant:matrix.example.org", device_id: "DEV1" };
+        }
+      };
+    }
+    throw new Error(`unexpected fetch url: ${url}`);
+  };
+
+  const resolved = await ensureMatrixCredentials({
+    agentName: "accountant",
+    agentHouse,
+    config: {
+      homeserver: "https://matrix.example.org",
+      user: "@accountant:matrix.example.org",
+      token: "tok-mricge",
+      registrationSharedSecret: "secret",
+      mode: "sync"
+    },
+    fetchImpl
+  });
+
+  assert.equal(resolved.user, "@accountant:matrix.example.org");
+  assert.equal(resolved.token, "tok-accountant");
+  assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/account/whoami")).length, 1);
+  assert.equal(calls.filter((call) => String(call.url).endsWith("/_matrix/client/v3/login")).length, 1);
+
+  const persisted = await readMatrixAuthCache(agentHouse);
+  assert.equal(persisted.user, "@accountant:matrix.example.org");
+  assert.equal(persisted.accessToken, "tok-accountant");
 });
 
 test("matrix executive dm bootstrap reuses m.direct room when present", async () => {
@@ -309,8 +377,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-user-switch-"));
   const agentHouse = path.join(root, "world", "house", "pyash-agent");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.liberit.ca",
     user: "@agentbot:matrix.liberit.ca",
     localpart: "agentbot",
@@ -318,7 +385,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
     executiveDmRooms: {
       "@andrii:matrix.liberit.ca": "!old:matrix.liberit.ca"
     }
-  }, null, 2));
+  });
 
   const resolved = await ensureMatrixCredentials({
     agentName: "pyash-agent",
@@ -334,7 +401,7 @@ test("matrix credentials clears cached executive dm rooms when configured user c
   });
 
   assert.equal(resolved.user, "@pyash-agent:matrix.liberit.ca");
-  const persisted = JSON.parse(await fs.readFile(cachedAuthPath, "utf8"));
+  const persisted = await readMatrixAuthCache(agentHouse);
   assert.equal(persisted.user, "@pyash-agent:matrix.liberit.ca");
   assert.deepEqual(persisted.executiveDmRooms, {});
 });
@@ -343,15 +410,14 @@ test("matrix executive dm bootstrap ignores stale cached room when not joined", 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-matrix-dm-stale-room-"));
   const agentHouse = path.join(root, "world", "house", "pyash-agent");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
-  const cachedAuthPath = path.join(agentHouse, "conduct", "matrix-auth.json");
-  await fs.writeFile(cachedAuthPath, JSON.stringify({
+  await writeMatrixAuthCache(agentHouse, {
     homeserver: "https://matrix.liberit.ca",
     user: "@agentbot:matrix.liberit.ca",
     accessToken: "tok",
     executiveDmRooms: {
       "@andrii:matrix.liberit.ca": "!stale:matrix.liberit.ca"
     }
-  }, null, 2));
+  });
 
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {

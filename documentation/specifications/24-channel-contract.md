@@ -144,6 +144,17 @@ Push intake MUST be global per channel type, then fan out through router:
 
 This separation is mandatory for DRY reuse across Matrix/Telegram/Discord/email adapters.
 
+## 6.1 Scheduler Topology (Normative)
+
+Channel scheduling MUST be shared per channel type.
+
+Rules:
+
+1. The calendar MUST declare one `channel poll` service per channel type, not one poll service per agent.
+2. Poll runtime MAY fan out to many configured channel identities and agents, but scheduler job identity remains channel-scoped.
+3. Agent-specific channel schedules MUST NOT be required for normal operation.
+4. Runtime dispatch fan-out belongs in router/runtime code paths, not duplicated calendar entries.
+
 ## 7. Dedup and Idempotency (Normative)
 
 Dedup key:
@@ -155,6 +166,23 @@ Rules:
 1. The same dedup key MUST NOT be routed more than once.
 2. Dedup handling MUST be shared between push and fallback intake paths.
 3. Dedup state MUST use managed Pyash sentence files (`.pya`) and MUST NOT introduce ad hoc JSON state files.
+
+## 7.1 Holding Spool Semantics (Normative)
+
+Channel runtime MUST use the channel spool under `world/holding/channel/` for staged processing.
+
+Required lifecycle:
+
+1. inbound normalized files are written to `input/`.
+2. claimed files move to `runtime/`.
+3. completed files move to `produce/success/` or `produce/fail/`.
+
+Additional requirements:
+
+1. Claim/lease semantics MUST be scoped by channel + agent identity.
+2. Runtime MUST support warm-start checkpointing to avoid replaying historical backlog on first poll after restart.
+3. Implementations MUST preserve auditable `.pya` records at each stage.
+4. Queue writes and stage transitions MUST use atomic same-filesystem file operations (temp-write + rename, then rename across stage dirs).
 
 ## 8. Health Produce Requirements (Normative)
 
@@ -175,3 +203,20 @@ Current implementation surface:
 5. `during date` carries last input timestamp
 
 Implementations MAY add extra health facts, but these required fields MUST remain present.
+
+## 9. Channel outcome newspaper sentences (Normative)
+
+Channel adapters/runtime MUST chronicle critical step outcomes in channel newspapers as Pyash sentences.
+
+Examples:
+
+```pyash
+su name matrix credentials as name cache vyah success ob text "cached token accepted" during date 2026-02-15T05:00:00.000Z be channel outcome ya
+su name matrix executive_dm as name defect vyah fail ob text "fetch failed" during date 2026-02-15T05:00:01.000Z be channel outcome ya
+```
+
+Required behavior:
+1. Use `vyah success|fail` as the primary machine-readable outcome marker.
+2. Keep `ob text` short and operator-readable.
+3. Write outcomes to the same per-agent channel newspaper (`YYYYMMDD-channel-<channel>-<agent>.pya`).
+4. Outcome logging MUST be best-effort and MUST NOT crash channel runtime if newspaper append fails.

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
 import { discoverScheduledJobs } from "./scheduler.mjs";
 import { isServiceEnabled, normalizeSchedulerServiceName, setServiceEnabled } from "./scheduler_service_control.mjs";
+import { ensureAgentDirs } from "./session.mjs";
+import { listWorldDeclaredAgentHouses } from "../library/agent_command_policy.mjs";
 
 function controlDir(worldRoot) {
   return path.join(worldRoot, "conduct");
@@ -206,6 +208,44 @@ function isPidAlive(pid) {
   }
 }
 
+function parseLockPid(text) {
+  const match = String(text ?? "").match(/(?:^|\n)pid=(\d+)(?:\n|$)/);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+async function cleanupChannelInputLocks(worldRoot, { force = false } = {}) {
+  if (!worldRoot) return;
+  const dir = presenceDir(worldRoot);
+  let names = [];
+  try {
+    names = await fs.readdir(dir);
+  } catch (err) {
+    if (err?.code === "ENOENT") return;
+    throw err;
+  }
+  const lockNames = names.filter((name) => String(name).endsWith("-channel-input.lock"));
+  for (const name of lockNames) {
+    const filePath = path.join(dir, name);
+    if (force) {
+      await fs.rm(filePath, { force: true });
+      continue;
+    }
+    let ownerPid = null;
+    try {
+      const text = await fs.readFile(filePath, "utf8");
+      ownerPid = parseLockPid(text);
+    } catch {
+      // best effort below
+    }
+    if (!ownerPid || !isPidAlive(ownerPid)) {
+      await fs.rm(filePath, { force: true });
+    }
+  }
+}
+
 function escapeRegExp(value) {
   return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -236,7 +276,7 @@ function listSchedulerDaemonPids({ worldRoot } = {}) {
   }
 }
 
-async function stopSchedulerPids(pids = []) {
+async function stopSchedulerPids(pids = [], { forceKill = false } = {}) {
   const normalized = [...new Set((Array.isArray(pids) ? pids : [])
     .map((value) => Number.parseInt(String(value), 10))
     .filter((value) => Number.isFinite(value) && value > 0))];
@@ -253,10 +293,41 @@ async function stopSchedulerPids(pids = []) {
     pid,
     stopped: await waitForStop(pid)
   })));
+  if (forceKill) {
+    const stillAlive = checks.filter((entry) => entry.stopped === false).map((entry) => entry.pid);
+    for (const pid of stillAlive) {
+      if (!isPidAlive(pid)) continue;
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // ignore dead pid races
+      }
+    }
+    if (stillAlive.length > 0) {
+      const finalChecks = await Promise.all(normalized.map(async (pid) => ({
+        pid,
+        stopped: await waitForStop(pid, 1500)
+      })));
+      return {
+        pids: finalChecks.map(entry => entry.pid),
+        stopped: finalChecks.every(entry => entry.stopped)
+      };
+    }
+  }
   return {
     pids: checks.map(entry => entry.pid),
     stopped: checks.every(entry => entry.stopped)
   };
+}
+
+async function reconcileDeclaredAgentHouses(worldRoot) {
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  for (const declaration of declarations) {
+    const housePath = String(declaration?.path ?? "").trim();
+    if (!housePath) continue;
+    await ensureAgentDirs(housePath);
+  }
+  return declarations.length;
 }
 
 export async function schedulerHealth({ worldRoot } = {}) {
@@ -346,10 +417,11 @@ export async function schedulerServiceRestart({ worldRoot, serviceName } = {}) {
 }
 
 export async function schedulerBegin({ worldRoot } = {}) {
+  await cleanupChannelInputLocks(worldRoot);
   const health = await schedulerHealth({ worldRoot });
   const runningPids = Array.isArray(health?.status?.schedulerPids) ? health.status.schedulerPids : [];
   if (runningPids.length > 1) {
-    await stopSchedulerPids(runningPids);
+    await stopSchedulerPids(runningPids, { forceKill: true });
     await fs.rm(pidPath(worldRoot), { force: true });
   } else if (health.running) {
     return { ...health, action: "begin", changed: false };
@@ -357,6 +429,7 @@ export async function schedulerBegin({ worldRoot } = {}) {
   await fs.mkdir(controlDir(worldRoot), { recursive: true });
   await fs.mkdir(presenceDir(worldRoot), { recursive: true });
   await fs.mkdir(path.join(controlDir(worldRoot), "service"), { recursive: true });
+  await reconcileDeclaredAgentHouses(worldRoot);
   await fs.rm(legacyStatusPath(worldRoot), { force: true });
   const logPath = daemonLogPath(worldRoot);
   let stdoutFd = null;
@@ -393,15 +466,17 @@ async function waitForStop(pid, timeoutMs = 4000) {
   return !isPidAlive(pid);
 }
 
-export async function schedulerStop({ worldRoot } = {}) {
+export async function schedulerStop({ worldRoot, force = false } = {}) {
   const pid = await readPid(worldRoot);
   const daemonPids = listSchedulerDaemonPids({ worldRoot });
   const targets = [...new Set([pid, ...daemonPids].filter(Boolean))];
   if (targets.length === 0) {
+    await cleanupChannelInputLocks(worldRoot);
     return { running: false, pid: null, action: "stop", changed: false, worldRoot };
   }
-  const stopResult = await stopSchedulerPids(targets);
+  const stopResult = await stopSchedulerPids(targets, { forceKill: force === true });
   const stopped = stopResult.stopped;
+  await cleanupChannelInputLocks(worldRoot, { force: stopped || force === true });
   if (stopped) {
     await fs.rm(pidPath(worldRoot), { force: true });
     await fs.rm(legacyStatusPath(worldRoot), { force: true });
@@ -411,7 +486,7 @@ export async function schedulerStop({ worldRoot } = {}) {
 }
 
 export async function schedulerRestart({ worldRoot } = {}) {
-  await schedulerStop({ worldRoot });
+  await schedulerStop({ worldRoot, force: true });
   const started = await schedulerBegin({ worldRoot });
   return { ...started, action: "restart", changed: true };
 }

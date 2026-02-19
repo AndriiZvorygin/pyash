@@ -270,7 +270,7 @@ ob text "Task." for name helper to name text output be write do
 ```
 
 ```pyash
-exists su name helper be mind as name "review loop" ya
+exists su name helper be mind as name "verify loop" ya
 ob text "Task." for name helper to name text output be write do
 ```
 
@@ -292,7 +292,7 @@ This sends `keep_alive: 0` to Ollama to unload the model after a run.
 For refinery teardown (provider-level), use:
 
 ```pyash
-be discharge as wo refinery ob text "review loop" do
+be discharge as wo refinery ob text "verify loop" do
 ```
 
 This removes the refinery from the runtime registry and invalidates helper aliases bound to that provider.

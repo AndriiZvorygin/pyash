@@ -1,6 +1,10 @@
 import path from "node:path";
 import fs from "node:fs/promises";
-import { resolveWorldAgentDirectoryLicense, collectLicensedRoots } from "./agent_command_policy.mjs";
+import {
+  collectLicensedRoots,
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentDirectoryLicense
+} from "./agent_command_policy.mjs";
 
 function resolveRememberedAgentName(rememberFn) {
   if (typeof rememberFn !== "function") return null;
@@ -12,6 +16,17 @@ function resolveRememberedAgentName(rememberFn) {
 
 function inferAgentNameFromCwd(agentCwd, worldRoot) {
   const resolvedCwd = path.resolve(String(agentCwd ?? ""));
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  for (const declaration of declarations) {
+    const housePath = path.resolve(String(declaration?.path ?? ""));
+    if (!housePath) continue;
+    const relativeDeclared = path.relative(housePath, resolvedCwd);
+    const insideDeclared = relativeDeclared === ""
+      || (!relativeDeclared.startsWith("..") && !path.isAbsolute(relativeDeclared));
+    if (!insideDeclared) continue;
+    const valueDeclared = String(declaration?.agentName ?? "").trim();
+    if (valueDeclared) return valueDeclared;
+  }
   const houseRoot = path.join(path.resolve(String(worldRoot ?? "world")), "house");
   const relative = path.relative(houseRoot, resolvedCwd);
   if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null;

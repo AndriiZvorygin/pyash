@@ -62,11 +62,37 @@ Default heartbeat profile: every 24 minutes unless overridden.
 
 Expected controls: begin / stop / restart / health / list.
 
+Channel runtime scheduler rules:
+- shared channel services are declared globally in `world/conduct/calendar.pya`.
+- channel polling is channel-scoped (one `channel poll` job per channel type), then fans out in runtime.
+- channel spool/runtime artifacts are stored under `world/holding/channel/*` and are not conduct policy files.
+
 ## 7. Channels and sub-agents
 
 Channels route through `24-channel-contract.md` with dedup and auditable produce paths.
 
 Sub-agents may run as servant/tool-like workers with explicit boundaries.
+
+## 7.1 Channel outcome newspaper records
+
+Channel runtime MUST append human-readable Pyash outcome sentences to channel newspapers for critical auth/bootstrap paths.
+
+Required shape:
+
+```pyash
+su name matrix credentials
+as name <stage>
+vyah success|fail
+ob text "<short outcome text>"
+during date <timestamp>
+be channel outcome ya
+```
+
+Rules:
+- `vyah success` means the runtime can continue (including degraded fallback paths).
+- `vyah fail` means the step is defective and may block intake/produce.
+- Outcome lines MUST be sentence-shaped (not JSON-only blobs).
+- Outcome lines MUST be written to `world/newspaper/YYYYMMDD-channel-<channel>-<agent>.pya`.
 
 ## 8. Conformance
 

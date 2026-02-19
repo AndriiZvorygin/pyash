@@ -59,3 +59,25 @@ test("scheduled jobs still use global matrix user when agent policy has none", (
     forget();
   }
 });
+
+test("scheduled jobs ignore legacy scalar remember fallbacks when matrix map is missing", () => {
+  forget();
+  try {
+    doRemember({
+      mood: "ya",
+      su: { name: "matrix homeserver" },
+      ob: { text: "https://remember-only.example" }
+    });
+    doRemember({
+      mood: "ya",
+      su: { name: "matrix user" },
+      ob: { text: "@remember:example" }
+    });
+
+    const resolved = resolveMatrixConfigWithRemember({});
+    assert.equal(resolved.homeserver, null);
+    assert.equal(resolved.user, null);
+  } finally {
+    forget();
+  }
+});

@@ -9,7 +9,7 @@ test("channel policy parser loads matrix settings and room lanes", () => {
     'su name matrix mode ob text "appservice" ya',
     'su name matrix long poll ms ob text "45000" ya',
     'su name matrix bridge service file ob text "synapse-data/appservices/agent.yaml" ya',
-    "su name matrix mention gate ob bool truth ya",
+    "su name matrix public tag answer ob bool truth ya",
     "su name matrix debug ob bool truth ya",
     "su name matrix tool summary ob bool truth ya",
     "su name matrix dm tool summary ob bool lie ya",
@@ -31,7 +31,7 @@ test("channel policy parser loads matrix settings and room lanes", () => {
   assert.equal(matrix.appserviceRegistration, "synapse-data/appservices/agent.yaml");
   assert.equal(matrix.homeserver, "https://matrix.example.org");
   assert.equal(matrix.user, "@agent:example.org");
-  assert.equal(matrix.mentionGate, true);
+  assert.equal(matrix.publicTagAnswer, true);
   assert.equal(matrix.debug, true);
   assert.equal(matrix.toolSummary, true);
   assert.equal(matrix.dmToolSummary, false);
@@ -50,7 +50,7 @@ test("channel policy merge applies global defaults with agent overrides", () => 
     "su name matrix channel ob bool truth ya",
     'su name matrix mode ob text "sync" ya',
     'su name matrix long poll ms ob text "30000" ya',
-    "su name matrix mention gate ob bool truth ya",
+    "su name matrix public tag answer ob bool truth ya",
     "su name matrix debug ob bool lie ya",
     "su name matrix tool summary ob bool lie ya",
     "su name matrix dm tool summary ob bool lie ya",
@@ -77,7 +77,7 @@ test("channel policy merge applies global defaults with agent overrides", () => 
   assert.equal(matrix?.user, "@helper:example.org");
   assert.equal(matrix?.mode, "poll");
   assert.equal(matrix?.longPollMs, 1000);
-  assert.equal(matrix?.mentionGate, true);
+  assert.equal(matrix?.publicTagAnswer, true);
   assert.equal(matrix?.debug, true);
   assert.equal(matrix?.toolSummary, false);
   assert.equal(matrix?.dmToolSummary, true);

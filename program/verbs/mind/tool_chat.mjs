@@ -41,6 +41,23 @@ function normalizeVisionInput(input) {
   };
 }
 
+function buildToolUseDirective(tools = []) {
+  const names = Array.isArray(tools)
+    ? tools
+      .map((entry) => String(entry?.function?.name ?? "").trim())
+      .filter(Boolean)
+    : [];
+  const list = names.length ? names.join(", ") : "(none)";
+  return [
+    "TOOL USAGE RULES:",
+    "- You can call tools in this turn.",
+    `- Available tool function names: ${list}.`,
+    "- Do not claim tools are unavailable when a matching tool exists.",
+    "- If user asks to search/download/read files/execute commands, call the matching tool first.",
+    "- If a tool fails, report the failure reason and continue with best effort."
+  ].join("\n");
+}
+
 export async function runToolChat({
   sentence,
   ob,
@@ -90,6 +107,7 @@ export async function runToolChat({
   const messages = [];
   if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
   if (toolBlock) messages.push({ role: "system", content: toolBlock });
+  if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective(tools) });
   if (historyMessages.length) messages.push(...historyMessages);
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
   const userMessage = { role: "user", content: userContent };
@@ -156,6 +174,24 @@ export async function runToolChat({
     if (mindDebug) {
       // eslint-disable-next-line no-console
       console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(lastResponse?.message?.tool_calls), contentLength: (lastResponse?.message?.content ?? "").length })}`);
+    }
+
+    const observedToolEvents = Array.isArray(lastResponse?.message?.observed_tool_events)
+      ? lastResponse.message.observed_tool_events
+      : [];
+    for (const observed of observedToolEvents) {
+      const stage = String(observed?.stage ?? "").trim().toLowerCase();
+      const toolName = String(observed?.toolName ?? observed?.tool_name ?? "").trim();
+      if (!stage || !toolName) continue;
+      await emitToolCall({
+        stage,
+        toolName,
+        toolCall: observed?.toolCall ?? observed?.tool_call ?? null,
+        toolText: observed?.toolText ?? observed?.tool_text ?? ""
+      });
+      if (stage === "result") {
+        lastToolText = String(observed?.toolText ?? observed?.tool_text ?? "").trim();
+      }
     }
 
     const toolCalls = lastResponse?.message?.tool_calls;

@@ -51,6 +51,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Only do the work explicitly requested by the user; avoid expanding scope or tackling adjacent tasks unless asked.
 - If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
+- Prefer lean modular designs over compatibility layers: remove obsolete paths instead of stacking legacy flags, aliases, or fallback branches unless the user explicitly asks for backward compatibility.
 
 ## Skills Discipline
 - Check the `skills/` folder for relevant skills before starting a task.

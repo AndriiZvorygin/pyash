@@ -4,7 +4,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { runChannelOnce, buildChannelMindSentence } from "../program/agent/channels/index.mjs";
+import {
+  runChannelOnce,
+  runChannelPollOnce,
+  runChannelInputOnce,
+  runChannelProduceOnce,
+  buildChannelMindSentence
+} from "../program/agent/channels/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
@@ -56,7 +62,7 @@ test("channel runtime routes to session lane and deduplicates by event id", asyn
 
   const channelConfig = {
     user: "@self:server",
-    mentionGate: false,
+    publicTagAnswer: false,
     roomLanes: { "!room:server": "matrix_main" },
     defaultLane: null
   };
@@ -121,7 +127,7 @@ test("channel runtime lock prevents duplicate handling across concurrent polls",
 
   const channelConfig = {
     user: "@self:server",
-    mentionGate: false,
+    publicTagAnswer: false,
     roomLanes: {}
   };
 
@@ -149,6 +155,63 @@ test("channel runtime lock prevents duplicate handling across concurrent polls",
   assert.equal(sends, 1);
   assert.equal((a.handled ?? 0) + (b.handled ?? 0), 1);
   assert.equal((a.locked === true ? 1 : 0) + (b.locked === true ? 1 : 0), 1);
+});
+
+test("channel runtime marks matrix events seen before response generation", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-seen-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const order = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!room:server",
+            eventId: "$seen-1",
+            sender: "@u:server",
+            text: "hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-seen" }
+      };
+    },
+    async markSeen() {
+      order.push("seen");
+      await sleep(5);
+      return { ok: true };
+    },
+    async send() {
+      order.push("send");
+      return { eventId: "$out-seen" };
+    }
+  };
+
+  const interpretFn = async () => {
+    order.push("interpret");
+    return { ob: { text: "reply" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(order[0], "seen");
+  assert.equal(order.includes("interpret"), true);
+  assert.equal(order.includes("send"), true);
 });
 
 test("channel runtime clears stale lock when lock owner pid is not alive", async () => {
@@ -183,7 +246,7 @@ test("channel runtime clears stale lock when lock owner pid is not alive", async
   const result = await runChannelOnce({
     agentName: "helper",
     channelType: "matrix",
-    channelConfig: { user: "@self:server", mentionGate: false, roomLanes: {} },
+    channelConfig: { user: "@self:server", publicTagAnswer: false, roomLanes: {} },
     adapter,
     interpretFn: async () => ({ ob: { text: "reply" } }),
     agentHouse
@@ -194,7 +257,7 @@ test("channel runtime clears stale lock when lock owner pid is not alive", async
   assert.equal(sends, 1);
 });
 
-test("channel runtime mention gate skips non-mentions in public rooms and allows DM", async () => {
+test("channel runtime public tag answer skips non-mentions in public rooms and allows DM", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
@@ -226,7 +289,7 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: ["!dm:server"],
       roomLanes: {}
     },
@@ -236,6 +299,50 @@ test("channel runtime mention gate skips non-mentions in public rooms and allows
   });
   assert.equal(calls, 2);
   assert.equal(result.handled, 2);
+  assert.equal(result.skippedMention, 1);
+});
+
+test("channel runtime public tag answer allows direct-room events without configured dmRooms", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-mention-direct-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$1", sender: "@u:server", text: "hello all" },
+          { channelType: "matrix", channelId: "!dm:server", eventId: "$2", sender: "@u:server", text: "dm hello", dmRoom: true }
+        ],
+        checkpoint: { nextBatch: "tok2" }
+      };
+    },
+    async send() {
+      return { eventId: "$out" };
+    }
+  };
+
+  let calls = 0;
+  const interpretFn = async () => {
+    calls += 1;
+    return { ob: { text: "reply" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      dmRooms: [],
+      roomLanes: {}
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.handled, 1);
   assert.equal(result.skippedMention, 1);
 });
 
@@ -275,7 +382,7 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       warmStart: true,
       roomLanes: {}
     },
@@ -292,7 +399,7 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       warmStart: true,
       roomLanes: {}
     },
@@ -304,6 +411,58 @@ test("channel runtime warm-start primes checkpoint and skips backlog on first po
   assert.equal(second.handled, 1);
   assert.equal(second.sent, 1);
   assert.equal(sent.length, 1);
+});
+
+test("channel queue poll warm-start primes checkpoint and skips enqueue on first poll", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-poll-warm-start-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCalls = 0;
+  const adapter = {
+    async receive() {
+      receiveCalls += 1;
+      return {
+        events: [
+          { channelType: "matrix", channelId: "!pub:server", eventId: "$old1", sender: "@u:server", text: "old backlog message" }
+        ],
+        checkpoint: { nextBatch: "tok-after-warm" }
+      };
+    }
+  };
+
+  const first = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    agentHouse
+  });
+  assert.equal(first.warmed, true);
+  assert.equal(first.received, 0);
+  assert.equal(first.enqueued, 0);
+
+  const second = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: false,
+      warmStart: true,
+      roomLanes: {}
+    },
+    adapter,
+    agentHouse
+  });
+  assert.equal(second.warmed, undefined);
+  assert.equal(second.received, 1);
+  assert.equal(second.enqueued, 1);
+  assert.equal(receiveCalls, 2);
 });
 
 test("channel runtime sends configure-mind fallback when mind backend is missing", async () => {
@@ -338,7 +497,7 @@ test("channel runtime sends configure-mind fallback when mind backend is missing
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -421,7 +580,7 @@ test("channel runtime stores channel attachments and includes file hints in prom
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -497,7 +656,7 @@ test("channel runtime omits attachment tool hints when import conduct has none",
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -574,7 +733,7 @@ test("channel runtime injects auto image task for upload-only events", async () 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -651,7 +810,7 @@ test("channel runtime uses import conduct actions for image attachments", async 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -875,7 +1034,7 @@ test("channel runtime surfaces attachment download defects into prompt context",
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -918,7 +1077,7 @@ test("channel runtime sends configure-mind fallback when mind answer is empty an
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -930,6 +1089,199 @@ test("channel runtime sends configure-mind fallback when mind answer is empty an
   assert.equal(result.sent, 1);
   assert.equal(sent.length, 1);
   assert.equal(sent[0], "no mind configured yet, run pyash configure mind to set a mind relay");
+});
+
+test("channel runtime sends dm fallback when mind answer is empty", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-dm-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!dm:server",
+            eventId: "$dm-empty-1",
+            sender: "@u:server",
+            text: "hello dm",
+            dmRoom: true
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-dm" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-dm" };
+    }
+  };
+
+  const interpretFn = async () => ({ be: "answer", ob: { text: "" } });
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
+});
+
+test("channel runtime sends public fallback when tagged message yields empty mind answer", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-public-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$pub-empty-1",
+            sender: "@u:server",
+            text: "@helper hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-public" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-public" };
+    }
+  };
+
+  const interpretFn = async () => ({ be: "answer", ob: { text: "" } });
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "I received your message, but I could not generate a reply. Please retry.");
+});
+
+test("channel runtime retries once when mind answer is empty", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        backend: { ob: { text: "ollama command mind" } },
+        host: { ob: { text: "http://127.0.0.1:11434" } },
+        model: { ob: { text: "test-model" } }
+      }
+    }
+  });
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-empty-retry-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const sent = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!retry:server",
+            eventId: "$retry-empty-1",
+            sender: "@u:server",
+            text: "@helper hello"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-empty-retry" }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: "$out-empty-retry" };
+    }
+  };
+
+  let calls = 0;
+  const interpretFn = async () => {
+    calls += 1;
+    if (calls === 1) return { be: "answer", ob: { text: "" } };
+    return { be: "answer", ob: { text: "Recovered response" } };
+  };
+
+  const result = await runChannelOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@helper:server",
+      publicTagAnswer: true,
+      roomLanes: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn,
+    agentHouse
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.equal(calls, 2);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0], "Recovered response");
 });
 
 test("channel runtime fans out to configured listeners and routes mention to named agent", async () => {
@@ -963,7 +1315,7 @@ test("channel runtime fans out to configured listeners and routes mention to nam
     channelType: "matrix",
     channelConfig: {
       user: "@channel-postmaster:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       listeners: ["confederation-priest", "agent-helper"],
       roomListeners: {},
       dmRooms: []
@@ -980,6 +1332,61 @@ test("channel runtime fans out to configured listeners and routes mention to nam
   assert.equal(result.sent, 1);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.for?.name, "confederation-priest");
+});
+
+test("channel runtime pins listeners to self when self is in configured listener vector", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-self-listener-"));
+  const agentHouse = path.join(root, "world", "house", "mricge");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  const listeners = [];
+  const adapter = {
+    async receive() {
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$self-1",
+            sender: "@u:server",
+            text: "status"
+          }
+        ],
+        checkpoint: { nextBatch: "tok-self" }
+      };
+    },
+    async send() {
+      return { eventId: "$out-self" };
+    }
+  };
+
+  const result = await runChannelOnce({
+    agentName: "mricge",
+    channelType: "matrix",
+    channelConfig: {
+      user: "@mricge:server",
+      publicTagAnswer: false,
+      listeners: ["mricge", "accountant"],
+      roomListeners: {},
+      dmRooms: []
+    },
+    adapter,
+    interpretFn: async (sentence) => {
+      listeners.push({
+        name: sentence?.for?.name,
+        cwd: sentence?.at?.filename ?? ""
+      });
+      return { ob: { text: "reply" } };
+    },
+    agentHouse
+  });
+
+  assert.equal(result.received, 1);
+  assert.equal(result.handled, 1);
+  assert.equal(result.sent, 1);
+  assert.deepEqual(listeners, [
+    { name: "mricge", cwd: path.join(root, "world", "house", "mricge") }
+  ]);
 });
 
 test("channel runtime shared fanout dispatches one event to multiple listeners in one poll cycle", async () => {
@@ -1017,7 +1424,7 @@ test("channel runtime shared fanout dispatches one event to multiple listeners i
     channelType: "matrix",
     channelConfig: {
       user: "@channel-postmaster:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       listeners: ["confederation-priest", "agent-helper"],
       roomListeners: {},
       dmRooms: []
@@ -1124,7 +1531,7 @@ test("channel runtime appends DM tool call and summary block when enabled", asyn
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1211,7 +1618,7 @@ test("channel runtime see tool summary uses ceremony return instead of stale res
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1280,7 +1687,7 @@ test("channel runtime emits tool call none when tool-expected prompt returns no 
       channelType: "matrix",
       channelConfig: {
         user: "@helper:server",
-        mentionGate: false,
+        publicTagAnswer: false,
         dmRooms: ["!dm:server"],
         dmToolSummary: true
       },
@@ -1326,7 +1733,7 @@ test("channel debug mode logs per-event routing decisions", async () => {
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       debug: true,
       dmRooms: [],
       roomLanes: {}
@@ -1344,7 +1751,7 @@ test("channel debug mode logs per-event routing decisions", async () => {
   assert.match(text, /decision\\\":\\\"mention_skip\\\"/);
 });
 
-test("channel mention gate allows replies to self messages without explicit mention", async () => {
+test("channel public tag answer allows replies to self messages without explicit mention", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-reply-self-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
@@ -1383,7 +1790,7 @@ test("channel mention gate allows replies to self messages without explicit ment
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1432,7 +1839,7 @@ test("channel runtime skips agent canonical sender when configured user differs"
     channelConfig: {
       user: "@agentbot:matrix.liberit.ca",
       homeserver: "https://matrix.liberit.ca",
-      mentionGate: false,
+      publicTagAnswer: false,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1485,7 +1892,7 @@ test("channel mention matching uses token boundaries and avoids substring false 
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: true,
+      publicTagAnswer: true,
       dmRooms: [],
       roomLanes: {}
     },
@@ -1570,7 +1977,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     const denyResult = await runChannelOnce({
       agentName,
       channelType: "matrix",
-      channelConfig: { user: "@helper:server", mentionGate: false },
+      channelConfig: { user: "@helper:server", publicTagAnswer: false },
       adapter: denyAdapter,
       interpretFn: async (sentence) => {
         const patched = {
@@ -1612,7 +2019,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     const allowResult = await runChannelOnce({
       agentName,
       channelType: "matrix",
-      channelConfig: { user: "@helper:server", mentionGate: false },
+      channelConfig: { user: "@helper:server", publicTagAnswer: false },
       adapter: allowAdapter,
       interpretFn: async (sentence) => {
         const patched = {
@@ -1673,7 +2080,7 @@ test("channel runtime migrates legacy json state into managed .pya state", async
     channelType: "matrix",
     channelConfig: {
       user: "@helper:server",
-      mentionGate: false,
+      publicTagAnswer: false,
       roomLanes: {}
     },
     adapter,
@@ -1695,4 +2102,88 @@ test("channel runtime migrates legacy json state into managed .pya state", async
   await assert.rejects(fs.access(path.join(conductDir, "checkpoint-matrix.json")), { code: "ENOENT" });
   await assert.rejects(fs.access(path.join(conductDir, "dedup-matrix.json")), { code: "ENOENT" });
   await assert.rejects(fs.access(path.join(conductDir, "self-events-matrix.json")), { code: "ENOENT" });
+});
+
+test("channel queue mode dedups at input stage (not poll enqueue stage)", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-dedup-"));
+  const agentHouse = path.join(root, "world", "house", "helper");
+  await fs.mkdir(path.join(agentHouse, "conduct"), { recursive: true });
+
+  let receiveCount = 0;
+  const sent = [];
+  const adapter = {
+    async receive() {
+      receiveCount += 1;
+      return {
+        events: [
+          {
+            channelType: "matrix",
+            channelId: "!pub:server",
+            eventId: "$queue-dedup-1",
+            sender: "@u:server",
+            text: "@helper queue test"
+          }
+        ],
+        checkpoint: { nextBatch: `tok-queue-${receiveCount}` }
+      };
+    },
+    async send({ content }) {
+      sent.push(content);
+      return { eventId: `$out-queue-${sent.length}` };
+    }
+  };
+
+  const channelConfig = {
+    user: "@helper:server",
+    publicTagAnswer: true,
+    roomLanes: {},
+    dmRooms: []
+  };
+
+  const conductDir = path.join(agentHouse, "conduct");
+  await fs.writeFile(
+    path.join(conductDir, "channel-state-matrix.pya"),
+    [
+      "su name matrix channel state be map def",
+      "  su name checkpoint next batch ob text \"tok-before\" ya",
+      "  su name dedup event ob text \"$queue-dedup-1\" ya",
+      "prah",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  const poll = await runChannelPollOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    adapter,
+    agentHouse
+  });
+  assert.equal(poll.enqueued, 1);
+
+  const input = await runChannelInputOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    interpretFn: async () => ({ ob: { text: "queue reply" } }),
+    agentHouse,
+    maxItems: 4,
+    concurrency: 1
+  });
+  assert.equal(input.received, 1);
+  assert.equal(input.handled, 0);
+  assert.equal(input.skippedDedup, 1);
+  assert.equal(input.sent, 0);
+
+  const produce = await runChannelProduceOnce({
+    agentName: "helper",
+    channelType: "matrix",
+    channelConfig,
+    adapter,
+    agentHouse,
+    maxItems: 4
+  });
+  assert.equal(produce.sent, 0);
+  assert.equal(sent.length, 0);
 });

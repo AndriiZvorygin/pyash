@@ -86,4 +86,6 @@ RUN chmod +x /usr/local/bin/wasmtime
 WORKDIR /workplace
 
 ARG CODEX_VERSION=latest
-RUN npm install -g @openai/codex@${CODEX_VERSION}
+ARG CODEX_REFRESH=0
+RUN echo "codex-refresh=${CODEX_REFRESH}" >/tmp/codex_refresh \
+  && npm install -g @openai/codex@${CODEX_VERSION}

@@ -11,6 +11,15 @@ import { builtInSignatures } from "../program/verbs/index.mjs";
 import { signatures as compileSignatures } from "../program/verbs/exchange/compile.mjs";
 import { registerSignatureHandler } from "../program/bridge/signature.mjs";
 
+async function waitForRecord(predicate, { timeoutMs = 400, pollMs = 20 } = {}) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (predicate()) return true;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return predicate();
+}
+
 test("mcp crash vs clean exit recorded", async () => {
   forget();
   clearSignatureHandlers();
@@ -31,7 +40,10 @@ test("mcp crash vs clean exit recorded", async () => {
     () => interpret(parse("from name mcp clean to name mcp clean be import do")),
     (err) => err?.sentence?.su?.name === "mcp defective"
   );
-  assert.ok(records.some(s => s?.be === "mcp exit" && s?.su?.name === "mcp server exit"));
+  assert.equal(
+    await waitForRecord(() => records.some(s => s?.be === "mcp exit" && s?.su?.name === "mcp server exit")),
+    true
+  );
 
   doRemember({
     mood: "ya",
@@ -44,7 +56,10 @@ test("mcp crash vs clean exit recorded", async () => {
     () => interpret(parse("from name mcp crash to name mcp crash be import do")),
     (err) => err?.sentence?.su?.name === "mcp defective"
   );
-  assert.ok(records.some(s => s?.be === "error" && s?.su?.name === "mcp server crash"));
+  assert.equal(
+    await waitForRecord(() => records.some(s => s?.be === "error" && s?.su?.name === "mcp server crash")),
+    true
+  );
 
   closeMcpServers();
   clearExchangeRecorder();

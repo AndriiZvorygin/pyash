@@ -235,11 +235,11 @@ ob text "task" for name helper with name saddle tools to name text out be evoke 
 9. Conduct-bound invoke
 Bad (JSON):
 ```json
-{"target":"helper","input":"task","conduct":"review loop configure"}
+{"target":"helper","input":"task","conduct":"verify loop configure"}
 ```
 Use (Pyash):
 ```pyash
-ob text "task" for name helper under name review loop configure to name text out be evoke do
+ob text "task" for name helper under name verify loop configure to name text out be evoke do
 ```
 
 10. Approval gate intent

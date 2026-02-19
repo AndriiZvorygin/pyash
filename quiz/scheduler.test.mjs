@@ -88,12 +88,12 @@ test("load schedule policy reads conduct/calendar.pya", async () => {
   assert.equal(jobs[0]?.laneName, "scan");
 });
 
-test("load schedule policy parses legacy schedule with hour/day units", async () => {
+test("load schedule policy parses hour/day units from conduct/calendar.pya", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-schedule-units-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   const conductDir = path.join(agentHouse, "conduct");
   await fs.mkdir(conductDir, { recursive: true });
-  const schedulePath = path.join(conductDir, "schedule.pya");
+  const schedulePath = path.join(conductDir, "calendar.pya");
   await fs.writeFile(
     schedulePath,
     [
@@ -110,7 +110,7 @@ test("load schedule policy parses legacy schedule with hour/day units", async ()
   assert.equal(backup?.intervalMs, 24 * 60 * 60 * 1000);
 });
 
-test("load schedule policy falls back to conduct/schedule.pya", async () => {
+test("load schedule policy ignores conduct/schedule.pya without conduct/calendar.pya", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-schedule-fallback-"));
   const agentHouse = path.join(root, "world", "house", "helper");
   const conductDir = path.join(agentHouse, "conduct");
@@ -118,12 +118,10 @@ test("load schedule policy falls back to conduct/schedule.pya", async () => {
   const schedulePath = path.join(conductDir, "schedule.pya");
   await fs.writeFile(schedulePath, 'su name scan for name helper ob text "fallback" per minute 7 be calendar ya\n', "utf8");
   const jobs = await loadSchedulePolicy({ agentHouse, agentName: "helper" });
-  assert.equal(jobs.length, 1);
-  assert.equal(jobs[0]?.intervalMs, 7 * 60 * 1000);
-  assert.equal(jobs[0]?.prompt, "fallback");
+  assert.equal(jobs.length, 0);
 });
 
-test("scheduler skips overlapping ticks and records telemetry", async () => {
+test("scheduler coalesces overlapping ticks into one pending catch-up run", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-scheduler-"));
   const telemetryPath = path.join(root, "scheduler.pya");
   let release;
@@ -154,7 +152,7 @@ test("scheduler skips overlapping ticks and records telemetry", async () => {
 
   const snap = scheduler.snapshot();
   assert.equal(snap.length, 1);
-  assert.equal(snap[0]?.runs, 1);
+  assert.equal(snap[0]?.runs, 2);
   assert.equal(snap[0]?.skips, 1);
   assert.equal(typeof snap[0]?.overlapPct, "number");
   assert.equal(snap[0]?.errorCount, 0);
@@ -237,7 +235,7 @@ test("global schedule loads and agent-local overrides by agent+job", async () =>
   await fs.mkdir(globalConduct, { recursive: true });
   await fs.mkdir(agentConduct, { recursive: true });
   await fs.writeFile(
-    path.join(globalConduct, "schedule.pya"),
+    path.join(globalConduct, "calendar.pya"),
     [
       "su name heartbeat for name priest ob text \"global prompt\" vyah habit during minute 24 be calendar ya",
       'su name heartbeat lane ob text "global lane" ya'
@@ -276,6 +274,14 @@ test("discover scheduled jobs gathers global and agent-local declarations", asyn
   await fs.writeFile(
     path.join(betaConduct, "calendar.pya"),
     "su name matrix probe for name beta with wo tools vyah habit during minute 1 be calendar ya\n",
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(globalConduct, "agent.pya"),
+    [
+      'su name alpha house directory ob filename "world/house/alpha" ya',
+      'su name beta house directory ob filename "world/house/beta" ya'
+    ].join("\n") + "\n",
     "utf8"
   );
   const jobs = await discoverScheduledJobs({ worldRoot });

@@ -208,13 +208,13 @@ fi
 
 case "$CHOICE" in
   1)
-    exec "$ROOT_DIR/container/command/begin.sh"
+    exec "$ROOT_DIR/container/pyash/command/begin.sh"
     ;;
   2)
     if [[ "$buildx_available" != "yes" ]]; then
       echo "Buildx not detected. If you use ./container/build.sh, run: ./container/build.sh --no-buildx"
     fi
-    exec "$ROOT_DIR/container/command/begin.sh" --restart
+    exec "$ROOT_DIR/container/pyash/command/begin.sh" --restart
     ;;
   3)
     echo "Running demo: ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo"
@@ -226,13 +226,13 @@ Container prep:
   edit configure/container.pya or configure/secret.pya
 
 Docker compose:
-  ./container/command/begin.sh --restart
+  ./container/pyash/command/begin.sh --restart
 
 Local demo:
   ./run examples/pyash/mind-tool-call.pya --newspaper --run-id mind-tool-demo
 TEXT
     ;;
   *)
-    exec "$ROOT_DIR/container/command/begin.sh"
+    exec "$ROOT_DIR/container/pyash/command/begin.sh"
     ;;
 esac

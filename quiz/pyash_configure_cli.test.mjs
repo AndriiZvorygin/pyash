@@ -39,6 +39,237 @@ async function makeRoot() {
   return await fs.mkdtemp(path.join(os.tmpdir(), "pyash-configure-"));
 }
 
+async function startMatrixMockServer() {
+  const calls = [];
+  const tokenUser = new Map();
+  const readToken = (req) => {
+    const auth = String(req.headers.authorization ?? "").trim();
+    const match = auth.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : "";
+  };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      const bodyText = Buffer.concat(chunks).toString("utf8");
+      const token = readToken(req);
+      calls.push({
+        method: req.method,
+        path: url.pathname,
+        query: url.searchParams.toString(),
+        body: bodyText
+      });
+
+      if (req.method === "GET" && url.pathname === "/_synapse/admin/v1/register") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ nonce: "nonce-1" }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_synapse/admin/v1/register") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/login") {
+        const payload = JSON.parse(bodyText || "{}");
+        const loginUser = String(payload?.identifier?.user ?? payload?.user ?? "builder");
+        const normalizedUser = loginUser.startsWith("@") ? loginUser : `@${loginUser}:example.test`;
+        const accessToken = `token-${normalizedUser.replace(/[^a-z0-9]/gi, "_")}`;
+        tokenUser.set(accessToken, normalizedUser);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ access_token: accessToken, user_id: normalizedUser, device_id: "DEV1" }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/account/whoami") {
+        const userId = tokenUser.get(token) || "@builder:example.test";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ user_id: userId }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/join/%23pyash%3Aexample.test") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ room_id: "!main:example.test" }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/joined_rooms") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ joined_rooms: ["!main:example.test"] }));
+        return;
+      }
+      if (req.method === "GET" && /\/_matrix\/client\/v3\/user\/.+\/account_data\/m\.direct$/.test(url.pathname)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/createRoom") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ room_id: "!dm:example.test" }));
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ errcode: "M_NOT_FOUND", error: "not found" }));
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    homeserver: `http://127.0.0.1:${port}`,
+    calls,
+    close: async () => {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  };
+}
+
+async function startMatrixInviteFallbackMockServer() {
+  const calls = [];
+  const inviterToken = "inviter-token";
+  const accountantToken = "accountant-token";
+  const aliasToRoom = new Map([
+    ["#pyash:example.test", "!main:example.test"]
+  ]);
+  const joinedByToken = new Map([
+    [inviterToken, new Set(["!main:example.test"])],
+    [accountantToken, new Set()]
+  ]);
+  const invitedUsersByRoom = new Map([
+    ["!main:example.test", new Set()]
+  ]);
+
+  const tokenUser = (token) => {
+    if (token === inviterToken) return "@mricge:example.test";
+    if (token === accountantToken) return "@accountant:example.test";
+    return "@unknown:example.test";
+  };
+
+  const readToken = (req) => {
+    const auth = String(req.headers.authorization ?? "").trim();
+    const match = auth.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : "";
+  };
+
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      const bodyText = Buffer.concat(chunks).toString("utf8");
+      const token = readToken(req);
+      calls.push({
+        method: req.method,
+        path: url.pathname,
+        query: url.searchParams.toString(),
+        body: bodyText,
+        token
+      });
+
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/account/whoami") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ user_id: tokenUser(token) }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_synapse/admin/v1/register") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ nonce: "nonce-1" }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_synapse/admin/v1/register") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/login") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          access_token: accountantToken,
+          user_id: "@accountant:example.test",
+          device_id: "DEV1"
+        }));
+        return;
+      }
+      if (req.method === "GET" && url.pathname === "/_matrix/client/v3/joined_rooms") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ joined_rooms: [...(joinedByToken.get(token) ?? new Set())] }));
+        return;
+      }
+      if (req.method === "POST" && url.pathname.startsWith("/_matrix/client/v3/join/")) {
+        const encoded = url.pathname.split("/_matrix/client/v3/join/")[1] || "";
+        const roomOrAlias = decodeURIComponent(encoded);
+        const roomId = aliasToRoom.get(roomOrAlias) || roomOrAlias;
+        if (!roomId.startsWith("!")) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ errcode: "M_NOT_FOUND", error: "unknown room" }));
+          return;
+        }
+        if (token === inviterToken) {
+          joinedByToken.get(inviterToken)?.add(roomId);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ room_id: roomId }));
+          return;
+        }
+        if (token === accountantToken) {
+          const invited = invitedUsersByRoom.get(roomId)?.has("@accountant:example.test") === true;
+          if (!invited) {
+            res.writeHead(403, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ errcode: "M_FORBIDDEN", error: "You are not invited to this room." }));
+            return;
+          }
+          joinedByToken.get(accountantToken)?.add(roomId);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ room_id: roomId }));
+          return;
+        }
+      }
+      if (req.method === "POST" && /\/_matrix\/client\/v3\/rooms\/.+\/invite$/.test(url.pathname)) {
+        const roomId = decodeURIComponent(url.pathname.split("/_matrix/client/v3/rooms/")[1].replace(/\/invite$/, ""));
+        const payload = JSON.parse(bodyText || "{}");
+        const inviteUserId = String(payload?.user_id ?? "");
+        if (!invitedUsersByRoom.has(roomId)) invitedUsersByRoom.set(roomId, new Set());
+        invitedUsersByRoom.get(roomId)?.add(inviteUserId);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "GET" && /\/_matrix\/client\/v3\/user\/.+\/account_data\/m\.direct$/.test(url.pathname)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({}));
+        return;
+      }
+      if (req.method === "POST" && url.pathname === "/_matrix/client/v3/createRoom") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ room_id: "!dm:example.test" }));
+        return;
+      }
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ errcode: "M_NOT_FOUND", error: "not found" }));
+    });
+  });
+
+  await new Promise((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  return {
+    homeserver: `http://127.0.0.1:${port}`,
+    calls,
+    close: async () => {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  };
+}
+
 async function makeMockCodexBin() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-codex-mock-"));
   const binPath = path.join(dir, "codex");
@@ -147,17 +378,28 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
 
   const secretPath = path.join(root, "configure", "secret.pya");
   const worldChannelsPath = path.join(root, "world", "conduct", "channels.pya");
+  const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
   const channelsPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
   const calendarPath = path.join(root, "world", "house", "parity coder", "conduct", "calendar.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const worldChannelsText = await fs.readFile(worldChannelsPath, "utf8");
+  const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  const calendarText = await fs.readFile(calendarPath, "utf8");
+  const calendarText = await fs.readFile(calendarPath, "utf8").catch(() => "");
   assert.match(secretText, /managed by pyash configure matrix channel:start/);
   assert.match(secretText, /managed by pyash configure channel configure:start/);
   assert.match(worldChannelsText, /managed by pyash configure matrix channel world conduct:start/);
+  assert.match(worldChannelsText, /su name matrix dm tool summary ob bool truth ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel poll schedule:start/);
+  assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
+  assert.match(worldCalendarText, /su name channel input with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.match(worldCalendarText, /managed by pyash configure channel produce schedule:start/);
+  assert.match(worldCalendarText, /su name channel produce with ve text "matrix" vyah habit during second 1 be calendar ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
-  assert.match(calendarText, /su name channel poll for name parity coder with ve text "matrix" vyah habit during minute 1 be calendar ya/);
+  assert.doesNotMatch(calendarText, /su name channel poll for name parity coder/i);
+  assert.doesNotMatch(calendarText, /su name channel input for name parity coder/i);
+  assert.doesNotMatch(calendarText, /su name channel produce for name parity coder/i);
 
   const second = runCli(args);
   assert.equal(second.status, 0, second.stderr);
@@ -166,13 +408,124 @@ maybeTest("configure channel matrix apply writes managed blocks and is idempoten
   assert.equal(secondPayload.changed, false);
 });
 
+maybeTest("configure channel matrix establishes default agent by default", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.org",
+    "--room", "#pyash:matrix.org",
+    "--auth-mode", "token",
+    "--token", "abc123"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.route, "configure channel matrix");
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.count, 1);
+  assert.equal(listPayload.agents[0]?.agentName, "pyash-agent");
+});
+
+maybeTest("configure channel matrix infers default agent name from agent user id when --agent is omitted", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "ccrc"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.config.userId, "[redacted]");
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.count, 1);
+  assert.equal(listPayload.agents[0]?.agentName, "ccrc");
+});
+
+maybeTest("configure channel matrix infers agent from --agent-user-id even when prior default agent exists", async () => {
+  const root = await makeRoot();
+  const seed = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "seed-token",
+    "--agent", "pyash-agent"
+  ]);
+  assert.equal(seed.status, 0, seed.stderr);
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent-user-id", "ccrc"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.agents.some((item) => item.agentName === "ccrc"), true);
+});
+
+maybeTest("configure channel matrix accepts @style --agent and normalizes to local agent name", async () => {
+  const root = await makeRoot();
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#ccrc:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent", "@ccrc:matrix.liberit.ca",
+    "--agent-user-id", "@ccrc:matrix.liberit.ca"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const payload = JSON.parse(run.stdout);
+  assert.equal(payload.ok, true);
+
+  const listRun = runCli(["configure", "agent", "list", "--root", root, "--json"]);
+  assert.equal(listRun.status, 0, listRun.stderr);
+  const listPayload = JSON.parse(listRun.stdout);
+  assert.equal(listPayload.ok, true);
+  assert.equal(listPayload.agents.some((item) => item.agentName === "ccrc"), true);
+});
+
 maybeTest("configure channel matrix scrubs legacy matrix seed lines from agent policy", async () => {
   const root = await makeRoot();
   const channelPath = path.join(root, "world", "house", "parity coder", "conduct", "channels.pya");
   await fs.mkdir(path.dirname(channelPath), { recursive: true });
   await fs.writeFile(channelPath, [
     "su name matrix channel ob bool truth ya",
-    "su name matrix mention gate ob bool lie ya",
+    "su name matrix public tag answer ob bool lie ya",
     "su name matrix homeserver ob text \"https://matrix.example.org\" ya",
     "su name matrix room ob text \"!roomid:example.org\" ya",
     "su name matrix room lane ob text \"matrix_main\" ya"
@@ -195,7 +548,37 @@ maybeTest("configure channel matrix scrubs legacy matrix seed lines from agent p
   assert.doesNotMatch(text, /matrix\.example\.org/);
   assert.doesNotMatch(text, /!roomid:example\.org/);
   assert.match(text, /# managed by pyash configure matrix channel conduct:start/);
-  assert.match(text, /su name matrix room ob text "#pyash:matrix\.org" ya/);
+  assert.doesNotMatch(text, /su name matrix room ob text/);
+});
+
+maybeTest("configure channel matrix scrubs legacy matrix probe jobs from world calendar", async () => {
+  const root = await makeRoot();
+  const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
+  await fs.mkdir(path.dirname(worldCalendarPath), { recursive: true });
+  await fs.writeFile(worldCalendarPath, [
+    "su name matrix probe for name confederation-priest with wo tools vyah habit during minute 1 be calendar ya",
+    "su name matrix probe lane ob text \"matrix_public\" ya",
+    "su name keeper heartbeat for name keeper vyah habit during minute 5 be calendar ya"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.org",
+    "--room", "#pyash:matrix.org",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent", "parity coder",
+    "--write-agent-policy", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+  const text = await fs.readFile(worldCalendarPath, "utf8");
+  assert.doesNotMatch(text, /su name matrix probe for name confederation-priest/);
+  assert.doesNotMatch(text, /su name matrix probe lane ob text "matrix_public"/);
+  assert.match(text, /su name keeper heartbeat for name keeper vyah habit during minute 5 be calendar ya/);
+  assert.doesNotMatch(text, /su name matrix long poll ms ob text/);
 });
 
 maybeTest("configure channel matrix shared-secret mode reuses provided token idempotently", async () => {
@@ -248,7 +631,6 @@ maybeTest("configure channel matrix appservice mode validates registration and p
     "--homeserver", "https://matrix.liberit.ca",
     "--room", "#pyash:matrix.liberit.ca",
     "--mode", "appservice",
-    "--long-poll-ms", "45000",
     "--appservice-registration", registrationPath,
     "--auth-mode", "token",
     "--token", "abc123",
@@ -259,7 +641,6 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   const payload = JSON.parse(run.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.config.mode, "appservice-push");
-  assert.equal(payload.config.longPollMs, 45000);
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
   assert.equal(payload.appservice?.hasAsToken, true);
   assert.equal(payload.appservice?.hasHsToken, true);
@@ -268,18 +649,18 @@ maybeTest("configure channel matrix appservice mode validates registration and p
   const channelsPath = path.join(root, "world", "house", "pyash-agent", "conduct", "channels.pya");
   const secretText = await fs.readFile(secretPath, "utf8");
   const channelsText = await fs.readFile(channelsPath, "utf8");
-  assert.match(secretText, /su name mode ob text "appservice-push" ya/);
-  assert.match(secretText, /su name long poll ms ob text "45000" ya/);
+  assert.doesNotMatch(secretText, /su name mode ob text "appservice-push" ya/);
+  assert.doesNotMatch(secretText, /su name long poll ms ob text "45000" ya/);
   assert.match(secretText, /su name bridge service file ob text/);
-  assert.match(channelsText, /su name matrix mode ob text "appservice-push" ya/);
-  assert.match(channelsText, /su name matrix long poll ms ob text "45000" ya/);
+  assert.doesNotMatch(channelsText, /su name matrix mode ob text/);
+  assert.doesNotMatch(channelsText, /su name matrix long poll ms ob text/);
   assert.match(channelsText, /su name matrix user ob text "@pyash-agent:matrix\.liberit\.ca" ya/);
-  assert.match(channelsText, /su name matrix bridge service file ob text/);
+  assert.doesNotMatch(channelsText, /su name matrix bridge service file ob text/);
   const worldCalendarPath = path.join(root, "world", "conduct", "calendar.pya");
   const worldCalendarText = await fs.readFile(worldCalendarPath, "utf8");
   assert.match(worldCalendarText, /managed by pyash configure channel input schedule:start/);
-  assert.match(worldCalendarText, /su name channel input for name pyash-agent/);
-  assert.match(worldCalendarText, /su name channel input for name pyash-agent with ve text "matrix" vyah habit during second 1 be calendar ya/);
+  assert.match(worldCalendarText, /su name matrix poll vyah habit during second 10 be calendar ya/);
+  assert.match(worldCalendarText, /su name channel input with ve text "matrix" vyah habit during second 1 be calendar ya/);
 });
 
 maybeTest("configure channel matrix appservice mode defaults registration path to configure/secret/matrix.yaml", async () => {
@@ -315,6 +696,42 @@ maybeTest("configure channel matrix appservice mode defaults registration path t
   assert.equal(payload.config.appserviceRegistration, "configure/secret/matrix.yaml");
   assert.equal(payload.appservice?.path, registrationPath);
   assert.equal(payload.appservice?.senderLocalpart, "pyash-agent");
+});
+
+maybeTest("configure channel matrix preserves multiple executive usernames", async () => {
+  const root = await makeRoot();
+  const first = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--executive", "@mricge-smoke:matrix.liberit.ca",
+    "--executive", "@htaf:matrix.liberit.ca",
+    "--agent", "mricge"
+  ]);
+  assert.equal(first.status, 0, first.stderr);
+
+  const second = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "token",
+    "--token", "abc123",
+    "--agent", "mricge"
+  ]);
+  assert.equal(second.status, 0, second.stderr);
+
+  const worldChannelsPath = path.join(root, "world", "conduct", "channels.pya");
+  const worldChannelsText = await fs.readFile(worldChannelsPath, "utf8");
+  assert.match(worldChannelsText, /su name matrix executive username ob text "@mricge-smoke:matrix\.liberit\.ca" ya/);
+  assert.match(worldChannelsText, /su name matrix executive username ob text "@htaf:matrix\.liberit\.ca" ya/);
 });
 
 maybeTest("configure channel matrix appservice mode auto-fills token auth from registration", async () => {
@@ -516,9 +933,11 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   const calendarText = await fs.readFile(calendarPath, "utf8");
   assert.match(runtimeText, /managed by pyash configure agent runtime:start/);
   assert.match(policyText, /managed by pyash configure agent directory license builder:start/);
+  assert.match(policyText, /su name builder house directory ob filename "world\/house\/builder" ya/);
   assert.match(policyText, /su name builder directory license be map def/);
   assert.match(policyText, /su name "world\/house\/builder" ob ve text "read" "write" "command" ya/);
   assert.match(channelsText, /managed by pyash configure matrix channel conduct:start/);
+  assert.doesNotMatch(channelsText, /su name matrix public tag answer ob bool/);
   assert.match(calendarText, /managed by pyash configure agent channel schedule:start/);
   assert.match(calendarText, /su name matrix poll/);
 
@@ -528,6 +947,149 @@ maybeTest("configure agent apply writes runtime and binds channel when available
   assert.equal(secondPayload.ok, true);
   assert.equal(secondPayload.changed, false);
   assert.equal(secondPayload.directoryLicenseWrite.changed, false);
+});
+
+maybeTest("configure agent bind-channel writes per-agent matrix user when shared-secret provisioning is configured", async () => {
+  const root = await makeRoot();
+  const channelRun = runCli([
+    "configure", "channel", "matrix",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--homeserver", "https://matrix.liberit.ca",
+    "--room", "#pyash:matrix.liberit.ca",
+    "--auth-mode", "shared-secret",
+    "--registration-shared-secret", "shared-secret-value",
+    "--token", "existing-token",
+    "--agent-user-id", "@mricge:matrix.liberit.ca",
+    "--write-agent-policy", "lie"
+  ]);
+  assert.equal(channelRun.status, 0, channelRun.stderr);
+
+  const run = runCli([
+    "configure", "agent", "establish",
+    "--root", root,
+    "--non-interactive",
+    "--json",
+    "--agent", "accountant",
+    "--purpose", "Handle accounting tasks.",
+    "--backend", "ollama",
+    "--model", "gpt-oss:latest",
+    "--tools-map", "tools",
+    "--bind-channel", "truth",
+    "--smoke-test", "lie",
+    "--start-now", "lie"
+  ]);
+  assert.equal(run.status, 0, run.stderr);
+
+  const channelsPath = path.join(root, "world", "house", "accountant", "conduct", "channels.pya");
+  const channelsText = await fs.readFile(channelsPath, "utf8");
+  assert.doesNotMatch(channelsText, /su name matrix public tag answer ob bool/);
+  assert.match(channelsText, /su name matrix user ob text "@accountant:matrix\.liberit\.ca" ya/);
+});
+
+maybeTest("configure agent start-now bootstraps matrix room and executive dm", async () => {
+  const root = await makeRoot();
+  const matrix = await startMatrixMockServer();
+  try {
+    const channelRun = await runCliAsync([
+      "configure", "channel", "matrix",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--homeserver", matrix.homeserver,
+      "--room", "#pyash:example.test",
+      "--auth-mode", "shared-secret",
+      "--registration-shared-secret", "shared-secret-value",
+      "--executive", "@boss:example.test",
+      "--write-agent-policy", "lie"
+    ]);
+    assert.equal(channelRun.status, 0, channelRun.stderr);
+
+    const agentRun = await runCliAsync([
+      "configure", "agent", "establish",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--agent", "builder",
+      "--purpose", "Build things.",
+      "--interval-minutes", "15",
+      "--backend", "ollama",
+      "--model", "gpt-oss:latest",
+      "--tools-map", "tools",
+      "--bind-channel", "truth",
+      "--smoke-test", "lie",
+      "--start-now", "truth"
+    ]);
+    assert.equal(agentRun.status, 0, agentRun.stderr);
+    const payload = JSON.parse(agentRun.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.channelBootstrap?.ok, true);
+    assert.equal(payload.channelBootstrap?.joinedRoomId, "!main:example.test");
+    assert.equal(payload.channelBootstrap?.executiveDm?.roomId, "!dm:example.test");
+
+    const seenRegister = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_synapse/admin/v1/register"
+    );
+    const seenLogin = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_matrix/client/v3/login"
+    );
+    const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
+    const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
+    assert.equal(seenRegister, true);
+    assert.equal(seenLogin, true);
+    assert.equal(seenJoin, true);
+    assert.equal(seenCreateRoom, true);
+  } finally {
+    const stopRun = runCli(["calendar", "stop", "--root", root, "--json"]);
+    assert.equal(stopRun.status, 0, stopRun.stderr);
+    await matrix.close();
+  }
+});
+
+maybeTest("configure agent start-now surfaces join forbidden when bootstrap identity cannot invite", async () => {
+  const root = await makeRoot();
+  const matrix = await startMatrixInviteFallbackMockServer();
+  try {
+    const channelRun = await runCliAsync([
+      "configure", "channel", "matrix",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--homeserver", matrix.homeserver,
+      "--room", "#pyash:example.test",
+      "--auth-mode", "shared-secret",
+      "--registration-shared-secret", "shared-secret-value",
+      "--agent-user-id", "@mricge:example.test",
+      "--write-agent-policy", "lie"
+    ]);
+    assert.equal(channelRun.status, 0, channelRun.stderr);
+
+    const agentRun = await runCliAsync([
+      "configure", "agent", "establish",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--agent", "accountant",
+      "--purpose", "Handle accounting tasks.",
+      "--backend", "ollama",
+      "--model", "gpt-oss:latest",
+      "--tools-map", "tools",
+      "--bind-channel", "truth",
+      "--smoke-test", "lie",
+      "--start-now", "truth"
+    ]);
+    assert.equal(agentRun.status, 0, agentRun.stderr);
+    const payload = JSON.parse(agentRun.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.channelBootstrap?.ok, false);
+    assert.equal(payload.channelBootstrap?.step, "join room");
+    assert.match(String(payload.channelBootstrap?.error || ""), /M_FORBIDDEN/);
+  } finally {
+    const stopRun = runCli(["calendar", "stop", "--root", root, "--json"]);
+    assert.equal(stopRun.status, 0, stopRun.stderr);
+    await matrix.close();
+  }
 });
 
 maybeTest("configure agent skips per-agent channel schedule when channel mode is appservice-push", async () => {
@@ -1165,12 +1727,44 @@ maybeTest("calendar health and list return json payload", async () => {
   assert.equal(Array.isArray(listPayload.result.services), true);
 });
 
+maybeTest("calendar health reports scheduler newspaper path and debug tail when unhealthy", async () => {
+  const root = await makeRoot();
+  const worldRoot = path.join(root, "world");
+  const newspaperDir = path.join(worldRoot, "newspaper");
+  const conductDir = path.join(worldRoot, "conduct");
+  await fs.mkdir(newspaperDir, { recursive: true });
+  await fs.mkdir(conductDir, { recursive: true });
+  const schedulerNewspaperPath = path.join(newspaperDir, "20260115-calendar.pya");
+  await fs.writeFile(schedulerNewspaperPath, [
+    "su name scheduler be scheduler telemetry as name start ya",
+    "su name scheduler be scheduler telemetry as name error ya"
+  ].join("\n") + "\n", "utf8");
+  const schedulerDaemonLogPath = path.join(conductDir, "scheduler.log");
+  await fs.writeFile(schedulerDaemonLogPath, [
+    "[scheduler daemon error] boom",
+    "[scheduler runNow error] crash"
+  ].join("\n") + "\n", "utf8");
+
+  const run = runCli(["calendar", "health", "--root", root]);
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /scheduler newspaper/);
+  assert.match(run.stdout, new RegExp(schedulerNewspaperPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(run.stdout, /scheduler telemetry as name error/);
+  assert.match(run.stdout, /scheduler daemon log/);
+  assert.match(run.stdout, /\[scheduler daemon error\] boom/);
+});
+
 maybeTest("calendar list supports agent filter and returns available/stopped service maps", async () => {
   const root = await makeRoot();
   const worldConduct = path.join(root, "world", "conduct");
   const agentConduct = path.join(root, "world", "house", "pyash-agent", "conduct");
   await fs.mkdir(worldConduct, { recursive: true });
   await fs.mkdir(agentConduct, { recursive: true });
+  await fs.writeFile(
+    path.join(worldConduct, "agent.pya"),
+    'su name pyash-agent house directory ob filename "world/house/pyash-agent" ya\n',
+    "utf8"
+  );
   await fs.writeFile(path.join(worldConduct, "calendar.pya"), "", "utf8");
   await fs.writeFile(path.join(agentConduct, "calendar.pya"), [
     "su name heartbeat with wo tools vyah habit during minute 24 for name pyash-agent be calendar ya",
@@ -1221,6 +1815,54 @@ maybeTest("calendar begin passes explicit world root to scheduler daemon", async
   assert.equal(stopRun.status, 0, stopRun.stderr);
 });
 
+maybeTest("channel bootstrap joins matrix room and resolves executive dm for a specific agent", async () => {
+  const root = await makeRoot();
+  const matrix = await startMatrixMockServer();
+  try {
+    const channelRun = await runCliAsync([
+      "configure", "channel", "matrix",
+      "--root", root,
+      "--non-interactive",
+      "--json",
+      "--homeserver", matrix.homeserver,
+      "--room", "#pyash:example.test",
+      "--auth-mode", "shared-secret",
+      "--registration-shared-secret", "shared-secret-value",
+      "--write-agent-policy", "lie"
+    ]);
+    assert.equal(channelRun.status, 0, channelRun.stderr);
+
+    const bootstrapRun = await runCliAsync([
+      "channel", "bootstrap",
+      "--root", root,
+      "--agent", "accountant",
+      "--executive", "@boss:example.test",
+      "--json"
+    ]);
+    assert.equal(bootstrapRun.status, 0, bootstrapRun.stderr);
+    const payload = JSON.parse(bootstrapRun.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.agentName, "accountant");
+    assert.equal(payload.bootstrap?.joinedRoomId, "!main:example.test");
+    assert.equal(payload.bootstrap?.executiveDm?.roomId, "!dm:example.test");
+
+    const seenRegister = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_synapse/admin/v1/register"
+    );
+    const seenLogin = matrix.calls.some((call) =>
+      call.method === "POST" && call.path === "/_matrix/client/v3/login"
+    );
+    const seenJoin = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/join/%23pyash%3Aexample.test");
+    const seenCreateRoom = matrix.calls.some((call) => call.method === "POST" && call.path === "/_matrix/client/v3/createRoom");
+    assert.equal(seenRegister, true);
+    assert.equal(seenLogin, true);
+    assert.equal(seenJoin, true);
+    assert.equal(seenCreateRoom, true);
+  } finally {
+    await matrix.close();
+  }
+});
+
 maybeTest("channel log returns not found when no newspaper exists", async () => {
   const root = await makeRoot();
   const run = runCli([
@@ -1235,4 +1877,52 @@ maybeTest("channel log returns not found when no newspaper exists", async () => 
   assert.equal(payload.ok, true);
   assert.equal(payload.route, "channel log");
   assert.equal(payload.log.found, false);
+});
+
+maybeTest("channel cli send and read routes through channel poll runtime", async () => {
+  const root = await makeRoot();
+  await fs.mkdir(path.join(root, "world", "conduct"), { recursive: true });
+  const worldConductPath = path.join(root, "world", "conduct", "channels.pya");
+  await fs.writeFile(worldConductPath, [
+    "su name cli channel ob bool truth ya",
+    "su name cli room ob text \"terminal\" ya"
+  ].join("\n") + "\n", "utf8");
+
+  const sendRun = runCli([
+    "channel", "cli", "send",
+    "--root", root,
+    "--agent", "ccrc",
+    "--room", "terminal",
+    "--sender", "andrii",
+    "--text", "hello from cli",
+    "--json"
+  ]);
+  assert.equal(sendRun.status, 0, sendRun.stderr);
+  const sendPayload = JSON.parse(sendRun.stdout);
+  assert.equal(sendPayload.ok, true);
+  assert.equal(sendPayload.route, "channel cli send");
+
+  const pollRun = runCli([
+    "channel", "poll",
+    "--root", root,
+    "--agent", "ccrc",
+    "--channel", "cli",
+    "--json"
+  ]);
+  assert.equal(pollRun.status, 0, pollRun.stderr);
+  assert.match(pollRun.stdout, /"route"\s*:\s*"channel poll"/);
+
+  const readRun = runCli([
+    "channel", "cli", "read",
+    "--root", root,
+    "--agent", "ccrc",
+    "--json"
+  ]);
+  assert.equal(readRun.status, 0, readRun.stderr);
+  const readPayload = JSON.parse(readRun.stdout);
+  assert.equal(readPayload.ok, true);
+  assert.equal(readPayload.route, "channel cli read");
+  assert.equal(readPayload.consumed > 0, true);
+  assert.equal(Array.isArray(readPayload.rows), true);
+  assert.equal(readPayload.rows.some((row) => String(row?.text ?? "").trim().length > 0), true);
 });
