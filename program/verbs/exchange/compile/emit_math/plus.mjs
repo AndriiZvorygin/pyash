@@ -33,10 +33,14 @@ export function handleMathPlus(context, helpers) {
     const targetName = sentence.to?.name ? sanitizeName(sentence.to.name) : null;
     const targetIsText =
       targetName &&
-      (localsTypes?.get(targetName) === "text" || declaredTypes?.get(targetName) === "text");
+      (localsTypes?.get(targetName) === "text" || declaredTypes?.get(targetName) === "text" || declaredTypes?.get(sentence.to?.name) === "text");
     const canUseTextExpr =
       typeof ob.text === "string" ||
-      (ob?.name && (localsTypes?.get(sanitizeName(ob.name)) === "text" || declaredTypes?.get(sanitizeName(ob.name)) === "text"));
+      (ob?.name && (
+        localsTypes?.get(sanitizeName(ob.name)) === "text" ||
+        declaredTypes?.get(sanitizeName(ob.name)) === "text" ||
+        declaredTypes?.get(ob.name) === "text"
+      ));
     const valueExpr =
       (canUseTextExpr && objTextExpr !== null)
         ? (typeof ob.text === "string" ? JSON.stringify(ob.text) : `String(${objTextExpr})`)

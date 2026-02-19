@@ -19,11 +19,8 @@ export function handleCompileSentence(sentence, { lang, declared, declaredTypes,
   if (sourceState !== "json" || targetState !== "pyash") return null;
   const sourceText = sentence?.ob?.text ?? sentence?.from?.text ?? sentence?.fromtext?.text;
   if (typeof sourceText !== "string") {
-    throwErrorSentence({
-      name: "compile error",
-      message: "compile: source text is required (from text or from filename)",
-      from: { name: "compile" }
-    });
+    // Only lower inline json->pyash compile forms here; defer dynamic/file-backed forms.
+    return null;
   }
   let parsed;
   try {
