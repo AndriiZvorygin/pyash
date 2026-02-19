@@ -63,16 +63,24 @@ export function handleMathPlus(context, helpers) {
         }
         const target = sanitizeName(sentence.to.name);
         const needsDecl = !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
+        const textExprRaw = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: "\"\"", field: "text" }) ?? "\"\"";
+        const textExpr = cExpr(textExprRaw);
+        const numExprRaw = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: null, field: "num" });
+        const numExpr = numExprRaw != null ? cExpr(numExprRaw) : null;
+        const numericSourceExplicit =
+          ob.num !== undefined ||
+          (Array.isArray(ob?.genitive?.chain) && ob.genitive.chain.includes("num"));
+        const appendLine = (typeof ob.text === "string" || canUseTextExpr)
+          ? `pya_concat_buf(${target}, ${typeof ob.text === "string" ? JSON.stringify(ob.text) : textExpr});`
+          : (numericSourceExplicit && numExpr != null
+            ? `pya_concat_num_buf(${target}, ${numExpr});`
+            : `pya_concat_buf(${target}, ${textExpr});`);
         if (needsDecl) {
           if (markDeclared) markDeclared(declared, sentence.to.name);
           if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
-          return `char ${target}[PYA_TEXT_CAP] = \"\";\n${typeof ob.text === "string" ? `pya_concat_buf(${target}, ${JSON.stringify(ob.text)});` : `pya_concat_buf(${target}, ${exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: "\"\"", field: "text" }) ?? "\"\""});`}`;
+          return `char ${target}[PYA_TEXT_CAP] = \"\";\n${appendLine}`;
         }
-        if (typeof ob.text === "string") {
-          return `pya_concat_buf(${target}, ${JSON.stringify(ob.text)});`;
-        }
-        const textExpr = exprForSlot(ob, { sentenceArg, locals, declared, defaultExpr: "\"\"", field: "text" }) ?? "\"\"";
-        return `pya_concat_buf(${target}, ${textExpr});`;
+        return appendLine;
       }
       if (!sentenceArg && sentence.to?.name && (!declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name)))) {
         const declName = sanitizeName(sentence.to.name);
@@ -269,21 +277,16 @@ export function handleMathPlus(context, helpers) {
       const concat = `${target} = ${target} + ${textExpr};`;
       return `${init}\n${concat}`;
     }
-    if (!sentenceArg && sentence.to?.name && (!declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name)))) {
-      const declName = sanitizeName(sentence.to.name);
-      if (markDeclared) markDeclared(declared, sentence.to.name);
-      if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
-      return `let ${declName} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: {}, be: "text", mood: "ya" };\n${declName}.ob.text = (${declName}.ob.text ?? \"\") + ${textExpr};\nglobalThis[${JSON.stringify(sentence.to.name)}] = ${declName};`;
-    }
     if (lang === "c") {
       if (cHelpers) {
         cHelpers.usesTextHelper = true;
         cHelpers.usesString = true;
         cHelpers.usesStdlib = true;
       }
+      const cTextExpr = cExpr(textExpr);
       if (sentence.to?.genitive) {
         const target = pathFromGenitive(sentence.to.genitive, sentenceArg, { locals, declared, allowCGlobals: true });
-        if (target) return `pya_concat_buf(${target}, ${textExpr});`;
+        if (target) return `pya_concat_buf(${target}, ${cTextExpr});`;
       }
       const target = sanitizeName(sentence.to.name);
       const needsDecl = sentence.to?.name && !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
@@ -292,7 +295,13 @@ export function handleMathPlus(context, helpers) {
         if (markDeclared) markDeclared(declared, sentence.to.name);
         if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
       }
-      return `${decl}pya_concat_buf(${target}, ${textExpr});`;
+      return `${decl}pya_concat_buf(${target}, ${cTextExpr});`;
+    }
+    if (!sentenceArg && sentence.to?.name && (!declared?.has(sentence.to.name) && !declared?.has(sanitizeName(sentence.to.name)))) {
+      const declName = sanitizeName(sentence.to.name);
+      if (markDeclared) markDeclared(declared, sentence.to.name);
+      if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
+      return `let ${declName} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: {}, be: "text", mood: "ya" };\n${declName}.ob.text = (${declName}.ob.text ?? \"\") + ${textExpr};\nglobalThis[${JSON.stringify(sentence.to.name)}] = ${declName};`;
     }
     return `${sentence.to.name}.ob = ${sentence.to.name}.ob ?? {};\n${sentence.to.name}.ob.text = (${sentence.to.name}.ob.text ?? \"\") + ${textExpr};`;
   }

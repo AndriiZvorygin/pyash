@@ -36,6 +36,20 @@ export function buildRefineryCForDefinition({
   const runFns = [];
   const names = [];
   const actions = [];
+  const sharedTextTargets = new Set();
+  refinery.platforms.forEach((platform) => {
+    const targetName = platform?.action?.to?.name;
+    if (targetName) sharedTextTargets.add(targetName);
+  });
+  for (const targetName of sharedTextTargets) {
+    const safe = sanitizeName(targetName);
+    lines.push(`static char ${safe}[PYA_TEXT_CAP] = "";`);
+    if (declared) {
+      declared.add(targetName);
+      declared.add(safe);
+    }
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+  }
   refinery.platforms.forEach((platform) => {
     const fnName = sanitizeName(`${prefix}_${platform.name}`);
     const actionLine = sentenceToPyash(platform.action);

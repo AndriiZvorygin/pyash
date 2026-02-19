@@ -30,6 +30,7 @@ export function handleNativeInterpret(context, helpers) {
       cHelpers.usesPrintf = true;
       cHelpers.usesToolCapture = true;
       cHelpers.usesSysStat = true;
+      cHelpers.usesMapGlobals = true;
     }
     const needsDecl = !locals?.has(targetVar) && !declared?.has(targetVar) && !declared?.has(targetName);
     const lines = [];

@@ -61,13 +61,15 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
   let hasReturn = false;
   const locals = new Set();
   const localsTypes = new Map();
+  const scopedDeclared = new Set(declared ? [...declared] : []);
+  const scopedDeclaredTypes = new Map(declaredTypes ? [...declaredTypes.entries()] : []);
   const paramMacros = [];
   const paramUndefs = [];
   const addParamMacro = (slot, role) => {
     if (!slot?.name) return;
     const name = sanitizeName(slot.name);
     const typeWords = Array.isArray(slot.nameTypeWords) ? slot.nameTypeWords : [];
-    const isText = typeWords.includes("text");
+    const isText = typeWords.includes("text") || typeWords.includes("filename");
     const isBool = typeWords.includes("bool") || typeWords.includes("boolean");
     let reg = null;
     if (role === "to") reg = isText ? "pya_to_text" : (isBool ? "pya_to_bool" : "pya_to_num");
@@ -110,7 +112,20 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
     }
   }
   for (const s of bodySentences) {
-    const line = transpileSentence(s, { lang, sentenceArg: lang === "c" ? undefined : "sentence", locals, localsTypes, declared, declaredTypes, declaredVectorTypes, ceremonyFns, ceremonyReturnTypes, cHelpers, jsHelpers, cState });
+    const line = transpileSentence(s, {
+      lang,
+      sentenceArg: lang === "c" ? undefined : "sentence",
+      locals,
+      localsTypes,
+      declared: scopedDeclared,
+      declaredTypes: scopedDeclaredTypes,
+      declaredVectorTypes,
+      ceremonyFns,
+      ceremonyReturnTypes,
+      cHelpers,
+      jsHelpers,
+      cState
+    });
     if (line) {
       bodyLines.push(line);
       if (line.includes("return")) {

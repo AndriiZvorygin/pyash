@@ -1,5 +1,3 @@
-import { throwErrorSentence } from "../../../error.mjs";
-
 export function handleCommandSentence({
   sentence,
   baseBe,
@@ -78,14 +76,6 @@ export function handleCommandSentence({
       cHelpers.usesPrintf = true;
       cHelpers.usesExchange = true;
     }
-    if (inputFilename || inputText) {
-      throwErrorSentence({
-        name: "command defective",
-        message: "command defective",
-        from: { name: "compile" },
-        raw: { reason: "stdin unsupported in c" }
-      });
-    }
     const cmdExpr = exprForSlot(sentence.ob, {
       sentenceArg,
       locals,
@@ -100,7 +90,31 @@ export function handleCommandSentence({
     const evoked = JSON.stringify(sentenceToPyash(sentence));
     lines.push(`const char *__pyaCmd = ${cmdCExpr ?? '""'};`);
     lines.push(`if (!__pyaCmd || !strlen(__pyaCmd)) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: empty command\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
-    lines.push(`char *${outVar} = pya_command(__pyaCmd);`);
+    let runCmdExpr = "__pyaCmd";
+    let cleanupStdinLine = null;
+    if (inputFilename) {
+      lines.push("char __pyaCmdWithInput[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaCmdWithInput, sizeof(__pyaCmdWithInput), "%s < \\\"%s\\\"", __pyaCmd, ${JSON.stringify(inputFilename)});`);
+      runCmdExpr = "__pyaCmdWithInput";
+    } else if (inputText != null) {
+      const inFileVar = `__pyaCmdInputFile_${cState?.fileCounter ?? 0}`;
+      const inFdVar = `__pyaCmdInputFd_${cState?.fileCounter ?? 0}`;
+      const inFilePtr = `__pyaCmdInputFp_${cState?.fileCounter ?? 0}`;
+      if (cState) cState.fileCounter += 1;
+      lines.push(`char ${inFileVar}[] = "/tmp/pyash-cmd-input-XXXXXX";`);
+      lines.push(`int ${inFdVar} = mkstemp(${inFileVar});`);
+      lines.push(`if (${inFdVar} < 0) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: stdin temp failed\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+      lines.push(`FILE *${inFilePtr} = fdopen(${inFdVar}, "w");`);
+      lines.push(`if (!${inFilePtr}) { close(${inFdVar}); remove(${inFileVar}); char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: stdin write failed\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+      lines.push(`fputs(${JSON.stringify(inputText)}, ${inFilePtr});`);
+      lines.push(`fclose(${inFilePtr});`);
+      lines.push("char __pyaCmdWithInput[PYA_TEXT_CAP];");
+      lines.push(`snprintf(__pyaCmdWithInput, sizeof(__pyaCmdWithInput), "%s < \\\"%s\\\"", __pyaCmd, ${inFileVar});`);
+      runCmdExpr = "__pyaCmdWithInput";
+      cleanupStdinLine = `remove(${inFileVar});`;
+    }
+    lines.push(`char *${outVar} = pya_command(${runCmdExpr});`);
+    if (cleanupStdinLine) lines.push(cleanupStdinLine);
     lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
     if (sentence?.to?.filename) {
       const safePath = JSON.stringify(sentence.to.filename);
@@ -111,11 +125,27 @@ export function handleCommandSentence({
     }
     if (sentence?.to?.name) {
       const target = sanitizeName(sentence.to.name);
+      const needsDecl = !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
       if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
       markDeclared(declared, sentence.to.name);
-      lines.push(`char ${target}[PYA_TEXT_CAP];`);
+      if (needsDecl) {
+        lines.push(`char ${target}[PYA_TEXT_CAP] = "";`);
+        locals?.add(target);
+      }
       lines.push(`snprintf(${target}, sizeof(${target}), "%s", ${outVar} ? ${outVar} : "");`);
     } else {
+      if (sentence?.su?.name) {
+        const subject = sanitizeName(sentence.su.name);
+        const needsDecl = !locals?.has(subject) && !declared?.has(subject) && !declared?.has(sentence.su.name);
+        if (needsDecl) {
+          lines.push(`char ${subject}[PYA_TEXT_CAP] = "";`);
+          markDeclared(declared, sentence.su.name);
+          locals?.add(subject);
+        }
+        if (declaredTypes) declaredTypes.set(sentence.su.name, "text");
+        if (localsTypes) localsTypes.set(subject, "text");
+        lines.push(`snprintf(${subject}, sizeof(${subject}), "%s", ${outVar} ? ${outVar} : "");`);
+      }
       if (!locals?.has("result") && !declared?.has("result")) {
         lines.push("char result[PYA_TEXT_CAP] = \"\";");
         locals?.add("result");
