@@ -13,6 +13,15 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
     && [...lines, ...mainLines].some((line) => typeof line === "string" && /\bpya_csv_/.test(line));
   const needsYamlRuntime = cHelpers.usesYamlRuntime;
   const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
+  const needsDirentHeader = Boolean(cHelpers.usesDirent || cHelpers.usesFilesystem);
+  const needsCtypeHeader = Boolean(
+    cHelpers.usesCtype
+    || cHelpers.usesMap
+    || cHelpers.usesMapPrinter
+    || cHelpers.usesVectorPrinter
+    || cHelpers.usesJsonRuntime
+    || needsCsvRuntime
+  );
   const headers = [];
   headers.push("#if defined(__GNUC__)");
   headers.push("#pragma GCC diagnostic push");
@@ -25,13 +34,13 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
   if (cHelpers.usesString) headers.push("#include <string.h>");
   if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
-  if (cHelpers.usesCtype) headers.push("#include <ctype.h>");
+  if (needsCtypeHeader) headers.push("#include <ctype.h>");
   if (cHelpers.usesExchange) headers.push("#include <stdint.h>");
   if (cHelpers.usesExchange) headers.push("#include <unistd.h>");
   if (cHelpers.usesExchange) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesExchange) headers.push("#include <errno.h>");
   if (cHelpers.usesExchange || cHelpers.usesDateMath) headers.push("#include <time.h>");
-  if (cHelpers.usesDirent) headers.push("#include <dirent.h>");
+  if (needsDirentHeader) headers.push("#include <dirent.h>");
   if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesErrno) headers.push("#include <errno.h>");
   if (cHelpers.usesFilesystem) headers.push("#include <unistd.h>");

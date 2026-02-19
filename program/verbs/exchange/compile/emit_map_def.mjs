@@ -138,7 +138,13 @@ export function handleMapDefinition(context, helpers) {
       cHelpers.usesPrintf = true;
       cHelpers.usesCtype = true;
       const mapVar = sanitizeName(name);
-      lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
+      const priorType = declaredTypes.get(name);
+      const mapAlreadyDeclared = declared.has(name) && (
+        priorType === "map" || priorType === "json map" || priorType === "csv map"
+      );
+      if (!mapAlreadyDeclared) {
+        lines.push(`pya_map ${mapVar} = {0, 0, NULL};`);
+      }
       mainLines.push(`pya_map_init(&${mapVar});`);
       for (const [key, value] of Object.entries(map)) {
         if (sentence.be === "map" && value && typeof value === "object" && value.mood) {
@@ -183,7 +189,12 @@ export function handleMapDefinition(context, helpers) {
   } else {
     const varName = sanitizeName(name);
     const payload = JSON.stringify(mapSentence);
-    lines.push(`const ${varName} = ${payload};`);
+    const mapAlreadyDeclared = declared.has(name);
+    if (mapAlreadyDeclared) {
+      lines.push(`${varName} = ${payload};`);
+    } else {
+      lines.push(`let ${varName} = ${payload};`);
+    }
     lines.push(`globalThis[${JSON.stringify(name)}] = ${varName};`);
   }
 
