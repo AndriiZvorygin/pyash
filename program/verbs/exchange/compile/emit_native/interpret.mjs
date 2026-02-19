@@ -1,17 +1,33 @@
 import { throwErrorSentence } from "../../../../error.mjs";
 
 export function handleNativeInterpret(context, helpers) {
-  const { sentence, baseBe, ob, lang, locals, declared, declaredTypes, cHelpers, jsHelpers, rememberFlag } = context;
-  const { sanitizeName, markDeclared } = helpers;
+  const { sentence, baseBe, ob, lang, sentenceArg, locals, declared, declaredTypes, cHelpers, jsHelpers, rememberFlag } = context;
+  const { sanitizeName, markDeclared, exprForSlot, cExpr } = helpers;
   if (baseBe !== "interpret") return null;
   const scriptText = ob?.text;
+  const scriptExpr = exprForSlot
+    ? exprForSlot(ob, {
+      sentenceArg,
+      locals,
+      declared,
+      defaultExpr: sentenceArg ? `${sentenceArg}.ob?.text` : undefined,
+      field: "text"
+    })
+    : (typeof scriptText === "string" ? JSON.stringify(scriptText) : null);
+  const scriptCExpr = cExpr && scriptExpr ? cExpr(scriptExpr) : scriptExpr;
+  const scriptName = typeof ob?.name === "string" ? ob.name : null;
+  const scriptVar = scriptName ? sanitizeName(scriptName) : null;
+  const cScriptVarKnown = scriptVar && (locals?.has(scriptVar) || declared?.has(scriptVar) || declared?.has(scriptName));
+  const jsScriptExpr = scriptName
+    ? `(globalThis[${JSON.stringify(scriptName)}]?.ob?.text ?? globalThis[${JSON.stringify(scriptName)}] ?? "")`
+    : (scriptExpr ?? JSON.stringify(scriptText ?? ""));
   const language = sentence?.as?.wo ?? sentence?.as?.name ?? sentence?.as?.text ?? "";
   const timeoutRaw = sentence?.during?.num ?? sentence?.during?.text ?? sentence?.during?.name;
   const timeoutValue = typeof timeoutRaw === "number" ? timeoutRaw : Number(timeoutRaw);
   const timeoutMs = Number.isFinite(timeoutValue) && timeoutValue > 0
     ? Math.max(1, Math.trunc(timeoutValue * 1000))
     : 500;
-  if (typeof scriptText !== "string") {
+  if (!scriptExpr && typeof scriptText !== "string") {
     throwErrorSentence({
       name: "compile error",
       message: "compile: interpret script missing",
@@ -55,7 +71,8 @@ export function handleNativeInterpret(context, helpers) {
     lines.push("  snprintf(__pyaQuickjs, sizeof(__pyaQuickjs), \"%s/caterer/quickjs-wasi/qjs.wasm\", __pyaCwd);");
     lines.push("  char __pyaScriptPath[PYA_TEXT_CAP];");
     lines.push(`  snprintf(__pyaScriptPath, sizeof(__pyaScriptPath), \"%s/script.js\", __pyaTempDir);`);
-    lines.push("  const char *__pyaScript = (pya_ob_text && pya_ob_text[0]) ? pya_ob_text : " + JSON.stringify(scriptText) + ";");
+    lines.push(`  const char *__pyaScript = (pya_ob_text && pya_ob_text[0]) ? pya_ob_text : ${cScriptVarKnown ? (scriptCExpr ?? JSON.stringify(scriptText ?? "")) : JSON.stringify(scriptText ?? "")};`);
+    lines.push("  if (!__pyaScript) { fprintf(stderr, \"interpret defective: script missing\\n\"); exit(1); }");
     lines.push("  FILE *__pyaScriptFile = fopen(__pyaScriptPath, \"w\");");
     lines.push("  if (!__pyaScriptFile) { fprintf(stderr, \"interpret defective: script write failed\\n\"); exit(1); }");
     lines.push("  fputs(__pyaScript, __pyaScriptFile);");
@@ -91,7 +108,7 @@ export function handleNativeInterpret(context, helpers) {
   lines.push(`  const __pyaLang = ${JSON.stringify(String(language ?? "").trim().toLowerCase())};`);
   lines.push("  if (__pyaLang !== \"javascript\") { throw new Error(`interpret defective: unsupported language ${__pyaLang}`); }");
   lines.push(`  const __pyaTimeout = ${timeoutMs};`);
-  lines.push(`  const __pyaOut = pyaInterpret(${JSON.stringify(scriptText)}, __pyaTimeout);`);
+  lines.push(`  const __pyaOut = pyaInterpret(String(${jsScriptExpr} ?? ""), __pyaTimeout);`);
   lines.push(`  ${targetVar} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: String(__pyaOut ?? \"\") }, be: \"interpret\", mood: \"ya\" };`);
   lines.push(`  globalThis[${JSON.stringify(targetName)}] = ${targetVar};`);
   lines.push(`  globalThis.result = { ...${targetVar}, su: { name: \"result\" } };`);

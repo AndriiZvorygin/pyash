@@ -54,9 +54,14 @@ export function handleCommandSentence({
     }
     if (sentence?.to?.name) {
       const target = sanitizeName(sentence.to.name);
+      const needsDecl = !locals?.has(target) && !declared?.has(target) && !declared?.has(sentence.to.name);
       if (declaredTypes) declaredTypes.set(sentence.to.name, "text");
       markDeclared(declared, sentence.to.name);
-      lines.push(`const ${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
+      if (needsDecl) {
+        lines.unshift(`let ${target};`);
+        locals?.add(target);
+      }
+      lines.push(`${target} = { su: { name: ${JSON.stringify(sentence.to.name)} }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
       lines.push(`globalThis[${JSON.stringify(sentence.to.name)}] = ${target};`);
     }
     lines.push(`const result = { su: { name: "result" }, ob: { text: String(__pyaOut ?? "") }, be: "text", mood: "ya" };`);
@@ -84,18 +89,21 @@ export function handleCommandSentence({
       field: "text"
     });
     const cmdCExpr = cExpr ? cExpr(cmdExpr) : cmdExpr;
-    const outVar = `cmd_out_${cState?.fileCounter ?? 0}`;
+    const commandNonce = cState?.fileCounter ?? 0;
     if (cState) cState.fileCounter += 1;
+    const cmdVar = `__pyaCmd_${commandNonce}`;
+    const cmdWithInputVar = `__pyaCmdWithInput_${commandNonce}`;
+    const outVar = `cmd_out_${commandNonce}`;
     const lines = [];
     const evoked = JSON.stringify(sentenceToPyash(sentence));
-    lines.push(`const char *__pyaCmd = ${cmdCExpr ?? '""'};`);
-    lines.push(`if (!__pyaCmd || !strlen(__pyaCmd)) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: empty command\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
-    let runCmdExpr = "__pyaCmd";
+    lines.push(`const char *${cmdVar} = ${cmdCExpr ?? '""'};`);
+    lines.push(`if (!${cmdVar} || !strlen(${cmdVar})) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: empty command\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
+    let runCmdExpr = cmdVar;
     let cleanupStdinLine = null;
     if (inputFilename) {
-      lines.push("char __pyaCmdWithInput[PYA_TEXT_CAP];");
-      lines.push(`snprintf(__pyaCmdWithInput, sizeof(__pyaCmdWithInput), "%s < \\\"%s\\\"", __pyaCmd, ${JSON.stringify(inputFilename)});`);
-      runCmdExpr = "__pyaCmdWithInput";
+      lines.push(`char ${cmdWithInputVar}[PYA_TEXT_CAP];`);
+      lines.push(`snprintf(${cmdWithInputVar}, sizeof(${cmdWithInputVar}), "%s < \\\"%s\\\"", ${cmdVar}, ${JSON.stringify(inputFilename)});`);
+      runCmdExpr = cmdWithInputVar;
     } else if (inputText != null) {
       const inFileVar = `__pyaCmdInputFile_${cState?.fileCounter ?? 0}`;
       const inFdVar = `__pyaCmdInputFd_${cState?.fileCounter ?? 0}`;
@@ -108,9 +116,9 @@ export function handleCommandSentence({
       lines.push(`if (!${inFilePtr}) { close(${inFdVar}); remove(${inFileVar}); char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\"command defective: stdin write failed\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
       lines.push(`fputs(${JSON.stringify(inputText)}, ${inFilePtr});`);
       lines.push(`fclose(${inFilePtr});`);
-      lines.push("char __pyaCmdWithInput[PYA_TEXT_CAP];");
-      lines.push(`snprintf(__pyaCmdWithInput, sizeof(__pyaCmdWithInput), "%s < \\\"%s\\\"", __pyaCmd, ${inFileVar});`);
-      runCmdExpr = "__pyaCmdWithInput";
+      lines.push(`char ${cmdWithInputVar}[PYA_TEXT_CAP];`);
+      lines.push(`snprintf(${cmdWithInputVar}, sizeof(${cmdWithInputVar}), "%s < \\\"%s\\\"", ${cmdVar}, ${inFileVar});`);
+      runCmdExpr = cmdWithInputVar;
       cleanupStdinLine = `remove(${inFileVar});`;
     }
     lines.push(`char *${outVar} = pya_command(${runCmdExpr});`);

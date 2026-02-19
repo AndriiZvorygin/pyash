@@ -146,7 +146,7 @@ export function handleTextLiteral({
   sanitizeName,
   valueForRole
 } = {}) {
-  if (effectiveBe !== "text" || typeof ob.text !== "string") return null;
+  if (!(effectiveBe === "text" || effectiveBe === "default") || typeof ob.text !== "string") return null;
   const value = JSON.stringify(ob.text);
   if (sentenceArg) {
     const baseName = sentence.su?.name ? sanitizeName(sentence.su.name) : null;
@@ -164,6 +164,61 @@ export function handleTextLiteral({
     return `${target} = ${value};`;
   }
   const sentenceObject = `{ su: { name: \"${name}\" }, ob: { text: ${value} }, be: \"${effectiveBe}\", exists: ${shouldDeclare}, mood: \"ya\" }`;
+  if (lang === "c") {
+    if (cHelpers) {
+      cHelpers.usesTextHelper = true;
+      cHelpers.usesString = true;
+      cHelpers.usesPrintf = true;
+    }
+    const cName = sanitizeName(name);
+    if (shouldDeclare) {
+      locals?.add(cName);
+      if (localsTypes) localsTypes.set(cName, "text");
+    }
+    if (!shouldDeclare) return `snprintf(${cName}, PYA_TEXT_CAP, \"%s\", ${value});`;
+    return `char ${cName}[PYA_TEXT_CAP] = ${value};`;
+  }
+  const varName = sanitizeName(name);
+  if (shouldDeclare) {
+    return `let ${varName} = ${sentenceObject};\nglobalThis[\"${name}\"] = ${varName};`;
+  }
+  return `${varName} = ${sentenceObject};\nglobalThis[\"${name}\"] = ${varName};`;
+}
+
+export function handleFilenameLiteral({
+  sentence,
+  ob,
+  lang,
+  sentenceArg,
+  name,
+  effectiveBe,
+  shouldDeclare,
+  locals,
+  localsTypes,
+  declared,
+  cHelpers
+} = {}, {
+  sanitizeName,
+  valueForRole
+} = {}) {
+  if (!(effectiveBe === "default" || effectiveBe === "text" || effectiveBe === "filename") || typeof ob.filename !== "string") return null;
+  const value = JSON.stringify(ob.filename);
+  if (sentenceArg) {
+    const baseName = sentence.su?.name ? sanitizeName(sentence.su.name) : null;
+    if (baseName) {
+      const needsDecl = !locals?.has(baseName) && !declared?.has(baseName);
+      if (needsDecl) {
+        locals?.add(baseName);
+        if (localsTypes) localsTypes.set(baseName, "text");
+        return `let ${baseName} = { su: { name: \"${sentence.su.name}\" }, ob: {}, be: \"text\", mood: \"ya\" };\n${baseName}.ob.filename = ${value};\n${baseName}.ob.text = ${value};`;
+      }
+      if (localsTypes) localsTypes.set(baseName, "text");
+      return `${baseName}.ob = ${baseName}.ob ?? {};\n${baseName}.ob.filename = ${value};\n${baseName}.ob.text = ${value};`;
+    }
+    const target = valueForRole("su", sentenceArg, "text") ?? name;
+    return `${target} = ${value};`;
+  }
+  const sentenceObject = `{ su: { name: \"${name}\" }, ob: { filename: ${value}, text: ${value} }, be: \"${effectiveBe}\", exists: ${shouldDeclare}, mood: \"ya\" }`;
   if (lang === "c") {
     if (cHelpers) {
       cHelpers.usesTextHelper = true;

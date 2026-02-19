@@ -6,11 +6,11 @@ const READ_COMMANDS = {
     },
     markdown: {
       prefix: "pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none \"",
-      suffix: "\" | sed -e 's/<span[^>]*><\\\\/span>//g'"
+      suffix: "\" | sed -e 's#<span[^>]*></span>##g'"
     },
     markdownPlain: {
       prefix: "pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none \"",
-      suffix: "\" | sed -e 's/<span[^>]*><\\\\/span>//g'"
+      suffix: "\" | sed -e 's#<span[^>]*></span>##g'"
     }
   },
   pdf: {
@@ -20,11 +20,11 @@ const READ_COMMANDS = {
     },
     markdown: {
       prefix: "pdftohtml -stdout -i -q \"",
-      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none | sed -e 's/<span[^>]*><\\\\/span>//g' -e '/^-----/d'"
+      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=gfm --wrap=none | sed -e 's#<span[^>]*></span>##g' -e '/^-----/d'"
     },
     markdownPlain: {
       prefix: "pdftohtml -stdout -i -q \"",
-      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none | sed -e 's/<span[^>]*><\\\\/span>//g' -e '/^-----/d'"
+      suffix: "\" | pandoc --from=html-native_divs-native_spans --to=markdown --wrap=none | sed -e 's#<span[^>]*></span>##g' -e '/^-----/d'"
     }
   }
 };
@@ -127,14 +127,16 @@ export function handleReadSentence(context, helpers) {
       }
       const evoked = JSON.stringify(sentenceToPyash(sentence));
       const toolTarget = JSON.stringify(targetName);
-      const outVar = `read_out_${cState?.fileCounter ?? 0}`;
+      const readNonce = cState?.fileCounter ?? 0;
       if (cState) cState.fileCounter += 1;
+      const cmdVar = `__pyaReadCmd_${readNonce}`;
+      const outVar = `read_out_${readNonce}`;
       const lines = [];
       if (!locals?.has(safeName) && !alreadyDeclared) {
         lines.push(`char ${safeName}[PYA_TEXT_CAP] = "";`);
       }
-      lines.push(`const char *__pyaCmd = ${JSON.stringify(cmd)};`);
-      lines.push(`char *${outVar} = pya_command(__pyaCmd);`);
+      lines.push(`const char *${cmdVar} = ${JSON.stringify(cmd)};`);
+      lines.push(`char *${outVar} = pya_command(${cmdVar});`);
       lines.push(`if (!${outVar}) { char __pyaErr[PYA_TEXT_CAP]; snprintf(__pyaErr, sizeof(__pyaErr), "su name command defective ob text \\\\\\"command defective\\\\\\" from la %s ko be error ya", ${evoked}); pya_emit_exchange(__pyaErr); exit(1); }`);
       lines.push(`snprintf(${safeName}, sizeof(${safeName}), "%s", ${outVar} ? ${outVar} : "");`);
       lines.push(`{ char __pyaEsc[PYA_TEXT_CAP]; pya_escape_text(${outVar} ? ${outVar} : "", __pyaEsc, sizeof(__pyaEsc)); char __pyaEvent[PYA_TEXT_CAP]; snprintf(__pyaEvent, sizeof(__pyaEvent), "su name tool event %06d ob la %s ko to la su name %s ob text \\\\\\"%s\\\\\\" be text ya ko be tool ya", pya_next_tool_event_id(), ${evoked}, ${toolTarget}, __pyaEsc); pya_emit_exchange(__pyaEvent); }`);

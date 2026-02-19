@@ -24,7 +24,7 @@ import { inlineSentenceLiteral } from "./module_helpers.mjs";
 import { handleVectorElementRead } from "./transpile_sentence/vector_element_read.mjs";
 import { handleVectorMapAll } from "./transpile_sentence/vector_map_all.mjs";
 import { handleVectorLiteral } from "./transpile_sentence/vector_literal.mjs";
-import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
+import { handleDateLiteral, handleNumberLiteral, handleTextLiteral, handleFilenameLiteral, handleSentenceLiteral } from "./transpile_sentence/scalar_literals.mjs";
 
 const LANGUAGE_TYPES = new Set([
   "english"
@@ -254,7 +254,9 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   }, {
     sanitizeName,
     markDeclared,
-    inlineSentenceLiteral
+    inlineSentenceLiteral,
+    exprForSlot,
+    cExpr
   });
   if (nativeResult) return nativeResult;
 
@@ -326,6 +328,29 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     markDeclared
   });
   if (mathResult) return mathResult;
+
+  if (lang !== "c" && sentence?.mood === "do" && baseBe === "text" && sentence.to?.name) {
+    const targetName = sentence.to.name;
+    const targetVar = sanitizeName(targetName);
+    const needsDecl = !locals?.has(targetVar) && !declared?.has(targetVar) && !declared?.has(targetName);
+    if (localsTypes) localsTypes.set(targetVar, "text");
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    const sourceExpr = (() => {
+      if (typeof ob.text === "string") return JSON.stringify(ob.text);
+      if (typeof ob.filename === "string") return JSON.stringify(ob.filename);
+      if (ob.genitive) return pathFromGenitive(ob.genitive, sentenceArg, { locals, declared, allowCGlobals: true }) ?? "\"\"";
+      if (ob.name) return sanitizeName(ob.name);
+      return "\"\"";
+    })();
+    const lines = [];
+    if (needsDecl) {
+      lines.push(`let ${targetVar} = "";`);
+      locals?.add(targetVar);
+      if (markDeclared) markDeclared(declared, targetName);
+    }
+    lines.push(`${targetVar} = String(${sourceExpr} ?? "");`);
+    return lines.join("\n");
+  }
 
   if (lang === "c" && sentence?.mood === "do" && baseBe === "text" && sentence.to?.name) {
     if (cHelpers) {
@@ -473,6 +498,24 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
     valueForRole
   });
   if (textLiteralResult) return textLiteralResult;
+
+  const filenameLiteralResult = handleFilenameLiteral({
+    sentence,
+    ob,
+    lang,
+    sentenceArg,
+    name,
+    effectiveBe: literalBe,
+    shouldDeclare,
+    locals,
+    localsTypes,
+    declared,
+    cHelpers
+  }, {
+    sanitizeName,
+    valueForRole
+  });
+  if (filenameLiteralResult) return filenameLiteralResult;
 
   const sentenceLiteralResult = handleSentenceLiteral({
     sentence,
