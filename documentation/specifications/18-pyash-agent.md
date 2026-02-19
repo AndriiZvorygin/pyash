@@ -98,7 +98,17 @@ Rules:
 
 Implementation conforms when it provides deterministic session/memory behavior, valid tool exposure, scheduler-managed recurring runs, and channel routing via canonical contract.
 
+## 8.1 External TUI projection rule
+
+When Pyash invokes an external interactive shell (for example Codex TUI), canonical run history remains Pyash-native.
+
+Rules:
+- `.codex` (or equivalent external runtime state) is treated as backend/tool cache, not canonical memory.
+- Session continuity for Pyash features (`session`, `memory`, `gold`) MUST be projected into agent-house `.pya` records.
+- Projection details are implementation-specific and documented in reference docs, not in this spec.
+
 ## 9. References
 
 - `documentation/recipes/spec-archive/18-pyash-agent.full.md`
 - `documentation/recipes/spec-archive/22-memory-and-remember.full.md`
+- `documentation/reference/agent-tui-session-projection.md`

@@ -51,7 +51,7 @@ export function parseCodexWrapperArgs(args = []) {
   return out;
 }
 
-export async function codexCommand(args, { installRoot } = {}) {
+export async function codexCommand(args, { installRoot, cwd = "", envOverrides = null } = {}) {
   const parsed = parseCodexWrapperArgs(args);
   const rootDir = parsed.root
     ? path.resolve(parsed.root)
@@ -67,12 +67,15 @@ export async function codexCommand(args, { installRoot } = {}) {
 
   const code = await new Promise((resolve, reject) => {
     const child = spawn("codex", finalArgs, {
-      cwd: rootDir,
+      cwd: cwd ? path.resolve(cwd) : rootDir,
       stdio: "inherit",
-      env: process.env
+      env: {
+        ...process.env,
+        ...(envOverrides && typeof envOverrides === "object" ? envOverrides : {})
+      }
     });
     child.on("error", reject);
     child.on("close", (status) => resolve(Number(status ?? 0)));
   });
-  process.exit(code);
+  return code;
 }

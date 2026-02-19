@@ -83,6 +83,15 @@ When changing appservice sender:
   - Then restart:
     - `pyash calendar restart`
 
+- Stop control not interrupting active runs
+  - Supported channel forms: `stop`, `@<agent> stop`, `<agent> stop`, `stop @<agent>`, `stop <agent>`
+  - Verify with:
+    - `pyash channel log --agent <agent> --channel matrix --tail 120`
+  - Look for telemetry decisions:
+    - `stop_requested`, `stop_no_active_run`
+  - Detailed runbook:
+    - `documentation/recipes/channel-stop-control.md`
+
 ## Agent management commands
 
 - List:
