@@ -327,6 +327,34 @@ export function transpileSentence(sentence, { lang, sentenceArg, locals, localsT
   });
   if (mathResult) return mathResult;
 
+  if (lang === "c" && sentence?.mood === "do" && baseBe === "text" && sentence.to?.name) {
+    if (cHelpers) {
+      cHelpers.usesTextHelper = true;
+      cHelpers.usesString = true;
+      cHelpers.usesPrintf = true;
+    }
+    const targetName = sentence.to.name;
+    const targetVar = sanitizeName(targetName);
+    const needsDecl = !locals?.has(targetVar) && !declared?.has(targetVar) && !declared?.has(targetName);
+    if (needsDecl) {
+      locals?.add(targetVar);
+      if (markDeclared) markDeclared(declared, targetName);
+    }
+    if (localsTypes) localsTypes.set(targetVar, "text");
+    if (declaredTypes) declaredTypes.set(targetName, "text");
+    const sourceExpr = (() => {
+      if (typeof ob.text === "string") return JSON.stringify(ob.text);
+      if (typeof ob.filename === "string") return JSON.stringify(ob.filename);
+      if (ob.genitive) return pathFromGenitive(ob.genitive, undefined, { locals, declared, allowCGlobals: true }) ?? "\"\"";
+      if (ob.name) return sanitizeName(ob.name);
+      return "\"\"";
+    })();
+    const lines = [];
+    if (needsDecl) lines.push(`char ${targetVar}[PYA_TEXT_CAP] = "";`);
+    lines.push(`snprintf(${targetVar}, PYA_TEXT_CAP, "%s", ${sourceExpr});`);
+    return lines.join("\n");
+  }
+
   const name = sentence?.su?.name;
   const mood = sentence?.mood;
   const doResult = handleDoSentence({

@@ -176,7 +176,7 @@ export function handleDoSentence(context, helpers) {
         const toName = sanitizeName(sentence.to.name);
         const toTypeWords = Array.isArray(sentence.to?.nameTypeWords) ? sentence.to.nameTypeWords : [];
         const toType = localsTypes?.get(toName) ?? declaredTypes?.get(toName) ?? declaredTypes?.get(sentence.to.name);
-        const toIsTextSlot = toType === "text" || toTypeWords.includes("text");
+        const toIsTextSlot = toType === "text" || toTypeWords.includes("text") || toTypeWords.includes("filename");
         const toIsBoolSlot = toType === "bool" || toType === "boolean" || toTypeWords.includes("bool") || toTypeWords.includes("boolean");
         if (toIsTextSlot) {
           lines.push(`pya_to_text = ${toName};`);
@@ -194,6 +194,8 @@ export function handleDoSentence(context, helpers) {
             lines.push("pya_ob_num = pya_to_num;");
           }
         }
+      } else if (typeof sentence.to?.filename === "string") {
+        lines.push(`pya_to_text = ${JSON.stringify(sentence.to.filename)};`);
       }
       const retVar = `_pya_ret_${cState ? (cState.ceremonyCounter++ || 0) : 0}`;
       lines.push(`pya_value ${retVar} = ${fn}();`);

@@ -13,6 +13,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
     && [...lines, ...mainLines].some((line) => typeof line === "string" && /\bpya_csv_/.test(line));
   const needsYamlRuntime = cHelpers.usesYamlRuntime;
   const needsYamlStringify = cHelpers.usesYamlStringify && !needsYamlRuntime;
+  const needsRunRoot = [...lines, ...mainLines].some((line) => typeof line === "string" && /\brun_root\b/.test(line));
   const needsDirentHeader = Boolean(cHelpers.usesDirent || cHelpers.usesFilesystem);
   const needsCtypeHeader = Boolean(
     cHelpers.usesCtype
@@ -44,6 +45,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (cHelpers.usesSysStat) headers.push("#include <sys/stat.h>");
   if (cHelpers.usesErrno) headers.push("#include <errno.h>");
   if (cHelpers.usesFilesystem) headers.push("#include <unistd.h>");
+  if (needsRunRoot) headers.push("#include <unistd.h>");
   if (needsYamlRuntime) headers.push("#include <strings.h>");
   if (needsYamlRuntime) headers.push("#include <yaml.h>");
   if (needsCsvRuntime) {
@@ -75,6 +77,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
     headers.push("char *pya_to_text = 0;");
     headers.push("int pya_to_bool = 0;");
   }
+  if (needsRunRoot) headers.push("static char run_root[4096] = \".\";");
   if (headers.length) lines.unshift(...headers);
   const cPrelude = [];
   if (cHelpers.usesTextHelper) cPrelude.push(TEXT_HELPER);
@@ -100,7 +103,12 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState } = {}) {
   if (needsCsvRuntime) cPrelude.push(CSV_RUNTIME_HELPER);
   if (cPrelude.length) lines.splice(headers.length, 0, ...cPrelude);
   if (cState?.preMain?.length) lines.push(...cState.preMain);
-  const body = mainLines.map(l => `  ${l}`).join("\n");
+  const mainBodyLines = [];
+  if (needsRunRoot) {
+    mainBodyLines.push("if (!getcwd(run_root, sizeof(run_root))) { run_root[0] = '.'; run_root[1] = '\\0'; }");
+  }
+  if (mainLines?.length) mainBodyLines.push(...mainLines);
+  const body = mainBodyLines.map(l => `  ${l}`).join("\n");
   lines.push("int main(void) {");
   lines.push(body || "  return 0;");
   lines.push("  return 0;");

@@ -36,9 +36,11 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
         if (parts.length === 1) return "pya_to_num";
         if (parts.length === 2 && parts[1] === "num") return "pya_to_num";
         if (parts.length === 2 && parts[1] === "text") return "pya_to_text";
+        if (parts.length === 2 && parts[1] === "filename") return "pya_to_text";
         if (parts.length === 2 && parts[1] === "boolean") return "pya_to_bool";
         if (parts.length === 3 && parts[1] === "ob" && parts[2] === "num") return "pya_to_num";
         if (parts.length === 3 && parts[1] === "ob" && parts[2] === "text") return "pya_to_text";
+        if (parts.length === 3 && parts[1] === "ob" && parts[2] === "filename") return "pya_to_text";
         if (parts.length === 3 && parts[1] === "ob" && parts[2] === "boolean") return "pya_to_bool";
       }
       if (head === "from") {

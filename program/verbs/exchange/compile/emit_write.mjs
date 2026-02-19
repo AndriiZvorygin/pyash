@@ -319,6 +319,10 @@ export function handleSayOrWrite({
   if (expr === "undefined" && typeof ob.date === "string") {
     expr = JSON.stringify(ob.date);
   }
+  if (lang === "c" && expr === "undefined") {
+    // Keep C output compilable even when a source slot can't be resolved yet.
+    expr = "\"\"";
+  }
   const writeFilename = sentence?.to?.filename;
   if (writeFilename && lang !== "c") {
     if (jsHelpers) {
