@@ -27,7 +27,7 @@ Runner config can be set inside the program:
 
 ```pyash
 exists su name run result ob bool truth ya
-exists su name refinery name ob text "reviewer circle" be text ya
+exists su name refinery name ob text "verifier circle" be text ya
 ```
 
 To emit a newspaper, plus `--newspaper` and optionally `--run-id <name>`:

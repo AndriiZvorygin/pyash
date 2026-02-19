@@ -121,6 +121,27 @@ test("mind invocation includes recent history in prompt with per-mind window", a
   }
 });
 
+test("mind invocation uses configured mind model when per-mind model is absent", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse('exists su name mind model ob text "gpt-5.3-codex" be default ya'));
+    await interpret(parse("exists su name helper be mind ya"));
+    await interpret(parse('be write ob text "hello" for name helper to name text helper-out do'));
+
+    const payload = decodeMindPayload(records, "helper");
+    assert.equal(payload.model, "gpt-5.3-codex");
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("mind history can be injected from a series via accordingto", async () => {
   forget();
   resetMindLogs();

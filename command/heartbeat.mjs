@@ -12,7 +12,6 @@ import { createScheduler, loadSchedulePolicyWithGlobal } from "../program/agent/
 import { resolveWorldRoot } from "../program/library/world.mjs";
 import { worldNewspaperLogPath } from "../program/agent/newspaper_log.mjs";
 
-const DEFAULT_INTERVAL_S = 24 * 60;
 const HEARTBEAT_JOB_NAME = "heartbeat";
 const HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK";
 const HEARTBEAT_PROMPT = `Read HEARTBEAT.md in your agent house.
@@ -41,13 +40,6 @@ function sanitizeName(raw, fallback = "value") {
   const text = String(raw ?? "").trim().toLowerCase();
   const cleaned = text.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   return cleaned || fallback;
-}
-
-function toPositiveSeconds(rawValue, fallbackSeconds) {
-  if (rawValue == null) return fallbackSeconds;
-  const num = Number(rawValue);
-  if (!Number.isFinite(num) || num <= 0) return null;
-  return num;
 }
 
 function buildCallSentence({ job, prompt, outName }) {
@@ -103,7 +95,7 @@ async function initializeRuntime({ cwd, agentName }) {
 }
 
 function usage() {
-  return "Usage: node command/heartbeat.mjs --agent <name> [--once] [--interval <seconds>] [--job <job-name>]";
+  return "Usage: node command/heartbeat.mjs --agent <name> [--once] [--job <job-name>]";
 }
 
 async function main() {
@@ -115,29 +107,18 @@ async function main() {
   }
   const once = args.includes("--once");
   const jobFilter = readFlagValue(args, "--job");
-  const intervalS = toPositiveSeconds(readFlagValue(args, "--interval"), DEFAULT_INTERVAL_S);
-  if (!intervalS) {
-    console.error("Invalid --interval value");
-    process.exit(1);
-  }
 
   await initializeRuntime({ cwd: process.cwd(), agentName });
   const worldRoot = resolveWorldRoot({ rememberFn: remember }) ?? path.resolve(process.cwd(), "world");
   const agentHouse = resolveAgentHouse({ mindName: agentName, rememberFn: null });
   await ensureAgentDirs(agentHouse);
   const heartbeatPath = path.join(agentHouse, "HEARTBEAT.md");
-  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "scheduler" });
+  const telemetryPath = worldNewspaperLogPath({ worldRoot, name: "calendar" });
 
   let jobs = await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName });
   if (!jobs.length) {
-    jobs = [{
-      jobName: HEARTBEAT_JOB_NAME,
-      intervalMs: intervalS * 1000,
-      agentName,
-      prompt: "",
-      withCase: { wo: "tools" },
-      laneName: HEARTBEAT_JOB_NAME
-    }];
+    console.error(`no calendar jobs configured for ${agentName}`);
+    process.exit(1);
   }
   if (jobFilter) {
     jobs = jobs.filter(job => job.jobName === jobFilter);

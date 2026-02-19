@@ -83,13 +83,13 @@ For coding tasks, the preferred reliability pattern is:
 
 1. generator writes a candidate,
 2. deterministic `guarantee` gate validates it,
-3. optional reviewer runs only after guarantee passes.
+3. optional verifier runs only after guarantee passes.
 
-`review loop` supports this directly.
+`verify loop` supports this directly.
 
 ### 5.1 Configure deterministic guarantees
 
-Use `review loop configure` map keys:
+Use `verify loop configure` map keys:
 
 - `guarantee command` — shell command template. `{{draft}}` and `{{task}}` are available placeholders.
 - `guarantee expect regex` — optional regex that must match guarantee command stdout.
@@ -102,14 +102,14 @@ Backward-compatibility aliases:
 
 ### 5.2 Stop conditions and compact state
 
-`review loop` records deterministic control facts:
+`verify loop` records deterministic control facts:
 
-- `review loop attempts used`
-- `review loop stop reason` (`pass`, `max attempts`, `unchanged draft`)
-- `review loop seed task`
-- `review loop last failure`
-- `review loop last success`
-- `review loop summary`
+- `verify loop attempts used`
+- `verify loop stop reason` (`pass`, `max attempts`, `unchanged draft`)
+- `verify loop seed task`
+- `verify loop last failure`
+- `verify loop last success`
+- `verify loop summary`
 
 ### 5.3 Canonical example
 
@@ -117,7 +117,7 @@ Reference:
 
 - `examples/pyash/coding-loop-guarantee.pya`
 
-This example runs a coding loop with `saddle tools` and a guarantee command gate, without a reviewer mind.
+This example runs a coding loop with `saddle tools` and a guarantee command gate, without a verifier mind.
 
 ## 6. Error and success surfaces
 

@@ -36,16 +36,19 @@ function ensureChannel(channels, channelType) {
     channels.set(channelType, {
       type: channelType,
       enabled: undefined,
+      authMode: null,
       mode: null,
       longPollMs: null,
       appserviceRegistration: null,
       homeserver: null,
       user: null,
+      executiveUsernames: [],
       token: null,
+      password: null,
       registrationSharedSecret: null,
       adminToken: null,
       debug: undefined,
-      mentionGate: undefined,
+      publicTagAnswer: undefined,
       toolSummary: undefined,
       dmToolSummary: undefined,
       rooms: [],
@@ -105,6 +108,10 @@ export function parseChannelPolicyText(text) {
       cfg.mode = readTextValue(sentence) ?? cfg.mode;
       continue;
     }
+    if (action === "auth mode") {
+      cfg.authMode = readTextValue(sentence) ?? cfg.authMode;
+      continue;
+    }
     if (action === "long poll ms") {
       const raw = readTextValue(sentence);
       const num = Number(raw);
@@ -119,8 +126,27 @@ export function parseChannelPolicyText(text) {
       cfg.user = readTextValue(sentence) ?? cfg.user;
       continue;
     }
+    if (action === "executive username") {
+      const executive = readTextValue(sentence);
+      if (!executive) continue;
+      if (!cfg.executiveUsernames.includes(executive)) cfg.executiveUsernames.push(executive);
+      continue;
+    }
+    if (action === "executive usernames") {
+      const executives = readNameVector(sentence);
+      for (const executive of executives) {
+        const value = String(executive ?? "").trim();
+        if (!value) continue;
+        if (!cfg.executiveUsernames.includes(value)) cfg.executiveUsernames.push(value);
+      }
+      continue;
+    }
     if (action === "token") {
       cfg.token = readTextValue(sentence) ?? cfg.token;
+      continue;
+    }
+    if (action === "password") {
+      cfg.password = readTextValue(sentence) ?? cfg.password;
       continue;
     }
     if (action === "registration shared secret") {
@@ -148,9 +174,9 @@ export function parseChannelPolicyText(text) {
       cfg.defaultLane = readTextValue(sentence) ?? cfg.defaultLane;
       continue;
     }
-    if (action === "mention gate") {
+    if (action === "public tag answer") {
       const enabled = readBoolValue(sentence);
-      if (enabled != null) cfg.mentionGate = enabled;
+      if (enabled != null) cfg.publicTagAnswer = enabled;
       continue;
     }
     if (action === "debug") {
@@ -196,6 +222,7 @@ export function parseChannelPolicyText(text) {
         lane: cfg.roomLanes.get(roomId) ?? cfg.defaultLane ?? laneFromRoomId(channelType, roomId)
       })),
       dmRooms: [...cfg.dmRooms],
+      executiveUsernames: [...cfg.executiveUsernames],
       listeners: Array.isArray(cfg.listeners) ? [...cfg.listeners] : [],
       roomListeners: Object.fromEntries(cfg.roomListeners.entries()),
       roomLanes: Object.fromEntries(cfg.roomLanes.entries())
@@ -247,15 +274,18 @@ function mergeChannelEntry(base = {}, override = {}) {
     ...override,
     enabled: override.enabled ?? base.enabled ?? false,
     mode: override.mode ?? base.mode ?? "sync",
-    longPollMs: override.longPollMs ?? base.longPollMs ?? 30000,
+    authMode: override.authMode ?? base.authMode ?? null,
+    longPollMs: override.longPollMs ?? base.longPollMs ?? null,
     appserviceRegistration: override.appserviceRegistration ?? base.appserviceRegistration ?? null,
     homeserver: override.homeserver ?? base.homeserver ?? null,
     user: override.user ?? base.user ?? null,
     token: override.token ?? base.token ?? null,
+    password: override.password ?? base.password ?? null,
     registrationSharedSecret: override.registrationSharedSecret ?? base.registrationSharedSecret ?? null,
     adminToken: override.adminToken ?? base.adminToken ?? null,
+    executiveUsernames: Array.from(new Set([...(base.executiveUsernames ?? []), ...(override.executiveUsernames ?? [])])),
     defaultLane: override.defaultLane ?? base.defaultLane ?? null,
-    mentionGate: override.mentionGate ?? base.mentionGate ?? false,
+    publicTagAnswer: override.publicTagAnswer ?? base.publicTagAnswer ?? false,
     debug: override.debug ?? base.debug ?? false,
     toolSummary: override.toolSummary ?? base.toolSummary ?? false,
     dmToolSummary: override.dmToolSummary ?? base.dmToolSummary ?? false,

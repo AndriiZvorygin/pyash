@@ -5,13 +5,24 @@ import { interpret as bridgeInterpret } from "../../bridge/index.mjs";
 import { remember } from "../../remember/index.mjs";
 import { mind_to_name_text } from "../../verbs/mind/mind.mjs";
 import { worldRootFromAgentHouse, worldNewspaperLogPath } from "../newspaper_log.mjs";
+import { resolveWorldAgentHouseDirectory } from "../../library/agent_command_policy.mjs";
 import { routeChannelInput, routeChannelProduce } from "../router_runtime.mjs";
 import { orchestrateRouterInput } from "../orchestrator_runtime.mjs";
 import { loadImportPolicyWithGlobal } from "../import/policy.mjs";
+import { buildRouterProduceRequestSentence } from "../channel_core/contract.mjs";
 import {
   readChannelRuntimeState,
   writeChannelRuntimeState
 } from "../channel_core/state.mjs";
+import {
+  enqueueInputEnvelope,
+  enqueueProduceEnvelope,
+  claimOldestInputEnvelope,
+  claimOldestProduceEnvelope,
+  ackRuntimeEnvelopeSuccess,
+  ackRuntimeEnvelopeFail,
+  queueDepth
+} from "../channel_core/queue.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -198,8 +209,15 @@ function expectsToolActivity(text = "") {
   return /\b(tool|search|web\s*search|lookup|look\s+up|find)\b/i.test(String(text ?? ""));
 }
 
-function shouldIncludeToolSummary({ channelConfig, channelId, dmRooms }) {
-  const isDmRoom = dmRooms?.has(channelId) === true;
+function isDmEvent(event, dmRooms) {
+  if (event?.dmRoom === true) return true;
+  const channelId = String(event?.channelId ?? "").trim();
+  if (!channelId) return false;
+  return dmRooms?.has(channelId) === true;
+}
+
+function shouldIncludeToolSummary({ channelConfig, event, dmRooms }) {
+  const isDmRoom = isDmEvent(event, dmRooms);
   const dmSetting = channelConfig?.dmToolSummary;
   if (isDmRoom && typeof dmSetting === "boolean") return dmSetting;
   if (typeof channelConfig?.toolSummary === "boolean") return channelConfig.toolSummary;
@@ -215,9 +233,9 @@ function formatToolEventMessage({ stage, toolName, toolText, ratifySentence, too
   }
   if (stage === "ratify") {
     const decision = ratifySentence?.ob?.boolean;
-    if (decision === true) return `tool review: ${name} allowed`;
-    if (decision === false) return `tool review: ${name} denied`;
-    return `tool review: ${name}`;
+    if (decision === true) return `tool verify: ${name} allowed`;
+    if (decision === false) return `tool verify: ${name} denied`;
+    return `tool verify: ${name}`;
   }
   if (stage === "result") {
     const summary = shortToolSummary(toolText);
@@ -530,6 +548,19 @@ function mindErrorFallback(err) {
   return `mind defective: ${message}`;
 }
 
+function emptyMindFallback() {
+  return "I received your message, but I could not generate a reply. Please retry.";
+}
+
+function buildRetrySentence(sentence = {}) {
+  const original = String(sentence?.ob?.text ?? "");
+  const retrySuffix = "\n\n[reply rule]\nReply with at least one short plain-text sentence.";
+  return {
+    ...sentence,
+    ob: { text: `${original}${retrySuffix}` }
+  };
+}
+
 function isMindUnavailableError(err) {
   if (!err) return false;
   const sentenceName = String(err?.sentence?.su?.name ?? "").trim().toLowerCase();
@@ -644,11 +675,27 @@ function selfSenderCandidates({ channelConfig, agentName } = {}) {
 }
 
 function roomListenerAgents(channelConfig, roomId, fallbackAgentName) {
-  const roomScoped = channelConfig?.roomListeners?.[roomId];
-  if (Array.isArray(roomScoped) && roomScoped.length) return roomScoped;
-  const global = channelConfig?.listeners;
-  if (Array.isArray(global) && global.length) return global;
-  return [fallbackAgentName];
+  const normalize = (values) => {
+    if (!Array.isArray(values)) return [];
+    return values
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean);
+  };
+  const roomScoped = normalize(channelConfig?.roomListeners?.[roomId]);
+  const global = normalize(channelConfig?.listeners);
+  const configured = roomScoped.length ? roomScoped : global;
+  if (!configured.length) return [fallbackAgentName];
+  const fallback = String(fallbackAgentName ?? "").trim();
+  if (fallback && configured.includes(fallback)) return [fallback];
+  return configured;
+}
+
+function resolveTargetAgentHouse(worldRoot, agentName) {
+  return resolveWorldAgentHouseDirectory({
+    worldRoot,
+    agentName,
+    includeFallback: true
+  }) ?? path.join(worldRoot, "house", String(agentName ?? "").trim());
 }
 
 function resolveMentionTargets({ text, listenerAgents, channelUser }) {
@@ -674,12 +721,14 @@ async function dispatchChannelEvents({
   interpretFn,
   routerInterpretFn,
   agentHouse,
+  worldRoot = "",
   dedupIds,
   dedupState,
   selfEventIds,
   selfState,
   dedupLimit,
-  debug
+  debug,
+  outputMode = "direct"
 }) {
   let received = 0;
   let handled = 0;
@@ -688,17 +737,17 @@ async function dispatchChannelEvents({
   let skippedMention = 0;
   let sent = 0;
   const dmRooms = new Set(Array.isArray(channelConfig?.dmRooms) ? channelConfig.dmRooms : []);
-  const mentionGate = channelConfig?.mentionGate === true;
+  const publicTagAnswer = channelConfig?.publicTagAnswer === true;
   const selfSenders = selfSenderCandidates({ channelConfig, agentName });
-  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const worldRootResolved = worldRoot || worldRootFromAgentHouse(agentHouse);
   const importPolicyByAgent = new Map();
 
   const loadImportPolicyForAgent = async (targetAgent) => {
     const key = String(targetAgent ?? "").trim();
     if (!key) return {};
     if (importPolicyByAgent.has(key)) return importPolicyByAgent.get(key);
-    const targetAgentHouse = path.join(worldRoot, "house", key);
-    const policy = await loadImportPolicyWithGlobal({ worldRoot, agentHouse: targetAgentHouse });
+    const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, key);
+    const policy = await loadImportPolicyWithGlobal({ worldRoot: worldRootResolved, agentHouse: targetAgentHouse });
     importPolicyByAgent.set(key, policy);
     return policy;
   };
@@ -706,6 +755,7 @@ async function dispatchChannelEvents({
   for (const event of events) {
     received += 1;
     const listenerAgents = roomListenerAgents(channelConfig, event.channelId, agentName);
+    const eventIsDmRoom = isDmEvent(event, dmRooms);
     const targetedByMention = resolveMentionTargets({
       text: event.text,
       listenerAgents,
@@ -715,7 +765,7 @@ async function dispatchChannelEvents({
       (event.inReplyToEventId && selfEventIds.has(event.inReplyToEventId))
       || (event.threadId && selfEventIds.has(event.threadId))
     );
-    const listenersToRun = mentionGate && !dmRooms.has(event.channelId)
+    const listenersToRun = publicTagAnswer && !eventIsDmRoom
       ? (repliedToSelf ? listenerAgents : targetedByMention)
       : (targetedByMention.length ? targetedByMention : listenerAgents);
 
@@ -773,6 +823,41 @@ async function dispatchChannelEvents({
       }
       continue;
     }
+
+    if (typeof adapter?.markSeen === "function") {
+      try {
+        const markSeenTask = adapter.markSeen({ config: channelConfig, event });
+        if (markSeenTask && typeof markSeenTask.then === "function") {
+          void markSeenTask.catch(async (err) => {
+            if (!debug) return;
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: "mark_seen_error",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              error: String(err?.stack ?? err?.message ?? err)
+            }, { channelType, agentName });
+          });
+        }
+      } catch (err) {
+        if (debug) {
+          await appendTelemetry(agentHouse, {
+            timestamp: nowIso(),
+            channelType,
+            event: "event",
+            decision: "mark_seen_error",
+            eventId: event.eventId,
+            sender: event.sender,
+            channelId: event.channelId,
+            error: String(err?.stack ?? err?.message ?? err)
+          }, { channelType, agentName });
+        }
+      }
+    }
+
     if (!listenersToRun.length) {
       skippedMention += 1;
       if (debug) {
@@ -788,8 +873,8 @@ async function dispatchChannelEvents({
           listenerAgents,
           targetedByMention,
           listenersToRun,
-          mentionGate,
-          dmRoom: dmRooms.has(event.channelId),
+          publicTagAnswer,
+          dmRoom: eventIsDmRoom,
           repliedToSelf
         }, { channelType, agentName });
       }
@@ -809,8 +894,8 @@ async function dispatchChannelEvents({
         listenerAgents,
         targetedByMention,
         listenersToRun,
-        mentionGate,
-        dmRoom: dmRooms.has(event.channelId),
+        publicTagAnswer,
+        dmRoom: eventIsDmRoom,
         repliedToSelf
       }, { channelType, agentName });
     }
@@ -838,7 +923,8 @@ async function dispatchChannelEvents({
       };
       if (typeof adapter?.downloadAttachments === "function" && event.attachments?.length) {
         const dayStamp = dateStampFromIso(event.timestamp);
-        const targetDir = path.join(worldRoot, "house", targetAgent, "artifacts", dayStamp);
+        const targetAgentHouse = resolveTargetAgentHouse(worldRootResolved, targetAgent);
+        const targetDir = path.join(targetAgentHouse, "artifacts", dayStamp);
         try {
           routedEvent.attachmentsSaved = await adapter.downloadAttachments({
             config: channelConfig,
@@ -877,19 +963,46 @@ async function dispatchChannelEvents({
         channelConfig,
         sessionName: orchestratorDirective.sessionName,
         payloadId: orchestratorDirective.payloadId,
-        agentCwd: path.join(worldRoot, "house", targetAgent)
+        agentCwd: resolveTargetAgentHouse(worldRootResolved, targetAgent)
       });
       handled += 1;
       let responseText = "";
       const includeToolSummary = shouldIncludeToolSummary({
         channelConfig,
-        channelId: event.channelId,
+        event,
         dmRooms
       });
       const mindInputs = buildMindInputsFromAttachments(routedEvent.attachmentsSaved);
       const toolExpectation = includeToolSummary && expectsToolActivity(event.text);
       let toolEventCount = 0;
       const sendChannelMessage = async (content) => {
+        if (outputMode === "queue") {
+          const produceRequest = buildRouterProduceRequestSentence({
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await routeChannelProduce({
+            routerInterpretFn,
+            channelType,
+            event,
+            sourceAgentName: targetAgent,
+            payloadId: orchestratorDirective.payloadId,
+            responseText: content
+          });
+          await enqueueProduceEnvelope(worldRootResolved, {
+            channelType,
+            identity: String(channelConfig?.user ?? "").trim(),
+            agentName: targetAgent,
+            roomName: event.channelId,
+            payloadId: orchestratorDirective.payloadId,
+            payloadSentence: produceRequest
+          });
+          sent += 1;
+          return;
+        }
         const sendResult = await adapter.send({ config: channelConfig, event, content });
         if (sendResult?.eventId) {
           selfEventIds.add(sendResult.eventId);
@@ -912,11 +1025,64 @@ async function dispatchChannelEvents({
         : null;
       try {
         const result = (interpretFn === bridgeInterpret)
-          ? await mind_to_name_text(sentence, { onToolCall, inputs: mindInputs })
+          ? await mind_to_name_text(sentence, {
+            onToolCall,
+            inputs: mindInputs,
+            sessionUserContent: String(event?.text ?? ""),
+            sessionUserMetadata: {
+              channelType: String(event?.channelType ?? ""),
+              channelId: String(event?.channelId ?? ""),
+              sender: String(event?.sender ?? ""),
+              payloadId: String(orchestratorDirective?.payloadId ?? ""),
+              timestamp: String(event?.timestamp ?? "")
+            },
+            sessionAssistantMetadata: {
+              channelType: String(event?.channelType ?? ""),
+              channelId: String(event?.channelId ?? ""),
+              sender: String(targetAgent ?? agentName ?? ""),
+              payloadId: String(orchestratorDirective?.payloadId ?? "")
+            }
+          })
           : await interpretFn(sentence);
         responseText = String(result?.ob?.text ?? "").trim();
         if (!responseText && !isMindConfigured()) {
           responseText = noMindConfiguredFallback();
+        }
+        if (!responseText) {
+          const retrySentence = buildRetrySentence(sentence);
+          const retryResult = (interpretFn === bridgeInterpret)
+            ? await mind_to_name_text(retrySentence, {
+              inputs: mindInputs,
+              sessionUserContent: String(event?.text ?? ""),
+              sessionUserMetadata: {
+                channelType: String(event?.channelType ?? ""),
+                channelId: String(event?.channelId ?? ""),
+                sender: String(event?.sender ?? ""),
+                payloadId: String(orchestratorDirective?.payloadId ?? ""),
+                timestamp: String(event?.timestamp ?? "")
+              },
+              sessionAssistantMetadata: {
+                channelType: String(event?.channelType ?? ""),
+                channelId: String(event?.channelId ?? ""),
+                sender: String(targetAgent ?? agentName ?? ""),
+                payloadId: String(orchestratorDirective?.payloadId ?? "")
+              }
+            })
+            : await interpretFn(retrySentence);
+          responseText = String(retryResult?.ob?.text ?? "").trim();
+          if (debug) {
+            await appendTelemetry(agentHouse, {
+              timestamp: nowIso(),
+              channelType,
+              event: "event",
+              decision: responseText ? "mind_retry_success" : "mind_retry_empty",
+              eventId: event.eventId,
+              sender: event.sender,
+              channelId: event.channelId,
+              listener: targetAgent,
+              payloadId: orchestratorDirective.payloadId
+            }, { channelType, agentName });
+          }
         }
       } catch (err) {
         if (isMindUnavailableError(err)) {
@@ -961,8 +1127,14 @@ async function dispatchChannelEvents({
           repliedToSelf
         }, { channelType, agentName });
       }
-      if (!responseText) continue;
-      await sendChannelMessage(responseText);
+      if (!responseText) responseText = emptyMindFallback();
+      const produceRequest = buildRouterProduceRequestSentence({
+        channelType,
+        event,
+        sourceAgentName: targetAgent,
+        payloadId: orchestratorDirective.payloadId,
+        responseText
+      });
       await routeChannelProduce({
         routerInterpretFn,
         channelType,
@@ -971,6 +1143,19 @@ async function dispatchChannelEvents({
         payloadId: orchestratorDirective.payloadId,
         responseText
       });
+      if (outputMode === "queue") {
+        await enqueueProduceEnvelope(worldRootResolved, {
+          channelType,
+          identity: String(channelConfig?.user ?? "").trim(),
+          agentName: targetAgent,
+          roomName: event.channelId,
+          payloadId: orchestratorDirective.payloadId,
+          payloadSentence: produceRequest
+        });
+        sent += 1;
+      } else {
+        await sendChannelMessage(responseText);
+      }
     }
   }
 
@@ -1026,7 +1211,421 @@ function normalizeEvent(rawEvent, channelType) {
     text,
     timestamp: rawEvent.timestamp ? String(rawEvent.timestamp) : nowIso(),
     laneName: rawEvent.laneName ? String(rawEvent.laneName) : null,
-    attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : []
+    attachments: Array.isArray(rawEvent.attachments) ? rawEvent.attachments : [],
+    dmRoom: rawEvent.dmRoom === true || rawEvent.directRoom === true
+  };
+}
+
+function eventToQueueSentence(event) {
+  return {
+    mood: "ya",
+    su: { name: String(event?.eventId ?? "").trim() || "channel-event" },
+    be: "channel queued event",
+    ob: { text: JSON.stringify(event ?? {}) }
+  };
+}
+
+function eventFromQueueSentence(sentence) {
+  const text = String(sentence?.ob?.text ?? "").trim();
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseChannelIdFromEndpoint(endpoint) {
+  const text = String(endpoint ?? "").trim();
+  const match = text.match(/^channel\s+\S+\s+room\s+(.+)$/i);
+  if (!match) return "";
+  return String(match[1] ?? "").trim();
+}
+
+function parseAgentNameFromEndpoint(endpoint) {
+  const text = String(endpoint ?? "").trim();
+  const match = text.match(/^agent\s+(.+)$/i);
+  if (!match) return "";
+  return String(match[1] ?? "").trim();
+}
+
+export async function runChannelPollOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter,
+  agentHouse,
+  dedupLimit = 2000
+}) {
+  if (!agentName) throw new Error("runChannelPollOnce requires agentName");
+  if (!channelType) throw new Error("runChannelPollOnce requires channelType");
+  if (!adapter) throw new Error("runChannelPollOnce requires adapter");
+  if (!agentHouse) throw new Error("runChannelPollOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const lock = await acquireChannelInputLock({ worldRoot, agentName, channelType });
+  if (!lock) return { received: 0, enqueued: 0, skippedDedup: 0, durationMs: 0, queueDepth: 0, locked: true };
+
+  try {
+    const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+    const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+      ? runtimeState.checkpoint
+      : {};
+    const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+    const startMs = Date.now();
+    const recv = await adapter.receive({ config: channelConfig, checkpoint });
+    const rawEvents = Array.isArray(recv?.events) ? recv.events : [];
+    const events = rawEvents.map(event => normalizeEvent(event, channelType)).filter(Boolean);
+    const newCheckpoint = recv?.checkpoint ?? checkpoint;
+    const checkpointText = String(checkpoint?.nextBatch ?? "").trim();
+    const shouldWarmStart = channelConfig?.warmStart === true
+      && !checkpointText
+      && Array.isArray(runtimeState?.dedupOrder)
+      && runtimeState.dedupOrder.length === 0
+      && Array.isArray(runtimeState?.selfOrder)
+      && runtimeState.selfOrder.length === 0;
+    let enqueued = 0;
+    let skippedDedup = 0;
+    const debug = channelConfig?.debug === true;
+
+    if (shouldWarmStart) {
+      await writeChannelRuntimeState({
+        agentHouse,
+        channelType,
+        checkpoint: newCheckpoint,
+        dedupOrder: Array.isArray(runtimeState?.dedupOrder) ? runtimeState.dedupOrder : [],
+        selfOrder: selfState.order,
+        removeLegacy: true
+      });
+      const depth = await queueDepth(worldRoot);
+      const durationMs = Date.now() - startMs;
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "poll_enqueue",
+        decision: "warm_start",
+        durationMs,
+        received: 0,
+        enqueued: 0,
+        skippedDedup: 0,
+        queueDepth: depth.total
+      }, { channelType, agentName });
+      return {
+        received: 0,
+        enqueued: 0,
+        skippedDedup: 0,
+        durationMs,
+        queueDepth: depth.total,
+        warmed: true
+      };
+    }
+
+    for (const event of events) {
+      if (typeof adapter?.markSeen === "function") {
+        try {
+          const seenTask = adapter.markSeen({ config: channelConfig, event });
+          if (seenTask && typeof seenTask.then === "function") void seenTask.catch(() => {});
+        } catch {
+          // best-effort only
+        }
+      }
+      await enqueueInputEnvelope(worldRoot, {
+        channelType,
+        identity: String(channelConfig?.user ?? "").trim(),
+        agentName,
+        roomName: event.channelId,
+        eventId: event.eventId,
+        payloadSentence: eventToQueueSentence(event)
+      });
+      enqueued += 1;
+    }
+
+    await writeChannelRuntimeState({
+      agentHouse,
+      channelType,
+      checkpoint: newCheckpoint,
+      dedupOrder: Array.isArray(runtimeState?.dedupOrder) ? runtimeState.dedupOrder : [],
+      selfOrder: selfState.order,
+      removeLegacy: true
+    });
+    const depth = await queueDepth(worldRoot);
+    const durationMs = Date.now() - startMs;
+    await appendTelemetry(agentHouse, {
+      timestamp: nowIso(),
+      channelType,
+      event: "poll_enqueue",
+      durationMs,
+      received: events.length,
+      enqueued,
+      skippedDedup,
+      queueDepth: depth.total
+    }, { channelType, agentName });
+    if (debug && recv?.diagnostics) {
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "poll_debug",
+        diagnostics: recv.diagnostics
+      }, { channelType, agentName });
+    }
+    return {
+      received: events.length,
+      enqueued,
+      skippedDedup,
+      durationMs,
+      queueDepth: depth.total
+    };
+  } finally {
+    await releaseChannelInputLock(lock);
+  }
+}
+
+export async function runChannelInputOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter = null,
+  interpretFn,
+  routerInterpretFn = bridgeInterpret,
+  agentHouse,
+  dedupLimit = 2000,
+  maxItems = 10,
+  concurrency = 2
+}) {
+  if (!agentName) throw new Error("runChannelInputOnce requires agentName");
+  if (!channelType) throw new Error("runChannelInputOnce requires channelType");
+  if (typeof interpretFn !== "function") throw new Error("runChannelInputOnce requires interpretFn");
+  if (!agentHouse) throw new Error("runChannelInputOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+  const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+    ? runtimeState.checkpoint
+    : {};
+  const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+  const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+  const dedupIds = new Set(dedupState.order);
+  const selfEventIds = new Set(selfState.order);
+  const claims = [];
+  const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  for (let i = 0; i < limit; i += 1) {
+    const claimed = await claimOldestInputEnvelope(worldRoot, {
+      workerTag: `${agentName}-input`,
+      channelType,
+      agentName
+    });
+    if (!claimed) break;
+    claims.push(claimed);
+  }
+  if (!claims.length) {
+    const depth = await queueDepth(worldRoot);
+    return {
+      received: 0,
+      handled: 0,
+      sent: 0,
+      skippedDedup: 0,
+      skippedSelf: 0,
+      skippedMention: 0,
+      durationMs: 0,
+      queueDepth: depth.total
+    };
+  }
+  const startMs = Date.now();
+  const workerCount = Math.max(1, Math.trunc(Number(concurrency) || 2));
+  let cursor = 0;
+  const totals = {
+    received: 0,
+    handled: 0,
+    sent: 0,
+    skippedDedup: 0,
+    skippedSelf: 0,
+    skippedMention: 0
+  };
+  const processClaim = async (claim) => {
+    const queuedEvent = eventFromQueueSentence(claim?.envelope?.payloadSentence);
+    const event = normalizeEvent(queuedEvent, channelType);
+    const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));
+    if (!event) {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount,
+        maxRetries: 0,
+        requeuePhase: "input"
+      });
+      return;
+    }
+    try {
+      const dispatchResult = await dispatchChannelEvents({
+        events: [event],
+        channelType,
+        channelConfig,
+        agentName,
+        adapter,
+        interpretFn,
+        routerInterpretFn,
+        agentHouse,
+        worldRoot,
+        dedupIds,
+        dedupState,
+        selfEventIds,
+        selfState,
+        dedupLimit,
+        debug: channelConfig?.debug === true,
+        outputMode: "queue"
+      });
+      totals.received += Number(dispatchResult?.received ?? 0);
+      totals.handled += Number(dispatchResult?.handled ?? 0);
+      totals.sent += Number(dispatchResult?.sent ?? 0);
+      totals.skippedDedup += Number(dispatchResult?.skippedDedup ?? 0);
+      totals.skippedSelf += Number(dispatchResult?.skippedSelf ?? 0);
+      totals.skippedMention += Number(dispatchResult?.skippedMention ?? 0);
+      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+    } catch {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount: retryCount + 1,
+        maxRetries: 2,
+        requeuePhase: "input"
+      });
+    }
+  };
+  const workers = Array.from({ length: Math.min(workerCount, claims.length) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= claims.length) return;
+      await processClaim(claims[index]);
+    }
+  });
+  await Promise.all(workers);
+  await writeChannelRuntimeState({
+    agentHouse,
+    channelType,
+    checkpoint,
+    dedupOrder: dedupState.order,
+    selfOrder: selfState.order,
+    removeLegacy: true
+  });
+  const depth = await queueDepth(worldRoot);
+  const durationMs = Date.now() - startMs;
+  await appendTelemetry(agentHouse, {
+    timestamp: nowIso(),
+    channelType,
+    event: "input_dispatch",
+    durationMs,
+    ...totals,
+    queueDepth: depth.total
+  }, { channelType, agentName });
+  return {
+    ...totals,
+    durationMs,
+    queueDepth: depth.total
+  };
+}
+
+export async function runChannelProduceOnce({
+  agentName,
+  channelType,
+  channelConfig,
+  adapter,
+  agentHouse,
+  dedupLimit = 2000,
+  maxItems = 10
+}) {
+  if (!agentName) throw new Error("runChannelProduceOnce requires agentName");
+  if (!channelType) throw new Error("runChannelProduceOnce requires channelType");
+  if (!adapter) throw new Error("runChannelProduceOnce requires adapter");
+  if (!agentHouse) throw new Error("runChannelProduceOnce requires agentHouse");
+  const worldRoot = worldRootFromAgentHouse(agentHouse);
+  const runtimeState = await readChannelRuntimeState({ agentHouse, channelType });
+  const checkpoint = runtimeState?.checkpoint && typeof runtimeState.checkpoint === "object"
+    ? runtimeState.checkpoint
+    : {};
+  const dedupState = { order: Array.isArray(runtimeState?.dedupOrder) ? [...runtimeState.dedupOrder] : [] };
+  const selfState = { order: Array.isArray(runtimeState?.selfOrder) ? [...runtimeState.selfOrder] : [] };
+  const limit = Math.max(1, Math.trunc(Number(maxItems) || 10));
+  let sent = 0;
+  let failed = 0;
+  const startMs = Date.now();
+
+  for (let i = 0; i < limit; i += 1) {
+    const claim = await claimOldestProduceEnvelope(worldRoot, {
+      workerTag: `${agentName}-produce`,
+      channelType,
+      agentName
+    });
+    if (!claim) break;
+    const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));
+    const payloadSentence = claim?.envelope?.payloadSentence ?? {};
+    const roomId = parseChannelIdFromEndpoint(payloadSentence?.to?.name);
+    const sourceAgent = parseAgentNameFromEndpoint(payloadSentence?.from?.name) || agentName;
+    const content = String(payloadSentence?.ob?.text ?? "").trim();
+    if (!roomId || !content) {
+      failed += 1;
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount,
+        maxRetries: 0,
+        requeuePhase: "produce"
+      });
+      continue;
+    }
+    try {
+      const sendResult = await adapter.send({
+        config: channelConfig,
+        event: { channelType, channelId: roomId },
+        content
+      });
+      if (sendResult?.eventId) {
+        selfState.order.push(sendResult.eventId);
+        while (selfState.order.length > dedupLimit) selfState.order.shift();
+      }
+      sent += 1;
+      await ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath: claim.path });
+      await appendTelemetry(agentHouse, {
+        timestamp: nowIso(),
+        channelType,
+        event: "produce_sent",
+        sourceAgent,
+        roomId,
+        eventId: sendResult?.eventId ?? ""
+      }, { channelType, agentName });
+    } catch {
+      failed += 1;
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claim.path,
+        retryCount: retryCount + 1,
+        maxRetries: 2,
+        requeuePhase: "produce"
+      });
+    }
+  }
+
+  await writeChannelRuntimeState({
+    agentHouse,
+    channelType,
+    checkpoint,
+    dedupOrder: dedupState.order,
+    selfOrder: selfState.order,
+    removeLegacy: true
+  });
+  const depth = await queueDepth(worldRoot);
+  const durationMs = Date.now() - startMs;
+  await appendTelemetry(agentHouse, {
+    timestamp: nowIso(),
+    channelType,
+    event: "produce_dispatch",
+    durationMs,
+    sent,
+    failed,
+    queueDepth: depth.total
+  }, { channelType, agentName });
+  return {
+    received: sent + failed,
+    handled: sent,
+    sent,
+    failed,
+    durationMs,
+    queueDepth: depth.total
   };
 }
 

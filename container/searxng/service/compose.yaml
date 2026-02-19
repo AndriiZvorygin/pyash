@@ -1,0 +1,22 @@
+services:
+  redis:
+    image: valkey/valkey:7-alpine   # or redis:7-alpine if you prefer
+    container_name: redis
+    restart: unless-stopped
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "60490:8080"
+    env_file:
+      - ../configure/ecology/searxng.env
+    volumes:
+      - "../configure/searxng:/etc/searxng"
+    environment:
+      - BASE_URL=http://[::]:8080/
+      - INSTANCE_NAME=search
+      - UWSGI_WORKERS=4
+      - UWSGI_THREADS=4
+      - BIND_ADDRESS=[::]:8080

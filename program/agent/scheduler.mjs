@@ -4,9 +4,12 @@ import path from "node:path";
 import { splitSentences } from "../library/sentenceSplitter.mjs";
 import { parse } from "../understand/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
+import {
+  listWorldDeclaredAgentHouses,
+  resolveWorldAgentHouseDirectory
+} from "../library/agent_command_policy.mjs";
 
 const LANE_PATTERN = /^(.+?)\s+lane$/i;
-const CALENDAR_FILENAMES = ["calendar.pya", "schedule.pya"];
 
 function sanitizeLaneName(raw) {
   const text = String(raw ?? "").trim().toLowerCase();
@@ -120,7 +123,6 @@ export function parseSchedulePolicyText(text, { defaultAgentName } = {}) {
         laneName: sanitizeLaneName(laneRaw)
       };
     })
-    .filter(job => job.agentName)
     .sort((a, b) => a.jobName.localeCompare(b.jobName, "en"));
 
   return parsedJobs;
@@ -182,38 +184,40 @@ export async function loadSchedulePolicyWithGlobal({
   return mergeSchedulePolicies(scopedGlobal, agentJobs);
 }
 
-async function listAgentNames(worldRoot) {
-  if (!worldRoot) return [];
-  const houseDir = path.join(worldRoot, "house");
-  let entries;
-  try {
-    entries = await fs.readdir(houseDir, { withFileTypes: true });
-  } catch (err) {
-    if (err?.code === "ENOENT") return [];
-    throw err;
-  }
-  return entries
-    .filter(entry => entry.isDirectory())
-    .map(entry => entry.name)
-    .sort((a, b) => a.localeCompare(b, "en"));
+function listDeclaredAgentNames(worldRoot) {
+  const declarations = listWorldDeclaredAgentHouses({ worldRoot });
+  return declarations.map((entry) => entry.agentName);
 }
 
 export async function discoverScheduledJobs({ worldRoot } = {}) {
   if (!worldRoot) return [];
   const globalConductDir = path.join(worldRoot, "conduct");
   const globalJobs = await loadSchedulePolicyFromConductDir(globalConductDir, { defaultAgentName: null });
-  const agentNamesFromGlobal = new Set(globalJobs.map(job => job.agentName).filter(Boolean));
-  const agentNamesFromHouse = await listAgentNames(worldRoot);
-  for (const name of agentNamesFromHouse) agentNamesFromGlobal.add(name);
-
-  const allAgentNames = [...agentNamesFromGlobal].sort((a, b) => a.localeCompare(b, "en"));
+  const sharedGlobalJobs = globalJobs.filter((job) => !String(job?.agentName ?? "").trim());
+  const sharedChannelJobPattern = /^channel\s+(poll|probe|input|produce)$/i;
+  const allAgentNames = [...new Set(listDeclaredAgentNames(worldRoot))]
+    .sort((a, b) => a.localeCompare(b, "en"));
   const mergedJobs = [];
   for (const agentName of allAgentNames) {
-    const agentHouse = path.join(worldRoot, "house", agentName);
-    const jobs = await loadSchedulePolicyWithGlobal({ worldRoot, agentHouse, agentName });
+    const agentHouse = resolveWorldAgentHouseDirectory({
+      worldRoot,
+      agentName,
+      includeFallback: true
+    }) ?? path.join(worldRoot, "house", agentName);
+    const scopedGlobal = globalJobs.filter((job) => String(job?.agentName ?? "").trim() === agentName);
+    const agentJobs = await loadSchedulePolicy({ agentHouse, agentName });
+    const filteredAgentJobs = agentJobs.filter((job) => {
+      const name = String(job?.jobName ?? "").trim();
+      if (!name) return false;
+      return !sharedChannelJobPattern.test(name);
+    });
+    const jobs = mergeSchedulePolicies(scopedGlobal, filteredAgentJobs);
     mergedJobs.push(...jobs);
   }
-  return mergedJobs.sort((a, b) => {
+  return [...sharedGlobalJobs, ...mergedJobs].sort((a, b) => {
+    const sharedA = String(a.agentName ?? "").trim() ? 1 : 0;
+    const sharedB = String(b.agentName ?? "").trim() ? 1 : 0;
+    if (sharedA !== sharedB) return sharedA - sharedB;
     const agentCmp = String(a.agentName).localeCompare(String(b.agentName), "en");
     if (agentCmp !== 0) return agentCmp;
     return String(a.jobName).localeCompare(String(b.jobName), "en");
@@ -222,17 +226,14 @@ export async function discoverScheduledJobs({ worldRoot } = {}) {
 
 export async function loadSchedulePolicyFromConductDir(conductDir, { defaultAgentName } = {}) {
   if (!conductDir) return [];
-  for (const filename of CALENDAR_FILENAMES) {
-    const policyPath = path.join(conductDir, filename);
-    try {
-      await fs.access(policyPath);
-    } catch (err) {
-      if (err?.code === "ENOENT") continue;
-      throw err;
-    }
-    return loadSchedulePolicyFromPath(policyPath, { defaultAgentName });
+  const policyPath = path.join(conductDir, "calendar.pya");
+  try {
+    await fs.access(policyPath);
+  } catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
   }
-  return [];
+  return loadSchedulePolicyFromPath(policyPath, { defaultAgentName });
 }
 
 function createStats(job) {
@@ -251,6 +252,7 @@ function createStats(job) {
     consecutiveErrors: 0,
     enabled: true,
     running: false,
+    pending: false,
     lastStart: null,
     lastEnd: null,
     lastError: null,
@@ -319,6 +321,7 @@ export function createScheduler({
       stats.enabled = true;
     }
     if (stats.running) {
+      stats.pending = true;
       stats.skips += 1;
       const attempts = stats.runs + stats.skips;
       stats.overlapPct = attempts > 0
@@ -404,6 +407,14 @@ export function createScheduler({
       return { skipped: false, error: err };
     } finally {
       stats.running = false;
+      if (stats.pending) {
+        stats.pending = false;
+        const task = tick(job).catch((err) => {
+          if (onError) onError(err);
+        });
+        tasks.add(task);
+        task.finally(() => tasks.delete(task));
+      }
     }
   }
 
@@ -457,6 +468,7 @@ export function createScheduler({
         consecutiveErrors: stats?.consecutiveErrors ?? 0,
         enabled: stats?.enabled !== false,
         running: !!stats?.running,
+        pending: !!stats?.pending,
         lastStatus: stats?.lastStatus ?? null,
         lastError: stats?.lastError ?? null
       };

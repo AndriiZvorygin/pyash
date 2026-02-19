@@ -71,8 +71,8 @@ function applyTemplate(template, values) {
   return out;
 }
 
-function parseVerdictFromLastLine(reviewText, threshold) {
-  const lastLine = extractLastNonEmptyLine(reviewText);
+function parseVerdictFromLastLine(verifyText, threshold) {
+  const lastLine = extractLastNonEmptyLine(verifyText);
   const upper = lastLine.toUpperCase();
   if (/^PASS\b/u.test(upper)) return { pass: true, score: 1, lastLine };
   if (/^FAIL\b/u.test(upper)) return { pass: false, score: 0, lastLine };
@@ -176,9 +176,9 @@ async function invokeGuaranteeCommand({ commandText, outputName }) {
   }
 }
 
-function buildReviewerPrompt({ task, draft, transcript, threshold, includeTranscript }) {
+function buildVerifierPrompt({ task, draft, transcript, threshold, includeTranscript }) {
   const pieces = [
-    "Review the candidate for factual grounding, constraint fit, and contradictions.",
+    "Verify the candidate for factual grounding, constraint fit, and contradictions.",
     includeTranscript
       ? "Use the flow transcript to check whether claims match tool outputs and prior steps."
       : "Focus on task fit and factual consistency from the candidate text.",
@@ -197,20 +197,20 @@ function buildReviewerPrompt({ task, draft, transcript, threshold, includeTransc
   return pieces.join("\n");
 }
 
-function buildRetryPrompt({ task, acceptedBundle, draft, reviewText, guaranteeText }) {
+function buildRetryPrompt({ task, acceptedBundle, draft, verifyText, guaranteeText }) {
   const lines = [
-    "Revise the candidate to fix all reviewer issues while preserving supported facts.",
+    "Revise the candidate to fix all verifier issues while preserving supported facts.",
     "Keep the result concise.",
     "",
     "TASK:",
     task
   ];
-  if (acceptedBundle?.draft || acceptedBundle?.review || acceptedBundle?.guarantee) {
+  if (acceptedBundle?.draft || acceptedBundle?.verify || acceptedBundle?.guarantee) {
     lines.push(
       "",
       "LATEST ACCEPTED REFERENCE:",
       `draft: ${acceptedBundle?.draft || "none"}`,
-      `review: ${acceptedBundle?.review || "none"}`,
+      `verify: ${acceptedBundle?.verify || "none"}`,
       `guarantee: ${acceptedBundle?.guarantee || "none"}`
     );
   }
@@ -219,8 +219,8 @@ function buildRetryPrompt({ task, acceptedBundle, draft, reviewText, guaranteeTe
     "LATEST FAILED CANDIDATE:",
     draft,
     "",
-    "LATEST REVIEW FEEDBACK:",
-    reviewText || "none",
+    "LATEST VERIFY FEEDBACK:",
+    verifyText || "none",
     "",
     "LATEST GUARANTEE FEEDBACK:",
     guaranteeText || "none"
@@ -255,72 +255,72 @@ function rememberMap(name, map) {
   });
 }
 
-export async function reviewLoop(sentence) {
+export async function verifyLoop(sentence) {
   const task = resolveTextFromValue(sentence?.ob);
   const generatorName = sentence?.for?.name ?? null;
-  const reviewerName = sentence?.by?.name ?? null;
+  const verifierName = sentence?.by?.name ?? null;
   const toolMapName = sentence?.with?.name ?? (sentence?.with?.wo === "tools" ? "agent tools" : null);
   const outputName = sentence?.to?.name ?? null;
-  const configMaxAttempts = resolveConfigMapNum("review loop configure", "max attempts");
-  const configThreshold = resolveConfigMapNum("review loop configure", "threshold");
+  const configMaxAttempts = resolveConfigMapNum("verify loop configure", "max attempts");
+  const configThreshold = resolveConfigMapNum("verify loop configure", "threshold");
   const maxAttempts = Math.max(1, Math.trunc(Number(sentence?.atmost?.num ?? configMaxAttempts ?? 3)));
   const threshold = Number.isFinite(Number(sentence?.atleast?.num))
     ? Number(sentence.atleast.num)
     : (Number.isFinite(Number(configThreshold)) ? Number(configThreshold) : 0.8);
   const transcriptMaxLines = Math.max(1, Math.trunc(Number(
-    resolveConfigMapNum("review loop configure", "transcript max lines") ?? 40
+    resolveConfigMapNum("verify loop configure", "transcript max lines") ?? 40
   )));
-  const includeTranscript = resolveConfigMapText("review loop configure", "include transcript") !== "lie";
+  const includeTranscript = resolveConfigMapText("verify loop configure", "include transcript") !== "lie";
   const guaranteeCommandTemplate =
-    resolveConfigMapText("review loop configure", "guarantee command")
-    ?? resolveConfigMapText("review loop configure", "verifier command")
+    resolveConfigMapText("verify loop configure", "guarantee command")
+    ?? resolveConfigMapText("verify loop configure", "verifier command")
     ?? "";
   const guaranteeExpectRegex =
-    resolveConfigMapText("review loop configure", "guarantee expect regex")
-    ?? resolveConfigMapText("review loop configure", "verifier expect regex")
+    resolveConfigMapText("verify loop configure", "guarantee expect regex")
+    ?? resolveConfigMapText("verify loop configure", "verifier expect regex")
     ?? "";
-  const guaranteeDraftRegex = resolveConfigMapText("review loop configure", "guarantee draft regex") ?? "";
+  const guaranteeDraftRegex = resolveConfigMapText("verify loop configure", "guarantee draft regex") ?? "";
 
   if (!task) {
     throwErrorSentence({
-      name: "review loop defective",
-      message: "review loop defective: missing input text",
-      from: { name: "review loop" },
+      name: "verify loop defective",
+      message: "verify loop defective: missing input text",
+      from: { name: "verify loop" },
       raw: { sentence }
     });
   }
   if (!generatorName) {
     throwErrorSentence({
-      name: "review loop defective",
-      message: "review loop defective: missing generator name",
-      from: { name: "review loop" },
+      name: "verify loop defective",
+      message: "verify loop defective: missing generator name",
+      from: { name: "verify loop" },
       raw: { sentence }
     });
   }
-  if (!reviewerName && !guaranteeCommandTemplate && !guaranteeDraftRegex) {
+  if (!verifierName && !guaranteeCommandTemplate && !guaranteeDraftRegex) {
     throwErrorSentence({
-      name: "review loop defective",
-      message: "review loop defective: missing reviewer and guarantee",
-      from: { name: "review loop" },
+      name: "verify loop defective",
+      message: "verify loop defective: missing verifier and guarantee",
+      from: { name: "verify loop" },
       raw: { sentence }
     });
   }
 
   const generatorFact = remember(generatorName);
-  const reviewerFact = reviewerName ? remember(reviewerName) : null;
+  const verifierFact = verifierName ? remember(verifierName) : null;
   const generatorIsMind = generatorFact?.be === "mind";
-  const reviewerIsMind = reviewerFact?.be === "mind";
+  const verifierIsMind = verifierFact?.be === "mind";
   const generatorRefineryName = !generatorIsMind ? await resolveRefineryTarget(generatorName) : null;
-  const reviewerRefineryName = reviewerName && !reviewerIsMind ? await resolveRefineryTarget(reviewerName) : null;
-  const reviewerIsRefinery = reviewerName && !reviewerIsMind
-    ? Boolean(reviewerRefineryName ?? await resolveIsRefinery(reviewerName))
+  const verifierRefineryName = verifierName && !verifierIsMind ? await resolveRefineryTarget(verifierName) : null;
+  const verifierIsRefinery = verifierName && !verifierIsMind
+    ? Boolean(verifierRefineryName ?? await resolveIsRefinery(verifierName))
     : false;
   const generatorIsRefinery = !generatorIsMind && Boolean(generatorRefineryName ?? await resolveIsRefinery(generatorName));
 
-  const priorSuccess = remember("review loop last success")?.ob?.map ?? {};
+  const priorSuccess = remember("verify loop last success")?.ob?.map ?? {};
   const acceptedReference = {
     draft: String(priorSuccess?.draft?.text ?? ""),
-    review: String(priorSuccess?.review?.text ?? ""),
+    verify: String(priorSuccess?.verify?.text ?? ""),
     guarantee: String(priorSuccess?.guarantee?.text ?? "")
   };
   let latestPrompt = task;
@@ -335,11 +335,11 @@ export async function reviewLoop(sentence) {
   let lastFailureBundle = null;
   let lastSuccessBundle = null;
 
-  rememberText("review loop seed task", task);
+  rememberText("verify loop seed task", task);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     attemptsUsed = attempt;
-    const draftName = `review loop draft ${attempt}`;
+    const draftName = `verify loop draft ${attempt}`;
     const flowSeriesName = generatorIsMind ? `${generatorName} story session` : "";
     const flowStart = seriesEntryCount(flowSeriesName);
     if (generatorIsMind) {
@@ -380,7 +380,7 @@ export async function reviewLoop(sentence) {
         draft: shellEscapeSingle(finalDraft),
         task: shellEscapeSingle(task)
       });
-      const guaranteeName = `review loop guarantee ${attempt}`;
+      const guaranteeName = `verify loop guarantee ${attempt}`;
       const guarantee = await invokeGuaranteeCommand({
         commandText: guaranteeCommand,
         outputName: guaranteeName
@@ -406,14 +406,14 @@ export async function reviewLoop(sentence) {
     }
 
     if (!lastGuaranteePass) {
-      lastReviewText = "skipped reviewer (guarantee failed)";
+      lastReviewText = "skipped verifier (guarantee failed)";
       lastVerdict = { pass: false, score: 0, lastLine: "FAIL (guarantee)" };
-    } else if (reviewerName) {
+    } else if (verifierName) {
       const transcript = formatSeriesTranscript(flowSeriesName, {
         maxLines: transcriptMaxLines,
         fromIndex: flowStart
       });
-      const reviewPrompt = buildReviewerPrompt({
+      const reviewPrompt = buildVerifierPrompt({
         task,
         draft: finalDraft,
         transcript,
@@ -421,29 +421,29 @@ export async function reviewLoop(sentence) {
         includeTranscript
       });
 
-      const reviewName = `review loop feedback ${attempt}`;
-      if (reviewerIsMind) {
+      const reviewName = `verify loop feedback ${attempt}`;
+      if (verifierIsMind) {
         lastReviewText = await invokeMind({
-          mindName: reviewerName,
+          mindName: verifierName,
           prompt: reviewPrompt,
           outputName: reviewName
         });
-      } else if (reviewerIsRefinery) {
+      } else if (verifierIsRefinery) {
         lastReviewText = await invokeRefinery({
-          refineryName: reviewerRefineryName ?? reviewerName,
+          refineryName: verifierRefineryName ?? verifierName,
           prompt: reviewPrompt,
           outputName: reviewName
         });
       } else {
         lastReviewText = await invokeCeremony({
-          ceremonyName: reviewerName,
+          ceremonyName: verifierName,
           prompt: reviewPrompt,
           outputName: reviewName
         });
       }
       lastVerdict = parseVerdictFromLastLine(lastReviewText, threshold);
     } else {
-      lastReviewText = "skipped reviewer";
+      lastReviewText = "skipped verifier";
       lastVerdict = { pass: true, score: 1, lastLine: "PASS (guarantee)" };
     }
 
@@ -452,7 +452,7 @@ export async function reviewLoop(sentence) {
       lastSuccessBundle = {
         attempt: { num: attempt },
         draft: { text: finalDraft },
-        review: { text: lastReviewText },
+        verify: { text: lastReviewText },
         verdict: { text: lastVerdict.lastLine || "PASS" },
         guarantee: { text: lastGuaranteeText }
       };
@@ -464,7 +464,7 @@ export async function reviewLoop(sentence) {
       lastFailureBundle = {
         attempt: { num: attempt },
         draft: { text: finalDraft },
-        review: { text: lastReviewText },
+        verify: { text: lastReviewText },
         verdict: { text: lastVerdict.lastLine || "FAIL" },
         guarantee: { text: lastGuaranteeText }
       };
@@ -474,7 +474,7 @@ export async function reviewLoop(sentence) {
     lastFailureBundle = {
       attempt: { num: attempt },
       draft: { text: finalDraft },
-      review: { text: lastReviewText },
+      verify: { text: lastReviewText },
       verdict: { text: lastVerdict.lastLine || "FAIL" },
       guarantee: { text: lastGuaranteeText }
     };
@@ -484,7 +484,7 @@ export async function reviewLoop(sentence) {
       task,
       acceptedBundle: acceptedReference,
       draft: finalDraft,
-      reviewText: lastReviewText,
+      verifyText: lastReviewText,
       guaranteeText: lastGuaranteeText
     });
   }
@@ -493,16 +493,16 @@ export async function reviewLoop(sentence) {
   if (outputName) {
     rememberText(outputName, resultText);
   }
-  rememberText("review loop verdict", lastVerdict.lastLine || (lastVerdict.pass ? "PASS" : "FAIL"));
-  rememberText("review loop guarantee", lastGuaranteeText);
-  rememberText("review loop verifier", lastGuaranteeText);
-  rememberNum("review loop attempts used", attemptsUsed);
-  rememberText("review loop stop reason", stopReason);
-  rememberText("review loop summary", `attempts=${attemptsUsed}; stop=${stopReason}; verdict=${lastVerdict.lastLine || "FAIL"}; guarantee=${lastGuaranteeText}`);
-  if (lastFailureBundle) rememberMap("review loop last failure", lastFailureBundle);
-  if (lastSuccessBundle) rememberMap("review loop last success", lastSuccessBundle);
+  rememberText("verify loop verdict", lastVerdict.lastLine || (lastVerdict.pass ? "PASS" : "FAIL"));
+  rememberText("verify loop guarantee", lastGuaranteeText);
+  rememberText("verify loop verifier", lastGuaranteeText);
+  rememberNum("verify loop attempts used", attemptsUsed);
+  rememberText("verify loop stop reason", stopReason);
+  rememberText("verify loop summary", `attempts=${attemptsUsed}; stop=${stopReason}; verdict=${lastVerdict.lastLine || "FAIL"}; guarantee=${lastGuaranteeText}`);
+  if (lastFailureBundle) rememberMap("verify loop last failure", lastFailureBundle);
+  if (lastSuccessBundle) rememberMap("verify loop last success", lastSuccessBundle);
   if (typeof lastVerdict.score === "number") {
-    rememberNum("review loop score", lastVerdict.score);
+    rememberNum("verify loop score", lastVerdict.score);
   }
   try {
     const label = lastVerdict.pass ? "gold_positive" : "gold_negative";
@@ -513,14 +513,14 @@ export async function reviewLoop(sentence) {
       label,
       task,
       draft: resultText,
-      review: bundle?.review?.text ?? lastReviewText,
+      review: bundle?.verify?.text ?? lastReviewText,
       guarantee: bundle?.guarantee?.text ?? lastGuaranteeText
     });
-    rememberText("review loop gold label", label);
-    rememberText("review loop gold key", gold?.key ?? "");
-    rememberText("review loop gold file", gold?.file ?? "");
+    rememberText("verify loop gold label", label);
+    rememberText("verify loop gold key", gold?.key ?? "");
+    rememberText("verify loop gold file", gold?.file ?? "");
   } catch (err) {
-    rememberText("review loop gold error", String(err?.message ?? err ?? ""));
+    rememberText("verify loop gold error", String(err?.message ?? err ?? ""));
   }
 
   return { ob: { text: resultText }, be: "text" };
@@ -543,8 +543,8 @@ const WITH_TYPES = [
   ["wo", "tools"]
 ];
 
-function buildReviewSignature({ obType, forType, byType, withType, includeLimits }) {
-  const words = ["be", "review", "loop"];
+function buildVerifySignature({ obType, forType, byType, withType, includeLimits }) {
+  const words = ["be", "verify", "loop"];
   // Signatures are sorted by case key: atleast, atmost, by, for, ob, to, with
   if (includeLimits) words.push("atleast", "num", "atmost", "num");
   if (byType) words.push("by", ...byType);
@@ -564,11 +564,11 @@ for (const obType of OB_TYPES) {
       for (const withType of WITH_TYPES) {
         for (const includeLimits of [false, true]) {
           for (const useReviewer of [true, false]) {
-            const words = buildReviewSignature({ obType, forType, byType: useReviewer ? byType : null, withType, includeLimits });
+            const words = buildVerifySignature({ obType, forType, byType: useReviewer ? byType : null, withType, includeLimits });
             const key = words.join(" ");
             if (signatureSet.has(key)) continue;
             signatureSet.add(key);
-            signatureEntries.push({ signatureWords: words, handler: reviewLoop });
+            signatureEntries.push({ signatureWords: words, handler: verifyLoop });
           }
         }
       }
@@ -578,4 +578,4 @@ for (const obType of OB_TYPES) {
 
 export const signatures = signatureEntries;
 
-export default reviewLoop;
+export default verifyLoop;

@@ -1,0 +1,56 @@
+su name openai mind runner ob text payload be ceremony def
+  exists su name cmd ob text "node command/mind_openai_runner.mjs" be text ya
+  su name run ob text of cmd fromtext text of ob of this be command do
+  su name run ret
+prah
+
+su name openai mind runner ob text payload vyah stream be ceremony def
+  exists su name cmd ob text "node command/mind_openai_runner.mjs --stream" be text ya
+  su name run ob text of cmd fromtext text of ob of this vyah stream be command do
+  su name run ret
+prah
+
+su name openai command mind ob text payload be ceremony def
+  su name run ob text of ob of this be openai mind runner do
+  su name run ret
+prah
+
+su name openai command mind ob text payload vyah stream be ceremony def
+  su name run ob text of ob of this vyah stream be openai mind runner do
+  su name run ret
+prah
+
+su name litellm command mind ob text payload be ceremony def
+  su name run ob text of ob of this be openai mind runner do
+  su name run ret
+prah
+
+su name litellm command mind ob text payload vyah stream be ceremony def
+  su name run ob text of ob of this vyah stream be openai mind runner do
+  su name run ret
+prah
+
+su name openrouter command mind ob text payload be ceremony def
+  su name run ob text of ob of this be openai mind runner do
+  su name run ret
+prah
+
+su name openrouter command mind ob text payload vyah stream be ceremony def
+  su name run ob text of ob of this vyah stream be openai mind runner do
+  su name run ret
+prah
+
+su name vllm command mind ob text payload be ceremony def
+  su name run ob text of ob of this be openai mind runner do
+  su name run ret
+prah
+
+su name vllm command mind ob text payload vyah stream be ceremony def
+  su name run ob text of ob of this vyah stream be openai mind runner do
+  su name run ret
+prah
+
+exists su name openai command mind be export ya
+exists su name litellm command mind be export ya
+exists su name openrouter command mind be export ya
+exists su name vllm command mind be export ya

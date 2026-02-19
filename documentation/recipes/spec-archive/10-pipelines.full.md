@@ -385,7 +385,7 @@ ob text "Task." for name helper to name text output be write do
 ```
 
 ```pyash
-exists su name helper be mind as name "review loop" ya
+exists su name helper be mind as name "verify loop" ya
 ob text "Task." for name helper to name text output be write do
 ```
 
@@ -401,7 +401,7 @@ Required behavior:
 `discharge` MUST support explicit refinery teardown:
 
 ```pyash
-be discharge as wo refinery ob text "review loop" do
+be discharge as wo refinery ob text "verify loop" do
 ```
 
 Required behavior:
@@ -923,10 +923,10 @@ integrates with run newspaper and again mode requirements (§9–§10)
 
 ---
 
-## 13. Draft extensions for pure-Pyash review loops (v0.2 draft)
+## 13. Draft extensions for pure-Pyash verify loops (v0.2 draft)
 
 This section is a forward-looking draft. It does not change v0.1 behavior.
-Goal: make reviewer/generator loops implementable as ordinary Pyash refineries.
+Goal: make verifier/generator loops implementable as ordinary Pyash refineries.
 
 ### 13.1 Loop control verbs
 
@@ -950,7 +950,7 @@ Canonical signatures:
 
 ### 13.2 Structured branch extension
 
-Add `else if` chain support so reviewer loops do not rely on deeply nested `then`.
+Add `else if` chain support so verifier loops do not rely on deeply nested `then`.
 
 Canonical surface forms:
 
@@ -1052,11 +1052,11 @@ Canonical signatures:
 
 Refinery runners MUST provide run-local scope for platform execution and typed output contracts.
 
-Canonical local slots for review loops:
+Canonical local slots for verify loops:
 
 * `trying` (attempt index)
 * `sketch` (current generator output)
-* `reaction` (current reviewer output)
+* `reaction` (current verifier output)
 * `decision` (pass/fail or score parse)
 
 Contract extension on platform series entries:
@@ -1123,7 +1123,7 @@ The Re-entry Cycle delivers the first meaningful jump using existing models and 
 ### How (mechanism)
 
 The system intentionally **re-enters the same input** multiple times. Each pass produces a draft,
-receives reviewer criticism, and only applies revisions when the reviewer reports failure. A pass can
+receives verifier criticism, and only applies revisions when the verifier reports failure. A pass can
 skip revision entirely. Feedback from earlier passes shapes later ones.
 The recurrence lives in **control flow** (`fromindex … toindex … do`), not inside the model.
 One mind or multiple minds may be used; both qualify as RPT-1 because the input itself is what is re-entered.
@@ -1151,7 +1151,7 @@ Produce a concise, structured candidate answer.
 State assumptions explicitly when needed.
 ```
 
-**Review (reviewer mind)**
+**Review (verifier mind)**
 
 ```
 Review the candidate.
@@ -1208,18 +1208,18 @@ Explicit loop rule (normative):
 
 ---
 
-## Mind configuration (author/reviewer/judge)
+## Mind configuration (author/verifier/judge)
 
-The author, reviewer, and judge are **mind configurations**. Define them with `be mind` sentences and
+The author, verifier, and judge are **mind configurations**. Define them with `be mind` sentences and
 set their model + system prompt via `as` and `from discourse`:
 
 ```pyash
 exists su name author prompt ob text "Draft: be concise and follow the input." be text ya
-exists su name reviewer prompt ob text "Review: list issues + patch plan." be text ya
+exists su name verifier prompt ob text "Verify: list issues + patch plan." be text ya
 exists su name judge prompt ob text "Judge: score 0..1 + notes." be text ya
 
 exists su name author be mind as name "qwen3-vl:8b-instruct" from discourse name author prompt ya
-exists su name reviewer be mind as name "qwen3-vl:8b-instruct" from discourse name reviewer prompt ya
+exists su name verifier be mind as name "qwen3-vl:8b-instruct" from discourse name verifier prompt ya
 exists su name judge be mind as name "qwen3-vl:8b-instruct" from discourse name judge prompt ya
 ```
 
@@ -1228,9 +1228,9 @@ These can live in `configure/default.pya` for global defaults or inline in a spe
 To keep each stage strictly pipeline-based (no dialogue carryover), set a history window of zero
 via `by num 0` on the mind calls (see the attempt example below).
 
-### Context retention for review loops (normative)
+### Context retention for verify loops (normative)
 
-To prevent context overruns in retry-heavy reviewer/generator loops, prompt history
+To prevent context overruns in retry-heavy verifier/generator loops, prompt history
 for each new attempt MUST be compacted to a golden subset:
 
 1. the original user task/prompt (immutable),
@@ -1302,10 +1302,10 @@ su name re-entry attempt to name text output be ceremony def
   by num 0
   be write do
 
-  ; review (draft -> reviewer -> criticism)
+  ; review (draft -> verifier -> criticism)
   su name criticism out
   ob text draft out
-  for name reviewer
+  for name verifier
   to name criticism out
   by num 0
   be write do
@@ -1383,7 +1383,7 @@ The goal is a small, stable summary suitable for dashboards or CI.
 Recommended extraction fields (derive from newspaper + artifacts):
 
 - run id, run time, run root, source filename
-- reviewer status (pass/fail) and counts (passed/failed/skipped)
+- verifier status (pass/fail) and counts (passed/failed/skipped)
 - quiz entries (name, file, status, duration, failure message)
 - artifact references (locators for report inputs/outputs)
 - notes (optional, human-readable)

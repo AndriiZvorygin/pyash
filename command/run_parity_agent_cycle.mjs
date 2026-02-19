@@ -76,60 +76,22 @@ async function writeText(filePath, text) {
   await fs.writeFile(filePath, text, "utf8");
 }
 
-function readRememberText(name) {
-  const fact = remember(name);
-  const value = fact?.ob?.text ?? fact?.ob?.name ?? fact?.ob?.filename ?? null;
-  if (value == null) return null;
-  const text = String(value).trim();
-  return text || null;
-}
-
 function resolveMatrixConfigWithMap(rawConfig = {}) {
   const mapName = "matrix channel";
   const mapHomeserver = resolveConfigMapText(mapName, "homeserver");
   const mapSharedSecret = resolveConfigMapText(mapName, "registration shared secret");
   const mapAdminToken = resolveConfigMapText(mapName, "admin token");
   const mapToken = resolveConfigMapText(mapName, "token");
-  const mapExecutive = resolveConfigMapText(mapName, "executive username");
   const mapUser = resolveConfigMapText(mapName, "user");
   const mapRoom = resolveConfigMapText(mapName, "room");
   return {
     ...rawConfig,
-    homeserver:
-      mapHomeserver ??
-      rawConfig.homeserver ??
-      readRememberText("matrix homeserver") ??
-      readRememberText("matrix server") ??
-      null,
-    registrationSharedSecret:
-      mapSharedSecret ??
-      rawConfig.registrationSharedSecret ??
-      readRememberText("matrix registration shared secret") ??
-      null,
-    adminToken:
-      mapAdminToken ??
-      rawConfig.adminToken ??
-      readRememberText("matrix admin token") ??
-      null,
-    token:
-      mapToken ??
-      rawConfig.token ??
-      readRememberText("matrix access token") ??
-      null,
-    executiveUsername:
-      mapExecutive ??
-      rawConfig.executiveUsername ??
-      readRememberText("matrix executive username") ??
-      null,
-    user:
-      mapUser ??
-      rawConfig.user ??
-      readRememberText("matrix user") ??
-      null,
-    room:
-      mapRoom ??
-      readRememberText("matrix room") ??
-      null
+    homeserver: rawConfig.homeserver ?? mapHomeserver ?? null,
+    registrationSharedSecret: rawConfig.registrationSharedSecret ?? mapSharedSecret ?? null,
+    adminToken: rawConfig.adminToken ?? mapAdminToken ?? null,
+    token: rawConfig.token ?? mapToken ?? null,
+    user: rawConfig.user ?? mapUser ?? null,
+    room: rawConfig.room ?? mapRoom ?? null
   };
 }
 

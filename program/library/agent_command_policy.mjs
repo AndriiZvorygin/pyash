@@ -5,6 +5,7 @@ import { parse } from "../understand/index.mjs";
 import { splitSentences } from "./sentenceSplitter.mjs";
 
 const MAP_SUFFIX = " directory license";
+const HOUSE_SUFFIX = " house directory";
 const CAPABILITY_WORDS = new Set(["read", "write", "command"]);
 const cache = new Map();
 
@@ -36,6 +37,7 @@ function resolvePathRaw(name = "") {
 
 function parsePolicyText(text = "") {
   const maps = new Map();
+  const houses = new Map();
   const lines = splitSentences(String(text ?? ""), { includeThen: true });
   let activeAgent = null;
   for (const rawLine of lines) {
@@ -60,38 +62,53 @@ function parsePolicyText(text = "") {
       activeAgent = agentName;
       continue;
     }
-    if (!activeAgent) continue;
+    if (activeAgent) {
+      let sentence;
+      try {
+        sentence = parse(trimmed);
+      } catch {
+        continue;
+      }
+      const dirRaw = resolvePathRaw(sentence?.su?.name);
+      if (!dirRaw) continue;
+      const caps = parseCapabilityEntry(sentence);
+      if (!caps.length) continue;
+      const entryMap = maps.get(activeAgent) ?? new Map();
+      const prior = entryMap.get(dirRaw) ?? [];
+      const merged = [...prior];
+      for (const capability of caps) {
+        if (!merged.includes(capability)) merged.push(capability);
+      }
+      entryMap.set(dirRaw, merged);
+      maps.set(activeAgent, entryMap);
+      continue;
+    }
+
     let sentence;
     try {
       sentence = parse(trimmed);
     } catch {
       continue;
     }
-    const dirRaw = resolvePathRaw(sentence?.su?.name);
-    if (!dirRaw) continue;
-    const caps = parseCapabilityEntry(sentence);
-    if (!caps.length) continue;
-    const entryMap = maps.get(activeAgent) ?? new Map();
-    const prior = entryMap.get(dirRaw) ?? [];
-    const merged = [...prior];
-    for (const capability of caps) {
-      if (!merged.includes(capability)) merged.push(capability);
-    }
-    entryMap.set(dirRaw, merged);
-    maps.set(activeAgent, entryMap);
+    const subject = String(sentence?.su?.name ?? "").trim();
+    if (!subject.endsWith(HOUSE_SUFFIX)) continue;
+    const agentName = normalizeAgentName(subject.slice(0, -HOUSE_SUFFIX.length));
+    const declaredPath = resolvePathRaw(sentence?.ob?.filename);
+    if (!agentName || !declaredPath) continue;
+    houses.set(agentName, declaredPath);
   }
-  return maps;
+  return { maps, houses };
 }
 
 function resolvePolicyMap(policyPath) {
   try {
     const stat = fsSync.statSync(policyPath);
     const cached = cache.get(policyPath);
-    if (cached && cached.mtimeMs === stat.mtimeMs) return cached.maps;
+    if (cached && cached.mtimeMs === stat.mtimeMs) return cached.parsed;
     const text = fsSync.readFileSync(policyPath, "utf8");
-    const maps = parsePolicyText(text);
-    cache.set(policyPath, { mtimeMs: stat.mtimeMs, maps });
-    return maps;
+    const parsed = parsePolicyText(text);
+    cache.set(policyPath, { mtimeMs: stat.mtimeMs, parsed });
+    return parsed;
   } catch (err) {
     if (err?.code === "ENOENT") return null;
     return null;
@@ -110,14 +127,45 @@ function normalizePolicyPath(raw = "", { worldRoot } = {}) {
   return path.resolve(resolvedWorld, text);
 }
 
+function scoreHouseCandidate({ resolvedPath, agentName }) {
+  const normalizedPath = String(resolvedPath ?? "").toLowerCase();
+  const normalizedAgent = String(agentName ?? "").trim().toLowerCase();
+  const base = path.basename(String(resolvedPath ?? "")).toLowerCase();
+  if (normalizedAgent && base === normalizedAgent) return 0;
+  if (normalizedPath.includes(`${path.sep}house${path.sep}`) || normalizedPath.includes("/house/")) return 1;
+  return 2;
+}
+
+function deriveHousePathFromLicenseMap(scopedMap, { worldRoot, agentName } = {}) {
+  if (!scopedMap || scopedMap.size === 0) return null;
+  const candidates = [];
+  for (const [rawPath, capabilities] of scopedMap.entries()) {
+    const resolvedPath = normalizePolicyPath(rawPath, { worldRoot });
+    if (!resolvedPath) continue;
+    const caps = normalizeCapabilityList(capabilities);
+    if (!caps.length) continue;
+    candidates.push({
+      path: resolvedPath,
+      score: scoreHouseCandidate({ resolvedPath, agentName })
+    });
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score;
+    return a.path.localeCompare(b.path, "en");
+  });
+  return candidates[0].path;
+}
+
 export function resolveWorldAgentDirectoryLicense({ worldRoot, agentName } = {}) {
   const root = String(worldRoot ?? "").trim();
   const resolvedAgent = normalizeAgentName(agentName);
   if (!root || !resolvedAgent) return null;
   const resolvedWorldRoot = path.resolve(root);
   const policyPath = path.join(resolvedWorldRoot, "conduct", "agent.pya");
-  const maps = resolvePolicyMap(policyPath);
-  if (!maps) return null;
+  const parsed = resolvePolicyMap(policyPath);
+  if (!parsed) return null;
+  const maps = parsed.maps;
   const scopedMap = maps.get(resolvedAgent) ?? maps.get("default") ?? null;
   if (!scopedMap || scopedMap.size === 0) {
     return {
@@ -142,6 +190,60 @@ export function resolveWorldAgentDirectoryLicense({ worldRoot, agentName } = {})
   };
 }
 
+export function resolveWorldAgentHouseDirectory({
+  worldRoot,
+  agentName,
+  includeFallback = true
+} = {}) {
+  const root = String(worldRoot ?? "").trim();
+  const resolvedAgent = normalizeAgentName(agentName);
+  if (!root || !resolvedAgent) return null;
+  const resolvedWorldRoot = path.resolve(root);
+  const policyPath = path.join(resolvedWorldRoot, "conduct", "agent.pya");
+  const parsed = resolvePolicyMap(policyPath);
+  const declaredPath = parsed?.houses?.get(resolvedAgent);
+  if (declaredPath) {
+    return normalizePolicyPath(declaredPath, { worldRoot: resolvedWorldRoot });
+  }
+  const scopedMap = parsed?.maps?.get(resolvedAgent) ?? null;
+  const derivedFromLicense = deriveHousePathFromLicenseMap(scopedMap, {
+    worldRoot: resolvedWorldRoot,
+    agentName: resolvedAgent
+  });
+  if (derivedFromLicense) return derivedFromLicense;
+  if (!includeFallback) return null;
+  return path.join(resolvedWorldRoot, "house", String(agentName ?? "").trim());
+}
+
+export function listWorldDeclaredAgentHouses({ worldRoot } = {}) {
+  const root = String(worldRoot ?? "").trim();
+  if (!root) return [];
+  const resolvedWorldRoot = path.resolve(root);
+  const policyPath = path.join(resolvedWorldRoot, "conduct", "agent.pya");
+  const parsed = resolvePolicyMap(policyPath);
+  const out = [];
+  const names = new Set([
+    ...Array.from(parsed?.houses?.keys?.() ?? []),
+    ...Array.from(parsed?.maps?.keys?.() ?? [])
+  ]);
+  for (const agentName of names) {
+    const rawPath = parsed?.houses?.get(agentName) ?? null;
+    const resolvedPath = rawPath
+      ? normalizePolicyPath(rawPath, { worldRoot: resolvedWorldRoot })
+      : deriveHousePathFromLicenseMap(parsed?.maps?.get(agentName), {
+        worldRoot: resolvedWorldRoot,
+        agentName
+      });
+    if (!resolvedPath) continue;
+    out.push({
+      agentName,
+      path: resolvedPath,
+      sourcePath: policyPath
+    });
+  }
+  return out.sort((a, b) => a.agentName.localeCompare(b.agentName, "en"));
+}
+
 export function collectLicensedRoots(license = null, capability = "write") {
   if (!license || !Array.isArray(license.entries)) return [];
   const needed = String(capability ?? "").trim().toLowerCase();
@@ -156,4 +258,3 @@ export function collectLicensedRoots(license = null, capability = "write") {
   }
   return out;
 }
-

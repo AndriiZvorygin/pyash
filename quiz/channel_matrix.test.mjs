@@ -49,10 +49,117 @@ test("matrix adapter receive normalizes room events", async () => {
   assert.equal(received.events[0]?.eventId, "$ev1");
   assert.equal(received.events[0]?.laneName, "main");
   assert.equal(received.checkpoint?.nextBatch, "tok2");
-  assert.equal(received.diagnostics?.timeoutMs, 30000);
+  assert.equal(received.diagnostics?.timeoutMs, 10000);
   assert.ok(calls.some(call => String(call.url).includes("/join/")));
   assert.ok(calls.some(call => String(call.url).includes("/sync?")));
-  assert.ok(calls.some(call => String(call.url).includes("timeout=30000")));
+  assert.ok(calls.some(call => String(call.url).includes("timeout=10000")));
+});
+
+test("matrix adapter receive skips join when already joined room is known", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    calls.push(text);
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server"] };
+        }
+      };
+    }
+    if (text.includes("/_matrix/client/v3/join/")) {
+      throw new Error("unexpected join call");
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$ev-joined",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: { body: "hello", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$ev-joined");
+  assert.equal(received.diagnostics?.joinDiagnostics?.length, 0);
+  assert.equal(calls.some((call) => call.includes("/joined_rooms")), true);
+  assert.equal(calls.some((call) => call.includes("/_matrix/client/v3/join/")), false);
+});
+
+test("matrix adapter receive tolerates join rate limiting and continues polling", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/_matrix/client/v3/join/")) {
+      return { ok: false, status: 429, async json() { return { errcode: "M_LIMIT_EXCEEDED" }; } };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$ev429",
+                      sender: "@u:server",
+                      origin_server_ts: 1700000000000,
+                      content: { body: "hello", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$ev429");
+  assert.equal(received.diagnostics?.joinDiagnostics?.[0]?.status, 429);
+  assert.equal(received.diagnostics?.joinDiagnostics?.[0]?.ok, true);
 });
 
 test("matrix adapter receive keeps attachment metadata for m.file events", async () => {
@@ -220,6 +327,37 @@ test("matrix adapter send posts m.room.message", async () => {
   assert.equal(payload.body, "reply text");
   assert.equal(payload.format, "org.matrix.custom.html");
   assert.match(payload.formatted_body, /<p>reply text<\/p>/);
+});
+
+test("matrix adapter markSeen posts m.read receipt", async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), opts });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {};
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const result = await adapter.markSeen({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@helper:server"
+    },
+    event: {
+      channelId: "!room:server",
+      eventId: "$ev1"
+    }
+  });
+  assert.equal(result.ok, true);
+  const receiptCall = calls.find((call) => call.url.includes("/receipt/m.read/"));
+  assert.ok(receiptCall);
+  assert.equal(receiptCall?.opts?.method, "POST");
+  assert.match(receiptCall?.url || "", /\/rooms\/!room%3Aserver\/receipt\/m\.read\/%24ev1/);
 });
 
 test("matrix adapter downloads attachments into target directory", async () => {
@@ -468,7 +606,167 @@ test("matrix adapter receive includes m.direct room events", async () => {
   assert.equal(received.events[0]?.eventId, "$dm1");
   assert.equal(received.events[0]?.channelId, "!dm:server");
   assert.equal(received.events[0]?.laneName, null);
+  assert.equal(received.events[0]?.dmRoom, true);
   assert.deepEqual(received.diagnostics?.directRoomsSnapshot?.rooms, ["!dm:server"]);
+});
+
+test("matrix adapter receive infers dm rooms from sync summary when m.direct is missing", async () => {
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    if (text.includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    if (text.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {};
+        }
+      };
+    }
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server", "!dm2:server"] };
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": { timeline: { events: [] } },
+              "!dm2:server": {
+                summary: {
+                  "m.joined_member_count": 2,
+                  "m.invited_member_count": 0
+                },
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$dm2",
+                      sender: "@friend:server",
+                      origin_server_ts: 1700000000200,
+                      content: { body: "hello inferred dm", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@bot:server",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$dm2");
+  assert.equal(received.events[0]?.channelId, "!dm2:server");
+  assert.equal(received.events[0]?.dmRoom, true);
+  assert.deepEqual(received.diagnostics?.inferredDmRooms, ["!dm2:server"]);
+});
+
+test("matrix adapter receive infers dm rooms from joined member count when summary is missing", async () => {
+  const fetchImpl = async (url) => {
+    const text = String(url);
+    if (text.includes("/_matrix/client/v3/join/")) {
+      return { ok: true, status: 200, async json() { return { room_id: "!room:server" }; } };
+    }
+    if (text.includes("/account_data/m.direct")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {};
+        }
+      };
+    }
+    if (text.includes("/joined_rooms")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { joined_rooms: ["!room:server", "!dm3:server"] };
+        }
+      };
+    }
+    if (text.includes("/rooms/!dm3%3Aserver/joined_members")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            joined: {
+              "@bot:server": { display_name: "bot" },
+              "@friend:server": { display_name: "friend" }
+            }
+          };
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          next_batch: "tok2",
+          rooms: {
+            join: {
+              "!room:server": { timeline: { events: [] } },
+              "!dm3:server": {
+                timeline: {
+                  events: [
+                    {
+                      type: "m.room.message",
+                      event_id: "$dm3",
+                      sender: "@friend:server",
+                      origin_server_ts: 1700000000201,
+                      content: { body: "hello inferred dm membership", msgtype: "m.text" }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        };
+      }
+    };
+  };
+  const adapter = createMatrixAdapter({ fetchImpl });
+  const received = await adapter.receive({
+    config: {
+      homeserver: "https://matrix.example.org",
+      token: "secret",
+      user: "@bot:server",
+      rooms: [{ id: "!room:server", lane: "main" }]
+    },
+    checkpoint: { nextBatch: "tok1" }
+  });
+  assert.equal(received.events.length, 1);
+  assert.equal(received.events[0]?.eventId, "$dm3");
+  assert.equal(received.events[0]?.channelId, "!dm3:server");
+  assert.equal(received.events[0]?.dmRoom, true);
+  assert.deepEqual(received.diagnostics?.inferredDmRooms, ["!dm3:server"]);
+  assert.deepEqual(received.diagnostics?.inferredDmMembershipProbes, [
+    { roomId: "!dm3:server", memberCount: 2 }
+  ]);
 });
 
 test("matrix adapter receive includes joined sync rooms when includeJoinedRooms is enabled", async () => {

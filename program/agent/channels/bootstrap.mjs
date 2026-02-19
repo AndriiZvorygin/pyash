@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { appendChannelOutcome } from "./outcome.mjs";
 
 function toBaseUrl(raw) {
   return String(raw ?? "").replace(/\/+$/g, "");
@@ -55,23 +56,100 @@ function generateCredentials({ agentName, localpart, withSuffix = false }) {
   return { localpart: resolved, password };
 }
 
-async function readJsonFile(filePath, fallback) {
+async function readTextFile(filePath) {
   try {
-    const text = await fs.readFile(filePath, "utf8");
-    return JSON.parse(text);
+    return await fs.readFile(filePath, "utf8");
   } catch (err) {
-    if (err?.code === "ENOENT") return fallback;
+    if (err?.code === "ENOENT") return "";
     throw err;
   }
 }
 
-async function writeJsonFile(filePath, value) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+function authPath(agentHouse) {
+  return path.join(agentHouse, "conduct", "matrix-auth.pya");
 }
 
-function authPath(agentHouse) {
+function legacyAuthPath(agentHouse) {
   return path.join(agentHouse, "conduct", "matrix-auth.json");
+}
+
+function quotePyashText(value) {
+  const text = String(value ?? "");
+  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`;
+}
+
+function unquotePyashText(value) {
+  const text = String(value ?? "").trim();
+  if (!(text.startsWith("\"") && text.endsWith("\""))) return text;
+  const inner = text.slice(1, -1);
+  return inner
+    .replace(/\\\"/g, "\"")
+    .replace(/\\\\/g, "\\");
+}
+
+function normalizeAuthCache(raw = {}) {
+  const executiveDmRooms = {};
+  for (const [key, value] of Object.entries(raw?.executiveDmRooms ?? {})) {
+    const userId = String(key ?? "").trim();
+    const roomId = String(value ?? "").trim();
+    if (!userId || !roomId) continue;
+    executiveDmRooms[userId] = roomId;
+  }
+  return {
+    homeserver: String(raw?.homeserver ?? "").trim(),
+    user: String(raw?.user ?? "").trim(),
+    localpart: String(raw?.localpart ?? "").trim(),
+    password: String(raw?.password ?? "").trim(),
+    accessToken: String(raw?.accessToken ?? "").trim(),
+    deviceId: raw?.deviceId == null ? null : String(raw.deviceId).trim(),
+    executiveDmRooms
+  };
+}
+
+function parseMatrixAuthPyash(text = "") {
+  const cache = normalizeAuthCache({});
+  const dmPattern = /su name executive dm room for name ("(?:[^"\\]|\\.)*") ob text ("(?:[^"\\]|\\.)*") ya/gi;
+  for (const match of String(text).matchAll(dmPattern)) {
+    const userId = unquotePyashText(match[1]);
+    const roomId = unquotePyashText(match[2]);
+    if (!userId || !roomId) continue;
+    cache.executiveDmRooms[userId] = roomId;
+  }
+
+  const fieldPattern = /su name (homeserver|user|localpart|password|access token|device id) ob text ("(?:[^"\\]|\\.)*") ya/gi;
+  for (const match of String(text).matchAll(fieldPattern)) {
+    const key = String(match[1] ?? "").trim().toLowerCase();
+    const value = unquotePyashText(match[2]);
+    if (key === "homeserver") cache.homeserver = value;
+    else if (key === "user") cache.user = value;
+    else if (key === "localpart") cache.localpart = value;
+    else if (key === "password") cache.password = value;
+    else if (key === "access token") cache.accessToken = value;
+    else if (key === "device id") cache.deviceId = value;
+  }
+  return cache;
+}
+
+function renderMatrixAuthPyash(raw = {}) {
+  const cache = normalizeAuthCache(raw);
+  const lines = ["# managed by pyash matrix auth cache"];
+  if (cache.homeserver) lines.push(`su name homeserver ob text ${quotePyashText(cache.homeserver)} ya`);
+  if (cache.user) lines.push(`su name user ob text ${quotePyashText(cache.user)} ya`);
+  if (cache.localpart) lines.push(`su name localpart ob text ${quotePyashText(cache.localpart)} ya`);
+  if (cache.password) lines.push(`su name password ob text ${quotePyashText(cache.password)} ya`);
+  if (cache.accessToken) lines.push(`su name access token ob text ${quotePyashText(cache.accessToken)} ya`);
+  if (cache.deviceId) lines.push(`su name device id ob text ${quotePyashText(cache.deviceId)} ya`);
+  for (const [userId, roomId] of Object.entries(cache.executiveDmRooms)) {
+    lines.push(`su name executive dm room for name ${quotePyashText(userId)} ob text ${quotePyashText(roomId)} ya`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export async function writeMatrixAuthCache(agentHouse, value) {
+  if (!agentHouse) throw new Error("writeMatrixAuthCache requires agentHouse");
+  const filePath = authPath(agentHouse);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, renderMatrixAuthPyash(value), "utf8");
 }
 
 function sanitizeUserId(raw, homeserver) {
@@ -86,6 +164,18 @@ function normalizeConfiguredUserId(raw, homeserver) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
   return sanitizeUserId(text, homeserver);
+}
+
+function userIdsMatch(a, b) {
+  const left = String(a ?? "").trim().toLowerCase();
+  const right = String(b ?? "").trim().toLowerCase();
+  return Boolean(left && right && left === right);
+}
+
+function shortError(err) {
+  return String(err?.message ?? err ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 async function matrixWhoAmI({ homeserver, token, fetchImpl, userId = "", mode = "" }) {
@@ -112,17 +202,29 @@ async function resolveTokenUserId({
   fetchImpl
 }) {
   const normalizedPreferred = normalizeConfiguredUserId(preferredUser, homeserver);
-  if (normalizedPreferred) return normalizedPreferred;
   try {
-    return await matrixWhoAmI({
+    const resolved = await matrixWhoAmI({
       homeserver,
       token,
       userId: normalizedPreferred || "",
       mode,
       fetchImpl
     });
+    if (!resolved) {
+      return {
+        userId: isAppserviceMode(mode) ? normalizedPreferred : null,
+        reason: "empty"
+      };
+    }
+    if (normalizedPreferred && !isAppserviceMode(mode) && !userIdsMatch(resolved, normalizedPreferred)) {
+      return { userId: null, reason: "mismatch" };
+    }
+    return { userId: resolved, reason: "ok" };
   } catch {
-    return null;
+    return {
+      userId: isAppserviceMode(mode) ? normalizedPreferred : null,
+      reason: "unreachable"
+    };
   }
 }
 
@@ -292,7 +394,20 @@ function envHomeserver() {
 
 export async function readMatrixAuthCache(agentHouse) {
   if (!agentHouse) return null;
-  return readJsonFile(authPath(agentHouse), null);
+  const text = await readTextFile(authPath(agentHouse));
+  if (String(text).trim()) return parseMatrixAuthPyash(text);
+  const legacyText = await readTextFile(legacyAuthPath(agentHouse));
+  if (!String(legacyText).trim()) return null;
+  let legacy = null;
+  try {
+    legacy = JSON.parse(legacyText);
+  } catch {
+    return null;
+  }
+  const migrated = normalizeAuthCache(legacy);
+  await writeMatrixAuthCache(agentHouse, migrated);
+  await fs.rm(legacyAuthPath(agentHouse), { force: true }).catch(() => {});
+  return migrated;
 }
 
 export async function ensureMatrixCredentials({
@@ -304,67 +419,184 @@ export async function ensureMatrixCredentials({
   if (!agentName) throw new Error("ensureMatrixCredentials requires agentName");
   if (!agentHouse) throw new Error("ensureMatrixCredentials requires agentHouse");
   if (typeof fetchImpl !== "function") throw new Error("ensureMatrixCredentials requires fetch");
+  const report = async ({ stage = "status", outcome = "success", message = "" } = {}) => {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType: "matrix",
+        agentName,
+        area: "credentials",
+        stage,
+        outcome,
+        message
+      });
+    } catch {
+      // non-blocking debug log
+    }
+  };
 
-  const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
-  if (!homeserver) throw new Error("matrix homeserver missing");
+  try {
+    const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
+    if (!homeserver) throw new Error("matrix homeserver missing");
 
-  const cached = await readMatrixAuthCache(agentHouse);
-  const desiredUserFromConfig = config?.user ? String(config.user) : null;
-  const mode = config?.mode ? String(config.mode) : "";
-  if (cached?.accessToken) {
-    const resolvedCachedUser = await resolveTokenUserId({
-      homeserver,
-      token: cached.accessToken,
-      preferredUser: desiredUserFromConfig ?? cached.user,
-      mode,
-      fetchImpl
-    });
-    const resolvedLocalpart = cached.localpart
-      ?? parseLocalpartFromUserId(resolvedCachedUser)
-      ?? null;
-    if (resolvedCachedUser && resolvedCachedUser !== cached.user) {
-      await writeJsonFile(authPath(agentHouse), {
-        ...cached,
+    const cached = await readMatrixAuthCache(agentHouse);
+    const desiredUserFromConfig = config?.user ? String(config.user) : null;
+    const desiredUserNormalized = normalizeConfiguredUserId(desiredUserFromConfig, homeserver);
+    const mode = config?.mode ? String(config.mode) : "";
+    if (cached?.accessToken) {
+    if (isAppserviceMode(mode) && desiredUserNormalized) {
+      const resolvedLocalpart = cached.localpart
+        ?? parseLocalpartFromUserId(desiredUserNormalized)
+        ?? null;
+      if (!userIdsMatch(cached.user, desiredUserNormalized)) {
+        await writeMatrixAuthCache(agentHouse, {
+          ...cached,
+          homeserver,
+          user: desiredUserNormalized,
+          localpart: resolvedLocalpart,
+          executiveDmRooms: {}
+        });
+      }
+      const resolved = {
         homeserver,
+        token: cached.accessToken,
+        user: desiredUserNormalized,
+        localpart: resolvedLocalpart,
+        executiveDmRooms: userIdsMatch(cached.user, desiredUserNormalized)
+          ? (cached?.executiveDmRooms ?? {})
+          : {}
+      };
+      await report({ stage: "cache_appservice", outcome: "success", message: "cached token active for configured appservice user" });
+      return resolved;
+    }
+
+    const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
+    let preferredUser = desiredUserNormalized ?? cached.user;
+    let resolvedCachedUser = normalizeConfiguredUserId(cached.user, homeserver);
+    let resolvedCachedReason = "ok";
+    if (requireTokenUserValidation || !resolvedCachedUser) {
+      const resolved = await resolveTokenUserId({
+        homeserver,
+        token: cached.accessToken,
+        preferredUser,
+        mode,
+        fetchImpl
+      });
+      resolvedCachedUser = resolved.userId;
+      resolvedCachedReason = resolved.reason;
+    }
+    if (requireTokenUserValidation && !resolvedCachedUser) {
+      if (resolvedCachedReason === "mismatch") {
+        // Cached token belongs to a different user; continue with login/register flow.
+      } else {
+      const fallbackUser = desiredUserNormalized || cached.user || null;
+        const resolved = {
+          homeserver,
+          token: cached.accessToken,
+          user: fallbackUser,
+        localpart: cached.localpart
+          ?? parseLocalpartFromUserId(fallbackUser)
+          ?? null,
+          executiveDmRooms: cached?.executiveDmRooms ?? {}
+        };
+        await report({ stage: "cache_fallback", outcome: "success", message: "cached token used while whoami unavailable" });
+        return resolved;
+      }
+    } else {
+      const resolvedLocalpart = cached.localpart
+        ?? parseLocalpartFromUserId(resolvedCachedUser)
+        ?? null;
+      if (resolvedCachedUser && !userIdsMatch(resolvedCachedUser, cached.user)) {
+        await writeMatrixAuthCache(agentHouse, {
+          ...cached,
+          homeserver,
+          user: resolvedCachedUser,
+          localpart: resolvedLocalpart,
+          executiveDmRooms: {}
+        });
+      }
+      const resolved = {
+        homeserver,
+        token: cached.accessToken,
         user: resolvedCachedUser,
         localpart: resolvedLocalpart,
-        executiveDmRooms: {}
-      });
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
+      await report({ stage: "cache", outcome: "success", message: "cached token accepted" });
+      return resolved;
     }
-    return {
-      homeserver,
-      token: cached.accessToken,
-      user: resolvedCachedUser,
-      localpart: resolvedLocalpart,
-      executiveDmRooms: cached?.executiveDmRooms ?? {}
-    };
   }
 
   if (config?.token) {
-    const resolvedTokenUser = await resolveTokenUserId({
-      homeserver,
-      token: config.token,
-      preferredUser: desiredUserFromConfig,
-      mode,
-      fetchImpl
-    });
-    if (resolvedTokenUser) {
-      await writeJsonFile(authPath(agentHouse), {
+    if (isAppserviceMode(mode) && desiredUserNormalized) {
+      await writeMatrixAuthCache(agentHouse, {
         ...(cached ?? {}),
         homeserver,
-        user: resolvedTokenUser,
-        localpart: parseLocalpartFromUserId(resolvedTokenUser),
+        user: desiredUserNormalized,
+        localpart: parseLocalpartFromUserId(desiredUserNormalized),
         accessToken: config.token,
         executiveDmRooms: cached?.executiveDmRooms ?? {}
       });
+      const resolved = {
+        homeserver,
+        token: config.token,
+        user: desiredUserNormalized,
+        localpart: parseLocalpartFromUserId(desiredUserNormalized),
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
+      await report({ stage: "config_token_appservice", outcome: "success", message: "configured token accepted for appservice user" });
+      return resolved;
     }
-    return {
+
+    const requireTokenUserValidation = Boolean(desiredUserNormalized) && !isAppserviceMode(mode);
+    let resolvedTokenUser = desiredUserNormalized ?? null;
+    let resolvedTokenReason = "ok";
+    if (requireTokenUserValidation || !resolvedTokenUser) {
+      const resolved = await resolveTokenUserId({
+        homeserver,
+        token: config.token,
+        preferredUser: desiredUserNormalized,
+        mode,
+        fetchImpl
+      });
+      resolvedTokenUser = resolved.userId;
+      resolvedTokenReason = resolved.reason;
+    }
+    if (!requireTokenUserValidation || resolvedTokenUser) {
+      if (resolvedTokenUser) {
+        await writeMatrixAuthCache(agentHouse, {
+          ...(cached ?? {}),
+          homeserver,
+          user: resolvedTokenUser,
+          localpart: parseLocalpartFromUserId(resolvedTokenUser),
+          accessToken: config.token,
+          executiveDmRooms: cached?.executiveDmRooms ?? {}
+        });
+      }
+      const resolved = {
+        homeserver,
+        token: config.token,
+        user: resolvedTokenUser,
+        localpart: parseLocalpartFromUserId(resolvedTokenUser),
+        executiveDmRooms: cached?.executiveDmRooms ?? {}
+      };
+      await report({ stage: "config_token", outcome: "success", message: "configured token accepted" });
+      return resolved;
+    }
+    if (resolvedTokenReason === "mismatch") {
+      // Token exists but cannot be used for the configured user in non-appservice mode.
+    } else {
+    const fallbackUser = desiredUserNormalized || cached?.user || null;
+    const resolved = {
       homeserver,
       token: config.token,
-      user: resolvedTokenUser,
-      localpart: parseLocalpartFromUserId(resolvedTokenUser),
+      user: fallbackUser,
+      localpart: parseLocalpartFromUserId(fallbackUser),
       executiveDmRooms: cached?.executiveDmRooms ?? {}
     };
+    await report({ stage: "config_token_fallback", outcome: "success", message: "configured token used while whoami unavailable" });
+    return resolved;
+    }
+    // Token exists but cannot be used for the configured user in non-appservice mode.
   }
 
   const sharedSecret = config?.registrationSharedSecret ?? envSharedSecret();
@@ -385,7 +617,7 @@ export async function ensureMatrixCredentials({
     password = generated.password;
   }
 
-  if (sharedSecret) {
+    if (sharedSecret) {
     let registerResult = await registerWithSharedSecret({
       homeserver,
       sharedSecret,
@@ -422,7 +654,7 @@ export async function ensureMatrixCredentials({
           throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
         }
       } else {
-        throw new Error("matrix user already exists; reuse cached token or configure token/password for this user");
+          throw new Error("matrix user already exists; reuse cached token or configure token/password for this user");
       }
     } else if (!registerResult.ok) {
       throw new Error(`matrix register failed: status=${registerResult.status} code=${registerResult.code} error=${registerResult.error}`);
@@ -434,7 +666,7 @@ export async function ensureMatrixCredentials({
       : `@${localpart}:${String(userFromConfig).split(":").slice(1).join(":") || homeserver.replace(/^https?:\/\//, "")}`)
     : localpart;
 
-  const loginPayload = await loginPassword({
+    const loginPayload = await loginPassword({
     homeserver,
     user: resolvedLoginUser,
     password,
@@ -452,14 +684,20 @@ export async function ensureMatrixCredentials({
     deviceId: loginPayload?.device_id ?? null,
     executiveDmRooms: cached?.executiveDmRooms ?? {}
   };
-  await writeJsonFile(authPath(agentHouse), record);
-  return {
-    homeserver,
-    token: accessToken,
-    user: resolvedUser,
-    localpart,
-    executiveDmRooms: record.executiveDmRooms
-  };
+    await writeMatrixAuthCache(agentHouse, record);
+    const resolved = {
+      homeserver,
+      token: accessToken,
+      user: resolvedUser,
+      localpart,
+      executiveDmRooms: record.executiveDmRooms
+    };
+    await report({ stage: "password_login", outcome: "success", message: "password flow token issued and cached" });
+    return resolved;
+  } catch (err) {
+    await report({ stage: "defect", outcome: "fail", message: shortError(err) || "credential flow defective" });
+    throw err;
+  }
 }
 
 export async function ensureMatrixExecutiveDmRoom({
@@ -474,28 +712,56 @@ export async function ensureMatrixExecutiveDmRoom({
   if (!agentHouse) throw new Error("ensureMatrixExecutiveDmRoom requires agentHouse");
   if (!homeserver || !token) throw new Error("ensureMatrixExecutiveDmRoom requires homeserver/token");
   if (typeof fetchImpl !== "function") throw new Error("ensureMatrixExecutiveDmRoom requires fetch");
+  const report = async ({ stage = "status", outcome = "success", message = "" } = {}) => {
+    try {
+      await appendChannelOutcome(agentHouse, {
+        channelType: "matrix",
+        agentName: parseLocalpartFromUserId(user) || "agent",
+        area: "executive_dm",
+        stage,
+        outcome,
+        message
+      });
+    } catch {
+      // non-blocking debug log
+    }
+  };
 
   const executiveUserId = sanitizeUserId(executiveUser, homeserver);
   if (!executiveUserId) return null;
 
-  const cached = await readJsonFile(authPath(agentHouse), null);
-  const joinedRooms = await fetchJoinedRoomSet({
-    homeserver,
-    token,
-    userId: user,
-    mode,
-    fetchImpl
-  });
-  const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
-  if (
-    typeof cachedRoom === "string"
-    && cachedRoom.startsWith("!")
-    && (!joinedRooms || joinedRooms.has(cachedRoom))
-  ) {
-    return cachedRoom;
-  }
+  try {
+    const cached = await readMatrixAuthCache(agentHouse);
+    const cachedRoom = cached?.executiveDmRooms?.[executiveUserId];
+    let joinedRooms = null;
+    if (typeof cachedRoom === "string" && cachedRoom.startsWith("!")) {
+      try {
+        joinedRooms = await fetchJoinedRoomSet({
+          homeserver,
+          token,
+          userId: user,
+          mode,
+          fetchImpl
+        });
+        if (!joinedRooms || joinedRooms.has(cachedRoom)) {
+          await report({ stage: "cache", outcome: "success", message: `reused cached room ${cachedRoom}` });
+          return cachedRoom;
+        }
+      } catch {
+        await report({ stage: "cache_fallback", outcome: "success", message: `reused cached room ${cachedRoom} while joined_rooms unavailable` });
+        return cachedRoom;
+      }
+    } else {
+      joinedRooms = await fetchJoinedRoomSet({
+        homeserver,
+        token,
+        userId: user,
+        mode,
+        fetchImpl
+      });
+    }
 
-  const directRoom = await readDirectRoomFromAccountData({
+    const directRoom = await readDirectRoomFromAccountData({
     homeserver,
     token,
     userId: user,
@@ -503,8 +769,8 @@ export async function ensureMatrixExecutiveDmRoom({
     mode,
     fetchImpl
   });
-  if (directRoom && (!joinedRooms || joinedRooms.has(directRoom))) {
-    const next = {
+    if (directRoom && (!joinedRooms || joinedRooms.has(directRoom))) {
+      const next = {
       ...(cached ?? {}),
       homeserver,
       user,
@@ -514,11 +780,12 @@ export async function ensureMatrixExecutiveDmRoom({
         [executiveUserId]: directRoom
       }
     };
-    await writeJsonFile(authPath(agentHouse), next);
-    return directRoom;
-  }
+      await writeMatrixAuthCache(agentHouse, next);
+      await report({ stage: "account_data", outcome: "success", message: `resolved direct room ${directRoom}` });
+      return directRoom;
+    }
 
-  const createdRoom = await createDirectRoom({
+    const createdRoom = await createDirectRoom({
     homeserver,
     token,
     executiveUserId,
@@ -526,7 +793,7 @@ export async function ensureMatrixExecutiveDmRoom({
     actingUserId: user,
     fetchImpl
   });
-  const next = {
+    const next = {
     ...(cached ?? {}),
     homeserver,
     user,
@@ -536,6 +803,11 @@ export async function ensureMatrixExecutiveDmRoom({
       [executiveUserId]: createdRoom
     }
   };
-  await writeJsonFile(authPath(agentHouse), next);
-  return createdRoom;
+    await writeMatrixAuthCache(agentHouse, next);
+    await report({ stage: "create_room", outcome: "success", message: `created direct room ${createdRoom}` });
+    return createdRoom;
+  } catch (err) {
+    await report({ stage: "defect", outcome: "fail", message: shortError(err) || "executive dm bootstrap defective" });
+    throw err;
+  }
 }
