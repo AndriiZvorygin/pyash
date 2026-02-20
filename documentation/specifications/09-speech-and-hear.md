@@ -44,7 +44,7 @@ Speech/hear runs should record:
 
 Boundary note:
 - `hear` owns transcript/timeline extraction,
-- `footnote` (teaching-video pipeline) owns subtitle styling/render/burn-in.
+- `footnote` (teaching-video pipeline) owns subtitle burn-in modes (`plain`, `karaoke`, `wordflow`) from SRT + video.
 
 ## 4. Determinism
 
