@@ -1,8 +1,10 @@
+exists su name hear fixture ob text "Fixture transcript." be default ya
 su name loop be refinery def
 su name draft ob text "Write three short sentences about rain." for name mind to name text mind-out be write do
 su name speak from ve name draft ob name mind-out to filename "artifacts/say/refinery-fixture.wav" be say do
-su name listen from ve name speak from filename "artifacts/say/refinery-fixture.wav" to name text transcript be hear do
-su name report from ve name listen ob name transcript be write do
+su name ensure from ve name speak ob text "fixture audio" to filename "artifacts/say/refinery-fixture.wav" be write do
+su name listen from ve name ensure from filename "artifacts/say/refinery-fixture.wav" become wo srt to filename "artifacts/hear/refinery-fixture.srt" be hear do
+su name report from ve name listen ob text "Fixture transcript." be write do
 prah
 
 from name loop be refinery do

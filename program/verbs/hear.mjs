@@ -9,11 +9,12 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
 import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
-import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath } from "./hear/config.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel } from "./hear/config.mjs";
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
+import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -49,6 +50,26 @@ function classifyEvidentialFromSource(sentence) {
   return "direct";
 }
 
+function resolveEvokeInputPath({ rememberFn } = {}) {
+  const evoke = state.currentEvokeRef || state.currentEvoke;
+  if (!evoke) return null;
+
+  if (typeof evoke?.ob?.filename === "string") return evoke.ob.filename;
+  if (typeof evoke?.to?.filename === "string") return evoke.to.filename;
+  if (typeof evoke?.from?.filename === "string") return evoke.from.filename;
+
+  const artifactName = evoke?.ob?.name;
+  if (!artifactName || !rememberFn) return null;
+  const artifactFact = rememberFn(artifactName);
+  if (!artifactFact) return null;
+
+  if (typeof artifactFact?.to?.filename === "string") return artifactFact.to.filename;
+  if (typeof artifactFact?.ob?.filename === "string") return artifactFact.ob.filename;
+  if (typeof artifactFact?.from?.filename === "string") return artifactFact.from.filename;
+  if (typeof artifactFact?.ob?.text === "string") return artifactFact.ob.text;
+  return null;
+}
+
 export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "hear", caseKey: "vyah" });
@@ -56,6 +77,8 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const wantsSrt = sentence?.become?.wo === "srt";
   const outputPath = resolveOutputPath(sentence, { defaultExt: wantsSrt ? ".srt" : ".txt" });
   const metadataPath = metadataPathForOutput(outputPath);
+  const hearBackend = resolveHearBackend({ rememberFn });
+  const wantsSpeakerDiarize = sentence?.as?.wo === "speaker";
   if (aspectKey === "cancel") {
     const targetName = sentence?.su?.name;
     if (!targetName) {
@@ -131,7 +154,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   let transcript = "";
   let backend = "fixture";
   let model = null;
-  const inputPath = resolveHearInputPath(sentence, { rememberFn });
+  const inputPath = resolveHearInputPath(sentence, { rememberFn }) || resolveEvokeInputPath({ rememberFn });
   if (aspectKey === "stream") {
     const streamResult = await handleHearStream({ sentence, rememberFn, fixture, hearStreamProcesses });
     if (streamResult?.stream) return streamResult.stream;
@@ -244,50 +267,76 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
           raw: { sentence }
         });
       }
-      const whisperBin = resolveWhisperBinary({ rememberFn });
-      const modelPath = resolveModelPath({ rememberFn });
-      const prompt = resolveHearPrompt(sentence);
-      backend = "whisper.cpp";
-      model = modelPath;
-      const outputBase = outputPath.replace(/\.[^.]+$/, "");
-      await fs.mkdir(path.dirname(outputPath), { recursive: true });
-      const res = await new Promise((resolve, reject) => {
-        const formatFlag = wantsSrt ? "-osrt" : "-otxt";
-        const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", formatFlag, "-of", outputBase];
-        if (prompt) {
-          args.push("--prompt", prompt);
-        }
-        const proc = spawn(String(whisperBin), args, {
-          stdio: ["ignore", "pipe", "pipe"]
-        });
-        let stdout = "";
-        let stderr = "";
-        proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
-        proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
-        proc.on("error", reject);
-        proc.on("close", status => resolve({ status, stdout, stderr }));
-      });
-      if (res.status) {
-        throwErrorSentence({
-          name: "hear defective",
-          message: `hear defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
-          from: { name: "hear" },
-          raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
-        });
-      }
-      try {
-        if (wantsSrt) {
+      if (wantsSrt && hearBackend === "whisperx") {
+        const host = resolveHearHost({ rememberFn });
+        const whisperxModel = resolveHearWhisperxModel({ rememberFn });
+        const language = resolveHearLanguage({ rememberFn });
+        backend = "whisperx";
+        model = whisperxModel;
+        try {
+          await transcribeWithWhisperx({
+            host,
+            inputPath,
+            outputPath,
+            language,
+            model: whisperxModel,
+            diarize: wantsSpeakerDiarize
+          });
           transcript = String(await fs.readFile(outputPath, "utf8"));
-        } else {
-          transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
+        } catch (err) {
+          throwErrorSentence({
+            name: "hear defective",
+            message: `hear defective: ${err?.message ?? "whisperx failed"}`,
+            from: { name: "hear" },
+            raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
+          });
         }
-      } catch (err) {
-        throwErrorSentence({
-          name: "hear defective",
-          message: "hear defective: missing transcript",
-          from: { name: "hear" },
-          raw: { outputPath, error: err?.message }
+      } else {
+        const whisperBin = resolveWhisperBinary({ rememberFn });
+        const modelPath = resolveModelPath({ rememberFn });
+        const prompt = resolveHearPrompt(sentence);
+        backend = "whisper.cpp";
+        model = modelPath;
+        const outputBase = outputPath.replace(/\.[^.]+$/, "");
+        await fs.mkdir(path.dirname(outputPath), { recursive: true });
+        const res = await new Promise((resolve, reject) => {
+          const formatFlag = wantsSrt ? "-osrt" : "-otxt";
+          const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", formatFlag, "-of", outputBase];
+          if (prompt) {
+            args.push("--prompt", prompt);
+          }
+          const proc = spawn(String(whisperBin), args, {
+            stdio: ["ignore", "pipe", "pipe"]
+          });
+          let stdout = "";
+          let stderr = "";
+          proc.stdout.on("data", data => { stdout += data.toString("utf8"); });
+          proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
+          proc.on("error", reject);
+          proc.on("close", status => resolve({ status, stdout, stderr }));
         });
+        if (res.status) {
+          throwErrorSentence({
+            name: "hear defective",
+            message: `hear defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
+            from: { name: "hear" },
+            raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
+          });
+        }
+        try {
+          if (wantsSrt) {
+            transcript = String(await fs.readFile(outputPath, "utf8"));
+          } else {
+            transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
+          }
+        } catch (err) {
+          throwErrorSentence({
+            name: "hear defective",
+            message: "hear defective: missing transcript",
+            from: { name: "hear" },
+            raw: { outputPath, error: err?.message }
+          });
+        }
       }
     }
   }
@@ -387,10 +436,16 @@ export const signatures = [
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "during", "num", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename", "to", "filename"], handler: hear },
-  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text", "to", "filename"], handler: hear }
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text", "to", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt"], handler: hear },
+  { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt", "to", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt", "from", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt", "from", "filename", "to", "filename"], handler: hear }
 ];

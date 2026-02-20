@@ -62,6 +62,7 @@ container/configure/ecology/searxng.env
 .fluxbox/
 *.swp
 container/building/
+container/whisperx/cache/
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
