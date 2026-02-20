@@ -5,6 +5,7 @@ import path from "node:path";
 
 import hear from "../program/verbs/hear.mjs";
 import { forget } from "../program/remember/index.mjs";
+import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 
 test("hear become wo srt uses whisperx backend and speaker diarize flag", async () => {
   forget();
@@ -22,6 +23,8 @@ test("hear become wo srt uses whisperx backend and speaker diarize flag", async 
   };
 
   let diarizePayload = null;
+  const exchange = [];
+  setExchangeRecorder({ record: (s) => exchange.push(s), runRoot: process.cwd() });
   const priorFetch = globalThis.fetch;
   globalThis.fetch = async (_url, options = {}) => {
     const body = JSON.parse(String(options.body ?? "{}"));
@@ -29,7 +32,7 @@ test("hear become wo srt uses whisperx backend and speaker diarize flag", async 
     await fs.writeFile(outputPath, "1\n00:00:00,000 --> 00:00:01,000\nhello\n", "utf8");
     return {
       ok: true,
-      json: async () => ({ output_srt: outputPath, model: "large-v3", diarize: true })
+      json: async () => ({ output_srt: outputPath, model: "large-v3", diarize: true, stdout: "whisperx ok", stderr: "" })
     };
   };
   try {
@@ -44,7 +47,10 @@ test("hear become wo srt uses whisperx backend and speaker diarize flag", async 
     assert.equal(result?.be, "hear");
     assert.equal(result?.ob?.filename, outputPath);
     assert.equal(Boolean(diarizePayload?.diarize), true);
+    assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear request whisperx"));
+    assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear result whisperx" && /whisperx ok/u.test(String(s?.totext?.text ?? ""))));
   } finally {
     globalThis.fetch = priorFetch;
+    clearExchangeRecorder();
   }
 });

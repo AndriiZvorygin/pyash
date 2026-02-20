@@ -19,4 +19,4 @@ su name report ob text "Generated teaching video in run artifacts folder." be wr
 prah
 
 from name love teaching full be refinery do
-ob name concatenate platform be write do
+ob text "love teaching full complete." be write do

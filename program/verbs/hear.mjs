@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 
 import { remember } from "../remember/index.mjs";
 import { recordArtifact } from "../bridge/exchange.mjs";
+import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
@@ -15,6 +16,7 @@ import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStream
 import { handleHearStream } from "./hear/run_stream.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
+import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -48,6 +50,12 @@ function classifyEvidentialFromSource(sentence) {
   const lower = String(source).toLowerCase();
   if (/\b(news|report|reported|article)\b/u.test(lower)) return "reported";
   return "direct";
+}
+
+function clipLogText(value, max = 1200) {
+  const text = String(value ?? "");
+  if (text.length <= max) return text;
+  return text.slice(-max);
 }
 
 function resolveEvokeInputPath({ rememberFn } = {}) {
@@ -268,13 +276,25 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       if (wantsSrt && hearBackend === "whisperx") {
+        await enforceAutoDischarge({ activatingClass: "hear", rememberFn });
         const host = resolveHearHost({ rememberFn });
         const whisperxModel = resolveHearWhisperxModel({ rememberFn });
         const language = resolveHearLanguage({ rememberFn });
         backend = "whisperx";
         model = whisperxModel;
+        const requestSentence = {
+          mood: "do",
+          su: { name: "hear request whisperx" },
+          from: { filename: inputPath },
+          to: { filename: outputPath },
+          fromstate: { text: host },
+          as: { text: whisperxModel },
+          be: "hear"
+        };
+        if (wantsSpeakerDiarize) requestSentence.vyah = { ve: { type: "name", values: ["speaker"] } };
+        emitExchangeSentence(requestSentence);
         try {
-          await transcribeWithWhisperx({
+          const payload = await transcribeWithWhisperx({
             host,
             inputPath,
             outputPath,
@@ -283,6 +303,22 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
             diarize: wantsSpeakerDiarize
           });
           transcript = String(await fs.readFile(outputPath, "utf8"));
+          const resultSentence = {
+            mood: "ya",
+            su: { name: "hear result whisperx" },
+            from: { filename: inputPath },
+            ob: { filename: outputPath },
+            fromstate: { text: host },
+            as: { text: whisperxModel },
+            be: "hear"
+          };
+          const stdout = clipLogText(payload?.stdout ?? "");
+          const stderr = clipLogText(payload?.stderr ?? "");
+          if (stdout) resultSentence.totext = { text: stdout };
+          if (stderr) resultSentence.fromtext = { text: stderr };
+          const statusNum = Number(payload?.status);
+          if (Number.isFinite(statusNum)) resultSentence.by = { num: statusNum };
+          emitExchangeSentence(resultSentence);
         } catch (err) {
           throwErrorSentence({
             name: "hear defective",
