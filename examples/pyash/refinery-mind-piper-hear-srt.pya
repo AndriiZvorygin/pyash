@@ -1,5 +1,5 @@
 su name love teaching be refinery def
-su name manuscript ob text "Write a spoken teaching manuscript about the love of God. Target about 90 words, plain language, no lists, no markdown." for name mind to name text manuscript out be write do
+su name manuscript ob text "Write a spoken teaching manuscript about loving God. Target about 90 words, plain language, no lists, no markdown." for name mind to name text manuscript out be write do
 su name telling from ve name manuscript ob name manuscript out to filename "examples/out/love-of-god-30s.wav" be piper say do
 su name footnote from ve name telling from filename "examples/out/love-of-god-30s.wav" become wo srt to filename "examples/out/love-of-god-30s.srt" be hear do
 su name report from ve name footnote ob text "Generated examples/out/love-of-god-30s.wav and examples/out/love-of-god-30s.srt" be write do

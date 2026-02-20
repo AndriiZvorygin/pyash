@@ -333,15 +333,7 @@ export function recordPlatform(sentence) {
       raw: sentence
     });
   }
-  const name = sentence?.su?.name;
-  if (!name) {
-    throwErrorSentence({
-      name: "platform defective",
-      message: "platform name required",
-      from: { name: "interpret" },
-      raw: sentence
-    });
-  }
+  const name = sentence?.su?.name || `platform ${frame.order.length + 1}`;
   if (frame.platforms.has(name)) {
     throwErrorSentence({
       name: "platform defective",
