@@ -54,6 +54,8 @@ function clamp(value, min, max) {
 }
 
 const GOLDEN = 1.61803398875;
+const SUBTITLE_WIDTH_RATIO = 0.61;
+const SUBTITLE_MAX_ROWS = 2;
 
 function splitWords(text = "") {
   return String(text ?? "").trim().split(/\s+/).filter(Boolean);
@@ -80,27 +82,32 @@ function wrapWords(words = [], maxChars = 30) {
 }
 
 function estimateMaxLineChars(width, fontSize) {
-  const safeWidth = Math.max(100, Number(width) * 0.68);
+  const safeWidth = Math.max(100, Number(width) * SUBTITLE_WIDTH_RATIO);
   const charPx = Math.max(7, Number(fontSize) * 0.70);
   return clamp(Math.floor(safeWidth / charPx), 10, 34);
+}
+
+function worstRowsForSrt(srtText, maxChars) {
+  const cuts = parseSrtToCuts(String(srtText ?? ""));
+  let worst = 1;
+  for (const cut of cuts) {
+    const words = splitWords(cut?.obText ?? "");
+    const rows = wrapWords(words, maxChars).length;
+    if (rows > worst) worst = rows;
+  }
+  return worst;
 }
 
 function pickFontSizeForSrt(srtText, { width, requestedFontSize } = {}) {
   if (Number.isFinite(requestedFontSize) && requestedFontSize > 0) {
     return Math.floor(requestedFontSize);
   }
-  const cuts = parseSrtToCuts(String(srtText ?? ""));
   let fontSize = clamp(Math.round(Number(width) * 0.030), 14, 28);
   let attempts = 0;
   while (attempts < 16) {
     const maxChars = estimateMaxLineChars(width, fontSize);
-    let worst = 1;
-    for (const cut of cuts) {
-      const words = splitWords(cut?.obText ?? "");
-      const lineCount = wrapWords(words, maxChars).length;
-      if (lineCount > worst) worst = lineCount;
-    }
-    if (worst <= 2 || fontSize <= 12) break;
+    const worst = worstRowsForSrt(srtText, maxChars);
+    if (worst <= SUBTITLE_MAX_ROWS || fontSize <= 12) break;
     fontSize -= 1;
     attempts += 1;
   }
@@ -143,6 +150,57 @@ function karaokeTextForCut(text, durationSeconds, maxLineChars = 30) {
     cursor += count;
   }
   return out.join("\\N");
+}
+
+function paginateRows(rows = [], maxRows = 2) {
+  const out = [];
+  for (let i = 0; i < rows.length; i += maxRows) {
+    out.push(rows.slice(i, i + maxRows));
+  }
+  return out.length ? out : [[[]]];
+}
+
+function karaokeTaggedRows(rows = [], totalCs = 1) {
+  const flatWords = rows.flat();
+  const wordsCount = flatWords.length || 1;
+  const each = Math.max(1, Math.floor(totalCs / wordsCount));
+  let remain = Math.max(0, totalCs - each * wordsCount);
+  const outRows = rows.map((row) => {
+    const parts = row.map((word) => {
+      const bonus = remain > 0 ? 1 : 0;
+      remain -= bonus;
+      return `{\\k${each + bonus}}${sanitizeAssText(word)}`;
+    });
+    return parts.join(" ");
+  });
+  return outRows.join("\\N");
+}
+
+function buildKaraokeDialogues(cuts = [], { maxLineChars = 24, maxRows = 2 } = {}) {
+  const out = [];
+  for (const cut of cuts) {
+    const since = Number(cut?.since ?? 0);
+    const until = Number(cut?.until ?? since + 1);
+    const duration = Math.max(0.05, until - since);
+    const words = splitWords(cut?.obText ?? "");
+    if (!words.length) continue;
+    const rows = wrapWords(words, Math.max(1, Math.floor(maxLineChars)));
+    const pages = paginateRows(rows, Math.max(1, Math.floor(maxRows)));
+    const totalWords = pages.reduce((sum, pageRows) => sum + pageRows.flat().length, 0) || 1;
+    let cursor = since;
+    for (let i = 0; i < pages.length; i += 1) {
+      const pageRows = pages[i];
+      const pageWords = pageRows.flat().length || 1;
+      const ratio = pageWords / totalWords;
+      const slice = duration * ratio;
+      const end = i === pages.length - 1 ? until : cursor + slice;
+      const totalCs = Math.max(1, Math.round((end - cursor) * 100));
+      const text = karaokeTaggedRows(pageRows, totalCs);
+      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + 0.04, end))},Default,,0,0,0,,${text}`);
+      cursor = end;
+    }
+  }
+  return out;
 }
 
 function plainTextForCut(text, maxLineChars = 30) {
@@ -191,7 +249,8 @@ function buildAssFromSrt(
     fontName = "DejaVu Sans",
     maxLineChars = 30,
     playResX = 720,
-    playResY = 1280
+    playResY = 1280,
+    marginLR = 80
   } = {}
 ) {
   const cuts = parseSrtToCuts(srtText);
@@ -205,14 +264,16 @@ function buildAssFromSrt(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H0032C8FF,&H00000000,&H7F000000,0,0,0,0,100,100,0,0,1,2,0,2,80,80,${marginV},1`,
+    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H0032C8FF,&H00000000,&H7F000000,0,0,0,0,100,100,0,0,1,2,0,2,${marginLR},${marginLR},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
   ];
   const body = mode === "wordflow"
     ? buildWordflowDialogues(cuts, { maxLineChars })
-    : cuts.map((cut) => {
+    : mode === "karaoke"
+      ? buildKaraokeDialogues(cuts, { maxLineChars, maxRows: SUBTITLE_MAX_ROWS })
+      : cuts.map((cut) => {
       const since = Number(cut?.since ?? 0);
       const until = Number(cut?.until ?? since + 1);
       const text = styleTextForCut(cut?.obText ?? "", mode, Math.max(0.05, until - since), maxLineChars);
@@ -296,9 +357,13 @@ export async function main(argv = process.argv) {
   const width = opts.width ?? probed?.width ?? 720;
   const height = opts.height ?? probed?.height ?? 1280;
   const marginV = opts.marginV ?? clamp(Math.round(height * 0.04), 24, 84);
+  const marginLR = Math.max(16, Math.round(width * ((1 - SUBTITLE_WIDTH_RATIO) / 2)));
   const provisionalFont = opts.fontSize ?? clamp(Math.round(width * 0.08), 42, 110);
-  const nonWordflowMaxChars = opts.maxLineChars ?? estimateMaxLineChars(width, provisionalFont);
+  const plainMaxChars = opts.maxLineChars ?? estimateMaxLineChars(width, provisionalFont);
   const wordflowMaxChars = opts.maxLineChars ?? clamp(Math.round(width / 64), 8, 14);
+  const karaokeFont = opts.fontSize ?? clamp(Math.round(width * 0.070), 36, 112);
+  const karaokeMaxChars = opts.maxLineChars
+    ?? clamp(Math.round((width * SUBTITLE_WIDTH_RATIO) / Math.max(10, karaokeFont * 0.42)), 14, 42);
   const fontSize = opts.mode === "wordflow"
     ? (
       opts.fontSize
@@ -308,8 +373,12 @@ export async function main(argv = process.argv) {
         120
       )
     )
-    : pickFontSizeForSrt(srtText, { width, requestedFontSize: opts.fontSize });
-  const maxLineChars = opts.mode === "wordflow" ? wordflowMaxChars : nonWordflowMaxChars;
+    : (opts.mode === "karaoke"
+      ? karaokeFont
+      : pickFontSizeForSrt(srtText, { width, requestedFontSize: opts.fontSize }));
+  const maxLineChars = opts.mode === "wordflow"
+    ? wordflowMaxChars
+    : (opts.mode === "karaoke" ? karaokeMaxChars : plainMaxChars);
   const assText = buildAssFromSrt(srtText, {
     mode: opts.mode,
     fontName: opts.fontName,
@@ -317,7 +386,8 @@ export async function main(argv = process.argv) {
     marginV,
     maxLineChars,
     playResX: width,
-    playResY: height
+    playResY: height,
+    marginLR
   });
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-footnote-"));
   const assFile = path.join(tmpDir, "subtitle.ass");
