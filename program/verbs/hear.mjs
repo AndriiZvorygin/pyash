@@ -19,6 +19,29 @@ const hearStreamProcesses = new Map();
 
 export { resolveHearInputPath };
 
+function formatSrtTimestamp(ms) {
+  const totalMs = Math.max(0, Math.trunc(ms));
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const seconds = Math.floor((totalMs % 60000) / 1000);
+  const millis = totalMs % 1000;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")},${String(millis).padStart(3, "0")}`;
+}
+
+function transcriptToSrt(transcript) {
+  const lines = String(transcript ?? "")
+    .split(/\r?\n/u)
+    .map(line => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return "";
+  const cues = lines.map((line, index) => {
+    const startMs = index * 2000;
+    const endMs = (index + 1) * 2000;
+    return `${index + 1}\n${formatSrtTimestamp(startMs)} --> ${formatSrtTimestamp(endMs)}\n${line}`;
+  });
+  return `${cues.join("\n\n")}\n`;
+}
+
 function classifyEvidentialFromSource(sentence) {
   const source = sentence?.from?.filename ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
   const lower = String(source).toLowerCase();
@@ -30,6 +53,9 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "hear", caseKey: "vyah" });
   const aspectKey = aspect === "dweh" ? "timebox" : aspect;
+  const wantsSrt = sentence?.become?.wo === "srt";
+  const outputPath = resolveOutputPath(sentence, { defaultExt: wantsSrt ? ".srt" : ".txt" });
+  const metadataPath = metadataPathForOutput(outputPath);
   if (aspectKey === "cancel") {
     const targetName = sentence?.su?.name;
     if (!targetName) {
@@ -55,6 +81,14 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       message: `hear does not support vyah ${aspect}`,
       from: { name: "hear" },
       raw: { aspect }
+    });
+  }
+  if (wantsSrt && aspectKey === "stream") {
+    throwErrorSentence({
+      name: "hear defective",
+      message: "hear defective: stream does not support srt",
+      from: { name: "hear" },
+      raw: { sentence }
     });
   }
 
@@ -98,8 +132,6 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   let backend = "fixture";
   let model = null;
   const inputPath = resolveHearInputPath(sentence, { rememberFn });
-  const outputPath = resolveOutputPath(sentence);
-  const metadataPath = metadataPathForOutput(outputPath);
   if (aspectKey === "stream") {
     const streamResult = await handleHearStream({ sentence, rememberFn, fixture, hearStreamProcesses });
     if (streamResult?.stream) return streamResult.stream;
@@ -217,10 +249,11 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       const prompt = resolveHearPrompt(sentence);
       backend = "whisper.cpp";
       model = modelPath;
-      const outputBase = outputPath.replace(/\.txt$/, "");
+      const outputBase = outputPath.replace(/\.[^.]+$/, "");
       await fs.mkdir(path.dirname(outputPath), { recursive: true });
       const res = await new Promise((resolve, reject) => {
-        const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", "-otxt", "-of", outputBase];
+        const formatFlag = wantsSrt ? "-osrt" : "-otxt";
+        const args = ["-m", String(modelPath), "-f", String(inputPath), "-nt", "-np", formatFlag, "-of", outputBase];
         if (prompt) {
           args.push("--prompt", prompt);
         }
@@ -243,7 +276,11 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       try {
-        transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
+        if (wantsSrt) {
+          transcript = String(await fs.readFile(outputPath, "utf8"));
+        } else {
+          transcript = sanitizeTranscript(await fs.readFile(outputPath, "utf8"));
+        }
       } catch (err) {
         throwErrorSentence({
           name: "hear defective",
@@ -254,7 +291,21 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       }
     }
   }
-  transcript = String(transcript ?? "");
+  if (wantsSrt) {
+    if (!/-->/u.test(String(transcript ?? ""))) {
+      transcript = transcriptToSrt(sanitizeTranscript(transcript));
+    }
+    if (!String(transcript ?? "").trim()) {
+      throwErrorSentence({
+        name: "hear defective",
+        message: "hear defective: missing srt transcript",
+        from: { name: "hear" },
+        raw: { outputPath }
+      });
+    }
+  } else {
+    transcript = String(transcript ?? "");
+  }
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, transcript, "utf8");
 
@@ -274,7 +325,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     model: model ?? undefined,
     inputSha256: sha256(inputBytes),
     outputSha256: sha256(transcriptBytes),
-    format: "text",
+    format: wantsSrt ? "srt" : "text",
     streaming: false
   };
   const metadataText = canonicalJsonStringify(metadata);
@@ -289,7 +340,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
 
   const evidential = classifyEvidentialFromSource(sentence);
   const result = {
-    ob: { text: transcript },
+    ob: wantsSrt ? { filename: outputPath } : { text: transcript },
     be: "hear",
     fromstate: { wo: "audio" },
     accordingto: { wo: evidential }
@@ -334,5 +385,12 @@ export const signatures = [
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "during", "num", "vyah", "dweh"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "vyah", "dweh"], handler: hear },
-  { signatureWords: ["be", "hear", "from", "name", "filename", "during", "num", "vyah", "dweh"], handler: hear }
+  { signatureWords: ["be", "hear", "from", "name", "filename", "during", "num", "vyah", "dweh"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "to", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename", "to", "filename"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text", "to", "filename"], handler: hear }
 ];
