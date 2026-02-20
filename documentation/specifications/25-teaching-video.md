@@ -22,7 +22,7 @@ This spec does not cover:
 | --- | --- | --- |
 | `fromstate ... become ... be draw do` | generate teaching media | text/photo/video to photograph/video |
 | `be hear ... become wo srt` | derive timing/subtitle timeline from telling | srt extraction |
-| `be footnote do` | style/render subtitle layer from SRT | fancy/baked captions |
+| `be footnote do` | burn subtitle layer from SRT into video | plain/karaoke/wordflow captions |
 | `be cut do` | split telling timeline into cuts | 5-7s unit extraction |
 | `be concatenate do` | assemble media units into final video | slideshow/video composition |
 | `be itinerary def` | ordered timeline container | teaching timeline source of truth |
@@ -105,14 +105,18 @@ Workflow selection:
 Prompt assembly and override (normative):
 - There is no hidden style prompt in the draw pipeline.
 - Effective positive prompt is assembled as:
-  1. sentence `ob text` (prompter),
+  1. sentence `fromtext text` (system prompt, optional),
   2. blank line,
-  3. cut payload (`cut.ob.text`).
-- If `ob text` is omitted, only `cut.ob.text` is sent.
+  3. sentence `ob text` (user prompt, optional),
+  4. blank line,
+  5. cut payload (`cut.ob.text`, optional).
+- If `fromtext` is omitted, prompt starts at `ob text`.
+- If `ob text` is omitted, prompt uses `cut.ob.text` (and optional `fromtext`).
 - For ComfyUI, `draw/refinery/comfyui/<workflow>.pya` controls where this prompt is injected:
   - `su name positive prompt path ob text "<node>.inputs.text" ya`
 - To override prompt behavior:
-  - change `ob text` in the `be draw do` sentence,
+  - change `fromtext text` for system/style behavior,
+  - change `ob text` for user/task behavior,
   - or select a different workflow via `as text`,
   - or point directly with `with filename`.
 
@@ -134,14 +138,48 @@ to name text footnote out
 be hear do
 ```
 
-### 4.2.1 Footnote (styled captions)
+### 4.2.1 Footnote (styled/baked captions)
 
-SRT to styled caption layer:
+`footnote` consumes SRT + video and emits a video with burned captions.
+
+Plain:
 ```pyash
 from filename "artifacts/footnote/teaching.srt"
-to filename "artifacts/footnote/teaching.ass"
+fromstate wo srt
+with filename "artifacts/video/teaching.mp4"
+become wo video
+to filename "artifacts/video/teaching-footnote.mp4"
 be footnote do
 ```
+
+Karaoke:
+```pyash
+from filename "artifacts/footnote/teaching.srt"
+fromstate wo srt
+with filename "artifacts/video/teaching.mp4"
+become wo video
+to filename "artifacts/video/teaching-karaoke.mp4"
+as wo karaoke
+be footnote do
+```
+
+Wordflow:
+```pyash
+from filename "artifacts/footnote/teaching.srt"
+fromstate wo srt
+with filename "artifacts/video/teaching.mp4"
+become wo video
+to filename "artifacts/video/teaching-wordflow.mp4"
+as wo wordflow
+be footnote do
+```
+
+Current layout behavior (implemented):
+- output sizing is dynamic from input video dimensions (`ffprobe`),
+- font sizing scales from width,
+- vertical placement scales from height,
+- caption region targets ~61% width,
+- karaoke paginates long cues so each displayed page stays within 2 rows.
 
 ### 4.3 Cut
 
@@ -319,7 +357,9 @@ Valid `hear` SRT forms:
 - `from filename <audio> become wo srt to name text <out> be hear do`
 
 Valid `footnote` forms:
-- `from filename <srt> to filename <caption layer> be footnote do`
+- `from filename <srt> fromstate wo srt with filename <video> become wo video to filename <output> be footnote do`
+- `from filename <srt> fromstate wo srt with filename <video> become wo video to filename <output> as wo karaoke be footnote do`
+- `from filename <srt> fromstate wo srt with filename <video> become wo video to filename <output> as wo wordflow be footnote do`
 
 Valid `cut` forms:
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
