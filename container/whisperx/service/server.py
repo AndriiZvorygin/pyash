@@ -31,6 +31,8 @@ def _run_whisperx(payload: dict):
 
   model = str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3")
   language = str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en")
+  compute_type = str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8")
+  device = str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "").strip()
   diarize = bool(payload.get("diarize"))
 
   os.makedirs(output_dir, exist_ok=True)
@@ -39,9 +41,12 @@ def _run_whisperx(payload: dict):
     input_path,
     "--model", model,
     "--language", language,
+    "--compute_type", compute_type,
     "--output_format", "srt",
     "--output_dir", output_dir
   ]
+  if device:
+    cmd.extend(["--device", device])
   if diarize:
     cmd.append("--diarize")
     token = os.environ.get("HF_TOKEN", "").strip()

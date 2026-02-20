@@ -11,6 +11,7 @@ services:
       - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/server.py:/service/server.py:ro
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
+      - WHISPERX_COMPUTE_TYPE=${WHISPERX_COMPUTE_TYPE:-int8}
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
       - HF_HOME=/root/.cache/huggingface
       - TORCH_HOME=/root/.cache/torch
