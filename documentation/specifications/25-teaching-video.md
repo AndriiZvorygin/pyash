@@ -97,6 +97,10 @@ to name itinerary photographs
 be draw do
 ```
 
+Workflow selection:
+- `as text "<workflow name>"` selects a named draw workflow,
+- `with filename "<workflow file>"` may override with an explicit workflow file path.
+
 ### 4.2 Footnote
 
 Audio to SRT file:
@@ -175,6 +179,21 @@ Optional fields:
 - Cut boundaries are monotonic and non-overlapping.
 - Concatenate consumes itinerary in declaration order.
 - File outputs should use deterministic names by cut id.
+- On single-GPU systems, provider switching between `mind` and `draw` should follow auto-discharge policy from `08-tools-and-mcp.md` and `23-configure.md`.
+
+## 6.1 Draw workflow storage and resolution
+
+Workflows are backend-owned files. Canonical root:
+- `./draw/refinery/<backend>/`
+
+ComfyUI canonical root:
+- `./draw/refinery/comfyui/`
+
+Resolution order for `draw`:
+1. if `with filename` is provided, use it directly;
+2. else if `as text "<workflow name>"` is provided, resolve to `./draw/refinery/<backend>/<workflow name>.json`;
+3. else load compositional default workflow for (`fromstate`, `become`) from `configure/default.pya`;
+4. if unresolved, emit `draw defective`.
 
 ## 7. Error classes
 
@@ -253,6 +272,8 @@ Valid `draw` forms:
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo video to filename <path> be draw do`
 - `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name itinerary <name> be draw do`
+- `ob text <prompt> fromstate wo text become wo photograph as text <workflow> to filename <path> be draw do`
+- `ob text <prompt> fromstate wo text become wo photograph with filename <workflow file> to filename <path> be draw do`
 
 Invalid `draw` forms:
 - missing `become` target kind,
