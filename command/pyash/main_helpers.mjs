@@ -15,6 +15,7 @@ export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
     "  pyash configure channel matrix [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--quickstart|--advanced] [--test-now <truth|lie>] [--start-now <truth|lie>] [--homeserver <url>] [--room <id-or-alias>] [--mode <poll|sync|appservice-push>] [--appservice-registration <path>] [--executive <@user:server>]... [--agent-user-id <@user:server>] [--auth-mode <password|token|shared-secret>] [--password <password>] [--token <token>] [--registration-shared-secret <secret>] [--admin-token <token>] [--agent <name>] [--write-agent-policy <truth|lie>] [--public-tag-answer <truth|lie>]",
     "  pyash configure channel matrix test [--root <path>] [--json]",
     "  pyash configure channel matrix doctor [--root <path>] [--json]",
+    "  pyash configure audio [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--backend <whisper|whisperx>] [--whisperx-enabled <truth|lie>] [--host <url>] [--model <name>]",
     "  pyash configure mind [--root <path>] [--non-interactive] [--dry-run] [--print] [--json] [--relay <name>] [--set-default <truth|lie>] [--backend <name>] [--host <url>] [--model <name>] [--reasoning-effort <name>] [--test-now <truth|lie>] [--codex-login <truth|lie>] [--codex-bin <path>]",
     "  pyash configure agent",
     "  pyash configure agent list [--root <path>] [--json]",

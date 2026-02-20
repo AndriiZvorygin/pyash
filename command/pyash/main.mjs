@@ -91,6 +91,7 @@ import {
 import { createConfigureMindSupport } from "./configure_mind_support.mjs";
 import { createConfigureOrchestratorCommand } from "./configure_orchestrator_command.mjs";
 import { createConfigureMenu } from "./configure_menu.mjs";
+import { createConfigureAudioCommand } from "./configure_audio_command.mjs";
 import {
   createNormalizeChannelAgentName,
   isEphemeralRootDir,
@@ -429,6 +430,23 @@ const configureMind = createConfigureMindCommand({
   textOut
 });
 
+const configureAudio = createConfigureAudioCommand({
+  resolveRootDirFromArgs,
+  hasFlag,
+  parseArgValue,
+  parseTruthy,
+  readText,
+  parseMapBlock,
+  extractManagedBlock,
+  planManagedUpsert,
+  applyWritePlan,
+  writePlanSummary,
+  renderShortPreview,
+  quoteText,
+  jsonOut,
+  textOut
+});
+
 const normalizeIntervalMinutes = normalizeIntervalMinutesImpl;
 
 const upsertAgentRuntime = async (args) => await upsertAgentRuntimeImpl({ ...args, resolveConfiguredAgentHouse, readText, planManagedUpsert, ensureDirForFile });
@@ -443,7 +461,7 @@ const upsertAgentChannelSchedule = async (args) => await upsertAgentChannelSched
 
 const configureAgent = createConfigureAgentCommand({ resolveRootDirFromArgs, hasFlag, parseArgValue, parseTruthy, readText, pathExists, resolveConfiguredAgentHouse, isEphemeralRootDir, loadMindConfigFromSecret, loadMatrixConfigureDefaults, parseMapBlock, blockMarkers, escapeRegex, extractManagedBlock, normalizeIntervalMinutes, canonicalizeMindBackend, DEFAULT_CHANNEL_AGENT_NAME, MATRIX_POLICY_BLOCK_NAME, MIND_BACKEND_CHOICES, findMindBackendChoice, resolveMindBackendSource, resolveMindBackendSelection, backendChoiceKey, displayMindBackendKey, relayMatchesBackendSource, formatNumberedRows, resolveModelSelection, sectionPrinter, establishAgent, beginAgent, stopAgent, listAgents, upsertAgentRuntime, upsertAgentDirectoryLicense, bindAgentToDefaultChannel, upsertAgentChannelSchedule, bootstrapAgentMatrixChannelConnection, renderShortPreview, quoteText, jsonOut, textOut });
 
-const { configureMenu } = createConfigureMenu({ resolveRootDirFromArgs, hasFlag, listAgents, pathExists, resolveConfiguredAgentHouse, loadMatrixConfigureDefaults, DEFAULT_CHANNEL_AGENT_NAME, loadMindConfigFromSecret, configureMatrix, configureMatrixTest, configureMatrixDoctor, MATRIX_CATERER_NAME, configureChannelList, configureMind, configureAgent, configureOrchestrator, textOut, jsonOut });
+const { configureMenu } = createConfigureMenu({ resolveRootDirFromArgs, hasFlag, listAgents, pathExists, resolveConfiguredAgentHouse, loadMatrixConfigureDefaults, DEFAULT_CHANNEL_AGENT_NAME, loadMindConfigFromSecret, configureMatrix, configureMatrixTest, configureMatrixDoctor, MATRIX_CATERER_NAME, configureChannelList, configureAudio, configureMind, configureAgent, configureOrchestrator, textOut, jsonOut });
 const verifyCommand = createVerifyCommand({ resolveRootDirFromArgs, hasFlag, parseArgValue, jsonOut, textOut });
 const agentCommand = createAgentCommand({
   resolveRootDirFromArgs,
