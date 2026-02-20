@@ -3,7 +3,7 @@ exists su name video cuts prefix ob text "love-teaching" be default ya
 
 su name love teaching full be refinery def
 
-su name manuscript ob text "Write a spoken teaching manuscript that teaches people how to love God. Focus on concrete actions humans can take to love God (prayer, obedience, gratitude, trust). Do not focus on God loving people. Target about 90 words, plain language, no lists, no markdown." for name mind to name text manuscript out be write do
+su name manuscript ob text "Write a spoken teaching manuscript that teaches people how to love God. Focus on concrete actions humans can take to love God (prayer, obedience, gratitude, trust). Target about 90 words, plain language, no lists, no markdown." for name mind to name text manuscript out be write do
 
 su name telling from ve name manuscript ob name manuscript out to filename "/workplace/artifacts/say/love-teaching.wav" be piper say do
 
@@ -11,13 +11,12 @@ su name hear from ve name telling from filename "/workplace/artifacts/say/love-t
 
 su name cut platform from filename "/workplace/artifacts/footnote/love-teaching.srt" during num 6 to name itinerary teaching cuts be cut do
 
-su name draw platform from name itinerary teaching cuts ob text "Create one cinematic illustration per cut. Keep continuity across cuts, no text in image, and make each image directly depict the cut content." fromstate wo text become wo photograph as text "love-teaching" be draw do
+su name draw platform from name itinerary teaching cuts ob text "Create one illustration representing the meaing of the text in an uplifting way, if there is any text it should be brief and at the top:" fromstate wo text become wo photograph as text "love-teaching" be draw do
 
-su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename "/workplace/artifacts/video/love-teaching.mp4" be concatenate do
+su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video be concatenate do
 
-su name report ob text "Generated /workplace/artifacts/video/love-teaching.mp4" be write do
+su name report ob text "Generated teaching video in run artifacts folder." be write do
 prah
 
 from name love teaching full be refinery do
-ob text "ls -lh /workplace/artifacts/video/love-teaching.mp4" to name text video preview be command do
-ob name video preview be write do
+ob name concatenate platform be write do

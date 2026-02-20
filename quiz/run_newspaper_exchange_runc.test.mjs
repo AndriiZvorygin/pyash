@@ -50,6 +50,10 @@ test("runc records exchange lines in newspaper", async () => {
   await fs.access(caPath);
   const nameMatch = artifactLine.match(/exists su name ([^ ]+)/);
   assert.ok(nameMatch);
-  const aliasPath = path.join(tmpDir, "artifacts", "run-c-exchange", nameMatch[1]);
+  const aliasDir = path.join(tmpDir, "artifacts", "run-c-exchange");
+  const aliasNames = await fs.readdir(aliasDir);
+  const aliasName = aliasNames.find((name) => name === nameMatch[1] || name.startsWith(`${nameMatch[1]}-`));
+  assert.ok(aliasName);
+  const aliasPath = path.join(aliasDir, aliasName);
   await fs.access(aliasPath);
 });
