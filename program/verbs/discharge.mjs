@@ -4,6 +4,7 @@ import { renderSayValue } from "./say.mjs";
 import { closeMcpServer } from "../motor/mcp.mjs";
 import { getRefinery, removeRefinery } from "../bridge/refinery.mjs";
 import { dischargeOllamaMind, listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
+import { dischargeDrawBackend } from "../motor/draw_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   const ob = sentence?.ob ?? {};
@@ -68,13 +69,22 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
   const targetNames = resolveTargetNames(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const dischargeType = resolveDischargeType(sentence);
-  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind") {
+  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw") {
     throwErrorSentence({
       name: "discharge target defective",
       message: `discharge target defective: ${dischargeType}`,
       from: { name: "discharge" },
       raw: { sentence }
     });
+  }
+  if (dischargeType === "draw") {
+    await dischargeDrawBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "draw" },
+      ob: { boolean: true }
+    };
   }
   const explicitOllama = dischargeType === "ollama";
   const explicitMind = dischargeType === "mind";
@@ -146,6 +156,7 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "ob", "name", "num"], handler: discharge },
   { signatureWords: ["be", "discharge", "ob", "name", "map"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "mind"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "draw"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "ollama"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "ollama", "ob", "vec", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "text"], handler: discharge },

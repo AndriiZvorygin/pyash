@@ -21,7 +21,8 @@ This spec does not cover:
 | Surface | Meaning | Application |
 | --- | --- | --- |
 | `fromstate ... become ... be draw do` | generate teaching media | text/photo/video to photograph/video |
-| `be footnote do` | derive footnote/timing text from telling | footnote/timestamp output |
+| `be hear ... become wo srt` | derive timing/subtitle timeline from telling | srt extraction |
+| `be footnote do` | style/render subtitle layer from SRT | fancy/baked captions |
 | `be cut do` | split telling timeline into cuts | 5-7s unit extraction |
 | `be concatenate do` | assemble media units into final video | slideshow/video composition |
 | `be itinerary def` | ordered timeline container | teaching timeline source of truth |
@@ -32,7 +33,7 @@ This spec does not cover:
 Order is normative for v0:
 1. create manuscript text,
 2. generate telling audio,
-3. derive footnote/timing output,
+3. derive SRT timing via hear,
 4. cut into 5-7 second units,
 5. draw one teaching photograph (or teaching video) per cut,
 6. concatenate into final video.
@@ -48,8 +49,8 @@ Canonical signatures (v0 quick block):
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo video to filename <path> be draw do`
 - `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name itinerary <name> be draw do`
-- `from filename <audio> become wo srt to filename <path> be footnote do`
-- `from filename <audio> become wo srt to name text <out> be footnote do`
+- `from filename <audio> become wo srt to filename <path> be hear do`
+- `from filename <audio> become wo srt to name text <out> be hear do`
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
 - `from name <itinerary> fromstate wo itinerary become wo video to filename <path> be concatenate do`
 - `from ve name <itinerary> name <dependency> fromstate wo itinerary become wo video to filename <path> be concatenate do`
@@ -101,14 +102,14 @@ Workflow selection:
 - `as text "<workflow name>"` selects a named draw workflow,
 - `with filename "<workflow file>"` may override with an explicit workflow file path.
 
-### 4.2 Footnote
+### 4.2 Hear SRT
 
 Audio to SRT file:
 ```pyash
 from filename "artifacts/say/teaching.wav"
 become wo srt
 to filename "artifacts/footnote/teaching.srt"
-be footnote do
+be hear do
 ```
 
 Audio to SRT text:
@@ -116,6 +117,15 @@ Audio to SRT text:
 from filename "artifacts/say/teaching.wav"
 become wo srt
 to name text footnote out
+be hear do
+```
+
+### 4.2.1 Footnote (styled captions)
+
+SRT to styled caption layer:
+```pyash
+from filename "artifacts/footnote/teaching.srt"
+to filename "artifacts/footnote/teaching.ass"
 be footnote do
 ```
 
@@ -199,6 +209,7 @@ Resolution order for `draw`:
 
 Implementations should report sentence-shaped errors with these names:
 - `draw defective`,
+- `hear defective`,
 - `footnote defective`,
 - `cut defective`,
 - `concatenate defective`,
@@ -228,15 +239,15 @@ ob name manuscript out
 to filename "artifacts/say/teaching.wav"
 be say do
 
-su name footnote platform
+su name hear platform
 from name telling platform
 from filename "artifacts/say/teaching.wav"
 become wo srt
 to filename "artifacts/footnote/teaching.srt"
-be footnote do
+be hear do
 
 su name cut platform
-from name footnote platform
+from name hear platform
 from filename "artifacts/footnote/teaching.srt"
 during num 6
 to name itinerary teaching cuts
@@ -280,9 +291,12 @@ Invalid `draw` forms:
 - missing `fromstate` source kind,
 - `fromstate wo text become wo video` in v0 (not part of starter surface).
 
+Valid `hear` SRT forms:
+- `from filename <audio> become wo srt to filename <path> be hear do`
+- `from filename <audio> become wo srt to name text <out> be hear do`
+
 Valid `footnote` forms:
-- `from filename <audio> become wo srt to filename <path> be footnote do`
-- `from filename <audio> become wo srt to name text <out> be footnote do`
+- `from filename <srt> to filename <caption layer> be footnote do`
 
 Valid `cut` forms:
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
