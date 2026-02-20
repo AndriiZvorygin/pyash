@@ -24,6 +24,10 @@ from filename "./module/read_pdf_markdown.pya" ob name read to name read pdf mar
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read pdf markdown plain be import do
 from filename "./module/see_vl.pya" ob name see to name see be import do
 from filename "./module/draw_comfyui.pya" ob name draw to name draw be import do
+from filename "./module/cut_itinerary.pya" ob name cut to name cut be import do
+from filename "./module/draw_cuts.pya" ob name draw to name draw be import do
+from filename "./module/cuts_video.pya" ob name concatenate to name concatenate be import do
+from filename "./module/footnote_video.pya" ob name footnote to name footnote be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
@@ -35,6 +39,9 @@ exists su name draw host ob text "http://localhost:8188" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/refinery/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
+exists su name provider auto discharge ob bool truth be default ya
+exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" be default ya
+exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya
