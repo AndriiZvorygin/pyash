@@ -1,0 +1,8 @@
+su name example meta be map def
+su name required ob ve text "PYA_HEAR_FIXTURE or whisper binaries/model" ya
+prah
+
+exists su name hear fixture ob text "Hello from SRT." be default ya
+ob text "fixture audio input" to filename "examples/out/hear-audio-srt-input.wav" be write do
+from filename "examples/out/hear-audio-srt-input.wav" become wo srt to filename "examples/out/hear-audio-srt-example.srt" be hear do
+ob text "Wrote SRT to examples/out/hear-audio-srt-example.srt" be write do
