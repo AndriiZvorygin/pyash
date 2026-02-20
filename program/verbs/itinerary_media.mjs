@@ -8,7 +8,7 @@ import { parseSrtToCuts, parseItineraryPya } from "../../command/itinerary_io.mj
 import { outputPathForCut, promptFromCut, runDraw } from "../../command/itinerary_to_draw_images.mjs";
 import { buildTimelineItems, createConcatListFile, findImageForCut, getAudioDurationSeconds, runFfmpeg } from "../../command/itinerary_to_video.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
-import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
+import { emitExchangeSentence, getExchangeRunId, recordArtifact } from "../bridge/exchange.mjs";
 
 function buildRunTag(now = new Date()) {
   const iso = now.toISOString();
@@ -18,6 +18,8 @@ function buildRunTag(now = new Date()) {
 }
 
 function defaultDrawOutputDir() {
+  const runId = String(getExchangeRunId?.() ?? "").trim();
+  if (runId) return path.join("artifacts", runId, "draw");
   return path.join("artifacts", "draw", buildRunTag());
 }
 
@@ -145,6 +147,16 @@ function drawWorkflowName(rememberFn) {
   return String(rememberFn("draw workflow default")?.ob?.text ?? "").trim();
 }
 
+function resolveFromTextPrompt(value, rememberFn) {
+  if (!value) return "";
+  if (typeof value?.text === "string") return value.text;
+  if (typeof value?.name === "string" && rememberFn) {
+    const fact = rememberFn(value.name);
+    return String(fact?.ob?.text ?? "");
+  }
+  return "";
+}
+
 function videoImagesDir(rememberFn, { outputFile = "" } = {}) {
   const configured = String(rememberFn("video cuts images directory")?.ob?.text ?? "").trim();
   if (configured) return configured;
@@ -250,9 +262,10 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
     be: "draw"
   });
   const work = cuts.slice(0, Number.isFinite(limit) ? limit : cuts.length);
+  const systemPrompt = resolveFromTextPrompt(sentence?.fromtext, rememberFn);
   for (const cut of work) {
     const output = outputPathForCut(outputResolved, prefix, cut);
-    const prompt = promptFromCut(cut, sentence?.ob?.text ?? "");
+    const prompt = promptFromCut(cut, sentence?.ob?.text ?? "", systemPrompt);
     const requestSentence = {
       mood: "do",
       su: { name: `draw request ${String(cut.index).padStart(3, "0")}` },
@@ -285,19 +298,15 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
 
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
-  const outputFile = String(sentence?.to?.filename ?? "").trim();
-  if (!outputFile) {
-    throwErrorSentence({
-      name: "concatenate defective",
-      message: "concatenate defective: missing to filename",
-      from: { name: "concatenate" },
-      raw: { sentence }
-    });
-  }
-  const imagesDir = videoImagesDir(rememberFn, { outputFile });
-  const audioFile = videoAudioFilename(rememberFn, { outputFile });
+  const requestedOutputFile = String(sentence?.to?.filename ?? "").trim();
+  const outputFileForDefaults = requestedOutputFile || "video.mp4";
+  const imagesDir = videoImagesDir(rememberFn, { outputFile: outputFileForDefaults });
+  const audioFile = videoAudioFilename(rememberFn, { outputFile: outputFileForDefaults });
   const imageDirResolved = resolveAgentPath(imagesDir, { rememberFn });
   const audioResolved = resolveAgentPath(audioFile, { rememberFn });
+  const runId = String(getExchangeRunId?.() ?? "").trim();
+  const outputFile = requestedOutputFile
+    || (runId ? path.join("artifacts", runId, "video.mp4") : path.join(imageDirResolved.resolved, "video.mp4"));
   const outputResolved = resolveAgentPath(outputFile, { rememberFn });
   if (imageDirResolved.outside || audioResolved.outside || outputResolved.outside) {
     throwErrorSentence({
@@ -307,7 +316,7 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       raw: { sentence }
     });
   }
-  const prefix = videoPrefix(rememberFn, { outputFile });
+  const prefix = videoPrefix(rememberFn, { outputFile: outputFileForDefaults });
   const fps = videoFps(rememberFn);
   const audioDurationSeconds = await getAudioDurationSeconds(audioResolved.resolved);
   const timeline = buildTimelineItems(cuts, audioDurationSeconds);
@@ -325,6 +334,16 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       outputFile: outputResolved.resolved,
       fps
     });
+    const bytes = await fs.readFile(outputResolved.resolved);
+    const artifact = recordArtifact({ locator: outputResolved.resolved, producer: "concatenate", bytes, kind: "video" });
+    emitExchangeSentence({
+      mood: "ya",
+      su: { name: "concatenate result" },
+      ob: { filename: outputResolved.resolved },
+      be: "concatenate",
+      by: { num: bytes.length },
+      accordingto: artifact?.su?.name ? { name: artifact.su.name } : undefined
+    });
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
@@ -339,13 +358,22 @@ export const signatures = [
   { signatureWords: ["be", "cut", "from", "filename", "to", "name", "itinerary"], handler: cutFromFilenameToNameItinerary },
 
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text"], handler: drawFromNameItinerary },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "by", "num", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text"], handler: drawFromNameItinerary },
 
-  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary }
+  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
+  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary }
 ];

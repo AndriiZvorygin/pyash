@@ -66,6 +66,10 @@ export function setExchangeRunId(runId) {
   exchangeRunId = runId ? String(runId) : null;
 }
 
+export function getExchangeRunId() {
+  return exchangeRunId;
+}
+
 export function setExchangeSentenceId(sentenceId) {
   exchangeSentenceId = sentenceId ? String(sentenceId) : null;
 }
@@ -130,10 +134,40 @@ function writeContentAddressed({ hash, locator, bytes } = {}) {
   return { relative: rel, absolute: abs };
 }
 
-function linkRunAlias({ name, target } = {}) {
+function sanitizeAliasPart(value) {
+  return String(value ?? "")
+    .replace(/[\\\/]+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function locatorBasename(locator) {
+  const text = String(locator ?? "");
+  if (!text) return "";
+  if (isUri(text)) {
+    try {
+      const parsed = new URL(text);
+      return path.basename(parsed.pathname || "");
+    } catch {
+      return "";
+    }
+  }
+  return path.basename(text);
+}
+
+function runAliasName({ artifactName, locator } = {}) {
+  const baseRaw = locatorBasename(locator);
+  const base = sanitizeAliasPart(baseRaw || "");
+  if (!base) return String(artifactName ?? "");
+  return `${artifactName}-${base}`;
+}
+
+function linkRunAlias({ name, target, locator } = {}) {
   if (!exchangeRunId || !name || !target) return null;
   const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const rel = ["artifacts", exchangeRunId, name].join("/");
+  const alias = runAliasName({ artifactName: name, locator });
+  const rel = ["artifacts", exchangeRunId, alias].join("/");
   const abs = path.resolve(runRoot, rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (!fs.existsSync(abs)) {
@@ -185,7 +219,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     }
     if (hash && bytes) {
       const written = writeContentAddressed({ hash, locator: normalized, bytes });
-      linkRunAlias({ name: existing, target: written?.absolute });
+      linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
     }
     return {
       mood: "ya",
@@ -211,7 +245,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     sentence.fromtext = { text: hash };
     artifactHashes.set(sentence.su.name, hash);
     const written = writeContentAddressed({ hash, locator: normalized, bytes });
-    linkRunAlias({ name: sentence.su.name, target: written?.absolute });
+    linkRunAlias({ name: sentence.su.name, target: written?.absolute, locator: normalized });
   }
   if (size != null) {
     sentence.by = { num: size };
