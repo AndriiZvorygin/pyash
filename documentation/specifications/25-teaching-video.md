@@ -102,6 +102,20 @@ Workflow selection:
 - `as text "<workflow name>"` selects a named draw workflow,
 - `with filename "<workflow file>"` may override with an explicit workflow file path.
 
+Prompt assembly and override (normative):
+- There is no hidden style prompt in the draw pipeline.
+- Effective positive prompt is assembled as:
+  1. sentence `ob text` (prompter),
+  2. blank line,
+  3. cut payload (`cut.ob.text`).
+- If `ob text` is omitted, only `cut.ob.text` is sent.
+- For ComfyUI, `draw/refinery/comfyui/<workflow>.pya` controls where this prompt is injected:
+  - `su name positive prompt path ob text "<node>.inputs.text" ya`
+- To override prompt behavior:
+  - change `ob text` in the `be draw do` sentence,
+  - or select a different workflow via `as text`,
+  - or point directly with `with filename`.
+
 ### 4.2 Hear SRT
 
 Audio to SRT file:
@@ -161,27 +175,30 @@ The itinerary is the source of truth for assembly.
 
 Canonical shape:
 ```pyash
-su name teaching cuts be itinerary def
-  su name cut 001 be cut ya
-  su name cut 001 from num 0.0 ya
-  su name cut 001 to num 6.0 ya
-  su name cut 001 during num 6.0 ya
-  su name cut 001 ob text "footnote text for this cut" ya
-  su name cut 001 from filename "artifacts/draw/cut-001.png" ya
-  su name cut 001 with filename "artifacts/say/teaching.wav" ya
-prah
+su name teaching cuts be series def
+su name cut 001 since num 0.000 until num 6.000 ob text "footnote text for this cut" ya
+su name cut 002 since num 6.000 until num 12.000 ob text "footnote text for this cut" ya
 ```
 
-Minimum required fields per cut:
-- `from num` start seconds,
-- `to num` end seconds,
-- `during num` duration seconds,
-- `from filename` still photograph path.
+Minimum required fields per cut row:
+- `since num` start seconds,
+- `until num` end seconds,
+- `ob text` cut content payload.
 
 Optional fields:
-- `ob text` footnote text,
-- `with filename` shared teaching path,
+- additional per-cut media metadata encoded by extra facts keyed to the same cut name,
+- shared media references (audio/image/video lanes) encoded by companion facts,
 - tool-specific style/seed metadata.
+
+Normalization rules:
+- `since`/`until` are seconds from timeline origin,
+- `until >= since`,
+- render duration is `until - since`,
+- row order in the series defines render order when no explicit sort key is supplied.
+
+TSV relation:
+- TSV is an optional export/debug view only.
+- Implementations MUST treat itinerary series facts as canonical runtime source of truth.
 
 ## 6. Determinism rules
 
@@ -190,6 +207,12 @@ Optional fields:
 - Concatenate consumes itinerary in declaration order.
 - File outputs should use deterministic names by cut id.
 - On single-GPU systems, provider switching between `mind` and `draw` should follow auto-discharge policy from `08-tools-and-mcp.md` and `23-configure.md`.
+
+## 6.2 Runtime Persistence Policy
+
+- Stage API should prefer typed links (for example `from name itinerary ...`) to keep refinery wiring clean.
+- In newspaper mode (`newspaper enabled` is `truth`), implementations should persist replayable stage artifacts in the background and emit artifact/exchange records.
+- Explicit filename signatures remain valid and useful for checkpoint/debug control, but are not required to obtain replayability under newspaper mode.
 
 ## 6.1 Draw workflow storage and resolution
 
