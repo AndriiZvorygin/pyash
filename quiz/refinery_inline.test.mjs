@@ -30,3 +30,15 @@ test("inline refinery call works with from name only", async () => {
   const result = remember("result");
   assert.equal(result?.ob?.text, "ok");
 });
+
+test("refinery accepts unnamed platform steps", async () => {
+  forget();
+
+  await interpret(parse("su name demo be refinery def"));
+  await interpret(parse('ob text "ok unnamed" be write do'));
+  await interpret(parse("prah"));
+
+  await interpret(parse("from name demo be refinery do"));
+  const result = remember("result");
+  assert.equal(result?.ob?.text, "ok unnamed");
+});
