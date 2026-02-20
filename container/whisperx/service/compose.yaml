@@ -3,11 +3,12 @@ services:
     container_name: whisperx
     image: ghcr.io/jim60105/whisperx:no_model
     working_dir: /workplace
-    command: ["python3", "/service/server.py", "--host", "0.0.0.0", "--port", "8000"]
+    entrypoint: ["python3", "/service/server.py"]
+    command: ["--host", "0.0.0.0", "--port", "8000"]
     volumes:
       - ${WHISPERX_WORKSPACE:-../../..}:/workplace
-      - ../cache:/root/.cache
-      - ./server.py:/service/server.py:ro
+      - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/cache:/root/.cache
+      - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/server.py:/service/server.py:ro
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
