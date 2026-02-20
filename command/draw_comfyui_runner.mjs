@@ -109,6 +109,8 @@ function normalizePromptObject(workflow) {
   for (const node of workflow.nodes) {
     const id = String(node?.id ?? "");
     if (!id) continue;
+    const classType = String(node?.type ?? "");
+    if (!classType || classType === "Note") continue;
     const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
     const widgets = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
     let widgetIndex = 0;
@@ -116,7 +118,7 @@ function normalizePromptObject(workflow) {
     const hasKSamplerSeedShape = widgetInputNames.includes("seed") && widgets.length > widgetInputNames.length;
 
     const entry = {
-      class_type: String(node?.type ?? ""),
+      class_type: classType,
       inputs: {}
     };
 
@@ -257,6 +259,22 @@ function pickFirstImage(historyEntry) {
   return null;
 }
 
+function extractExecutionError(historyEntry) {
+  const status = historyEntry?.status;
+  const messages = Array.isArray(status?.messages) ? status.messages : [];
+  for (const pair of messages) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    const kind = String(pair[0] ?? "");
+    const payload = pair[1] ?? {};
+    if (kind !== "execution_error") continue;
+    const nodeType = String(payload?.node_type ?? "");
+    const message = String(payload?.exception_message ?? payload?.error ?? "").trim();
+    if (nodeType && message) return `${nodeType}: ${message}`;
+    if (message) return message;
+  }
+  return "";
+}
+
 async function pollHistoryForImage(host, promptId, timeoutMs = 120000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -268,6 +286,10 @@ async function pollHistoryForImage(host, promptId, timeoutMs = 120000) {
       payload = {};
     }
     const entry = payload?.[promptId] ?? payload?.[String(promptId)] ?? null;
+    const errorMessage = extractExecutionError(entry);
+    if (errorMessage) {
+      throw new Error(`draw_comfyui_runner: execution failed: ${errorMessage}`);
+    }
     const image = pickFirstImage(entry);
     if (image) return image;
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -306,6 +328,13 @@ async function main() {
     prompt: promptObject
   };
   const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, payload);
+  if (queued?.error) {
+    const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
+    throw new Error(`draw_comfyui_runner: prompt rejected: ${message}`);
+  }
+  if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
+    throw new Error(`draw_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
+  }
   const promptId = queued?.prompt_id;
   if (!promptId) throw new Error("draw_comfyui_runner: missing prompt_id from ComfyUI");
 

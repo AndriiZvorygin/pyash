@@ -8,6 +8,7 @@ Purpose: define `say`/`hear` contracts, streaming behavior, and artifact/evident
 | --- | --- | --- |
 | `be say do` | synthesize/output speech | TTS or speech rendering |
 | `be hear do` | transcribe/input speech | STT ingestion |
+| `be hear ... become wo srt` | emit subtitle timeline | SRT extraction from audio |
 | `vyah stream` | incremental output mode | live transcript chunks |
 | `vyah cancel` | stop stream/listen process | deterministic interruption |
 
@@ -16,6 +17,11 @@ Purpose: define `say`/`hear` contracts, streaming behavior, and artifact/evident
 Hear text:
 ```pyash
 from filename "audio.wav" to name text transcript be hear do
+```
+
+Hear SRT:
+```pyash
+from filename "audio.wav" become wo srt to filename "audio.srt" be hear do
 ```
 
 Hear stream:
@@ -35,6 +41,10 @@ Speech/hear runs should record:
 - model/backend metadata,
 - transcript result sentence,
 - evidential tags when content is observational/reported.
+
+Boundary note:
+- `hear` owns transcript/timeline extraction,
+- `footnote` (teaching-video pipeline) owns subtitle styling/render/burn-in.
 
 ## 4. Determinism
 
