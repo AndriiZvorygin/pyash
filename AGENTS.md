@@ -39,6 +39,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Work red→green: write a failing quiz first, then implement the smallest change to make it pass, and keep runs fast.
 - Keep imperatives recording both the command and a result fact; update quizzes when adding verbs that should emit structured outputs.
 - Do not consider a change complete until it has run at least one real test without fixtures (no `PYA_MIND_RESPONSE`, no test-only backends).
+- For end-to-end debugging and examples, explicitly unset fixture env vars (`PYA_MIND_RESPONSE`, `PYA_HEAR_FIXTURE`, `PYA_PIPER_FIXTURE`, etc.) and verify real backend outputs/metadata.
 
 ## Commit & Pull Request Guidelines
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.

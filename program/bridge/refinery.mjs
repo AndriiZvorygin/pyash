@@ -375,7 +375,11 @@ export function recordPlatform(sentence) {
     return { name: String(targetName), typeWords: targetTypeWords.map(w => String(w)) };
   })();
   actionSentence = { ...sentence };
-  if (actionSentence.from?.ve?.type === "name") delete actionSentence.from;
+  if (actionSentence.from?.ve?.type === "name") {
+    const { ve, ...fromRest } = actionSentence.from;
+    if (Object.keys(fromRest).length > 0) actionSentence.from = fromRest;
+    else delete actionSentence.from;
+  }
   frame.platforms.set(name, { deps, actionSentence, outputContract });
   frame.order.push(name);
   return { recorded: true };
@@ -723,7 +727,15 @@ export async function runRefinery({
         ])
       };
       state.refineryScopeStack.push(scopeFrame);
+      const prevEvoke = state.currentEvoke;
+      const prevEvokeRef = state.currentEvokeRef;
       try {
+        const depRefName = platform.deps.length ? platform.deps[platform.deps.length - 1] : null;
+        const depRefFact = depRefName ? remember(depRefName) : null;
+        if (depRefFact) {
+          state.currentEvoke = depRefFact;
+          state.currentEvokeRef = depRefFact;
+        }
         try {
           result = await interpret(platform.actionSentence);
         } catch (err) {
@@ -751,6 +763,8 @@ export async function runRefinery({
       } catch (err) {
         surfaced = surfaceErrorSentence(err?.sentence ?? err);
       } finally {
+        state.currentEvoke = prevEvoke;
+        state.currentEvokeRef = prevEvokeRef;
         state.refineryScopeStack.pop();
         popMemoryContext();
       }

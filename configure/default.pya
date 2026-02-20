@@ -45,6 +45,10 @@ exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
 exists su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
 exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
+exists su name hear backend default ob text "whisper" be default ya
+exists su name hear host ob text "http://localhost:8000" be default ya
+exists su name hear whisperx model ob text "large-v3" be default ya
+exists su name whisperx enabled ob bool lie be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name download extra default ob la be download as wo video ko with name download extra be default ya
 exists su name download extra default ob la be download as wo audio ko with name download extra be default ya

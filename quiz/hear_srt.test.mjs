@@ -5,7 +5,8 @@ import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember } from "../program/remember/index.mjs";
+import { doRemember, forget, remember } from "../program/remember/index.mjs";
+import { state } from "../program/bridge/state.mjs";
 
 async function run(line) {
   const sentence = parse(line);
@@ -60,6 +61,32 @@ test("hear stream rejects become wo srt", async () => {
       /hear defective: stream does not support srt/u
     );
   } finally {
+    delete process.env.PYA_HEAR_FIXTURE;
+  }
+});
+
+test("hear become wo srt resolves input from evoke artifact when from is omitted", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "hear-srt-"));
+  const inputPath = path.join(dir, "input.wav");
+  const outputPath = path.join(dir, "output.srt");
+  await fs.writeFile(inputPath, "fake-audio", "utf8");
+  process.env.PYA_HEAR_FIXTURE = "evoke line";
+  state.currentEvokeRef = { ob: { name: "artifact-evoke" } };
+  try {
+    doRemember({
+      su: { name: "artifact-evoke" },
+      be: "artifact",
+      to: { filename: inputPath },
+      ob: { name: "evoke-run" },
+      mood: "ya"
+    });
+    const result = await interpret(parse(`su name srt out become wo srt to filename "${outputPath}" be hear do`));
+    assert.equal(result?.value?.filename, outputPath);
+    const srt = await fs.readFile(outputPath, "utf8");
+    assert.match(srt, /evoke line/u);
+  } finally {
+    state.currentEvokeRef = null;
     delete process.env.PYA_HEAR_FIXTURE;
   }
 });

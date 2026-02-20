@@ -63,6 +63,21 @@ function resolveHearPrompt(sentence) {
   return trimmed.length ? trimmed : "";
 }
 
+function resolveHearBackend({ rememberFn } = {}) {
+  const configured = resolveConfigText("hear backend default", { rememberFn });
+  if (!configured) return "whisper";
+  const normalized = String(configured).trim().toLowerCase();
+  return normalized || "whisper";
+}
+
+function resolveHearHost({ rememberFn } = {}) {
+  return resolveConfigText("hear host", { rememberFn }) || "http://localhost:8000";
+}
+
+function resolveHearWhisperxModel({ rememberFn } = {}) {
+  return resolveConfigText("hear whisperx model", { rememberFn }) || "large-v3";
+}
+
 function resolveHearInputPath(sentence, { rememberFn } = {}) {
   if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
   if (typeof sentence?.from?.text === "string") return sentence.from.text;
@@ -83,5 +98,8 @@ export {
   resolveHearLanguage,
   resolveHearCapture,
   resolveHearPrompt,
-  resolveHearInputPath
+  resolveHearInputPath,
+  resolveHearBackend,
+  resolveHearHost,
+  resolveHearWhisperxModel
 };
