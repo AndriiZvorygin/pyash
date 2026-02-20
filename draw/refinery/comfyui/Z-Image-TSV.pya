@@ -1,0 +1,2 @@
+su name positive prompt path ob text "6.inputs.text" ya
+su name save image prefix path ob text "9.inputs.filename_prefix" ya

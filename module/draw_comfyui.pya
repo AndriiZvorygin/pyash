@@ -1,0 +1,67 @@
+su name draw ob text prompter fromstate wo text become wo image to filename output as text workflow be ceremony def
+  exists su name cmd ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" be text ya
+  ob text " --workflow-name \"" to name cmd be plus do
+  ob text of as of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --output \"" to name cmd be plus do
+  ob filename of to of this to name text out path be text do
+  ob name out path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of ob of this to name text result be command do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo image to filename output be ceremony def
+  exists su name workflow ob text "Z-Image-TSV" be text ya
+  ob name draw workflow default to name text cfg workflow be text do
+  ob text of cfg workflow to name workflow be text do
+  su name result ob text of ob of this fromstate wo text become wo image to filename of to of this as text of workflow be draw do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo image as text workflow be ceremony def
+  exists su name cmd ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" be text ya
+  ob text " --workflow-name \"" to name cmd be plus do
+  ob text of as of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd fromtext text of ob of this to name text result be command do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo image be ceremony def
+  exists su name workflow ob text "Z-Image-TSV" be text ya
+  ob name draw workflow default to name text cfg workflow be text do
+  ob text of cfg workflow to name workflow be text do
+  su name result ob text of ob of this fromstate wo text become wo image as text of workflow be draw do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo photograph to filename output as text workflow be ceremony def
+  su name result ob text of ob of this fromstate wo text become wo image to filename of to of this as text of as of this be draw do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo photograph to filename output be ceremony def
+  su name result ob text of ob of this fromstate wo text become wo image to filename of to of this be draw do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo photograph as text workflow be ceremony def
+  su name result ob text of ob of this fromstate wo text become wo image as text of as of this be draw do
+  su name result ret
+prah
+
+su name draw ob text prompter fromstate wo text become wo photograph be ceremony def
+  su name result ob text of ob of this fromstate wo text become wo image be draw do
+  su name result ret
+prah
+
+exists su name draw be export ya

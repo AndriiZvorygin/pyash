@@ -6,6 +6,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { appendWorldActivity, derivePresence, ensureWorldDir, isWorldToolsActive, readActivityTail, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir, resolveWorldRoot } from "../library/world.mjs";
 import { schedulerList } from "../agent/scheduler_control.mjs";
 import { listAgents } from "../agent/admin.mjs";
+import { listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -74,6 +75,12 @@ function isHouseScope(sentence) {
   return text === "house";
 }
 
+function isOllamaScope(sentence) {
+  const raw = sentence?.from?.wo ?? sentence?.from?.text ?? sentence?.from?.name ?? "";
+  const text = String(raw ?? "").trim().toLowerCase();
+  return text === "ollama";
+}
+
 function resolveSchedulerTarget(sentence) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
   if (typeof sentence?.to?.name === "string" && sentence.to.name.trim()) return sentence.to.name.trim();
@@ -101,6 +108,19 @@ export async function list(sentence, { remember: rememberFn = remember } = {}) {
       return { ob: { ve: { type: "text", values: hit } }, be: "list" };
     }
     return { ob: { ve: { type: "text", values: result.services } }, be: "list" };
+  }
+  if (isOllamaScope(sentence)) {
+    try {
+      const names = await listWarmOllamaMinds({ rememberFn });
+      return { ob: { ve: { type: "text", values: names } }, be: "list" };
+    } catch (err) {
+      throwErrorSentence({
+        name: "list defective",
+        message: `list defective: ${String(err?.message ?? err)}`,
+        from: { name: "list" },
+        raw: { sentence }
+      });
+    }
   }
 
   const worldMode = isWorldToolsActive({ rememberFn });
@@ -216,6 +236,8 @@ export const signatures = [
   { signatureWords: ["be", "list", "from", "wo", "house", "to", "name", "text"], handler: list },
   { signatureWords: ["be", "list", "from", "wo", "house", "to", "name", "map"], handler: list },
   { signatureWords: ["be", "list", "from", "wo", "calendar"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "ollama"], handler: list },
+  { signatureWords: ["be", "list", "from", "wo", "ollama", "to", "vec", "text"], handler: list },
   { signatureWords: ["be", "list", "from", "filename"], handler: list },
   { signatureWords: ["be", "list", "from", "name", "filename"], handler: list },
   { signatureWords: ["be", "list", "with", "name", "hidden"], handler: list },
