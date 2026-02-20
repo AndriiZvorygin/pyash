@@ -18,6 +18,7 @@ Use this when the cheat sheet is not enough.
 - **Translation** → `11-translation.md`
 - **Module system + runner contract** → `11-modules.md`
 - **Web search** → `12-web-and-browser.md`
+- **Teaching-video refinery pipeline** → `25-teaching-video.md`
 - **Verify output envelope (provisional)** → `documentation/reference/verify-envelope.md`
 - **External TUI session projection (Codex/others)** → `documentation/reference/agent-tui-session-projection.md`
 
