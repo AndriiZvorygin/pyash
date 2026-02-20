@@ -173,6 +173,9 @@ if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; t
   full_compose_args+=(-f "$PROJECT_ROOT/container/searxng/service/compose.yaml")
 fi
 if [[ "$search_only" != "truth" && "${whisperx_enabled:-lie}" == "truth" ]]; then
+  whisperx_cache_root="$PROJECT_ROOT/container/whisperx/cache"
+  mkdir -p "$whisperx_cache_root/huggingface" "$whisperx_cache_root/torch" "$whisperx_cache_root/matplotlib"
+  chmod -R 0777 "$whisperx_cache_root" 2>/dev/null || true
   compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
   full_compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
 fi

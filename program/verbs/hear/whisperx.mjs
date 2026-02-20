@@ -13,13 +13,14 @@ export async function transcribeWithWhisperx({
   diarize = false
 } = {}) {
   const endpoint = `${normalizeHost(host)}/transcribe`;
+  const normalizedLanguage = String(language ?? "").trim().toLowerCase();
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       input: inputPath,
       output_srt: outputPath,
-      language,
+      language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
       model,
       diarize
     })
@@ -32,7 +33,10 @@ export async function transcribeWithWhisperx({
     payload = {};
   }
   if (!response.ok) {
-    const message = payload?.error || `${response.status} ${response.statusText}`;
+    const stderr = typeof payload?.stderr === "string" ? payload.stderr.trim() : "";
+    const status = payload?.status !== undefined ? ` status=${payload.status}` : "";
+    const detail = stderr ? ` stderr=${JSON.stringify(stderr.slice(-600))}` : "";
+    const message = `${payload?.error || `${response.status} ${response.statusText}`}${status}${detail}`;
     throw new Error(`whisperx defective: ${message}`);
   }
   return payload;
