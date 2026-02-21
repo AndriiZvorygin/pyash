@@ -51,6 +51,18 @@ test("parses typed name in name <type> <literal> order", () => {
   assert.deepEqual(s.to.nameTypeWords, ["text"]);
 });
 
+test("parses itinerary typed name in name <type> <literal> order", () => {
+  const s = parse("from name itinerary teaching cuts be topic ya");
+  assert.equal(s.from.name, "teaching cuts");
+  assert.deepEqual(s.from.nameTypeWords, ["itinerary"]);
+});
+
+test("parses photographs typed name in name <type> <literal> order", () => {
+  const s = parse("to name photographs photos be topic ya");
+  assert.equal(s.to.name, "photos");
+  assert.deepEqual(s.to.nameTypeWords, ["photographs"]);
+});
+
 test("parses bool and hollow literals", () => {
   const sBool = parse("ob bool truth be topic ya");
   assert.equal(sBool.ob.boolean, true);

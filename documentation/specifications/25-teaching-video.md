@@ -35,7 +35,7 @@ Order is normative for v0:
 2. generate telling audio,
 3. derive SRT timing via hear,
 4. cut into 5-7 second units,
-5. draw one teaching photograph (or teaching video) per cut,
+5. draw one-or-more teaching photographs per cut,
 6. concatenate into final video.
 
 The flow should be declared and executed as a refinery (`be refinery def ... prah`, then `be refinery do`).
@@ -48,12 +48,12 @@ Canonical signatures (v0 quick block):
 - `ob text <prompt> fromstate wo text become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo video to filename <path> be draw do`
-- `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name itinerary <name> be draw do`
+- `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name photographs <name> be draw do`
 - `from filename <audio> become wo srt to filename <path> be hear do`
 - `from filename <audio> become wo srt to name text <out> be hear do`
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
 - `from name <itinerary> fromstate wo itinerary become wo video to filename <path> be concatenate do`
-- `from ve name <itinerary> name <dependency> fromstate wo itinerary become wo video to filename <path> be concatenate do`
+- `from ve name itinerary <itinerary> name photographs <photos> fromstate wo itinerary become wo video to filename <path> be concatenate do`
 
 ## 4. Starter signatures
 
@@ -88,15 +88,20 @@ to filename "artifacts/draw/shot-003.mp4"
 be draw do
 ```
 
-Cuts to photograph itinerary:
+Cuts to photographs artifact family:
 ```pyash
 from name teaching cuts
 ob text "Generate one photograph per cut from its footnote text."
 fromstate wo text
 become wo photograph
-to name itinerary photographs
+to name photographs photos
 be draw do
 ```
+
+`photographs` output contract (normative):
+- draw returns `be photographs` with `ob series`,
+- each row maps cut index/timing to produced image locator + artifact id/hash reference,
+- draw also writes a manifest series artifact file in the run artifacts folder, using the same handle prefix.
 
 Workflow selection:
 - `as text "<workflow name>"` selects a named draw workflow,
@@ -198,9 +203,9 @@ Behavior:
 
 ### 4.4 Concatenate
 
-Itinerary to video:
+Itinerary + photographs to video:
 ```pyash
-from name teaching cuts
+from ve name itinerary teaching cuts name photographs photos
 fromstate wo itinerary
 become wo video
 to filename "artifacts/video/teaching.mp4"
@@ -244,6 +249,7 @@ TSV relation:
 - Cut boundaries are monotonic and non-overlapping.
 - Concatenate consumes itinerary in declaration order.
 - File outputs should use deterministic names by cut id.
+- When `photographs` is produced, consumers should resolve images from the `photographs` series/manifest contract, not filename-prefix heuristics.
 - On single-GPU systems, provider switching between `mind` and `draw` should follow auto-discharge policy from `08-tools-and-mcp.md` and `23-configure.md`.
 
 ## 6.2 Runtime Persistence Policy
@@ -251,6 +257,19 @@ TSV relation:
 - Stage API should prefer typed links (for example `from name itinerary ...`) to keep refinery wiring clean.
 - In newspaper mode (`newspaper enabled` is `truth`), implementations should persist replayable stage artifacts in the background and emit artifact/exchange records.
 - Explicit filename signatures remain valid and useful for checkpoint/debug control, but are not required to obtain replayability under newspaper mode.
+
+### 6.2.1 Name-only refinery profile
+
+For teach-video refineries that target clean sentence wiring and minimal file-path churn:
+- prefer `from name <platform>` links between stages,
+- avoid explicit `filename` cases in the refinery source,
+- keep intermediate prompt planning as a dedicated platform between `cut` and `draw`,
+- keep subtitle burn as a dedicated `footnote` platform after `concatenate`.
+
+Runtime contract for this profile:
+- artifact identity is platform-based (`platform-001`, `platform-002`, ...),
+- downstream `from name <platform>` resolves via latest platform artifact locator,
+- replay/debug remains available through newspaper + artifacts even without explicit file paths in the refinery.
 
 ## 6.1 Draw workflow storage and resolution
 
@@ -319,11 +338,11 @@ from name cut platform
 ob text "Generate one photograph per cut from its footnote text."
 fromstate wo text
 become wo photograph
-to name itinerary photographs
+to name photographs photos
 be draw do
 
 su name concatenate platform
-from ve name teaching cuts name draw platform
+from ve name itinerary teaching cuts name photographs photos
 fromstate wo itinerary
 become wo video
 to filename "artifacts/video/teaching.mp4"
@@ -343,7 +362,7 @@ Valid `draw` forms:
 - `ob text <prompt> fromstate wo text become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo photograph to filename <path> be draw do`
 - `from filename <path> ob text <prompt> fromstate wo photograph become wo video to filename <path> be draw do`
-- `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name itinerary <name> be draw do`
+- `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name photographs <name> be draw do`
 - `ob text <prompt> fromstate wo text become wo photograph as text <workflow> to filename <path> be draw do`
 - `ob text <prompt> fromstate wo text become wo photograph with filename <workflow file> to filename <path> be draw do`
 

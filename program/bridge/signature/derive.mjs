@@ -1,6 +1,7 @@
 import { throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { getRefinery } from "../refinery.mjs";
+import { lookupArtifactLocator } from "../exchange.mjs";
 import { makeSignatureWords, normalizeTypeWords, normalizeWords } from "./normalize.mjs";
 
 const NON_CASE_FIELDS = new Set([
@@ -96,6 +97,10 @@ function caseTypeWordsForDefinition(value, caseKey, verb) {
     const aspect = getEffectiveVyahAspect(modifiers, { verb, caseKey });
     return aspect ? [aspect] : ["do"];
   }
+  if (caseKey === "fromtext" && value?.wo !== undefined) {
+    const literal = normalizeWords(String(value.wo));
+    if (literal === "text") return ["text"];
+  }
   if (caseKey === "ob" && value?.wo !== undefined) {
     return ["wo"];
   }
@@ -116,6 +121,8 @@ function normalizeDefinitionTypeWords(typeWords) {
       t === "refinery" ||
       t === "map" ||
       t === "series" ||
+      t === "itinerary" ||
+      t === "photographs" ||
       t === "stream" ||
       t === "duty" ||
       t === "filename" ||
@@ -193,6 +200,13 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.hollow) return ["hollow"];
 
   if (value.name) {
+    if (caseKey === "fromtext") {
+      const inferred = remember ? remember(value.name) : null;
+      if (inferred?.ob?.text !== undefined || inferred?.ob?.filename !== undefined || inferred?.ob?.num !== undefined) {
+        return ["text"];
+      }
+      return ["text"];
+    }
     if (verb === "refinery" && caseKey === "from" && !value.nameTypeWords?.length) {
       return ["name", "text"];
     }
@@ -201,6 +215,10 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
       if (stateName) return ["name", stateName];
     }
     const inferred = remember ? remember(value.name) : null;
+    const artifactLocator = lookupArtifactLocator(value.name);
+    if ((caseKey === "from" || caseKey === "with" || caseKey === "to") && typeof artifactLocator === "string" && artifactLocator) {
+      return ["filename"];
+    }
     const literalTail = normalizeWords(value.name);
     if (!inferred && typeof literalTail === "string" && literalTail.includes(" ")) {
       const [head] = literalTail.split(" ");
@@ -211,6 +229,8 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
         head === "vec" ||
         head === "ve" ||
         head === "filename" ||
+        head === "itinerary" ||
+        head === "photographs" ||
         head === "bool" ||
         head === "mind" ||
         head === "refinery" ||
@@ -223,7 +243,7 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
         return ["name", head];
       }
     }
-    if (!inferred && literalTail && (literalTail === "num" || literalTail === "text" || literalTail === "vec" || literalTail === "ve" || literalTail === "filename" || literalTail === "bool" || literalTail === "mind" || literalTail === "date")) {
+    if (!inferred && literalTail && (literalTail === "num" || literalTail === "text" || literalTail === "vec" || literalTail === "ve" || literalTail === "filename" || literalTail === "itinerary" || literalTail === "photographs" || literalTail === "bool" || literalTail === "mind" || literalTail === "date")) {
       return ["name", literalTail];
     }
     const factObj = inferred?.ob;
@@ -264,6 +284,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (inferred?.be === "refinery") return ["name", "refinery"];
     if (inferred?.be === "map") return ["name", "map"];
     if (inferred?.be === "series") return ["name", "series"];
+    if (inferred?.be === "itinerary") return ["name", "itinerary"];
+    if (inferred?.be === "photographs") return ["name", "photographs"];
+    if (inferred?.be === "artifact") {
+      if (typeof inferred?.to?.filename === "string" && inferred.to.filename) return ["name", "filename"];
+      if (typeof inferred?.ob?.filename === "string" && inferred.ob.filename) return ["name", "filename"];
+    }
     if (inferred?.be === "csv map") return ["name", "csv", "map"];
     if (inferred?.be === "json map") return ["name", "json", "map"];
 
@@ -279,7 +305,10 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
     if (factObj?.num !== undefined) return ["name", "num"];
     if (factObj?.boolean !== undefined) return ["name", "bool"];
     if (factObj?.text !== undefined) return ["name", "text"];
-    if (factObj?.filename !== undefined) return ["name", "filename"];
+    if (factObj?.filename !== undefined) {
+      if (caseKey === "from" || caseKey === "with" || caseKey === "to") return ["filename"];
+      return ["name", "filename"];
+    }
     if (typeof value.name === "string") {
       if (/\s/.test(value.name)) return ["text"];
       if (verb === "write" && caseKey === "to") return ["text"];
