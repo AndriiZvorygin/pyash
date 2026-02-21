@@ -369,7 +369,9 @@ export function parseTokens(tokens, { allowMoodless = false, quotedText = null }
           "boolean",
           "date",
           "map",
-          "series"
+          "series",
+          "itinerary",
+          "photographs"
         ];
         const parts = [];
         let j = i + 1;

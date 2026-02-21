@@ -26,6 +26,16 @@ Each artifact record should include:
 - relation to producer action,
 - hash metadata when available.
 
+For multi-artifact producers (example: `photographs`):
+- producer should emit one manifest series artifact that lists produced child artifacts,
+- newspaper hash verification MUST include this manifest artifact,
+- downstream stages should depend on the manifest handle instead of filename conventions.
+
+Default policy:
+- newspaper recording is enabled by default (`exists su name newspaper enabled ob bool truth be default ya`),
+- sentence-level APIs may remain typed/in-memory (for example `from name itinerary ...`),
+- when newspaper mode is enabled, implementations should persist replayable artifacts in the background and record them as artifact/exchange events.
+
 ## 4. Canonical application examples
 
 Enable run recording and execute:

@@ -1,4 +1,4 @@
-import { surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
+import { buildErrorSentence, surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
 import { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { state } from "./state.mjs";
@@ -142,6 +142,8 @@ function factMatchesTypeWord(fact, expectedWord) {
   if (word === "num") return typeof ob.num === "number" && Number.isFinite(ob.num);
   if (word === "bool") return typeof ob.boolean === "boolean";
   if (word === "filename") return typeof ob.filename === "string";
+  if (word === "itinerary") return fact?.be === "itinerary" || Array.isArray(ob.series);
+  if (word === "photographs") return fact?.be === "photographs" && Array.isArray(ob.series);
   if (word === "series") return Array.isArray(ob.series);
   if (word === "map") return fact?.be === "map" || (ob.map && typeof ob.map === "object" && !Array.isArray(ob.map));
   if (word === "json map") return fact?.be === "json map";
@@ -209,6 +211,18 @@ function readLocalSlotFacts(localWrites) {
   return slots;
 }
 
+function normalizeRefineryError(errorLike, { refineryName, platformName, actionSentence } = {}) {
+  const surfaced = surfaceErrorSentence(errorLike?.sentence ?? errorLike);
+  if (surfaced?.mood && surfaced?.be) return surfaced;
+  const message = String(errorLike?.message ?? surfaced?.message ?? "platform execution failed");
+  return surfaceErrorSentence(buildErrorSentence({
+    name: "platform defective",
+    message: `platform defective: ${message}`,
+    from: { name: refineryName || "refinery" },
+    raw: { platform: platformName, action: actionSentence }
+  }));
+}
+
 function restoreExportFacts(exportFacts = []) {
   for (const fact of exportFacts) {
     if (fact?.mood === "ya") doRemember(fact);
@@ -243,6 +257,182 @@ function assertNameVector(value) {
     });
   }
   return value.ve.values.map((entry) => String(entry));
+}
+
+function normalizeDependencyVector(values = []) {
+  const deps = [];
+  for (let i = 0; i < values.length; i += 1) {
+    const token = String(values[i] ?? "");
+    if (!token) continue;
+    if (token === "name") {
+      const next = String(values[i + 1] ?? "");
+      if (next) {
+        deps.push(next);
+        i += 1;
+      }
+      continue;
+    }
+    deps.push(token);
+  }
+  return deps;
+}
+
+function dependencyTokensFromVector(values = []) {
+  const raw = Array.isArray(values) ? values.map(v => String(v ?? "")).filter(Boolean) : [];
+  if (!raw.length) return [];
+  const hasNameDelimiter = raw.includes("name");
+  const hasTypedHead = raw.some((token, idx) => {
+    const head = normalizeNameTypeWord(token);
+    if (head === "json" || head === "csv") return normalizeNameTypeWord(raw[idx + 1]) === "map";
+    return HANDLE_TYPE_WORDS.has(head);
+  });
+  if (!hasNameDelimiter && !hasTypedHead) {
+    return normalizeDependencyVector(raw);
+  }
+
+  const out = [];
+  let i = 0;
+  while (i < raw.length) {
+    if (raw[i] === "name") {
+      i += 1;
+      continue;
+    }
+    const head = raw[i];
+    const lower = normalizeNameTypeWord(head);
+    let typeWords = [];
+    if ((lower === "json" || lower === "csv") && normalizeNameTypeWord(raw[i + 1]) === "map") {
+      typeWords = [head, raw[i + 1]];
+      i += 2;
+    } else if (HANDLE_TYPE_WORDS.has(lower)) {
+      typeWords = [head];
+      i += 1;
+    }
+    const handleWords = [];
+    while (i < raw.length && raw[i] !== "name") {
+      handleWords.push(raw[i]);
+      i += 1;
+    }
+    if (!handleWords.length) continue;
+    if (typeWords.length) out.push(`${typeWords.join(" ")} ${handleWords.join(" ")}`.trim());
+    else out.push(handleWords.join(" ").trim());
+  }
+  return normalizeDependencyVector(out);
+}
+
+function dependencyHandleNameFromTypedToken(token) {
+  const parts = String(token ?? "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const first = normalizeNameTypeWord(parts[0]);
+  if ((first === "json" || first === "csv") && normalizeNameTypeWord(parts[1]) === "map") {
+    return parts.slice(2).join(" ").trim();
+  }
+  if (HANDLE_TYPE_WORDS.has(first)) {
+    return parts.slice(1).join(" ").trim();
+  }
+  return "";
+}
+
+function normalizeTypeWords(words = []) {
+  return words.map(normalizeNameTypeWord).filter(Boolean);
+}
+
+const HANDLE_TYPE_WORDS = new Set([
+  "text",
+  "num",
+  "bool",
+  "filename",
+  "map",
+  "series",
+  "itinerary",
+  "photographs",
+  "stream",
+  "duty",
+  "mind",
+  "refinery",
+  "date",
+  "month",
+  "second",
+  "minute",
+  "hour",
+  "day",
+  "week",
+  "line",
+  "byte"
+]);
+
+function expectedTypeWordsFromDependencyToken(token) {
+  const words = String(token ?? "").trim().split(/\s+/).map(normalizeNameTypeWord).filter(Boolean);
+  if (words.length < 2) return [];
+  if ((words[0] === "json" || words[0] === "csv") && words[1] === "map") {
+    return [words[0], "map"];
+  }
+  if (HANDLE_TYPE_WORDS.has(words[0])) return [words[0]];
+  return [];
+}
+
+function outputContractByHandle(frame, handleName) {
+  const matches = [];
+  for (const platformName of frame.order) {
+    const platform = frame.platforms.get(platformName);
+    if (!platform?.outputContract?.name) continue;
+    if (platform.outputContract.name === handleName) {
+      matches.push({ platformName, outputContract: platform.outputContract });
+    }
+  }
+  return matches;
+}
+
+function resolveDependencyToken(frame, token) {
+  const name = String(token ?? "").trim();
+  if (!name) return null;
+  if (frame.platforms.has(name)) {
+    const platform = frame.platforms.get(name);
+    return {
+      dep: name,
+      outputContract: platform?.outputContract ?? null
+    };
+  }
+  const matches = outputContractByHandle(frame, name);
+  if (matches.length > 1) {
+    throwErrorSentence({
+      name: "depend defective",
+      message: `depend defective: ambiguous dependency handle ${name}`,
+      from: { name: "interpret" },
+      raw: { name, matches: matches.map(entry => entry.platformName) }
+    });
+  }
+  if (matches.length === 1) {
+    return {
+      dep: matches[0].platformName,
+      outputContract: matches[0].outputContract
+    };
+  }
+  return null;
+}
+
+function assertDependencyTypeMatch({ dependencyToken, expectedTypeWords, resolved }) {
+  const expected = normalizeTypeWords(expectedTypeWords);
+  if (!expected.length) return;
+  const output = resolved?.outputContract;
+  if (!output) {
+    throwErrorSentence({
+      name: "depend defective",
+      message: `depend defective: ${dependencyToken} missing typed output contract`,
+      from: { name: "interpret" },
+      raw: { dependency: dependencyToken, expected }
+    });
+  }
+  const actual = normalizeTypeWords(output.typeWords);
+  const expectedJoined = expected.join(" ");
+  const actualJoined = actual.join(" ");
+  if (expectedJoined !== actualJoined) {
+    throwErrorSentence({
+      name: "depend defective",
+      message: `depend defective: ${dependencyToken} type mismatch (${expectedJoined} != ${actualJoined || "unknown"})`,
+      from: { name: "interpret" },
+      raw: { dependency: dependencyToken, expected, actual }
+    });
+  }
 }
 
 function assertPlatformAction(ob) {
@@ -333,7 +523,15 @@ export function recordPlatform(sentence) {
       raw: sentence
     });
   }
-  const name = sentence?.su?.name || `platform ${frame.order.length + 1}`;
+  const name = sentence?.su?.name;
+  if (!name) {
+    throwErrorSentence({
+      name: "platform defective",
+      message: "platform name required",
+      from: { name: "interpret" },
+      raw: sentence
+    });
+  }
   if (frame.platforms.has(name)) {
     throwErrorSentence({
       name: "platform defective",
@@ -343,10 +541,55 @@ export function recordPlatform(sentence) {
     });
   }
   let deps = [];
+  let hasExplicitDependency = false;
+  let primaryFromCase = null;
   let actionSentence = null;
   if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
-    deps = sentence.from.ve.values.map((entry) => String(entry));
-  } else if (sentence.from && (sentence.from.filename || sentence.from.text || sentence.from.name)) {
+    const tokens = dependencyTokensFromVector(sentence.from.ve.values);
+    for (const token of tokens) {
+      let resolved = resolveDependencyToken(frame, token);
+      const expectedTypeWords = expectedTypeWordsFromDependencyToken(token);
+      if (!resolved && expectedTypeWords.length) {
+        const typedHandleName = dependencyHandleNameFromTypedToken(token);
+        if (typedHandleName) resolved = resolveDependencyToken(frame, typedHandleName);
+      }
+      if (!resolved) {
+        throwErrorSentence({
+          name: "depend defective",
+          message: `depend defective: missing dependency ${token}`,
+          from: { name: "interpret" },
+          raw: { token }
+        });
+      }
+      hasExplicitDependency = true;
+      assertDependencyTypeMatch({
+        dependencyToken: token,
+        expectedTypeWords,
+        resolved
+      });
+      if (!primaryFromCase) {
+        const typedHandleName = dependencyHandleNameFromTypedToken(token);
+        const handleName = String(typedHandleName || token).trim();
+        if (handleName) {
+          primaryFromCase = { name: handleName };
+          if (expectedTypeWords.length) primaryFromCase.nameTypeWords = [...expectedTypeWords];
+        }
+      }
+      if (!deps.includes(resolved.dep)) deps.push(resolved.dep);
+    }
+  } else if (typeof sentence.from?.name === "string" && sentence.from.name) {
+    const fromName = String(sentence.from.name);
+    const resolved = resolveDependencyToken(frame, fromName);
+    if (resolved) {
+      assertDependencyTypeMatch({
+        dependencyToken: fromName,
+        expectedTypeWords: sentence.from?.nameTypeWords ?? [],
+        resolved
+      });
+      hasExplicitDependency = true;
+      deps = [resolved.dep];
+    }
+  } else if (sentence.from && (sentence.from.filename || sentence.from.text || sentence.from.name || sentence.from.genitive)) {
     // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
   } else if (sentence.from) {
     throwErrorSentence({
@@ -357,7 +600,7 @@ export function recordPlatform(sentence) {
     });
   }
   const priorName = frame.order.length > 0 ? frame.order[frame.order.length - 1] : null;
-  if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
+  if (!hasExplicitDependency && priorName && !deps.includes(priorName)) deps = [...deps, priorName];
   const outputContract = (() => {
     const targetName = sentence?.to?.name;
     const targetTypeWords = Array.isArray(sentence?.to?.nameTypeWords)
@@ -367,9 +610,12 @@ export function recordPlatform(sentence) {
     return { name: String(targetName), typeWords: targetTypeWords.map(w => String(w)) };
   })();
   actionSentence = { ...sentence };
-  if (actionSentence.from?.ve?.type === "name") {
+  if (actionSentence.from?.ve?.type === "name" || (typeof actionSentence.from?.name === "string" && actionSentence.from.name)) {
     const { ve, ...fromRest } = actionSentence.from;
-    if (Object.keys(fromRest).length > 0) actionSentence.from = fromRest;
+    if (ve?.type === "name") fromRest.ve = undefined;
+    const cleaned = Object.fromEntries(Object.entries(fromRest).filter(([, v]) => v !== undefined));
+    if (Object.keys(cleaned).length > 0) actionSentence.from = cleaned;
+    else if (primaryFromCase) actionSentence.from = { ...primaryFromCase };
     else delete actionSentence.from;
   }
   frame.platforms.set(name, { deps, actionSentence, outputContract });
@@ -711,10 +957,12 @@ export async function runRefinery({
       let scopeSlots = {};
       pushMemoryContext({ seedFromCurrent: true });
       const localStart = allRemember().length;
+      const outputHandleName = String(platform.actionSentence?.to?.name ?? nextName).trim() || nextName;
       const scopeFrame = {
         exports: new Set(),
         autoExport: new Set([
           nextName,
+          outputHandleName,
           ...(platform.outputContract?.name ? [platform.outputContract.name] : [])
         ])
       };
@@ -731,11 +979,27 @@ export async function runRefinery({
         try {
           result = await interpret(platform.actionSentence);
         } catch (err) {
-          result = surfaceErrorSentence(err?.sentence ?? err);
+          result = normalizeRefineryError(err, {
+            refineryName: name,
+            platformName: nextName,
+            actionSentence: platform.actionSentence
+          });
         }
         const resultSentence = resolveResultSentence(result, platform.actionSentence);
         surfaced = surfaceErrorSentence(resultSentence);
         const localWrites = allRemember().slice(localStart);
+        if (
+          !(surfaced?.be === "error" && surfaced?.mood === "ya")
+          && !rememberInLocalWrites(localWrites, outputHandleName)
+          && surfaced?.ob !== undefined
+        ) {
+          localWrites.push({
+            mood: "ya",
+            su: { name: outputHandleName },
+            be: surfaced?.be ?? platform.actionSentence?.be ?? "result",
+            ob: cloneValue(surfaced.ob)
+          });
+        }
         if (!(surfaced?.be === "error" && surfaced?.mood === "ya")) {
           if (!shouldSkipOutputContract({ outputContract: platform.outputContract, actionSentence: platform.actionSentence })) {
             validateOutputContract({
@@ -753,7 +1017,11 @@ export async function runRefinery({
         });
         scopeSlots = readLocalSlotFacts(localWrites);
       } catch (err) {
-        surfaced = surfaceErrorSentence(err?.sentence ?? err);
+        surfaced = normalizeRefineryError(err, {
+          refineryName: name,
+          platformName: nextName,
+          actionSentence: platform.actionSentence
+        });
       } finally {
         state.currentEvoke = prevEvoke;
         state.currentEvokeRef = prevEvokeRef;
