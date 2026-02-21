@@ -11,16 +11,27 @@ function pathFromGenitive(genitive = [], sentenceArg, { locals, declared, locals
     // Supported: `this ti fromindex`, `fromindex num of this`, etc.
     const rootName = typeof chainArr[0] === "string" ? sanitizeName(chainArr[0]) : null;
     if (rootName && (locals?.has(rootName) || declared?.has(rootName))) {
+      const localType = localsTypes?.get(rootName)
+        ?? declaredTypes?.get(rootName)
+        ?? declaredTypes?.get(chainArr[0]);
       const rest = chainArr.slice(1);
       if (rest.length === 0) return rootName;
-      if (rest.length === 1 && rest[0] === "text") return `${rootName}.ob?.text ?? ${rootName}`;
-      if (rest.length === 1 && rest[0] === "name") return `${rootName}.ob?.name ?? ${rootName}`;
-      if (rest.length === 1 && rest[0] === "boolean") return `${rootName}.ob?.boolean ?? ${rootName}`;
-      if (rest.length === 1 && rest[0] === "num") return `${rootName}.ob?.num ?? ${rootName}`;
-      if (rest.length === 2 && rest[0] === "ob" && rest[1] === "text") return `${rootName}.ob?.text ?? ${rootName}`;
-      if (rest.length === 2 && rest[0] === "ob" && rest[1] === "name") return `${rootName}.ob?.name ?? ${rootName}`;
-      if (rest.length === 2 && rest[0] === "ob" && rest[1] === "boolean") return `${rootName}.ob?.boolean ?? ${rootName}`;
-      if (rest.length === 2 && rest[0] === "ob" && rest[1] === "num") return `${rootName}.ob?.num ?? ${rootName}`;
+      if (
+        rest.length === 1 &&
+        (rest[0] === "text" || rest[0] === "name" || rest[0] === "boolean" || rest[0] === "num")
+      ) {
+        return rootName;
+      }
+      if (
+        rest.length === 2 &&
+        rest[0] === "ob" &&
+        (rest[1] === "text" || rest[1] === "name" || rest[1] === "boolean" || rest[1] === "num")
+      ) {
+        return rootName;
+      }
+      if (localType === "number" && rest.length === 2 && rest[0] === "ob" && rest[1] === "num") return rootName;
+      if (localType === "text" && rest.length === 2 && rest[0] === "ob" && rest[1] === "text") return rootName;
+      if (localType === "boolean" && rest.length === 2 && rest[0] === "ob" && rest[1] === "boolean") return rootName;
       return [rootName, ...rest.map(part => `.${part}`)].join("");
     }
     const isThisPrefix = chainArr[0] === "this";
