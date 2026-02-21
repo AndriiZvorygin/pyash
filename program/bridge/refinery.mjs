@@ -824,6 +824,17 @@ export async function runRefinery({
     return null;
   };
 
+  const resolveDependencyFact = (depName) => {
+    const depPlatform = depName ? refinery.platforms.get(depName) : null;
+    const handle = String(depPlatform?.outputContract?.name ?? "").trim();
+    if (handle) {
+      const byHandle = remember(handle);
+      if (byHandle?.mood) return byHandle;
+    }
+    const direct = depName ? remember(depName) : null;
+    return direct?.mood ? direct : direct;
+  };
+
   while (pending.size > 0) {
     const ready = [];
     for (const platformName of pending) {
@@ -971,7 +982,7 @@ export async function runRefinery({
       const prevEvokeRef = state.currentEvokeRef;
       try {
         const depRefName = platform.deps.length ? platform.deps[platform.deps.length - 1] : null;
-        const depRefFact = depRefName ? remember(depRefName) : null;
+        const depRefFact = depRefName ? resolveDependencyFact(depRefName) : null;
         if (depRefFact) {
           state.currentEvoke = depRefFact;
           state.currentEvokeRef = depRefFact;

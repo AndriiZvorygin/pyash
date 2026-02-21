@@ -39,12 +39,21 @@ function indexPrefix(index) {
 
 async function findImageForCut(imagesDir, prefix, cutIndex) {
   const names = await fs.readdir(imagesDir);
-  const stem = prefix ? `${prefix}-cut-${indexPrefix(cutIndex)}-` : `cut-${indexPrefix(cutIndex)}-`;
+  const idx = indexPrefix(cutIndex);
+  const normalizedPrefix = String(prefix ?? "").trim();
+  const stem = normalizedPrefix ? `${normalizedPrefix}-cut-${idx}` : `-cut-${idx}`;
   const found = names
-    .filter((name) => name.startsWith(stem) && name.toLowerCase().endsWith(".png"))
+    .filter((name) => {
+      if (!name.toLowerCase().endsWith(".png")) return false;
+      if (normalizedPrefix) return name.startsWith(stem);
+      return name.includes(stem);
+    })
     .sort();
   if (!found.length) {
-    throw new Error(`missing image for cut ${cutIndex} (expected prefix: ${stem})`);
+    if (normalizedPrefix) {
+      throw new Error(`missing image for cut ${cutIndex} (expected prefix: ${stem})`);
+    }
+    throw new Error(`missing image for cut ${cutIndex} (expected pattern: *-cut-${idx}.png)`);
   }
   return path.join(imagesDir, found[0]);
 }
@@ -54,12 +63,14 @@ async function createConcatListFile(items) {
   const file = path.join(dir, "list.txt");
   const lines = [];
   for (const item of items) {
-    lines.push(`file '${item.image.replace(/'/g, "'\\''")}'`);
+    const imagePath = path.resolve(String(item.image ?? ""));
+    lines.push(`file '${imagePath.replace(/'/g, "'\\''")}'`);
     lines.push(`duration ${Math.max(0.05, item.duration).toFixed(3)}`);
   }
   if (items.length > 0) {
     const last = items[items.length - 1];
-    lines.push(`file '${last.image.replace(/'/g, "'\\''")}'`);
+    const imagePath = path.resolve(String(last.image ?? ""));
+    lines.push(`file '${imagePath.replace(/'/g, "'\\''")}'`);
   }
   await fs.writeFile(file, `${lines.join("\n")}\n`, "utf8");
   return { dir, file };
@@ -87,7 +98,10 @@ function runFfmpeg({ listFile, audioFile, outputFile, fps }) {
     proc.on("error", reject);
     proc.on("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg failed status=${code}: ${stderr.slice(-1500)}`));
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`ffmpeg failed status=${code}: ${clipped}`));
+      }
     });
   });
 }

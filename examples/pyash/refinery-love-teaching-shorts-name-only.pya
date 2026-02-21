@@ -18,9 +18,9 @@ su name prompt stage ob text "Turn this teaching cut text into one concise image
 
 su name draw platform from ve name itinerary teaching cuts name text draw system prompt fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
 
-su name concatenate platform from ve name itinerary teaching cuts name photographs photos fromstate wo itinerary become wo video be concatenate do
+su name concatenate platform from ve name itinerary teaching cuts name photographs photos name telling fromstate wo itinerary become wo video be concatenate do
 
-su name footnote platform from name hear platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
+su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
 
 su name report ob text "Generated teaching shorts video in run artifacts folder." be write do
 prah

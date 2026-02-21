@@ -100,3 +100,39 @@ test("itinerary to video dry-run bridges timeline gaps using next since", async 
   assert.match(lines[0], /^1\t5\.000\t.*teaching-cut-001-000000000-000002000\.png$/);
   assert.match(lines[1], /^2\t1\.000\t.*teaching-cut-002-000005000-000006000\.png$/);
 });
+
+test("itinerary to video dry-run can auto-match cut images without explicit prefix", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-itinerary-video-noprefix-"));
+  const cuts = path.join(tmp, "cuts.pya");
+  const images = path.join(tmp, "images");
+  const audio = path.join(tmp, "audio.wav");
+  const out = path.join(tmp, "out.mp4");
+  await fs.mkdir(images, { recursive: true });
+  await fs.writeFile(
+    cuts,
+    [
+      "su name teaching cuts be series def",
+      "su name cut 001 since num 0.000 until num 2.000 ob text \"First\" ya"
+    ].join("\n"),
+    "utf8"
+  );
+  await fs.writeFile(path.join(images, "photos-cut-001.png"), "png", "utf8");
+  await fs.writeFile(audio, "wav", "utf8");
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      "command/itinerary_to_video.mjs",
+      cuts,
+      images,
+      audio,
+      out,
+      "--dry-run"
+    ],
+    { cwd: "/workplace" }
+  );
+
+  const lines = stdout.trim().split(/\r?\n/);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^1\t2\.000\t.*photos-cut-001\.png$/);
+});
