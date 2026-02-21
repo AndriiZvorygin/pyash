@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseArgs, buildAssFromSrt } from "../command/footnote_video.mjs";
+import { parseArgs, buildAssFromSrt, resolveRenderOutputPath } from "../command/footnote_video.mjs";
 
 test("footnote_video parseArgs accepts karaoke mode", () => {
   const opts = parseArgs([
@@ -79,4 +79,12 @@ test("footnote_video buildAssFromSrt emits grouped dialogue in wordflow mode", (
   assert.ok(lines.length >= 2);
   assert.ok(lines.some((line) => /,.*\s+.*$/u.test(line)));
   assert.ok(lines.some((line) => /,now$/u.test(line)));
+});
+
+test("footnote_video resolveRenderOutputPath avoids in-place writes", () => {
+  const same = resolveRenderOutputPath("/tmp/in.mp4", "/tmp/in.mp4");
+  assert.notEqual(same, "/tmp/in.mp4");
+  assert.match(same, /footnote-tmp-/u);
+  const different = resolveRenderOutputPath("/tmp/in.mp4", "/tmp/out.mp4");
+  assert.equal(different, "/tmp/out.mp4");
 });
