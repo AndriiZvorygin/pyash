@@ -22,3 +22,10 @@ From inside `pyash`, set:
 Optional diarization token:
 
 - set `HF_TOKEN` in shell environment before starting compose.
+
+## Streaming Logs
+
+- `POST /transcribe_stream` returns NDJSON events while transcribing:
+  - `{"type":"log","text":"..."}`
+  - `{"type":"result", ...}` (final success payload)
+  - `{"type":"error", ...}` (final error payload)

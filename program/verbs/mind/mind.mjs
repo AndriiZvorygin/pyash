@@ -34,6 +34,7 @@ import { runGenerate } from "./generate.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
 import { parse } from "../../understand/index.mjs";
 import { consumeMindInterrupt } from "../../agent/interrupt.mjs";
+import { enforceAutoDischarge } from "../../motor/provider_auto_discharge.mjs";
 
 const DEFAULT_TOOL_MAP_NAME = "agent tools";
 const DEFAULT_TOOL_MAP_PATH = path.resolve(
@@ -332,6 +333,7 @@ export async function mind_to_name_text(sentence, {
   const ollamaHost = runtimeHost || resolveConfigText("ollama host", { rememberFn: remember }) || null;
   const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
+  await enforceAutoDischarge({ activatingClass: "mind", rememberFn: remember });
 
   const debugMind = (label, payload) => {
     if (!mindDebug) return;

@@ -17,5 +17,6 @@ services:
       - HF_HOME=/cache/huggingface
       - TORCH_HOME=/cache/torch
       - MPLCONFIGDIR=/cache/matplotlib
+      - NLTK_DATA=/cache/nltk_data
     extra_hosts:
       - host.docker.internal:host-gateway

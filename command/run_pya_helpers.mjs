@@ -237,21 +237,26 @@ export function dateStampFromRunTime(runTime) {
 }
 
 export async function nextRunSequence({ dateStamp, cwd }) {
-  const newspaperDir = path.resolve(cwd, "newspaper");
-  let entries = [];
-  try {
-    entries = await fs.readdir(newspaperDir);
-  } catch {
-    return "001";
-  }
+  const candidateDirs = [
+    path.resolve(cwd, "newspaper"),
+    path.resolve(cwd, "artifacts")
+  ];
   let max = 0;
   const prefix = `${dateStamp}-`;
-  for (const entry of entries) {
-    if (!entry.startsWith(prefix)) continue;
-    const match = entry.match(/^(\d{8})-(\d{3})-/);
-    if (!match) continue;
-    const value = Number(match[2]);
-    if (Number.isFinite(value)) max = Math.max(max, value);
+  for (const dir of candidateDirs) {
+    let entries = [];
+    try {
+      entries = await fs.readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.startsWith(prefix)) continue;
+      const match = entry.match(/^(\d{8})-(\d{3})-/);
+      if (!match) continue;
+      const value = Number(match[2]);
+      if (Number.isFinite(value)) max = Math.max(max, value);
+    }
   }
   return String(max + 1).padStart(3, "0");
 }

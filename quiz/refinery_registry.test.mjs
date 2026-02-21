@@ -33,6 +33,35 @@ test("refinery registry captures platforms and deps", async () => {
   assert.equal(parseStage.actionSentence.mood, "do");
 });
 
+test("refinery accepts from name single dependency", async () => {
+  forget();
+  await runLines([
+    "su name build be refinery def",
+    "su name parse ob text \"a\" be write do",
+    "su name compile from name parse ob text \"b\" be write do",
+    "prah"
+  ]);
+  const refinery = getRefinery("build");
+  const compileStage = refinery?.platforms?.get("compile");
+  assert.deepStrictEqual(compileStage?.deps, ["parse"]);
+  assert.deepStrictEqual(compileStage?.actionSentence?.from, { name: "parse" });
+});
+
+test("refinery accepts repeated-name vector dependency form", async () => {
+  forget();
+  await runLines([
+    "su name build be refinery def",
+    "su name one ob text \"1\" be write do",
+    "su name two ob text \"2\" be write do",
+    "su name three ob text \"3\" be write do",
+    "su name final from ve name one name two name three ob text \"ok\" be write do",
+    "prah"
+  ]);
+  const refinery = getRefinery("build");
+  const finalStage = refinery?.platforms?.get("final");
+  assert.deepStrictEqual(finalStage?.deps, ["one", "two", "three"]);
+});
+
 test("refinery rejects invalid depend list", async () => {
   forget();
   await interpret(parse("su name build be refinery def"));

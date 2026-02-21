@@ -14,7 +14,7 @@ import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, res
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 
@@ -56,6 +56,12 @@ function clipLogText(value, max = 1200) {
   const text = String(value ?? "");
   if (text.length <= max) return text;
   return text.slice(-max);
+}
+
+function hearWhisperxLogStreamingEnabled(rememberFn) {
+  const configured = resolveConfigBool("stream stdout", { rememberFn });
+  if (configured !== undefined) return configured;
+  return process?.stdout?.isTTY === true;
 }
 
 function resolveEvokeInputPath({ rememberFn } = {}) {
@@ -130,6 +136,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     const hasInputPath = Boolean(resolveHearInputPath(sentence, { rememberFn }));
     const hasTarget = Boolean(sentence?.to?.name || sentence?.to?.filename);
     const canForward =
+      !wantsSrt &&
       !hasTarget &&
       ((aspectKey === "timebox" && Number.isFinite(Number(sentence?.during?.num ?? sentence?.during))) ||
       (aspectKey === "eval" && hasInputPath));
@@ -275,7 +282,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
           raw: { sentence }
         });
       }
-      if (wantsSrt && hearBackend === "whisperx") {
+      if (wantsSrt) {
         await enforceAutoDischarge({ activatingClass: "hear", rememberFn });
         const host = resolveHearHost({ rememberFn });
         const whisperxModel = resolveHearWhisperxModel({ rememberFn });
@@ -294,13 +301,29 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         if (wantsSpeakerDiarize) requestSentence.vyah = { ve: { type: "name", values: ["speaker"] } };
         emitExchangeSentence(requestSentence);
         try {
+          const whisperxLogLines = [];
           const payload = await transcribeWithWhisperx({
             host,
             inputPath,
             outputPath,
             language,
             model: whisperxModel,
-            diarize: wantsSpeakerDiarize
+            diarize: wantsSpeakerDiarize,
+            streamLogs: hearWhisperxLogStreamingEnabled(rememberFn),
+            onLog: (line) => {
+              const text = String(line ?? "").trim();
+              if (!text) return;
+              whisperxLogLines.push(text);
+              if (whisperxLogLines.length > 200) whisperxLogLines.shift();
+              emitExchangeSentence({
+                mood: "ya",
+                su: { name: "hear whisperx log" },
+                ob: { text: clipLogText(text, 800) },
+                fromstate: { text: host },
+                as: { text: whisperxModel },
+                be: "hear"
+              });
+            }
           });
           transcript = String(await fs.readFile(outputPath, "utf8"));
           const resultSentence = {
@@ -313,7 +336,8 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
             be: "hear"
           };
           const stdout = clipLogText(payload?.stdout ?? "");
-          const stderr = clipLogText(payload?.stderr ?? "");
+          const stderrRaw = payload?.stderr ?? (whisperxLogLines.length ? whisperxLogLines.join("\n") : "");
+          const stderr = clipLogText(stderrRaw);
           if (stdout) resultSentence.totext = { text: stdout };
           if (stderr) resultSentence.fromtext = { text: stderr };
           const statusNum = Number(payload?.status);
@@ -397,9 +421,10 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   const transcriptBytes = Buffer.from(transcript, "utf8");
   const inputBytes = await readInputBytes(sentence);
 
+  const producer = String(sentence?.su?.name ?? "hear");
   const artifact = recordArtifact({
     locator: outputPath,
-    producer: "hear",
+    producer,
     bytes: transcriptBytes,
     kind: "hear"
   });
@@ -418,7 +443,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   await fs.writeFile(metadataPath, metadataText, "utf8");
   recordArtifact({
     locator: metadataPath,
-    producer: "hear",
+    producer,
     bytes: Buffer.from(metadataText, "utf8"),
     kind: "metadata"
   });

@@ -1,0 +1,24 @@
+su name concatenate from filename cuts fromstate wo itinerary become wo video to filename output be ceremony def
+  exists su name cmd ob text "node command/itinerary_to_video.mjs" be text ya
+  ob filename of from of this to name text cuts path be text do
+  ob text " \"" to name cmd be plus do
+  ob name cuts path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob name video cuts images directory to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob name video cuts audio filename to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text out path be text do
+  ob name out path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --prefix \"" to name cmd be plus do
+  ob name video cuts prefix to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+exists su name concatenate be export ya
