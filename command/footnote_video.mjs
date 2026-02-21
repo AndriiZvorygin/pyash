@@ -56,6 +56,7 @@ function clamp(value, min, max) {
 const GOLDEN = 1.61803398875;
 const SUBTITLE_WIDTH_RATIO = 0.61;
 const SUBTITLE_MAX_ROWS = 2;
+const SUBTITLE_MIN_SEGMENT_SECONDS = 0.28;
 
 function splitWords(text = "") {
   return String(text ?? "").trim().split(/\s+/).filter(Boolean);
@@ -196,7 +197,7 @@ function buildKaraokeDialogues(cuts = [], { maxLineChars = 24, maxRows = 2 } = {
       const end = i === pages.length - 1 ? until : cursor + slice;
       const totalCs = Math.max(1, Math.round((end - cursor) * 100));
       const text = karaokeTaggedRows(pageRows, totalCs);
-      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + 0.04, end))},Default,,0,0,0,,${text}`);
+      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + SUBTITLE_MIN_SEGMENT_SECONDS, end))},Default,,0,0,0,,${text}`);
       cursor = end;
     }
   }
@@ -233,7 +234,7 @@ function buildWordflowDialogues(cuts = [], { maxLineChars = 12 } = {}) {
       const slice = duration * ratio;
       const end = i === groups.length - 1 ? until : cursor + slice;
       const text = sanitizeAssText(lineWords.join(" "));
-      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + 0.04, end))},Default,,0,0,0,,${text}`);
+      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + SUBTITLE_MIN_SEGMENT_SECONDS, end))},Default,,0,0,0,,${text}`);
       cursor = end;
     }
   }
@@ -264,7 +265,7 @@ function buildAssFromSrt(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H0032C8FF,&H00000000,&H7F000000,0,0,0,0,100,100,0,0,1,2,0,2,${marginLR},${marginLR},${marginV},1`,
+    `Style: Default,${fontName},${fontSize},&H0000FFFF,&H0000FFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,3,0,0,2,${marginLR},${marginLR},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -347,11 +348,25 @@ function runFfmpegBurn({ inputVideo, outputVideo, assFile }) {
 
 export { parseArgs, buildAssFromSrt, runFfmpegBurn };
 
+function resolveRenderOutputPath(inputVideo, outputVideo) {
+  const inputResolved = path.resolve(inputVideo);
+  const outputResolved = path.resolve(outputVideo);
+  if (inputResolved !== outputResolved) return outputResolved;
+  const ext = path.extname(outputResolved) || ".mp4";
+  const stem = path.basename(outputResolved, ext);
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return path.join(path.dirname(outputResolved), `${stem}.footnote-tmp-${nonce}${ext}`);
+}
+
+export { resolveRenderOutputPath };
+
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   const inputVideo = path.resolve(opts.inputVideo);
   const inputSrt = path.resolve(opts.inputSrt);
   const outputVideo = path.resolve(opts.outputVideo);
+  const renderOutputVideo = resolveRenderOutputPath(inputVideo, outputVideo);
+  const replaceInPlace = renderOutputVideo !== outputVideo;
   const srtText = await fs.readFile(inputSrt, "utf8");
   const probed = await probeVideoSize(inputVideo);
   const width = opts.width ?? probed?.width ?? 720;
@@ -394,9 +409,15 @@ export async function main(argv = process.argv) {
   await fs.writeFile(assFile, assText, "utf8");
   try {
     await fs.mkdir(path.dirname(outputVideo), { recursive: true });
-    await runFfmpegBurn({ inputVideo, outputVideo, assFile });
+    await runFfmpegBurn({ inputVideo, outputVideo: renderOutputVideo, assFile });
+    if (replaceInPlace) {
+      await fs.rename(renderOutputVideo, outputVideo);
+    }
     process.stdout.write(`${outputVideo}\n`);
   } finally {
+    if (replaceInPlace) {
+      await fs.rm(renderOutputVideo, { force: true });
+    }
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 }
