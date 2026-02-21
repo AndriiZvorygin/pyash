@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 import { throwErrorSentence } from "../error.mjs";
 import { allRemember, remember } from "../remember/index.mjs";
@@ -363,6 +365,41 @@ function videoFps(rememberFn) {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 30;
 }
 
+function resolveFilenameFromCase(value, rememberFn) {
+  const direct = String(value?.filename ?? "").trim();
+  if (direct) return direct;
+  const name = String(value?.name ?? "").trim();
+  if (!name) return "";
+  const byArtifact = String(lookupArtifactLocator(name) ?? "").trim();
+  if (byArtifact) return byArtifact;
+  const fact = rememberFn?.(name);
+  return String(fact?.ob?.filename ?? fact?.to?.filename ?? "").trim();
+}
+
+function defaultFootnoteOutputFilename(inputVideo) {
+  const ext = path.extname(inputVideo || ".mp4") || ".mp4";
+  const stem = path.basename(inputVideo || "video", ext);
+  return path.join(path.dirname(inputVideo || "."), `${stem}-footnote${ext}`);
+}
+
+async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode }) {
+  const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/footnote_video.mjs");
+  const args = [runner, inputVideo, inputSrt, outputVideo];
+  if (mode) args.push("--mode", mode);
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const proc = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+    proc.stdout.on("data", chunk => { stdout += String(chunk ?? ""); });
+    proc.stderr.on("data", chunk => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
+      else reject(new Error(stderr.trim() || `footnote failed with status ${code}`));
+    });
+  });
+}
+
 export async function cutFromFilenameToNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const source = (() => {
     const direct = String(sentence?.from?.filename ?? "").trim();
@@ -570,14 +607,17 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
   const requestedOutputFile = String(sentence?.to?.filename ?? "").trim();
-  const outputFileForDefaults = requestedOutputFile || "video.mp4";
+  const outputHandle = platformOutputHandleName(sentence, "video");
+  const outputPrefix = normalizePlatformHandleToPrefix(outputHandle, "video");
+  const defaultOutputFilename = `${outputPrefix}.mp4`;
+  const outputFileForDefaults = requestedOutputFile || defaultOutputFilename;
   const imagesDir = videoImagesDir(rememberFn, { outputFile: outputFileForDefaults });
   const audioFile = videoAudioFilename(rememberFn, { outputFile: outputFileForDefaults });
   const imageDirResolved = resolveAgentPath(imagesDir, { rememberFn });
   const audioResolved = resolveAgentPath(audioFile, { rememberFn });
   const runId = String(getExchangeRunId?.() ?? "").trim();
   const outputFile = requestedOutputFile
-    || (runId ? path.join("artifacts", runId, "video.mp4") : path.join(imageDirResolved.resolved, "video.mp4"));
+    || (runId ? path.join("artifacts", runId, defaultOutputFilename) : path.join(imageDirResolved.resolved, defaultOutputFilename));
   const outputResolved = resolveAgentPath(outputFile, { rememberFn });
   if (imageDirResolved.outside || audioResolved.outside || outputResolved.outside) {
     throwErrorSentence({
@@ -636,6 +676,63 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   return { ob: { filename: outputResolved.resolved }, be: "concatenate" };
 }
 
+export async function footnoteVideo(sentence, { remember: rememberFn = remember } = {}) {
+  const inputSrtRaw = resolveFilenameFromCase(sentence?.from, rememberFn);
+  const inputVideoRaw = resolveFilenameFromCase(sentence?.with, rememberFn);
+  const outputRaw = resolveFilenameFromCase(sentence?.to, rememberFn)
+    || (inputVideoRaw ? defaultFootnoteOutputFilename(inputVideoRaw) : "");
+  if (!inputSrtRaw || !inputVideoRaw || !outputRaw) {
+    throwErrorSentence({
+      name: "footnote defective",
+      message: "footnote defective: requires from srt, with video, and to output",
+      from: { name: "footnote" },
+      raw: { sentence }
+    });
+  }
+  const inputSrt = resolveAgentPath(inputSrtRaw, { rememberFn });
+  const inputVideo = resolveAgentPath(inputVideoRaw, { rememberFn });
+  const outputVideo = resolveAgentPath(outputRaw, { rememberFn });
+  if (inputSrt.outside || inputVideo.outside || outputVideo.outside) {
+    throwErrorSentence({
+      name: "footnote defective",
+      message: `footnote defective: outside agent cwd (${outputVideo.agentCwd || inputVideo.agentCwd || inputSrt.agentCwd})`,
+      from: { name: "footnote" },
+      raw: { sentence }
+    });
+  }
+  await fs.mkdir(path.dirname(outputVideo.resolved), { recursive: true });
+  const mode = String(sentence?.as?.wo ?? sentence?.as?.text ?? "").trim().toLowerCase();
+  const samePath = path.resolve(inputVideo.resolved) === path.resolve(outputVideo.resolved);
+  const renderOutput = samePath
+    ? path.join(path.dirname(outputVideo.resolved), `${path.basename(outputVideo.resolved, path.extname(outputVideo.resolved))}.footnote.tmp${path.extname(outputVideo.resolved) || ".mp4"}`)
+    : outputVideo.resolved;
+  await runFootnoteVideo({
+    inputVideo: inputVideo.resolved,
+    inputSrt: inputSrt.resolved,
+    outputVideo: renderOutput,
+    mode: mode || undefined
+  });
+  if (samePath) {
+    await fs.rename(renderOutput, outputVideo.resolved);
+  }
+  const bytes = await fs.readFile(outputVideo.resolved);
+  const artifact = recordArtifact({
+    locator: outputVideo.resolved,
+    producer: String(sentence?.su?.name ?? "footnote"),
+    bytes,
+    kind: "video"
+  });
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: "footnote result" },
+    ob: { filename: outputVideo.resolved },
+    be: "footnote",
+    by: { num: bytes.length },
+    accordingto: artifact?.su?.name ? { name: artifact.su.name } : undefined
+  });
+  return { ob: { filename: outputVideo.resolved }, be: "footnote" };
+}
+
 export default cutFromFilenameToNameItinerary;
 
 export const signatures = [
@@ -684,5 +781,9 @@ export const signatures = [
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "name", "photographs", "with", "name", "map"], handler: drawFromNameItinerary },
 
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
-  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary }
+  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
+
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo }
 ];
