@@ -252,7 +252,10 @@ function indexFromSeriesEntry(entry = {}, fallback = 0) {
 }
 
 function imagesByPhotographsFact(fact = {}) {
-  if (fact?.be !== "photographs" || !Array.isArray(fact?.ob?.series)) return new Map();
+  if (!Array.isArray(fact?.ob?.series)) return new Map();
+  const looksLikePhotographs = fact?.be === "photographs"
+    || fact.ob.series.some(row => String(row?.be ?? "").trim().toLowerCase() === "photograph");
+  if (!looksLikePhotographs) return new Map();
   const map = new Map();
   for (let i = 0; i < fact.ob.series.length; i += 1) {
     const row = fact.ob.series[i];
@@ -262,6 +265,40 @@ function imagesByPhotographsFact(fact = {}) {
     map.set(index, filename);
   }
   return map;
+}
+
+async function imagesByRunManifest(runId, rememberFn) {
+  const id = String(runId ?? "").trim();
+  if (!id) return new Map();
+  const manifestDir = resolveAgentPath(path.join("artifacts", id), { rememberFn });
+  if (manifestDir.outside) return new Map();
+  let names = [];
+  try {
+    names = await fs.readdir(manifestDir.resolved);
+  } catch {
+    return new Map();
+  }
+  const manifests = names.filter(name => name.endsWith(".series.pya")).sort();
+  for (const name of manifests) {
+    let text = "";
+    try {
+      text = await fs.readFile(path.join(manifestDir.resolved, name), "utf8");
+    } catch {
+      continue;
+    }
+    const map = new Map();
+    for (const line of String(text).split(/\r?\n/u)) {
+      const indexMatch = line.match(/su\s+name\s+cut\s+(\d{1,6})/u);
+      const fileMatch = line.match(/ob\s+filename\s+"([^"]+)"/u);
+      if (!indexMatch || !fileMatch) continue;
+      const idx = Number.parseInt(indexMatch[1], 10);
+      const file = String(fileMatch[1] ?? "").trim();
+      if (!Number.isFinite(idx) || idx <= 0 || !file) continue;
+      map.set(idx, file);
+    }
+    if (map.size) return map;
+  }
+  return new Map();
 }
 
 function videoImagesDir(rememberFn, { outputFile = "" } = {}) {
@@ -274,6 +311,8 @@ function videoImagesDir(rememberFn, { outputFile = "" } = {}) {
     const filename = String(sentence?.ob?.filename ?? "").trim();
     if (filename) return filename;
   }
+  const runId = String(getExchangeRunId?.() ?? "").trim();
+  if (runId) return path.join("artifacts", runId, "draw");
   const baseDir = path.dirname(outputFile || ".");
   const stem = path.basename(outputFile || "video", path.extname(outputFile || "video"));
   return path.join(baseDir, `${stem}-cuts`);
@@ -284,6 +323,29 @@ function videoAudioFilename(rememberFn, { outputFile = "" } = {}) {
   if (byName) return byName;
   const byFilename = String(rememberFn("video cuts audio filename")?.ob?.filename ?? "").trim();
   if (byFilename) return byFilename;
+  const tellingFact = rememberFn("telling");
+  const tellingHandle = String(tellingFact?.ob?.name ?? "").trim();
+  if (tellingHandle) {
+    const locator = String(lookupArtifactLocator(tellingHandle) ?? "").trim();
+    if (locator) return locator;
+  }
+  const history = allRemember();
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const sentence = history[i];
+    if (sentence?.be === "say") {
+      const handle = String(sentence?.ob?.name ?? "").trim();
+      if (handle) {
+        const locator = String(lookupArtifactLocator(handle) ?? "").trim();
+        if (locator) return locator;
+      }
+      const filename = String(sentence?.ob?.filename ?? "").trim();
+      if (filename) return filename;
+    }
+    if (sentence?.be === "artifact" && sentence?.as?.name === "say") {
+      const filename = String(sentence?.to?.filename ?? sentence?.ob?.filename ?? "").trim();
+      if (filename) return filename;
+    }
+  }
   const baseDir = path.dirname(outputFile || ".");
   const stem = path.basename(outputFile || "video", path.extname(outputFile || "video"));
   return path.join(baseDir, `${stem}.wav`);
@@ -292,12 +354,7 @@ function videoAudioFilename(rememberFn, { outputFile = "" } = {}) {
 function videoPrefix(rememberFn, { outputFile = "" } = {}) {
   const configured = String(rememberFn("video cuts prefix")?.ob?.text ?? "").trim();
   if (configured) return configured;
-  // In refinery execution, currentEvokeRef tracks the immediate dependency output.
-  // Use that handle contract (to.name, else su.name) as the default image prefix.
-  const evokeHandle = String(state.currentEvokeRef?.su?.name ?? state.currentEvoke?.su?.name ?? "").trim();
-  if (evokeHandle) {
-    return normalizePlatformHandleToPrefix(evokeHandle, "draw");
-  }
+  void outputFile;
   return "";
 }
 
@@ -534,7 +591,7 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   const fps = videoFps(rememberFn);
   const audioDurationSeconds = await getAudioDurationSeconds(audioResolved.resolved);
   const timeline = buildTimelineItems(cuts, audioDurationSeconds);
-  const imageByIndex = (() => {
+  let imageByIndex = (() => {
     const fromEvoke = imagesByPhotographsFact(state.currentEvokeRef ?? {});
     if (fromEvoke.size) return fromEvoke;
     const history = allRemember();
@@ -544,6 +601,10 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
     }
     return new Map();
   })();
+  if (!imageByIndex.size) {
+    const runManifestMap = await imagesByRunManifest(runId, rememberFn);
+    if (runManifestMap.size) imageByIndex = runManifestMap;
+  }
   const items = [];
   for (const cut of timeline) {
     const mapped = String(imageByIndex.get(cut.index) ?? "").trim();
