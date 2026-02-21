@@ -4,9 +4,11 @@ su name draw size shorts be map def
   su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
 prah
 
-su name love teaching shorts name only be refinery def
+su name latifundia shorts name only be refinery def
 
-su name manuscript ob text "Write a spoken teaching manuscript that teaches people how to love God. Focus on concrete actions humans can take to love God. About 90 words. Plain language." for name mind to name text manuscript out be write do
+su name source stage from filename "know/input/latifundia.txt" become wo text to name text latifundia source be read do
+
+su name manuscript ob name text latifundia source fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
 
 su name telling ob name manuscript out be piper say do
 
@@ -24,8 +26,8 @@ su name concatenate platform from ve name itinerary teaching cuts name photograp
 
 su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
 
-su name report ob text "Generated teaching shorts video in run artifacts folder." be write do
+su name report ob text "Generated latifundia shorts video in run artifacts folder." be write do
 prah
 
-from name love teaching shorts name only be refinery do
-ob text "love teaching shorts name-only complete." be write do
+from name latifundia shorts name only be refinery do
+ob text "latifundia shorts name-only complete." be write do

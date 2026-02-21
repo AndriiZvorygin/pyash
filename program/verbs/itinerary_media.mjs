@@ -10,6 +10,7 @@ import { state } from "../bridge/state.mjs";
 import { parseSrtToCuts, parseItineraryPya } from "../../command/itinerary_io.mjs";
 import { outputPathForCut, promptFromCut, runDraw } from "../../command/itinerary_to_draw_images.mjs";
 import { buildTimelineItems, createConcatListFile, findImageForCut, getAudioDurationSeconds, runFfmpeg } from "../../command/itinerary_to_video.mjs";
+import { callPromptMind } from "../../command/itinerary_promptify.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 
@@ -176,6 +177,24 @@ function resolveFromTextPrompt(value, rememberFn) {
     return String(fact?.ob?.text ?? "");
   }
   return "";
+}
+
+function promptifyModel(sentence, rememberFn) {
+  const callModel = String(sentence?.as?.name ?? sentence?.as?.text ?? "").trim();
+  if (callModel) return callModel;
+  const mindName = String(sentence?.for?.name ?? "mind").trim();
+  const mindFact = rememberFn?.(mindName);
+  const model = String(mindFact?.as?.name ?? "").trim();
+  if (model) return model;
+  return process.env.PYA_DRAW_PROMPT_MODEL || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct";
+}
+
+function promptifyHost(sentence, rememberFn) {
+  const callHost = String(sentence?.fromstate?.text ?? "").trim();
+  if (callHost) return callHost;
+  const hostFact = String(rememberFn?.("mind host")?.ob?.text ?? "").trim();
+  if (hostFact) return hostFact;
+  return process.env.OLLAMA_HOST || "http://localhost:11434";
 }
 
 function resolveNumericFromMapEntry(entry) {
@@ -604,6 +623,66 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
   return { ob: { filename: outputResolved }, be: "draw" };
 }
 
+export async function promptifyFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
+  await enforceAutoDischarge({ activatingClass: "mind", rememberFn });
+  const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
+  const targetName = String(sentence?.to?.name ?? "").trim();
+  if (!targetName) {
+    throwErrorSentence({
+      name: "promptify defective",
+      message: "promptify defective: requires to name itinerary",
+      from: { name: "promptify" },
+      raw: { sentence }
+    });
+  }
+  const instruction = String(sentence?.ob?.text ?? "").trim()
+    || "Turn this transcript cut into one concise image prompt.";
+  const systemPrompt = resolveFromTextPrompt(sentence?.fromtext, rememberFn)
+    || "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation.";
+  const host = promptifyHost(sentence, rememberFn);
+  const model = promptifyModel(sentence, rememberFn);
+  const series = [];
+  for (const cut of cuts) {
+    const index = Number(cut?.index ?? (series.length + 1));
+    const cutText = String(cut?.obText ?? "").trim();
+    const promptInput = `${instruction}\n\n${cutText}`.trim();
+    emitExchangeSentence({
+      mood: "do",
+      su: { name: `promptify request ${String(index).padStart(3, "0")}` },
+      ob: { text: promptInput },
+      fromtext: { text: systemPrompt },
+      fromstate: { text: host },
+      as: { text: model },
+      by: { num: index },
+      be: "promptify"
+    });
+    const prompt = await callPromptMind({
+      host,
+      model,
+      systemPrompt,
+      cutText: promptInput
+    });
+    series.push({
+      mood: "ya",
+      su: { name: `cut ${String(index).padStart(3, "0")}` },
+      since: { num: Number(cut?.since ?? 0) },
+      until: { num: Number(cut?.until ?? cut?.since ?? 0) },
+      ob: { text: prompt },
+      be: "cut"
+    });
+    emitExchangeSentence({
+      mood: "ya",
+      su: { name: `promptify result ${String(index).padStart(3, "0")}` },
+      ob: { text: prompt },
+      fromstate: { text: host },
+      as: { text: model },
+      by: { num: index },
+      be: "promptify"
+    });
+  }
+  return { ob: { series }, be: "itinerary" };
+}
+
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
   const requestedOutputFile = String(sentence?.to?.filename ?? "").trim();
@@ -779,6 +858,17 @@ export const signatures = [
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "name", "photographs", "with", "name", "map"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "name", "photographs"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "name", "photographs", "with", "name", "map"], handler: drawFromNameItinerary },
+
+  { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
 
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
