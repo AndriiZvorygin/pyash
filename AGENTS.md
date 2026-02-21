@@ -53,6 +53,14 @@ This guide keeps contributions consistent for the Pyash codebase.
 - If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
 - Prefer lean modular designs over compatibility layers: remove obsolete paths instead of stacking legacy flags, aliases, or fallback branches unless the user explicitly asks for backward compatibility.
+- Keep defaults scoped by stability: put universal, environment-level defaults in `configure/default.pya`; keep example/run-specific filenames, prefixes, and paths in the example `.pya` files.
+- If intent, spec mapping, or expected behavior is unclear, stop and ask a targeted clarification question before coding; do not assume and proceed on uncertain interpretations.
+
+## Spec Discipline
+- Implement behavior from specification first; do not ship ad hoc heuristics as permanent fixes.
+- If runtime behavior diverges from spec, fix the source contract (signatures/defaults/data flow) instead of adding wildcard matching or hidden fallback paths.
+- Keep one canonical default per behavior (for example shared prefixes or output handles) so producer/consumer stages stay deterministic.
+- When a quick mitigation is used during debugging, replace it with a spec-aligned implementation before considering the task complete.
 
 ## Skills Discipline
 - Check the `skills/` folder for relevant skills before starting a task.

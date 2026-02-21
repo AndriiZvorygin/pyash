@@ -88,3 +88,24 @@ test("footnote_video resolveRenderOutputPath avoids in-place writes", () => {
   const different = resolveRenderOutputPath("/tmp/in.mp4", "/tmp/out.mp4");
   assert.equal(different, "/tmp/out.mp4");
 });
+
+test("footnote_video style uses white text with black outline and top-zone margin", () => {
+  const srt = [
+    "1",
+    "00:00:00,000 --> 00:00:03,000",
+    "one two three four five six",
+    ""
+  ].join("\n");
+  const ass = buildAssFromSrt(srt, {
+    mode: "wordflow",
+    fontSize: 72,
+    marginV: 720,
+    marginLR: 108,
+    playResX: 1080,
+    playResY: 1920
+  });
+  const styleLine = ass.split("\n").find((line) => line.startsWith("Style: Default,"));
+  assert.ok(styleLine);
+  assert.match(styleLine, /,72,/u);
+  assert.match(styleLine, /,1,7\.92,1\.8,8,108,108,720,1$/u);
+});

@@ -85,6 +85,108 @@ def _run_whisperx(payload: dict):
   }
 
 
+def _send_ndjson(handler: BaseHTTPRequestHandler, payload: dict):
+  line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
+  handler.wfile.write(line)
+  handler.wfile.flush()
+
+
+def _stream_whisperx(handler: BaseHTTPRequestHandler, payload: dict):
+  input_path = str(payload.get("input") or "").strip()
+  if not input_path:
+    _json(handler, 400, {"error": "input required"})
+    return
+  if not os.path.exists(input_path):
+    _json(handler, 404, {"error": f"input not found: {input_path}"})
+    return
+
+  output_srt = str(payload.get("output_srt") or "").strip()
+  output_dir = str(payload.get("output_dir") or "").strip() or os.path.dirname(output_srt)
+  if not output_dir:
+    output_dir = "/tmp"
+
+  model = str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3")
+  language = str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en")
+  compute_type = str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8")
+  device = str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "").strip()
+  diarize = bool(payload.get("diarize"))
+
+  os.makedirs(output_dir, exist_ok=True)
+  cmd = [
+    "whisperx",
+    input_path,
+    "--model", model,
+    "--language", language,
+    "--compute_type", compute_type,
+    "--output_format", "srt",
+    "--output_dir", output_dir
+  ]
+  if device:
+    cmd.extend(["--device", device])
+  if diarize:
+    cmd.append("--diarize")
+    token = os.environ.get("HF_TOKEN", "").strip()
+    if token:
+      cmd.extend(["--hf_token", token])
+
+  handler.send_response(200)
+  handler.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+  handler.send_header("Cache-Control", "no-cache")
+  handler.end_headers()
+
+  proc = subprocess.Popen(
+    cmd,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    bufsize=1
+  )
+  logs = []
+  assert proc.stdout is not None
+  for raw_line in proc.stdout:
+    line = str(raw_line).rstrip("\r\n")
+    if not line:
+      continue
+    logs.append(line)
+    if len(logs) > 300:
+      logs = logs[-300:]
+    _send_ndjson(handler, {"type": "log", "text": line})
+  proc.wait()
+
+  if proc.returncode != 0:
+    _send_ndjson(handler, {
+      "type": "error",
+      "error": "whisperx failed",
+      "status": proc.returncode,
+      "stderr": "\n".join(logs[-120:])
+    })
+    return
+
+  stem = os.path.splitext(os.path.basename(input_path))[0]
+  generated_srt = os.path.join(output_dir, f"{stem}.srt")
+  if not os.path.exists(generated_srt):
+    _send_ndjson(handler, {"type": "error", "error": f"generated srt missing: {generated_srt}"})
+    return
+
+  if output_srt:
+    os.makedirs(os.path.dirname(output_srt) or ".", exist_ok=True)
+    if os.path.abspath(generated_srt) != os.path.abspath(output_srt):
+      shutil.copyfile(generated_srt, output_srt)
+    final_srt = output_srt
+  else:
+    final_srt = generated_srt
+
+  generated_json = os.path.join(output_dir, f"{stem}.json")
+  _send_ndjson(handler, {
+    "type": "result",
+    "output_srt": final_srt,
+    "output_json": generated_json if os.path.exists(generated_json) else "",
+    "model": model,
+    "language": language,
+    "diarize": diarize
+  })
+
+
 def _discharge():
   try:
     import torch  # type: ignore
@@ -119,6 +221,9 @@ class Handler(BaseHTTPRequestHandler):
     if self.path == "/transcribe":
       code, body = _run_whisperx(payload)
       _json(self, code, body)
+      return
+    if self.path == "/transcribe_stream":
+      _stream_whisperx(self, payload)
       return
     if self.path == "/discharge":
       code, body = _discharge()

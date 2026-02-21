@@ -47,3 +47,18 @@ test("draw fromstate wo text become wo image without output returns file path", 
   const stat = await fs.stat(path.resolve(filename));
   assert.ok(stat.size > 0);
 });
+
+test("draw supports fromtext system prompt with ob user prompt", async () => {
+  forget();
+  await fs.mkdir("quiz/sandpit", { recursive: true });
+  await run("from filename \"./module/draw_comfyui.pya\" ob name draw to name draw be import do");
+  await run("exists su name draw host ob text \"http://localhost:8188\" be default ya");
+  await run("exists su name draw workflow default ob text \"Z-Image-TSV\" be default ya");
+  const output = "quiz/sandpit/draw-output-system.png";
+  await run(
+    `ob text "a city at dawn" fromtext text "watercolor style, muted palette" fromstate wo text become wo image to filename "${output}" be draw do`,
+    { env: { PYA_DRAW_FIXTURE_FILE: "quiz/fixtures/pyash_raven.png" } }
+  );
+  const written = await fs.readFile(output);
+  assert.ok(written.length > 0);
+});

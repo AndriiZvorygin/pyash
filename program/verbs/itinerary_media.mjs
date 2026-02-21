@@ -322,6 +322,18 @@ async function imagesByRunManifest(runId, rememberFn) {
   return new Map();
 }
 
+function imageFromPhotographFact(fact = {}) {
+  if (fact?.be !== "photograph" && fact?.be !== "filename") return "";
+  const byFilename = String(fact?.ob?.filename ?? "").trim();
+  if (byFilename) return byFilename;
+  const byName = String(fact?.ob?.name ?? "").trim();
+  if (byName) {
+    const locator = String(lookupArtifactLocator(byName) ?? "").trim();
+    if (locator) return locator;
+  }
+  return "";
+}
+
 function videoImagesDir(rememberFn, { outputFile = "" } = {}) {
   const configured = String(rememberFn("video cuts images directory")?.ob?.text ?? "").trim();
   if (configured) return configured;
@@ -330,7 +342,9 @@ function videoImagesDir(rememberFn, { outputFile = "" } = {}) {
     const sentence = history[i];
     if (sentence?.be !== "draw") continue;
     const filename = String(sentence?.ob?.filename ?? "").trim();
-    if (filename) return filename;
+    if (!filename) continue;
+    if (/\.(png|jpe?g|webp|gif)$/iu.test(filename)) continue;
+    return filename;
   }
   const runId = String(getExchangeRunId?.() ?? "").trim();
   if (runId) return path.join("artifacts", runId, "draw");
@@ -384,6 +398,13 @@ function videoFps(rememberFn) {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 30;
 }
 
+function videoThumbnailSeconds(rememberFn, firstDuration = 1) {
+  const configured = Number(rememberFn("video thumbnail seconds")?.ob?.num ?? 0.8);
+  const desired = Number.isFinite(configured) && configured > 0 ? configured : 0.8;
+  const maxByFirst = Math.max(0.2, Number(firstDuration) * 0.8);
+  return Math.min(desired, maxByFirst);
+}
+
 function resolveFilenameFromCase(value, rememberFn) {
   const direct = String(value?.filename ?? "").trim();
   if (direct) return direct;
@@ -399,6 +420,22 @@ function defaultFootnoteOutputFilename(inputVideo) {
   const ext = path.extname(inputVideo || ".mp4") || ".mp4";
   const stem = path.basename(inputVideo || "video", ext);
   return path.join(path.dirname(inputVideo || "."), `${stem}-footnote${ext}`);
+}
+
+function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = "" } = {}) {
+  const lines = ["su name video metadata be map def"];
+  const title = String(rememberFn("video title")?.ob?.text ?? "").trim();
+  const heading = String(rememberFn("video heading")?.ob?.text ?? "").trim();
+  const description = String(rememberFn("video description")?.ob?.text ?? "").trim();
+  const video = String(videoFile ?? "").trim();
+  const thumbnail = String(thumbnailFile ?? "").trim();
+  if (title) lines.push(`su name title ob text ${JSON.stringify(title)} ya`);
+  if (heading) lines.push(`su name heading ob text ${JSON.stringify(heading)} ya`);
+  if (description) lines.push(`su name description ob text ${JSON.stringify(description)} ya`);
+  if (video) lines.push(`su name video ob filename ${JSON.stringify(video)} ya`);
+  if (thumbnail) lines.push(`su name thumbnail ob filename ${JSON.stringify(thumbnail)} ya`);
+  lines.push("prah");
+  return `${lines.join("\n")}\n`;
 }
 
 async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode }) {
@@ -698,6 +735,10 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   const outputFile = requestedOutputFile
     || (runId ? path.join("artifacts", runId, defaultOutputFilename) : path.join(imageDirResolved.resolved, defaultOutputFilename));
   const outputResolved = resolveAgentPath(outputFile, { rememberFn });
+  const metadataFile = path.join(
+    path.dirname(outputResolved.resolved),
+    `${path.basename(outputResolved.resolved, path.extname(outputResolved.resolved) || ".mp4")}.metadata.pya`
+  );
   if (imageDirResolved.outside || audioResolved.outside || outputResolved.outside) {
     throwErrorSentence({
       name: "concatenate defective",
@@ -730,6 +771,30 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
     const image = mapped || await findImageForCut(imageDirResolved.resolved, prefix, cut.index);
     items.push({ ...cut, image });
   }
+
+  const thumbnailImage = (() => {
+    const fromEvoke = imageFromPhotographFact(state.currentEvokeRef ?? {});
+    if (fromEvoke) return fromEvoke;
+    const history = allRemember();
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      const fromFact = imageFromPhotographFact(history[i]);
+      if (fromFact) return fromFact;
+    }
+    return "";
+  })();
+  if (thumbnailImage && items.length) {
+    const first = items[0];
+    const firstDuration = Number(first?.duration ?? 0);
+    const thumbDuration = videoThumbnailSeconds(rememberFn, firstDuration);
+    if (Number.isFinite(firstDuration) && firstDuration > 0.1 && thumbDuration > 0.05 && thumbDuration < firstDuration) {
+      const remainder = Math.max(0.05, firstDuration - thumbDuration);
+      const thumbItem = { ...first, image: thumbnailImage, duration: thumbDuration };
+      const firstRemainder = { ...first, duration: remainder };
+      items.splice(0, 1, thumbItem, firstRemainder);
+    } else {
+      items[0] = { ...first, image: thumbnailImage };
+    }
+  }
   const { dir, file } = await createConcatListFile(items);
   try {
     await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
@@ -748,6 +813,28 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       be: "concatenate",
       by: { num: bytes.length },
       accordingto: artifact?.su?.name ? { name: artifact.su.name } : undefined
+    });
+
+    const thumbnailFilename = resolveFilenameFromCase({ name: "thumbnail" }, rememberFn);
+    const metadataText = metadataTextFromRemember(rememberFn, {
+      videoFile: outputResolved.resolved,
+      thumbnailFile: thumbnailFilename
+    });
+    await fs.writeFile(metadataFile, metadataText, "utf8");
+    const metadataBytes = await fs.readFile(metadataFile);
+    const metadataArtifact = recordArtifact({
+      locator: metadataFile,
+      producer: String(sentence?.su?.name ?? "concatenate"),
+      bytes: metadataBytes,
+      kind: "metadata"
+    });
+    emitExchangeSentence({
+      mood: "ya",
+      su: { name: "concatenate metadata" },
+      ob: { filename: metadataFile },
+      be: "artifact",
+      by: { num: metadataBytes.length },
+      accordingto: metadataArtifact?.su?.name ? { name: metadataArtifact.su.name } : undefined
     });
   } finally {
     await fs.rm(dir, { recursive: true, force: true });

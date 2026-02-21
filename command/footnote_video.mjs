@@ -53,10 +53,21 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-const GOLDEN = 1.61803398875;
 const SUBTITLE_WIDTH_RATIO = 0.61;
 const SUBTITLE_MAX_ROWS = 2;
 const SUBTITLE_MIN_SEGMENT_SECONDS = 0.28;
+const SUBTITLE_FONT_RATIO_MIN = 0.058;
+const SUBTITLE_FONT_RATIO_MAX = 0.068;
+const SUBTITLE_FONT_RATIO_DEFAULT = 0.063;
+const SUBTITLE_OUTLINE_RATIO_MIN = 0.10;
+const SUBTITLE_OUTLINE_RATIO_MAX = 0.12;
+const SUBTITLE_OUTLINE_RATIO_DEFAULT = 0.11;
+const SUBTITLE_SHADOW_RATIO_MIN = 0.02;
+const SUBTITLE_SHADOW_RATIO_MAX = 0.03;
+const SUBTITLE_SHADOW_RATIO_DEFAULT = 0.025;
+const SUBTITLE_ZONE_TOP_RATIO = 0.40;
+const SUBTITLE_ZONE_BOTTOM_RATIO = 0.70;
+const SUBTITLE_ZONE_DEFAULT_RATIO = 0.58;
 
 function splitWords(text = "") {
   return String(text ?? "").trim().split(/\s+/).filter(Boolean);
@@ -207,7 +218,9 @@ function buildKaraokeDialogues(cuts = [], { maxLineChars = 24, maxRows = 2 } = {
 function plainTextForCut(text, maxLineChars = 30) {
   const words = splitWords(text);
   if (!words.length) return "";
-  return wrapWords(words, maxLineChars)
+  const rows = wrapWords(words, maxLineChars);
+  return rows
+    .slice(0, SUBTITLE_MAX_ROWS)
     .map((line) => sanitizeAssText(line.join(" ")))
     .join("\\N");
 }
@@ -251,10 +264,30 @@ function buildAssFromSrt(
     maxLineChars = 30,
     playResX = 720,
     playResY = 1280,
-    marginLR = 80
+    marginLR = 80,
+    outline = null,
+    shadow = null
   } = {}
 ) {
   const cuts = parseSrtToCuts(srtText);
+  const resolvedOutline = Number.isFinite(outline) && outline > 0
+    ? Number(outline)
+    : Number(
+      clamp(
+        (Number(fontSize) * SUBTITLE_OUTLINE_RATIO_DEFAULT),
+        Number(fontSize) * SUBTITLE_OUTLINE_RATIO_MIN,
+        Number(fontSize) * SUBTITLE_OUTLINE_RATIO_MAX
+      ).toFixed(2)
+    );
+  const resolvedShadow = Number.isFinite(shadow) && shadow >= 0
+    ? Number(shadow)
+    : Number(
+      clamp(
+        (Number(fontSize) * SUBTITLE_SHADOW_RATIO_DEFAULT),
+        Number(fontSize) * SUBTITLE_SHADOW_RATIO_MIN,
+        Number(fontSize) * SUBTITLE_SHADOW_RATIO_MAX
+      ).toFixed(2)
+    );
   const header = [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -265,8 +298,8 @@ function buildAssFromSrt(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // High-contrast defaults: white text + black outline/shadow for readability on varied footage.
-    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,1,0,0,0,100,100,0,0,1,3,1,2,${marginLR},${marginLR},${marginV},1`,
+    // White bold text with black outline and soft shadow (no background box).
+    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${resolvedOutline},${resolvedShadow},8,${marginLR},${marginLR},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -372,26 +405,44 @@ export async function main(argv = process.argv) {
   const probed = await probeVideoSize(inputVideo);
   const width = opts.width ?? probed?.width ?? 720;
   const height = opts.height ?? probed?.height ?? 1280;
-  const marginV = opts.marginV ?? clamp(Math.round(height * 0.04), 24, 84);
-  const marginLR = Math.max(16, Math.round(width * ((1 - SUBTITLE_WIDTH_RATIO) / 2)));
-  const provisionalFont = opts.fontSize ?? clamp(Math.round(width * 0.08), 42, 110);
+  const marginV = Math.floor(
+    clamp(
+      opts.marginV ?? Math.round(height * SUBTITLE_ZONE_DEFAULT_RATIO),
+      Math.round(height * SUBTITLE_ZONE_TOP_RATIO),
+      Math.round(height * SUBTITLE_ZONE_BOTTOM_RATIO)
+    )
+  );
+  const marginLR = Math.max(16, Math.round(width * 0.10));
+  const proportionalFont = clamp(
+    Math.round(height * SUBTITLE_FONT_RATIO_DEFAULT),
+    Math.round(height * SUBTITLE_FONT_RATIO_MIN),
+    Math.round(height * SUBTITLE_FONT_RATIO_MAX)
+  );
+  const provisionalFont = opts.fontSize ?? proportionalFont;
   const plainMaxChars = opts.maxLineChars ?? estimateMaxLineChars(width, provisionalFont);
   const wordflowMaxChars = opts.maxLineChars ?? clamp(Math.round(width / 64), 8, 14);
-  const karaokeFont = opts.fontSize ?? clamp(Math.round(width * 0.070), 36, 112);
+  const karaokeFont = opts.fontSize ?? proportionalFont;
   const karaokeMaxChars = opts.maxLineChars
     ?? clamp(Math.round((width * SUBTITLE_WIDTH_RATIO) / Math.max(10, karaokeFont * 0.42)), 14, 42);
-  const fontSize = opts.mode === "wordflow"
-    ? (
-      opts.fontSize
-      ?? clamp(
-        Math.round((width / GOLDEN) / (Math.max(1, wordflowMaxChars) * 0.62)),
-        42,
-        120
-      )
-    )
-    : (opts.mode === "karaoke"
-      ? karaokeFont
-      : pickFontSizeForSrt(srtText, { width, requestedFontSize: opts.fontSize }));
+  const fontSize = opts.mode === "karaoke"
+    ? karaokeFont
+    : (opts.mode === "wordflow"
+      ? proportionalFont
+      : pickFontSizeForSrt(srtText, { width, requestedFontSize: opts.fontSize ?? proportionalFont }));
+  const outline = Number(
+    clamp(
+      (fontSize * SUBTITLE_OUTLINE_RATIO_DEFAULT),
+      fontSize * SUBTITLE_OUTLINE_RATIO_MIN,
+      fontSize * SUBTITLE_OUTLINE_RATIO_MAX
+    ).toFixed(2)
+  );
+  const shadow = Number(
+    clamp(
+      (fontSize * SUBTITLE_SHADOW_RATIO_DEFAULT),
+      fontSize * SUBTITLE_SHADOW_RATIO_MIN,
+      fontSize * SUBTITLE_SHADOW_RATIO_MAX
+    ).toFixed(2)
+  );
   const maxLineChars = opts.mode === "wordflow"
     ? wordflowMaxChars
     : (opts.mode === "karaoke" ? karaokeMaxChars : plainMaxChars);
@@ -403,7 +454,9 @@ export async function main(argv = process.argv) {
     maxLineChars,
     playResX: width,
     playResY: height,
-    marginLR
+    marginLR,
+    outline,
+    shadow
   });
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-footnote-"));
   const assFile = path.join(tmpDir, "subtitle.ass");

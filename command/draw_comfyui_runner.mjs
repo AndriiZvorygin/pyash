@@ -13,7 +13,10 @@ function parseArgs(argv) {
     workflowRoot: null,
     workflowName: null,
     workflowFile: null,
-    output: null
+    output: null,
+    width: null,
+    height: null,
+    negativePrompt: null
   };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -25,6 +28,9 @@ function parseArgs(argv) {
     else if (arg === "--workflow-name") out.workflowName = args[++i] ?? null;
     else if (arg === "--workflow-file") out.workflowFile = args[++i] ?? null;
     else if (arg === "--output") out.output = args[++i] ?? null;
+    else if (arg === "--width") out.width = Number(args[++i] ?? "");
+    else if (arg === "--height") out.height = Number(args[++i] ?? "");
+    else if (arg === "--negative-prompt") out.negativePrompt = args[++i] ?? null;
   }
   return out;
 }
@@ -83,11 +89,37 @@ async function readMappingPya(workflowFile) {
       const value = String(m[2] ?? "");
       if (key === "positive prompt path") result.positivePromptPath = value;
       if (key === "save image prefix path") result.saveImagePrefixPath = value;
+      if (key === "width path") result.widthPath = value;
+      if (key === "height path") result.heightPath = value;
+      if (key === "negative prompt path") result.negativePromptPath = value;
     }
     return result;
   } catch {
     return {};
   }
+}
+
+function detectDimensionPath(workflow, promptObject, axis = "width") {
+  const desired = String(axis).toLowerCase() === "height" ? "height" : "width";
+  const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  for (const node of nodes) {
+    const nodeId = String(node?.id ?? "");
+    if (!nodeId) continue;
+    const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
+    const hasAxis = inputs.some((input) => String(input?.name ?? "").toLowerCase() === desired);
+    if (!hasAxis) continue;
+    return `${nodeId}.inputs.${desired}`;
+  }
+  if (!promptObject || typeof promptObject !== "object") return null;
+  for (const [id, entry] of Object.entries(promptObject)) {
+    if (!entry || typeof entry !== "object") continue;
+    const inputs = entry.inputs;
+    if (!inputs || typeof inputs !== "object") continue;
+    if (Object.prototype.hasOwnProperty.call(inputs, desired)) {
+      return `${id}.inputs.${desired}`;
+    }
+  }
+  return null;
 }
 
 function normalizePromptObject(workflow) {
@@ -200,6 +232,29 @@ function detectPositivePromptPath(workflow, promptObject) {
   }
   if (!positive) return null;
   return `${positive}.inputs.text`;
+}
+
+function detectNegativePromptPath(workflow, promptObject, positivePath = null) {
+  const positiveNode = String(positivePath ?? "").split(".")[0] || null;
+  const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  let fallback = null;
+  for (const node of nodes) {
+    if (String(node?.type ?? "") !== "CLIPTextEncode") continue;
+    const id = String(node?.id ?? "");
+    if (!id) continue;
+    const title = String(node?.title ?? "").toLowerCase();
+    if (title.includes("negative")) return `${id}.inputs.text`;
+    if (!fallback && id !== positiveNode) fallback = `${id}.inputs.text`;
+  }
+  if (!fallback && promptObject && typeof promptObject === "object") {
+    for (const [id, entry] of Object.entries(promptObject)) {
+      if (String(entry?.class_type ?? "") !== "CLIPTextEncode") continue;
+      if (String(id) === String(positiveNode ?? "")) continue;
+      fallback = `${id}.inputs.text`;
+      break;
+    }
+  }
+  return fallback;
 }
 
 function defaultOutputPath() {
@@ -316,11 +371,30 @@ async function main() {
   const positivePath = mapping.positivePromptPath || detectPositivePromptPath(workflow, promptObject);
   if (!positivePath) throw new Error("draw_comfyui_runner: positive prompt path unresolved");
   setAtPath(promptObject, positivePath, promptText);
+  const negativePath = mapping.negativePromptPath || detectNegativePromptPath(workflow, promptObject, positivePath);
+  if (opts.negativePrompt && negativePath) {
+    setAtPath(promptObject, negativePath, String(opts.negativePrompt));
+  }
 
   const prefixPath = mapping.saveImagePrefixPath;
   if (prefixPath) {
     const base = path.basename(outputPath, path.extname(outputPath));
     setAtPath(promptObject, prefixPath, base);
+  }
+
+  if (Number.isFinite(opts.width) && opts.width > 0) {
+    const widthPath = mapping.widthPath || detectDimensionPath(workflow, promptObject, "width");
+    if (!widthPath) {
+      throw new Error("draw_comfyui_runner: width path unresolved");
+    }
+    setAtPath(promptObject, widthPath, Math.floor(opts.width));
+  }
+  if (Number.isFinite(opts.height) && opts.height > 0) {
+    const heightPath = mapping.heightPath || detectDimensionPath(workflow, promptObject, "height");
+    if (!heightPath) {
+      throw new Error("draw_comfyui_runner: height path unresolved");
+    }
+    setAtPath(promptObject, heightPath, Math.floor(opts.height));
   }
 
   const payload = {

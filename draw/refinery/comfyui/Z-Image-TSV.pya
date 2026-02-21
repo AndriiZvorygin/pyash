@@ -1,2 +1,5 @@
 su name positive prompt path ob text "6.inputs.text" ya
+su name negative prompt path ob text "7.inputs.text" ya
 su name save image prefix path ob text "9.inputs.filename_prefix" ya
+su name width path ob text "13.inputs.width" ya
+su name height path ob text "13.inputs.height" ya

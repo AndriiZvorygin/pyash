@@ -75,6 +75,8 @@ import establish, { signatures as establishSignatures } from "./establish.mjs";
 import improve, { signatures as improveSignatures } from "./improve.mjs";
 import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
+import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
+import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 
 export {
   plus,
@@ -140,7 +142,9 @@ export {
   establish,
   improve,
   router,
-  verify
+  verify,
+  itineraryMedia,
+  drawTextImage
 };
 
 export const builtInSignatures = [
@@ -221,4 +225,6 @@ export const builtInSignatures = [
   ...improveSignatures,
   ...routerSignatures,
   ...verifySignatures,
+  ...itineraryMediaSignatures,
+  ...drawTextImageSignatures,
 ];

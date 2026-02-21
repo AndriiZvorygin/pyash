@@ -2,6 +2,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 
 import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
+import { lookupArtifactLocator } from "../../bridge/exchange.mjs";
 
 function resolveComputer() {
   const arch = process.arch;
@@ -84,9 +85,16 @@ function resolveHearInputPath(sentence, { rememberFn } = {}) {
   const fromName = sentence?.from?.name;
   if (!fromName || !rememberFn) return null;
   const fact = rememberFn(fromName);
+  const fromArtifact = lookupArtifactLocator(fromName);
+  if (typeof fromArtifact === "string" && fromArtifact) return fromArtifact;
+  if (typeof fact?.to?.filename === "string") return fact.to.filename;
   if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
   if (typeof fact?.ob?.text === "string") return fact.ob.text;
-  if (typeof fact?.ob?.name === "string") return fact.ob.name;
+  if (typeof fact?.ob?.name === "string") {
+    const obArtifact = lookupArtifactLocator(fact.ob.name);
+    if (typeof obArtifact === "string" && obArtifact) return obArtifact;
+    return fact.ob.name;
+  }
   return null;
 }
 

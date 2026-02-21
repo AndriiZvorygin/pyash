@@ -5,6 +5,24 @@ export function handleRefineryDefinition({
   refineryDefs,
   throwErrorSentence
 } = {}) {
+  function normalizeDependencyVector(values = []) {
+    const deps = [];
+    for (let i = 0; i < values.length; i += 1) {
+      const token = String(values[i] ?? "");
+      if (!token) continue;
+      if (token === "name") {
+        const next = String(values[i + 1] ?? "");
+        if (next) {
+          deps.push(next);
+          i += 1;
+        }
+        continue;
+      }
+      deps.push(token);
+    }
+    return deps;
+  }
+
   if (!sentence || sentence.mood !== "def" || sentence.be !== "refinery") return null;
   const name = sentence?.su?.name;
   if (!name) {
@@ -63,8 +81,11 @@ export function handleRefineryDefinition({
     let deps = [];
     let action = null;
     if (entry.from?.ve?.type === "name" && Array.isArray(entry.from.ve.values)) {
-      deps = entry.from.ve.values.map((value) => String(value));
-    } else if (entry.from && (entry.from.filename || entry.from.text || entry.from.name)) {
+      deps = normalizeDependencyVector(entry.from.ve.values);
+    } else if (typeof entry.from?.name === "string" && entry.from.name) {
+      const fromName = String(entry.from.name);
+      if (seen.has(fromName)) deps = [fromName];
+    } else if (entry.from && (entry.from.filename || entry.from.text || entry.from.name || entry.from.genitive)) {
       // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
     } else if (entry.from) {
       throwErrorSentence({
@@ -76,7 +97,13 @@ export function handleRefineryDefinition({
     }
     if (priorName && !deps.includes(priorName)) deps = [...deps, priorName];
     action = { ...entry };
-    if (action.from?.ve?.type === "name") delete action.from;
+    if (action.from?.ve?.type === "name" || (typeof action.from?.name === "string" && action.from.name)) {
+      const { ve, ...fromRest } = action.from;
+      if (ve?.type === "name") fromRest.ve = undefined;
+      const cleaned = Object.fromEntries(Object.entries(fromRest).filter(([, v]) => v !== undefined));
+      if (Object.keys(cleaned).length > 0) action.from = cleaned;
+      else delete action.from;
+    }
     platforms.push({ name: platformName, deps, action });
     priorName = platformName;
   }

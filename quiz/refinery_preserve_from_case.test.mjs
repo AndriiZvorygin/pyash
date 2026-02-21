@@ -25,3 +25,22 @@ test("refinery keeps non-dependency from fields when from ve name is also presen
   assert.equal(fact?.be, "read");
   assert.equal(fact?.ob?.text, "alpha");
 });
+
+test("refinery accepts genitive from filename without treating it as depend list", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "refinery-from-genitive-"));
+  const inputPath = path.join(dir, "input.txt");
+  const program = [
+    "su name flow be refinery def",
+    `su name source ob text \"beta\" to filename \"${inputPath}\" be write do`,
+    "su name read back from filename of to of source be read do",
+    "prah"
+  ];
+  for (const line of program) {
+    await interpret(parse(line));
+  }
+  await interpret(parse("from name flow be refinery do"));
+  const fact = remember("read back");
+  assert.equal(fact?.be, "read");
+  assert.equal(fact?.ob?.text, "beta");
+});

@@ -1,0 +1,7 @@
+exists su name video cuts images directory ob text "/workplace/examples/out/love-of-god-30s-cuts" be default ya
+exists su name video cuts audio filename ob text "/workplace/examples/out/love-of-god-30s.wav" be default ya
+exists su name video cuts prefix ob text "love-of-god-30s" be default ya
+exists su name teaching cuts ob filename "/workplace/examples/out/love-of-god-30s.srt.cuts.pya" be itinerary ya
+from name itinerary teaching cuts fromstate wo itinerary become wo video to filename "/workplace/examples/out/love-of-god-30s.mp4" be concatenate do
+ob text "ls -lh /workplace/examples/out/love-of-god-30s.mp4" to name text video preview be command do
+ob name video preview be write do
