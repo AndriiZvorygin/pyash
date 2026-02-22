@@ -10,7 +10,7 @@ import { state } from "../bridge/state.mjs";
 import { parseSrtToCuts, parseItineraryPya } from "../../command/itinerary_io.mjs";
 import { outputPathForCut, promptFromCut, runDraw } from "../../command/itinerary_to_draw_images.mjs";
 import { buildTimelineItems, createConcatListFile, findImageForCut, getAudioDurationSeconds, runFfmpeg } from "../../command/itinerary_to_video.mjs";
-import { callPromptMind } from "../../command/itinerary_promptify.mjs";
+import { callPromptMind, buildPromptifyPacket } from "../../command/itinerary_promptify.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 
@@ -678,11 +678,19 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
     || "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation.";
   const host = promptifyHost(sentence, rememberFn);
   const model = promptifyModel(sentence, rememberFn);
+  const fullScript = cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
   const series = [];
-  for (const cut of cuts) {
+  let previousPrompt = "";
+  for (let i = 0; i < cuts.length; i += 1) {
+    const cut = cuts[i];
     const index = Number(cut?.index ?? (series.length + 1));
-    const cutText = String(cut?.obText ?? "").trim();
-    const promptInput = `${instruction}\n\n${cutText}`.trim();
+    const promptInput = buildPromptifyPacket({
+      cuts,
+      index: i,
+      instruction,
+      fullScript,
+      previousPrompt
+    });
     emitExchangeSentence({
       mood: "do",
       su: { name: `promptify request ${String(index).padStart(3, "0")}` },
@@ -699,6 +707,7 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       systemPrompt,
       cutText: promptInput
     });
+    previousPrompt = prompt;
     series.push({
       mood: "ya",
       su: { name: `cut ${String(index).padStart(3, "0")}` },

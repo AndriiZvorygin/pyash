@@ -39,9 +39,13 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     assert.equal(resultFact?.be, "itinerary");
     const rows = Array.isArray(resultFact?.ob?.series) ? resultFact.ob.series : [];
     assert.equal(rows.length, 2);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /prompt:Turn this cut into an image prompt\./u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /prompt:\[ROLE\]/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /\[TASK\]\s*Turn this cut into an image prompt\./u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /\[GLOBAL CONTEXT\]/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /current_cut:\s*pray daily/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /pray daily/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /serve others/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /current_cut:\s*serve others/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:/u);
     assert.equal(Number(rows[0]?.since?.num ?? -1), 0);
     assert.equal(Number(rows[1]?.until?.num ?? -1), 4);
   } finally {

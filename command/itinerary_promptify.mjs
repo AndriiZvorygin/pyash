@@ -42,6 +42,47 @@ function cleanPrompt(text) {
   return normalized;
 }
 
+function packetValue(value) {
+  const text = String(value ?? "").trim();
+  return text || "EMPTY";
+}
+
+function buildPromptifyPacket({
+  cuts = [],
+  index = 0,
+  instruction = "",
+  fullScript = "",
+  previousPrompt = ""
+} = {}) {
+  const current = cuts[index] ?? {};
+  const previous = index > 0 ? cuts[index - 1] : null;
+  const next = index + 1 < cuts.length ? cuts[index + 1] : null;
+  const currentText = String(current?.obText ?? "").trim();
+  const lines = [
+    "[ROLE]",
+    "You generate ONE visual prompt for the CURRENT CUT only.",
+    "Keep continuity with nearby cuts and prior prompt.",
+    "",
+    "[TASK]",
+    packetValue(instruction),
+    "",
+    "[GLOBAL CONTEXT]",
+    `full_script: ${packetValue(fullScript)}`,
+    "",
+    "[NEIGHBOR CONTEXT]",
+    `previous_cut: ${packetValue(previous?.obText ?? "")}`,
+    `current_cut: ${packetValue(currentText)}`,
+    `next_cut: ${packetValue(next?.obText ?? "")}`,
+    "",
+    "[PRIOR VISUAL STATE]",
+    `previous_prompt: ${packetValue(previousPrompt)}`,
+    "",
+    "[OUTPUT RULE]",
+    "Return ONLY one single-line prompt. No markdown. No explanation."
+  ];
+  return lines.join("\n");
+}
+
 async function callPromptMind({ host, model, systemPrompt, cutText }) {
   const endpoint = `${normalizeHost(host)}/api/chat`;
   const response = await fetch(endpoint, {
@@ -71,20 +112,31 @@ async function callPromptMind({ host, model, systemPrompt, cutText }) {
   return prompt;
 }
 
-export { parseArgs, callPromptMind, cleanPrompt };
+export { parseArgs, callPromptMind, cleanPrompt, buildPromptifyPacket };
 
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   const inputText = await fs.readFile(opts.inputFile, "utf8");
   const itinerary = parseItineraryPya(inputText);
   const promptedCuts = [];
-  for (const cut of itinerary.cuts) {
+  const fullScript = itinerary.cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
+  let previousPrompt = "";
+  for (let i = 0; i < itinerary.cuts.length; i += 1) {
+    const packet = buildPromptifyPacket({
+      cuts: itinerary.cuts,
+      index: i,
+      instruction: "Turn this transcript cut into one concise visual image prompt for generation.",
+      fullScript,
+      previousPrompt
+    });
     const prompt = await callPromptMind({
       host: opts.host,
       model: opts.model,
       systemPrompt: opts.systemPrompt,
-      cutText: String(cut?.obText ?? "")
+      cutText: packet
     });
+    previousPrompt = prompt;
+    const cut = itinerary.cuts[i];
     promptedCuts.push({
       ...cut,
       obText: prompt
