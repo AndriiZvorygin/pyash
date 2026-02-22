@@ -14,7 +14,7 @@ import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 function resolveWorkflowName(sentence, { rememberFn = remember } = {}) {
   const explicit = String(sentence?.as?.text ?? "").trim();
   if (explicit) return explicit;
-  return resolveConfigText("say workflow default", { rememberFn }) || "andrii_voice_qwen3_TTS";
+  return resolveConfigText("say workflow default", { rememberFn }) || "andrii_teaching_voice_qwen3_TTS";
 }
 
 function resolveHost({ rememberFn = remember } = {}) {
@@ -26,7 +26,7 @@ function resolveHost({ rememberFn = remember } = {}) {
 }
 
 function resolveWorkflowRoot({ rememberFn = remember } = {}) {
-  return resolveConfigText("say workflow root", { rememberFn }) || "./say/refinery/";
+  return resolveConfigText("say workflow root", { rememberFn }) || "./say/";
 }
 
 async function runQwenSay({ text, workflowName, workflowRoot, host, output }) {
