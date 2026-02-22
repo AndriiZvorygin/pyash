@@ -1,0 +1,2 @@
+exists su name say host ob text "http://host.docker.internal:8188" be default ya
+su name qwen run example ob text "Hello from qwen say run example." to filename "artifacts/say/qwen-run-example.wav" be qwen say do
