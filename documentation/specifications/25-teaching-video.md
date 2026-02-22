@@ -117,7 +117,7 @@ Prompt assembly and override (normative):
   5. cut payload (`cut.ob.text`, optional).
 - If `fromtext` is omitted, prompt starts at `ob text`.
 - If `ob text` is omitted, prompt uses `cut.ob.text` (and optional `fromtext`).
-- For ComfyUI, `draw/refinery/comfyui/<workflow>.pya` controls where this prompt is injected:
+- For ComfyUI, `draw/comfyui/<workflow>.pya` controls where this prompt is injected:
   - `su name positive prompt path ob text "<node>.inputs.text" ya`
 - To override prompt behavior:
   - change `fromtext text` for system/style behavior,
@@ -274,14 +274,14 @@ Runtime contract for this profile:
 ## 6.1 Draw workflow storage and resolution
 
 Workflows are backend-owned files. Canonical root:
-- `./draw/refinery/<backend>/`
+- `./draw/<backend>/`
 
 ComfyUI canonical root:
-- `./draw/refinery/comfyui/`
+- `./draw/comfyui/`
 
 Resolution order for `draw`:
 1. if `with filename` is provided, use it directly;
-2. else if `as text "<workflow name>"` is provided, resolve to `./draw/refinery/<backend>/<workflow name>.json`;
+2. else if `as text "<workflow name>"` is provided, resolve to `./draw/<backend>/<workflow name>.json`;
 3. else load compositional default workflow for (`fromstate`, `become`) from `configure/default.pya`;
 4. if unresolved, emit `draw defective`.
 

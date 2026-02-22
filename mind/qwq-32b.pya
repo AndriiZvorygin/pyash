@@ -1,0 +1,11 @@
+su name mind tuning be map def
+  su name temperature ob num 0.6 ya
+  su name top p ob num 0.95 ya
+  su name top k ob num 30 ya
+  su name min p ob num 0 ya
+  su name presence penalty ob num 0.8 ya
+  su name think prefix ob text "<think>\n" ya
+  su name strip think history ob bool truth ya
+prah
+
+exists su name mind tuning be export ya

@@ -68,7 +68,7 @@ Canonical default facts:
 exists su name provider auto discharge ob bool truth be default ya
 exists su name gpu exclusive classes ob ve text "mind" "draw" ya
 exists su name newspaper enabled ob bool truth be default ya
-exists su name draw workflow root ob filename "./draw/refinery/" be default ya
+exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow default ob la be draw fromstate wo text become wo photograph ko as text "teaching-text-to-photograph" be default ya
 exists su name draw workflow default ob la be draw fromstate wo photograph become wo photograph ko as text "teaching-photograph-to-photograph" be default ya
@@ -79,7 +79,7 @@ exists su name draw workflow default ob la be draw fromstate wo photograph becom
 Semantics:
 - when `provider auto discharge` is `truth`, activating one class listed in `gpu exclusive classes` discharges active providers from other listed classes;
 - when `provider auto discharge` is `lie`, no automatic discharge occurs.
-- workflow files for backend `<b>` resolve under `./draw/refinery/<b>/` unless an explicit `with filename` override is supplied.
+- workflow files for backend `<b>` resolve under `./draw/<b>/` unless an explicit `with filename` override is supplied.
 - when `newspaper enabled` is `truth`, runtime should persist replayable artifacts in background even when stage surfaces use typed in-memory links such as `from name itinerary ...`.
 
 ## 8. Output modes

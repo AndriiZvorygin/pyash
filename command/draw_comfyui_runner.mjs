@@ -44,7 +44,7 @@ function resolveBackend(opts) {
 }
 
 function resolveWorkflowRoot(opts) {
-  return opts.workflowRoot ?? process.env.PYA_DRAW_WORKFLOW_ROOT ?? "./draw/refinery/";
+  return opts.workflowRoot ?? process.env.PYA_DRAW_WORKFLOW_ROOT ?? "./draw/";
 }
 
 function resolveWorkflowName(opts) {
