@@ -38,11 +38,11 @@ function resolveBackend(opts) {
 }
 
 function resolveWorkflowRoot(opts) {
-  return opts.workflowRoot ?? process.env.PYA_SAY_WORKFLOW_ROOT ?? "./say/refinery/";
+  return opts.workflowRoot ?? process.env.PYA_SAY_WORKFLOW_ROOT ?? "./say/";
 }
 
 function resolveWorkflowName(opts) {
-  return opts.workflowName ?? process.env.PYA_SAY_WORKFLOW_DEFAULT ?? "andrii_voice_qwen3_TTS";
+  return opts.workflowName ?? process.env.PYA_SAY_WORKFLOW_DEFAULT ?? "andrii_teaching_voice_qwen3_TTS";
 }
 
 function resolveText(opts) {
