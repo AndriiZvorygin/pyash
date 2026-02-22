@@ -33,6 +33,10 @@ exists su name see default prompter ob la be see ko ob text "Describe the image.
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name draw host ob text "http://localhost:8188" be default ya
+exists su name say host ob text "http://localhost:8188" be default ya
+exists su name say backend default ob text "comfyui" be default ya
+exists su name say workflow root ob filename "./say/refinery/" be default ya
+exists su name say workflow default ob text "andrii_voice_qwen3_TTS" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/refinery/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
