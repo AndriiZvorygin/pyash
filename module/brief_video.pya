@@ -1,0 +1,112 @@
+su name draw size shorts be map def
+  su name width ob num 720 ya
+  su name height ob num 1280 ya
+  su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
+prah
+
+exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
+
+exists su name thumbnail system prompt ob text quoted.text.You are a viral Shorts thumbnail expert in 2026. Your only job is to analyze the full provided video script/transcript and create ONE highly effective, scroll-stopping image generation prompt for an AI tool (DALL·E, Midjourney, Flux, Leonardo, etc.).
+
+Follow these strict rules every time:
+
+1. First, identify the MOST intriguing, emotional, surprising, valuable, or curiosity-driven core angle from the script (the "hook moment").
+2. Invent ONE original 3-6 word bold hook phrase that captures that angle perfectly - punchy, authentic, no generic clickbait.
+3. Build a rich, detailed scene-first prompt: describe a high-energy, visually striking full-scene image (hyper-realistic or cinematic style) that fills the frame with strong impact - e.g., shocked expression reacting to something dramatic, intense close-up transformation, eye-catching split-screen before/after, mysterious reveal, emotional reaction shot, high-contrast action moment. Avoid plain/minimal backgrounds; make it dynamic and detailed.
+4. Do NOT include any visible text in the image. No letters, no captions, no logos, no watermarks. The image must be text-free.
+5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition.
+6. Output ONLY the final image generation prompt - nothing else. No explanations, no lists, no extra text.
+
+User will provide the script next. Respond with just the image prompt..text.quoted be text ya
+
+su name brief video from text manuscript be ceremony def
+  su name manuscript ob text of from of this fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. In the very first 3 seconds, the spoken hook must be exactly 6-9 words (ideal 7) with slow, dramatic delivery. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
+
+  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
+
+  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. 3-7 words. Plain text only." for name mind to name text video heading be write do
+
+  su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
+
+  exists su name video thumbnail seconds ob num 1 be default ya
+
+  su name telling ob name manuscript out be qwen say do
+
+  su name hear platform from name telling become wo srt be hear do
+
+  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+
+  su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
+
+  su name thumbnail prompt stage ob name text manuscript out fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
+
+  su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
+
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name concatenate platform from ve name itinerary teaching cuts name photographs photos name telling name filename thumbnail fromstate wo itinerary become wo video be concatenate do
+
+  su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
+
+  su name brief video output be map def
+    su name video ob filename of ob of footnote platform ya
+    su name metadata ob filename of ob of concatenate metadata ya
+    su name thumbnail ob filename of ob of thumbnail platform ya
+    su name title ob text of ob of video title ya
+    su name heading ob text of ob of video heading ya
+    su name description ob text of ob of video description ya
+  prah
+
+  su name result ob name brief video output be brief video ya
+  su name result ret
+prah
+
+su name brief video from text manuscript to filename video short be ceremony def
+  su name manuscript ob text of from of this fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. In the very first 3 seconds, the spoken hook must be exactly 6-9 words (ideal 7) with slow, dramatic delivery. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
+
+  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
+
+  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. 3-7 words. Plain text only." for name mind to name text video heading be write do
+
+  su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
+
+  exists su name video thumbnail seconds ob num 1 be default ya
+
+  su name telling ob name manuscript out be qwen say do
+
+  su name hear platform from name telling become wo srt be hear do
+
+  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+
+  su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
+
+  su name thumbnail prompt stage ob name text manuscript out fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
+
+  su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
+
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name concatenate platform from ve name itinerary teaching cuts name photographs photos name telling name filename thumbnail fromstate wo itinerary become wo video to filename of to of this be concatenate do
+
+  su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to filename of to of this as wo wordflow be footnote do
+
+  su name brief video output be map def
+    su name video ob filename of ob of footnote platform ya
+    su name metadata ob filename of ob of concatenate metadata ya
+    su name thumbnail ob filename of ob of thumbnail platform ya
+    su name title ob text of ob of video title ya
+    su name heading ob text of ob of video heading ya
+    su name description ob text of ob of video description ya
+  prah
+
+  su name result ob name brief video output be brief video ya
+  su name result ret
+prah
+
+exists su name brief video be export ya

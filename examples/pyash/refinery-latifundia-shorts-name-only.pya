@@ -17,7 +17,7 @@ su name title stage ob name text manuscript out fromtext text "Create a compelli
 
 su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. 3-7 words. Plain text only." for name mind to name text video heading be write do
 
-su name description stage ob name text manuscript out fromtext text "Write a short video description based on the script: 2 brief paragraphs plus 3 relevant hashtags. Plain text only." for name mind to name text video description be write do
+su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
 
 exists su name video thumbnail seconds ob num 1 be default ya
 
@@ -40,8 +40,8 @@ Follow these strict rules every time:
 1. First, identify the MOST intriguing, emotional, surprising, valuable, or curiosity-driven core angle from the script (the "hook moment").
 2. Invent ONE original 3-6 word bold hook phrase that captures that angle perfectly - punchy, authentic, no generic clickbait.
 3. Build a rich, detailed scene-first prompt: describe a high-energy, visually striking full-scene image (hyper-realistic or cinematic style) that fills the frame with strong impact - e.g., shocked expression reacting to something dramatic, intense close-up transformation, eye-catching split-screen before/after, mysterious reveal, emotional reaction shot, high-contrast action moment. Avoid plain/minimal backgrounds; make it dynamic and detailed.
-4. Overlay ONLY the hook text you created, and it must match the opening spoken hook wording exactly. Place it centered in the upper third at exactly 15% from the top, massive bold white sans-serif font, thick black outline, subtle glow/drop shadow for max pop and readability at small sizes.
-5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition with negative space around text.
+4. Do NOT include any visible text in the image. No letters, no captions, no logos, no watermarks. The image must be text-free.
+5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition.
 6. Output ONLY the final image generation prompt - nothing else. No explanations, no lists, no extra text.
 
 User will provide the script next. Respond with just the image prompt..text.quoted be text ya
@@ -49,6 +49,7 @@ User will provide the script next. Respond with just the image prompt..text.quot
 su name thumbnail prompt stage ob name text manuscript out fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
 
 su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
+su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
 
 su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
