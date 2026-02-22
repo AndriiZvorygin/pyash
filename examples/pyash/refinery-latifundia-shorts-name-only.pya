@@ -44,9 +44,22 @@ Follow these strict rules every time:
 5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition.
 6. Output ONLY the final image generation prompt - nothing else. No explanations, no lists, no extra text.
 
-User will provide the script next. Respond with just the image prompt..text.quoted be text ya
+User will provide full context next as plain text containing:
+- FULL SCRIPT
+- IMAGE PROMPTS ITINERARY (scene-by-scene prompt list)
 
-su name thumbnail prompt stage ob name text manuscript out fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
+Use both sources to choose a hook image that previews the whole narrative and visually flows into the opening scene.
+
+Respond with just the image prompt..text.quoted be text ya
+
+ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
+ob name manuscript out to name text manuscript full be text do
+ob name manuscript full to name thumbnail context be plus do
+ob text "\n\nIMAGE PROMPTS ITINERARY:\n" to name thumbnail context be plus do
+ob name itinerary teaching draw prompts to name text draw prompts context be text do
+ob name draw prompts context to name thumbnail context be plus do
+
+su name thumbnail prompt stage ob name thumbnail context fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
 
 su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
 su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
