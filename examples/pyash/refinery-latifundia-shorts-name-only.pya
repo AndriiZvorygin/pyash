@@ -4,11 +4,14 @@ su name draw size shorts be map def
   su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
 prah
 
+ob filename text manuscript to filename video short be input ya
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+
 su name latifundia shorts name only be refinery def
 
-su name source stage from filename "know/input/latifundia.txt" become wo text to name text latifundia source be read do
+su name source stage from filename of ob of manuscript become wo text to name text latifundia source be read do
 
-su name manuscript ob name text latifundia source fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
+su name manuscript ob name text latifundia source fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. In the very first 3 seconds, the spoken hook must be exactly 6-9 words (ideal 7) with slow, dramatic delivery. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
 
 su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
@@ -18,7 +21,7 @@ su name description stage ob name text manuscript out fromtext text "Write a sho
 
 exists su name video thumbnail seconds ob num 1 be default ya
 
-su name telling ob name manuscript out be piper say do
+su name telling ob name manuscript out be qwen say do
 
 su name hear platform from name telling become wo srt be hear do
 
@@ -37,7 +40,7 @@ Follow these strict rules every time:
 1. First, identify the MOST intriguing, emotional, surprising, valuable, or curiosity-driven core angle from the script (the "hook moment").
 2. Invent ONE original 3-6 word bold hook phrase that captures that angle perfectly - punchy, authentic, no generic clickbait.
 3. Build a rich, detailed scene-first prompt: describe a high-energy, visually striking full-scene image (hyper-realistic or cinematic style) that fills the frame with strong impact - e.g., shocked expression reacting to something dramatic, intense close-up transformation, eye-catching split-screen before/after, mysterious reveal, emotional reaction shot, high-contrast action moment. Avoid plain/minimal backgrounds; make it dynamic and detailed.
-4. Overlay ONLY the hook text you created: place it centered in the upper third, massive bold white sans-serif font, thick black outline, subtle glow/drop shadow for max pop and readability at small sizes.
+4. Overlay ONLY the hook text you created, and it must match the opening spoken hook wording exactly. Place it centered in the upper third at exactly 15% from the top, massive bold white sans-serif font, thick black outline, subtle glow/drop shadow for max pop and readability at small sizes.
 5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition with negative space around text.
 6. Output ONLY the final image generation prompt - nothing else. No explanations, no lists, no extra text.
 

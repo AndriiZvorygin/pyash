@@ -43,17 +43,32 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
     }
   }
 
-  // Text concatenation: ob text "..." to name <textVar> be plus do
-  const obText =
-    typeof sentence.ob?.text === "string"
-      ? sentence.ob.text
-      : (sentence.ob?.genitive ? resolveScalarValue(sentence.ob, remember) : undefined);
-  if (typeof obText === "string") {
+  const resolveTextPiece = (value) => {
+    if (!value) return undefined;
+    if (typeof value?.text === "string") return value.text;
+    if (value?.genitive) {
+      const resolved = resolveScalarValue(value, remember);
+      if (typeof resolved === "string") return resolved;
+      return undefined;
+    }
+    if (value?.name && remember) {
+      const fact = remember(value.name);
+      if (typeof fact?.ob?.text === "string") return fact.ob.text;
+    }
+    return undefined;
+  };
+
+  // Text concatenation: supports one-piece (ob) and two-piece (from + ob) forms.
+  const obText = resolveTextPiece(sentence.ob);
+  const fromText = resolveTextPiece(sentence.from);
+  const hasTextConcat = typeof obText === "string" || typeof fromText === "string";
+  if (hasTextConcat) {
+    const appendText = `${typeof fromText === "string" ? fromText : ""}${typeof obText === "string" ? obText : ""}`;
     if (typeof sentence.to === "string") {
-      return { ob: { text: sentence.to + obText }, be: "text" };
+      return { ob: { text: sentence.to + appendText }, be: "text" };
     }
     if (typeof sentence.to?.text === "string") {
-      return { ob: { text: sentence.to.text + obText }, be: "text" };
+      return { ob: { text: sentence.to.text + appendText }, be: "text" };
     }
     if (sentence.to?.genitive) {
       const target = resolveGenitiveTarget(sentence.to.genitive, remember);
@@ -61,7 +76,7 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
         const current = typeof target.value === "string"
           ? target.value
           : (typeof target.value?.text === "string" ? target.value.text : "");
-        target.parent[target.key] = current + obText;
+        target.parent[target.key] = current + appendText;
         return { ob: { text: target.parent[target.key] }, be: "text" };
       }
     }
@@ -70,7 +85,7 @@ export async function plus_obj_num_to_name_num(sentence, { remember }) {
     if (!targetName || !remember) throw new Error("plus: to name is required for text");
     const fact = remember(targetName);
     const current = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
-    return { ob: { text: current + obText }, be: "text" };
+    return { ob: { text: current + appendText }, be: "text" };
   }
 
   if (sentence.ob?.name && remember) {
@@ -213,6 +228,10 @@ export const signatures = [
   { signatureWords: ["be", "plus", "ob", "name", "num", "to", "name", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num", "to", "name", "map"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "text", "ob", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "name", "text", "ob", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "text", "ob", "name", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
+  { signatureWords: ["be", "plus", "from", "name", "text", "ob", "name", "text", "to", "name", "text"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "text", "to", "text"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "text", "to", "name", "num"], handler: plus_obj_num_to_name_num },
   { signatureWords: ["be", "plus", "ob", "num", "to", "name", "text"], handler: plus_obj_num_to_name_num },

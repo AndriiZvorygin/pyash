@@ -43,7 +43,11 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
   }
 
   assert.equal(calls.length, 2);
+  assert.match(calls[0], /\[GLOBAL CONTEXT\]/u);
+  assert.match(calls[0], /current_cut:\s*first cut text/u);
+  assert.match(calls[0], /next_cut:\s*second cut text/u);
+  assert.match(calls[1], /current_cut:\s*second cut text/u);
+  assert.match(calls[1], /previous_prompt:/u);
   const outputText = await fs.readFile(output, "utf8");
-  assert.match(outputText, /ob text "visual prompt for first cut text"/u);
-  assert.match(outputText, /ob text "visual prompt for second cut text"/u);
+  assert.match(outputText, /visual prompt for \[ROLE\]/u);
 });
