@@ -47,6 +47,23 @@ function packetValue(value) {
   return text || "EMPTY";
 }
 
+function normalizeCutText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function findDistinctNeighborText(cuts, index, direction) {
+  const list = Array.isArray(cuts) ? cuts : [];
+  const current = normalizeCutText(list[index]?.obText ?? "");
+  let i = Number(index) + Number(direction);
+  while (i >= 0 && i < list.length) {
+    const candidateRaw = String(list[i]?.obText ?? "").trim();
+    const candidate = normalizeCutText(candidateRaw);
+    if (candidate && candidate !== current) return candidateRaw;
+    i += Number(direction);
+  }
+  return "";
+}
+
 function buildPromptifyPacket({
   cuts = [],
   index = 0,
@@ -55,8 +72,8 @@ function buildPromptifyPacket({
   previousPrompt = ""
 } = {}) {
   const current = cuts[index] ?? {};
-  const previous = index > 0 ? cuts[index - 1] : null;
-  const next = index + 1 < cuts.length ? cuts[index + 1] : null;
+  const previousText = findDistinctNeighborText(cuts, index, -1);
+  const nextText = findDistinctNeighborText(cuts, index, 1);
   const currentText = String(current?.obText ?? "").trim();
   const lines = [
     "[ROLE]",
@@ -70,9 +87,9 @@ function buildPromptifyPacket({
     `full_script: ${packetValue(fullScript)}`,
     "",
     "[NEIGHBOR CONTEXT]",
-    `previous_cut: ${packetValue(previous?.obText ?? "")}`,
+    `previous_cut: ${packetValue(previousText)}`,
     `current_cut: ${packetValue(currentText)}`,
-    `next_cut: ${packetValue(next?.obText ?? "")}`,
+    `next_cut: ${packetValue(nextText)}`,
     "",
     "[PRIOR VISUAL STATE]",
     `previous_prompt: ${packetValue(previousPrompt)}`,

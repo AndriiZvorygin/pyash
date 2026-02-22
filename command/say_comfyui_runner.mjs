@@ -120,10 +120,12 @@ function normalizePromptObject(workflow) {
     const widgets = Array.isArray(node?.widgets_values) ? node.widgets_values : [];
     let widgetIndex = 0;
     const widgetInputNames = inputs.filter(inp => inp?.widget?.name).map(inp => String(inp.name));
+    const hasSeedWidget = widgetInputNames.includes("seed");
+    const seedModeToken = widgets.length > 1 ? String(widgets[1] ?? "") : "";
     const hasQwenSeedModeShape =
-      widgetInputNames.includes("seed") &&
-      widgetInputNames.includes("language") &&
-      widgets.length > widgetInputNames.length;
+      hasSeedWidget &&
+      (seedModeToken === "randomize" || seedModeToken === "fixed" || seedModeToken === "increment") &&
+      widgets.length === widgetInputNames.length + 1;
     const entry = { class_type: classType, inputs: {} };
     for (const input of inputs) {
       const inputName = String(input?.name ?? "");
@@ -136,12 +138,7 @@ function normalizePromptObject(workflow) {
       }
       if (input?.widget?.name) {
         let value = widgets[widgetIndex];
-        if (
-          hasQwenSeedModeShape &&
-          inputName === "language" &&
-          typeof value === "string" &&
-          (value === "randomize" || value === "fixed" || value === "increment")
-        ) {
+        if (hasQwenSeedModeShape && inputName !== "seed" && widgetIndex === 1) {
           widgetIndex += 1;
           value = widgets[widgetIndex];
         }

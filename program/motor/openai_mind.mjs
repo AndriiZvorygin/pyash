@@ -119,6 +119,9 @@ async function buildChatCompletionsRequest(payload = {}) {
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
   const reasoningEffort = asText(payload.reasoningEffort);
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;
+  if (Number.isFinite(Number(payload.temperature))) body.temperature = Number(payload.temperature);
+  if (Number.isFinite(Number(payload.topP))) body.top_p = Number(payload.topP);
+  if (Number.isFinite(Number(payload.presencePenalty))) body.presence_penalty = Number(payload.presencePenalty);
   return body;
 }
 

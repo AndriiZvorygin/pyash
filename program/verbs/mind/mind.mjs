@@ -42,6 +42,8 @@ const DEFAULT_TOOL_MAP_PATH = path.resolve(
   "../../../module/agent_tools.pya"
 );
 const CHANNEL_EMPTY_REPLY_FALLBACK = "I received your message, but I could not generate a reply. Please retry.";
+const loadedMindTuningKeys = new Set();
+const missingMindTuningKeys = new Set();
 
 function unescapeQuotedText(value) {
   return String(value ?? "")
@@ -89,6 +91,111 @@ async function loadAgentRuntimeConfig(agentCwd) {
     reasoningEffort,
     toolsMap
   };
+}
+
+function deriveMindTuningKey(model) {
+  const raw = String(model ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  const tail = raw.split("/").pop() ?? raw;
+  const base = tail.split(":")[0] ?? tail;
+  return base.replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+async function ensureMindTuningLoaded(model) {
+  const key = deriveMindTuningKey(model);
+  if (!key) return key;
+  if (loadedMindTuningKeys.has(key) || missingMindTuningKeys.has(key)) return key;
+  const filename = path.resolve(process.cwd(), "mind", `${key}.pya`);
+  try {
+    await fs.access(filename);
+  } catch {
+    missingMindTuningKeys.add(key);
+    return key;
+  }
+  const { interpret } = await import("../../bridge/index.mjs");
+  try {
+    await interpret({
+      mood: "do",
+      be: "import",
+      from: { name: filename },
+      ob: { name: "mind tuning" },
+      to: { name: `mind tuning ${key}` }
+    });
+    loadedMindTuningKeys.add(key);
+  } catch (err) {
+    throwErrorSentence({
+      name: "mind tuning defective",
+      message: `mind tuning defective: ${err?.message ?? "cannot import tuning file"}`,
+      from: { name: "mind" },
+      raw: { model, filename }
+    });
+  }
+  return key;
+}
+
+function readMapNum(map, keys = []) {
+  for (const key of keys) {
+    const entry = map?.[key];
+    const direct = Number(entry?.ob?.num ?? entry?.num);
+    if (Number.isFinite(direct)) return direct;
+    const fromText = Number(entry?.ob?.text ?? entry?.text);
+    if (Number.isFinite(fromText)) return fromText;
+  }
+  return null;
+}
+
+function readMapText(map, keys = []) {
+  for (const key of keys) {
+    const text = entryText(map?.[key]);
+    if (text) return text;
+  }
+  return "";
+}
+
+function readMapBool(map, keys = []) {
+  for (const key of keys) {
+    const entry = map?.[key];
+    const value = entry?.ob?.boolean ?? entry?.boolean;
+    if (typeof value === "boolean") return value;
+    const text = String(entry?.ob?.text ?? entry?.text ?? "").trim().toLowerCase();
+    if (text === "truth" || text === "true" || text === "1" || text === "yes") return true;
+    if (text === "lie" || text === "false" || text === "0" || text === "no") return false;
+  }
+  return false;
+}
+
+function entryText(entry) {
+  return String(entry?.ob?.text ?? entry?.text ?? "").trim();
+}
+
+function resolveMindTuningForModel(model, { rememberFn = remember } = {}) {
+  const key = deriveMindTuningKey(model);
+  if (!key) return null;
+  const fact = rememberFn(`mind tuning ${key}`);
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") return null;
+  return {
+    temperature: readMapNum(map, ["temperature"]),
+    topP: readMapNum(map, ["top p", "top_p"]),
+    topK: readMapNum(map, ["top k", "top_k"]),
+    minP: readMapNum(map, ["min p", "min_p"]),
+    presencePenalty: readMapNum(map, ["presence penalty", "presence_penalty"]),
+    thinkPrefix: readMapText(map, ["think prefix", "think_prefix"]),
+    stripThinkInHistory: readMapBool(map, ["strip think history", "strip think in history", "strip_think_in_history", "strip think"])
+  };
+}
+
+function stripThinkBlock(text) {
+  const source = String(text ?? "");
+  if (!source.trim()) return source;
+  const lower = source.toLowerCase();
+  const openIndex = lower.indexOf("<think>");
+  const closeIndex = lower.indexOf("</think>");
+  if (openIndex === 0 && closeIndex > openIndex) {
+    const rest = source.slice(closeIndex + "</think>".length).trim();
+    return rest || source;
+  }
+  return source;
 }
 
 async function ensureDefaultToolMapLoaded() {
@@ -176,17 +283,26 @@ export async function mind_to_name_text(sentence, {
   const runtimeModel = agentRuntime?.model ? String(agentRuntime.model).trim() : null;
   const configuredModel = resolveConfigText("mind model", { rememberFn: remember }) ?? null;
   const model = explicitModel ?? runtimeModel ?? configModel ?? configuredModel ?? "qwen3-vl:8b-instruct";
+  await ensureMindTuningLoaded(model);
+  const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
 
   // Prompt resolution: config/call fromtext (discourse source) + call prompt/text
   const configPromptValue = configSentence?.fromtext ?? null;
   const callPromptValue = sentence?.fromtext ?? null;
 
-  const { callPrompt, resolvedConfigPrompt } = resolveMindPrompt({
+  const { callPrompt: rawCallPrompt, resolvedConfigPrompt } = resolveMindPrompt({
     sentence,
     ob,
     configSentence,
     rememberFn: remember
   });
+  const callPrompt = (() => {
+    const prefix = String(modelTuning?.thinkPrefix ?? "").trim();
+    const base = String(rawCallPrompt ?? "");
+    if (!prefix) return base;
+    if (base.startsWith(prefix)) return base;
+    return `${prefix}\n${base}`.trim();
+  })();
 
   const runtimeToolsMap = agentRuntime?.toolsMap ? String(agentRuntime.toolsMap).trim() : "";
   const toolMapName = sentence?.with?.name
@@ -487,6 +603,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      modelTuning,
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
@@ -507,6 +624,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      modelTuning,
       mindDebug,
       debugMind,
       outputName,
@@ -522,6 +640,9 @@ export async function mind_to_name_text(sentence, {
 
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {
     responseText = CHANNEL_EMPTY_REPLY_FALLBACK;
+  }
+  if (modelTuning?.stripThinkInHistory) {
+    responseText = stripThinkBlock(responseText);
   }
 
   if (sessionAgentEnabled && sessionFile) {

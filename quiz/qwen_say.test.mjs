@@ -17,7 +17,7 @@ test("qwen say fixture records audio and metadata artifacts", async () => {
     record: (sentence) => records.push(sentence)
   });
   doRemember({ mood: "ya", su: { name: "say host" }, ob: { text: "http://localhost:8188" }, be: "default" });
-  doRemember({ mood: "ya", su: { name: "say workflow root" }, ob: { text: "./say/refinery/" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "say workflow root" }, ob: { text: "./say/" }, be: "default" });
   doRemember({ mood: "ya", su: { name: "say workflow default" }, ob: { text: "andrii_voice_qwen3_TTS" }, be: "default" });
   process.env.PYA_SAY_COMFYUI_FIXTURE_FILE = path.resolve("quiz/fixtures/pyash_raven.png");
   try {
@@ -38,7 +38,7 @@ test("qwen say fixture records audio and metadata artifacts", async () => {
 test("qwen say fails fast when text path is unresolved", async () => {
   forget();
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-say-"));
-  const workflowRoot = path.join(tmp, "say", "refinery");
+  const workflowRoot = path.join(tmp, "say");
   const backendRoot = path.join(workflowRoot, "comfyui");
   await fs.mkdir(backendRoot, { recursive: true });
   const workflow = {

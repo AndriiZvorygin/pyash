@@ -5,6 +5,8 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 import { parse } from "../program/understand/index.mjs";
+import { tokenize } from "../program/understand/tokenize.mjs";
+import { QUOTED_TEXT_PREFIX } from "../program/understand/constants.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember, doRemember } from "../program/remember/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
@@ -12,7 +14,7 @@ import { signatures as compileSignatures } from "../program/verbs/exchange/compi
 import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
 import { splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
-import { surfaceErrorSentence } from "../program/error.mjs";
+import { surfaceErrorSentence, throwErrorSentence } from "../program/error.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { state } from "../program/bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
@@ -77,6 +79,250 @@ function detectNestedLoops(parsedSentences) {
   return false;
 }
 
+function normalizeToken(token) {
+  const text = String(token ?? "");
+  if (text.startsWith(QUOTED_TEXT_PREFIX)) return text.slice(QUOTED_TEXT_PREFIX.length);
+  return text;
+}
+
+function parsePortTriples(tokens = [], startIndex = 0, stopWords = new Set()) {
+  const ports = [];
+  let index = startIndex;
+  if (tokens[index] === "ve") index += 1;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (stopWords.has(token)) break;
+    const transport = tokens[index];
+    const kind = tokens[index + 1];
+    const handle = tokens[index + 2];
+    if (!transport || !kind || !handle || stopWords.has(kind) || stopWords.has(handle)) {
+      return { error: "input declaration malformed port triple" };
+    }
+    ports.push({
+      transport: String(transport),
+      kind: String(kind),
+      handle: String(handle)
+    });
+    index += 3;
+  }
+  return { ports, index };
+}
+
+function parseInputDeclarationLine(rawLine = "") {
+  const tokens = tokenize(String(rawLine).trim()).map(normalizeToken);
+  if (tokens.length < 3) return null;
+  const beIndex = tokens.lastIndexOf("be");
+  if (beIndex < 0) return null;
+  if (tokens[beIndex + 1] !== "input") return null;
+  if (tokens[beIndex + 2] !== "ya") {
+    return { error: "input declaration must end with be input ya" };
+  }
+  const obIndex = tokens.indexOf("ob");
+  if (obIndex < 0 || obIndex >= beIndex) return { error: "input declaration missing ob ports" };
+  const toIndex = tokens.indexOf("to");
+  const obStops = new Set(toIndex > obIndex && toIndex < beIndex ? ["to", "be"] : ["be"]);
+  const obResult = parsePortTriples(tokens, obIndex + 1, obStops);
+  if (obResult.error) return { error: obResult.error };
+  let outputs = [];
+  if (toIndex > obIndex && toIndex < beIndex) {
+    const toResult = parsePortTriples(tokens, toIndex + 1, new Set(["be"]));
+    if (toResult.error) return { error: toResult.error };
+    outputs = toResult.ports ?? [];
+  }
+  return { inputs: obResult.ports ?? [], outputs };
+}
+
+function collectInputDeclarations(entries = []) {
+  const inputs = [];
+  const outputs = [];
+  for (const entry of entries) {
+    const line = String(entry?.text ?? "").trim();
+    if (!line) continue;
+    const parsed = parseInputDeclarationLine(line);
+    if (!parsed) continue;
+    if (parsed.error) {
+      throwErrorSentence({
+        name: "input declaration defective",
+        message: `input declaration defective: ${parsed.error}`,
+        from: { name: "run" },
+        raw: { line }
+      });
+    }
+    if (Array.isArray(parsed.inputs)) inputs.push(...parsed.inputs);
+    if (Array.isArray(parsed.outputs)) outputs.push(...parsed.outputs);
+  }
+  return { inputs, outputs };
+}
+
+function parseBindingTailWords(bindingWords = []) {
+  const joined = bindingWords.join(" ").trim();
+  if (!joined) return { explicit: [], shorthand: null };
+  const tokens = tokenize(joined).map(normalizeToken).filter(Boolean);
+  if (tokens.length === 1 && tokens[0] !== "ob") {
+    return { explicit: [], shorthand: tokens[0] };
+  }
+  const explicit = [];
+  let index = 0;
+  while (index < tokens.length) {
+    while (index < tokens.length && (tokens[index] === "ya" || tokens[index] === "and")) index += 1;
+    if (index >= tokens.length) break;
+    if (tokens[index] !== "ob") {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: expected ob",
+        from: { name: "run" },
+        raw: { tokens, index }
+      });
+    }
+    const transport = tokens[index + 1];
+    const value = tokens[index + 2];
+    if (!transport || value === undefined) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: expected ob <transport> <value>",
+        from: { name: "run" },
+        raw: { tokens, index }
+      });
+    }
+    if (tokens[index + 3] !== "to" || tokens[index + 4] !== "name") {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: expected to name <handle>",
+        from: { name: "run" },
+        raw: { tokens, index }
+      });
+    }
+    const handle = tokens[index + 5];
+    if (!handle) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: missing handle name",
+        from: { name: "run" },
+        raw: { tokens, index }
+      });
+    }
+    explicit.push({ transport: String(transport), value: String(value), handle: String(handle) });
+    index += 6;
+  }
+  return { explicit, shorthand: null };
+}
+
+function materializeBindingFact({ handle, transport, value }) {
+  const key = String(handle ?? "").trim();
+  const type = String(transport ?? "").trim();
+  if (!key || !type) return;
+  if (type === "filename") {
+    doRemember({ mood: "ya", su: { name: key }, ob: { filename: String(value ?? "") }, be: "filename" });
+    return;
+  }
+  if (type === "text") {
+    doRemember({ mood: "ya", su: { name: key }, ob: { text: String(value ?? "") }, be: "text" });
+    return;
+  }
+  if (type === "name") {
+    doRemember({ mood: "ya", su: { name: key }, ob: { name: String(value ?? "") }, be: "name" });
+    return;
+  }
+  throwErrorSentence({
+    name: "input binding defective",
+    message: `input binding defective: unsupported transport ${JSON.stringify(type)}`,
+    from: { name: "run" },
+    raw: { handle, transport, value }
+  });
+}
+
+function bindRuntimeInputs({ declarations, bindingWords }) {
+  const inputs = Array.isArray(declarations?.inputs) ? declarations.inputs : [];
+  const outputs = Array.isArray(declarations?.outputs) ? declarations.outputs : [];
+  const ports = [...inputs, ...outputs];
+  if (ports.length === 0) {
+    if (Array.isArray(bindingWords) && bindingWords.length > 0) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: no be input ya declaration in program",
+        from: { name: "run" },
+        raw: { bindingWords }
+      });
+    }
+    return;
+  }
+  const byHandle = new Map();
+  for (const port of ports) {
+    const handle = String(port?.handle ?? "").trim();
+    if (!handle) continue;
+    if (byHandle.has(handle)) {
+      throwErrorSentence({
+        name: "input declaration defective",
+        message: `input declaration defective: duplicate handle ${JSON.stringify(handle)}`,
+        from: { name: "run" },
+        raw: { declarations }
+      });
+    }
+    byHandle.set(handle, port);
+  }
+  const { explicit, shorthand } = parseBindingTailWords(bindingWords);
+  const bound = new Map();
+  if (shorthand !== null) {
+    const filenameInputs = inputs.filter(port => String(port?.transport ?? "") === "filename");
+    if (filenameInputs.length !== 1) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: "input binding defective: shorthand requires exactly one filename input port",
+        from: { name: "run" },
+        raw: { declarations, shorthand }
+      });
+    }
+    const port = filenameInputs[0];
+    bound.set(String(port.handle), { handle: String(port.handle), transport: "filename", value: String(shorthand) });
+  }
+  for (const row of explicit) {
+    const handle = String(row?.handle ?? "").trim();
+    const declared = byHandle.get(handle);
+    if (!declared) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: `input binding defective: unknown handle ${JSON.stringify(handle)}`,
+        from: { name: "run" },
+        raw: { row }
+      });
+    }
+    const expectedTransport = String(declared?.transport ?? "");
+    const gotTransport = String(row?.transport ?? "");
+    if (expectedTransport && gotTransport && expectedTransport !== gotTransport) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: `input binding defective: transport mismatch for ${JSON.stringify(handle)} (expected ${expectedTransport}, got ${gotTransport})`,
+        from: { name: "run" },
+        raw: { row, declared }
+      });
+    }
+    if (bound.has(handle)) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: `input binding defective: duplicate binding for ${JSON.stringify(handle)}`,
+        from: { name: "run" },
+        raw: { row }
+      });
+    }
+    bound.set(handle, { handle, transport: expectedTransport || gotTransport, value: String(row?.value ?? "") });
+  }
+  for (const required of inputs) {
+    const handle = String(required?.handle ?? "").trim();
+    if (!handle) continue;
+    if (!bound.has(handle)) {
+      throwErrorSentence({
+        name: "input binding defective",
+        message: `input binding defective: missing required input ${JSON.stringify(handle)}`,
+        from: { name: "run" },
+        raw: { declarations }
+      });
+    }
+  }
+  for (const item of bound.values()) {
+    materializeBindingFact(item);
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const gross = args.includes("--gross");
@@ -104,9 +350,10 @@ async function main() {
     positional.push(arg);
   }
   const filePath = positional[0];
+  const runtimeBindingWords = positional.slice(1);
 
   if (!filePath) {
-    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--no-jit] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] (deprecated) <path/to/file.pya>");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--no-jit] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya> [runtime input binding words]");
     process.exit(1);
   }
 
@@ -136,6 +383,10 @@ async function main() {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
   const sentences = splitSentencesWithLines(text, { includeThen: true });
+  if (readFromFile) {
+    const inputDeclarations = collectInputDeclarations(sentences);
+    bindRuntimeInputs({ declarations: inputDeclarations, bindingWords: runtimeBindingWords });
+  }
   if (!disableJitFlag && process.env.PYA_NO_JIT_LOOPS !== "1" && readFromFile) {
     const parsed = sentences
       .map(({ text: sentenceText }) => parse(sentenceText))

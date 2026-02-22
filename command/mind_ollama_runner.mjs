@@ -265,6 +265,16 @@ async function runGenerate(payload) {
   const base = resolveHost(payload);
   const endpoint = `${base.replace(/\/$/, "")}/api/generate`;
   const body = { model: payload.model, prompt: payload.prompt, stream: !!payload.stream };
+  const options = {};
+  if (Number.isFinite(Number(payload?.temperature))) options.temperature = Number(payload.temperature);
+  if (Number.isFinite(Number(payload?.topP))) options.top_p = Number(payload.topP);
+  if (Number.isFinite(Number(payload?.topK))) options.top_k = Number(payload.topK);
+  if (Number.isFinite(Number(payload?.minP))) options.min_p = Number(payload.minP);
+  if (Number.isFinite(Number(payload?.presencePenalty))) options.presence_penalty = Number(payload.presencePenalty);
+  if (payload?.options && typeof payload.options === "object") {
+    Object.assign(options, payload.options);
+  }
+  if (Object.keys(options).length > 0) body.options = options;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
     await requestStream(endpoint, body);
@@ -285,6 +295,16 @@ async function runChat(payload) {
     messages: ollamaMessages,
     stream: !!payload.stream
   };
+  const options = {};
+  if (Number.isFinite(Number(payload?.temperature))) options.temperature = Number(payload.temperature);
+  if (Number.isFinite(Number(payload?.topP))) options.top_p = Number(payload.topP);
+  if (Number.isFinite(Number(payload?.topK))) options.top_k = Number(payload.topK);
+  if (Number.isFinite(Number(payload?.minP))) options.min_p = Number(payload.minP);
+  if (Number.isFinite(Number(payload?.presencePenalty))) options.presence_penalty = Number(payload.presencePenalty);
+  if (payload?.options && typeof payload.options === "object") {
+    Object.assign(options, payload.options);
+  }
+  if (Object.keys(options).length > 0) body.options = options;
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
