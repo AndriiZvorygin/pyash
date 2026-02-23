@@ -25,7 +25,7 @@ import {
   updateSessionSummary,
   normalizeHistoryWindow
 } from "../../agent/session.mjs";
-import { resolveConfigBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigBool, resolveConfigMapBool, resolveConfigMapNum, resolveConfigText } from "../../configure/env.mjs";
 import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
@@ -298,6 +298,12 @@ export async function mind_to_name_text(sentence, {
   const model = explicitModel ?? runtimeModel ?? configModel ?? configuredModel ?? "qwen3-vl:8b-instruct";
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
+  const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
+  const effectiveModelTuning = (() => {
+    const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
+    if (typeof configuredThink === "boolean") tuning.think = configuredThink;
+    return tuning;
+  })();
 
   // Prompt resolution: config/call fromtext (discourse source) + call prompt/text
   const configPromptValue = configSentence?.fromtext ?? null;
@@ -310,7 +316,7 @@ export async function mind_to_name_text(sentence, {
     rememberFn: remember
   });
   const callPrompt = (() => {
-    const prefix = String(modelTuning?.thinkPrefix ?? "").trim();
+    const prefix = String(effectiveModelTuning?.thinkPrefix ?? "").trim();
     const base = String(rawCallPrompt ?? "");
     if (!prefix) return base;
     if (base.startsWith(prefix)) return base;
@@ -616,7 +622,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
-      modelTuning,
+      modelTuning: effectiveModelTuning,
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
@@ -637,7 +643,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
-      modelTuning,
+      modelTuning: effectiveModelTuning,
       mindDebug,
       debugMind,
       outputName,
@@ -654,7 +660,7 @@ export async function mind_to_name_text(sentence, {
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {
     responseText = CHANNEL_EMPTY_REPLY_FALLBACK;
   }
-  if (modelTuning?.stripThinkInHistory) {
+  if (effectiveModelTuning?.stripThinkInHistory) {
     responseText = stripThinkBlock(responseText);
   }
 
