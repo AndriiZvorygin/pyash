@@ -68,7 +68,7 @@ su name brief video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -117,7 +117,7 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -166,7 +166,7 @@ su name teaching video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -215,7 +215,7 @@ su name teaching video from text manuscript to filename video short be ceremony 
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
