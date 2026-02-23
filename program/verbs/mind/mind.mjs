@@ -192,6 +192,7 @@ function resolveMindTuningForModel(model, { rememberFn = remember } = {}) {
     topK: readMapNum(map, ["top k", "top_k"]),
     minP: readMapNum(map, ["min p", "min_p"]),
     presencePenalty: readMapNum(map, ["presence penalty", "presence_penalty"]),
+    numPredict: readMapNum(map, ["num predict", "num_predict", "max tokens", "max output tokens"]),
     think: readMapBoolNullable(map, ["think", "thinking"]),
     thinkPrefix: readMapText(map, ["think prefix", "think_prefix"]),
     stripThinkInHistory: readMapBool(map, ["strip think history", "strip think in history", "strip_think_in_history", "strip think"])
@@ -299,9 +300,15 @@ export async function mind_to_name_text(sentence, {
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
+  const configuredNumPredict =
+    resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
+    ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
+    ?? resolveConfigMapNum("mind configure", "num predict", { rememberFn: remember })
+    ?? resolveConfigMapNum("mind configure", "num_predict", { rememberFn: remember });
   const effectiveModelTuning = (() => {
     const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
     if (typeof configuredThink === "boolean") tuning.think = configuredThink;
+    if (Number.isFinite(Number(configuredNumPredict))) tuning.numPredict = Number(configuredNumPredict);
     return tuning;
   })();
 
