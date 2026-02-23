@@ -70,6 +70,7 @@ export async function runGenerate({
     if (Number.isFinite(Number(tuning.topK))) payload.topK = Number(tuning.topK);
     if (Number.isFinite(Number(tuning.minP))) payload.minP = Number(tuning.minP);
     if (Number.isFinite(Number(tuning.presencePenalty))) payload.presencePenalty = Number(tuning.presencePenalty);
+    if (typeof tuning.think === "boolean") payload.think = tuning.think;
   };
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];

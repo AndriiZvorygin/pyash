@@ -1,0 +1,8 @@
+exists su name stream stdout ob bool truth be default ya
+exists su name glm hello mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a concise assistant. Reply in one short sentence." ya
+
+su name hello stage ob text "hello world" for name glm hello mind to name text hello out be write do
+su name hello out ob name text hello out be write do
+
+su name hello stream stage ob text "say hello in five words" for name glm hello mind to name text hello stream out be write vyah stream do
+su name hello stream out ob name text hello stream out be write do
