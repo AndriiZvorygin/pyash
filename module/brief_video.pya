@@ -147,6 +147,116 @@ su name brief video from text manuscript to filename video short be ceremony def
   su name result ret
 prah
 
+su name teaching video from text manuscript be ceremony def
+  su name script source stage ob text of from of this to name text teaching video script source be text do
+
+  su name manuscript stage ob name text teaching video script source to name text manuscript out be text do
+
+  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
+
+  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
+
+  su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
+
+  exists su name video thumbnail seconds ob num 1 be default ya
+
+  su name telling ob name manuscript out be qwen say do
+
+  su name hear platform from name telling become wo srt be hear do
+
+  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+
+  su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
+  su name manuscript full stage ob name manuscript out to name text manuscript full be text do
+  su name thumbnail context script stage ob name manuscript full to name thumbnail context be plus do
+  su name thumbnail context title header ob text "\n\nVIDEO TITLE:\n" to name thumbnail context be plus do
+  su name thumbnail context title stage ob name text video title to name thumbnail context be plus do
+  su name thumbnail context heading header ob text "\n\nTHUMBNAIL HEADING:\n" to name thumbnail context be plus do
+  su name thumbnail context heading stage ob name text video heading to name thumbnail context be plus do
+  su name thumbnail context description header ob text "\n\nVIDEO DESCRIPTION:\n" to name thumbnail context be plus do
+  su name thumbnail context description stage ob name text video description to name thumbnail context be plus do
+
+  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+
+  su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
+
+  su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
+
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video be concatenate do
+
+  su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
+
+  su name result ob filename of ob of footnote platform be teaching video ya
+  su name result ret
+prah
+
+su name teaching video from text manuscript to filename video short be ceremony def
+  su name script source stage ob text of from of this to name text teaching video script source be text do
+
+  su name manuscript stage ob name text teaching video script source to name text manuscript out be text do
+
+  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
+
+  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
+
+  su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
+
+  exists su name video thumbnail seconds ob num 1 be default ya
+
+  su name telling ob name manuscript out be qwen say do
+
+  su name hear platform from name telling become wo srt be hear do
+
+  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+
+  su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
+  su name manuscript full stage ob name manuscript out to name text manuscript full be text do
+  su name thumbnail context script stage ob name manuscript full to name thumbnail context be plus do
+  su name thumbnail context title header ob text "\n\nVIDEO TITLE:\n" to name thumbnail context be plus do
+  su name thumbnail context title stage ob name text video title to name thumbnail context be plus do
+  su name thumbnail context heading header ob text "\n\nTHUMBNAIL HEADING:\n" to name thumbnail context be plus do
+  su name thumbnail context heading stage ob name text video heading to name thumbnail context be plus do
+  su name thumbnail context description header ob text "\n\nVIDEO DESCRIPTION:\n" to name thumbnail context be plus do
+  su name thumbnail context description stage ob name text video description to name thumbnail context be plus do
+
+  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+
+  su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
+
+  su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
+
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of to of this be concatenate do
+
+  su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to filename of to of this as wo wordflow be footnote do
+
+  su name result ob filename of ob of footnote platform be teaching video ya
+  su name result ret
+prah
+
+su name teaching video from filename manuscript be ceremony def
+  su name source stage from filename of from of this become wo text to name text manuscript source be read do
+  su name result from text of ob of manuscript source be teaching video do
+  su name result ret
+prah
+
+su name teaching video from filename manuscript to filename video short be ceremony def
+  su name source stage from filename of from of this become wo text to name text manuscript source be read do
+  su name result from text of ob of manuscript source to filename of to of this be teaching video do
+  su name result ret
+prah
+
 su name brief video from filename manuscript be ceremony def
   su name source stage from filename of from of this become wo text to name text manuscript source be read do
   su name result from text of ob of manuscript source be brief video do
@@ -160,3 +270,4 @@ su name brief video from filename manuscript to filename video short be ceremony
 prah
 
 exists su name brief video be export ya
+exists su name teaching video be export ya

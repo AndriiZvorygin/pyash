@@ -23,6 +23,24 @@ test("brief video module registers filename signatures", async () => {
   }
 });
 
+test("teaching video module registers text and filename signatures", async () => {
+  forget();
+  await interpret(parse('from filename "./module/brief_video.pya" to name teaching video be import do'));
+
+  const calls = [
+    'su name demo from text "Hook line. Body line. CTA line." be teaching video do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" be teaching video do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" to filename "artifacts/video/test.mp4" be teaching video do'
+  ];
+
+  for (const line of calls) {
+    const signature = joinSignatureWords(deriveSignatureFromCall(parse(line)));
+    const resolved = lookupSignature(signature);
+    assert.ok(resolved, `missing signature: ${signature}`);
+    assert.ok(String(resolved).endsWith("teaching video"), `unexpected target: ${resolved}`);
+  }
+});
+
 test("teaching video verbs accept vector dependency forms", async () => {
   forget();
   await interpret(parse('su name init ob text "ready" be write do'));

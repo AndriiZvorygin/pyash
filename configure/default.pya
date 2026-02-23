@@ -28,6 +28,7 @@ from filename "./module/footnote_video.pya" ob name footnote to name footnote be
 from filename "./module/thumbnail_heading.pya" ob name thumbnail heading burn to name thumbnail heading burn be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
 from filename "./module/brief_video.pya" ob name brief video to name brief video be import do
+from filename "./module/brief_video.pya" ob name teaching video to name teaching video be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
 exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
