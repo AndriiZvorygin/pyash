@@ -1,4 +1,6 @@
 exists su name stream stdout ob bool truth be default ya
+ob filename text manuscript be input ya
+su name provider auto discharge ob bool lie ya
 
 as wo ollama be discharge do
 
@@ -36,9 +38,9 @@ exists su name brief video script prompt end ob text quoted.text.
 limit thinking revisions to 3-4 and then produce the best one.
 Output ONLY in the script, nothing else.text.quoted be text ya
 
-su name source stage from filename "know/input/solon.txt" become wo text to name text manuscript source be read do
+su name source stage from filename of ob of manuscript become wo text to name text manuscript source be read do
 su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
 su name script request source stage ob name manuscript source to name brief video script request be plus do
 su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
-su name manuscript stage ob name brief video script request for name brief video script mind to name text manuscript out be write vyah stream do
+su name manuscript stage ob name brief video script request for name brief video script mind to name text manuscript out be write do
 su name manuscript out ob name text manuscript out be write do
