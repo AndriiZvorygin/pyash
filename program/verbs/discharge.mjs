@@ -3,6 +3,10 @@ import { throwErrorSentence } from "../error.mjs";
 import { renderSayValue } from "./say.mjs";
 import { closeMcpServer } from "../motor/mcp.mjs";
 import { getRefinery, removeRefinery } from "../bridge/refinery.mjs";
+import { dischargeOllamaMind, listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
+import { dischargeDrawBackend } from "../motor/draw_admin.mjs";
+import { dischargeHearBackend } from "../motor/hear_admin.mjs";
+import { dischargeSayBackend } from "../motor/say_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   const ob = sentence?.ob ?? {};
@@ -11,6 +15,12 @@ function resolveTargetName(sentence, { rememberFn }) {
   const raw = renderSayValue(ob, { rememberFn });
   const text = String(raw ?? "").trim();
   return text || null;
+}
+
+function resolveTargetNames(sentence) {
+  const values = sentence?.ob?.ve?.values;
+  if (!Array.isArray(values)) return [];
+  return values.map(v => String(v ?? "").trim()).filter(Boolean);
 }
 
 function resolveDischargeType(sentence) {
@@ -58,20 +68,68 @@ function invalidateRefineryBoundAliases(refineryName) {
 }
 
 export async function discharge(sentence, { remember: rememberFn = remember } = {}) {
+  const targetNames = resolveTargetNames(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
-  if (!targetName) {
+  const dischargeType = resolveDischargeType(sentence);
+  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw" && dischargeType !== "hear" && dischargeType !== "say") {
     throwErrorSentence({
-      name: "discharge target missing",
-      message: "discharge target missing",
+      name: "discharge target defective",
+      message: `discharge target defective: ${dischargeType}`,
       from: { name: "discharge" },
       raw: { sentence }
     });
   }
-  const dischargeType = resolveDischargeType(sentence);
-  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery") {
+  if (dischargeType === "draw") {
+    await dischargeDrawBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "draw" },
+      ob: { boolean: true }
+    };
+  }
+  if (dischargeType === "hear") {
+    await dischargeHearBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "hear" },
+      ob: { boolean: true }
+    };
+  }
+  if (dischargeType === "say") {
+    const result = await dischargeSayBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "say" },
+      from: { name: result.backend },
+      ob: { boolean: true }
+    };
+  }
+  const explicitOllama = dischargeType === "ollama";
+  const explicitMind = dischargeType === "mind";
+  if (explicitOllama || explicitMind) {
+    const names = targetNames.length > 0
+      ? targetNames
+      : (targetName ? [targetName] : await listWarmOllamaMinds({ rememberFn }));
+    const discharged = [];
+    for (const modelName of names) {
+      await dischargeOllamaMind(modelName, { rememberFn });
+      discharged.push(modelName);
+    }
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: explicitMind ? "mind" : "ollama" },
+      ob: { ve: { type: "text", values: discharged } },
+      by: { num: discharged.length }
+    };
+  }
+  if (!targetName) {
     throwErrorSentence({
-      name: "discharge target defective",
-      message: `discharge target defective: ${dischargeType}`,
+      name: "discharge target missing",
+      message: "discharge target missing",
       from: { name: "discharge" },
       raw: { sentence }
     });
@@ -115,8 +173,15 @@ export default discharge;
 
 export const signatures = [
   { signatureWords: ["be", "discharge", "ob", "text"], handler: discharge },
+  { signatureWords: ["be", "discharge", "ob", "vec", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "ob", "name", "num"], handler: discharge },
   { signatureWords: ["be", "discharge", "ob", "name", "map"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "mind"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "draw"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "hear"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "say"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ollama"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "ollama", "ob", "vec", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "num"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "name", "text"], handler: discharge },

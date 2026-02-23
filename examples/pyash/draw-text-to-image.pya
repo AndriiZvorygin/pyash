@@ -1,0 +1,4 @@
+from filename "../../module/draw_comfyui.pya" ob name draw to name draw be import do
+exists su name draw host ob text "http://host.docker.internal:8188" be default ya
+exists su name draw workflow default ob text "Z-Image-TSV" be default ya
+ob text "A clean technical sketch of a turbine, white background, high detail." fromstate wo text become wo image to filename "examples/out/draw-text-to-image.png" be draw do

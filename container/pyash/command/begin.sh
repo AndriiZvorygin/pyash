@@ -68,6 +68,8 @@ if [[ -z "${ai_host:-}" ]]; then
 fi
 web_search_enabled="$(get_config_value "web search enabled")"
 web_search_motor="$(get_config_value "web search motor")"
+hear_backend_default="$(get_config_value "hear backend default")"
+whisperx_enabled="$(get_config_value "whisperx enabled")"
 search_only="lie"
 vnc_enabled="truth"
 restart_container="lie"
@@ -87,6 +89,13 @@ if [[ -z "${web_search_enabled:-}" ]]; then
   esac
 fi
 
+if [[ -z "${whisperx_enabled:-}" ]]; then
+  whisperx_enabled="lie"
+fi
+if [[ "${hear_backend_default:-}" == "whisperx" ]]; then
+  whisperx_enabled="truth"
+fi
+
 ai_host="${ai_host/http:\/\/127.0.0.1/http:\/\/host.docker.internal}"
 ai_host="${ai_host/http:\/\/localhost/http:\/\/host.docker.internal}"
 
@@ -103,6 +112,7 @@ export PYASH_CODEX_DIR="$HOME/.codex"
 export PYASH_GITCONFIG="$HOME/.gitconfig"
 export PYASH_GITCONFIG_XDG="$HOME/.config/git/config"
 export PYASH_TZ=""
+export WHISPERX_WORKSPACE="$PROJECT_ROOT"
 
 mkdir -p "$PYASH_CONTAINER_HOME_DIR"
 
@@ -161,6 +171,13 @@ if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; t
   fi
   compose_args+=(-f "$PROJECT_ROOT/container/searxng/service/compose.yaml")
   full_compose_args+=(-f "$PROJECT_ROOT/container/searxng/service/compose.yaml")
+fi
+if [[ "$search_only" != "truth" && "${whisperx_enabled:-lie}" == "truth" ]]; then
+  whisperx_cache_root="$PROJECT_ROOT/container/whisperx/cache"
+  mkdir -p "$whisperx_cache_root/huggingface" "$whisperx_cache_root/torch" "$whisperx_cache_root/matplotlib" "$whisperx_cache_root/nltk_data"
+  chmod -R 0777 "$whisperx_cache_root" 2>/dev/null || true
+  compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
+  full_compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
 fi
 
 if [[ ${#compose_args[@]} -eq 0 ]]; then

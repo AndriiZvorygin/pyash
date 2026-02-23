@@ -1,0 +1,66 @@
+su name draw from filename cuts ob text prompter fromstate wo text become wo photograph to filename output as text prefix be ceremony def
+  exists su name cmd ob text "node command/itinerary_to_draw_images.mjs" be text ya
+  ob filename of from of this to name text cuts path be text do
+  ob text " \"" to name cmd be plus do
+  ob name cuts path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text out path be text do
+  ob name out path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --prefix \"" to name cmd be plus do
+  ob text of as of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw workflow default to name text workflow be text do
+  ob text " --workflow-name \"" to name cmd be plus do
+  ob name workflow to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --prompter \"" to name cmd be plus do
+  ob text of ob of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name draw from filename cuts ob text prompter fromstate wo text become wo photograph to filename output as text prefix by num limit be ceremony def
+  exists su name cmd ob text "node command/itinerary_to_draw_images.mjs" be text ya
+  ob filename of from of this to name text cuts path be text do
+  ob text " \"" to name cmd be plus do
+  ob name cuts path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text out path be text do
+  ob name out path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --prefix \"" to name cmd be plus do
+  ob text of as of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw host to name text host be text do
+  ob text " --host \"" to name cmd be plus do
+  ob name host to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob name draw workflow default to name text workflow be text do
+  ob text " --workflow-name \"" to name cmd be plus do
+  ob name workflow to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --prompter \"" to name cmd be plus do
+  ob text of ob of this to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --limit " to name cmd be plus do
+  ob num of by of this to name text limit text be text do
+  ob name limit text to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name draw from filename cuts ob text prompter fromstate wo text become wo photograph to filename output be ceremony def
+  exists su name prefix ob text "love-of-god-30s" be text ya
+  su name result from filename of from of this ob text of ob of this fromstate wo text become wo photograph to filename of to of this as text of prefix be draw do
+  su name result ret
+prah
+
+exists su name draw be export ya

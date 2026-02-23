@@ -2,6 +2,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 
 import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
+import { lookupArtifactLocator } from "../../bridge/exchange.mjs";
 
 function resolveComputer() {
   const arch = process.arch;
@@ -63,15 +64,37 @@ function resolveHearPrompt(sentence) {
   return trimmed.length ? trimmed : "";
 }
 
+function resolveHearBackend({ rememberFn } = {}) {
+  const configured = resolveConfigText("hear backend default", { rememberFn });
+  if (!configured) return "whisper";
+  const normalized = String(configured).trim().toLowerCase();
+  return normalized || "whisper";
+}
+
+function resolveHearHost({ rememberFn } = {}) {
+  return resolveConfigText("hear host", { rememberFn }) || "http://localhost:8000";
+}
+
+function resolveHearWhisperxModel({ rememberFn } = {}) {
+  return resolveConfigText("hear whisperx model", { rememberFn }) || "large-v3";
+}
+
 function resolveHearInputPath(sentence, { rememberFn } = {}) {
   if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
   if (typeof sentence?.from?.text === "string") return sentence.from.text;
   const fromName = sentence?.from?.name;
   if (!fromName || !rememberFn) return null;
   const fact = rememberFn(fromName);
+  const fromArtifact = lookupArtifactLocator(fromName);
+  if (typeof fromArtifact === "string" && fromArtifact) return fromArtifact;
+  if (typeof fact?.to?.filename === "string") return fact.to.filename;
   if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
   if (typeof fact?.ob?.text === "string") return fact.ob.text;
-  if (typeof fact?.ob?.name === "string") return fact.ob.name;
+  if (typeof fact?.ob?.name === "string") {
+    const obArtifact = lookupArtifactLocator(fact.ob.name);
+    if (typeof obArtifact === "string" && obArtifact) return obArtifact;
+    return fact.ob.name;
+  }
   return null;
 }
 
@@ -83,5 +106,8 @@ export {
   resolveHearLanguage,
   resolveHearCapture,
   resolveHearPrompt,
-  resolveHearInputPath
+  resolveHearInputPath,
+  resolveHearBackend,
+  resolveHearHost,
+  resolveHearWhisperxModel
 };

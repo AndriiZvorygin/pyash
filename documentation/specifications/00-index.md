@@ -26,6 +26,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 17. `19-ops-safety.md` — repair/command safety and coding harness requirements.
 18. `23-configure.md` — configure routes and managed write contract.
 19. `24-channel-contract.md` — channel/router input-produce-health contract.
+20. `25-teaching-video.md` — teaching-video refinery pipeline contract.
 
 ## Reference docs (non-normative)
 

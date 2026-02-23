@@ -5,9 +5,12 @@ import { getExchangeSentenceId } from "../../bridge/exchange.mjs";
 
 let hearCounter = 0;
 
-export function resolveOutputPath(sentence) {
+export function resolveOutputPath(sentence, { defaultExt = ".txt" } = {}) {
+  if (typeof sentence?.to?.filename === "string" && sentence.to.filename.trim()) {
+    return sentence.to.filename;
+  }
   const base = getExchangeSentenceId() || sentence?.su?.name || `hear-${hearCounter++}`;
-  return path.join("artifacts", "hear", `${base}.txt`);
+  return path.join("artifacts", "hear", `${base}${defaultExt}`);
 }
 
 export function resolveStreamOutputPath(sentence) {

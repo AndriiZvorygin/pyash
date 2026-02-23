@@ -140,6 +140,56 @@ test("deriveSignatureFromCall defaults unknown name to name num", () => {
   ]);
 });
 
+test("deriveSignatureFromCall preserves itinerary typed names", () => {
+  const sentence = {
+    mood: "do",
+    be: "draw",
+    from: { name: "teaching cuts", nameTypeWords: ["itinerary"] },
+    ob: { text: "Generate one photograph per cut." },
+    fromstate: { wo: "text" },
+    become: { wo: "photograph" },
+    to: { filename: "/tmp/out" }
+  };
+  const sig = deriveSignatureFromCall(sentence, { remember: () => undefined });
+  assert.deepEqual(sig, [
+    "be", "draw",
+    "become", "wo", "photograph",
+    "from", "name", "itinerary",
+    "fromstate", "wo", "text",
+    "ob", "text",
+    "to", "filename"
+  ]);
+});
+
+test("deriveSignatureFromCall treats fromtext name as text for draw dispatch", () => {
+  const sentence = {
+    mood: "do",
+    be: "draw",
+    from: { name: "teaching cuts", nameTypeWords: ["itinerary"] },
+    fromtext: { name: "draw system prompt" },
+    ob: { text: "Generate one photograph per cut." },
+    fromstate: { wo: "text" },
+    become: { wo: "photograph" },
+    with: { name: "draw size map", nameTypeWords: ["map"] },
+    to: { filename: "/tmp/out" }
+  };
+  const remember = name => {
+    if (name === "draw system prompt") return { ob: { text: "cinematic" } };
+    return undefined;
+  };
+  const sig = deriveSignatureFromCall(sentence, { remember });
+  assert.deepEqual(sig, [
+    "be", "draw",
+    "become", "wo", "photograph",
+    "from", "name", "itinerary",
+    "fromstate", "wo", "text",
+    "fromtext", "text",
+    "ob", "text",
+    "to", "filename",
+    "with", "name", "map"
+  ]);
+});
+
 test("deriveSignatureFromCall infers mind and text for write with literal prompt", () => {
   const sentence = {
     mood: "do",

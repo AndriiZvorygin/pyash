@@ -11,6 +11,7 @@ Purpose: define mind invocation, tool-calling envelope, and MCP integration cont
 | `with wo tools` | default tools set | stable standard tools |
 | `under name <conduct>` | run-scoped policy/config | verify loop / guardrails |
 | `to name text <out>` | bind output fact | deterministic downstream use |
+| `be discharge ... do` | provider teardown | free backend/runtime resources |
 
 ## 2. Canonical invocation forms
 
@@ -37,7 +38,24 @@ Tool events must preserve:
 - surfaced produce/error sentence,
 - deterministic ordering with run newspaper.
 
-## 4. MCP contract requirements
+## 4. Provider lifecycle and exclusivity
+
+Provider classes such as `mind` and `draw` should support explicit discharge.
+
+Canonical discharge forms:
+```pyash
+be discharge as wo mind do
+be discharge as wo draw do
+be discharge for name helper do
+```
+
+GPU exclusivity rule (single-GPU runtime):
+- At most one GPU-heavy provider class may stay active at a time.
+- Activating `draw` should discharge active `mind` providers when auto-discharge is enabled.
+- Activating `mind` should discharge active `draw` providers when auto-discharge is enabled.
+- Auto-discharge policy must be deterministic and observable in run records.
+
+## 5. MCP contract requirements
 
 MCP layer must provide:
 - discovery snapshot,
@@ -45,15 +63,15 @@ MCP layer must provide:
 - invocation with timeout/cancel behavior,
 - deterministic denial/error surfaces.
 
-## 5. Permissions and policy
+## 6. Permissions and policy
 
 Tool and MCP execution must honor `19-ops-safety.md` policy hierarchy.
 
-## 6. Conformance
+## 7. Conformance
 
-Implementation conforms when mind/tool/MCP flows preserve canonical sentence envelopes and deterministic policy-bounded behavior.
+Implementation conforms when mind/draw/tool/MCP flows preserve canonical sentence envelopes, deterministic lifecycle behavior, and policy-bounded execution.
 
-## 7. References
+## 8. References
 
 - Full details: `documentation/recipes/spec-archive/08-tools-and-mcp.full.md`
 - Interpreter adapter mapping: `documentation/recipes/pyash-interpreter-adapter.md`

@@ -48,6 +48,7 @@ configure/secret/
 configure/workplace.pya
 configure/container.pya
 container/building/compose.override.yaml
+container/pyash/building/compose.override.yaml
 container/compose.override.yaml
 container/configure/ecology/searxng.env
 .bash_history
@@ -61,6 +62,7 @@ container/configure/ecology/searxng.env
 .fluxbox/
 *.swp
 container/building/
+container/whisperx/cache/
 
 # caterer: keep manifests and licences tracked, ignore heavy and generated content
 caterer/**/binary/
@@ -77,3 +79,6 @@ caterer/piper/
 
 # local reference checkout, do not commit
 caterer/nanobot/
+
+container/whisperx/service/__pycache__/
+container/whisperx/service/*.pyc

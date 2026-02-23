@@ -16,6 +16,7 @@ export function createConfigureMenu(deps) {
     configureMatrixDoctor,
     MATRIX_CATERER_NAME,
     configureChannelList,
+    configureAudio,
     configureMind,
     configureAgent,
     configureOrchestrator,
@@ -67,9 +68,10 @@ export function createConfigureMenu(deps) {
       try {
         textOut("Pyash Configure Intro");
         textOut(`1. channel ${current.channel ? "(configured)" : "(pending)"}`);
-        textOut(`2. mind ${current.mind ? "(configured)" : "(pending)"}`);
-        textOut(`3. agent ${current.agent ? "(configured)" : "(pending)"}`);
-        textOut("4. exit");
+        textOut("2. audio");
+        textOut(`3. mind ${current.mind ? "(configured)" : "(pending)"}`);
+        textOut(`4. agent ${current.agent ? "(configured)" : "(pending)"}`);
+        textOut("5. exit");
         const choice = (await rl.question(`Choose option [${defaultChoice}]: `)).trim() || defaultChoice;
         if (choice === "1") {
           rl.close();
@@ -80,10 +82,16 @@ export function createConfigureMenu(deps) {
         if (choice === "2") {
           rl.close();
           rl = null;
-          await configureMind({ args: [] });
+          await configureAudio({ args: [] });
           continue;
         }
         if (choice === "3") {
+          rl.close();
+          rl = null;
+          await configureMind({ args: [] });
+          continue;
+        }
+        if (choice === "4") {
           rl.close();
           rl = null;
           await configureAgent({ args: [] });
@@ -159,6 +167,10 @@ export function createConfigureMenu(deps) {
       await configureMind({ args: args.slice(1) });
       return;
     }
+    if (first === "audio") {
+      await configureAudio({ args: args.slice(1) });
+      return;
+    }
     if (first === "agent") {
       await configureAgent({ args: args.slice(1) });
       return;
@@ -170,9 +182,10 @@ export function createConfigureMenu(deps) {
         textOut("Pyash Configure");
         textOut("1. intro");
         textOut("2. channel");
-        textOut("3. mind");
-        textOut("4. agent");
-        textOut("5. exit");
+        textOut("3. audio");
+        textOut("4. mind");
+        textOut("5. agent");
+        textOut("6. exit");
         const choice = (await rl.question("Choose option [1]: ")).trim() || "1";
         if (choice === "1") {
           rl.close();
@@ -189,10 +202,16 @@ export function createConfigureMenu(deps) {
         if (choice === "3") {
           rl.close();
           rl = null;
-          await configureMind({ args: [] });
+          await configureAudio({ args: [] });
           continue;
         }
         if (choice === "4") {
+          rl.close();
+          rl = null;
+          await configureMind({ args: [] });
+          continue;
+        }
+        if (choice === "5") {
           rl.close();
           rl = null;
           await configureAgent({ args: [] });

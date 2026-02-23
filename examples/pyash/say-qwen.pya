@@ -1,0 +1,1 @@
+su name qwen-demo ob text "Hello from qwen tts via comfyui." to filename "artifacts/say/qwen-demo.wav" be qwen say do

@@ -6,6 +6,8 @@ import path from "node:path";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerRestart, schedulerServiceRestart } from "../agent/scheduler_control.mjs";
 import { restartAgent } from "../agent/admin.mjs";
+import { restartDrawBackend } from "../motor/draw_admin.mjs";
+import { restartSayBackend } from "../motor/say_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
@@ -58,6 +60,26 @@ function isSchedulerTarget(targetName, restartType) {
 
 export async function restart(sentence, { remember: rememberFn = remember } = {}) {
   const restartType = resolveRestartType(sentence);
+  if (restartType === "draw") {
+    await restartDrawBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "restart",
+      from: { name: "draw" },
+      ob: { boolean: true },
+      by: { num: 3 }
+    };
+  }
+  if (restartType === "say") {
+    const result = await restartSayBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "restart",
+      from: { name: "say" },
+      as: { wo: result.backend },
+      ob: { boolean: true }
+    };
+  }
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
   const houseScope = isHouseScope(sentence);
@@ -72,7 +94,7 @@ export async function restart(sentence, { remember: rememberFn = remember } = {}
     }
   }
   if (restartType && restartType !== "mcp") {
-    if (restartType !== "scheduler") {
+    if (restartType !== "scheduler" && restartType !== "say") {
       throwErrorSentence({
         name: "restart target defective",
         message: `restart target defective: ${restartType}`,
@@ -153,6 +175,8 @@ export const signatures = [
   { signatureWords: ["be", "restart", "as", "wo", "ob", "name", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "ob", "name", "map"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "draw"], handler: restart },
+  { signatureWords: ["be", "restart", "as", "wo", "say"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "text"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "num"], handler: restart },
   { signatureWords: ["be", "restart", "as", "wo", "scheduler", "ob", "name", "map"], handler: restart },

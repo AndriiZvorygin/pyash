@@ -73,12 +73,22 @@ export async function runToolChat({
   backendName,
   ollamaHost,
   reasoningEffort,
+  modelTuning,
   mindDebug,
   debugMind,
   inputs,
   onToolCall,
   checkInterrupted
 } = {}) {
+  const applySampling = (payload) => {
+    if (!payload || typeof payload !== "object") return;
+    const tuning = modelTuning && typeof modelTuning === "object" ? modelTuning : {};
+    if (Number.isFinite(Number(tuning.temperature))) payload.temperature = Number(tuning.temperature);
+    if (Number.isFinite(Number(tuning.topP))) payload.topP = Number(tuning.topP);
+    if (Number.isFinite(Number(tuning.topK))) payload.topK = Number(tuning.topK);
+    if (Number.isFinite(Number(tuning.minP))) payload.minP = Number(tuning.minP);
+    if (Number.isFinite(Number(tuning.presencePenalty))) payload.presencePenalty = Number(tuning.presencePenalty);
+  };
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
   const mockResponseRaw = inputs?.mockResponseRaw ?? null;
@@ -150,6 +160,7 @@ export async function runToolChat({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     const mockResponse = nextMockResponse();

@@ -1,0 +1,22 @@
+services:
+  whisperx:
+    container_name: whisperx
+    image: ghcr.io/jim60105/whisperx:no_model
+    user: "${PYASH_UID}:${PYASH_GID}"
+    working_dir: /workplace
+    entrypoint: ["python3", "/service/server.py"]
+    command: ["--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - ${WHISPERX_WORKSPACE:-../../..}:/workplace
+      - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/cache:/cache
+      - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/server.py:/service/server.py:ro
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
+      - WHISPERX_COMPUTE_TYPE=${WHISPERX_COMPUTE_TYPE:-int8}
+      - TRANSFORMERS_CACHE=/cache/huggingface
+      - HF_HOME=/cache/huggingface
+      - TORCH_HOME=/cache/torch
+      - MPLCONFIGDIR=/cache/matplotlib
+      - NLTK_DATA=/cache/nltk_data
+    extra_hosts:
+      - host.docker.internal:host-gateway

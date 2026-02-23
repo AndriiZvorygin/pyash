@@ -23,13 +23,28 @@ from filename "./module/read_html_markdown_plain.pya" ob name read to name read 
 from filename "./module/read_pdf_markdown.pya" ob name read to name read pdf markdown be import do
 from filename "./module/read_pdf_markdown_plain.pya" ob name read to name read pdf markdown plain be import do
 from filename "./module/see_vl.pya" ob name see to name see be import do
+from filename "./module/draw_comfyui.pya" ob name draw to name draw be import do
+from filename "./module/footnote_video.pya" ob name footnote to name footnote be import do
+from filename "./module/thumbnail_heading.pya" ob name thumbnail heading burn to name thumbnail heading burn be import do
 from filename "./module/compile_photograph_text.pya" ob name compile to name compile be import do
+from filename "./module/brief_video.pya" ob name brief video to name brief video be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
 exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
 exists su name see default prompter ob la be see ko ob text "Describe the image." be default ya
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
+exists su name draw host ob text "http://localhost:8188" be default ya
+exists su name say host ob text "http://localhost:8188" be default ya
+exists su name say backend default ob text "comfyui" be default ya
+exists su name say workflow root ob filename "./say/" be default ya
+exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
+exists su name draw backend default ob text "comfyui" be default ya
+exists su name draw workflow root ob filename "./draw/" be default ya
+exists su name draw workflow default ob text "Z-Image-TSV" be default ya
+exists su name provider auto discharge ob bool truth be default ya
+exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" be default ya
+exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
 exists su name keyboard bin ob text "xdotool" be default ya
@@ -40,6 +55,10 @@ exists su name ffmpeg input device ob text "default" be default ya
 exists su name hear bin ob text "caterer/hear/binary/linux-x64/whisper-main" be default ya
 exists su name hear stream bin ob text "caterer/hear/binary/linux-x64/whisper-stream" be default ya
 exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" be default ya
+exists su name hear backend default ob text "whisper" be default ya
+exists su name hear host ob text "http://localhost:8000" be default ya
+exists su name hear whisperx model ob text "large-v3" be default ya
+exists su name whisperx enabled ob bool lie be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name download extra default ob la be download as wo video ko with name download extra be default ya
 exists su name download extra default ob la be download as wo audio ko with name download extra be default ya

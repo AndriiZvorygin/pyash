@@ -32,5 +32,9 @@ export const signatures = [
   { signatureWords: ["be", "filename", "ob", "text", "to", "name", "filename"], handler: filename },
   { signatureWords: ["be", "filename", "ob", "filename", "to", "name", "filename"], handler: filename },
   { signatureWords: ["be", "filename", "ob", "name", "text", "to", "name", "filename"], handler: filename },
-  { signatureWords: ["be", "filename", "ob", "name", "filename", "to", "name", "filename"], handler: filename }
+  { signatureWords: ["be", "filename", "ob", "name", "filename", "to", "name", "filename"], handler: filename },
+  { signatureWords: ["be", "filename", "ob", "filename", "to", "name", "itinerary"], handler: filename },
+  { signatureWords: ["be", "filename", "ob", "text", "to", "name", "itinerary"], handler: filename },
+  { signatureWords: ["be", "filename", "ob", "name", "filename", "to", "name", "itinerary"], handler: filename },
+  { signatureWords: ["be", "filename", "ob", "name", "text", "to", "name", "itinerary"], handler: filename }
 ];

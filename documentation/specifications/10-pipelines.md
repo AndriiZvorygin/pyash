@@ -8,7 +8,8 @@ Purpose: define refinery declarations, stage execution semantics, and determinis
 | --- | --- | --- |
 | `be refinery def ... prah` | refinery declaration block | define staged workflow |
 | `su name <stage>` | stage identifier | unique stage node |
-| `from ve name ...` | stage dependencies | explicit prior-stage requirements |
+| `from name ...` | single dependency link | explicit prior-stage requirement |
+| `from ve name ...` | multi-dependency link | explicit prior-stage requirements |
 | `be refinery do` | execute refinery | run declared pipeline |
 | `be reiterate ya` | retry marker | bounded retry reporting |
 | `be checkpoint ya` | checkpoint marker | deterministic reuse/trace |
@@ -31,6 +32,10 @@ ob text "task" from name plan loop to name text result be refinery do
 - explicit fail/success path,
 - bounded retry behavior,
 - replay visibility through run recording.
+
+Dependency encoding rule:
+- use `from name <dep>` when exactly one dependency is referenced,
+- use `from ve name <dep1> name <dep2> ...` when multiple dependencies are referenced.
 
 ## 4. Re-entry loop requirements
 
