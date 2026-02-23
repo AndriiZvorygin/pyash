@@ -1,5 +1,3 @@
-exists su name draw host ob text "http://host.docker.internal:8188" be default ya
-exists su name draw workflow default ob text "Z-Image-TSV" be default ya
 exists su name teaching cuts ob filename "/workplace/examples/out/love-of-god-30s.srt.cuts.pya" be itinerary ya
 from name itinerary teaching cuts ob text "Generate one photograph per cut from its footnote text." fromstate wo text become wo photograph to filename "/workplace/examples/out/love-of-god-30s-cuts" as text "love-of-god-30s" be draw do
 ob text "ls -1 /workplace/examples/out/love-of-god-30s-cuts | head -n 12" to name text draw preview be command do
