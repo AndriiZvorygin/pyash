@@ -25,8 +25,70 @@ Use both sources to choose a hook image that previews the whole narrative and vi
 
 Respond with just the image prompt..text.quoted be text ya
 
+exists su name brief video script mind be mind as name "qwq32b-ctx12k" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+
+exists su name brief video script prompt begin ob text quoted.text.Target: 30-60 second Short
+
+Hard rules (must obey exactly):
+- Total spoken words: 70-110
+- Total sentences: 6-9
+- Hook: exactly 6-9 words (ideal 7)
+- Shocking Fact 1: 18-24 words
+- Common Thread: 22-28 words
+- Shocking Fact 2 + modern parallel: 18-24 words
+- Uplifting vision + CTA: 12-18 words
+
+Structure order (always in this order):
+1. Hook
+2. Shocking Fact 1
+3. Common Thread (this pattern is repeating today)
+4. Shocking Fact 2 + modern parallel
+5. Uplifting vision / solution tease + strong CTA
+
+Rules:
+- Max 2 short sentences per section
+- Every subtitle line: maximum 6 words (max 2 lines at once)
+- Tone: dramatic and authoritative, end hopeful
+
+Use only the strongest parts from this transcript:
+[PASTE BEST MOMENTS / SUMMARY - keep under 7k tokens]
+
+.text.quoted be text ya
+
+exists su name brief video script prompt end ob text quoted.text.
+Output ONLY in this exact format, nothing else:
+
+HOOK: "exact 6-9 words here"
+
+SECTION 1 - Shocking Fact 1:
+SPOKEN: "text here"
+SUBTITLES:
+Line 1: max 6 words
+Line 2: max 6 words (if needed)
+
+SECTION 2 - Common Thread:
+SPOKEN: "text here"
+SUBTITLES:
+...
+
+SECTION 3 - Shocking Fact 2 + Modern:
+SPOKEN: "text here"
+SUBTITLES:
+...
+
+SECTION 4 - Uplifting + CTA:
+SPOKEN: "text here"
+SUBTITLES:
+...
+
+Total spoken words: XX
+Total sentences: X.text.quoted be text ya
+
 su name brief video from text manuscript be ceremony def
-  su name manuscript ob text of from of this fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. In the very first 3 seconds, the spoken hook must be exactly 6-9 words (ideal 7) with slow, dramatic delivery. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
+  su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
+  su name script request source stage ob text of from of this to name brief video script request be plus do
+  su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
+  su name manuscript ob name brief video script request for name brief video script mind to name text manuscript out be write do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
@@ -73,7 +135,10 @@ su name brief video from text manuscript be ceremony def
 prah
 
 su name brief video from text manuscript to filename video short be ceremony def
-  su name manuscript ob text of from of this fromtext text "Write one spoken narration script of about 30 seconds (about 75 words). Summarize the core historical claim and warning in clear, plain language. In the very first 3 seconds, the spoken hook must be exactly 6-9 words (ideal 7) with slow, dramatic delivery. No lists, no markdown, no quotes." for name mind to name text manuscript out be write do
+  su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
+  su name script request source stage ob text of from of this to name brief video script request be plus do
+  su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
+  su name manuscript ob name brief video script request for name brief video script mind to name text manuscript out be write do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
