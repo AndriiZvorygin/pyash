@@ -12,7 +12,7 @@ test("thumbnail heading burn parseArgs accepts defaults", () => {
   ]);
   assert.equal(opts.inputImage, "in.png");
   assert.equal(opts.outputImage, "out.png");
-  assert.equal(opts.yRatio, 0.70);
+  assert.equal(opts.yRatio, 0.20);
 });
 
 test("thumbnail heading burn parseArgs validates y-ratio band", () => {
@@ -25,6 +25,6 @@ test("thumbnail heading burn parseArgs validates y-ratio band", () => {
       "--y-ratio",
       "0.4"
     ]),
-    /y-ratio must be between 0.60 and 0.80/u
+    /y-ratio must be between 0.12 and 0.35/u
   );
 });

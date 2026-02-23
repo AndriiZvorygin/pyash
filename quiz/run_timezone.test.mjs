@@ -67,7 +67,7 @@ test("run uses timezone from config when writing run start", async () => {
     const newspaperPath = path.join(tmpDir, "newspaper", "tz-run.pya");
     const output = await fs.readFile(newspaperPath, "utf8");
     const runLine = output.split("\n").find(line => line.includes(" be run ya"));
-    assert.ok(runLine && /from time \d{4}-\d{2}-\d{2}T/.test(runLine), "expected run line with ISO timestamp");
+    assert.ok(runLine && /since name \d{4}-\d{2}-\d{2}T/.test(runLine), "expected run line with ISO timestamp");
     assert.ok(/[-+]\d{2}:\d{2}/.test(runLine), "expected timezone offset in run line");
   } finally {
     process.chdir(originalCwd);

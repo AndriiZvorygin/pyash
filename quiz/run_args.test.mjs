@@ -17,8 +17,16 @@ async function writeProgram(text) {
   return file;
 }
 
+async function writeInputFixture() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-run-fixture-"));
+  const file = path.join(dir, "input.txt");
+  await fs.writeFile(file, "fixture input text\n", "utf8");
+  return file;
+}
+
 test("run_pya_program binds shorthand filename when one filename input is declared", async () => {
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const inputFile = await writeInputFixture();
   const program = await writeProgram([
     "ob filename text manuscript be input ya",
     "from filename of ob of manuscript become wo text to name text out be read do"
@@ -30,7 +38,7 @@ test("run_pya_program binds shorthand filename when one filename input is declar
   });
   assert.notEqual(missing.status, 0, "expected missing binding to fail");
 
-  const withBinding = spawnSync(process.execPath, [runPath, program, "know/input/latifundia.txt"], {
+  const withBinding = spawnSync(process.execPath, [runPath, program, inputFile], {
     cwd: repoRoot,
     encoding: "utf8"
   });
@@ -39,11 +47,12 @@ test("run_pya_program binds shorthand filename when one filename input is declar
 
 test("run_pya_program rejects shorthand when multiple filename inputs exist", async () => {
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const inputFile = await writeInputFixture();
   const program = await writeProgram([
     "ob ve filename text manuscript filename text outline be input ya",
     "ob text \"ok\" be write do"
   ].join("\n"));
-  const out = spawnSync(process.execPath, [runPath, program, "know/input/latifundia.txt"], {
+  const out = spawnSync(process.execPath, [runPath, program, inputFile], {
     cwd: repoRoot,
     encoding: "utf8"
   });
@@ -52,13 +61,14 @@ test("run_pya_program rejects shorthand when multiple filename inputs exist", as
 
 test("run_pya_program accepts explicit ob...to name binding tail", async () => {
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const inputFile = await writeInputFixture();
   const program = await writeProgram([
     "ob filename text manuscript be input ya",
     "from filename of ob of manuscript become wo text to name text out be read do"
   ].join("\n"));
   const out = spawnSync(
     process.execPath,
-    [runPath, program, "ob", "filename", "know/input/latifundia.txt", "to", "name", "manuscript"],
+    [runPath, program, "ob", "filename", inputFile, "to", "name", "manuscript"],
     { cwd: repoRoot, encoding: "utf8" }
   );
   assert.equal(out.status, 0, `expected explicit binding to satisfy runtime input\nstderr:\n${out.stderr || ""}`);

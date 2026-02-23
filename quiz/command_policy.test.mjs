@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { command, classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
+import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 
 test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("cat README.md"), "read_only");
@@ -289,4 +290,35 @@ test("command sandbox allows world conduct project roots for an agent", async ()
   assert.equal(result?.be, "command");
   const written = await fs.readFile(outputFile, "utf8");
   assert.match(written, /allowed/);
+});
+
+test("command audit omits unknown class in by while preserving known classes", async () => {
+  forget();
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence), runRoot: process.cwd() });
+  try {
+    await interpret(parse("su name command configure be map def"));
+    await interpret(parse("su name policy mode ob wo allow ya"));
+    await interpret(parse("su name classifier enabled ob bool truth ya"));
+    await interpret(parse("prah"));
+
+    await command({
+      mood: "do",
+      be: "command",
+      ob: { text: "true" }
+    });
+    const unknownAudit = records.find((sentence) => sentence?.be === "command audit");
+    assert.ok(unknownAudit);
+    assert.equal(unknownAudit.by, undefined);
+
+    await command({
+      mood: "do",
+      be: "command",
+      ob: { text: "echo hi" }
+    });
+    const knownAudit = records.find((sentence) => sentence?.be === "command audit" && sentence?.by?.name === "read_only");
+    assert.ok(knownAudit);
+  } finally {
+    clearExchangeRecorder();
+  }
 });

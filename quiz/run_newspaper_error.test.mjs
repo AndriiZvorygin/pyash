@@ -42,7 +42,7 @@ test("run newspaper records surfaced error", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.equal(lines[0], "exists su name run-err from time 2025-01-01T00:00:00Z be run ya");
+  assert.equal(lines[0], "exists su name run-err since name 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines[1].startsWith("ob filename "));
   assert.ok(lines.some(line => line.includes("be error") && line.endsWith(" ya")));
   assert.equal(lines.at(-1), "exists su name run-err be end ya");

@@ -39,11 +39,21 @@ export async function enforceAutoDischarge({ activatingClass, rememberFn } = {})
   }
 
   if (activeClass === "mind") {
-    await dischargeDrawBackend({ rememberFn });
-    const released = ["draw"];
+    let drawReleased = false;
+    try {
+      await dischargeDrawBackend({ rememberFn });
+      drawReleased = true;
+    } catch {
+      drawReleased = false;
+    }
+    const released = drawReleased ? ["draw"] : [];
     if (classes.includes("hear")) {
-      const hear = await dischargeHearBackend({ rememberFn });
-      if (hear?.discharged) released.push("hear");
+      try {
+        const hear = await dischargeHearBackend({ rememberFn });
+        if (hear?.discharged) released.push("hear");
+      } catch {
+        // best-effort release
+      }
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
@@ -51,14 +61,27 @@ export async function enforceAutoDischarge({ activatingClass, rememberFn } = {})
   }
 
   if (activeClass === "draw") {
-    const warm = await listWarmOllamaMinds({ rememberFn });
+    let warm = [];
+    try {
+      warm = await listWarmOllamaMinds({ rememberFn });
+    } catch {
+      warm = [];
+    }
     for (const model of warm) {
-      await dischargeOllamaMind(model, { rememberFn });
+      try {
+        await dischargeOllamaMind(model, { rememberFn });
+      } catch {
+        // best-effort release
+      }
     }
     const released = warm.length ? ["mind"] : [];
     if (classes.includes("hear")) {
-      const hear = await dischargeHearBackend({ rememberFn });
-      if (hear?.discharged) released.push("hear");
+      try {
+        const hear = await dischargeHearBackend({ rememberFn });
+        if (hear?.discharged) released.push("hear");
+      } catch {
+        // best-effort release
+      }
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
@@ -66,12 +89,27 @@ export async function enforceAutoDischarge({ activatingClass, rememberFn } = {})
   }
 
   if (activeClass === "hear") {
-    await dischargeDrawBackend({ rememberFn });
-    const warm = await listWarmOllamaMinds({ rememberFn });
-    for (const model of warm) {
-      await dischargeOllamaMind(model, { rememberFn });
+    let drawReleased = false;
+    try {
+      await dischargeDrawBackend({ rememberFn });
+      drawReleased = true;
+    } catch {
+      drawReleased = false;
     }
-    const released = ["draw"];
+    let warm = [];
+    try {
+      warm = await listWarmOllamaMinds({ rememberFn });
+    } catch {
+      warm = [];
+    }
+    for (const model of warm) {
+      try {
+        await dischargeOllamaMind(model, { rememberFn });
+      } catch {
+        // best-effort release
+      }
+    }
+    const released = drawReleased ? ["draw"] : [];
     if (warm.length > 0) released.push("mind");
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);

@@ -123,6 +123,23 @@ function rememberInLocalWrites(localWrites, name) {
   return undefined;
 }
 
+function preserveActionMetadata(outputFact, actionSentence) {
+  if (!outputFact || !actionSentence) return;
+  const passthroughCases = [
+    "to",
+    "from",
+    "fromtext",
+    "totext",
+    "fromstate",
+    "become"
+  ];
+  for (const key of passthroughCases) {
+    if (outputFact[key] !== undefined) continue;
+    if (actionSentence[key] === undefined) continue;
+    outputFact[key] = cloneValue(actionSentence[key]);
+  }
+}
+
 function collectExportFacts({ localWrites, autoExportNames, explicitExportNames }) {
   const names = new Set();
   for (const name of autoExportNames ?? []) names.add(name);
@@ -523,15 +540,9 @@ export function recordPlatform(sentence) {
       raw: sentence
     });
   }
-  const name = sentence?.su?.name;
-  if (!name) {
-    throwErrorSentence({
-      name: "platform defective",
-      message: "platform name required",
-      from: { name: "interpret" },
-      raw: sentence
-    });
-  }
+  const explicitName = typeof sentence?.su?.name === "string" ? sentence.su.name.trim() : "";
+  const generatedName = `platform ${frame.order.length + 1}`;
+  const name = explicitName || generatedName;
   if (frame.platforms.has(name)) {
     throwErrorSentence({
       name: "platform defective",
@@ -542,9 +553,12 @@ export function recordPlatform(sentence) {
   }
   let deps = [];
   let hasExplicitDependency = false;
+  let consumedDependencyVector = false;
+  let consumedDependencyName = false;
   let primaryFromCase = null;
   let actionSentence = null;
   if (sentence.from?.ve?.type === "name" && Array.isArray(sentence.from.ve.values)) {
+    consumedDependencyVector = true;
     const tokens = dependencyTokensFromVector(sentence.from.ve.values);
     for (const token of tokens) {
       let resolved = resolveDependencyToken(frame, token);
@@ -581,6 +595,11 @@ export function recordPlatform(sentence) {
     const fromName = String(sentence.from.name);
     const resolved = resolveDependencyToken(frame, fromName);
     if (resolved) {
+      consumedDependencyName = true;
+      primaryFromCase = { name: fromName };
+      if (Array.isArray(sentence.from?.nameTypeWords) && sentence.from.nameTypeWords.length > 0) {
+        primaryFromCase.nameTypeWords = sentence.from.nameTypeWords.map((word) => String(word));
+      }
       assertDependencyTypeMatch({
         dependencyToken: fromName,
         expectedTypeWords: sentence.from?.nameTypeWords ?? [],
@@ -589,7 +608,7 @@ export function recordPlatform(sentence) {
       hasExplicitDependency = true;
       deps = [resolved.dep];
     }
-  } else if (sentence.from && (sentence.from.filename || sentence.from.text || sentence.from.name || sentence.from.genitive)) {
+  } else if (sentence.from && (sentence.from.filename || sentence.from.text || sentence.from.name || sentence.from.genitive || sentence.from.wo)) {
     // allow non-depend "from" cases (e.g. from filename) to pass through as part of the action
   } else if (sentence.from) {
     throwErrorSentence({
@@ -609,16 +628,44 @@ export function recordPlatform(sentence) {
     if (!targetName || targetTypeWords.length === 0) return null;
     return { name: String(targetName), typeWords: targetTypeWords.map(w => String(w)) };
   })();
+  if (typeof sentence?.be !== "string" || !sentence.be.trim()) {
+    throwErrorSentence({
+      name: "platform defective",
+      message: "platform activity required",
+      from: { name: "interpret" },
+      raw: sentence
+    });
+  }
   actionSentence = { ...sentence };
-  if (actionSentence.from?.ve?.type === "name" || (typeof actionSentence.from?.name === "string" && actionSentence.from.name)) {
-    const { ve, ...fromRest } = actionSentence.from;
-    if (ve?.type === "name") fromRest.ve = undefined;
+  if (consumedDependencyVector || consumedDependencyName) {
+    const fromRest = { ...(actionSentence.from ?? {}) };
+    if (consumedDependencyVector) delete fromRest.ve;
+    if (consumedDependencyName) {
+      delete fromRest.name;
+      delete fromRest.nameTypeWords;
+    }
+    if (primaryFromCase) {
+      if (fromRest.name === undefined) fromRest.name = primaryFromCase.name;
+      if (fromRest.nameTypeWords === undefined && Array.isArray(primaryFromCase.nameTypeWords)) {
+        fromRest.nameTypeWords = [...primaryFromCase.nameTypeWords];
+      }
+    }
     const cleaned = Object.fromEntries(Object.entries(fromRest).filter(([, v]) => v !== undefined));
     if (Object.keys(cleaned).length > 0) actionSentence.from = cleaned;
-    else if (primaryFromCase) actionSentence.from = { ...primaryFromCase };
     else delete actionSentence.from;
   }
-  frame.platforms.set(name, { deps, actionSentence, outputContract });
+  let runtimeActionSentence = actionSentence;
+  if (consumedDependencyVector || consumedDependencyName) {
+    runtimeActionSentence = { ...actionSentence };
+    const runtimeFrom = { ...(runtimeActionSentence.from ?? {}) };
+    delete runtimeFrom.ve;
+    delete runtimeFrom.name;
+    delete runtimeFrom.nameTypeWords;
+    const cleaned = Object.fromEntries(Object.entries(runtimeFrom).filter(([, v]) => v !== undefined));
+    if (Object.keys(cleaned).length > 0) runtimeActionSentence.from = cleaned;
+    else delete runtimeActionSentence.from;
+  }
+  frame.platforms.set(name, { deps, actionSentence, runtimeActionSentence, outputContract });
   frame.order.push(name);
   return { recorded: true };
 }
@@ -860,8 +907,9 @@ export async function runRefinery({
         from: { name: "interpret" }
       });
     }
+    const runnableSentence = platform.runtimeActionSentence ?? platform.actionSentence;
     if (onEvoke) onEvoke(platform.actionSentence);
-    if (platform.actionSentence?.mood === "propose") {
+    if (runnableSentence?.mood === "propose") {
       if (resumeGate) {
         const matchesName = resumeGate.platformName && resumeGate.platformName === nextName;
         const matchesIndex = resumeGate.index >= 0 && resumeGate.index === refinery.order.indexOf(nextName);
@@ -891,7 +939,7 @@ export async function runRefinery({
           continue;
         }
       }
-      const decisionName = platform.actionSentence?.to?.name ?? null;
+      const decisionName = runnableSentence?.to?.name ?? null;
       const resumeToken = buildResumeToken({
         runId,
         refineryName: name,
@@ -902,7 +950,7 @@ export async function runRefinery({
       const proposeSentence = buildProposeSentence({
         refineryName: name,
         platformName: nextName,
-        actionSentence: platform.actionSentence,
+        actionSentence: runnableSentence,
         resumeToken,
         decisionName
       });
@@ -912,13 +960,13 @@ export async function runRefinery({
     const deps = platform.deps ?? [];
     const sortedDeps = [...deps].sort(compareUtf8);
     const depResults = sortedDeps.map(dep => results.get(dep) ?? "");
-    const actionLine = sentenceToPyash(platform.actionSentence);
+    const actionLine = sentenceToPyash(runnableSentence);
     const loopCursorParts = [];
-    if (platform.actionSentence?.fromindex !== undefined) {
-      loopCursorParts.push(`fromindex:${JSON.stringify(platform.actionSentence.fromindex)}`);
+    if (runnableSentence?.fromindex !== undefined) {
+      loopCursorParts.push(`fromindex:${JSON.stringify(runnableSentence.fromindex)}`);
     }
-    if (platform.actionSentence?.toindex !== undefined) {
-      loopCursorParts.push(`toindex:${JSON.stringify(platform.actionSentence.toindex)}`);
+    if (runnableSentence?.toindex !== undefined) {
+      loopCursorParts.push(`toindex:${JSON.stringify(runnableSentence.toindex)}`);
     }
     const localScopeSnapshot = {};
     for (const slotName of REFINERY_LOCAL_SLOT_NAMES) {
@@ -968,7 +1016,7 @@ export async function runRefinery({
       let scopeSlots = {};
       pushMemoryContext({ seedFromCurrent: true });
       const localStart = allRemember().length;
-      const outputHandleName = String(platform.actionSentence?.to?.name ?? nextName).trim() || nextName;
+      const outputHandleName = String(runnableSentence?.to?.name ?? nextName).trim() || nextName;
       const scopeFrame = {
         exports: new Set(),
         autoExport: new Set([
@@ -988,15 +1036,15 @@ export async function runRefinery({
           state.currentEvokeRef = depRefFact;
         }
         try {
-          result = await interpret(platform.actionSentence);
+          result = await interpret(runnableSentence);
         } catch (err) {
           result = normalizeRefineryError(err, {
             refineryName: name,
             platformName: nextName,
-            actionSentence: platform.actionSentence
+            actionSentence: runnableSentence
           });
         }
-        const resultSentence = resolveResultSentence(result, platform.actionSentence);
+        const resultSentence = resolveResultSentence(result, runnableSentence);
         surfaced = surfaceErrorSentence(resultSentence);
         const localWrites = allRemember().slice(localStart);
         if (
@@ -1007,12 +1055,14 @@ export async function runRefinery({
           localWrites.push({
             mood: "ya",
             su: { name: outputHandleName },
-            be: surfaced?.be ?? platform.actionSentence?.be ?? "result",
+            be: surfaced?.be ?? runnableSentence?.be ?? "result",
             ob: cloneValue(surfaced.ob)
           });
         }
+        const outputFact = rememberInLocalWrites(localWrites, outputHandleName);
+        preserveActionMetadata(outputFact, runnableSentence);
         if (!(surfaced?.be === "error" && surfaced?.mood === "ya")) {
-          if (!shouldSkipOutputContract({ outputContract: platform.outputContract, actionSentence: platform.actionSentence })) {
+          if (!shouldSkipOutputContract({ outputContract: platform.outputContract, actionSentence: runnableSentence })) {
             validateOutputContract({
               outputContract: platform.outputContract,
               localWrites,
@@ -1031,7 +1081,7 @@ export async function runRefinery({
         surfaced = normalizeRefineryError(err, {
           refineryName: name,
           platformName: nextName,
-          actionSentence: platform.actionSentence
+          actionSentence: runnableSentence
         });
       } finally {
         state.currentEvoke = prevEvoke;
@@ -1062,13 +1112,13 @@ export async function runRefinery({
         if (onResult) onResult(surfaced);
         lastResult = surfaced;
       }
-      const resultLine = sentenceToPyash(surfaced ?? platform.actionSentence);
+      const resultLine = sentenceToPyash(surfaced ?? runnableSentence);
       results.set(nextName, resultLine);
       const checkpointSentence = buildCheckpointSentence({
         refineryName: name,
         platformName: nextName,
         hash: checkpointHash,
-        resultSentence: surfaced ?? platform.actionSentence,
+        resultSentence: surfaced ?? runnableSentence,
         resultLine,
         exportFacts: lastExportFacts,
         scopeSlots: lastScopeSlots

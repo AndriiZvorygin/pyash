@@ -75,7 +75,7 @@ test("refinery rejects missing activity clause", async () => {
   forget();
   await interpret(parse("su name build be refinery def"));
   await assert.rejects(
-    () => interpret(parse("ob text \"ok\" be write do")),
+    () => interpret(parse("su name step ya")),
     (err) => err?.sentence?.su?.name === "platform defective"
   );
 });
