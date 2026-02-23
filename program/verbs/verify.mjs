@@ -18,6 +18,7 @@ function resolveVerifyMode(sentence) {
   const mode = String(sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name ?? "pyash").trim().toLowerCase();
   if (!mode || mode === "pyash") return "pyash";
   if (mode === "word count") return "word count";
+  if (mode === "letter count") return "letter count";
   throwVerifyError(`verify defective: unsupported mode ${mode}`, { sentence });
 }
 
@@ -43,7 +44,7 @@ async function resolvePyashSourceText(sentence, { rememberFn = remember } = {}) 
   throwVerifyError("verify defective: expected from filename or ob text", { sentence });
 }
 
-function resolveWordCountBounds(sentence) {
+function resolveCountBounds(sentence) {
   const atleastRaw = sentence?.atleast?.num;
   const atmostRaw = sentence?.atmost?.num;
   const atleast = Number.isFinite(atleastRaw) ? Number(atleastRaw) : null;
@@ -62,7 +63,11 @@ function countWords(text) {
   return matches ? matches.length : 0;
 }
 
-async function resolveWordCountSourceText(sentence, { rememberFn = remember } = {}) {
+function countLetters(text) {
+  return Array.from(String(text ?? "")).length;
+}
+
+async function resolveCountSourceText(sentence, { rememberFn = remember } = {}) {
   if (typeof sentence?.ob?.text === "string") {
     return { text: sentence.ob.text, source: "ob text" };
   }
@@ -83,21 +88,23 @@ async function resolveWordCountSourceText(sentence, { rememberFn = remember } = 
   throwVerifyError("verify defective: expected from filename or from name or ob text", { sentence });
 }
 
-async function verifyWordCount(sentence, { rememberFn = remember } = {}) {
-  const { text, source } = await resolveWordCountSourceText(sentence, { rememberFn });
-  const { atleast, atmost } = resolveWordCountBounds(sentence);
-  const words = countWords(text);
+async function verifyCount(sentence, { mode, rememberFn = remember } = {}) {
+  const { text, source } = await resolveCountSourceText(sentence, { rememberFn });
+  const { atleast, atmost } = resolveCountBounds(sentence);
+  const countKey = mode === "letter count" ? "letters" : "words";
+  const countValue = mode === "letter count" ? countLetters(text) : countWords(text);
   const pass =
-    (atleast === null || words >= atleast)
-    && (atmost === null || words <= atmost);
+    (atleast === null || countValue >= atleast)
+    && (atmost === null || countValue <= atmost);
   return {
     ob: {
       map: {
         pass,
-        words,
+        [countKey]: countValue,
         atleast,
         atmost,
-        source
+        source,
+        mode
       }
     },
     be: "map"
@@ -106,12 +113,42 @@ async function verifyWordCount(sentence, { rememberFn = remember } = {}) {
 
 export async function verify(sentence, { remember: rememberFn = remember } = {}) {
   const mode = resolveVerifyMode(sentence);
-  if (mode === "word count") {
-    return verifyWordCount(sentence, { rememberFn });
+  if (mode === "word count" || mode === "letter count") {
+    return verifyCount(sentence, { mode, rememberFn });
   }
   const { text, source } = await resolvePyashSourceText(sentence, { rememberFn });
   const report = verifyPyashText(text, { source });
   return buildVerifyOutcomeSeries(report);
+}
+
+const countModeSignatureTails = [
+  ["atleast", "num", "atmost", "num", "from", "filename"],
+  ["atleast", "num", "atmost", "num", "from", "name", "num"],
+  ["atleast", "num", "atmost", "num", "from", "name", "text"],
+  ["atleast", "num", "atmost", "num", "from", "name", "filename"],
+  ["atleast", "num", "atmost", "num", "ob", "text"],
+  ["atleast", "num", "atmost", "num", "from", "filename", "to", "name", "num"],
+  ["atleast", "num", "atmost", "num", "from", "filename", "to", "name", "text"],
+  ["atleast", "num", "atmost", "num", "from", "filename", "to", "name", "map"],
+  ["atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "num"],
+  ["atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "text"],
+  ["atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "map"],
+  ["atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "num"],
+  ["atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "text"],
+  ["atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map"],
+  ["atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "num"],
+  ["atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "text"],
+  ["atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "map"],
+  ["atleast", "num", "atmost", "num", "ob", "text", "to", "name", "num"],
+  ["atleast", "num", "atmost", "num", "ob", "text", "to", "name", "text"],
+  ["atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map"]
+];
+
+function buildCountModeSignatures(mode) {
+  return countModeSignatureTails.map((tail) => ({
+    signatureWords: ["be", "verify", "as", "wo", mode, ...tail],
+    handler: verify
+  }));
 }
 
 export const signatures = [
@@ -135,26 +172,8 @@ export const signatures = [
   { signatureWords: ["be", "verify", "ob", "text", "as", "wo", "pyash", "to", "name", "series", "do"], handler: verify },
   { signatureWords: ["be", "verify", "as", "wo", "pyash", "ob", "text", "to", "name", "series"], handler: verify },
   { signatureWords: ["be", "verify", "as", "wo", "pyash", "ob", "text", "to", "name", "series", "do"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "filename"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "filename"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "ob", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "filename", "to", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "filename", "to", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "filename", "to", "name", "map"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "num", "to", "name", "map"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "from", "name", "filename", "to", "name", "map"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "num"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "text"], handler: verify },
-  { signatureWords: ["be", "verify", "as", "wo", "word count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map"], handler: verify }
+  ...buildCountModeSignatures("word count"),
+  ...buildCountModeSignatures("letter count")
 ];
 
 export default verify;

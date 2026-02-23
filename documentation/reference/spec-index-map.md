@@ -20,6 +20,7 @@ Use this when the cheat sheet is not enough.
 - **Web search** → `12-web-and-browser.md`
 - **Teaching-video refinery pipeline** → `25-teaching-video.md`
 - **Verify output envelope (provisional)** → `documentation/reference/verify-envelope.md`
+- **Verify count modes (word/letter count)** → `documentation/reference/verify-count-modes.md`
 - **Better compare refinery profile (reference)** → `documentation/reference/better-compare-refinery.md`
 - **Chirp refinery profile (reference)** → `documentation/reference/chirp-refinery.md`
 - **Brief manuscript refinery profile (reference)** → `documentation/reference/brief-manuscript-refinery.md`

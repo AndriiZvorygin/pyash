@@ -13,6 +13,7 @@
 - `documentation/reference/pyash-cli-modules.md` — module ownership, low-churn update checklist, and CLI regression guardrails.
 - `documentation/reference/agent-tui-session-projection.md` — implementation reference for external TUI (`.codex`) to Pyash session/newspaper projection.
 - `documentation/reference/verify-envelope.md` — provisional sentence envelope for `verify` outcomes.
+- `documentation/reference/verify-count-modes.md` — reference profile for `verify` word/letter count modes.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
