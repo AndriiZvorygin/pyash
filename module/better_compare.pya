@@ -1,8 +1,8 @@
 su name better compare judge to name text decision be ceremony def
   ob name text better compare judge prompter to name text better compare judge request be text do
-  ob text "\n\nA:\n" to name better compare judge request be plus do
+  ob text "\n\nInput A:\n" to name better compare judge request be plus do
   ob name text better compare candidate a to name better compare judge request be plus do
-  ob text "\n\nB:\n" to name better compare judge request be plus do
+  ob text "\n\nInput B:\n" to name better compare judge request be plus do
   ob name text better compare candidate b to name better compare judge request be plus do
   ob text "\n\nReply with only A or B." to name better compare judge request be plus do
   ob name text better compare judge request for name mind to name text better compare judge raw be write do
