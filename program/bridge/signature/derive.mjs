@@ -380,7 +380,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     if ((key === "by" || key === "atindex") && value?.register) continue; // skip map/loop register helpers
     if (isMindWrite && (key === "fromtext" || key === "accordingto")) continue;
     if (isSession && (key === "fromtext" || key === "accordingto")) continue;
-    const signatureCaseKey = isMindWrite && key === "atmost" ? "by" : key;
+    const signatureCaseKey = key;
     const typeWords = caseTypeWordsWithMemory(value, remember, verb, signatureCaseKey);
     if (typeWords.length === 0) {
       console.error("derive-signature-fail", { key, value, verb });

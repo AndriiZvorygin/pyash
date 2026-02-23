@@ -14,6 +14,7 @@ Add Pyash modules in `module/`, wire them into the default config, and verify be
 1. **Locate the existing module pattern**
 - Scan `module/` for adjacent modules or variants (e.g., `read_*`, `compile_*`).
 - Prefer composing existing modules or sharing helper pipelines.
+- If the user provides a proven example/refinery path, treat it as canonical: copy that flow first, then apply only requested adjustments (budgets, names, signatures).
 
 2. **Author the new module**
 - Create a `.pya` file under `module/` with a descriptive name.
@@ -21,6 +22,7 @@ Add Pyash modules in `module/`, wire them into the default config, and verify be
 - Keep modules concise and rely on existing verbs where possible.
 - When resolving typed genitives in interpreter code, use `applyResolvedTypedValue` (from `program/bridge/imperative_helpers.mjs`) so genitive lvalues remain intact.
 - For wrapper ceremonies that forward typed cases (especially `for name mind`), ensure `nameTypeWords` survives genitive resolution (for example `for name of for of this`). If `nameTypeWords` is lost, signature derivation may fall back to `num` and dispatch will fail.
+- For staged mind pipelines, mirror proven stage guards (`verify`, retries, decode caps such as `atmost`) from the canonical example before introducing new structure.
 
 3. **Wire the module into defaults**
 - Import the module in `configure/default.pya`.
