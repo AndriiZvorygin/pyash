@@ -2,37 +2,38 @@ exists su name stream stdout ob bool truth be default ya
 
 as wo ollama be discharge do
 
+ su name mind configure be map def
+    su name think ob bool lie ya
+  prah
+
+
 exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 
-exists su name brief video script prompt begin ob text quoted.text.Target: 30-60 second Short
+exists su name brief video script prompt begin ob text quoted.text.Target: 70-110 word brief video script
 
 Hard rules (must obey exactly):
 - Total spoken words: 70-110
 - Total sentences: 6-9
-- Hook: exactly 6-9 words (ideal 7)
-- Shocking Fact 1: 18-24 words
-- Common Thread: 22-28 words
-- Shocking Fact 2 + modern parallel: 18-24 words
-- Uplifting vision + CTA: 12-18 words
 
 Structure order (always in this order):
-1. Hook
-2. Shocking Fact 1
-3. Common Thread (this pattern is repeating today)
-4. Shocking Fact 2 + modern parallel
-5. Uplifting vision / solution tease + strong CTA
+1. Hook: exactly 6-9 words (ideal 7)
+2. Shocking Fact 1: 18-24 words
+3. Common Thread: 22-28 words (this pattern is repeating today)
+4. Shocking Fact 2 + modern parallel: 18-24 words
+5. Uplifting vision/solution tease: 12-18 words
+6. strong CTA (3-5 words)
 
 Rules:
-- Max 2 short sentences per section
+- 1-2 sentences per section, at least 70 words in total
 - Every subtitle line: maximum 6 words (max 2 lines at once)
 - Tone: dramatic and authoritative, end hopeful
+- Format: avoid words like not or n't, and produce only the final script
 
 Use only the strongest parts from this transcript:
-[PASTE BEST MOMENTS / SUMMARY - keep under 7k tokens]
-
 .text.quoted be text ya
 
 exists su name brief video script prompt end ob text quoted.text.
+limit thinking revisions to 3-4 and then produce the best one.
 Output ONLY in the script, nothing else.text.quoted be text ya
 
 su name source stage from filename "know/input/solon.txt" become wo text to name text manuscript source be read do
