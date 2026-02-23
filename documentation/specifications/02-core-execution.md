@@ -237,6 +237,7 @@ The following error names are stable and MUST be supported:
 * `platform defective`
 * `depend defective`
 * `again defective`
+* `evoke clause defective`
 
 Additional error names MAY be introduced by later specifications.
 
