@@ -144,6 +144,15 @@ function readMapNum(map, keys = []) {
   return null;
 }
 
+function normalizeNumPredict(value) {
+  if (value === undefined || value === null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const whole = Math.trunc(numeric);
+  if (whole <= 0) return null;
+  return whole;
+}
+
 function readMapText(map, keys = []) {
   for (const key of keys) {
     const text = entryText(map?.[key]);
@@ -300,15 +309,21 @@ export async function mind_to_name_text(sentence, {
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
-  const configuredNumPredict =
+  const configuredNumPredict = normalizeNumPredict(
     resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "num predict", { rememberFn: remember })
-    ?? resolveConfigMapNum("mind configure", "num_predict", { rememberFn: remember });
+    ?? resolveConfigMapNum("mind configure", "num_predict", { rememberFn: remember })
+  );
+  const callNumPredict = normalizeNumPredict(
+    sentence?.atmost?.num
+    ?? sentence?.atmost?.quantity?.num
+  );
   const effectiveModelTuning = (() => {
     const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
     if (typeof configuredThink === "boolean") tuning.think = configuredThink;
-    if (Number.isFinite(Number(configuredNumPredict))) tuning.numPredict = Number(configuredNumPredict);
+    if (configuredNumPredict !== null) tuning.numPredict = configuredNumPredict;
+    if (callNumPredict !== null) tuning.numPredict = callNumPredict;
     return tuning;
   })();
 

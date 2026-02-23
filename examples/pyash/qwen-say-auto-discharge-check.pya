@@ -1,0 +1,3 @@
+su name provider auto discharge ob bool truth ya
+su name script line ob text "Summarize Solon in one short sentence." for name mind to name script out atmost num 24 be write do
+su name qwen auto discharge check ob name script out to filename "artifacts/say/qwen-auto-discharge-check.wav" be qwen say do

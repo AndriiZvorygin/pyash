@@ -22,9 +22,10 @@ function autoDischargeEnabled({ rememberFn } = {}) {
 }
 
 function gpuExclusiveClasses({ rememberFn } = {}) {
+  const baseline = ["mind", "draw", "hear", "qwen say"];
   const configured = resolveConfigSeries("gpu exclusive classes", { rememberFn });
-  if (configured && configured.length) return normalizeClassList(configured);
-  return ["mind", "draw", "hear", "qwen say"];
+  if (!configured || configured.length === 0) return baseline;
+  return normalizeClassList([...configured, ...baseline]);
 }
 
 function normalizeModelRef(value) {
