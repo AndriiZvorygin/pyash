@@ -43,6 +43,53 @@ function resolveMatrixConfigWithMap(rawConfig = {}) {
   };
 }
 
+function isAppserviceMode(mode) {
+  const value = String(mode ?? "").trim().toLowerCase();
+  return value === "appservice" || value === "appservice-push";
+}
+
+function applyAuthToUrl(url, { token, userId, mode } = {}) {
+  const text = String(url ?? "");
+  if (!isAppserviceMode(mode)) return text;
+  const parsed = new URL(text);
+  if (token) parsed.searchParams.set("access_token", String(token));
+  if (userId) parsed.searchParams.set("user_id", String(userId));
+  return parsed.toString();
+}
+
+function authHeaders({ token, mode, headers = {} } = {}) {
+  const next = { ...headers };
+  if (!isAppserviceMode(mode) && token) {
+    next.Authorization = `Bearer ${token}`;
+  }
+  return next;
+}
+
+async function ensureJoinedRoomId({ homeserver, token, userId, mode, roomIdOrAlias, fetchImpl = globalThis.fetch }) {
+  const encoded = encodeURIComponent(String(roomIdOrAlias ?? "").trim());
+  if (!encoded) return null;
+  const joinUrl = applyAuthToUrl(`${homeserver}/_matrix/client/v3/join/${encoded}`, {
+    token,
+    userId,
+    mode
+  });
+  const response = await fetchImpl(joinUrl, {
+    method: "POST",
+    headers: authHeaders({
+      token,
+      mode,
+      headers: { "Content-Type": "application/json" }
+    }),
+    body: "{}"
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`matrix join failed: status=${response.status}${payload?.errcode ? ` code=${payload.errcode}` : ""}${payload?.error ? ` error=${payload.error}` : ""}`);
+  }
+  const joinedRoomId = String(payload?.room_id ?? "").trim();
+  return joinedRoomId || String(roomIdOrAlias).trim();
+}
+
 async function initializeRuntimeConfig({ cwd, agentName }) {
   forget();
   clearSignatureHandlers();
@@ -81,6 +128,13 @@ async function sendMatrixSummary({ worldRoot, agentName, summaryText, roomOverri
     agentHouse,
     config: matrix
   });
+  const joinedRoomId = await ensureJoinedRoomId({
+    homeserver: creds.homeserver,
+    token: creds.token,
+    userId: matrix.user ?? creds.user,
+    mode: matrix.mode ?? "",
+    roomIdOrAlias: targetRoomId
+  });
   const adapter = createMatrixAdapter();
   await adapter.send({
     config: {
@@ -89,10 +143,10 @@ async function sendMatrixSummary({ worldRoot, agentName, summaryText, roomOverri
       token: creds.token,
       user: matrix.user ?? creds.user
     },
-    event: { channelId: targetRoomId },
+    event: { channelId: joinedRoomId || targetRoomId },
     content: summaryText
   });
-  return { sent: true, roomId: targetRoomId };
+  return { sent: true, roomId: joinedRoomId || targetRoomId };
 }
 
 async function main() {
