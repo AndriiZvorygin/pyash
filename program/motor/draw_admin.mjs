@@ -38,6 +38,18 @@ export async function restartDrawBackend({ rememberFn } = {}) {
 
 export async function dischargeDrawBackend({ rememberFn } = {}) {
   const host = resolveDrawHost({ rememberFn }).replace(/\/$/, "");
+  // Be aggressive on discharge so the next GPU platform can claim VRAM reliably.
+  // Some backends keep queued/executing state unless interrupted first.
+  try {
+    await postEmpty(`${host}/interrupt`);
+  } catch {
+    // ignore; not all backends expose interrupt
+  }
+  try {
+    await postJson(`${host}/queue`, { clear: true });
+  } catch {
+    // ignore; queue clear is best-effort
+  }
   await postJson(`${host}/free`, { unload_models: true, free_memory: true });
   return true;
 }

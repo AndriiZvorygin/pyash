@@ -227,12 +227,21 @@ export async function runGenerate({
     if (typeof checkInterrupted === "function") {
       await checkInterrupted();
     }
-    const backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
-    responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+    let backendResponse = null;
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts += 1;
+      backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+      responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+      if (responseText) break;
+      if (attempts < 2) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    }
     recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
     if (mindDebug) {
       // eslint-disable-next-line no-console
-      console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: responseText.length })}`);
+      console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: responseText.length, attempts })}`);
       if (!responseText) {
         // eslint-disable-next-line no-console
         console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", backendResponse: stripContext(backendResponse ?? {}) })}`);
