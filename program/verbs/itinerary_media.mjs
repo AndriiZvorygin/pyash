@@ -91,11 +91,55 @@ function windowCuts(rows = [], targetSeconds = 6) {
 }
 
 async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
-  const name = String(fromCase?.name ?? "").trim();
+  const dependencyNamesFromVectorCase = (source) => {
+    const values = Array.isArray(source?.ve?.values)
+      ? source.ve.values.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
+    if (!values.length) return [];
+    const dependencies = [];
+    let i = 0;
+    while (i < values.length) {
+      if (values[i] === "name") {
+        i += 1;
+        continue;
+      }
+      const words = [];
+      while (i < values.length && values[i] !== "name") {
+        words.push(values[i]);
+        i += 1;
+      }
+      const token = words.join(" ").trim();
+      if (token) dependencies.push(token);
+    }
+    return dependencies;
+  };
+
+  const resolveItineraryName = (source) => {
+    const fromName = String(source?.name ?? "").trim();
+    if (fromName) return fromName;
+
+    const dependencies = dependencyNamesFromVectorCase(source);
+    if (!dependencies.length) return "";
+
+    const typedItinerary = dependencies.find((token) => {
+      const parts = token.split(/\s+/).filter(Boolean);
+      return parts.length >= 2 && parts[0].toLowerCase() === "itinerary";
+    });
+    if (typedItinerary) {
+      return typedItinerary.split(/\s+/).slice(1).join(" ").trim();
+    }
+
+    const exactItinerary = dependencies.find((token) => token.toLowerCase() === "itinerary");
+    if (exactItinerary) return exactItinerary;
+
+    return String(dependencies[0] ?? "").trim();
+  };
+
+  const name = resolveItineraryName(fromCase);
   if (!name) {
     throwErrorSentence({
       name: "itinerary defective",
-      message: "itinerary defective: missing from name itinerary",
+      message: "itinerary defective: missing from name itinerary or from ve name itinerary",
       from: { name: "itinerary" },
       raw: { from: fromCase }
     });
@@ -406,14 +450,46 @@ function videoThumbnailSeconds(rememberFn, firstDuration = 1) {
 }
 
 function resolveFilenameFromCase(value, rememberFn) {
+  const resolveByName = (name) => {
+    const byArtifact = String(lookupArtifactLocator(name) ?? "").trim();
+    if (byArtifact) return byArtifact;
+    const fact = rememberFn?.(name);
+    return String(fact?.ob?.filename ?? fact?.to?.filename ?? "").trim();
+  };
+  const dependencyNamesFromVectorCase = (source) => {
+    const values = Array.isArray(source?.ve?.values)
+      ? source.ve.values.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+      : [];
+    if (!values.length) return [];
+    const out = [];
+    let i = 0;
+    while (i < values.length) {
+      if (values[i] === "name") {
+        i += 1;
+        continue;
+      }
+      const words = [];
+      while (i < values.length && values[i] !== "name") {
+        words.push(values[i]);
+        i += 1;
+      }
+      const token = words.join(" ").trim();
+      if (token) out.push(token);
+    }
+    return out;
+  };
+
   const direct = String(value?.filename ?? "").trim();
   if (direct) return direct;
   const name = String(value?.name ?? "").trim();
-  if (!name) return "";
-  const byArtifact = String(lookupArtifactLocator(name) ?? "").trim();
-  if (byArtifact) return byArtifact;
-  const fact = rememberFn?.(name);
-  return String(fact?.ob?.filename ?? fact?.to?.filename ?? "").trim();
+  if (name) return resolveByName(name);
+
+  const dependencies = dependencyNamesFromVectorCase(value);
+  for (const dependency of dependencies) {
+    const resolved = resolveByName(dependency);
+    if (resolved) return resolved;
+  }
+  return "";
 }
 
 function defaultFootnoteOutputFilename(inputVideo) {
@@ -852,7 +928,25 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
 }
 
 export async function footnoteVideo(sentence, { remember: rememberFn = remember } = {}) {
-  const inputSrtRaw = resolveFilenameFromCase(sentence?.from, rememberFn);
+  const inputSrtRaw = (() => {
+    const direct = resolveFilenameFromCase(sentence?.from, rememberFn);
+    if (!direct) return "";
+    if (String(sentence?.fromstate?.wo ?? "").trim() !== "srt") return direct;
+    if (/\.srt$/iu.test(direct)) return direct;
+    const fromValues = Array.isArray(sentence?.from?.ve?.values) ? sentence.from.ve.values : [];
+    for (let i = 0; i < fromValues.length; i += 1) {
+      const token = String(fromValues[i] ?? "").trim();
+      if (!token || token === "name") continue;
+      const maybe = resolveFilenameFromCase({ name: token }, rememberFn);
+      if (/\.srt$/iu.test(maybe)) return maybe;
+      const next = String(fromValues[i + 1] ?? "").trim();
+      if (token !== "name" && next && next !== "name") {
+        const paired = resolveFilenameFromCase({ name: `${token} ${next}` }, rememberFn);
+        if (/\.srt$/iu.test(paired)) return paired;
+      }
+    }
+    return direct;
+  })();
   const inputVideoRaw = resolveFilenameFromCase(sentence?.with, rememberFn);
   const outputRaw = resolveFilenameFromCase(sentence?.to, rememberFn)
     || (inputVideoRaw ? defaultFootnoteOutputFilename(inputVideoRaw) : "");
@@ -968,8 +1062,19 @@ export const signatures = [
 
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
+  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
+  { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
 
   { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
-  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo }
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo }
 ];
