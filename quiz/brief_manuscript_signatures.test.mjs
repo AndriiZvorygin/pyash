@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -21,4 +22,13 @@ test("brief manuscript module registers text and filename signatures", async () 
     assert.ok(resolved, `missing signature: ${signature}`);
     assert.ok(String(resolved).endsWith("brief manuscript"), `unexpected target: ${resolved}`);
   }
+});
+
+test("brief manuscript module keeps staged word-count verifies including total bounds", async () => {
+  const text = await fs.readFile("module/brief_manuscript.pya", "utf8");
+  assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 24 atmost num 140/);
+  assert.match(text, /manuscript fact two verify stage be verify as wo word count atleast num 24 atmost num 160/);
+  assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 12 atmost num 120/);
+  assert.match(text, /manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 9/);
+  assert.match(text, /manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110/);
 });

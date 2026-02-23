@@ -30,12 +30,13 @@ The filename form reads source text first, then delegates to text-source form.
 
 Current module stage sequence:
 1. source resolve from input text,
-2. generate fact one from source,
-3. generate fact two from `fact one + source`,
-4. generate uplifting close from `fact one + fact two + source`,
+2. generate fact one from source, then verify word count (`24..140`),
+3. generate fact two from `fact one + source`, then verify word count (`24..160`),
+4. generate uplifting close from `fact one + fact two + source`, then verify word count (`12..120`),
 5. compose manuscript body,
-6. generate hook from manuscript body,
-7. assemble final manuscript as `hook + blank line + body`.
+6. generate hook from manuscript body, then verify word count (`6..9`),
+7. assemble final manuscript as `hook + blank line + body`,
+8. verify final manuscript total word count (`70..110`), fail deterministically if out-of-bounds.
 
 ## 4. Prompt contract
 
@@ -51,6 +52,7 @@ Each stage prompt requests plain prose output with no markdown/bullets/labels.
 
 - output target is `to name text manuscript out`.
 - final output is plain text manuscript suitable for downstream title/description/telling/draw stages.
+- stage-level verify guards enforce bounded lengths before returning.
 
 ## 6. Integration note
 
