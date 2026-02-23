@@ -18,6 +18,7 @@ import { surfaceErrorSentence, throwErrorSentence } from "../program/error.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { state } from "../program/bridge/state.mjs";
 import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExchangeRunId, setExchangeSentenceId } from "../program/bridge/exchange.mjs";
+import { recordArtifact } from "../program/bridge/exchange.mjs";
 import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
@@ -25,6 +26,7 @@ import { resolveConfigBool, resolveConfigText } from "../program/configure/env.m
 import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
 
 function renderSeriesSentence(sentence) {
   const name = sentence?.su?.name ?? "result";
@@ -231,6 +233,67 @@ function materializeBindingFact({ handle, transport, value }) {
   });
 }
 
+function shouldForceTextExternalization({ sentence, pathKey } = {}) {
+  const key = String(pathKey ?? "");
+  if (!key) return false;
+  if (sentence?.be === "read" && key === "ob.text") return true;
+  if (sentence?.be === "command audit" && key === "totext.text") return true;
+  return false;
+}
+
+function rewriteSentenceTextForNewspaper(sentence, {
+  runId,
+  nextTextArtifactIndex
+} = {}) {
+  if (!sentence || typeof sentence !== "object") return sentence;
+  const seen = new WeakMap();
+  const rewrite = (value, pathKey = "") => {
+    if (!value || typeof value !== "object") return value;
+    if (seen.has(value)) return seen.get(value);
+    if (Array.isArray(value)) {
+      const arr = value.map((item, idx) => rewrite(item, `${pathKey}[${idx}]`));
+      seen.set(value, arr);
+      return arr;
+    }
+    const out = {};
+    seen.set(value, out);
+    for (const [key, entry] of Object.entries(value)) {
+      const childPath = pathKey ? `${pathKey}.${key}` : key;
+      if (key === "text" && typeof entry === "string" && entry.length > 0) {
+        const bytes = Buffer.from(entry, "utf8");
+        const force = shouldForceTextExternalization({ sentence, pathKey: childPath });
+        if (force || bytes.length > NEWSPAPER_TEXT_ARTIFACT_THRESHOLD) {
+          const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
+          const relLocator = path.join(
+            "artifacts",
+            "newspaper",
+            sanitizeRunId(runId || "run"),
+            `text-${String(idx).padStart(6, "0")}.txt`
+          ).replace(/[\\]+/g, "/");
+          const artifact = recordArtifact({
+            locator: relLocator,
+            producer: "newspaper",
+            bytes,
+            kind: "text"
+          });
+          const artifactName = String(artifact?.su?.name ?? "").trim();
+          const hash = String(artifact?.fromtext?.text ?? "").trim();
+          const marker = [
+            "artifact",
+            artifactName || "unknown",
+            hash ? `sha256:${hash}` : ""
+          ].filter(Boolean).join(" ");
+          out[key] = marker;
+          continue;
+        }
+      }
+      out[key] = rewrite(entry, childPath);
+    }
+    return out;
+  };
+  return rewrite(sentence, "");
+}
+
 function bindRuntimeInputs({ declarations, bindingWords }) {
   const inputs = Array.isArray(declarations?.inputs) ? declarations.inputs : [];
   const outputs = Array.isArray(declarations?.outputs) ? declarations.outputs : [];
@@ -417,13 +480,28 @@ async function main() {
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const newspaperLines = [];
   setRunNewspaperLines(newspaperLines);
+  let newspaperTextArtifactCounter = 0;
   let toolCounter = 0;
   const pushNewspaper = (line) => {
     if (!line) return;
-    if ((useNewspaper || useAgain)) newspaperLines.push(line);
+    let nextLine = line;
+    if ((useNewspaper || useAgain)) {
+      const parsed = parse(String(line).trim());
+      if (parsed?.mood) {
+        const rewritten = rewriteSentenceTextForNewspaper(parsed, {
+          runId,
+          nextTextArtifactIndex: () => {
+            newspaperTextArtifactCounter += 1;
+            return newspaperTextArtifactCounter;
+          }
+        });
+        nextLine = sentenceToPyash(rewritten);
+      }
+      newspaperLines.push(nextLine);
+    }
     if (verbose) {
       // eslint-disable-next-line no-console
-      console.log(line);
+      console.log(nextLine);
     }
   };
   const nextToolCounter = () => String(++toolCounter).padStart(6, "0");
