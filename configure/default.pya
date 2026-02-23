@@ -43,7 +43,7 @@ exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
 exists su name provider auto discharge ob bool truth be default ya
-exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" be default ya
+exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" "qwen say" be default ya
 exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
