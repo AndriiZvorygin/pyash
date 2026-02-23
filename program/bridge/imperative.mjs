@@ -112,7 +112,13 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = String(chainArr.at(-1) ?? "").toLowerCase();
     if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
-    const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
+    let resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
+    // Chains ending in a type token (e.g. "of pass of report bool") can
+    // fail direct resolution after reaching a primitive; fallback to the
+    // parent chain and then apply the cast for the typed tail.
+    if ((resolved === null || resolved === undefined) && chainArr.length > 1) {
+      resolved = resolveGenitiveLiteral({ chain: chainArr.slice(0, -1) }, { state, memory });
+    }
     if (resolved === null || resolved === undefined) continue;
     if (tail === "name") {
       value.name = String(resolved);

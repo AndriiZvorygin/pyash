@@ -41,7 +41,7 @@ Companion recipe: `documentation/recipes/pyash-agent-admin.md`.
 
 - Internal identity: agent house name (`world/house/<agent>/`)
 - External identity: per-channel username (for example Matrix user id)
-- Keep them separate; do not rename houses to satisfy channel username rules.
+- Keep them separate by default; only rename houses as a controlled migration when the old house name is obsolete.
 
 For Matrix appservice mode:
 - Source of sender identity: `configure/secret/matrix.yaml` (`sender_localpart`)
@@ -62,6 +62,33 @@ When changing appservice sender:
    - `pyash configure channel matrix test --json`
    - ensure `whoami.userId` is expected sender
 
+## Obsolete agent rename migration
+
+Use this when an old internal agent name must be retired.
+
+1. Move the house:
+   - `mv "world/house/<old>" "world/house/<new>"`
+2. Update internal house references:
+   - `world/house/<new>/conduct/managed.pya`
+   - `world/house/<new>/conduct/calendar.pya`
+   - `world/house/<new>/conduct/channels.pya`
+   - `world/house/<new>/identity/*.md`
+   - `world/house/<new>/program/*.pya`
+3. Remove stale registry/license declarations for old name:
+   - `world/conduct/agent.pya`
+4. Remove old agent registration:
+   - `pyash configure agent delete --agent "<old>" --yes truth --non-interactive --json`
+5. Re-establish the new agent with explicit runtime + channel bind:
+   - `pyash configure agent establish --agent "<new>" --backend "<backend>" --model "<model>" --tools-map tools --bind-channel truth --start-now truth --non-interactive --json`
+6. Bootstrap Matrix as the new agent:
+   - `pyash channel bootstrap --agent "<new>" --channel matrix --executive "<@user:server>" --json`
+7. Restart and verify:
+   - `pyash calendar restart --json`
+   - `pyash configure agent list --json`
+   - `pyash calendar health --json`
+8. Send a hello to room and executive DM:
+   - `node command/send_parity_channel_report.mjs --agent "<new>" --summary-text "<hello>"`
+
 ## Common failures and fixes
 
 - `ENOENT ... configure/secret/configure/secret/matrix.yaml`
@@ -71,6 +98,18 @@ When changing appservice sender:
 - `matrix send failed ... M_FORBIDDEN ... not in room`
   - Run `pyash configure channel matrix test --json` to refresh DM mapping/join state.
   - Reconfigure + restart if sender changed.
+
+- `Application service cannot masquerade as this user`
+  - Ensure agent channel user matches appservice namespace rules (for this repo: `@.*agent:matrix.liberit.ca`).
+  - Re-bootstrap with explicit `--agent` and verify `bootstrap.userId`.
+
+- Old agent keeps appearing after rename
+  - Remove old `directory license`/`house directory` blocks from `world/conduct/agent.pya`.
+  - Delete stale `world/house/<old>` and restart calendar.
+
+- `matrix send failed: status=429`
+  - Reduce reply fanout: set `su name matrix mention gate ob bool truth ya` for the noisy agent.
+  - Retry after backoff and avoid rapid manual poll loops.
 
 - Agent replying to itself in loops
   - Check `pyash channel log ...` for self events.
