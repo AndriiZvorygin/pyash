@@ -1,7 +1,7 @@
 ob filename text manuscript be input ya
 su name provider auto discharge ob bool lie ya
 
-exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+exists su name brief video script mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
@@ -85,6 +85,7 @@ su name brief video script only be refinery def
   su name manuscript out body stage ob name text manuscript body out to name manuscript out be plus do
 
   su name manuscript out ob name text manuscript out be write do
+  su name ollama discharge stage as wo ollama be discharge do
 prah
 
 from name brief video script only be refinery do
