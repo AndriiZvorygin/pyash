@@ -20,6 +20,9 @@ Use this when the cheat sheet is not enough.
 - **Web search** → `12-web-and-browser.md`
 - **Teaching-video refinery pipeline** → `25-teaching-video.md`
 - **Verify output envelope (provisional)** → `documentation/reference/verify-envelope.md`
+- **Better compare refinery profile (reference)** → `documentation/reference/better-compare-refinery.md`
+- **Chirp refinery profile (reference)** → `documentation/reference/chirp-refinery.md`
+- **Brief manuscript refinery profile (reference)** → `documentation/reference/brief-manuscript-refinery.md`
 - **External TUI session projection (Codex/others)** → `documentation/reference/agent-tui-session-projection.md`
 
 ## If you see errors about…
