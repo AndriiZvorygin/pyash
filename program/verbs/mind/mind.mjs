@@ -475,7 +475,7 @@ export async function mind_to_name_text(sentence, {
   const ollamaHost = runtimeHost || resolveConfigText("ollama host", { rememberFn: remember }) || null;
   const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
-  await enforceAutoDischarge({ activatingClass: "mind", rememberFn: remember });
+  await enforceAutoDischarge({ activatingClass: "mind", activatingModel: model, rememberFn: remember });
 
   const debugMind = (label, payload) => {
     if (!mindDebug) return;

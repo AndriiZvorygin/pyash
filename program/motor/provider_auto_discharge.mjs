@@ -27,7 +27,31 @@ function gpuExclusiveClasses({ rememberFn } = {}) {
   return ["mind", "draw", "hear"];
 }
 
-export async function enforceAutoDischarge({ activatingClass, rememberFn } = {}) {
+function normalizeModelRef(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return { raw: "", base: "", tag: "" };
+  const raw = text.replace(/\s+/g, "");
+  const splitIndex = raw.indexOf(":");
+  if (splitIndex === -1) return { raw, base: raw, tag: "" };
+  return {
+    raw,
+    base: raw.slice(0, splitIndex),
+    tag: raw.slice(splitIndex + 1)
+  };
+}
+
+function modelMatchesTarget(candidate, target) {
+  const left = normalizeModelRef(candidate);
+  const right = normalizeModelRef(target);
+  if (!left.raw || !right.raw) return false;
+  if (left.raw === right.raw) return true;
+  if (left.base !== right.base) return false;
+  if (!left.tag || !right.tag) return true;
+  if (left.tag === "latest" || right.tag === "latest") return true;
+  return left.tag === right.tag;
+}
+
+export async function enforceAutoDischarge({ activatingClass, activatingModel = "", rememberFn } = {}) {
   const activeClass = String(activatingClass ?? "").trim().toLowerCase();
   if (!activeClass) return { changed: false, activated: "", released: [] };
   if (!autoDischargeEnabled({ rememberFn })) {
@@ -54,6 +78,24 @@ export async function enforceAutoDischarge({ activatingClass, rememberFn } = {})
       } catch {
         // best-effort release
       }
+    }
+    const targetModel = String(activatingModel ?? "").trim();
+    if (targetModel) {
+      let warm = [];
+      try {
+        warm = await listWarmOllamaMinds({ rememberFn });
+      } catch {
+        warm = [];
+      }
+      const toDischarge = warm.filter(model => !modelMatchesTarget(model, targetModel));
+      for (const model of toDischarge) {
+        try {
+          await dischargeOllamaMind(model, { rememberFn });
+        } catch {
+          // best-effort release
+        }
+      }
+      if (toDischarge.length > 0 && !released.includes("mind")) released.push("mind");
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);

@@ -737,7 +737,6 @@ export async function drawFromNameItinerary(sentence, { remember: rememberFn = r
 }
 
 export async function promptifyFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
-  await enforceAutoDischarge({ activatingClass: "mind", rememberFn });
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
   const targetName = String(sentence?.to?.name ?? "").trim();
   if (!targetName) {
@@ -754,6 +753,7 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
     || "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation.";
   const host = promptifyHost(sentence, rememberFn);
   const model = promptifyModel(sentence, rememberFn);
+  await enforceAutoDischarge({ activatingClass: "mind", activatingModel: model, rememberFn });
   const fullScript = cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
   const series = [];
   let previousPrompt = "";
