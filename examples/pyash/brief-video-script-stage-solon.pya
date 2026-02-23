@@ -9,7 +9,7 @@ as wo ollama be discharge do
   prah
 
 
-exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+exists su name brief video script mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 
 exists su name brief video script prompt begin ob text quoted.text.Target: 70-110 word brief video script
 
