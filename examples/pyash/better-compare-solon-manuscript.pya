@@ -1,0 +1,31 @@
+ob filename text manuscript be input ya
+su name provider auto discharge ob bool lie ya
+
+exists su name brief video script mind be mind as name "qwen3:4b-instruct" fromtext text "You write short, factual, viral history video scripts." ya
+exists su name mind be mind as name "qwen3:4b-instruct" fromtext text "You are a strict pairwise script judge. Return only A or B." ya
+
+from filename "../../module/brief_manuscript.pya" ob name brief manuscript to name brief manuscript be import do
+from filename "../../module/better_compare.pya" ob name better compare to name better compare be import do
+
+exists su name text better compare viral judge prompter ob text quoted.text.You are comparing two candidate scripts for a 30-60 second viral history short.
+
+Pick the better script using these priorities:
+1. Strong hook and curiosity.
+2. Clear factual grounding in the source transcript.
+3. Tight momentum and payoff.
+4. Shareability and emotional impact.
+
+Return only A or B..text.quoted be text ya
+
+su name manuscript source platform from filename of ob of manuscript become wo text to name text solon source be read do
+
+su name manuscript source draft ob text source to name text manuscript out be ceremony def
+  su name manuscript source draft run stage from text of ob of this to name text manuscript out be brief manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript final stage from la ob text of ob of solon source to name text manuscript scratch be manuscript source draft do ko ob text of ob of better compare viral judge prompter to name text manuscript final atmost num 1 be better compare do
+
+su name manuscript final ob name text manuscript final be write do
+
+as wo ollama be discharge do
