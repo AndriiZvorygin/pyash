@@ -1,0 +1,50 @@
+su name say internal ob name text payload be ceremony def
+  su name result ob name payload be qwen say do
+  su name result ret
+prah
+
+su name say ob text payload be ceremony def
+  ob text of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+
+su name say ob num payload be ceremony def
+  ob num of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+
+su name say ob bool payload be ceremony def
+  ob boolean of ob of this to name text input be text do
+  ob name input be say internal do
+prah
+
+su name say ob hollow payload be ceremony def
+  ob text "null" to name text input be text do
+  ob name input be say internal do
+prah
+
+su name say ob text payload to filename output be ceremony def
+  ob text of ob of this to name text input be text do
+  su name result ob name input to filename of to of this be qwen say do
+  su name result ret
+prah
+
+su name say ob num payload to filename output be ceremony def
+  ob num of ob of this to name text input be text do
+  su name result ob name input to filename of to of this be qwen say do
+  su name result ret
+prah
+
+su name say ob bool payload to filename output be ceremony def
+  ob boolean of ob of this to name text input be text do
+  su name result ob name input to filename of to of this be qwen say do
+  su name result ret
+prah
+
+su name say ob hollow payload to filename output be ceremony def
+  ob text "null" to name text input be text do
+  su name result ob name input to filename of to of this be qwen say do
+  su name result ret
+prah
+
+exists su name say be export ya

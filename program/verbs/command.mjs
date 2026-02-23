@@ -42,7 +42,12 @@ function splitCommand(cmd) {
 function resolveDirectProgram(programName) {
   const name = String(programName ?? "").trim();
   if (!name) return name;
-  if (name === "node" && process.execPath) return process.execPath;
+  if (name === "node") {
+    const fromPath = resolveExecutableFromPath("node");
+    if (fromPath) return fromPath;
+    if (process.execPath && isExecutablePath(process.execPath)) return process.execPath;
+    return "node";
+  }
   return name;
 }
 

@@ -6,6 +6,7 @@ import { renderSayValue } from "./say.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { schedulerStop, schedulerServiceStop } from "../agent/scheduler_control.mjs";
 import { stopAgent } from "../agent/admin.mjs";
+import { stopSayBackend } from "../motor/say_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   if (typeof sentence?.su?.name === "string" && sentence.su.name.trim()) return sentence.su.name.trim();
@@ -43,6 +44,16 @@ function isSchedulerTarget(targetName, stopType) {
 
 export async function stop(sentence, { remember: rememberFn = remember } = {}) {
   const stopType = resolveStopType(sentence);
+  if (stopType === "say") {
+    const result = await stopSayBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "stop",
+      from: { name: "say" },
+      as: { wo: result.backend },
+      ob: { boolean: true }
+    };
+  }
   const targetName = resolveTargetName(sentence, { rememberFn });
   const calendarScope = isCalendarScope(sentence);
   const houseScope = isHouseScope(sentence);
@@ -98,6 +109,7 @@ export const signatures = [
   { signatureWords: ["be", "stop", "ob", "name", "num"], handler: stop },
   { signatureWords: ["be", "stop", "ob", "name", "map"], handler: stop },
   { signatureWords: ["be", "stop", "as", "wo", "scheduler"], handler: stop },
+  { signatureWords: ["be", "stop", "as", "wo", "say"], handler: stop },
   { signatureWords: ["be", "stop", "as", "wo", "ob", "text"], handler: stop },
   { signatureWords: ["be", "stop", "as", "wo", "ob", "name", "num"], handler: stop },
   { signatureWords: ["be", "stop", "as", "wo", "ob", "name", "map"], handler: stop },

@@ -45,6 +45,7 @@ Each caterer must implement deterministic:
 ## 5. Managed config application
 
 Primary store: `configure/secret.pya`.
+Default policy store: `configure/default.pya`.
 
 Rules:
 - managed replacement blocks,
@@ -58,7 +59,30 @@ Channel runtime behavior is normative in `24-channel-contract.md`.
 
 Configure may also write agent conduct/channel/calendar bindings and global channel input schedule.
 
-## 7. Output modes
+## 7. Provider auto-discharge default
+
+To support single-GPU systems, configure should expose provider auto-discharge policy in `configure/default.pya`.
+
+Canonical default facts:
+```pyash
+exists su name provider auto discharge ob bool truth be default ya
+exists su name gpu exclusive classes ob ve text "mind" "draw" ya
+exists su name newspaper enabled ob bool truth be default ya
+exists su name draw workflow root ob filename "./draw/" be default ya
+exists su name draw backend default ob text "comfyui" be default ya
+exists su name draw workflow default ob la be draw fromstate wo text become wo photograph ko as text "teaching-text-to-photograph" be default ya
+exists su name draw workflow default ob la be draw fromstate wo photograph become wo photograph ko as text "teaching-photograph-to-photograph" be default ya
+exists su name draw workflow default ob la be draw fromstate wo text become wo video ko as text "teaching-text-to-video" be default ya
+exists su name draw workflow default ob la be draw fromstate wo photograph become wo video ko as text "teaching-photograph-to-video" be default ya
+```
+
+Semantics:
+- when `provider auto discharge` is `truth`, activating one class listed in `gpu exclusive classes` discharges active providers from other listed classes;
+- when `provider auto discharge` is `lie`, no automatic discharge occurs.
+- workflow files for backend `<b>` resolve under `./draw/<b>/` unless an explicit `with filename` override is supplied.
+- when `newspaper enabled` is `truth`, runtime should persist replayable artifacts in background even when stage surfaces use typed in-memory links such as `from name itinerary ...`.
+
+## 8. Output modes
 
 Supported modes:
 - `--dry-run`
@@ -67,10 +91,10 @@ Supported modes:
 - `--non-interactive`
 - optional post-config live test flag
 
-## 8. Conformance
+## 9. Conformance
 
 Implementation conforms when validation/write/test/doctor paths are deterministic, redacted, and repeatable.
 
-## 9. Full draft reference
+## 10. Full draft reference
 
 `documentation/recipes/spec-archive/23-configure.full.md`

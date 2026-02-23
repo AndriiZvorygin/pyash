@@ -8,9 +8,11 @@ let exchangeRecorder = null;
 let exchangeRunRoot = null;
 let exchangeRunId = null;
 let exchangeSentenceId = null;
-let artifactCounter = 0;
 const artifactByLocator = new Map();
 const artifactHashes = new Map();
+const artifactNameCounts = new Map();
+const artifactLocatorByName = new Map();
+const artifactLatestByProducer = new Map();
 let exchangeStrict = false;
 
 function isUri(locator = "") {
@@ -41,9 +43,11 @@ export function setExchangeRecorder({ record, runRoot } = {}) {
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
   exchangeRunId = null;
   exchangeSentenceId = null;
-  artifactCounter = 0;
   artifactByLocator.clear();
   artifactHashes.clear();
+  artifactNameCounts.clear();
+  artifactLocatorByName.clear();
+  artifactLatestByProducer.clear();
   exchangeStrict = false;
 }
 
@@ -52,9 +56,11 @@ export function clearExchangeRecorder() {
   exchangeRunRoot = null;
   exchangeRunId = null;
   exchangeSentenceId = null;
-  artifactCounter = 0;
   artifactByLocator.clear();
   artifactHashes.clear();
+  artifactNameCounts.clear();
+  artifactLocatorByName.clear();
+  artifactLatestByProducer.clear();
   exchangeStrict = false;
 }
 
@@ -64,6 +70,10 @@ export function setExchangeRunRoot(runRoot) {
 
 export function setExchangeRunId(runId) {
   exchangeRunId = runId ? String(runId) : null;
+}
+
+export function getExchangeRunId() {
+  return exchangeRunId;
 }
 
 export function setExchangeSentenceId(sentenceId) {
@@ -130,10 +140,46 @@ function writeContentAddressed({ hash, locator, bytes } = {}) {
   return { relative: rel, absolute: abs };
 }
 
-function linkRunAlias({ name, target } = {}) {
+function sanitizeAliasPart(value) {
+  return String(value ?? "")
+    .replace(/[\\\/]+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function locatorBasename(locator) {
+  const text = String(locator ?? "");
+  if (!text) return "";
+  if (isUri(text)) {
+    try {
+      const parsed = new URL(text);
+      return path.basename(parsed.pathname || "");
+    } catch {
+      return "";
+    }
+  }
+  return path.basename(text);
+}
+
+function runAliasName({ artifactName, locator } = {}) {
+  const baseRaw = locatorBasename(locator);
+  const base = sanitizeAliasPart(baseRaw || "");
+  if (!base) return String(artifactName ?? "");
+  return `${artifactName}-${base}`;
+}
+
+function linkRunAlias({ name, target, locator } = {}) {
   if (!exchangeRunId || !name || !target) return null;
+  const locatorText = String(locator ?? "").replace(/[\\]+/g, "/");
+  const runPrefix = `artifacts/${exchangeRunId}/`;
+  if (locatorText.startsWith(runPrefix)) {
+    // Already stored in this run folder; avoid duplicate alias files.
+    return null;
+  }
   const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const rel = ["artifacts", exchangeRunId, name].join("/");
+  const alias = runAliasName({ artifactName: name, locator });
+  const rel = ["artifacts", exchangeRunId, alias].join("/");
   const abs = path.resolve(runRoot, rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (!fs.existsSync(abs)) {
@@ -151,9 +197,17 @@ function linkRunAlias({ name, target } = {}) {
 }
 
 function nextArtifactName() {
-  const name = `artifact-${artifactCounter}`;
-  artifactCounter += 1;
-  return name;
+  const base = sanitizeAliasPart("artifact");
+  const count = artifactNameCounts.get(base) ?? 0;
+  artifactNameCounts.set(base, count + 1);
+  return `${base}-${String(count + 1).padStart(3, "0")}`;
+}
+
+function nextArtifactNameForProducer(producer = "") {
+  const base = sanitizeAliasPart(producer || "artifact") || nextArtifactName();
+  const count = artifactNameCounts.get(base) ?? 0;
+  artifactNameCounts.set(base, count + 1);
+  return `${base}-${String(count + 1).padStart(3, "0")}`;
 }
 
 export function recordArtifact({ locator, producer = "exchange", bytes, kind } = {}) {
@@ -171,6 +225,8 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
   const size = bytes ? bytes.length : null;
   const existing = artifactByLocator.get(normalized);
   if (existing) {
+    artifactLocatorByName.set(existing, normalized);
+    if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
     if (hash) {
       const priorHash = artifactHashes.get(existing);
       if (priorHash && priorHash !== hash) {
@@ -185,7 +241,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     }
     if (hash && bytes) {
       const written = writeContentAddressed({ hash, locator: normalized, bytes });
-      linkRunAlias({ name: existing, target: written?.absolute });
+      linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
     }
     return {
       mood: "ya",
@@ -201,7 +257,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     mood: "ya",
     exists: true,
     be: "artifact",
-    su: { name: nextArtifactName() },
+    su: { name: nextArtifactNameForProducer(producer) },
     ob: exchangeSentenceId ? { name: exchangeSentenceId } : { text: normalized },
     to: { filename: normalized },
     from: { name: producer }
@@ -211,7 +267,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     sentence.fromtext = { text: hash };
     artifactHashes.set(sentence.su.name, hash);
     const written = writeContentAddressed({ hash, locator: normalized, bytes });
-    linkRunAlias({ name: sentence.su.name, target: written?.absolute });
+    linkRunAlias({ name: sentence.su.name, target: written?.absolute, locator: normalized });
   }
   if (size != null) {
     sentence.by = { num: size };
@@ -220,8 +276,16 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     sentence.as = { name: kind };
   }
   artifactByLocator.set(normalized, sentence.su.name);
+  artifactLocatorByName.set(sentence.su.name, normalized);
+  if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
   exchangeRecorder(sentence);
   return sentence;
+}
+
+export function lookupArtifactLocator(name) {
+  const key = String(name ?? "").trim();
+  if (!key) return null;
+  return artifactLocatorByName.get(key) ?? artifactLatestByProducer.get(key) ?? null;
 }
 
 export function recordExchange({ artifactName, op, producer = "exchange", sentence } = {}) {

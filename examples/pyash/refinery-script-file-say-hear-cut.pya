@@ -1,0 +1,16 @@
+su name script file teaching be refinery def
+exists su name video cuts images directory ob text "/workplace/examples/out/canada-warning-cuts" be default ya
+exists su name video cuts audio filename ob text "/workplace/examples/out/canada-warning.wav" be default ya
+exists su name video cuts prefix ob text "canada-warning" be default ya
+su name manuscript from filename "/workplace/examples/pyash/fixtures/teaching-script-canada-warning.txt" become wo text to name text manuscript out be read do
+su name telling from ve name manuscript ob name manuscript out to filename "/workplace/examples/out/canada-warning.wav" be piper say do
+su name footnote from ve name telling from filename "/workplace/examples/out/canada-warning.wav" become wo srt to filename "/workplace/examples/out/canada-warning.srt" be hear do
+su name cut platform from filename "/workplace/examples/out/canada-warning.srt" during num 6 to name itinerary canada warning cuts be cut do
+su name draw platform from name itinerary canada warning cuts ob text "Generate one illustration per cut from its footnote text." fromstate wo text become wo photograph to filename "/workplace/examples/out/canada-warning-cuts" as text "canada-warning" be draw do
+su name concatenate platform from name itinerary canada warning cuts fromstate wo itinerary become wo video to filename "/workplace/examples/out/canada-warning.mp4" be concatenate do
+su name report ob text "Generated /workplace/examples/out/canada-warning.mp4" be write do
+prah
+
+from name script file teaching be refinery do
+ob text "ls -lh /workplace/examples/out/canada-warning.mp4" to name text video preview be command do
+ob name video preview be write do

@@ -1,0 +1,3 @@
+from filename "/workplace/examples/out/love-of-god-30s.srt" during num 6 to name itinerary teaching cuts be cut do
+ob text "head -n 8 /workplace/examples/out/love-of-god-30s.cuts.pya" to name text cut preview be command do
+ob name cut preview be write do

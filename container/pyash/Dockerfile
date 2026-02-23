@@ -55,6 +55,7 @@ RUN apt-get update \
     fluxbox \
     novnc \
     websockify \
+  && (apt-get install -y --no-install-recommends nvidia-utils-550 || apt-get install -y --no-install-recommends nvidia-utils-535) \
   && rm -rf /var/lib/apt/lists/*
 
 # uvx (MCP helpers)

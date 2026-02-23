@@ -1,0 +1,36 @@
+exists su name video cuts audio filename ob text "/workplace/artifacts/say/love-teaching-shorts.wav" be default ya
+exists su name video cuts prefix ob text "love-teaching-shorts" be default ya
+
+su name draw size shorts be map def
+  su name width ob num 720 ya
+  su name height ob num 1280 ya
+  su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
+prah
+
+su name love teaching shorts be refinery def
+
+su name manuscript ob text "Write a spoken teaching manuscript that teaches people how to love God. Focus on concrete actions humans can take to love God. About 90 words. Plain language." for name mind to name text manuscript out be write do
+
+su name telling from name manuscript ob name manuscript out to filename "/workplace/artifacts/say/love-teaching-shorts.wav" be piper say do
+
+su name hear from name telling from filename "/workplace/artifacts/say/love-teaching-shorts.wav" become wo srt to filename "/workplace/artifacts/footnote/love-teaching-shorts.srt" be hear do
+
+su name cut platform from filename of ob of hear platform during num 6 to filename "/workplace/artifacts/footnote/love-teaching-shorts.cuts.pya" be cut do
+
+exists su name teaching cuts ob filename "/workplace/artifacts/footnote/love-teaching-shorts.cuts.pya" be itinerary ya
+
+su name prompt stage ob text "node command/itinerary_promptify.mjs \"/workplace/artifacts/footnote/love-teaching-shorts.cuts.pya\" \"/workplace/artifacts/footnote/love-teaching-shorts.prompts.pya\"" be command do
+
+exists su name teaching draw prompts ob filename "/workplace/artifacts/footnote/love-teaching-shorts.prompts.pya" be itinerary ya
+
+su name draw platform from name itinerary teaching draw prompts ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts as text "love-teaching-shorts" be draw do
+
+su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video be concatenate do
+
+su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of ob of concatenate platform as wo wordflow be footnote do
+
+su name report ob text "Generated teaching shorts video in run artifacts folder." be write do
+prah
+
+from name love teaching shorts be refinery do
+ob text "love teaching shorts complete." be write do

@@ -1,0 +1,19 @@
+su name cut from filename source during num duration to filename output be ceremony def
+  exists su name cmd ob text "node command/srt_to_itinerary_pya.mjs" be text ya
+  ob filename of from of this to name text sourcepath be text do
+  ob filename of to of this to name text outputpath be text do
+  ob text " \"" to name cmd be plus do
+  ob name sourcepath to name cmd be plus do
+  ob text "\" \"" to name cmd be plus do
+  ob name outputpath to name cmd be plus do
+  ob text "\" --name \"teaching cuts\"" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name cut from filename source to filename output be ceremony def
+  su name result from filename of from of this during num 6 to filename of to of this be cut do
+  su name result ret
+prah
+
+exists su name cut be export ya

@@ -1,0 +1,31 @@
+su name draw size shorts be map def
+  su name width ob num 720 ya
+  su name height ob num 1280 ya
+  su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
+prah
+
+su name love teaching shorts name only be refinery def
+
+su name manuscript ob text "Write a spoken teaching manuscript that teaches people how to love God. Focus on concrete actions humans can take to love God. About 90 words. Plain language." for name mind to name text manuscript out be write do
+
+su name telling ob name manuscript out be piper say do
+
+su name hear platform from name telling become wo srt be hear do
+
+su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
+
+exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
+
+su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext text "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation." for name mind to name itinerary teaching draw prompts be promptify do
+
+su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
+
+su name concatenate platform from ve name itinerary teaching cuts name photographs photos name telling fromstate wo itinerary become wo video be concatenate do
+
+su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
+
+su name report ob text "Generated teaching shorts video in run artifacts folder." be write do
+prah
+
+from name love teaching shorts name only be refinery do
+ob text "love teaching shorts name-only complete." be write do

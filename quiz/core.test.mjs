@@ -196,3 +196,11 @@ test("plus missing roles triggers signature error", async () => {
   await assert.rejects(() => run("ob num 1 be plus do"), /plus: to or from is required/);
   await assert.rejects(() => run("to name target be plus do"), /plus: ob is required/);
 });
+
+test("plus concatenates from text and ob text in one sentence", async () => {
+  forget();
+  await run('exists su name line ob text "" be text ya');
+  await run('from text "hook: " ob text "Solon saved Athens" to name line be plus do');
+  const line = remember("line");
+  assert.equal(line?.ob?.text, "hook: Solon saved Athens");
+});

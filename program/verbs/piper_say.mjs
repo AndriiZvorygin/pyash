@@ -220,9 +220,10 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
     }
   }
 
+  const producer = String(sentence?.su?.name ?? "say");
   const artifact = recordArtifact({
     locator: outputPath,
-    producer: "say",
+    producer,
     bytes: audioBytes,
     kind: "say"
   });
@@ -242,7 +243,7 @@ export async function piperSay(sentence, { remember: rememberFn = remember } = {
   await fs.writeFile(metadataPath, metadataText, "utf8");
   recordArtifact({
     locator: metadataPath,
-    producer: "say",
+    producer,
     bytes: Buffer.from(metadataText, "utf8"),
     kind: "metadata"
   });

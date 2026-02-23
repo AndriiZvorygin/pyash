@@ -52,6 +52,7 @@ export async function runGenerate({
   backendName,
   ollamaHost,
   reasoningEffort,
+  modelTuning,
   mindDebug,
   debugMind,
   outputName,
@@ -61,6 +62,15 @@ export async function runGenerate({
   inputs = [],
   checkInterrupted
 } = {}) {
+  const applySampling = (payload) => {
+    if (!payload || typeof payload !== "object") return;
+    const tuning = modelTuning && typeof modelTuning === "object" ? modelTuning : {};
+    if (Number.isFinite(Number(tuning.temperature))) payload.temperature = Number(tuning.temperature);
+    if (Number.isFinite(Number(tuning.topP))) payload.topP = Number(tuning.topP);
+    if (Number.isFinite(Number(tuning.topK))) payload.topK = Number(tuning.topK);
+    if (Number.isFinite(Number(tuning.minP))) payload.minP = Number(tuning.minP);
+    if (Number.isFinite(Number(tuning.presencePenalty))) payload.presencePenalty = Number(tuning.presencePenalty);
+  };
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
   const toolList = toolListFromMap(toolMapName);
@@ -95,6 +105,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     (async () => {
@@ -193,6 +204,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     responseText = mockResponse;
@@ -201,6 +213,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     if (!backendName) {
@@ -214,12 +227,21 @@ export async function runGenerate({
     if (typeof checkInterrupted === "function") {
       await checkInterrupted();
     }
-    const backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
-    responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+    let backendResponse = null;
+    let attempts = 0;
+    while (attempts < 2) {
+      attempts += 1;
+      backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+      responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+      if (responseText) break;
+      if (attempts < 2) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+    }
     recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
     if (mindDebug) {
       // eslint-disable-next-line no-console
-      console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: responseText.length })}`);
+      console.error(`[mind debug] ${JSON.stringify({ label: "response", contentLength: responseText.length, attempts })}`);
       if (!responseText) {
         // eslint-disable-next-line no-console
         console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", backendResponse: stripContext(backendResponse ?? {}) })}`);
