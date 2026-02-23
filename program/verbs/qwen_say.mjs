@@ -59,7 +59,7 @@ async function runQwenSay({ text, workflowName, workflowRoot, host, output }) {
 }
 
 export async function qwenSay(sentence, { remember: rememberFn = remember } = {}) {
-  await enforceAutoDischarge({ activatingClass: "draw", rememberFn });
+  await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
   const text = String(renderSayValue(sentence.ob ?? {}, { rememberFn }) ?? "");
   if (!text.trim()) {
     throwErrorSentence({

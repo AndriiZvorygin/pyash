@@ -24,7 +24,7 @@ function autoDischargeEnabled({ rememberFn } = {}) {
 function gpuExclusiveClasses({ rememberFn } = {}) {
   const configured = resolveConfigSeries("gpu exclusive classes", { rememberFn });
   if (configured && configured.length) return normalizeClassList(configured);
-  return ["mind", "draw", "hear"];
+  return ["mind", "draw", "hear", "qwen say"];
 }
 
 function normalizeModelRef(value) {
@@ -117,6 +117,42 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
       }
     }
     const released = warm.length ? ["mind"] : [];
+    if (classes.includes("hear")) {
+      try {
+        const hear = await dischargeHearBackend({ rememberFn });
+        if (hear?.discharged) released.push("hear");
+      } catch {
+        // best-effort release
+      }
+    }
+    const result = { changed: released.length > 0, activated: activeClass, released };
+    emitAutoDischarge(result);
+    return result;
+  }
+
+  if (activeClass === "qwen say") {
+    let drawReleased = false;
+    try {
+      await dischargeDrawBackend({ rememberFn });
+      drawReleased = true;
+    } catch {
+      drawReleased = false;
+    }
+    let warm = [];
+    try {
+      warm = await listWarmOllamaMinds({ rememberFn });
+    } catch {
+      warm = [];
+    }
+    for (const model of warm) {
+      try {
+        await dischargeOllamaMind(model, { rememberFn });
+      } catch {
+        // best-effort release
+      }
+    }
+    const released = drawReleased ? ["draw"] : [];
+    if (warm.length > 0) released.push("mind");
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
