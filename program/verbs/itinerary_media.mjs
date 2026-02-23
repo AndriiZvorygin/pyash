@@ -450,6 +450,15 @@ function videoThumbnailSeconds(rememberFn, firstDuration = 1) {
 }
 
 export function resolveFilenameFromCase(value, rememberFn) {
+  const sanitizeFilenameText = (raw) => {
+    if (typeof raw === "number") return String(raw);
+    if (typeof raw !== "string") return "";
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    if (trimmed === "[object Object]") return "";
+    return trimmed;
+  };
+
   const resolveGenitiveScalar = (genitive, { depth = 0, seen = new Set() } = {}) => {
     if (depth > 10) return null;
     const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
@@ -508,31 +517,57 @@ export function resolveFilenameFromCase(value, rememberFn) {
     return curr ?? null;
   };
 
-  const resolveByName = (name) => {
-    const byArtifact = String(lookupArtifactLocator(name) ?? "").trim();
-    if (byArtifact) return byArtifact;
-    const fact = rememberFn?.(name);
-    if (typeof fact?.ob?.filename === "string" && fact.ob.filename.trim()) return fact.ob.filename.trim();
-    if (typeof fact?.to?.filename === "string" && fact.to.filename.trim()) return fact.to.filename.trim();
-    if (fact?.ob?.genitive) {
-      const resolved = resolveGenitiveScalar(fact.ob.genitive);
-      if (typeof resolved === "string" && resolved.trim()) return resolved.trim();
-      if (typeof resolved === "number") return String(resolved);
+  const normalizeResolved = (resolved) => {
+    const scalar = sanitizeFilenameText(resolved);
+    if (scalar) return scalar;
+    if (!resolved || typeof resolved !== "object") return "";
+
+    if (resolved.genitive) {
+      const byGenitive = normalizeResolved(resolveGenitiveScalar(resolved.genitive));
+      if (byGenitive) return byGenitive;
     }
+
+    const byFilename = normalizeResolved(resolved.filename);
+    if (byFilename) return byFilename;
+
+    const byText = normalizeResolved(resolved.text);
+    if (byText) return byText;
+
+    const byObFilename = normalizeResolved(resolved.ob?.filename);
+    if (byObFilename) return byObFilename;
+
+    const byObText = normalizeResolved(resolved.ob?.text);
+    if (byObText) return byObText;
+
+    const byName = sanitizeFilenameText(resolved.name);
+    if (byName) return resolveByName(byName);
+
+    const byObName = sanitizeFilenameText(resolved.ob?.name);
+    if (byObName) return resolveByName(byObName);
+
     return "";
   };
 
-  const normalizeResolved = (resolved) => {
-    if (typeof resolved === "string") return resolved.trim();
-    if (typeof resolved === "number") return String(resolved);
-    if (!resolved || typeof resolved !== "object") return "";
-    if (typeof resolved.filename === "string" && resolved.filename.trim()) return resolved.filename.trim();
-    if (typeof resolved.text === "string" && resolved.text.trim()) return resolved.text.trim();
-    if (typeof resolved.name === "string" && resolved.name.trim()) return resolveByName(resolved.name.trim());
-    if (typeof resolved.ob?.filename === "string" && resolved.ob.filename.trim()) return resolved.ob.filename.trim();
-    if (typeof resolved.ob?.text === "string" && resolved.ob.text.trim()) return resolved.ob.text.trim();
+  const resolveByName = (name) => {
+    const normalizedName = sanitizeFilenameText(name);
+    if (!normalizedName) return "";
+    const byArtifact = sanitizeFilenameText(lookupArtifactLocator(normalizedName));
+    if (byArtifact) return byArtifact;
+    const fact = rememberFn?.(normalizedName);
+    const byObFilename = normalizeResolved(fact?.ob?.filename);
+    if (byObFilename) return byObFilename;
+    const byToFilename = normalizeResolved(fact?.to?.filename);
+    if (byToFilename) return byToFilename;
+    if (fact?.ob?.genitive) {
+      const resolved = resolveGenitiveScalar(fact.ob.genitive);
+      const byResolved = normalizeResolved(resolved);
+      if (byResolved) return byResolved;
+    }
+    const byObText = normalizeResolved(fact?.ob?.text);
+    if (byObText) return byObText;
     return "";
   };
+
   const dependencyNamesFromVectorCase = (source) => {
     const values = Array.isArray(source?.ve?.values)
       ? source.ve.values.map((entry) => String(entry ?? "").trim()).filter(Boolean)
@@ -557,7 +592,8 @@ export function resolveFilenameFromCase(value, rememberFn) {
   };
 
   const directFilename = value?.filename;
-  if (typeof directFilename === "string" && directFilename.trim()) return directFilename.trim();
+  const directString = sanitizeFilenameText(directFilename);
+  if (directString) return directString;
   if (directFilename && typeof directFilename === "object") {
     if (directFilename.genitive) {
       const byGenitive = normalizeResolved(resolveGenitiveScalar(directFilename.genitive));

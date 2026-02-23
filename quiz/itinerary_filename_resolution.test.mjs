@@ -38,3 +38,16 @@ test("resolveFilenameFromCase resolves filename genitive without object coercion
     state.currentEvoke = prevEvoke;
   }
 });
+
+test("resolveFilenameFromCase unwraps nested filename objects", () => {
+  const out = resolveFilenameFromCase(
+    { filename: { filename: "artifacts/video/nested.mp4" } },
+    remember
+  );
+  assert.equal(out, "artifacts/video/nested.mp4");
+});
+
+test("resolveFilenameFromCase rejects object-marker filename strings", () => {
+  const out = resolveFilenameFromCase({ filename: "[object Object]" }, remember);
+  assert.equal(out, "");
+});
