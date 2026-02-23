@@ -1,1 +1,1 @@
-ob text "node command/run_parity_agent_cycle.mjs --agent \"parity coder\" --skip-fix" be command do
+ob text "bash \"./world/house/parity coder/program/parity-skill-cycle.sh\" --agent \"parity coder\" --repo-root . --world-root ./world" be command do
