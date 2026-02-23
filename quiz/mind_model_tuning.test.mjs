@@ -66,3 +66,30 @@ test("mind auto-loads glm tuning and sets think false on request payload", async
     clearExchangeRecorder();
   }
 });
+
+test("mind configure map think overrides model tuning think", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "glm-4.7-flash:latest" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        think: { mood: "ya", su: { name: "think" }, ob: { boolean: true } }
+      }
+    }
+  });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.model, "glm-4.7-flash:latest");
+    assert.equal(payload.think, true);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
