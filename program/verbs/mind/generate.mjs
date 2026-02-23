@@ -27,6 +27,12 @@ function modelLooksVisionCapable(model) {
   return /(vl|vision|llava|minicpm-v|moondream|internvl|qvq)/.test(text);
 }
 
+function isLoadingModelError(text) {
+  const lower = String(text ?? "").toLowerCase();
+  return lower.includes("llm server loading model")
+    || lower.includes("loading model");
+}
+
 function normalizeVisionInput(input) {
   if (!input || typeof input !== "object") return null;
   const kind = String(input?.kind ?? "").toLowerCase().trim();
@@ -235,15 +241,21 @@ export async function runGenerate({
       await checkInterrupted();
     }
     let backendResponse = null;
+    let backendErrorText = "";
     let attempts = 0;
-    while (attempts < 2) {
+    const baseAttempts = 2;
+    const loadingAttempts = 8;
+    while (attempts < loadingAttempts) {
       attempts += 1;
       backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+      backendErrorText = String(backendResponse?.error ?? "").trim();
       responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
       if (responseText) break;
-      if (attempts < 2) {
-        await new Promise(resolve => setTimeout(resolve, 250));
-      }
+      const loadingModel = isLoadingModelError(backendErrorText);
+      const maxAttempts = loadingModel ? loadingAttempts : baseAttempts;
+      if (attempts >= maxAttempts) break;
+      const waitMs = loadingModel ? Math.min(4000, 500 * attempts) : 250;
+      await new Promise(resolve => setTimeout(resolve, waitMs));
     }
     recordMindJson({ targetName: mindName, label: "response", payload: stripContext(backendResponse ?? {}) });
     if (mindDebug) {
@@ -255,6 +267,14 @@ export async function runGenerate({
       }
     }
     if (!responseText) {
+      if (backendErrorText) {
+        throwErrorSentence({
+          name: "mind defective",
+          message: `mind defective: ${backendErrorText}`,
+          from: { name: "mind" },
+          raw: { requestPayload, backendResponse: stripContext(backendResponse ?? {}) }
+        });
+      }
       throwErrorSentence({
         name: "mind hollow answer",
         message: "mind hollow answer from backend",
