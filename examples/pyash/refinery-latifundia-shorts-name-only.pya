@@ -82,9 +82,14 @@ su name description stage ob name text manuscript out fromtext text "Write a You
 
 exists su name video thumbnail seconds ob num 1 be default ya
 
-su name telling ob name manuscript out be qwen say do
+su name manuscript artifact stage ob name manuscript out to filename "artifacts/brief-video/manuscript.txt" be write do
+su name title artifact stage ob name video title to filename "artifacts/brief-video/video-title.txt" be write do
+su name heading artifact stage ob name video heading to filename "artifacts/brief-video/video-heading.txt" be write do
+su name description artifact stage ob name video description to filename "artifacts/brief-video/video-description.txt" be write do
 
-su name hear platform from name telling become wo srt be hear do
+su name telling ob name manuscript out to filename "artifacts/brief-video/telling.wav" be qwen say do
+
+su name hear platform from filename "artifacts/brief-video/telling.wav" become wo srt be hear do
 
 su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
@@ -108,6 +113,7 @@ Follow these strict rules every time:
 User will provide the script next. Respond with just the image prompt..text.quoted be text ya
 
 su name thumbnail prompt stage ob name text manuscript out fromtext name thumbnail system prompt for name mind to name text thumbnail prompt be write do
+su name thumbnail prompt artifact stage ob name text thumbnail prompt to filename "artifacts/brief-video/thumbnail-prompt.txt" be write do
 
 su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
 su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform be thumbnail heading burn do
