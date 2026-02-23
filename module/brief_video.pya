@@ -27,68 +27,86 @@ Respond with just the image prompt..text.quoted be text ya
 
 exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 
-exists su name brief video script prompt begin ob text quoted.text.Target: 30-60 second Short
+exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
-Hard rules (must obey exactly):
-- Total spoken words: 70-110
-- Total sentences: 6-9
-- Hook: exactly 6-9 words (ideal 7)
-- Shocking Fact 1: 18-24 words
-- Common Thread: 22-28 words
-- Shocking Fact 2 + modern parallel: 18-24 words
-- Uplifting vision + CTA: 12-18 words
-
-Structure order (always in this order):
-1. Hook
-2. Shocking Fact 1
-3. Common Thread (this pattern is repeating today)
-4. Shocking Fact 2 + modern parallel
-5. Uplifting vision / solution tease + strong CTA
+Task:
+- Write 3-4 short spoken sentences.
+- Use one shocking historical fact from the transcript.
+- Tie it to a clear modern parallel.
 
 Rules:
-- Max 2 short sentences per section
-- Every subtitle line: maximum 6 words (max 2 lines at once)
-- Tone: dramatic and authoritative, end hopeful
-
-Use only the strongest parts from this transcript:
-[PASTE BEST MOMENTS / SUMMARY - keep under 7k tokens]
-
+- Dramatic, authoritative tone.
+- Plain prose only.
+- No labels, no bullets, no markdown, no quotes around the full output.
 .text.quoted be text ya
 
-exists su name brief video script prompt end ob text quoted.text.
-Output ONLY in this exact format, nothing else:
+exists su name brief video script fact two prompt ob text quoted.text.You are writing the next spoken segment for the same short.
 
-HOOK: "exact 6-9 words here"
+Task:
+- Write 3-4 short spoken sentences.
+- Use a different shocking historical fact than the one already used.
+- Tie it to a clear modern parallel.
 
-SECTION 1 - Shocking Fact 1:
-SPOKEN: "text here"
-SUBTITLES:
-Line 1: max 6 words
-Line 2: max 6 words (if needed)
+Rules:
+- Do not repeat the same person/event/core claim from the prior segment.
+- Dramatic, authoritative tone.
+- Plain prose only.
+- No labels, no bullets, no markdown, no quotes around the full output.
+.text.quoted be text ya
 
-SECTION 2 - Common Thread:
-SPOKEN: "text here"
-SUBTITLES:
-...
+exists su name brief video script uplift prompt ob text quoted.text.Write the ending for the same short.
 
-SECTION 3 - Shocking Fact 2 + Modern:
-SPOKEN: "text here"
-SUBTITLES:
-...
+Task:
+- Write 1-2 short spoken sentences.
+- Give an uplifting vision grounded in civic courage and reform.
+- End with this exact CTA phrase: Subscribe for more.
 
-SECTION 4 - Uplifting + CTA:
-SPOKEN: "text here"
-SUBTITLES:
-...
+Rules:
+- Hopeful ending.
+- Plain prose only.
+- No labels, no bullets, no markdown, no quotes around the full output.
+.text.quoted be text ya
 
-Total spoken words: XX
-Total sentences: X.text.quoted be text ya
+exists su name brief video script hook prompt ob text quoted.text.Write one opening hook line for this short.
+
+Rules:
+- Exactly 6-9 words.
+- Must match the provided body content.
+- Dramatic and curiosity-driven.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+.text.quoted be text ya
 
 su name brief video from text manuscript be ceremony def
-  su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
-  su name script request source stage ob text of from of this to name brief video script request be plus do
-  su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
-  su name manuscript ob name brief video script request for name brief video script mind to name text manuscript out be write do
+  su name script source stage ob text of from of this to name text brief video script source be text do
+
+  su name manuscript fact one stage ob name text brief video script source fromtext name brief video script fact one prompt for name brief video script mind to name text manuscript fact one out be write do
+
+  su name manuscript fact two request begin stage ob text "PRIOR SEGMENT:\n" to name text manuscript fact two request be text do
+  su name manuscript fact two request prior stage ob name text manuscript fact one out to name manuscript fact two request be plus do
+  su name manuscript fact two request source header stage ob text "\n\nTRANSCRIPT:\n" to name manuscript fact two request be plus do
+  su name manuscript fact two request source stage ob name text brief video script source to name manuscript fact two request be plus do
+  su name manuscript fact two stage ob name manuscript fact two request fromtext name brief video script fact two prompt for name brief video script mind to name text manuscript fact two out be write do
+
+  su name manuscript uplift request begin stage ob text "SEGMENT 1:\n" to name text manuscript uplift request be text do
+  su name manuscript uplift request fact one stage ob name text manuscript fact one out to name manuscript uplift request be plus do
+  su name manuscript uplift request fact two header stage ob text "\n\nSEGMENT 2:\n" to name manuscript uplift request be plus do
+  su name manuscript uplift request fact two stage ob name text manuscript fact two out to name manuscript uplift request be plus do
+  su name manuscript uplift request source header stage ob text "\n\nTRANSCRIPT:\n" to name manuscript uplift request be plus do
+  su name manuscript uplift request source stage ob name text brief video script source to name manuscript uplift request be plus do
+  su name manuscript uplift stage ob name manuscript uplift request fromtext name brief video script uplift prompt for name brief video script mind to name text manuscript uplift out be write do
+
+  su name manuscript body begin stage ob name text manuscript fact one out to name text manuscript body out be text do
+  su name manuscript body fact two join stage ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body fact two stage ob name text manuscript fact two out to name manuscript body out be plus do
+  su name manuscript body uplift join stage ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body uplift stage ob name text manuscript uplift out to name manuscript body out be plus do
+
+  su name manuscript hook stage ob name text manuscript body out fromtext name brief video script hook prompt for name brief video script mind to name text manuscript hook out be write do
+
+  su name manuscript out begin stage ob name text manuscript hook out to name text manuscript out be text do
+  su name manuscript out join stage ob text "\n\n" to name manuscript out be plus do
+  su name manuscript out body stage ob name text manuscript body out to name manuscript out be plus do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
@@ -135,10 +153,35 @@ su name brief video from text manuscript be ceremony def
 prah
 
 su name brief video from text manuscript to filename video short be ceremony def
-  su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
-  su name script request source stage ob text of from of this to name brief video script request be plus do
-  su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
-  su name manuscript ob name brief video script request for name brief video script mind to name text manuscript out be write do
+  su name script source stage ob text of from of this to name text brief video script source be text do
+
+  su name manuscript fact one stage ob name text brief video script source fromtext name brief video script fact one prompt for name brief video script mind to name text manuscript fact one out be write do
+
+  su name manuscript fact two request begin stage ob text "PRIOR SEGMENT:\n" to name text manuscript fact two request be text do
+  su name manuscript fact two request prior stage ob name text manuscript fact one out to name manuscript fact two request be plus do
+  su name manuscript fact two request source header stage ob text "\n\nTRANSCRIPT:\n" to name manuscript fact two request be plus do
+  su name manuscript fact two request source stage ob name text brief video script source to name manuscript fact two request be plus do
+  su name manuscript fact two stage ob name manuscript fact two request fromtext name brief video script fact two prompt for name brief video script mind to name text manuscript fact two out be write do
+
+  su name manuscript uplift request begin stage ob text "SEGMENT 1:\n" to name text manuscript uplift request be text do
+  su name manuscript uplift request fact one stage ob name text manuscript fact one out to name manuscript uplift request be plus do
+  su name manuscript uplift request fact two header stage ob text "\n\nSEGMENT 2:\n" to name manuscript uplift request be plus do
+  su name manuscript uplift request fact two stage ob name text manuscript fact two out to name manuscript uplift request be plus do
+  su name manuscript uplift request source header stage ob text "\n\nTRANSCRIPT:\n" to name manuscript uplift request be plus do
+  su name manuscript uplift request source stage ob name text brief video script source to name manuscript uplift request be plus do
+  su name manuscript uplift stage ob name manuscript uplift request fromtext name brief video script uplift prompt for name brief video script mind to name text manuscript uplift out be write do
+
+  su name manuscript body begin stage ob name text manuscript fact one out to name text manuscript body out be text do
+  su name manuscript body fact two join stage ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body fact two stage ob name text manuscript fact two out to name manuscript body out be plus do
+  su name manuscript body uplift join stage ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body uplift stage ob name text manuscript uplift out to name manuscript body out be plus do
+
+  su name manuscript hook stage ob name text manuscript body out fromtext name brief video script hook prompt for name brief video script mind to name text manuscript hook out be write do
+
+  su name manuscript out begin stage ob name text manuscript hook out to name text manuscript out be text do
+  su name manuscript out join stage ob text "\n\n" to name manuscript out be plus do
+  su name manuscript out body stage ob name text manuscript body out to name manuscript out be plus do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
