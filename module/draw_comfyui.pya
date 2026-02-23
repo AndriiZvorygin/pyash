@@ -1,4 +1,5 @@
 su name draw ob text prompter fromstate wo text become wo image to filename output as text workflow be ceremony def
+  as wo mind be discharge do
   exists su name cmd ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" be text ya
   ob text " --workflow-name \"" to name cmd be plus do
   ob text of as of this to name cmd be plus do
@@ -24,6 +25,7 @@ su name draw ob text prompter fromstate wo text become wo image to filename outp
 prah
 
 su name draw ob text prompter fromstate wo text become wo image as text workflow be ceremony def
+  as wo mind be discharge do
   exists su name cmd ob text "node command/draw_comfyui_runner.mjs --prompt-stdin" be text ya
   ob text " --workflow-name \"" to name cmd be plus do
   ob text of as of this to name cmd be plus do
