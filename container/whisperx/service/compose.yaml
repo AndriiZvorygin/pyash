@@ -1,7 +1,7 @@
 services:
   whisperx:
     container_name: whisperx
-    image: ghcr.io/jim60105/whisperx:no_model
+    image: ghcr.io/jim60105/whisperx:base
     user: "${PYASH_UID}:${PYASH_GID}"
     working_dir: /workplace
     entrypoint: ["python3", "/service/server.py"]
@@ -12,6 +12,7 @@ services:
       - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/server.py:/service/server.py:ro
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
+      - WHISPERX_MODEL=${WHISPERX_MODEL:-base}
       - WHISPERX_COMPUTE_TYPE=${WHISPERX_COMPUTE_TYPE:-int8}
       - TRANSFORMERS_CACHE=/cache/huggingface
       - HF_HOME=/cache/huggingface
