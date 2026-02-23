@@ -1,7 +1,7 @@
 su name draw size shorts be map def
   su name width ob num 720 ya
   su name height ob num 1280 ya
-  su name negative prompt ob text "text, letters, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers" ya
+  su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
 prah
 
 ob filename text manuscript to filename video short be input ya
@@ -15,7 +15,7 @@ su name manuscript ob name text latifundia source fromtext text "Write one spoke
 
 su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
-su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. 3-7 words. Plain text only." for name mind to name text video heading be write do
+su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
 
 su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
 
