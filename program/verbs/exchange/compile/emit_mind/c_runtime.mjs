@@ -34,8 +34,10 @@ export function handleMindSentenceC(context, helpers) {
     const model = sentence.as?.name ?? ob.model ?? null;
     const prompt = sentence.fromtext?.name ?? sentence.fromtext?.text ?? ob.text ?? null;
     const window = sentence.by?.num ?? sentence.by?.quantity?.num ?? sentence.ob?.window?.num ?? ob.window?.num ?? null;
+    const hasWindow = window !== null && window !== undefined && Number.isFinite(Number(window));
+    const windowLiteral = hasWindow ? String(Math.max(0, Math.trunc(Number(window)))) : "0";
     const lines = [];
-    lines.push(`pya_mind_set_config(${JSON.stringify(mindName)}, ${space ? JSON.stringify(space) : "NULL"}, ${model ? JSON.stringify(model) : "NULL"}, ${prompt ? JSON.stringify(prompt) : "NULL"}, ${window ? Number(window) || 8 : 0});`);
+    lines.push(`pya_mind_set_config(${JSON.stringify(mindName)}, ${space ? JSON.stringify(space) : "NULL"}, ${model ? JSON.stringify(model) : "NULL"}, ${prompt ? JSON.stringify(prompt) : "NULL"}, ${windowLiteral});`);
     return lines.join("\n");
   }
   const userText = ob.text
@@ -45,6 +47,8 @@ export function handleMindSentenceC(context, helpers) {
       : "\"\"";
   const explicitModel = ob.model ? JSON.stringify(ob.model) : "NULL";
   const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
+  const hasWindowVal = windowVal !== null && windowVal !== undefined && Number.isFinite(Number(windowVal));
+  const windowValLiteral = hasWindowVal ? String(Math.max(0, Math.trunc(Number(windowVal)))) : "0";
   const dialogue = `${mindName} story`;
   const toolMapName = sentence.with?.name ?? null;
   const toolVar = toolMapName && (declaredTypes?.get(toolMapName) === "map" || declaredTypes?.get(toolMapName) === "json map" || declaredTypes?.get(toolMapName) === "csv map")
@@ -173,7 +177,7 @@ export function handleMindSentenceC(context, helpers) {
   }
   lines.push("int __pyaAnswerCount = 0;");
   lines.push(`const char *tool_json = ${toolJsonLiteral};`);
-  lines.push(`char *reply = pya_mind_invoke(${JSON.stringify(mindName)}, dialogue, ${userText}, tool_block, tool_json, ${toolDispatchName}, ${explicitModel}, ${windowVal !== null ? Number(windowVal) || 8 : 0}, &__pyaAnswerCount);`);
+  lines.push(`char *reply = pya_mind_invoke(${JSON.stringify(mindName)}, dialogue, ${userText}, tool_block, tool_json, ${toolDispatchName}, ${explicitModel}, ${windowValLiteral}, &__pyaAnswerCount);`);
   lines.push("if (!reply) reply = pya_strdup(\"\");");
   lines.push("char __pyaAnswerName[PYA_TEXT_CAP];");
   lines.push(`snprintf(__pyaAnswerName, sizeof(__pyaAnswerName), \"%s answer %d\", ${JSON.stringify(mindName)}, __pyaAnswerCount);`);

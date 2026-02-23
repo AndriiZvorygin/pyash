@@ -3,7 +3,7 @@ function mindHelperSource() {
 }
 
 function mindHistorySource() {
-  return `const mindHistory = new Map();\nfunction buildMindHistory(dialogue, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(dialogue, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(dialogue, trimmed);\n}`;
+  return `const mindHistory = new Map();\nfunction buildMindHistory(dialogue, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (windowSize <= 0) return [];\n  const max = windowSize * 2;\n  return arr.slice(-max);\n}\nfunction recordMindTurn(dialogue, userMsg, assistantMsg, windowSize = 8) {\n  const arr = mindHistory.get(dialogue) || [];\n  if (userMsg) arr.push(userMsg);\n  if (assistantMsg) arr.push(assistantMsg);\n  if (windowSize <= 0) {\n    mindHistory.set(dialogue, []);\n    return;\n  }\n  const max = windowSize * 2;\n  const trimmed = arr.slice(-max);\n  mindHistory.set(dialogue, trimmed);\n}`;
 }
 
 export { mindHelperSource, mindHistorySource };

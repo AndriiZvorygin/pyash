@@ -45,6 +45,8 @@ export function resolveHistoryContext({
     if (historyWindow > 0) {
       const max = historyWindow * 2;
       historyMessages = historyMessages.slice(-max);
+    } else {
+      historyMessages = [];
     }
   } else {
     historyMessages = buildHistoryMessages(dialogue, { window: historyWindow });
