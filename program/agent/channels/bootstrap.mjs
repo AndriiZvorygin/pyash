@@ -437,12 +437,13 @@ export async function ensureMatrixCredentials({
   try {
     const homeserver = toBaseUrl(config?.homeserver ?? envHomeserver());
     if (!homeserver) throw new Error("matrix homeserver missing");
+    const authMode = String(config?.authMode ?? "").trim().toLowerCase();
 
     const cached = await readMatrixAuthCache(agentHouse);
     const desiredUserFromConfig = config?.user ? String(config.user) : null;
     const desiredUserNormalized = normalizeConfiguredUserId(desiredUserFromConfig, homeserver);
     const mode = config?.mode ? String(config.mode) : "";
-    if (cached?.accessToken) {
+    if (cached?.accessToken && authMode !== "password") {
     if (isAppserviceMode(mode) && desiredUserNormalized) {
       const resolvedLocalpart = cached.localpart
         ?? parseLocalpartFromUserId(desiredUserNormalized)
@@ -526,7 +527,7 @@ export async function ensureMatrixCredentials({
     }
   }
 
-  if (config?.token) {
+  if (config?.token && authMode !== "password") {
     if (isAppserviceMode(mode) && desiredUserNormalized) {
       await writeMatrixAuthCache(agentHouse, {
         ...(cached ?? {}),
@@ -599,13 +600,18 @@ export async function ensureMatrixCredentials({
     // Token exists but cannot be used for the configured user in non-appservice mode.
   }
 
-  const sharedSecret = config?.registrationSharedSecret ?? envSharedSecret();
+  const sharedSecret = authMode === "password"
+    ? null
+    : (config?.registrationSharedSecret ?? envSharedSecret());
   const _adminToken = config?.adminToken ?? envAdminToken();
   const userFromConfig = desiredUserFromConfig;
 
   let localpart = parseLocalpartFromUserId(userFromConfig) ?? sanitizeUsernamePart(userFromConfig ?? agentName);
-  let password = null;
-  if (cached?.localpart && cached?.password) {
+  const configuredPassword = typeof config?.password === "string"
+    ? String(config.password).trim()
+    : "";
+  let password = configuredPassword || null;
+  if (!password && cached?.localpart && cached?.password) {
     if (!userFromConfig || cached.user === userFromConfig || cached.localpart === localpart) {
       localpart = cached.localpart;
       password = cached.password;
