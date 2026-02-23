@@ -1,0 +1,6 @@
+ob filename text manuscript to filename video short be input ya
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+
+su name teaching demo from filename of ob of manuscript to filename of ob of video short be teaching video do
+
+su name result out ob name teaching demo be write do
