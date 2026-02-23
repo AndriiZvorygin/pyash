@@ -71,8 +71,8 @@ Word-count checks:
 - record result maps through `to name map ...`.
 
 Character-count checks:
-- enforce deterministic per-section char bounds in-module (or helper stage),
-- record pass/fail flags used by retry conditions.
+- use `be verify as wo letter count ...`,
+- record result maps through `to name map ...`.
 
 Retry scope:
 - retries are stage-local (`hook`, `value`, `question`),
@@ -90,5 +90,5 @@ Retry scope:
 
 ## 8. Runtime surface note
 
-- Runtime supports `be verify as wo word count` for literal text, remembered text, and filename-backed text.
-- If a first-class character-count verifier is unavailable, module helper logic can enforce chars while keeping recorded pass/fail facts deterministic.
+- Runtime supports both `be verify as wo word count` and `be verify as wo letter count` for literal text, remembered text, and filename-backed text.
+- `letter count` includes spaces and line breaks (code-point count).

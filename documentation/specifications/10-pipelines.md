@@ -71,7 +71,7 @@ For the pairwise profile (see reference), conformance additionally requires:
 For the chirp profile (see reference), conformance additionally requires:
 - exactly one valid source mode (`ob text`, `from name text`, or `from filename`),
 - staged generation order (`hook -> value -> question`) with dependency-correct prompts,
-- mandatory per-stage word-count verification plus recorded char-bound checks,
+- mandatory per-stage word-count + letter-count verification,
 - stage-local bounded retries (no full-refinery retry for single-stage failures),
 - final assembled output within total word/char target bounds or deterministic failure.
 
@@ -80,5 +80,6 @@ For the chirp profile (see reference), conformance additionally requires:
 - Better compare refinery profile (reference): `documentation/reference/better-compare-refinery.md`
 - Chirp refinery profile (reference): `documentation/reference/chirp-refinery.md`
 - Brief manuscript refinery profile (reference): `documentation/reference/brief-manuscript-refinery.md`
+- Verify count modes profile (reference): `documentation/reference/verify-count-modes.md`
 - Full details: `documentation/recipes/spec-archive/10-pipelines.full.md`
 - LLM generation recipe: `documentation/recipes/refinery-planning-llm.md`
