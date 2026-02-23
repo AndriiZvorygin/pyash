@@ -93,3 +93,67 @@ test("mind configure map think overrides model tuning think", async () => {
     clearExchangeRecorder();
   }
 });
+
+test("mind tuning num predict maps to ollama options", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "cap-test-model" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  doRemember({
+    mood: "ya",
+    su: { name: "mind tuning cap-test-model" },
+    be: "map",
+    ob: {
+      map: {
+        "num predict": { mood: "ya", su: { name: "num predict" }, ob: { num: 1024 } }
+      }
+    }
+  });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.model, "cap-test-model");
+    assert.equal(payload.options?.num_predict, 1024);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
+
+test("mind configure map max tokens overrides model tuning num predict", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "cap-test-model" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  doRemember({
+    mood: "ya",
+    su: { name: "mind tuning cap-test-model" },
+    be: "map",
+    ob: {
+      map: {
+        "num predict": { mood: "ya", su: { name: "num predict" }, ob: { num: 1024 } }
+      }
+    }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "mind configure" },
+    be: "map",
+    ob: {
+      map: {
+        "max tokens": { mood: "ya", su: { name: "max tokens" }, ob: { num: 64 } }
+      }
+    }
+  });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.model, "cap-test-model");
+    assert.equal(payload.options?.num_predict, 64);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
