@@ -885,13 +885,20 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
     || "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation.";
   const host = promptifyHost(sentence, rememberFn);
   const model = promptifyModel(sentence, rememberFn);
+  const continuityWindowRaw = Number(sentence?.by?.num ?? sentence?.by?.quantity?.num);
+  const continuityWindow = Number.isFinite(continuityWindowRaw) && continuityWindowRaw >= 0
+    ? Math.floor(continuityWindowRaw)
+    : 1;
   await enforceAutoDischarge({ activatingClass: "mind", activatingModel: model, rememberFn });
   const fullScript = cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
   const series = [];
-  let previousPrompt = "";
+  const promptHistory = [];
   for (let i = 0; i < cuts.length; i += 1) {
     const cut = cuts[i];
     const index = Number(cut?.index ?? (series.length + 1));
+    const previousPrompt = continuityWindow > 0
+      ? promptHistory.slice(-continuityWindow).join("\n")
+      : "";
     const promptInput = buildPromptifyPacket({
       cuts,
       index: i,
@@ -915,7 +922,7 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       systemPrompt,
       cutText: promptInput
     });
-    previousPrompt = prompt;
+    promptHistory.push(prompt);
     series.push({
       mood: "ya",
       su: { name: `cut ${String(index).padStart(3, "0")}` },
@@ -1182,15 +1189,25 @@ export const signatures = [
   { signatureWords: ["be", "draw", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "name", "photographs", "with", "name", "map"], handler: drawFromNameItinerary },
 
   { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "text"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "ob", "text", "to", "name", "itinerary", "fromtext", "name", "text"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
+  { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
 
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
