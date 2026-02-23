@@ -26,9 +26,15 @@ test("brief manuscript module registers text and filename signatures", async () 
 
 test("brief manuscript module keeps staged word-count verifies including total bounds", async () => {
   const text = await fs.readFile("module/brief_manuscript.pya", "utf8");
-  assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 24 atmost num 140/);
-  assert.match(text, /manuscript fact two verify stage be verify as wo word count atleast num 24 atmost num 160/);
-  assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 12 atmost num 120/);
+  assert.match(text, /manuscript fact one write stage .* by num 0 atmost num 72 be write do/);
+  assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34/);
+  assert.match(text, /manuscript fact one verify retry stage be verify as wo word count atleast num 20 atmost num 34/);
+  assert.match(text, /manuscript fact two write stage .* by num 0 atmost num 72 be write do/);
+  assert.match(text, /manuscript fact two verify stage be verify as wo word count atleast num 20 atmost num 34/);
+  assert.match(text, /manuscript fact two verify retry stage be verify as wo word count atleast num 20 atmost num 34/);
+  assert.match(text, /manuscript uplift write stage .* by num 0 atmost num 84 be write do/);
+  assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 24 atmost num 33/);
+  assert.match(text, /manuscript uplift verify retry stage be verify as wo word count atleast num 24 atmost num 33/);
   assert.match(text, /manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 9/);
   assert.match(text, /manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110/);
 });

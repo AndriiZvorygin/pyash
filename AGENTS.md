@@ -52,6 +52,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Only do the work explicitly requested by the user; avoid expanding scope or tackling adjacent tasks unless asked.
 - If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
+- When the user points to a proven example/refinery as the source of truth, port that flow directly first and only apply explicit deltas; do not re-implement from scratch unless the user asks for redesign.
 - Prefer lean modular designs over compatibility layers: remove obsolete paths instead of stacking legacy flags, aliases, or fallback branches unless the user explicitly asks for backward compatibility.
 - Keep defaults scoped by stability: put universal, environment-level defaults in `configure/default.pya`; keep example/run-specific filenames, prefixes, and paths in the example `.pya` files.
 - If intent, spec mapping, or expected behavior is unclear, stop and ask a targeted clarification question before coding; do not assume and proceed on uncertain interpretations.

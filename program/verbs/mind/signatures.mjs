@@ -125,11 +125,44 @@ const agentCwdWithWoToolsSignatures = agentCwdSignatures
   .map(replaceWithWoTools)
   .filter(Boolean);
 
+function withAtmostCase(words) {
+  if (!Array.isArray(words) || words.length < 2) return null;
+  if (words[0] !== "be" || words[1] !== "write") return null;
+  if (words.includes("atmost")) return null;
+  if (words[2] === "at" && words[3] === "filename") {
+    return ["be", "write", "at", "filename", "atmost", "num", ...words.slice(4)];
+  }
+  return ["be", "write", "atmost", "num", ...words.slice(2)];
+}
+
+const atmostOnlySignatures = [
+  ...baseAndNameNumSignatures,
+  ...withWoToolsSignatures,
+  ...withWoToolsNoToSignatures,
+  ...agentCwdSignatures,
+  ...agentCwdWithWoToolsSignatures
+]
+  .filter(words => !words.includes("by"))
+  .map(withAtmostCase)
+  .filter(Boolean);
+
+const byAndAtmostSignatures = [
+  ...baseAndNameNumSignatures,
+  ...withWoToolsSignatures,
+  ...agentCwdSignatures,
+  ...agentCwdWithWoToolsSignatures
+]
+  .filter(words => words.includes("by"))
+  .map(withAtmostCase)
+  .filter(Boolean);
+
 const allMindSignatureWords = baseAndNameNumSignatures
   .concat(withWoToolsSignatures)
   .concat(withWoToolsNoToSignatures)
   .concat(agentCwdSignatures)
-  .concat(agentCwdWithWoToolsSignatures);
+  .concat(agentCwdWithWoToolsSignatures)
+  .concat(atmostOnlySignatures)
+  .concat(byAndAtmostSignatures);
 
 export const mindSignatureWords = [...new Set(allMindSignatureWords.map(words => words.join(" ")))]
   .map(signature => signature.split(" "));

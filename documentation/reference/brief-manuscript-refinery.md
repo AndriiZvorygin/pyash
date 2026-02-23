@@ -30,13 +30,17 @@ The filename form reads source text first, then delegates to text-source form.
 
 Current module stage sequence:
 1. source resolve from input text,
-2. generate fact one from source, then verify word count (`24..140`),
-3. generate fact two from `fact one + source`, then verify word count (`24..160`),
-4. generate uplifting close from `fact one + fact two + source`, then verify word count (`12..120`),
+2. generate fact one from source, then verify word count (`20..34`),
+3. generate fact two from `fact one + source`, then verify word count (`20..34`),
+4. generate uplifting close from `fact one + fact two + source`, then verify word count (`24..33`),
 5. compose manuscript body,
 6. generate hook from manuscript body, then verify word count (`6..9`),
 7. assemble final manuscript as `hook + blank line + body`,
 8. verify final manuscript total word count (`70..110`), fail deterministically if out-of-bounds.
+
+Stage behavior details:
+- fact one/fact two/uplift/hook each use bounded mind decode (`atmost`) and one retry pass before guarantee failure.
+- total manuscript check also retries once by rewriting body text under bounded decode.
 
 ## 4. Prompt contract
 
