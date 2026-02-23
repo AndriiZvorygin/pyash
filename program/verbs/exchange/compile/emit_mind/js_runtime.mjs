@@ -1,3 +1,11 @@
+function historyWindowLiteral(windowValue, fallbackExpression = "cfg.window") {
+  const numeric = Number(windowValue);
+  if (windowValue !== null && windowValue !== undefined && Number.isFinite(numeric)) {
+    return String(Math.max(0, Math.trunc(numeric)));
+  }
+  return `(Number.isFinite(Number(${fallbackExpression})) ? Math.max(0, Math.trunc(Number(${fallbackExpression}))) : 8)`;
+}
+
 export function handleMindSentenceJs(context, helpers) {
   const {
     sentence,
@@ -26,12 +34,13 @@ export function handleMindSentenceJs(context, helpers) {
     const prompt = sentence.fromtext?.name ?? sentence.fromtext?.text ?? ob.text ?? null;
     const session = sentence.accordingto?.name ?? sentence.accordingto?.text ?? null;
     const window = sentence.by?.num ?? sentence.by?.quantity?.num ?? sentence.ob?.window?.num ?? ob.window?.num ?? null;
+    const windowLiteral = historyWindowLiteral(window, "cfg.window");
     const lines = [];
     lines.push(`mindConfigs.set(${JSON.stringify(mindName)}, {`);
     if (space) lines.push(`  space: ${JSON.stringify(space)},`);
     if (model) lines.push(`  model: ${JSON.stringify(model)},`);
     if (prompt) lines.push(`  prompt: ${JSON.stringify(prompt)},`);
-    if (window) lines.push(`  window: ${Number(window) || 8},`);
+    if (window !== null && window !== undefined && Number.isFinite(Number(window))) lines.push(`  window: ${windowLiteral},`);
     if (session) lines.push(`  session: ${JSON.stringify(session)},`);
     lines.push("});");
     return lines.join("\n");
@@ -55,11 +64,12 @@ export function handleMindSentenceJs(context, helpers) {
   lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
   lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
   const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
+  const windowLiteral = historyWindowLiteral(windowVal, "cfg.window");
   const dialogue = `${mindName} story`;
   lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
   lines.push(`const session = ${sessionName ? JSON.stringify(String(sessionName)) : "null"} || cfg.session || null;`);
   lines.push("let historyMessages = [];");
-  lines.push(`const historyWindow = ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"};`);
+  lines.push(`const historyWindow = ${windowLiteral};`);
   lines.push("if (session) {");
   lines.push("  const series = typeof remember === \"function\" ? remember(session) : null;");
   lines.push("  const entries = Array.isArray(series?.ob?.series) ? series.ob.series : [];");
@@ -73,6 +83,8 @@ export function handleMindSentenceJs(context, helpers) {
   lines.push("  if (historyWindow > 0) {");
   lines.push("    const max = historyWindow * 2;");
   lines.push("    historyMessages = historyMessages.slice(-max);");
+  lines.push("  } else {");
+  lines.push("    historyMessages = [];");
   lines.push("  }");
   lines.push("} else {");
   lines.push("  historyMessages = buildMindHistory(dialogue, historyWindow);");
@@ -108,7 +120,7 @@ export function handleMindSentenceJs(context, helpers) {
   lines.push("    globalThis[session] = series;");
   lines.push("  }");
   lines.push("} else {");
-  lines.push(`  recordMindTurn(dialogue, { role: \"user\", content: ${userText} }, { role: \"assistant\", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+  lines.push(`  recordMindTurn(dialogue, { role: \"user\", content: ${userText} }, { role: \"assistant\", content: reply }, ${windowLiteral});`);
   lines.push("}");
   lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
   lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");

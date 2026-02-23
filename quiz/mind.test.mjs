@@ -121,6 +121,31 @@ test("mind invocation includes recent history in prompt with per-mind window", a
   }
 });
 
+test("mind invocation with by num 0 sends no prior dialogue history", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(
+      parse('exists su generator be mind from discourse "orchestrator" via state "qwen3:8b" ya')
+    );
+    await interpret(parse('be write ob text "first turn" for name generator to name text generator-out do'));
+    await interpret(parse('su question ob discourse "second turn" for name generator to name text generator-out by num 0 be write do'));
+
+    const payload = decodeMindPayload(records, "generator");
+    assert.doesNotMatch(payload.prompt ?? "", /first turn/);
+    assert.match(payload.prompt ?? "", /second turn/);
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("mind invocation uses configured mind model when per-mind model is absent", async () => {
   forget();
   const original = process.env.PYA_MIND_RESPONSE;
@@ -168,6 +193,33 @@ test("mind history can be injected from a series via accordingto", async () => {
     assert.ok(session);
     assert.ok(Array.isArray(session.ob?.series));
     assert.equal(session.ob.series.length, 4);
+  } finally {
+    clearExchangeRecorder();
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("mind accordingto series honors by num 0 and suppresses series history", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "ok";
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+
+  try {
+    await interpret(parse("su name session be series def"));
+    await interpret(parse('su name user ob text "Hi from series" be text ya'));
+    await interpret(parse('su name assistant ob text "Series reply" be text ya'));
+    await interpret(parse("prah"));
+    await interpret(parse('exists su helper be mind accordingto name session via state "qwen3:8b" ya'));
+    await interpret(parse('su q ob discourse "Hello" for name helper to name text helper-out by num 0 be write do'));
+
+    const payload = decodeMindPayload(records, "helper");
+    assert.doesNotMatch(payload.prompt ?? "", /Hi from series/);
+    assert.doesNotMatch(payload.prompt ?? "", /Series reply/);
+    assert.match(payload.prompt ?? "", /Hello/);
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;

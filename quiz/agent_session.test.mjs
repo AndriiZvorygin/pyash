@@ -106,8 +106,8 @@ test("agent session appends subsequent turns without rewriting header", async ()
 
 test("session history window normalization is deterministic", () => {
   assert.equal(normalizeHistoryWindow(undefined, { defaultPairs: 8 }), 8);
-  assert.equal(normalizeHistoryWindow(0, { defaultPairs: 8 }), 1);
-  assert.equal(normalizeHistoryWindow(-4, { defaultPairs: 8 }), 1);
+  assert.equal(normalizeHistoryWindow(0, { defaultPairs: 8 }), 0);
+  assert.equal(normalizeHistoryWindow(-4, { defaultPairs: 8 }), 0);
   assert.equal(normalizeHistoryWindow(3.7, { defaultPairs: 8 }), 3);
   assert.equal(normalizeHistoryWindow(9999, { defaultPairs: 8, maxPairs: 200 }), 200);
 });
@@ -131,6 +131,8 @@ test("readSessionMessages enforces stable truncation by pair window", async () =
   assert.equal(onePair.messages.length, 2);
   assert.equal(onePair.messages[0].content, "u5");
   assert.equal(onePair.messages[1].content, "a5");
+  const noPairs = await readSessionMessages({ sessionFile, historyWindow: 0 });
+  assert.equal(noPairs.messages.length, 0);
   const allPairs = await readSessionMessages({ sessionFile, historyWindow: 10 });
   assert.equal(allPairs.messages.length, 10);
 });

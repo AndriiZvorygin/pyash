@@ -1,3 +1,11 @@
+function historyWindowLiteral(windowValue, fallbackExpression = "cfg.window") {
+  const numeric = Number(windowValue);
+  if (windowValue !== null && windowValue !== undefined && Number.isFinite(numeric)) {
+    return String(Math.max(0, Math.trunc(numeric)));
+  }
+  return `(Number.isFinite(Number(${fallbackExpression})) ? Math.max(0, Math.trunc(Number(${fallbackExpression}))) : 8)`;
+}
+
 export function handleMindWrite(context, helpers) {
   const {
     sentence,
@@ -61,8 +69,9 @@ export function handleMindWrite(context, helpers) {
     ?? sentence.fromtext?.name
     ?? sentence.fromtext?.text
     ?? `${mindName} story`;
+  const windowLiteral = historyWindowLiteral(windowVal, "cfg.window");
   lines.push(`const dialogue = ${JSON.stringify(String(dialogue))};`);
-  lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+  lines.push(`const historyMessages = buildMindHistory(dialogue, ${windowLiteral});`);
   lines.push("const messages = [];");
   lines.push("if (cfg.prompt) messages.push({ role: \"system\", content: cfg.prompt });");
   if (sentence.with?.name) {
@@ -137,7 +146,7 @@ export function handleMindWrite(context, helpers) {
   lines.push("}");
   lines.push("if (!reply) reply = lastResponse?.message?.content ?? \"\";");
   const resVar = sanitizeName(resultName);
-  lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowVal !== null ? Number(windowVal) || 8 : "cfg.window || 8"});`);
+  lines.push(`recordMindTurn(dialogue, { role: "user", content: ${promptVal} }, { role: "assistant", content: reply }, ${windowLiteral});`);
   lines.push("const __pyaAnswerCount = (mindAnswerCounters.get(dialogue) || 0) + 1;");
   lines.push("mindAnswerCounters.set(dialogue, __pyaAnswerCount);");
   lines.push(`const ${resVar} = { su: { name: ${JSON.stringify(mindName)} + " answer " + __pyaAnswerCount }, from: { name: ${JSON.stringify(mindName)} }, ob: { text: reply }, be: "answer", mood: "ya" };`);
