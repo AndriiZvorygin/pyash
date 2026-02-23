@@ -275,6 +275,7 @@ async function runGenerate(payload) {
     Object.assign(options, payload.options);
   }
   if (Object.keys(options).length > 0) body.options = options;
+  if (payload.think !== undefined) body.think = payload.think;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {
     await requestStream(endpoint, body);
@@ -305,6 +306,7 @@ async function runChat(payload) {
     Object.assign(options, payload.options);
   }
   if (Object.keys(options).length > 0) body.options = options;
+  if (payload.think !== undefined) body.think = payload.think;
   if (Array.isArray(payload.tools) && payload.tools.length > 0) body.tools = payload.tools;
   if (payload.keep_alive !== undefined) body.keep_alive = payload.keep_alive;
   if (payload.stream) {

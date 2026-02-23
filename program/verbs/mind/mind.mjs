@@ -164,6 +164,18 @@ function readMapBool(map, keys = []) {
   return false;
 }
 
+function readMapBoolNullable(map, keys = []) {
+  for (const key of keys) {
+    const entry = map?.[key];
+    const value = entry?.ob?.boolean ?? entry?.boolean;
+    if (typeof value === "boolean") return value;
+    const text = String(entry?.ob?.text ?? entry?.text ?? "").trim().toLowerCase();
+    if (text === "truth" || text === "true" || text === "1" || text === "yes") return true;
+    if (text === "lie" || text === "false" || text === "0" || text === "no") return false;
+  }
+  return null;
+}
+
 function entryText(entry) {
   return String(entry?.ob?.text ?? entry?.text ?? "").trim();
 }
@@ -180,6 +192,7 @@ function resolveMindTuningForModel(model, { rememberFn = remember } = {}) {
     topK: readMapNum(map, ["top k", "top_k"]),
     minP: readMapNum(map, ["min p", "min_p"]),
     presencePenalty: readMapNum(map, ["presence penalty", "presence_penalty"]),
+    think: readMapBoolNullable(map, ["think", "thinking"]),
     thinkPrefix: readMapText(map, ["think prefix", "think_prefix"]),
     stripThinkInHistory: readMapBool(map, ["strip think history", "strip think in history", "strip_think_in_history", "strip think"])
   };

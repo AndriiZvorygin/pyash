@@ -25,7 +25,7 @@ Use both sources to choose a hook image that previews the whole narrative and vi
 
 Respond with just the image prompt..text.quoted be text ya
 
-exists su name brief video script mind be mind as name "qwq32b-ctx12k" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 
 exists su name brief video script prompt begin ob text quoted.text.Target: 30-60 second Short
 

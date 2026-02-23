@@ -1,0 +1,43 @@
+exists su name stream stdout ob bool truth be default ya
+
+as wo ollama be discharge do
+
+exists su name brief video script mind be mind as name "glm-4.7-flash:latest" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
+
+exists su name brief video script prompt begin ob text quoted.text.Target: 30-60 second Short
+
+Hard rules (must obey exactly):
+- Total spoken words: 70-110
+- Total sentences: 6-9
+- Hook: exactly 6-9 words (ideal 7)
+- Shocking Fact 1: 18-24 words
+- Common Thread: 22-28 words
+- Shocking Fact 2 + modern parallel: 18-24 words
+- Uplifting vision + CTA: 12-18 words
+
+Structure order (always in this order):
+1. Hook
+2. Shocking Fact 1
+3. Common Thread (this pattern is repeating today)
+4. Shocking Fact 2 + modern parallel
+5. Uplifting vision / solution tease + strong CTA
+
+Rules:
+- Max 2 short sentences per section
+- Every subtitle line: maximum 6 words (max 2 lines at once)
+- Tone: dramatic and authoritative, end hopeful
+
+Use only the strongest parts from this transcript:
+[PASTE BEST MOMENTS / SUMMARY - keep under 7k tokens]
+
+.text.quoted be text ya
+
+exists su name brief video script prompt end ob text quoted.text.
+Output ONLY in the script, nothing else.text.quoted be text ya
+
+su name source stage from filename "know/input/solon.txt" become wo text to name text manuscript source be read do
+su name script request begin stage ob name brief video script prompt begin to name text brief video script request be text do
+su name script request source stage ob name manuscript source to name brief video script request be plus do
+su name script request end stage ob name brief video script prompt end to name brief video script request be plus do
+su name manuscript stage ob name brief video script request for name brief video script mind to name text manuscript out be write vyah stream do
+su name manuscript out ob name text manuscript out be write do

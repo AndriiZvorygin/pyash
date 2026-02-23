@@ -88,6 +88,7 @@ export async function runToolChat({
     if (Number.isFinite(Number(tuning.topK))) payload.topK = Number(tuning.topK);
     if (Number.isFinite(Number(tuning.minP))) payload.minP = Number(tuning.minP);
     if (Number.isFinite(Number(tuning.presencePenalty))) payload.presencePenalty = Number(tuning.presencePenalty);
+    if (typeof tuning.think === "boolean") payload.think = tuning.think;
   };
   let responseText = "";
   const inputText = inputs?.inputText ?? "";
