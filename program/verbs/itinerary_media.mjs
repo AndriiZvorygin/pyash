@@ -449,12 +449,89 @@ function videoThumbnailSeconds(rememberFn, firstDuration = 1) {
   return Math.min(desired, maxByFirst);
 }
 
-function resolveFilenameFromCase(value, rememberFn) {
+export function resolveFilenameFromCase(value, rememberFn) {
+  const resolveGenitiveScalar = (genitive, { depth = 0, seen = new Set() } = {}) => {
+    if (depth > 10) return null;
+    const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
+    if (chainArr.length === 0) return null;
+    const [root, ...rest] = chainArr;
+    let curr =
+      root === "this"
+        ? (state.currentEvokeRef || state.currentEvoke)
+        : (typeof root === "string" && rememberFn ? rememberFn(root) : null);
+    for (const part of rest) {
+      if (curr && typeof curr === "object" && curr.genitive) {
+        if (seen.has(curr.genitive)) return null;
+        seen.add(curr.genitive);
+        const resolved = resolveGenitiveScalar(curr.genitive, { depth: depth + 1, seen });
+        if (resolved !== null && resolved !== undefined) curr = resolved;
+      }
+      if (curr && typeof curr === "object" && curr.name && rememberFn) {
+        const fact = rememberFn(curr.name);
+        if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
+      }
+      if (curr && typeof curr === "object") {
+        if (curr.text !== undefined && (part === "filename" || part === "text")) {
+          curr = curr.text;
+          continue;
+        }
+        if (curr.filename !== undefined && part === "filename") {
+          curr = curr.filename;
+          continue;
+        }
+        if (curr.ob?.text !== undefined && (part === "filename" || part === "text")) {
+          curr = curr.ob.text;
+          continue;
+        }
+        if (curr.ob?.filename !== undefined && part === "filename") {
+          curr = curr.ob.filename;
+          continue;
+        }
+        if (curr.ob?.map && Object.prototype.hasOwnProperty.call(curr.ob.map, part)) {
+          curr = curr.ob.map[part];
+        } else if (curr.ob && curr.ob[part] !== undefined) {
+          curr = curr.ob[part];
+        } else {
+          curr = curr[part];
+        }
+      } else {
+        curr = curr?.[part];
+      }
+    }
+    if (typeof curr === "string" || typeof curr === "number" || typeof curr === "boolean") return curr;
+    if (curr && typeof curr === "object") {
+      if (curr.text !== undefined) return curr.text;
+      if (curr.filename !== undefined) return curr.filename;
+      if (curr.num !== undefined) return curr.num;
+      if (curr.boolean !== undefined) return curr.boolean;
+    }
+    return curr ?? null;
+  };
+
   const resolveByName = (name) => {
     const byArtifact = String(lookupArtifactLocator(name) ?? "").trim();
     if (byArtifact) return byArtifact;
     const fact = rememberFn?.(name);
-    return String(fact?.ob?.filename ?? fact?.to?.filename ?? "").trim();
+    if (typeof fact?.ob?.filename === "string" && fact.ob.filename.trim()) return fact.ob.filename.trim();
+    if (typeof fact?.to?.filename === "string" && fact.to.filename.trim()) return fact.to.filename.trim();
+    if (fact?.ob?.genitive) {
+      const resolved = resolveGenitiveScalar(fact.ob.genitive);
+      if (typeof resolved === "string" && resolved.trim()) return resolved.trim();
+      if (typeof resolved === "number") return String(resolved);
+    }
+    return "";
+  };
+
+  const normalizeResolved = (resolved) => {
+    if (typeof resolved === "string") return resolved.trim();
+    if (typeof resolved === "number") return String(resolved);
+    if (!resolved || typeof resolved !== "object") return "";
+    if (typeof resolved.filename === "string" && resolved.filename.trim()) return resolved.filename.trim();
+    if (typeof resolved.text === "string" && resolved.text.trim()) return resolved.text.trim();
+    if (typeof resolved.name === "string" && resolved.name.trim()) return resolveByName(resolved.name.trim());
+    if (typeof resolved.ob?.filename === "string" && resolved.ob.filename.trim()) return resolved.ob.filename.trim();
+    if (typeof resolved.ob?.text === "string" && resolved.ob.text.trim()) return resolved.ob.text.trim();
+    return "";
   };
   const dependencyNamesFromVectorCase = (source) => {
     const values = Array.isArray(source?.ve?.values)
@@ -479,8 +556,27 @@ function resolveFilenameFromCase(value, rememberFn) {
     return out;
   };
 
-  const direct = String(value?.filename ?? "").trim();
-  if (direct) return direct;
+  const directFilename = value?.filename;
+  if (typeof directFilename === "string" && directFilename.trim()) return directFilename.trim();
+  if (directFilename && typeof directFilename === "object") {
+    if (directFilename.genitive) {
+      const byGenitive = normalizeResolved(resolveGenitiveScalar(directFilename.genitive));
+      if (byGenitive) return byGenitive;
+    }
+    const nestedName = typeof directFilename.name === "string" ? directFilename.name.trim() : "";
+    if (nestedName) {
+      const byName = resolveByName(nestedName);
+      if (byName) return byName;
+    }
+    const nestedResolved = normalizeResolved(directFilename);
+    if (nestedResolved) return nestedResolved;
+  }
+
+  if (value?.genitive) {
+    const byGenitive = normalizeResolved(resolveGenitiveScalar(value.genitive));
+    if (byGenitive) return byGenitive;
+  }
+
   const name = String(value?.name ?? "").trim();
   if (name) return resolveByName(name);
 
@@ -639,7 +735,7 @@ export async function cutFromNameFilenameToNameItinerary(sentence, { remember: r
 export async function drawFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   await enforceAutoDischarge({ activatingClass: "draw", rememberFn });
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
-  const outputDir = String(sentence?.to?.filename ?? "").trim() || defaultDrawOutputDir();
+  const outputDir = resolveFilenameFromCase(sentence?.to, rememberFn) || defaultDrawOutputDir();
   const { resolved: outputResolved, outside, agentCwd } = resolveAgentPath(outputDir, { rememberFn });
   if (outside) {
     throwErrorSentence({
@@ -807,7 +903,7 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
 
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
-  const requestedOutputFile = String(sentence?.to?.filename ?? "").trim();
+  const requestedOutputFile = resolveFilenameFromCase(sentence?.to, rememberFn);
   const outputHandle = platformOutputHandleName(sentence, "video");
   const outputPrefix = normalizePlatformHandleToPrefix(outputHandle, "video");
   const defaultOutputFilename = `${outputPrefix}.mp4`;
