@@ -1,4 +1,5 @@
 from filename "./brief_manuscript.pya" ob name brief manuscript to name brief manuscript be import do
+from filename "./better_compare.pya" ob name better compare to name better compare be import do
 
 su name draw size shorts be map def
   su name width ob num 720 ya
@@ -27,10 +28,30 @@ Use both sources to choose a hook image that previews the whole narrative and vi
 
 Respond with just the image prompt..text.quoted be text ya
 
+exists su name brief video manuscript judge prompter ob text quoted.text.You are comparing two candidate spoken scripts for a 30-60 second history short.
+
+Pick the better script using these priorities:
+1. Strong hook and curiosity.
+2. Clear factual grounding in the source transcript.
+3. Tight momentum and payoff.
+4. Shareability and emotional impact.
+
+Return only A or B..text.quoted be text ya
+
+su name brief video manuscript draft ob text source to name text manuscript out be ceremony def
+  su name brief video manuscript draft run stage from text of ob of this to name text manuscript out be brief manuscript do
+  su name manuscript out ret
+prah
+
+su name brief video manuscript improve from text source to name text manuscript out be ceremony def
+  su name brief video manuscript improve run stage from la ob text of ob of this to name text manuscript scratch be brief video manuscript draft do ko ob text of ob of brief video manuscript judge prompter to name text manuscript out atmost num 1 be better compare do
+  su name manuscript out ret
+prah
+
 su name brief video from text manuscript be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
 
-  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief manuscript do
+  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief video manuscript improve do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 
@@ -79,7 +100,7 @@ prah
 su name brief video from text manuscript to filename video short be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
 
-  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief manuscript do
+  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief video manuscript improve do
 
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
 

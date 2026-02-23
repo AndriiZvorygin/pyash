@@ -48,6 +48,23 @@ const baseMindSignatureWords = [
   ["be", "write", "ob", "name", "text", "to", "name", "mind", "totext", "text", "vyah", "stream", "with", "name", "map"]
 ];
 
+function replaceObNameTextWithNum(words) {
+  const out = [...words];
+  for (let i = 0; i < out.length - 2; i += 1) {
+    if (out[i] === "ob" && out[i + 1] === "name" && out[i + 2] === "text") {
+      out[i + 2] = "num";
+      return out;
+    }
+  }
+  return null;
+}
+
+const obNameNumSignatures = baseMindSignatureWords
+  .map(replaceObNameTextWithNum)
+  .filter(Boolean);
+
+const baseAndNameNumSignatures = baseMindSignatureWords.concat(obNameNumSignatures);
+
 function replaceWithWoTools(words) {
   const out = [...words];
   for (let i = 0; i < out.length - 2; i += 1) {
@@ -59,7 +76,7 @@ function replaceWithWoTools(words) {
   return null;
 }
 
-const withWoToolsSignatures = baseMindSignatureWords
+const withWoToolsSignatures = baseAndNameNumSignatures
   .map(replaceWithWoTools)
   .filter(Boolean);
 
@@ -96,7 +113,7 @@ const withWoToolsNoToSignatures = withWoToolsSignatures
   })
   .filter(words => words.includes("ob") && words.includes("for") && words.includes("with"));
 
-const agentCwdSignatures = baseMindSignatureWords.map(words => [
+const agentCwdSignatures = baseAndNameNumSignatures.map(words => [
   "be",
   "write",
   "at",
@@ -108,8 +125,11 @@ const agentCwdWithWoToolsSignatures = agentCwdSignatures
   .map(replaceWithWoTools)
   .filter(Boolean);
 
-export const mindSignatureWords = baseMindSignatureWords
+const allMindSignatureWords = baseAndNameNumSignatures
   .concat(withWoToolsSignatures)
   .concat(withWoToolsNoToSignatures)
   .concat(agentCwdSignatures)
   .concat(agentCwdWithWoToolsSignatures);
+
+export const mindSignatureWords = [...new Set(allMindSignatureWords.map(words => words.join(" ")))]
+  .map(signature => signature.split(" "));

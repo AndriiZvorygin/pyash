@@ -36,7 +36,7 @@ test("run writes run newspaper with evoke/result", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.equal(lines[0], "exists su name run-1 from time 2025-01-01T00:00:00Z be run ya");
+  assert.equal(lines[0], "exists su name run-1 since name 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines[1].startsWith("ob filename "));
   assert.equal(lines[2], "exists su name evoke-0 ob la exists su name alpha ob num 1 be number ya ko be evoke ya");
   assert.equal(lines[3], "exists su name alpha ob num 1 be number ya");

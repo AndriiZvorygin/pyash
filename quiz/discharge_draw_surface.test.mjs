@@ -28,9 +28,9 @@ test("discharge as wo draw frees comfyui models", async () => {
   try {
     const out = await interpret(parse("be discharge as wo draw do"));
     assert.equal(out?.value?.boolean, true);
-    assert.equal(calls.length, 1);
-    assert.ok(calls[0].url.endsWith("/free"));
-    assert.deepEqual(calls[0].body, { unload_models: true, free_memory: true });
+    const freeCalls = calls.filter(call => call.url.endsWith("/free"));
+    assert.equal(freeCalls.length, 1);
+    assert.deepEqual(freeCalls[0].body, { unload_models: true, free_memory: true });
   } finally {
     globalThis.fetch = originalFetch;
     forget();

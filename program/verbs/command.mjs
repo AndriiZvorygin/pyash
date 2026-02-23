@@ -245,6 +245,7 @@ function buildCommandAudit({
 } = {}) {
   const lane = resolveConfigMapText("command configure", "audit security lane", { rememberFn });
   const id = requestId ?? nextAuditId();
+  const normalizedClass = String(commandClass ?? "").trim().toLowerCase();
   const audit = {
     mood: "ya",
     exists: true,
@@ -254,10 +255,12 @@ function buildCommandAudit({
     as: { name: stage || "policy" },
     from: { name: policy?.source ?? "command configure" },
     accordingto: { name: decision ?? policy?.mode ?? "allow" },
-    by: { name: commandClass ?? "unknown" },
     ob: { text: sentenceToPyash(sentence ?? {}) },
     fromtext: { text: new Date().toISOString() }
   };
+  if (normalizedClass && normalizedClass !== "unknown") {
+    audit.by = { name: normalizedClass };
+  }
   if (resultSentence) audit.totext = { text: sentenceToPyash(resultSentence) };
   if (lane) audit.at = { filename: lane };
   return audit;

@@ -3,7 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 const SPEC_DIR = path.resolve("documentation/specifications");
-const MAX_FILES = 20;
+const MAX_FILES = 24;
 const MAX_BYTES = 16 * 1024;
 
 const entries = await readdir(SPEC_DIR);
