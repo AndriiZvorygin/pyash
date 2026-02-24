@@ -1,8 +1,9 @@
-import { resolveConfigBool, resolveConfigSeries } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigSeries } from "../configure/env.mjs";
 import { dischargeDrawBackend } from "./draw_admin.mjs";
 import { dischargeHearBackend } from "./hear_admin.mjs";
 import { dischargeOllamaMind, listWarmOllamaMinds } from "./ollama_admin.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
+import { doRemember, remember } from "../remember/index.mjs";
 
 function normalizeClassList(values = []) {
   const out = [];
@@ -19,6 +20,60 @@ function normalizeClassList(values = []) {
 function autoDischargeEnabled({ rememberFn } = {}) {
   const configured = resolveConfigBool("provider auto discharge", { rememberFn });
   return configured !== false;
+}
+
+function activeProviderClass({ rememberFn = remember } = {}) {
+  const text = String(rememberFn?.("provider active class")?.ob?.text ?? "").trim().toLowerCase();
+  return text || "";
+}
+
+function rememberActiveProviderClass(activeClass) {
+  const name = String(activeClass ?? "").trim().toLowerCase();
+  if (!name) return;
+  doRemember({
+    mood: "ya",
+    su: { name: "provider active class" },
+    ob: { text: name },
+    be: "text"
+  });
+}
+
+function autoDischargeSettleMs({ rememberFn } = {}) {
+  const configured = Number(resolveConfigNum("provider auto discharge settle ms", { rememberFn }));
+  if (Number.isFinite(configured)) return Math.max(0, Math.floor(configured));
+  return 1200;
+}
+
+async function settleAfterSwitch({ activeClass, previousClass, changed, rememberFn } = {}) {
+  if (!changed) return 0;
+  const active = String(activeClass ?? "").trim().toLowerCase();
+  const previous = String(previousClass ?? "").trim().toLowerCase();
+  if (!active || !previous || active === previous) return 0;
+  const waitMs = autoDischargeSettleMs({ rememberFn });
+  if (waitMs <= 0) return 0;
+  await new Promise(resolve => setTimeout(resolve, waitMs));
+  return waitMs;
+}
+
+async function finalizeAutoDischarge(result = {}, { activeClass, previousClass, rememberFn } = {}) {
+  const waitedMs = await settleAfterSwitch({
+    activeClass,
+    previousClass,
+    changed: Boolean(result?.changed),
+    rememberFn
+  });
+  rememberActiveProviderClass(activeClass);
+  if (waitedMs > 0) {
+    emitExchangeSentence({
+      mood: "ya",
+      be: "number",
+      su: { name: "provider auto discharge settle ms" },
+      from: { name: String(activeClass ?? "").trim().toLowerCase() || "provider" },
+      ob: { num: waitedMs }
+    });
+    return { ...result, waitedMs };
+  }
+  return result;
 }
 
 function gpuExclusiveClasses({ rememberFn } = {}) {
@@ -55,12 +110,13 @@ function modelMatchesTarget(candidate, target) {
 export async function enforceAutoDischarge({ activatingClass, activatingModel = "", rememberFn } = {}) {
   const activeClass = String(activatingClass ?? "").trim().toLowerCase();
   if (!activeClass) return { changed: false, activated: "", released: [] };
+  const previousClass = activeProviderClass({ rememberFn });
   if (!autoDischargeEnabled({ rememberFn })) {
-    return { changed: false, activated: activeClass, released: [] };
+    return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
   }
   const classes = gpuExclusiveClasses({ rememberFn });
   if (!classes.includes(activeClass)) {
-    return { changed: false, activated: activeClass, released: [] };
+    return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
   }
 
   if (activeClass === "mind") {
@@ -100,7 +156,7 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
-    return result;
+    return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
   }
 
   if (activeClass === "draw") {
@@ -128,7 +184,7 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
-    return result;
+    return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
   }
 
   if (activeClass === "qwen say") {
@@ -164,7 +220,7 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
-    return result;
+    return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
   }
 
   if (activeClass === "hear") {
@@ -192,10 +248,10 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     if (warm.length > 0) released.push("mind");
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
-    return result;
+    return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
   }
 
-  return { changed: false, activated: activeClass, released: [] };
+  return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
 }
 
 function emitAutoDischarge(result = {}) {
