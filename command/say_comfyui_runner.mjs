@@ -8,6 +8,7 @@ function parseArgs(argv) {
   const out = {
     textStdin: false,
     text: null,
+    instruct: null,
     host: null,
     backend: null,
     workflowRoot: null,
@@ -19,6 +20,7 @@ function parseArgs(argv) {
     const arg = args[i];
     if (arg === "--text-stdin") out.textStdin = true;
     else if (arg === "--text") out.text = args[++i] ?? null;
+    else if (arg === "--instruct") out.instruct = args[++i] ?? null;
     else if (arg === "--host") out.host = args[++i] ?? null;
     else if (arg === "--backend") out.backend = args[++i] ?? null;
     else if (arg === "--workflow-root") out.workflowRoot = args[++i] ?? null;
@@ -88,6 +90,9 @@ async function readMappingPya(workflowFile) {
       const key = String(m[1] ?? "").trim().toLowerCase();
       const value = String(m[2] ?? "");
       if (key === "text path") result.textPath = value;
+      if (key === "instruct path") result.instructPath = value;
+      if (key === "default instruct path") result.instructPath = value;
+      if (key === "tone path") result.instructPath = value;
       if (key === "audio path") result.audioPath = value;
       if (key === "save audio prefix path") result.saveAudioPrefixPath = value;
     }
@@ -176,6 +181,25 @@ function detectTextPath(workflow, promptObject) {
     const input = entry.inputs;
     if (input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, "text")) {
       return `${id}.inputs.text`;
+    }
+  }
+  return null;
+}
+
+function detectInstructPath(workflow, promptObject) {
+  const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
+  for (const node of nodes) {
+    const nodeId = String(node?.id ?? "");
+    if (!nodeId) continue;
+    const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
+    const hasInstruct = inputs.some((input) => String(input?.name ?? "").toLowerCase() === "default_instruct");
+    if (hasInstruct) return `${nodeId}.inputs.default_instruct`;
+  }
+  for (const [id, entry] of Object.entries(promptObject ?? {})) {
+    if (!entry || typeof entry !== "object") continue;
+    const input = entry.inputs;
+    if (input && typeof input === "object" && Object.prototype.hasOwnProperty.call(input, "default_instruct")) {
+      return `${id}.inputs.default_instruct`;
     }
   }
   return null;
@@ -299,10 +323,15 @@ async function main() {
   const workflow = await readWorkflowJson(workflowFile);
   const promptObject = normalizePromptObject(workflow);
   const mapping = await readMappingPya(workflowFile);
+  const instruct = String(opts.instruct ?? "").trim();
 
   const textPath = mapping.textPath || detectTextPath(workflow, promptObject);
   if (!textPath) throw new Error("say_comfyui_runner: text path unresolved");
   setAtPath(promptObject, textPath, text);
+  if (instruct) {
+    const instructPath = mapping.instructPath || detectInstructPath(workflow, promptObject);
+    if (instructPath) setAtPath(promptObject, instructPath, instruct);
+  }
 
   if (mapping.saveAudioPrefixPath) {
     const base = path.basename(outputPath, path.extname(outputPath));

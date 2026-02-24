@@ -40,6 +40,9 @@ exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya
 exists su name say workflow root ob filename "./say/" be default ya
 exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
+exists su name qwen say tone default ob text "speak as a compassionate teacher" be default ya
+exists su name qwen say post process ob bool truth be default ya
+exists su name qwen say post process filter ob text "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya

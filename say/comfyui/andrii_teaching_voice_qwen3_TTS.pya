@@ -1,2 +1,3 @@
 su name text path ob text "18.inputs.script" ya
+su name instruct path ob text "18.inputs.default_instruct" ya
 su name audio path ob text "7.audio" ya
