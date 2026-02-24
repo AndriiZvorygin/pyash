@@ -216,3 +216,79 @@ test("auto discharge hear unloads draw and warm ollama minds", async () => {
     globalThis.fetch = priorFetch;
   }
 });
+
+test("auto discharge waits after gpu class switch when settle ms is configured", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge settle ms" }, ob: { num: 700 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider active class" }, ob: { text: "draw" }, be: "text" });
+  doRemember({ mood: "ya", su: { name: "draw host" }, ob: { text: "http://draw.local:8188" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "ollama host" }, ob: { text: "http://ollama.local:11434" }, be: "default" });
+
+  const priorFetch = globalThis.fetch;
+  const priorSetTimeout = globalThis.setTimeout;
+  let waitedMs = 0;
+  globalThis.fetch = async (url) => {
+    const asText = String(url);
+    if (asText.endsWith("/api/ps")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ models: [] })
+      };
+    }
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
+  };
+  globalThis.setTimeout = ((fn, ms, ...args) => {
+    waitedMs = Number(ms) || 0;
+    if (typeof fn === "function") fn(...args);
+    return 0;
+  });
+  try {
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    assert.equal(waitedMs, 700);
+    assert.equal(result.waitedMs, 700);
+  } finally {
+    globalThis.fetch = priorFetch;
+    globalThis.setTimeout = priorSetTimeout;
+  }
+});
+
+test("auto discharge skips settle wait when gpu class does not change", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge settle ms" }, ob: { num: 700 }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider active class" }, ob: { text: "mind" }, be: "text" });
+  doRemember({ mood: "ya", su: { name: "draw host" }, ob: { text: "http://draw.local:8188" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "ollama host" }, ob: { text: "http://ollama.local:11434" }, be: "default" });
+
+  const priorFetch = globalThis.fetch;
+  const priorSetTimeout = globalThis.setTimeout;
+  let waited = false;
+  globalThis.fetch = async (url) => {
+    const asText = String(url);
+    if (asText.endsWith("/api/ps")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ models: [] })
+      };
+    }
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
+  };
+  globalThis.setTimeout = ((fn, _ms, ...args) => {
+    waited = true;
+    if (typeof fn === "function") fn(...args);
+    return 0;
+  });
+  try {
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    assert.equal(waited, false);
+    assert.equal(result.waitedMs ?? 0, 0);
+  } finally {
+    globalThis.fetch = priorFetch;
+    globalThis.setTimeout = priorSetTimeout;
+  }
+});
