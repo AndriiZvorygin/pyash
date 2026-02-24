@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { doRemember, forget, remember } from "../program/remember/index.mjs";
+import { qwenSay, splitQwenSayTextChunks } from "../program/verbs/qwen_say.mjs";
 
 test("qwen say fixture records audio and metadata artifacts", async () => {
   forget();
@@ -62,4 +63,88 @@ test("qwen say fails fast when text path is unresolved", async () => {
     async () => interpret(parse('ob text "hello" be qwen say do')),
     /text path unresolved/
   );
+});
+
+test("splitQwenSayTextChunks keeps short text as one chunk", () => {
+  const chunks = splitQwenSayTextChunks("One short paragraph with a couple sentences. Nothing too long.");
+  assert.equal(chunks.length, 1);
+});
+
+test("qwenSay chunks long text and concatenates chunk outputs", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-chunk-out-"));
+  const output = path.join(outDir, "out.wav");
+  const longText = [
+    "Sentence one with enough words to count as meaningful.",
+    "Sentence two continues the same thought with a bit more detail.",
+    "Sentence three adds context and pacing for the narration.",
+    "Sentence four keeps the flow moving with more substance.",
+    "Sentence five brings another concrete example to the script.",
+    "Sentence six closes the paragraph while staying clear."
+  ].join(" ").repeat(8);
+
+  const chunkInputs = [];
+  let concatCalled = 0;
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    chunkInputs.push(String(text));
+    await fs.writeFile(chunkFile, Buffer.from(`RIFF_chunk_${chunkInputs.length}`));
+  };
+  const concatAudioFn = async ({ inputs, output: outFile }) => {
+    concatCalled += 1;
+    assert.ok(Array.isArray(inputs));
+    assert.ok(inputs.length > 1);
+    await fs.writeFile(outFile, Buffer.from("RIFF_concat_out"));
+  };
+
+  try {
+    const result = await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: longText },
+        to: { filename: output }
+      },
+      { runSayFn, concatAudioFn }
+    );
+    assert.equal(result?.be, "say");
+    assert.equal(concatCalled, 1);
+    assert.ok(chunkInputs.length > 1);
+    assert.ok(chunkInputs.every((entry) => entry.trim().length > 0));
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay keeps short text in a single synthesis call", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-short-out-"));
+  const output = path.join(outDir, "out.wav");
+  let runCalls = 0;
+  let concatCalls = 0;
+  const runSayFn = async ({ output: chunkFile }) => {
+    runCalls += 1;
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_short"));
+  };
+  const concatAudioFn = async () => {
+    concatCalls += 1;
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "Short text only." },
+        to: { filename: output }
+      },
+      { runSayFn, concatAudioFn }
+    );
+    assert.equal(runCalls, 1);
+    assert.equal(concatCalls, 0);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
 });
