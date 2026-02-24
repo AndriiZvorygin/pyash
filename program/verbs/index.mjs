@@ -15,6 +15,7 @@ import abridge, { signatures as abridgeSignatures } from "./abridge.mjs";
 import seriesMap, { signatures as seriesMapSignatures } from "./series_map.mjs";
 import vectorMap, { signatures as vectorMapSignatures } from "./vector_map.mjs";
 import text, { signatures as textSignatures } from "./text.mjs";
+import instead, { signatures as insteadSignatures } from "./instead.mjs";
 import filename, { signatures as filenameSignatures } from "./filename.mjs";
 import compile, { signatures as compileSignatures } from "./exchange/compile.mjs";
 import importJson, { signatures as importSignatures } from "./exchange/import.mjs";
@@ -97,6 +98,7 @@ export {
   seriesMap,
   vectorMap,
   text,
+  instead,
   filename,
   compile,
   importJson,
@@ -167,6 +169,7 @@ export const builtInSignatures = [
   ...seriesMapSignatures,
   ...vectorMapSignatures,
   ...textSignatures,
+  ...insteadSignatures,
   ...filenameSignatures,
   ...compileSignatures,
   ...importSignatures,

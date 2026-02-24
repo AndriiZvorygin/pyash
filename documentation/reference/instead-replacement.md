@@ -1,6 +1,6 @@
 # Instead Replacement Profile
 
-Status: reference profile for proposed map-driven replacement verb `be instead do`.
+Status: reference profile for implemented map-driven replacement verb `be instead do`.
 
 ## 1. Purpose
 
