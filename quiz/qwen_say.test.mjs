@@ -20,6 +20,7 @@ test("qwen say fixture records audio and metadata artifacts", async () => {
   doRemember({ mood: "ya", su: { name: "say host" }, ob: { text: "http://localhost:8188" }, be: "default" });
   doRemember({ mood: "ya", su: { name: "say workflow root" }, ob: { text: "./say/" }, be: "default" });
   doRemember({ mood: "ya", su: { name: "say workflow default" }, ob: { text: "andrii_voice_qwen3_TTS" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   process.env.PYA_SAY_COMFYUI_FIXTURE_FILE = path.resolve("quiz/fixtures/pyash_raven.png");
   try {
     await interpret(parse('su name voice ob text "hello from qwen say" be qwen say do'));
@@ -70,9 +71,23 @@ test("splitQwenSayTextChunks keeps short text as one chunk", () => {
   assert.equal(chunks.length, 1);
 });
 
+test("splitQwenSayTextChunks splits long input sentence by sentence", () => {
+  const longText = [
+    "First sentence gives setup.",
+    "Second sentence adds detail.",
+    "Third sentence escalates stakes.",
+    "Fourth sentence gives context.",
+    "Fifth sentence closes the point."
+  ].join(" ").repeat(8);
+  const chunks = splitQwenSayTextChunks(longText);
+  assert.ok(chunks.length > 8);
+  assert.ok(chunks.every((chunk) => chunk.trim().length > 0));
+});
+
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-chunk-out-"));
   const output = path.join(outDir, "out.wav");
   const longText = [
@@ -120,6 +135,7 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
 test("qwenSay keeps short text in a single synthesis call", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-short-out-"));
   const output = path.join(outDir, "out.wav");
   let runCalls = 0;
@@ -144,6 +160,146 @@ test("qwenSay keeps short text in a single synthesis call", async () => {
     );
     assert.equal(runCalls, 1);
     assert.equal(concatCalls, 0);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay treats as text as tone override when it is not a workflow name", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-out-"));
+  const output = path.join(outDir, "out.wav");
+  let seenInstruct = "";
+  let seenWorkflow = "";
+  const runSayFn = async ({ instruct, workflowName, output: chunkFile }) => {
+    seenInstruct = String(instruct ?? "");
+    seenWorkflow = String(workflowName ?? "");
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tone"));
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        as: { text: "professional tone" },
+        ob: { text: "This line should sound steady and clear." },
+        to: { filename: output }
+      },
+      {
+        runSayFn,
+        pathExistsFn: async () => false
+      }
+    );
+    assert.equal(seenInstruct, "professional tone");
+    assert.equal(seenWorkflow, "andrii_teaching_voice_qwen3_TTS");
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay keeps as text workflow override when workflow exists", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-workflow-out-"));
+  const output = path.join(outDir, "out.wav");
+  let seenInstruct = "";
+  let seenWorkflow = "";
+  const runSayFn = async ({ instruct, workflowName, output: chunkFile }) => {
+    seenInstruct = String(instruct ?? "");
+    seenWorkflow = String(workflowName ?? "");
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_workflow"));
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        as: { text: "andrii_voice_qwen3_TTS" },
+        ob: { text: "A short line for workflow check." },
+        to: { filename: output }
+      },
+      {
+        runSayFn,
+        pathExistsFn: async () => true
+      }
+    );
+    assert.equal(seenWorkflow, "andrii_voice_qwen3_TTS");
+    assert.notEqual(seenInstruct, "andrii_voice_qwen3_TTS");
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay post-processes audio when enabled", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: true }, be: "default" });
+  doRemember({
+    mood: "ya",
+    su: { name: "qwen say post process filter" },
+    ob: { text: "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" },
+    be: "default"
+  });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-postprocess-out-"));
+  const output = path.join(outDir, "out.wav");
+  let postProcessCalls = 0;
+  let seenFilter = "";
+  const runSayFn = async ({ output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_postprocess_src"));
+  };
+  const postProcessFn = async ({ input, output: cleaned, filter }) => {
+    postProcessCalls += 1;
+    seenFilter = String(filter ?? "");
+    await fs.copyFile(input, cleaned);
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "Short text for post process check." },
+        to: { filename: output }
+      },
+      { runSayFn, postProcessFn }
+    );
+    assert.equal(postProcessCalls, 1);
+    assert.equal(seenFilter, "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB");
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay skips post-processing when disabled", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-no-postprocess-out-"));
+  const output = path.join(outDir, "out.wav");
+  let postProcessCalls = 0;
+  const runSayFn = async ({ output: chunkFile }) => {
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_no_postprocess_src"));
+  };
+  const postProcessFn = async () => {
+    postProcessCalls += 1;
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "Short text for no post process check." },
+        to: { filename: output }
+      },
+      { runSayFn, postProcessFn }
+    );
+    assert.equal(postProcessCalls, 0);
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }

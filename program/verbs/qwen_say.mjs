@@ -9,14 +9,8 @@ import { renderSayValue } from "./say.mjs";
 import { recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
-
-function resolveWorkflowName(sentence, { rememberFn = remember } = {}) {
-  const explicit = String(sentence?.as?.text ?? "").trim();
-  if (explicit) return explicit;
-  return resolveConfigText("say workflow default", { rememberFn }) || "andrii_teaching_voice_qwen3_TTS";
-}
 
 function resolveHost({ rememberFn = remember } = {}) {
   return (
@@ -28,6 +22,76 @@ function resolveHost({ rememberFn = remember } = {}) {
 
 function resolveWorkflowRoot({ rememberFn = remember } = {}) {
   return resolveConfigText("say workflow root", { rememberFn }) || "./say/";
+}
+
+function resolveWorkflowDefault({ rememberFn = remember } = {}) {
+  return resolveConfigText("say workflow default", { rememberFn }) || "andrii_teaching_voice_qwen3_TTS";
+}
+
+function resolveToneDefault({ rememberFn = remember } = {}) {
+  return resolveConfigText("qwen say tone default", { rememberFn }) || "speak as a compassionate teacher";
+}
+
+function resolvePostProcessEnabled({ rememberFn = remember } = {}) {
+  const configured = resolveConfigBool("qwen say post process", { rememberFn });
+  return configured !== false;
+}
+
+function resolvePostProcessFilter({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("qwen say post process filter", { rememberFn }) ||
+    "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB"
+  );
+}
+
+async function pathExists(filename) {
+  try {
+    await fs.access(filename);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveWorkflowAndTone(
+  sentence,
+  { rememberFn = remember, pathExistsFn = pathExists } = {}
+) {
+  const workflowRoot = resolveWorkflowRoot({ rememberFn });
+  const workflowDefault = resolveWorkflowDefault({ rememberFn });
+  const toneDefault = resolveToneDefault({ rememberFn });
+  const explicit = String(sentence?.as?.text ?? "").trim();
+  if (!explicit) {
+    return {
+      workflowRoot,
+      workflowName: workflowDefault,
+      toneOverride: "",
+      toneDefault
+    };
+  }
+
+  const workflowCandidate = explicit.replace(/\.json$/i, "").trim();
+  const workflowPaths = [
+    path.resolve(workflowRoot, "comfyui", `${workflowCandidate}.json`),
+    path.resolve(workflowRoot, `${workflowCandidate}.json`)
+  ];
+  for (const workflowPath of workflowPaths) {
+    if (await pathExistsFn(workflowPath)) {
+      return {
+        workflowRoot,
+        workflowName: workflowCandidate,
+        toneOverride: "",
+        toneDefault
+      };
+    }
+  }
+
+  return {
+    workflowRoot,
+    workflowName: workflowDefault,
+    toneOverride: explicit,
+    toneDefault
+  };
 }
 
 function countWords(text = "") {
@@ -70,39 +134,43 @@ export function splitQwenSayTextChunks(text = "") {
   const chunks = [];
   for (const paragraph of units) {
     const sentences = splitSentences(paragraph);
-    if (sentences.length <= 4) {
-      if (countWords(paragraph) > 95) {
-        chunks.push(...splitByWordBudget(paragraph, 90));
-      } else {
-        chunks.push(paragraph);
-      }
+    if (!sentences.length) {
+      chunks.push(...splitByWordBudget(paragraph, 90));
       continue;
     }
-
-    let group = [];
-    let groupWords = 0;
     for (const sentence of sentences) {
-      group.push(sentence);
-      groupWords += countWords(sentence);
-      const flushByCount = group.length >= 4;
-      const flushBySize = group.length >= 3 && groupWords >= 65;
-      if (flushByCount || flushBySize) {
-        const chunk = group.join(" ").replace(/\s+/g, " ").trim();
+      if (countWords(sentence) > 95) {
+        chunks.push(...splitByWordBudget(sentence, 90));
+      } else {
+        const chunk = String(sentence ?? "").replace(/\s+/g, " ").trim();
         if (chunk) chunks.push(chunk);
-        group = [];
-        groupWords = 0;
       }
-    }
-    if (group.length) {
-      const chunk = group.join(" ").replace(/\s+/g, " ").trim();
-      if (chunk) chunks.push(chunk);
     }
   }
 
   return chunks.length ? chunks : [source];
 }
 
-async function runQwenSay({ text, workflowName, workflowRoot, host, output }) {
+function inferChunkTone(chunk = "", fallback = "") {
+  const text = String(chunk ?? "");
+  if (!text.trim()) return fallback;
+  if (/[?]/.test(text)) return "speak in a curious, professional tone";
+  if (/\b(crisis|collapse|warning|debt|foreclosure|danger|harm|desperate|loss)\b/i.test(text)) {
+    return "speak in an urgent, serious tone";
+  }
+  if (/\b(restore|build|hope|future|solution|reform|can|together|opportunity|thrive)\b/i.test(text)) {
+    return "speak in an optimistic, confident tone";
+  }
+  return fallback;
+}
+
+function resolveChunkInstructs(chunks = [], { toneOverride = "", toneDefault = "" } = {}) {
+  const override = String(toneOverride ?? "").trim();
+  if (override) return chunks.map(() => override);
+  return chunks.map((chunk) => inferChunkTone(chunk, toneDefault));
+}
+
+async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output }) {
   const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/say_comfyui_runner.mjs");
   const args = [
     runner,
@@ -117,6 +185,9 @@ async function runQwenSay({ text, workflowName, workflowRoot, host, output }) {
     "--output",
     output
   ];
+  if (String(instruct ?? "").trim()) {
+    args.push("--instruct", String(instruct).trim());
+  }
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
@@ -127,6 +198,30 @@ async function runQwenSay({ text, workflowName, workflowRoot, host, output }) {
     proc.on("close", (code) => {
       if (code === 0) resolve({ stdout: stdout.trim() });
       else reject(new Error(stderr.trim() || `qwen say defective: status=${code}`));
+    });
+  });
+}
+
+async function postProcessQwenSayAudio({ input, output, filter }) {
+  const args = [
+    "-y",
+    "-i",
+    input,
+    "-af",
+    String(filter ?? ""),
+    output
+  ];
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`qwen say defective: post process failed status=${code}: ${clipped}`));
+      }
     });
   });
 }
@@ -174,7 +269,9 @@ export async function qwenSay(
   {
     remember: rememberFn = remember,
     runSayFn = runQwenSay,
-    concatAudioFn = concatAudioChunks
+    concatAudioFn = concatAudioChunks,
+    pathExistsFn = pathExists,
+    postProcessFn = postProcessQwenSayAudio
   } = {}
 ) {
   await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
@@ -190,14 +287,18 @@ export async function qwenSay(
 
   const outputPath = resolveOutputPath(sentence, { ext: ".wav" });
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  const workflowName = resolveWorkflowName(sentence, { rememberFn });
-  const workflowRoot = resolveWorkflowRoot({ rememberFn });
+  const { workflowName, workflowRoot, toneDefault, toneOverride } = await resolveWorkflowAndTone(sentence, { rememberFn, pathExistsFn });
   const host = resolveHost({ rememberFn });
   const chunks = splitQwenSayTextChunks(text);
+  const chunkInstructs = resolveChunkInstructs(chunks, { toneDefault, toneOverride });
+  const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
+  const postProcessFilter = resolvePostProcessFilter({ rememberFn });
+  let postProcessApplied = false;
 
   if (chunks.length <= 1) {
     await runSayFn({
       text: chunks[0] ?? text,
+      instruct: chunkInstructs[0] ?? toneDefault,
       workflowName,
       workflowRoot,
       host,
@@ -212,6 +313,7 @@ export async function qwenSay(
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
         await runSayFn({
           text: chunkText,
+          instruct: chunkInstructs[i] ?? toneDefault,
           workflowName,
           workflowRoot,
           host,
@@ -222,6 +324,22 @@ export async function qwenSay(
       await concatAudioFn({ inputs: chunkFiles, output: outputPath });
     } finally {
       await fs.rm(chunkDir, { recursive: true, force: true });
+    }
+  }
+
+  if (postProcessEnabled && String(postProcessFilter ?? "").trim()) {
+    const parsed = path.parse(outputPath);
+    const cleanedPath = path.join(parsed.dir, `${parsed.name}.cleaned${parsed.ext || ".wav"}`);
+    try {
+      await postProcessFn({
+        input: outputPath,
+        output: cleanedPath,
+        filter: postProcessFilter
+      });
+      await fs.rename(cleanedPath, outputPath);
+      postProcessApplied = true;
+    } catch {
+      await fs.rm(cleanedPath, { force: true });
     }
   }
 
@@ -244,7 +362,12 @@ export async function qwenSay(
     outputSha256: sha256(audioBytes),
     format: "wav",
     streaming: false,
-    chunks: chunks.length
+    chunks: chunks.length,
+    tone: toneOverride || toneDefault,
+    toneStrategy: toneOverride ? "override" : "heuristic",
+    postProcess: postProcessEnabled,
+    postProcessApplied,
+    postProcessFilter
   };
   const metadataText = canonicalJsonStringify(metadata);
   await fs.writeFile(metadataPath, metadataText, "utf8");
