@@ -9,6 +9,7 @@ Use this when the cheat sheet is not enough.
 - **Configuration defaults (dynamic)** → `02-core-execution.md`
 - **`vyah` aspects (stream/eval/start/await/cancel)** → `03-vyah-and-aspect.md`
 - **Runtime primitives (streams/tasks/IR)** → `04-runtime-primitives.md`
+- **Map-driven text replacement (`be instead`)** → `documentation/reference/instead-replacement.md`
 - **Run recording, newspaper, artifacts, again-mode** → `05-run-recording-and-artifacts.md`
 - **Maps / JSON / YAML / CSV formats** → `06-data-formats.md`
 - **IO verbs (read/write/download/command/etc.)** → `07-io-and-scripts.md`
@@ -24,6 +25,7 @@ Use this when the cheat sheet is not enough.
 - **Better compare refinery profile (reference)** → `documentation/reference/better-compare-refinery.md`
 - **Chirp refinery profile (reference)** → `documentation/reference/chirp-refinery.md`
 - **Brief manuscript refinery profile (reference)** → `documentation/reference/brief-manuscript-refinery.md`
+- **Instead replacement profile (reference)** → `documentation/reference/instead-replacement.md`
 - **External TUI session projection (Codex/others)** → `documentation/reference/agent-tui-session-projection.md`
 
 ## If you see errors about…
