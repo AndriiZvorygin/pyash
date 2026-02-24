@@ -15,7 +15,7 @@ function parseArgs(argv) {
     outputFile: args[1],
     model: process.env.PYA_DRAW_PROMPT_MODEL || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct",
     host: process.env.OLLAMA_HOST || "http://localhost:11434",
-    systemPrompt: "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation."
+    systemPrompt: "Use the provided fields to generate one image prompt. Follow instruction exactly and return only prompt text."
   };
   for (let i = 2; i < args.length; i += 1) {
     const arg = args[i];
@@ -47,92 +47,11 @@ function packetValue(value) {
   return text || "EMPTY";
 }
 
-function normalizeCutText(value) {
-  return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function findDistinctNeighborText(cuts, index, direction) {
-  const list = Array.isArray(cuts) ? cuts : [];
-  const current = normalizeCutText(list[index]?.obText ?? "");
-  let i = Number(index) + Number(direction);
-  while (i >= 0 && i < list.length) {
-    const candidateRaw = String(list[i]?.obText ?? "").trim();
-    const candidate = normalizeCutText(candidateRaw);
-    if (candidate && candidate !== current) return candidateRaw;
-    i += Number(direction);
-  }
-  return "";
-}
-
-function shotModeForIndex(index) {
-  const n = Math.max(0, Number(index) || 0) % 4;
-  if (n === 0) return "establishing wide shot";
-  if (n === 1) return "medium character-driven scene";
-  if (n === 2) return "close-up symbolic detail";
-  return "dynamic action or transition shot";
-}
-
-function sceneModeHintForText(value) {
-  const text = normalizeCutText(value);
-  if (!text) return "neutral";
-  if (/(juxtap|contrast|versus|\bvs\b|split scene|before and after|then and now|across time)/u.test(text)) {
-    return "contrast";
-  }
-  let positive = 0;
-  let negative = 0;
-  const positiveTokens = [
-    "reform",
-    "restore",
-    "restored",
-    "justice",
-    "equity",
-    "freedom",
-    "relief",
-    "prosper",
-    "stability",
-    "ownership",
-    "uplift",
-    "solution",
-    "healed"
-  ];
-  const negativeTokens = [
-    "debt",
-    "slavery",
-    "foreclosure",
-    "oppression",
-    "starved",
-    "crisis",
-    "ruinous",
-    "collapse",
-    "hoarding",
-    "eviction",
-    "exploitation",
-    "despair",
-    "suffering"
-  ];
-  for (const token of positiveTokens) if (text.includes(token)) positive += 1;
-  for (const token of negativeTokens) if (text.includes(token)) negative += 1;
-  if (positive > negative) return "positive";
-  if (negative > positive) return "negative";
-  return "neutral";
-}
-
-function hasSolutionSignal(value) {
-  const text = normalizeCutText(value);
-  if (!text) return false;
-  return /(solution|reform|restor|justice|equity|ownership|freedom|relief|law|policy|solon)/u.test(text);
-}
-
-function hasProblemSignal(value) {
-  const text = normalizeCutText(value);
-  if (!text) return false;
-  return /(problem|debt|slavery|foreclosure|oppression|starved|crisis|ruinous|collapse|hoarding|eviction|exploitation|despair|suffering|harm)/u.test(text);
-}
-
-function sentimentTargetForText(value) {
-  if (hasSolutionSignal(value)) return "positive";
-  if (hasProblemSignal(value)) return "negative";
-  return sceneModeHintForText(value);
+function cutTextAt(cuts, index) {
+  if (!Array.isArray(cuts)) return "";
+  const at = Number(index);
+  if (!Number.isInteger(at) || at < 0 || at >= cuts.length) return "";
+  return String(cuts[at]?.obText ?? "").trim();
 }
 
 function buildPromptifyPacket({
@@ -142,69 +61,22 @@ function buildPromptifyPacket({
   fullScript = "",
   previousPrompts = []
 } = {}) {
-  const current = cuts[index] ?? {};
-  const previousText = findDistinctNeighborText(cuts, index, -1);
-  const nextText = findDistinctNeighborText(cuts, index, 1);
-  const currentText = String(current?.obText ?? "").trim();
-  const shotMode = shotModeForIndex(index);
-  const sceneModeHint = sceneModeHintForText(currentText);
-  const solutionReferenceHint = hasSolutionSignal(currentText);
-  const problemReferenceHint = hasProblemSignal(currentText);
-  const sentimentTarget = sentimentTargetForText(currentText);
+  const currentText = cutTextAt(cuts, index);
+  const previousText = cutTextAt(cuts, Number(index) - 1);
+  const nextText = cutTextAt(cuts, Number(index) + 1);
   const priorPrompts = Array.isArray(previousPrompts)
     ? previousPrompts.map(value => String(value ?? "").trim()).filter(Boolean)
     : [];
   const previousPrompt1 = priorPrompts.length ? priorPrompts[priorPrompts.length - 1] : "";
   const previousPrompt2 = priorPrompts.length > 1 ? priorPrompts[priorPrompts.length - 2] : "";
-  const previousPrompt = priorPrompts.join("\n");
   const lines = [
-    "[ROLE]",
-    "You generate ONE visual prompt for the CURRENT CUT only.",
-    "Use previous prompts only to avoid repetition; do not force continuity with them.",
-    "Primary relevance must be current_cut, with full_script as context.",
-    "",
-    "[TASK]",
-    packetValue(instruction),
-    "",
-    "[RELEVANCE POLICY]",
-    "Use full_script as narrative context; do not limit visuals to literal words in current_cut.",
-    "You may introduce source-faithful implied details from full_script to tell the bigger story in one frame.",
-    "Prompt must contribute a new perspective, detail, or causal angle compared to the two previous prompts.",
-    `solution_reference_hint: ${packetValue(solutionReferenceHint ? "truth" : "lie")}`,
-    `problem_reference_hint: ${packetValue(problemReferenceHint ? "truth" : "lie")}`,
-    `sentiment_target: ${packetValue(sentimentTarget)}`,
-    "",
-    "[DIVERSITY GUARDRAILS]",
-    "The image must be visually distinct from neighboring cuts and prior prompts.",
-    "Do not reuse the same central composition, same subject arrangement, or same symbolic centerpiece.",
-    "Prefer a new perspective, setting emphasis, or camera distance when semantic overlap exists.",
-    "Ensure clear novelty from previous_prompt_1 and previous_prompt_2.",
-    "",
-    "[SCENE CONSISTENCY]",
-    "First infer the scene mode: negative, positive, contrast, or neutral. Then follow sentiment_target.",
-    "Use a single coherent scene by default; use split-scene composition only when contrast is explicitly required.",
-    "If sentiment_target is positive, this cut MUST be solution-forward and feature the solution mechanism.",
-    "If sentiment_target is negative, this cut MUST feature root causes and harm/problem conditions.",
-    "If sentiment_target is contrast, render a single frame split scene with clear before/after contrast.",
-    "Include one short causal visual clause describing why the scene looks this way.",
-    "",
-    "[GLOBAL CONTEXT]",
-    `full_script: ${packetValue(fullScript)}`,
-    "",
-    "[NEIGHBOR CONTEXT]",
-    `previous_cut: ${packetValue(previousText)}`,
+    `instruction: ${packetValue(instruction)}`,
     `current_cut: ${packetValue(currentText)}`,
+    `previous_cut: ${packetValue(previousText)}`,
     `next_cut: ${packetValue(nextText)}`,
-    `shot_mode: ${packetValue(shotMode)}`,
-    `scene_mode_hint: ${packetValue(sceneModeHint)}`,
-    "",
-    "[PRIOR VISUAL STATE]",
+    `full_script: ${packetValue(fullScript)}`,
     `previous_prompt_1: ${packetValue(previousPrompt1)}`,
-    `previous_prompt_2: ${packetValue(previousPrompt2)}`,
-    `previous_prompt: ${packetValue(previousPrompt)}`,
-    "",
-    "[OUTPUT RULE]",
-    "Return ONLY one single-line prompt. No markdown. No explanation. No visible text in the image."
+    `previous_prompt_2: ${packetValue(previousPrompt2)}`
   ];
   return lines.join("\n");
 }

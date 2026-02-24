@@ -8,7 +8,19 @@ su name draw size shorts be map def
 prah
 
 exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
-exists su name draw promptify instruction ob text quoted.text.Convert this transcript cut into one concise visual image prompt for generation. Prioritize relevance to the current cut, using full script context for source-faithful implied detail. You may inspect previous prompts only to avoid repetition; do not force continuity. The prompt must be clearly different from the previous two prompts and add a new perspective, detail, or causal angle. If the current cut references a solution, reform, policy, law, or remedy, the prompt MUST be positive and feature the solution mechanism. If the current cut references a problem, debt, oppression, or harm, the prompt MUST be negative and feature root causes. Use split-scene only for explicit contrast. Return only the prompt text. No markdown, no quotes, no explanation..text.quoted be text ya
+exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
+
+Follow these rules:
+1. Treat current_cut as the primary subject. The image must directly represent current_cut.
+2. Use full_script only as supporting context for source-faithful detail.
+3. Use previous_prompt_1 and previous_prompt_2 only for novelty checks; do not force continuity with them.
+4. The new prompt must be clearly different from previous_prompt_1 and previous_prompt_2, adding a new perspective, detail, or causal angle.
+5. If current_cut references a solution, reform, policy, law, or remedy, output a positive sentiment prompt that features the solution mechanism.
+6. If current_cut references a problem, debt, oppression, or harm, output a negative sentiment prompt that features causes and harms.
+7. Use split-scene only when current_cut explicitly describes contrast or before/after.
+8. No visible text in the image.
+
+Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be text ya
 
 exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Shorts thumbnail prompt director.
 

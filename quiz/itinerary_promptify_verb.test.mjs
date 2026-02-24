@@ -39,22 +39,17 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     assert.equal(resultFact?.be, "itinerary");
     const rows = Array.isArray(resultFact?.ob?.series) ? resultFact.ob.series : [];
     assert.equal(rows.length, 2);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /prompt:\[ROLE\]/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /\[TASK\]\s*Turn this cut into an image prompt\./u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /\[GLOBAL CONTEXT\]/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /prompt:instruction:\s*Turn this cut into an image prompt\./u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /current_cut:\s*pray daily/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /shot_mode:\s*establishing wide shot/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /\[RELEVANCE POLICY\]/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /\[SCENE CONSISTENCY\]/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /scene_mode_hint:\s*neutral/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /sentiment_target:\s*neutral/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /previous_cut:\s*EMPTY/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /next_cut:\s*serve others/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /full_script:\s*pray daily serve others/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /pray daily/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /current_cut:\s*serve others/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /shot_mode:\s*medium character-driven scene/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /sentiment_target:\s*neutral/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_cut:\s*pray daily/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /next_cut:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_1:\s*prompt:/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:/u);
     assert.equal(Number(rows[0]?.since?.num ?? -1), 0);
     assert.equal(Number(rows[1]?.until?.num ?? -1), 4);
   } finally {
@@ -99,8 +94,6 @@ test("promptify by num 0 disables prior prompt carryover", async () => {
     assert.match(String(rows[0]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_1:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /previous_prompt:\s*EMPTY/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:\s*EMPTY/u);
   } finally {
     globalThis.fetch = priorFetch;
   }
