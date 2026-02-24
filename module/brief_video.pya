@@ -94,6 +94,8 @@ su name brief video from text manuscript be ceremony def
 
   exists su name video thumbnail seconds ob num 1 be default ya
 
+  exists su name qwen say tone strategy ob text "promptify" be default ya
+
   su name telling ob name manuscript out be qwen say do
 
   su name hear platform from name telling become wo srt be hear do
@@ -136,6 +138,8 @@ su name brief video from text manuscript to filename video short be ceremony def
   su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
 
   exists su name video thumbnail seconds ob num 1 be default ya
+
+  exists su name qwen say tone strategy ob text "promptify" be default ya
 
   su name telling ob name manuscript out be qwen say do
 
