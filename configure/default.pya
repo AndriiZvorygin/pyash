@@ -41,6 +41,9 @@ exists su name say backend default ob text "comfyui" be default ya
 exists su name say workflow root ob filename "./say/" be default ya
 exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
 exists su name qwen say tone default ob text "speak as a compassionate teacher" be default ya
+exists su name qwen say tone strategy ob text "heuristic" be default ya
+exists su name qwen say tone promptify system prompt ob text "You are a narration tone planner for text to speech. Return only one short speaking instruction for the current sentence." be default ya
+exists su name qwen say tone promptify instruction ob text "Choose the best speaking instruction for this sentence. Return only concise tone text like: professional tone, urgent tone, reflective tone, warm encouraging tone." be default ya
 exists su name qwen say post process ob bool truth be default ya
 exists su name qwen say post process filter ob text "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" be default ya
 exists su name draw backend default ob text "comfyui" be default ya

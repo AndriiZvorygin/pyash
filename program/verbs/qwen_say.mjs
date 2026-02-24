@@ -11,6 +11,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
+import { buildPromptifyPacket, callPromptMind } from "../../command/itinerary_promptify.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
   return (
@@ -30,6 +31,42 @@ function resolveWorkflowDefault({ rememberFn = remember } = {}) {
 
 function resolveToneDefault({ rememberFn = remember } = {}) {
   return resolveConfigText("qwen say tone default", { rememberFn }) || "speak as a compassionate teacher";
+}
+
+function resolveToneStrategy({ rememberFn = remember } = {}) {
+  const mode = String(resolveConfigText("qwen say tone strategy", { rememberFn }) || "heuristic").trim().toLowerCase();
+  return mode || "heuristic";
+}
+
+function resolveTonePromptifyHost({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("qwen say tone host", { rememberFn }) ||
+    resolveConfigText("mind host", { rememberFn }) ||
+    process.env.OLLAMA_HOST ||
+    "http://localhost:11434"
+  );
+}
+
+function resolveTonePromptifyModel({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("qwen say tone model", { rememberFn }) ||
+    process.env.PYA_MIND_MODEL ||
+    "qwen3-vl:8b-instruct"
+  );
+}
+
+function resolveTonePromptifySystem({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("qwen say tone promptify system prompt", { rememberFn }) ||
+    "You are a narration tone planner for text to speech. Return only one short speaking instruction for the current sentence."
+  );
+}
+
+function resolveTonePromptifyInstruction({ rememberFn = remember } = {}) {
+  return (
+    resolveConfigText("qwen say tone promptify instruction", { rememberFn }) ||
+    "Choose the best speaking instruction for this sentence. Return only concise tone text like: professional tone, urgent tone, reflective tone, warm encouraging tone."
+  );
 }
 
 function resolvePostProcessEnabled({ rememberFn = remember } = {}) {
@@ -118,12 +155,12 @@ function splitByWordBudget(text = "", maxWords = 90) {
   return out;
 }
 
-export function splitQwenSayTextChunks(text = "") {
+export function splitQwenSayTextChunks(text = "", { forceSentenceChunks = false } = {}) {
   const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
   if (!source) return [];
   const words = countWords(source);
   const shouldChunk = source.length > 800 || words > 130;
-  if (!shouldChunk) return [source];
+  if (!forceSentenceChunks && !shouldChunk) return [source];
 
   const paragraphs = source
     .split(/\n\s*\n+/)
@@ -168,6 +205,87 @@ function resolveChunkInstructs(chunks = [], { toneOverride = "", toneDefault = "
   const override = String(toneOverride ?? "").trim();
   if (override) return chunks.map(() => override);
   return chunks.map((chunk) => inferChunkTone(chunk, toneDefault));
+}
+
+function normalizeToneInstruction(value = "", fallback = "") {
+  const tone = String(value ?? "").replace(/[`"'*]/g, "").replace(/\s+/g, " ").trim();
+  if (tone) return tone.slice(0, 140);
+  return String(fallback ?? "").trim();
+}
+
+async function promptifyToneInstructs(
+  chunks = [],
+  {
+    rememberFn = remember,
+    toneDefault = ""
+  } = {}
+) {
+  const host = resolveTonePromptifyHost({ rememberFn });
+  const model = resolveTonePromptifyModel({ rememberFn });
+  const systemPrompt = resolveTonePromptifySystem({ rememberFn });
+  const instruction = resolveTonePromptifyInstruction({ rememberFn });
+  const cuts = chunks.map((chunk, index) => ({ index, obText: String(chunk ?? "") }));
+  const fullScript = chunks.map(chunk => String(chunk ?? "").trim()).filter(Boolean).join(" ");
+  const previousPrompts = [];
+  const tones = [];
+  for (let i = 0; i < cuts.length; i += 1) {
+    const packet = buildPromptifyPacket({
+      cuts,
+      index: i,
+      instruction,
+      fullScript,
+      previousPrompts: previousPrompts.slice(-2)
+    });
+    const rawTone = await callPromptMind({
+      host,
+      model,
+      systemPrompt,
+      cutText: packet
+    });
+    const tone = normalizeToneInstruction(rawTone, toneDefault);
+    tones.push(tone);
+    previousPrompts.push(tone);
+  }
+  return tones;
+}
+
+async function planChunkInstructs(
+  chunks = [],
+  {
+    rememberFn = remember,
+    toneOverride = "",
+    toneDefault = "",
+    toneStrategy = "heuristic"
+  } = {}
+) {
+  const override = String(toneOverride ?? "").trim();
+  if (override) {
+    return { instructs: chunks.map(() => override), strategy: "override" };
+  }
+
+  const mode = String(toneStrategy ?? "").trim().toLowerCase();
+  if (mode === "promptify") {
+    try {
+      const instructs = await promptifyToneInstructs(chunks, {
+        rememberFn,
+        toneDefault
+      });
+      if (instructs.length === chunks.length && instructs.every(value => String(value ?? "").trim())) {
+        return { instructs, strategy: "promptify" };
+      }
+    } catch {
+      // fallback below
+    }
+    return {
+      instructs: chunks.map(() => toneDefault),
+      strategy: "default-fallback"
+    };
+  }
+
+  return {
+    instructs: resolveChunkInstructs(chunks, { toneOverride: "", toneDefault }),
+    strategy: "heuristic"
+  };
 }
 
 async function runQwenSay({ text, instruct = "", workflowName, workflowRoot, host, output }) {
@@ -271,7 +389,8 @@ export async function qwenSay(
     runSayFn = runQwenSay,
     concatAudioFn = concatAudioChunks,
     pathExistsFn = pathExists,
-    postProcessFn = postProcessQwenSayAudio
+    postProcessFn = postProcessQwenSayAudio,
+    planChunkInstructsFn = planChunkInstructs
   } = {}
 ) {
   await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
@@ -289,8 +408,19 @@ export async function qwenSay(
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   const { workflowName, workflowRoot, toneDefault, toneOverride } = await resolveWorkflowAndTone(sentence, { rememberFn, pathExistsFn });
   const host = resolveHost({ rememberFn });
-  const chunks = splitQwenSayTextChunks(text);
-  const chunkInstructs = resolveChunkInstructs(chunks, { toneDefault, toneOverride });
+  const toneStrategy = resolveToneStrategy({ rememberFn });
+  const forceSentenceChunks = !String(toneOverride ?? "").trim() && toneStrategy === "promptify";
+  const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks });
+  const tonePlan = await planChunkInstructsFn(chunks, {
+    rememberFn,
+    toneOverride,
+    toneDefault,
+    toneStrategy
+  });
+  const chunkInstructs = Array.isArray(tonePlan?.instructs) && tonePlan.instructs.length === chunks.length
+    ? tonePlan.instructs
+    : resolveChunkInstructs(chunks, { toneDefault, toneOverride });
+  const toneStrategyResolved = String(tonePlan?.strategy ?? "").trim() || (toneOverride ? "override" : toneStrategy);
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   let postProcessApplied = false;
@@ -363,8 +493,8 @@ export async function qwenSay(
     format: "wav",
     streaming: false,
     chunks: chunks.length,
-    tone: toneOverride || toneDefault,
-    toneStrategy: toneOverride ? "override" : "heuristic",
+    tone: toneOverride || chunkInstructs[0] || toneDefault,
+    toneStrategy: toneStrategyResolved,
     postProcess: postProcessEnabled,
     postProcessApplied,
     postProcessFilter
