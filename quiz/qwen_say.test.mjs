@@ -304,3 +304,80 @@ test("qwenSay skips post-processing when disabled", async () => {
     await fs.rm(outDir, { recursive: true, force: true });
   }
 });
+
+test("qwenSay promptify tone strategy plans per-sentence instructs on short text", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "promptify" }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-promptify-out-"));
+  const output = path.join(outDir, "out.wav");
+  const seenChunks = [];
+  const seenInstructs = [];
+  const runSayFn = async ({ text, instruct, output: chunkFile }) => {
+    seenChunks.push(String(text ?? ""));
+    seenInstructs.push(String(instruct ?? ""));
+    await fs.writeFile(chunkFile, Buffer.from(`RIFF_promptify_${seenChunks.length}`));
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_promptify_concat"));
+  };
+  const planChunkInstructsFn = async (chunks) => ({
+    instructs: chunks.map((_, idx) => `tone ${idx + 1}`),
+    strategy: "promptify"
+  });
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "Sentence one. Sentence two? Sentence three." },
+        to: { filename: output }
+      },
+      { runSayFn, concatAudioFn, planChunkInstructsFn }
+    );
+    assert.ok(seenChunks.length >= 3);
+    assert.deepEqual(seenInstructs.slice(0, 3), ["tone 1", "tone 2", "tone 3"]);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("qwenSay promptify tone strategy falls back to compassionate teacher when planner fails", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "promptify" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone default" }, ob: { text: "speak as a compassionate teacher" }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-fallback-out-"));
+  const output = path.join(outDir, "out.wav");
+  const seenInstructs = [];
+  const runSayFn = async ({ instruct, output: chunkFile }) => {
+    seenInstructs.push(String(instruct ?? ""));
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tone_fallback"));
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_tone_fallback_concat"));
+  };
+  const planChunkInstructsFn = async () => ({
+    instructs: [],
+    strategy: "default-fallback"
+  });
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "First line. Second line." },
+        to: { filename: output }
+      },
+      { runSayFn, concatAudioFn, planChunkInstructsFn }
+    );
+    assert.ok(seenInstructs.length >= 2);
+    assert.ok(seenInstructs.every((value) => value === "speak as a compassionate teacher"));
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});

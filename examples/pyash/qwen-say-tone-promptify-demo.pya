@@ -1,0 +1,7 @@
+exists su name qwen say tone strategy ob text "promptify" be default ya
+exists su name qwen say tone promptify system prompt ob text "You choose narration tone instructions for one sentence. Return only a short tone instruction." be default ya
+exists su name qwen say tone promptify instruction ob text "Pick the best speaking tone for current_cut. Return only concise text like professional tone, urgent tone, reflective tone, or warm encouraging tone." be default ya
+
+su name qwen tone promptify demo ob text quoted.text.The old debt laws crushed ordinary families until reform finally arrived.
+Today we can still choose policies that return ownership to working people.
+What kind of leadership do we need right now?.text.quoted to filename "artifacts/say/qwen-tone-promptify-demo.wav" be qwen say do
