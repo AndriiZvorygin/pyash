@@ -47,6 +47,40 @@ function packetValue(value) {
   return text || "EMPTY";
 }
 
+const PACKET_PLACEHOLDER_KEYS = [
+  "instruction",
+  "current_cut",
+  "previous_cut",
+  "next_cut",
+  "full_script",
+  "previous_prompt_1",
+  "previous_prompt_2"
+];
+
+const DEFAULT_PACKET_TEMPLATE = [
+  "instruction: [[instruction]]",
+  "current_cut: [[current_cut]]",
+  "previous_cut: [[previous_cut]]",
+  "next_cut: [[next_cut]]",
+  "full_script: [[full_script]]",
+  "previous_prompt_1: [[previous_prompt_1]]",
+  "previous_prompt_2: [[previous_prompt_2]]"
+].join("\n");
+
+function hasPacketPlaceholders(template = "") {
+  const text = String(template ?? "");
+  return PACKET_PLACEHOLDER_KEYS.some((key) => text.includes(`[[${key}]]`));
+}
+
+function renderPacketTemplate(template = "", values = {}) {
+  let out = String(template ?? "");
+  for (const key of PACKET_PLACEHOLDER_KEYS) {
+    const token = `[[${key}]]`;
+    out = out.split(token).join(packetValue(values[key]));
+  }
+  return out;
+}
+
 function cutTextAt(cuts, index) {
   if (!Array.isArray(cuts)) return "";
   const at = Number(index);
@@ -59,7 +93,8 @@ function buildPromptifyPacket({
   index = 0,
   instruction = "",
   fullScript = "",
-  previousPrompts = []
+  previousPrompts = [],
+  packetTemplate = ""
 } = {}) {
   const currentText = cutTextAt(cuts, index);
   const previousText = cutTextAt(cuts, Number(index) - 1);
@@ -69,16 +104,21 @@ function buildPromptifyPacket({
     : [];
   const previousPrompt1 = priorPrompts.length ? priorPrompts[priorPrompts.length - 1] : "";
   const previousPrompt2 = priorPrompts.length > 1 ? priorPrompts[priorPrompts.length - 2] : "";
-  const lines = [
-    `instruction: ${packetValue(instruction)}`,
-    `current_cut: ${packetValue(currentText)}`,
-    `previous_cut: ${packetValue(previousText)}`,
-    `next_cut: ${packetValue(nextText)}`,
-    `full_script: ${packetValue(fullScript)}`,
-    `previous_prompt_1: ${packetValue(previousPrompt1)}`,
-    `previous_prompt_2: ${packetValue(previousPrompt2)}`
-  ];
-  return lines.join("\n");
+  const values = {
+    instruction,
+    current_cut: currentText,
+    previous_cut: previousText,
+    next_cut: nextText,
+    full_script: fullScript,
+    previous_prompt_1: previousPrompt1,
+    previous_prompt_2: previousPrompt2
+  };
+  const templateText = String(packetTemplate ?? "").trim();
+  if (templateText && hasPacketPlaceholders(templateText)) {
+    return renderPacketTemplate(templateText, values);
+  }
+  if (templateText) values.instruction = templateText;
+  return renderPacketTemplate(DEFAULT_PACKET_TEMPLATE, values);
 }
 
 async function callPromptMind({ host, model, systemPrompt, cutText }) {
