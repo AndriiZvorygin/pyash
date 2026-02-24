@@ -117,12 +117,51 @@ function sceneModeHintForText(value) {
   return "neutral";
 }
 
+function hasSolutionSignal(value) {
+  const text = normalizeCutText(value);
+  if (!text) return false;
+  return /(solution|reform|restor|justice|equity|ownership|freedom|relief|law|policy|solon)/u.test(text);
+}
+
+function boolWord(value) {
+  return value ? "truth" : "lie";
+}
+
+function triadPolicyForIndex(cuts = [], index = 0) {
+  const list = Array.isArray(cuts) ? cuts : [];
+  const safeIndex = Math.max(0, Math.min(Number(index) || 0, Math.max(0, list.length - 1)));
+  const triadStart = Math.floor(safeIndex / 3) * 3;
+  const triadEnd = Math.min(list.length, triadStart + 3);
+  const triadSize = Math.max(1, triadEnd - triadStart);
+  const triadPosition = (safeIndex - triadStart) + 1;
+  let previousPositiveCount = 0;
+  for (let i = triadStart; i < safeIndex; i += 1) {
+    if (sceneModeHintForText(list[i]?.obText ?? "") === "positive") {
+      previousPositiveCount += 1;
+    }
+  }
+  const requiredPositiveCount = 1;
+  const positivesNeeded = Math.max(0, requiredPositiveCount - previousPositiveCount);
+  const remainingSlotsIncludingCurrent = Math.max(1, triadEnd - safeIndex);
+  const positiveRequiredNow = positivesNeeded >= remainingSlotsIncludingCurrent;
+  const windowLabel = `${triadStart + 1}-${triadEnd}`;
+  return {
+    triadStart,
+    triadEnd,
+    triadSize,
+    triadPosition,
+    previousPositiveCount,
+    positiveRequiredNow,
+    windowLabel
+  };
+}
+
 function buildPromptifyPacket({
   cuts = [],
   index = 0,
   instruction = "",
   fullScript = "",
-  previousPrompt = ""
+  previousPrompts = []
 } = {}) {
   const current = cuts[index] ?? {};
   const previousText = findDistinctNeighborText(cuts, index, -1);
@@ -130,6 +169,15 @@ function buildPromptifyPacket({
   const currentText = String(current?.obText ?? "").trim();
   const shotMode = shotModeForIndex(index);
   const sceneModeHint = sceneModeHintForText(currentText);
+  const solutionReferenceHint = hasSolutionSignal(currentText);
+  const triadPolicy = triadPolicyForIndex(cuts, index);
+  const triadTargetMode = (solutionReferenceHint || triadPolicy.positiveRequiredNow) ? "positive" : sceneModeHint;
+  const priorPrompts = Array.isArray(previousPrompts)
+    ? previousPrompts.map(value => String(value ?? "").trim()).filter(Boolean)
+    : [];
+  const previousPrompt1 = priorPrompts.length ? priorPrompts[priorPrompts.length - 1] : "";
+  const previousPrompt2 = priorPrompts.length > 1 ? priorPrompts[priorPrompts.length - 2] : "";
+  const previousPrompt = priorPrompts.join("\n");
   const lines = [
     "[ROLE]",
     "You generate ONE visual prompt for the CURRENT CUT only.",
@@ -137,6 +185,17 @@ function buildPromptifyPacket({
     "",
     "[TASK]",
     packetValue(instruction),
+    "",
+    "[NARRATIVE ARC POLICY]",
+    "Use full_script as narrative context; do not limit visuals to literal words in current_cut.",
+    "You may introduce source-faithful implied details from full_script to tell the bigger story in one frame.",
+    "Across each 3-cut window, ensure at least one clearly positive or solution-forward image.",
+    `triad_window: ${packetValue(triadPolicy.windowLabel)}`,
+    `triad_position: ${packetValue(`${triadPolicy.triadPosition}/${triadPolicy.triadSize}`)}`,
+    `triad_previous_positive_count: ${packetValue(String(triadPolicy.previousPositiveCount))}`,
+    `triad_positive_required_now: ${packetValue(boolWord(triadPolicy.positiveRequiredNow))}`,
+    `solution_reference_hint: ${packetValue(boolWord(solutionReferenceHint))}`,
+    `triad_target_mode: ${packetValue(triadTargetMode)}`,
     "",
     "[DIVERSITY GUARDRAILS]",
     "The image must be visually distinct from neighboring cuts and prior prompts.",
@@ -147,7 +206,9 @@ function buildPromptifyPacket({
     "First infer the scene mode: negative, positive, contrast, or neutral.",
     "Use a single coherent scene by default; use split-scene composition only when contrast is explicitly required.",
     "If mode is negative, keep all major elements tied to harm/problem conditions and avoid remedy symbols unless current_cut explicitly includes them.",
+    "If solution_reference_hint is truth, this cut MUST be positive and solution-forward.",
     "If mode is positive, foreground the remedy and its real-world benefit in one coherent scene.",
+    "If triad_positive_required_now is truth, make this cut solution-forward positive while staying source-faithful to full_script context.",
     "If mode is contrast, render a single frame split scene with clear before/after contrast.",
     "Include one short causal visual clause describing why the scene looks this way.",
     "",
@@ -162,6 +223,8 @@ function buildPromptifyPacket({
     `scene_mode_hint: ${packetValue(sceneModeHint)}`,
     "",
     "[PRIOR VISUAL STATE]",
+    `previous_prompt_1: ${packetValue(previousPrompt1)}`,
+    `previous_prompt_2: ${packetValue(previousPrompt2)}`,
     `previous_prompt: ${packetValue(previousPrompt)}`,
     "",
     "[OUTPUT RULE]",
@@ -207,14 +270,14 @@ export async function main(argv = process.argv) {
   const itinerary = parseItineraryPya(inputText);
   const promptedCuts = [];
   const fullScript = itinerary.cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
-  let previousPrompt = "";
+  const promptHistory = [];
   for (let i = 0; i < itinerary.cuts.length; i += 1) {
     const packet = buildPromptifyPacket({
       cuts: itinerary.cuts,
       index: i,
       instruction: "Turn this transcript cut into one concise visual image prompt for generation.",
       fullScript,
-      previousPrompt
+      previousPrompts: promptHistory.slice(-2)
     });
     const prompt = await callPromptMind({
       host: opts.host,
@@ -222,7 +285,7 @@ export async function main(argv = process.argv) {
       systemPrompt: opts.systemPrompt,
       cutText: packet
     });
-    previousPrompt = prompt;
+    promptHistory.push(prompt);
     const cut = itinerary.cuts[i];
     promptedCuts.push({
       ...cut,

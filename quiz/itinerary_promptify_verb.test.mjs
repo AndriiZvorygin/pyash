@@ -44,11 +44,16 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     assert.match(String(rows[0]?.ob?.text ?? ""), /\[GLOBAL CONTEXT\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /current_cut:\s*pray daily/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /shot_mode:\s*establishing wide shot/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /\[NARRATIVE ARC POLICY\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /\[SCENE CONSISTENCY\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /scene_mode_hint:\s*neutral/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /triad_positive_required_now:\s*lie/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /pray daily/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /current_cut:\s*serve others/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /shot_mode:\s*medium character-driven scene/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /triad_positive_required_now:\s*truth/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_1:\s*prompt:/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:/u);
     assert.equal(Number(rows[0]?.since?.num ?? -1), 0);
     assert.equal(Number(rows[1]?.until?.num ?? -1), 4);
@@ -90,6 +95,10 @@ test("promptify by num 0 disables prior prompt carryover", async () => {
     const resultFact = remember("result");
     const rows = Array.isArray(resultFact?.ob?.series) ? resultFact.ob.series : [];
     assert.equal(rows.length, 2);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /previous_prompt_1:\s*EMPTY/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_1:\s*EMPTY/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /previous_prompt:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:\s*EMPTY/u);
   } finally {
