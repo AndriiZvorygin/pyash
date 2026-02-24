@@ -825,7 +825,14 @@ async function main() {
   if (closedServers > 0) {
     console.warn("warning: MCP servers were still running at exit; add `be discharge ob name <server> as wo mcp do` to shut them down explicitly.");
   }
-  if (runError) throw runError;
+  const printArtifactsFolderHint = () => {
+    const abs = path.resolve(process.cwd(), "artifacts", String(runId));
+    console.error(`artifacts folder: ${abs}`);
+  };
+  if (runError) {
+    printArtifactsFolderHint();
+    throw runError;
+  }
 
   if (full) {
     console.log("\nResult:");
@@ -835,11 +842,13 @@ async function main() {
   const showResult = showResultFlag || showResultConfig === true;
 
   if (gross) {
+    printArtifactsFolderHint();
     console.log(JSON.stringify({ outputs, result }, null, 2));
     return;
   }
 
   if (!showResult && !full) {
+    printArtifactsFolderHint();
     return;
   }
 
@@ -853,18 +862,21 @@ async function main() {
     } catch {
       console.log(finalResult ? JSON.stringify(finalResult, null, 2) : "(no result)");
     }
+    printArtifactsFolderHint();
     return;
   }
 
   // If the result is a compiled artifact with a text payload, stream it directly.
   if (result?.ob?.text && !full) {
     console.log(result.ob.text);
+    printArtifactsFolderHint();
     return;
   }
 
   // Surface series payloads in block form so entry boundaries are visible.
   if (result?.be === "series" && Array.isArray(result?.ob?.series)) {
     console.log(renderSeriesSentence(result));
+    printArtifactsFolderHint();
     return;
   }
 
@@ -879,6 +891,7 @@ async function main() {
   } catch {
     console.log(result ? JSON.stringify(result, null, 2) : "(no result)");
   }
+  printArtifactsFolderHint();
 }
 
 try {
