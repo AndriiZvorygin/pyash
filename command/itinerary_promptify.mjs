@@ -64,6 +64,14 @@ function findDistinctNeighborText(cuts, index, direction) {
   return "";
 }
 
+function shotModeForIndex(index) {
+  const n = Math.max(0, Number(index) || 0) % 4;
+  if (n === 0) return "establishing wide shot";
+  if (n === 1) return "medium character-driven scene";
+  if (n === 2) return "close-up symbolic detail";
+  return "dynamic action or transition shot";
+}
+
 function buildPromptifyPacket({
   cuts = [],
   index = 0,
@@ -75,13 +83,19 @@ function buildPromptifyPacket({
   const previousText = findDistinctNeighborText(cuts, index, -1);
   const nextText = findDistinctNeighborText(cuts, index, 1);
   const currentText = String(current?.obText ?? "").trim();
+  const shotMode = shotModeForIndex(index);
   const lines = [
     "[ROLE]",
     "You generate ONE visual prompt for the CURRENT CUT only.",
-    "Keep continuity with nearby cuts and prior prompt.",
+    "Keep continuity with nearby cuts, but avoid repeating the same visual concept.",
     "",
     "[TASK]",
     packetValue(instruction),
+    "",
+    "[DIVERSITY GUARDRAILS]",
+    "The image must be visually distinct from neighboring cuts and prior prompts.",
+    "Do not reuse the same central composition, same subject arrangement, or same symbolic centerpiece.",
+    "Prefer a new perspective, setting emphasis, or camera distance when semantic overlap exists.",
     "",
     "[GLOBAL CONTEXT]",
     `full_script: ${packetValue(fullScript)}`,
@@ -90,6 +104,7 @@ function buildPromptifyPacket({
     `previous_cut: ${packetValue(previousText)}`,
     `current_cut: ${packetValue(currentText)}`,
     `next_cut: ${packetValue(nextText)}`,
+    `shot_mode: ${packetValue(shotMode)}`,
     "",
     "[PRIOR VISUAL STATE]",
     `previous_prompt: ${packetValue(previousPrompt)}`,

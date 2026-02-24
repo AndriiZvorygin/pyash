@@ -46,7 +46,9 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
   assert.match(calls[0], /\[GLOBAL CONTEXT\]/u);
   assert.match(calls[0], /current_cut:\s*first cut text/u);
   assert.match(calls[0], /next_cut:\s*second cut text/u);
+  assert.match(calls[0], /shot_mode:\s*establishing wide shot/u);
   assert.match(calls[1], /current_cut:\s*second cut text/u);
+  assert.match(calls[1], /shot_mode:\s*medium character-driven scene/u);
   assert.match(calls[1], /previous_prompt:/u);
   const outputText = await fs.readFile(output, "utf8");
   assert.match(outputText, /visual prompt for \[ROLE\]/u);
@@ -94,7 +96,9 @@ test("itinerary_promptify neighbor context skips duplicate adjacent cuts", async
   assert.match(calls[0], /current_cut:\s*same text/u);
   assert.match(calls[0], /next_cut:\s*different text/u);
   assert.match(calls[0], /previous_cut:\s*EMPTY/u);
+  assert.match(calls[0], /shot_mode:\s*establishing wide shot/u);
   assert.match(calls[1], /current_cut:\s*same text/u);
   assert.match(calls[1], /next_cut:\s*different text/u);
   assert.match(calls[1], /previous_cut:\s*EMPTY/u);
+  assert.match(calls[1], /shot_mode:\s*medium character-driven scene/u);
 });
