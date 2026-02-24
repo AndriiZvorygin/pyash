@@ -8,7 +8,7 @@ su name draw size shorts be map def
 prah
 
 exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
-exists su name draw promptify instruction ob text quoted.text.Convert this transcript cut into one concise visual image prompt for generation. Keep continuity across cuts but make each cut visually distinct. Infer whether the cut is negative, positive, or explicit contrast. Use one coherent scene unless explicit contrast is required; for contrast, use one split-scene frame. For negative cuts, keep all major elements tied to harm conditions and do not insert solution symbols unless the cut explicitly includes them. For positive cuts, foreground the solution mechanism and visible benefit. Include a short causal visual clause explaining why the scene appears this way. Return only the prompt text. No markdown, no quotes, no explanation..text.quoted be text ya
+exists su name draw promptify instruction ob text quoted.text.Convert this transcript cut into one concise visual image prompt for generation. Use full script arc context, not only literal current cut wording, while staying source-faithful. Keep continuity across cuts but make each cut visually distinct. Infer whether the cut is negative, positive, or explicit contrast. Use one coherent scene unless explicit contrast is required; for contrast, use one split-scene frame. Across each 3-cut window, ensure at least one clearly positive or solution-forward image. If the cut references a solution symbol, reform, policy, or law, the image MUST be positive. For negative cuts, keep all major elements tied to harm conditions and do not insert unrelated remedy symbols. For positive cuts, foreground the solution mechanism and visible benefit. Include a short causal visual clause explaining why the scene appears this way. Return only the prompt text. No markdown, no quotes, no explanation..text.quoted be text ya
 
 exists su name thumbnail system prompt ob text quoted.text.You are a viral Shorts thumbnail expert in 2026. Your only job is to analyze the full provided video script/transcript and create ONE highly effective, scroll-stopping image generation prompt for an AI tool (DALL·E, Midjourney, Flux, Leonardo, etc.).
 
@@ -69,7 +69,7 @@ su name brief video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -118,7 +118,7 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -167,7 +167,7 @@ su name teaching video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do
@@ -216,7 +216,7 @@ su name teaching video from text manuscript to filename video short be ceremony 
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context begin ob text "FULL SCRIPT:\n" to name text thumbnail context be text do
   su name manuscript full stage ob name manuscript out to name text manuscript full be text do

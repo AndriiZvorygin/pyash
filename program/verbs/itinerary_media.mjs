@@ -896,15 +896,15 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
   for (let i = 0; i < cuts.length; i += 1) {
     const cut = cuts[i];
     const index = Number(cut?.index ?? (series.length + 1));
-    const previousPrompt = continuityWindow > 0
-      ? promptHistory.slice(-continuityWindow).join("\n")
-      : "";
+    const previousPrompts = continuityWindow > 0
+      ? promptHistory.slice(-continuityWindow)
+      : [];
     const promptInput = buildPromptifyPacket({
       cuts,
       index: i,
       instruction,
       fullScript,
-      previousPrompt
+      previousPrompts
     });
     emitExchangeSentence({
       mood: "do",
