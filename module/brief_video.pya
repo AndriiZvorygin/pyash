@@ -95,6 +95,8 @@ su name brief video from text manuscript be ceremony def
 
   su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
 
+  su name draw discharge stage as wo draw be discharge do
+
   su name result ob filename of ob of footnote platform be brief video ya
   su name result ret
 prah
@@ -143,6 +145,8 @@ su name brief video from text manuscript to filename video short be ceremony def
   su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of to of this be concatenate do
 
   su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to filename of to of this as wo wordflow be footnote do
+
+  su name draw discharge stage as wo draw be discharge do
 
   su name result ob filename of ob of footnote platform be brief video ya
   su name result ret
@@ -193,6 +197,8 @@ su name teaching video from text manuscript be ceremony def
 
   su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to name concatenate platform as wo wordflow be footnote do
 
+  su name draw discharge stage as wo draw be discharge do
+
   su name result ob filename of ob of footnote platform be teaching video ya
   su name result ret
 prah
@@ -241,6 +247,8 @@ su name teaching video from text manuscript to filename video short be ceremony 
   su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of to of this be concatenate do
 
   su name footnote platform from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform become wo video to filename of to of this as wo wordflow be footnote do
+
+  su name draw discharge stage as wo draw be discharge do
 
   su name result ob filename of ob of footnote platform be teaching video ya
   su name result ret
