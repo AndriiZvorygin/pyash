@@ -72,6 +72,51 @@ function shotModeForIndex(index) {
   return "dynamic action or transition shot";
 }
 
+function sceneModeHintForText(value) {
+  const text = normalizeCutText(value);
+  if (!text) return "neutral";
+  if (/(juxtap|contrast|versus|\bvs\b|split scene|before and after|then and now|across time)/u.test(text)) {
+    return "contrast";
+  }
+  let positive = 0;
+  let negative = 0;
+  const positiveTokens = [
+    "reform",
+    "restore",
+    "restored",
+    "justice",
+    "equity",
+    "freedom",
+    "relief",
+    "prosper",
+    "stability",
+    "ownership",
+    "uplift",
+    "solution",
+    "healed"
+  ];
+  const negativeTokens = [
+    "debt",
+    "slavery",
+    "foreclosure",
+    "oppression",
+    "starved",
+    "crisis",
+    "ruinous",
+    "collapse",
+    "hoarding",
+    "eviction",
+    "exploitation",
+    "despair",
+    "suffering"
+  ];
+  for (const token of positiveTokens) if (text.includes(token)) positive += 1;
+  for (const token of negativeTokens) if (text.includes(token)) negative += 1;
+  if (positive > negative) return "positive";
+  if (negative > positive) return "negative";
+  return "neutral";
+}
+
 function buildPromptifyPacket({
   cuts = [],
   index = 0,
@@ -84,6 +129,7 @@ function buildPromptifyPacket({
   const nextText = findDistinctNeighborText(cuts, index, 1);
   const currentText = String(current?.obText ?? "").trim();
   const shotMode = shotModeForIndex(index);
+  const sceneModeHint = sceneModeHintForText(currentText);
   const lines = [
     "[ROLE]",
     "You generate ONE visual prompt for the CURRENT CUT only.",
@@ -97,6 +143,14 @@ function buildPromptifyPacket({
     "Do not reuse the same central composition, same subject arrangement, or same symbolic centerpiece.",
     "Prefer a new perspective, setting emphasis, or camera distance when semantic overlap exists.",
     "",
+    "[SCENE CONSISTENCY]",
+    "First infer the scene mode: negative, positive, contrast, or neutral.",
+    "Use a single coherent scene by default; use split-scene composition only when contrast is explicitly required.",
+    "If mode is negative, keep all major elements tied to harm/problem conditions and avoid remedy symbols unless current_cut explicitly includes them.",
+    "If mode is positive, foreground the remedy and its real-world benefit in one coherent scene.",
+    "If mode is contrast, render a single frame split scene with clear before/after contrast.",
+    "Include one short causal visual clause describing why the scene looks this way.",
+    "",
     "[GLOBAL CONTEXT]",
     `full_script: ${packetValue(fullScript)}`,
     "",
@@ -105,12 +159,13 @@ function buildPromptifyPacket({
     `current_cut: ${packetValue(currentText)}`,
     `next_cut: ${packetValue(nextText)}`,
     `shot_mode: ${packetValue(shotMode)}`,
+    `scene_mode_hint: ${packetValue(sceneModeHint)}`,
     "",
     "[PRIOR VISUAL STATE]",
     `previous_prompt: ${packetValue(previousPrompt)}`,
     "",
     "[OUTPUT RULE]",
-    "Return ONLY one single-line prompt. No markdown. No explanation."
+    "Return ONLY one single-line prompt. No markdown. No explanation. No visible text in the image."
   ];
   return lines.join("\n");
 }
