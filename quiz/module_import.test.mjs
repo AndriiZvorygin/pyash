@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { remember, forget } from "../program/remember/index.mjs";
-import { setEntryModulePath } from "../program/bridge/modules.mjs";
+import { clearModuleCache, loadModule, setEntryModuleDir, setEntryModulePath } from "../program/bridge/modules.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 
 const fixturesDir = path.resolve("quiz/fixtures/modules");
@@ -54,4 +54,35 @@ test("entry module allows top-level do", async () => {
     const sentence = parse(line);
     await interpret(sentence);
   }
+});
+
+test("module qualification rewrites typed name references for internal symbols", async () => {
+  forget();
+  clearModuleCache();
+  setEntryModuleDir(process.cwd());
+  const loaded = await loadModule({
+    specifier: "./module/brief_video.pya",
+    alias: "teaching video",
+    source: "module import test"
+  });
+
+  const insteadSentence = loaded.sentences.find(
+    (s) => s?.be === "instead" && s?.su?.name === "thumbnail context stage"
+  );
+  assert.ok(insteadSentence, "expected thumbnail context instead sentence");
+  assert.equal(
+    insteadSentence?.ob?.name,
+    "teaching video internal thumbnail context replacements",
+    "typed map reference should be module-qualified"
+  );
+  assert.equal(
+    insteadSentence?.in?.name,
+    "teaching video internal thumbnail context template",
+    "typed text reference should be module-qualified"
+  );
+
+  const promptInstruction = loaded.sentences.find(
+    (s) => s?.su?.name === "teaching video internal draw promptify instruction" && s?.be === "text"
+  );
+  assert.ok(promptInstruction, "top-level names after map blocks should be module-qualified");
 });
