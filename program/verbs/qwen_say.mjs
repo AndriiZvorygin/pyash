@@ -9,7 +9,7 @@ import { renderSayValue } from "./say.mjs";
 import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
-import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { buildPromptifyPacket, callPromptMind } from "../../command/itinerary_promptify.mjs";
 
@@ -79,6 +79,12 @@ function resolvePostProcessFilter({ rememberFn = remember } = {}) {
     resolveConfigText("qwen say post process filter", { rememberFn }) ||
     "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB"
   );
+}
+
+function resolveConcatGapSeconds({ rememberFn = remember } = {}) {
+  const configured = resolveConfigNum("qwen say concat gap seconds", { rememberFn });
+  if (!Number.isFinite(configured)) return 0.06;
+  return Math.max(0, Math.min(0.25, Number(configured)));
 }
 
 async function pathExists(filename) {
@@ -364,7 +370,67 @@ async function postProcessQwenSayAudio({ input, output, filter }) {
   });
 }
 
-async function concatAudioChunks({ inputs = [], output }) {
+async function probeAudioFormat(filename = "") {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "a:0",
+      "-show_entries", "stream=sample_rate,channels",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      String(filename ?? "")
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    proc.stdout.on("data", (chunk) => { stdout += String(chunk ?? ""); });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", () => resolve({ sampleRate: 24000, channels: 1 }));
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        void stderr;
+        resolve({ sampleRate: 24000, channels: 1 });
+        return;
+      }
+      const lines = String(stdout ?? "").split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+      const sampleRate = Number(lines[0]);
+      const channels = Number(lines[1]);
+      resolve({
+        sampleRate: Number.isFinite(sampleRate) && sampleRate > 0 ? Math.floor(sampleRate) : 24000,
+        channels: Number.isFinite(channels) && channels > 0 ? Math.floor(channels) : 1
+      });
+    });
+  });
+}
+
+function resolveChannelLayout(channels = 1) {
+  if (channels <= 1) return "mono";
+  if (channels === 2) return "stereo";
+  return "stereo";
+}
+
+async function writeSilenceWav({ output, sampleRate = 24000, channels = 1, seconds = 0.06 }) {
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", [
+      "-y",
+      "-f", "lavfi",
+      "-i", `anullsrc=r=${Math.max(8000, Math.floor(sampleRate))}:cl=${resolveChannelLayout(channels)}`,
+      "-t", String(Math.max(0.005, seconds)),
+      "-c:a", "pcm_s16le",
+      output
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`qwen say defective: silence generation failed status=${code}: ${clipped}`));
+      }
+    });
+  });
+}
+
+async function concatAudioChunks({ inputs = [], output, gapSeconds = 0.06 }) {
   if (!Array.isArray(inputs) || !inputs.length) {
     throw new Error("qwen say defective: no chunk audio to concatenate");
   }
@@ -375,7 +441,27 @@ async function concatAudioChunks({ inputs = [], output }) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-say-concat-"));
   const listFile = path.join(tempDir, "list.txt");
   try {
-    const lines = inputs.map((filename) => `file '${path.resolve(String(filename ?? "")).replace(/'/g, "'\\''")}'`);
+    const gap = Number(gapSeconds);
+    const useGap = Number.isFinite(gap) && gap > 0 && inputs.length > 1;
+    let gapFile = "";
+    if (useGap) {
+      const format = await probeAudioFormat(inputs[0]);
+      gapFile = path.join(tempDir, "gap.wav");
+      await writeSilenceWav({
+        output: gapFile,
+        sampleRate: format.sampleRate,
+        channels: format.channels,
+        seconds: gap
+      });
+    }
+    const lines = [];
+    for (let i = 0; i < inputs.length; i += 1) {
+      const filename = inputs[i];
+      lines.push(`file '${path.resolve(String(filename ?? "")).replace(/'/g, "'\\''")}'`);
+      if (gapFile && i < inputs.length - 1) {
+        lines.push(`file '${path.resolve(gapFile).replace(/'/g, "'\\''")}'`);
+      }
+    }
     await fs.writeFile(listFile, `${lines.join("\n")}\n`, "utf8");
     await new Promise((resolve, reject) => {
       let stderr = "";
@@ -443,6 +529,7 @@ export async function qwenSay(
   const toneStrategyResolved = String(tonePlan?.strategy ?? "").trim() || (toneOverride ? "override" : toneStrategy);
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
+  const concatGapSeconds = resolveConcatGapSeconds({ rememberFn });
   let postProcessApplied = false;
 
   if (chunks.length <= 1) {
@@ -471,7 +558,7 @@ export async function qwenSay(
         });
         chunkFiles.push(chunkOutput);
       }
-      await concatAudioFn({ inputs: chunkFiles, output: outputPath });
+      await concatAudioFn({ inputs: chunkFiles, output: outputPath, gapSeconds: concatGapSeconds });
     } finally {
       await fs.rm(chunkDir, { recursive: true, force: true });
     }
@@ -513,6 +600,7 @@ export async function qwenSay(
     format: "wav",
     streaming: false,
     chunks: chunks.length,
+    concatGapSeconds: chunks.length > 1 ? concatGapSeconds : 0,
     tone: toneOverride || chunkInstructs[0] || toneDefault,
     toneStrategy: toneStrategyResolved,
     postProcess: postProcessEnabled,
