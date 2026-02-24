@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 
 import { remember } from "../remember/index.mjs";
 import { renderSayValue } from "./say.mjs";
-import { recordArtifact } from "../bridge/exchange.mjs";
+import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
@@ -229,12 +229,23 @@ async function promptifyToneInstructs(
   const previousPrompts = [];
   const tones = [];
   for (let i = 0; i < cuts.length; i += 1) {
+    const index = i + 1;
     const packet = buildPromptifyPacket({
       cuts,
       index: i,
       instruction,
       fullScript,
       previousPrompts: previousPrompts.slice(-2)
+    });
+    emitExchangeSentence({
+      mood: "do",
+      su: { name: `qwen say tone request ${String(index).padStart(3, "0")}` },
+      ob: { text: packet },
+      fromtext: { text: systemPrompt },
+      fromstate: { text: host },
+      as: { text: model },
+      by: { num: index },
+      be: "promptify"
     });
     const rawTone = await callPromptMind({
       host,
@@ -243,6 +254,15 @@ async function promptifyToneInstructs(
       cutText: packet
     });
     const tone = normalizeToneInstruction(rawTone, toneDefault);
+    emitExchangeSentence({
+      mood: "ya",
+      su: { name: `qwen say tone result ${String(index).padStart(3, "0")}` },
+      ob: { text: String(rawTone ?? "") || tone },
+      fromstate: { text: host },
+      as: { text: model },
+      by: { num: index },
+      be: "promptify"
+    });
     tones.push(tone);
     previousPrompts.push(tone);
   }
