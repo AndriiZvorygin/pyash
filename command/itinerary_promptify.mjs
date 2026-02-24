@@ -123,37 +123,16 @@ function hasSolutionSignal(value) {
   return /(solution|reform|restor|justice|equity|ownership|freedom|relief|law|policy|solon)/u.test(text);
 }
 
-function boolWord(value) {
-  return value ? "truth" : "lie";
+function hasProblemSignal(value) {
+  const text = normalizeCutText(value);
+  if (!text) return false;
+  return /(problem|debt|slavery|foreclosure|oppression|starved|crisis|ruinous|collapse|hoarding|eviction|exploitation|despair|suffering|harm)/u.test(text);
 }
 
-function triadPolicyForIndex(cuts = [], index = 0) {
-  const list = Array.isArray(cuts) ? cuts : [];
-  const safeIndex = Math.max(0, Math.min(Number(index) || 0, Math.max(0, list.length - 1)));
-  const triadStart = Math.floor(safeIndex / 3) * 3;
-  const triadEnd = Math.min(list.length, triadStart + 3);
-  const triadSize = Math.max(1, triadEnd - triadStart);
-  const triadPosition = (safeIndex - triadStart) + 1;
-  let previousPositiveCount = 0;
-  for (let i = triadStart; i < safeIndex; i += 1) {
-    if (sceneModeHintForText(list[i]?.obText ?? "") === "positive") {
-      previousPositiveCount += 1;
-    }
-  }
-  const requiredPositiveCount = 1;
-  const positivesNeeded = Math.max(0, requiredPositiveCount - previousPositiveCount);
-  const remainingSlotsIncludingCurrent = Math.max(1, triadEnd - safeIndex);
-  const positiveRequiredNow = positivesNeeded >= remainingSlotsIncludingCurrent;
-  const windowLabel = `${triadStart + 1}-${triadEnd}`;
-  return {
-    triadStart,
-    triadEnd,
-    triadSize,
-    triadPosition,
-    previousPositiveCount,
-    positiveRequiredNow,
-    windowLabel
-  };
+function sentimentTargetForText(value) {
+  if (hasSolutionSignal(value)) return "positive";
+  if (hasProblemSignal(value)) return "negative";
+  return sceneModeHintForText(value);
 }
 
 function buildPromptifyPacket({
@@ -170,8 +149,8 @@ function buildPromptifyPacket({
   const shotMode = shotModeForIndex(index);
   const sceneModeHint = sceneModeHintForText(currentText);
   const solutionReferenceHint = hasSolutionSignal(currentText);
-  const triadPolicy = triadPolicyForIndex(cuts, index);
-  const triadTargetMode = (solutionReferenceHint || triadPolicy.positiveRequiredNow) ? "positive" : sceneModeHint;
+  const problemReferenceHint = hasProblemSignal(currentText);
+  const sentimentTarget = sentimentTargetForText(currentText);
   const priorPrompts = Array.isArray(previousPrompts)
     ? previousPrompts.map(value => String(value ?? "").trim()).filter(Boolean)
     : [];
@@ -181,35 +160,32 @@ function buildPromptifyPacket({
   const lines = [
     "[ROLE]",
     "You generate ONE visual prompt for the CURRENT CUT only.",
-    "Keep continuity with nearby cuts, but avoid repeating the same visual concept.",
+    "Use previous prompts only to avoid repetition; do not force continuity with them.",
+    "Primary relevance must be current_cut, with full_script as context.",
     "",
     "[TASK]",
     packetValue(instruction),
     "",
-    "[NARRATIVE ARC POLICY]",
+    "[RELEVANCE POLICY]",
     "Use full_script as narrative context; do not limit visuals to literal words in current_cut.",
     "You may introduce source-faithful implied details from full_script to tell the bigger story in one frame.",
-    "Across each 3-cut window, ensure at least one clearly positive or solution-forward image.",
-    `triad_window: ${packetValue(triadPolicy.windowLabel)}`,
-    `triad_position: ${packetValue(`${triadPolicy.triadPosition}/${triadPolicy.triadSize}`)}`,
-    `triad_previous_positive_count: ${packetValue(String(triadPolicy.previousPositiveCount))}`,
-    `triad_positive_required_now: ${packetValue(boolWord(triadPolicy.positiveRequiredNow))}`,
-    `solution_reference_hint: ${packetValue(boolWord(solutionReferenceHint))}`,
-    `triad_target_mode: ${packetValue(triadTargetMode)}`,
+    "Prompt must contribute a new perspective, detail, or causal angle compared to the two previous prompts.",
+    `solution_reference_hint: ${packetValue(solutionReferenceHint ? "truth" : "lie")}`,
+    `problem_reference_hint: ${packetValue(problemReferenceHint ? "truth" : "lie")}`,
+    `sentiment_target: ${packetValue(sentimentTarget)}`,
     "",
     "[DIVERSITY GUARDRAILS]",
     "The image must be visually distinct from neighboring cuts and prior prompts.",
     "Do not reuse the same central composition, same subject arrangement, or same symbolic centerpiece.",
     "Prefer a new perspective, setting emphasis, or camera distance when semantic overlap exists.",
+    "Ensure clear novelty from previous_prompt_1 and previous_prompt_2.",
     "",
     "[SCENE CONSISTENCY]",
-    "First infer the scene mode: negative, positive, contrast, or neutral.",
+    "First infer the scene mode: negative, positive, contrast, or neutral. Then follow sentiment_target.",
     "Use a single coherent scene by default; use split-scene composition only when contrast is explicitly required.",
-    "If mode is negative, keep all major elements tied to harm/problem conditions and avoid remedy symbols unless current_cut explicitly includes them.",
-    "If solution_reference_hint is truth, this cut MUST be positive and solution-forward.",
-    "If mode is positive, foreground the remedy and its real-world benefit in one coherent scene.",
-    "If triad_positive_required_now is truth, make this cut solution-forward positive while staying source-faithful to full_script context.",
-    "If mode is contrast, render a single frame split scene with clear before/after contrast.",
+    "If sentiment_target is positive, this cut MUST be solution-forward and feature the solution mechanism.",
+    "If sentiment_target is negative, this cut MUST feature root causes and harm/problem conditions.",
+    "If sentiment_target is contrast, render a single frame split scene with clear before/after contrast.",
     "Include one short causal visual clause describing why the scene looks this way.",
     "",
     "[GLOBAL CONTEXT]",

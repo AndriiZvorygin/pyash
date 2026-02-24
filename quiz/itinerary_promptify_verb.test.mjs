@@ -44,14 +44,14 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     assert.match(String(rows[0]?.ob?.text ?? ""), /\[GLOBAL CONTEXT\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /current_cut:\s*pray daily/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /shot_mode:\s*establishing wide shot/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /\[NARRATIVE ARC POLICY\]/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /\[RELEVANCE POLICY\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /\[SCENE CONSISTENCY\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /scene_mode_hint:\s*neutral/u);
-    assert.match(String(rows[0]?.ob?.text ?? ""), /triad_positive_required_now:\s*lie/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /sentiment_target:\s*neutral/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /pray daily/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /current_cut:\s*serve others/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /shot_mode:\s*medium character-driven scene/u);
-    assert.match(String(rows[1]?.ob?.text ?? ""), /triad_positive_required_now:\s*truth/u);
+    assert.match(String(rows[1]?.ob?.text ?? ""), /sentiment_target:\s*neutral/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_1:\s*prompt:/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt_2:\s*EMPTY/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /previous_prompt:/u);
