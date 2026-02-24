@@ -44,6 +44,8 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     assert.match(String(rows[0]?.ob?.text ?? ""), /\[GLOBAL CONTEXT\]/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /current_cut:\s*pray daily/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /shot_mode:\s*establishing wide shot/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /\[SCENE CONSISTENCY\]/u);
+    assert.match(String(rows[0]?.ob?.text ?? ""), /scene_mode_hint:\s*neutral/u);
     assert.match(String(rows[0]?.ob?.text ?? ""), /pray daily/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /current_cut:\s*serve others/u);
     assert.match(String(rows[1]?.ob?.text ?? ""), /shot_mode:\s*medium character-driven scene/u);
