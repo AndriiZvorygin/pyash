@@ -13,6 +13,7 @@ import { buildTimelineItems, createConcatListFile, findImageForCut, getAudioDura
 import { callPromptMind, buildPromptifyPacket } from "../../command/itinerary_promptify.mjs";
 import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
+import { renderSayValue } from "./say.mjs";
 
 function buildRunTag(now = new Date()) {
   const iso = now.toISOString();
@@ -219,6 +220,19 @@ function resolveFromTextPrompt(value, rememberFn) {
   if (typeof value?.name === "string" && rememberFn) {
     const fact = rememberFn(value.name);
     return String(fact?.ob?.text ?? "");
+  }
+  return "";
+}
+
+function resolvePromptifyPacketTemplate(sentence, rememberFn) {
+  if (typeof sentence?.ob?.text === "string") return sentence.ob.text;
+  if (typeof sentence?.ob?.name === "string" && rememberFn) {
+    const fact = rememberFn(sentence.ob.name);
+    if (typeof fact?.ob?.text === "string") return fact.ob.text;
+  }
+  if (sentence?.ob?.genitive) {
+    const rendered = renderSayValue({ genitive: sentence.ob.genitive }, { rememberFn });
+    if (rendered !== undefined && rendered !== null) return String(rendered);
   }
   return "";
 }
@@ -879,8 +893,8 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       raw: { sentence }
     });
   }
-  const instruction = String(sentence?.ob?.text ?? "").trim()
-    || "Turn this transcript cut into one concise image prompt.";
+  const packetTemplate = resolvePromptifyPacketTemplate(sentence, rememberFn);
+  const instruction = "Turn this transcript cut into one concise image prompt.";
   const systemPrompt = resolveFromTextPrompt(sentence?.fromtext, rememberFn)
     || "Convert this transcript cut into one concise visual image prompt for generation. Return only the prompt text. No markdown, no quotes, no explanation.";
   const host = promptifyHost(sentence, rememberFn);
@@ -904,7 +918,8 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       index: i,
       instruction,
       fullScript,
-      previousPrompts
+      previousPrompts,
+      packetTemplate
     });
     emitExchangeSentence({
       mood: "do",

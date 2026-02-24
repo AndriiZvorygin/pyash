@@ -21,6 +21,13 @@ Follow these rules:
 8. No visible text in the image.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be text ya
+exists su name draw promptify packet template ob text quoted.text.instruction: Turn this teaching cut text into one concise image prompt. Return only the prompt text.
+current_cut: [[current_cut]]
+previous_cut: [[previous_cut]]
+next_cut: [[next_cut]]
+full_script: [[full_script]]
+previous_prompt_1: [[previous_prompt_1]]
+previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
 
 exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Shorts thumbnail prompt director.
 
@@ -93,7 +100,7 @@ su name brief video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -136,7 +143,7 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -179,7 +186,7 @@ su name teaching video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -222,7 +229,7 @@ su name teaching video from text manuscript to filename video short be ceremony 
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text "Turn this teaching cut text into one concise image prompt. Return only the prompt text." fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 

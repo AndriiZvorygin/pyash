@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { main } from "../command/itinerary_promptify.mjs";
+import { main, buildPromptifyPacket } from "../command/itinerary_promptify.mjs";
 
 test("itinerary_promptify rewrites cut text via mind responses", async () => {
   const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "promptify-"));
@@ -152,4 +152,22 @@ test("itinerary_promptify carries raw cut fields for each request", async () => 
   assert.match(calls[2], /current_cut:\s*juxtaposed before and after conditions/u);
   assert.match(calls[2], /previous_prompt_1:\s*ok prompt/u);
   assert.match(calls[2], /previous_prompt_2:\s*ok prompt/u);
+});
+
+test("buildPromptifyPacket renders caller-provided placeholder template", () => {
+  const packet = buildPromptifyPacket({
+    cuts: [
+      { obText: "first cut" },
+      { obText: "second cut" }
+    ],
+    index: 1,
+    instruction: "ignored in this template",
+    fullScript: "first cut second cut",
+    previousPrompts: ["first prompt"],
+    packetTemplate: "CUT=[[current_cut]]|PREV=[[previous_cut]]|NEXT=[[next_cut]]|SCRIPT=[[full_script]]|P1=[[previous_prompt_1]]|P2=[[previous_prompt_2]]"
+  });
+  assert.equal(
+    packet,
+    "CUT=second cut|PREV=first cut|NEXT=EMPTY|SCRIPT=first cut second cut|P1=first prompt|P2=EMPTY"
+  );
 });
