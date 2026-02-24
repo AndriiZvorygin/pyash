@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { parseItineraryPya, renderItineraryPya } from "./itinerary_io.mjs";
 
 function usage() {
-  return "Usage: node command/itinerary_promptify.mjs <input-itinerary.pya> <output-itinerary.pya> [--model <name>] [--host <url>] [--system <text>] [--instruction <text>] [--packet <text>] [--packet-file <filename>]";
+  return "Usage: node command/itinerary_promptify.mjs <input-itinerary.pya> <output-itinerary.pya> [--model <name>] [--host <url>] [--system <text>]";
 }
 
 function parseArgs(argv) {
@@ -15,19 +15,13 @@ function parseArgs(argv) {
     outputFile: args[1],
     model: process.env.PYA_DRAW_PROMPT_MODEL || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct",
     host: process.env.OLLAMA_HOST || "http://localhost:11434",
-    systemPrompt: "Use the provided fields to generate one image prompt. Follow instruction exactly and return only prompt text.",
-    instruction: "Turn this transcript cut into one concise visual image prompt for generation.",
-    packetTemplate: "",
-    packetTemplateFile: ""
+    systemPrompt: "Use the provided fields to generate one image prompt. Follow instruction exactly and return only prompt text."
   };
   for (let i = 2; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--model") out.model = String(args[++i] ?? out.model);
     else if (arg === "--host") out.host = String(args[++i] ?? out.host);
     else if (arg === "--system") out.systemPrompt = String(args[++i] ?? out.systemPrompt);
-    else if (arg === "--instruction") out.instruction = String(args[++i] ?? out.instruction);
-    else if (arg === "--packet") out.packetTemplate = String(args[++i] ?? out.packetTemplate);
-    else if (arg === "--packet-file") out.packetTemplateFile = String(args[++i] ?? out.packetTemplateFile);
     else throw new Error(usage());
   }
   return out;
@@ -162,9 +156,6 @@ export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   const inputText = await fs.readFile(opts.inputFile, "utf8");
   const itinerary = parseItineraryPya(inputText);
-  const packetTemplateText = opts.packetTemplateFile
-    ? await fs.readFile(path.resolve(opts.packetTemplateFile), "utf8")
-    : String(opts.packetTemplate ?? "");
   const promptedCuts = [];
   const fullScript = itinerary.cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
   const promptHistory = [];
@@ -172,10 +163,9 @@ export async function main(argv = process.argv) {
     const packet = buildPromptifyPacket({
       cuts: itinerary.cuts,
       index: i,
-      instruction: opts.instruction,
+      instruction: "Turn this transcript cut into one concise visual image prompt for generation.",
       fullScript,
-      previousPrompts: promptHistory.slice(-2),
-      packetTemplate: packetTemplateText
+      previousPrompts: promptHistory.slice(-2)
     });
     const prompt = await callPromptMind({
       host: opts.host,
