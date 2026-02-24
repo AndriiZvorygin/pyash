@@ -10,6 +10,7 @@ Purpose: define low-level runtime primitives and IR contracts used by interprete
 | `stream` | ordered incremental output | chunked/ongoing transfer |
 | `chip` | one stream chunk | deterministic stream consumption unit |
 | `evoke` (clause mode) | execute embedded sentence template | reusable clause-driven calls with deterministic override |
+| `instead` (map mode) | deterministic literal replacement | map-driven packet/text assembly |
 
 ## 2. Lifecycle concepts
 
@@ -93,3 +94,13 @@ For clause-mode `evoke`, conformance additionally requires:
 ## 8. Full draft reference
 
 `documentation/recipes/spec-archive/04-runtime-primitives.full.md`
+
+## 9. Map replacement primitive reference (`instead`)
+
+`instead` map-mode behavior is tracked in the reference profile:
+- `documentation/reference/instead-replacement.md`
+
+Conformance target (when implemented):
+- deterministic map-order literal replacement,
+- no hidden placeholder language requirement,
+- parity across interpreter/JS/C for equivalent inputs.

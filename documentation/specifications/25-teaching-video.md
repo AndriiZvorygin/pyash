@@ -124,6 +124,7 @@ Prompt assembly and override (normative):
   - change `ob text` for user/task behavior,
   - or select a different workflow via `as text`,
   - or point directly with `with filename`.
+- If module authors need packet-style token substitution, use the map-driven replacement profile (`documentation/reference/instead-replacement.md`) rather than hidden JS placeholders.
 
 ### 4.2 Hear SRT
 
