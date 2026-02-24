@@ -8,7 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { doRemember, forget, remember } from "../program/remember/index.mjs";
-import { qwenSay, splitQwenSayTextChunks } from "../program/verbs/qwen_say.mjs";
+import { normalizeQwenSayChunkText, qwenSay, splitQwenSayTextChunks } from "../program/verbs/qwen_say.mjs";
 
 test("qwen say fixture records audio and metadata artifacts", async () => {
   forget();
@@ -84,6 +84,12 @@ test("splitQwenSayTextChunks splits long input sentence by sentence", () => {
   assert.ok(chunks.every((chunk) => chunk.trim().length > 0));
 });
 
+test("normalizeQwenSayChunkText appends an extra terminal period", () => {
+  assert.equal(normalizeQwenSayChunkText("No final marker"), "No final marker..");
+  assert.equal(normalizeQwenSayChunkText("Already complete."), "Already complete..");
+  assert.equal(normalizeQwenSayChunkText("Question?"), "Question?.");
+});
+
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
@@ -101,14 +107,12 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
 
   const chunkInputs = [];
   let concatCalled = 0;
-  let seenGap = null;
   const runSayFn = async ({ text, output: chunkFile }) => {
     chunkInputs.push(String(text));
     await fs.writeFile(chunkFile, Buffer.from(`RIFF_chunk_${chunkInputs.length}`));
   };
-  const concatAudioFn = async ({ inputs, output: outFile, gapSeconds }) => {
+  const concatAudioFn = async ({ inputs, output: outFile }) => {
     concatCalled += 1;
-    seenGap = gapSeconds;
     assert.ok(Array.isArray(inputs));
     assert.ok(inputs.length > 1);
     await fs.writeFile(outFile, Buffer.from("RIFF_concat_out"));
@@ -127,7 +131,6 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
     );
     assert.equal(result?.be, "say");
     assert.equal(concatCalled, 1);
-    assert.equal(seenGap, 0.06);
     assert.ok(chunkInputs.length > 1);
     assert.ok(chunkInputs.every((entry) => entry.trim().length > 0));
   } finally {
@@ -135,28 +138,20 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
   }
 });
 
-test("qwenSay uses configured inter-chunk silence gap", async () => {
+test("qwenSay appends sentence end marker for chunked text without punctuation", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
-  doRemember({ mood: "ya", su: { name: "qwen say concat gap seconds" }, ob: { num: 0.12 }, be: "default" });
-  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-gap-out-"));
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-punc-out-"));
   const output = path.join(outDir, "out.wav");
-  const longText = [
-    "Sentence one with enough words to count as meaningful.",
-    "Sentence two continues the same thought with a bit more detail.",
-    "Sentence three adds context and pacing for the narration.",
-    "Sentence four keeps the flow moving with more substance.",
-    "Sentence five brings another concrete example to the script.",
-    "Sentence six closes the paragraph while staying clear."
-  ].join(" ").repeat(8);
-  let seenGap = null;
-  const runSayFn = async ({ output: chunkFile }) => {
-    await fs.writeFile(chunkFile, Buffer.from("RIFF_gap_chunk"));
+  const longNoPunctuation = ("this chunk has no punctuation and keeps going ").repeat(70).trim();
+  const seenTexts = [];
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    seenTexts.push(String(text ?? ""));
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_punc_chunk"));
   };
-  const concatAudioFn = async ({ output: outFile, gapSeconds }) => {
-    seenGap = gapSeconds;
-    await fs.writeFile(outFile, Buffer.from("RIFF_gap_concat"));
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_punc_concat"));
   };
   try {
     await qwenSay(
@@ -164,12 +159,13 @@ test("qwenSay uses configured inter-chunk silence gap", async () => {
         mood: "do",
         be: "qwen say",
         su: { name: "voice" },
-        ob: { text: longText },
+        ob: { text: longNoPunctuation },
         to: { filename: output }
       },
       { runSayFn, concatAudioFn }
     );
-    assert.equal(seenGap, 0.12);
+    assert.ok(seenTexts.length > 1);
+    assert.ok(seenTexts.every((value) => value.trim().endsWith(".")));
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
