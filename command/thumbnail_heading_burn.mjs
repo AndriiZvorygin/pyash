@@ -17,7 +17,7 @@ function parseArgs(argv) {
     outputImage: String(args[1] ?? ""),
     text: null,
     textStdin: false,
-    yRatio: 0.20,
+    yRatio: 0.42,
     maxWidthRatio: 0.82,
     fontFile: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
   };
@@ -30,8 +30,8 @@ function parseArgs(argv) {
     else if (arg === "--font-file") out.fontFile = String(args[++i] ?? out.fontFile);
     else throw new Error(usage());
   }
-  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.12 || out.yRatio > 0.35) {
-    throw new Error("y-ratio must be between 0.12 and 0.35");
+  if (!Number.isFinite(out.yRatio) || out.yRatio < 0.38 || out.yRatio > 0.48) {
+    throw new Error("y-ratio must be between 0.38 and 0.48");
   }
   if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.60 || out.maxWidthRatio > 0.95) {
     throw new Error("max-width-ratio must be between 0.60 and 0.95");
