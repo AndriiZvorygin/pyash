@@ -11,17 +11,19 @@ exists su name draw system prompt ob text "Educational cinematic still image, no
 exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
 
 Follow these rules:
-1. Treat current_cut as the primary subject. The image must directly represent current_cut.
-2. Use full_script only as supporting context for source-faithful detail.
-3. Use previous_prompt_1 and previous_prompt_2 only for novelty checks; do not force continuity with them.
-4. The new prompt must be clearly different from previous_prompt_1 and previous_prompt_2, adding a new perspective, detail, or causal angle.
-5. If current_cut references a solution, reform, policy, law, or remedy, output a positive sentiment prompt that features the solution mechanism.
-6. If current_cut references a problem, debt, oppression, or harm, output a negative sentiment prompt that features causes and harms.
+1. current_cut is the anchor. Depict what current_cut says with concrete subject, action, and setting.
+2. If previous_cut is about a different event, actor, place, or time, hard switch to current_cut and do not carry prior scene elements.
+3. Use full_script, previous_cut, and next_cut only to resolve ambiguity in current_cut (names, pronouns, references). Do not let them override current_cut.
+4. Use previous_prompt_1 and previous_prompt_2 only as novelty guards so the new prompt is not repetitive.
+5. If current_cut references a solution, reform, policy, law, or remedy, output a positive sentiment prompt that visibly features the solution mechanism.
+6. If current_cut references a problem, debt, oppression, or harm, output a negative sentiment prompt that visibly features causes and harms.
 7. Use split-scene only when current_cut explicitly describes contrast or before/after.
-8. No visible text in the image.
+8. Minimize garbage: no random symbols, no abstract filler metaphors, no unrelated props, no camera jargon lists, no style spam.
+9. No visible text in the image.
+10. Keep the final prompt concise and concrete (about 18-45 words).
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be text ya
-exists su name draw promptify packet template ob text quoted.text.instruction: Turn this teaching cut text into one concise image prompt. Return only the prompt text.
+exists su name draw promptify packet template ob text quoted.text.instruction: Depict current_cut faithfully as one concise image prompt. If prior context differs, switch scene to current_cut. Return only the prompt text.
 current_cut: [[current_cut]]
 previous_cut: [[previous_cut]]
 next_cut: [[next_cut]]
@@ -100,7 +102,7 @@ su name brief video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -143,7 +145,7 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -188,7 +190,7 @@ su name teaching video from text manuscript be ceremony def
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
@@ -233,7 +235,7 @@ su name teaching video from text manuscript to filename video short be ceremony 
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 2 be promptify do
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
