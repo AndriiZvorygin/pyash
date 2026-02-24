@@ -44,19 +44,18 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
 
   assert.equal(calls.length, 2);
   assert.match(calls[0], /\[GLOBAL CONTEXT\]/u);
-  assert.match(calls[0], /\[NARRATIVE ARC POLICY\]/u);
+  assert.match(calls[0], /\[RELEVANCE POLICY\]/u);
   assert.match(calls[0], /current_cut:\s*first cut text/u);
   assert.match(calls[0], /next_cut:\s*second cut text/u);
   assert.match(calls[0], /shot_mode:\s*establishing wide shot/u);
-  assert.match(calls[0], /triad_positive_required_now:\s*lie/u);
+  assert.match(calls[0], /sentiment_target:\s*neutral/u);
   assert.match(calls[0], /previous_prompt_1:\s*EMPTY/u);
   assert.match(calls[0], /previous_prompt_2:\s*EMPTY/u);
   assert.match(calls[0], /\[SCENE CONSISTENCY\]/u);
   assert.match(calls[0], /scene_mode_hint:\s*neutral/u);
   assert.match(calls[1], /current_cut:\s*second cut text/u);
   assert.match(calls[1], /shot_mode:\s*medium character-driven scene/u);
-  assert.match(calls[1], /triad_positive_required_now:\s*truth/u);
-  assert.match(calls[1], /triad_target_mode:\s*positive/u);
+  assert.match(calls[1], /sentiment_target:\s*neutral/u);
   assert.match(calls[1], /previous_prompt_1:\s*visual prompt for/u);
   assert.match(calls[1], /previous_prompt_2:\s*EMPTY/u);
   assert.match(calls[1], /previous_prompt:/u);
@@ -111,8 +110,8 @@ test("itinerary_promptify neighbor context skips duplicate adjacent cuts", async
   assert.match(calls[1], /next_cut:\s*different text/u);
   assert.match(calls[1], /previous_cut:\s*EMPTY/u);
   assert.match(calls[1], /shot_mode:\s*medium character-driven scene/u);
-  assert.match(calls[2], /triad_positive_required_now:\s*truth/u);
-  assert.match(calls[2], /triad_target_mode:\s*positive/u);
+  assert.match(calls[2], /previous_prompt_1:\s*ok prompt/u);
+  assert.match(calls[2], /previous_prompt_2:\s*ok prompt/u);
 });
 
 test("itinerary_promptify emits scene mode hints for negative positive and contrast cuts", async () => {
@@ -155,8 +154,11 @@ test("itinerary_promptify emits scene mode hints for negative positive and contr
 
   assert.equal(calls.length, 3);
   assert.match(calls[0], /scene_mode_hint:\s*negative/u);
+  assert.match(calls[0], /problem_reference_hint:\s*truth/u);
+  assert.match(calls[0], /sentiment_target:\s*negative/u);
   assert.match(calls[1], /scene_mode_hint:\s*positive/u);
-  assert.match(calls[2], /scene_mode_hint:\s*contrast/u);
   assert.match(calls[1], /solution_reference_hint:\s*truth/u);
-  assert.match(calls[1], /triad_target_mode:\s*positive/u);
+  assert.match(calls[1], /sentiment_target:\s*positive/u);
+  assert.match(calls[2], /scene_mode_hint:\s*contrast/u);
+  assert.match(calls[2], /sentiment_target:\s*contrast/u);
 });

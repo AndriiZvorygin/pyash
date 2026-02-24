@@ -8,26 +8,21 @@ su name draw size shorts be map def
 prah
 
 exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
-exists su name draw promptify instruction ob text quoted.text.Convert this transcript cut into one concise visual image prompt for generation. Use full script arc context, not only literal current cut wording, while staying source-faithful. Keep continuity across cuts but make each cut visually distinct. Infer whether the cut is negative, positive, or explicit contrast. Use one coherent scene unless explicit contrast is required; for contrast, use one split-scene frame. Across each 3-cut window, ensure at least one clearly positive or solution-forward image. If the cut references a solution symbol, reform, policy, or law, the image MUST be positive. For negative cuts, keep all major elements tied to harm conditions and do not insert unrelated remedy symbols. For positive cuts, foreground the solution mechanism and visible benefit. Include a short causal visual clause explaining why the scene appears this way. Return only the prompt text. No markdown, no quotes, no explanation..text.quoted be text ya
+exists su name draw promptify instruction ob text quoted.text.Convert this transcript cut into one concise visual image prompt for generation. Prioritize relevance to the current cut, using full script context for source-faithful implied detail. You may inspect previous prompts only to avoid repetition; do not force continuity. The prompt must be clearly different from the previous two prompts and add a new perspective, detail, or causal angle. If the current cut references a solution, reform, policy, law, or remedy, the prompt MUST be positive and feature the solution mechanism. If the current cut references a problem, debt, oppression, or harm, the prompt MUST be negative and feature root causes. Use split-scene only for explicit contrast. Return only the prompt text. No markdown, no quotes, no explanation..text.quoted be text ya
 
-exists su name thumbnail system prompt ob text quoted.text.You are a viral Shorts thumbnail expert in 2026. Your only job is to analyze the full provided video script/transcript and create ONE highly effective, scroll-stopping image generation prompt for an AI tool (DALL·E, Midjourney, Flux, Leonardo, etc.).
+exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Shorts thumbnail prompt director.
 
-Follow these strict rules every time:
+Output exactly one image-generation prompt for a single scroll-stopping scene based on the full context.
 
-1. First, identify the MOST intriguing, emotional, surprising, valuable, or curiosity-driven core angle from the script (the "hook moment").
-2. Invent ONE original 3-6 word bold hook phrase that captures that angle perfectly - punchy, authentic, no generic clickbait.
-3. Build a rich, detailed scene-first prompt: describe a high-energy, visually striking full-scene image (hyper-realistic or cinematic style) that fills the frame with strong impact - e.g., shocked expression reacting to something dramatic, intense close-up transformation, eye-catching split-screen before/after, mysterious reveal, emotional reaction shot, high-contrast action moment. Avoid plain/minimal backgrounds; make it dynamic and detailed.
-4. Do NOT include any visible text in the image. No letters, no captions, no logos, no watermarks. The image must be text-free.
-5. Keep the overall prompt concise (under 150 words), high-contrast, vibrant colors, cinematic lighting, scroll-stopping energy, clean composition.
-6. Output ONLY the final image generation prompt - nothing else. No explanations, no lists, no extra text.
+Hard rules:
+1. Image-only. Absolutely no visible text, letters, words, numbers, logos, watermarks, captions, subtitles, UI, signs, posters, book pages, tablets, engraved writing, or title cards.
+2. Do not ask for text overlay and do not include any wording inside the image scene.
+3. Pick the strongest hook moment from the script and render it as a concrete visual scene with clear subject, action, and stakes.
+4. Favor emotional intensity, cinematic lighting, strong contrast, depth, and clean composition.
+5. Keep prompt under 120 words and specific to visuals.
+6. Output only the final image prompt.
 
-User will provide full context next as plain text containing:
-- FULL SCRIPT
-- IMAGE PROMPTS ITINERARY (scene-by-scene prompt list)
-
-Use both sources to choose a hook image that previews the whole narrative and visually flows into the opening scene.
-
-Respond with just the image prompt..text.quoted be text ya
+Context contains FULL SCRIPT and IMAGE PROMPTS ITINERARY. Use both to choose a hook frame that represents the video and opens with high curiosity..text.quoted be text ya
 
 exists su name brief video manuscript judge prompter ob text quoted.text.You are comparing two candidate spoken scripts for a 30-60 second history short.
 
