@@ -100,7 +100,7 @@ For clause-mode `evoke`, conformance additionally requires:
 `instead` map-mode behavior is tracked in the reference profile:
 - `documentation/reference/instead-replacement.md`
 
-Conformance target (when implemented):
+Conformance target:
 - deterministic map-order literal replacement,
 - no hidden placeholder language requirement,
 - parity across interpreter/JS/C for equivalent inputs.
