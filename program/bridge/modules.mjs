@@ -200,7 +200,7 @@ function qualifyValue(value, opts, { skipNames = false } = {}) {
   if (Array.isArray(value)) return value.map(v => qualifyValue(v, opts, { skipNames }));
 
   const next = { ...value };
-  if (!skipNames && next.name && !next.nameTypeWords && opts.nameMap.has(next.name)) {
+  if (!skipNames && next.name && opts.nameMap.has(next.name)) {
     next.name = opts.nameMap.get(next.name);
   }
   if (next.genitive?.chain) {
@@ -398,7 +398,7 @@ export async function loadModule({ specifier, alias, source }) {
   let mapDepth = 0;
   for (const s of base.sentences) {
     const isMapDef = s?.mood === "def" && (s?.be === "map" || s?.be === "json map" || s?.be === "csv map");
-    const isMapPrah = s?.mood === "prah" && (s?.be === "map" || s?.be === "json map" || s?.be === "csv map");
+    const isMapPrah = s?.mood === "prah" && (s?.be === "map" || s?.be === "json map" || s?.be === "csv map" || mapDepth > 0);
     const inMap = mapDepth > 0;
     const skipSuName = inMap && s?.mood === "ya";
     const nextSentence = qualifySentence(s, { nameMap, localCeremonies: base.localCeremonies, importAliases: base.importAliases }, { skipSuName });
