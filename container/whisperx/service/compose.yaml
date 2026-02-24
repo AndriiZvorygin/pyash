@@ -1,7 +1,7 @@
 services:
   whisperx:
     container_name: whisperx
-    image: ghcr.io/jim60105/whisperx:base
+    image: ghcr.io/jim60105/whisperx:no_model
     user: "${PYASH_UID}:${PYASH_GID}"
     working_dir: /workplace
     entrypoint: ["python3", "/service/server.py"]
@@ -20,9 +20,6 @@ services:
       - TORCH_HOME=/cache/torch
       - MPLCONFIGDIR=/cache/matplotlib
       - NLTK_DATA=/cache/nltk_data
-    device_requests:
-      - driver: nvidia
-        count: all
-        capabilities: [gpu]
+    gpus: all
     extra_hosts:
       - host.docker.internal:host-gateway
