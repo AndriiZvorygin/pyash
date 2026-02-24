@@ -14,10 +14,15 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - WHISPERX_MODEL=${WHISPERX_MODEL:-base}
       - WHISPERX_COMPUTE_TYPE=${WHISPERX_COMPUTE_TYPE:-int8}
+      - WHISPERX_DEVICE=${WHISPERX_DEVICE:-cuda}
       - TRANSFORMERS_CACHE=/cache/huggingface
       - HF_HOME=/cache/huggingface
       - TORCH_HOME=/cache/torch
       - MPLCONFIGDIR=/cache/matplotlib
       - NLTK_DATA=/cache/nltk_data
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]
     extra_hosts:
       - host.docker.internal:host-gateway
