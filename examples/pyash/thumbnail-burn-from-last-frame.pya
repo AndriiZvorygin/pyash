@@ -1,0 +1,20 @@
+ob filename text video be input ya
+
+exists su name heading text ob text "Solon's Reform Saved Athens" be default ya
+exists su name frame file ob filename "/workplace/examples/out/thumbnail-last-frame.png" be default ya
+exists su name output file ob filename "/workplace/examples/out/thumbnail-last-frame-burn.png" be default ya
+
+ob text "mkdir -p /workplace/examples/out" be command do
+
+ob text of ob of video to name text video path be text do
+
+ob text "ffmpeg -y -sseof -1 -i \"" to name text extract cmd be text do
+ob name text video path to name extract cmd be plus do
+ob text "\" -frames:v 1 \"" to name extract cmd be plus do
+ob text of ob of frame file to name extract cmd be plus do
+ob text "\"" to name extract cmd be plus do
+ob name extract cmd be command do
+
+su name burn stage from filename of ob of frame file with name text heading text to filename of ob of output file be thumbnail heading burn do
+
+su name result out ob text of ob of output file be write do

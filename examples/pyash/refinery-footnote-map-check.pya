@@ -1,0 +1,50 @@
+from filename "../../module/brief_video.pya" to name brief video be import do
+from filename "../../module/footnote_video.pya" ob name footnote to name footnote be import do
+
+su name footnote map check be refinery def
+  ob text "mkdir -p /workplace/examples/out" be command do
+  ob text "ffmpeg -y -f lavfi -i color=c=#101820:s=1280x720:d=4 -f lavfi -i anullsrc=r=44100:cl=stereo -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac /workplace/examples/out/refinery-footnote-wide-base.mp4" be command do
+  ob text "ffmpeg -y -f lavfi -i color=c=#201010:s=720x1280:d=4 -f lavfi -i anullsrc=r=44100:cl=stereo -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac /workplace/examples/out/refinery-footnote-tall-base.mp4" be command do
+
+  ob text "1
+00:00:00,000 --> 00:00:02,000
+Wide frame should use karaoke.
+
+2
+00:00:02,000 --> 00:00:04,000
+Margin should be ten percent.
+" to filename "/workplace/examples/out/refinery-footnote-wide-base.srt" be write do
+
+  ob text "1
+00:00:00,000 --> 00:00:02,000
+Tall frame should use wordflow.
+
+2
+00:00:02,000 --> 00:00:04,000
+Margin should be ten percent.
+" to filename "/workplace/examples/out/refinery-footnote-tall-base.srt" be write do
+
+  su name wide mode stage to name text widescreen footnote mode be widescreen footnote mode do
+  su name wide margin stage to name num widescreen subtitle margin ratio be widescreen subtitle margin ratio do
+  su name tall mode stage to name text shorts footnote mode be shorts footnote mode do
+  su name tall margin stage to name num shorts subtitle margin ratio be shorts subtitle margin ratio do
+
+  ob text of ob of wide mode stage to name text wide mode be text do
+  ob num of ob of wide margin stage to name num wide margin be plus do
+  ob text of ob of tall mode stage to name text tall mode be text do
+  ob num of ob of tall margin stage to name num tall margin be plus do
+  ob name text wide mode be write do
+  ob name num wide margin be write do
+  ob name text tall mode be write do
+  ob name num tall margin be write do
+
+  ob name text wide mode be equally from text "karaoke" then from filename "/workplace/examples/out/refinery-footnote-wide-base.srt" fromstate wo srt with filename "/workplace/examples/out/refinery-footnote-wide-base.mp4" become wo video to filename "/workplace/examples/out/refinery-footnote-wide.mp4" as wo karaoke by num of ob of wide margin stage be footnote do
+  ob name text wide mode be equally from text "wordflow" then from filename "/workplace/examples/out/refinery-footnote-wide-base.srt" fromstate wo srt with filename "/workplace/examples/out/refinery-footnote-wide-base.mp4" become wo video to filename "/workplace/examples/out/refinery-footnote-wide.mp4" as wo wordflow by num of ob of wide margin stage be footnote do
+
+  ob name text tall mode be equally from text "karaoke" then from filename "/workplace/examples/out/refinery-footnote-tall-base.srt" fromstate wo srt with filename "/workplace/examples/out/refinery-footnote-tall-base.mp4" become wo video to filename "/workplace/examples/out/refinery-footnote-tall.mp4" as wo karaoke by num of ob of tall margin stage be footnote do
+  ob name text tall mode be equally from text "wordflow" then from filename "/workplace/examples/out/refinery-footnote-tall-base.srt" fromstate wo srt with filename "/workplace/examples/out/refinery-footnote-tall-base.mp4" become wo video to filename "/workplace/examples/out/refinery-footnote-tall.mp4" as wo wordflow by num of ob of tall margin stage be footnote do
+
+  ob text "footnote map refinery check complete" be write do
+prah
+
+from name footnote map check be refinery do
