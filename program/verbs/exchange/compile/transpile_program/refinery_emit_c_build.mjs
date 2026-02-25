@@ -124,7 +124,7 @@ export function buildRefineryCForDefinition({
   lines.push(`    pya_checkpoint_hash(${actionVar}[next], depNames, depResults, depCount, checkpointHash);`);
   lines.push("    if (checkpoint_enabled) {");
   lines.push(`      const char *checkpointResult = pya_find_checkpoint(refineryName, ${nameVar}[next], checkpointHash);`);
-  lines.push("      if (checkpointResult) {");
+  lines.push("      if (checkpointResult && pya_checkpoint_result_files_exist(checkpointResult)) {");
   lines.push("        char checkpointLine[PYA_TEXT_CAP];");
   lines.push("        snprintf(checkpointLine, sizeof(checkpointLine), \"su name %s ob text \\\"%s\\\" from name %s to la %s ko be checkpoint ya\", " + nameVar + "[next], checkpointHash, refineryName, checkpointResult);");
   lines.push("        pya_emit_exchange(checkpointLine);");

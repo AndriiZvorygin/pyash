@@ -23,6 +23,7 @@ export function emitRefineryJs({
   if (!refineryDefs || refineryDefs.size === 0) {
     return { lines: [], usesRememberShim, usesMapShim };
   }
+  jsHelpers.usesFs = true;
   const lines = buildRefineryJsPreludeLines(effectiveRetryConfig);
   for (const [refineryName, refinery] of refineryDefs.entries()) {
     const result = buildRefineryJsDefinitions({

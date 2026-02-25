@@ -13,7 +13,7 @@ const canCaptureNodeChildStdout = (() => {
   return String(stdout ?? "").trim() === "ok";
 })();
 
-test("refinery checkpoints reuse prior results", async (t) => {
+test("refinery reruns stage when checkpoint output file is missing", async (t) => {
   if (!canCaptureNodeChildStdout) t.skip("environment cannot capture node child stdout");
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-refinery-checkpoint-"));
   const programPath = path.join(tmpDir, "program.pya");
@@ -55,7 +55,7 @@ test("refinery checkpoints reuse prior results", async (t) => {
   } catch {
     recreated = false;
   }
-  assert.equal(recreated, false);
+  assert.equal(recreated, true);
 
   const newspaperPath = path.join(tmpDir, "newspaper", "run-checkpoint.pya");
   const newspaper = await fs.readFile(newspaperPath, "utf8");

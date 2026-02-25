@@ -25,6 +25,7 @@ export function emitRefineryC({
   }
   cHelpers.usesStdlib = true;
   cHelpers.usesString = true;
+  cHelpers.usesCtype = true;
   cHelpers.usesExchange = true;
   const lines = buildRefineryCPreludeLines();
   const mainLines = [];

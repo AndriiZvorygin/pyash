@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { buildErrorSentence, surfaceErrorSentence, throwErrorSentence } from "../error.mjs";
 import { remember, doRemember, allRemember, pushMemoryContext, popMemoryContext } from "../remember/index.mjs";
 import { sentenceToPyash } from "../beautiful.mjs";
@@ -257,6 +258,39 @@ function applyScopeSnapshotToHashParts(scopeSlots = {}) {
     }
   }
   return parts;
+}
+
+function looksLikeRemoteLocator(value = "") {
+  const text = String(value ?? "").trim();
+  return /^[a-z]+:\/\//i.test(text);
+}
+
+function collectFilenameLocators(sentence = {}) {
+  const out = [];
+  const obFilename = String(sentence?.ob?.filename ?? "").trim();
+  if (obFilename) out.push(obFilename);
+  const toFilename = String(sentence?.to?.filename ?? "").trim();
+  if (toFilename) out.push(toFilename);
+  const fromFilename = String(sentence?.from?.filename ?? "").trim();
+  if (fromFilename) out.push(fromFilename);
+  return out;
+}
+
+function checkpointOutputFilesExist({ resultSentence, exportFacts = [] } = {}) {
+  const candidates = new Set();
+  for (const locator of collectFilenameLocators(resultSentence)) {
+    if (!looksLikeRemoteLocator(locator)) candidates.add(locator);
+  }
+  for (const fact of exportFacts) {
+    for (const locator of collectFilenameLocators(fact)) {
+      if (!looksLikeRemoteLocator(locator)) candidates.add(locator);
+    }
+  }
+  if (!candidates.size) return true;
+  for (const locator of candidates) {
+    if (!fs.existsSync(locator)) return false;
+  }
+  return true;
 }
 
 async function sleepMs(delayMs) {
@@ -983,7 +1017,15 @@ export async function runRefinery({
     );
     const checkpointMap = checkpointIndex?.get(name);
     const checkpointRecord = checkpointEnabled ? checkpointMap?.get(nextName) : null;
-    if (checkpointEnabled && checkpointRecord?.hash === checkpointHash) {
+    const checkpointResultSentence = checkpointRecord?.resultSentence;
+    const checkpointExportFacts = checkpointRecord?.exportFacts ?? [];
+    const checkpointUsable = checkpointEnabled
+      && checkpointRecord?.hash === checkpointHash
+      && checkpointOutputFilesExist({
+        resultSentence: checkpointResultSentence,
+        exportFacts: checkpointExportFacts
+      });
+    if (checkpointUsable) {
       const resultSentence = checkpointRecord.resultSentence;
       const resultLine = checkpointRecord.resultLine ?? sentenceToPyash(resultSentence);
       restoreExportFacts(checkpointRecord.exportFacts ?? []);
