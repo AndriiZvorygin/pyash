@@ -10,7 +10,6 @@ import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
-import { buildPromptifyPacket, callPromptMind } from "../../command/itinerary_promptify.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
   return (
@@ -35,38 +34,6 @@ function resolveToneDefault({ rememberFn = remember } = {}) {
 function resolveToneStrategy({ rememberFn = remember } = {}) {
   const mode = String(resolveConfigText("qwen say tone strategy", { rememberFn }) || "heuristic").trim().toLowerCase();
   return mode || "heuristic";
-}
-
-function resolveTonePromptifyHost({ rememberFn = remember } = {}) {
-  return (
-    resolveConfigText("qwen say tone host", { rememberFn }) ||
-    resolveConfigText("mind host", { rememberFn }) ||
-    process.env.OLLAMA_HOST ||
-    "http://localhost:11434"
-  );
-}
-
-function resolveTonePromptifyModel({ rememberFn = remember } = {}) {
-  return (
-    resolveConfigText("qwen say tone model", { rememberFn }) ||
-    resolveConfigText("mind model", { rememberFn }) ||
-    process.env.PYA_MIND_MODEL ||
-    "qwen3-vl:8b-instruct"
-  );
-}
-
-function resolveTonePromptifySystem({ rememberFn = remember } = {}) {
-  return (
-    resolveConfigText("qwen say tone promptify system prompt", { rememberFn }) ||
-    "You are a voice director for a text-to-speech teaching video. Return only one short speaking instruction line."
-  );
-}
-
-function resolveTonePromptifyInstruction({ rememberFn = remember } = {}) {
-  return (
-    resolveConfigText("qwen say tone promptify instruction", { rememberFn }) ||
-    "Return exactly one single-line speaking direction sentence for TTS. Required shape: tone words, pace phrase, articulation phrase, pause phrase, emphasis phrase. Rules: one line only, plain text, no labels or bullets, under 22 words, warm teacher style unless urgency is explicit. Example output (single line): Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis."
-  );
 }
 
 function resolvePostProcessEnabled({ rememberFn = remember } = {}) {
@@ -246,62 +213,6 @@ function normalizeToneInstruction(value = "", fallback = "") {
   return String(fallback ?? "").trim();
 }
 
-async function promptifyToneInstructs(
-  chunks = [],
-  {
-    rememberFn = remember,
-    toneDefault = ""
-  } = {}
-) {
-  const host = resolveTonePromptifyHost({ rememberFn });
-  const model = resolveTonePromptifyModel({ rememberFn });
-  const systemPrompt = resolveTonePromptifySystem({ rememberFn });
-  const instruction = resolveTonePromptifyInstruction({ rememberFn });
-  const cuts = chunks.map((chunk, index) => ({ index, obText: String(chunk ?? "") }));
-  const fullScript = chunks.map(chunk => String(chunk ?? "").trim()).filter(Boolean).join(" ");
-  const previousPrompts = [];
-  const tones = [];
-  for (let i = 0; i < cuts.length; i += 1) {
-    const index = i + 1;
-    const packet = buildPromptifyPacket({
-      cuts,
-      index: i,
-      instruction,
-      fullScript,
-      previousPrompts: previousPrompts.slice(-2)
-    });
-    emitExchangeSentence({
-      mood: "do",
-      su: { name: `qwen say tone request ${String(index).padStart(3, "0")}` },
-      ob: { text: packet },
-      fromtext: { text: instruction },
-      fromstate: { text: host },
-      as: { text: model },
-      by: { num: index },
-      be: "promptify"
-    });
-    const rawTone = await callPromptMind({
-      host,
-      model,
-      systemPrompt,
-      cutText: packet
-    });
-    const tone = normalizeToneInstruction(rawTone, toneDefault);
-    emitExchangeSentence({
-      mood: "ya",
-      su: { name: `qwen say tone result ${String(index).padStart(3, "0")}` },
-      ob: { text: String(rawTone ?? "") || tone },
-      fromstate: { text: host },
-      as: { text: model },
-      by: { num: index },
-      be: "promptify"
-    });
-    tones.push(tone);
-    previousPrompts.push(tone);
-  }
-  return tones;
-}
-
 async function planChunkInstructs(
   chunks = [],
   {
@@ -314,25 +225,6 @@ async function planChunkInstructs(
   const override = String(toneOverride ?? "").trim();
   if (override) {
     return { instructs: chunks.map(() => override), strategy: "override" };
-  }
-
-  const mode = String(toneStrategy ?? "").trim().toLowerCase();
-  if (mode === "promptify") {
-    try {
-      const instructs = await promptifyToneInstructs(chunks, {
-        rememberFn,
-        toneDefault
-      });
-      if (instructs.length === chunks.length && instructs.every(value => String(value ?? "").trim())) {
-        return { instructs, strategy: "promptify" };
-      }
-    } catch {
-      // fallback below
-    }
-    return {
-      instructs: chunks.map(() => toneDefault),
-      strategy: "default-fallback"
-    };
   }
 
   return {
@@ -461,8 +353,7 @@ export async function qwenSay(
   const { workflowName, workflowRoot, toneDefault, toneOverride } = await resolveWorkflowAndTone(sentence, { rememberFn, pathExistsFn });
   const host = resolveHost({ rememberFn });
   const toneStrategy = resolveToneStrategy({ rememberFn });
-  const forceSentenceChunks = !String(toneOverride ?? "").trim() && toneStrategy === "promptify";
-  const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks });
+  const chunks = splitQwenSayTextChunks(text);
   const tonePlan = await planChunkInstructsFn(chunks, {
     rememberFn,
     toneOverride,

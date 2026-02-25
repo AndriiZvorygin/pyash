@@ -350,11 +350,11 @@ test("qwenSay skips post-processing when disabled", async () => {
   }
 });
 
-test("qwenSay promptify tone strategy plans per-sentence instructs on short text", async () => {
+test("qwenSay applies planner instructs when chunked synthesis is used", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
-  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "promptify" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "heuristic" }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-promptify-out-"));
   const output = path.join(outDir, "out.wav");
   const seenChunks = [];
@@ -372,28 +372,30 @@ test("qwenSay promptify tone strategy plans per-sentence instructs on short text
     strategy: "promptify"
   });
   try {
+    const longText = Array.from({ length: 170 }, (_, idx) => `word${idx + 1}`).join(" ");
     await qwenSay(
       {
         mood: "do",
         be: "qwen say",
         su: { name: "voice" },
-        ob: { text: "Sentence one. Sentence two? Sentence three." },
+        ob: { text: longText },
         to: { filename: output }
       },
       { runSayFn, concatAudioFn, planChunkInstructsFn }
     );
-    assert.ok(seenChunks.length >= 3);
-    assert.deepEqual(seenInstructs.slice(0, 3), ["tone 1", "tone 2", "tone 3"]);
+    assert.ok(seenChunks.length >= 2);
+    assert.equal(seenInstructs[0], "tone 1");
+    assert.equal(seenInstructs[1], "tone 2");
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
 });
 
-test("qwenSay promptify tone strategy falls back to compassionate teacher when planner fails", async () => {
+test("qwenSay falls back to heuristic instructs when planner returns empty", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
-  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "promptify" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "heuristic" }, be: "default" });
   doRemember({ mood: "ya", su: { name: "qwen say tone default" }, ob: { text: "speak as a compassionate teacher" }, be: "default" });
   const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-fallback-out-"));
   const output = path.join(outDir, "out.wav");
@@ -410,12 +412,13 @@ test("qwenSay promptify tone strategy falls back to compassionate teacher when p
     strategy: "default-fallback"
   });
   try {
+    const longText = Array.from({ length: 180 }, (_, idx) => `line${idx + 1}`).join(" ");
     await qwenSay(
       {
         mood: "do",
         be: "qwen say",
         su: { name: "voice" },
-        ob: { text: "First line. Second line." },
+        ob: { text: longText },
         to: { filename: output }
       },
       { runSayFn, concatAudioFn, planChunkInstructsFn }
