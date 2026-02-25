@@ -65,7 +65,7 @@ function resolveTonePromptifySystem({ rememberFn = remember } = {}) {
 function resolveTonePromptifyInstruction({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("qwen say tone promptify instruction", { rememberFn }) ||
-    "Pick a natural speaking direction under 20 words. Use plain language with no labels or bullets. Choose fitting tone/emotion/energy/pace/emphasis/pauses; keep articulation crisp. Prefer clarity and warmth unless urgency is signaled. Avoid extreme combinations."
+    "Pick one natural speaking direction under 20 words. Tone options: friendly teacher professional narrator conversational authoritative reflective. Emotion options: neutral warm calm enthusiastic serious inspiring concerned. Energy options: low medium high. Pace options: slow moderate slightly fast. Emphasis options: none key words numbers contrast. Pause options: none brief pauses after key terms pause before conclusion micro pauses between clauses. Prefer clarity and warmth unless urgency appears. Avoid repeating reflective tone across adjacent cuts. Use reflective only for retrospective or lesson summary lines. No labels. No bullets."
   );
 }
 
