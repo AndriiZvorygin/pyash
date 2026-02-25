@@ -212,6 +212,31 @@ For retention and compaction.
 
 ---
 
+### 3.8 Holding
+
+`world/holding/` is the runtime spool namespace for queue-backed processors.
+
+Lane model:
+
+* each runtime family owns one lane under `world/holding/<lane>/`
+* lane layouts are lifecycle-oriented (for example `input/`, `runtime/`, `produce/success/`, `produce/fail/`)
+* lane contracts are specified by the owning subsystem spec
+
+Current reserved lane:
+
+* `world/holding/channel/` is reserved for channel adapters/router runtime spool (`documentation/specifications/24-channel-contract.md`)
+
+Isolation rules:
+
+* non-channel runtimes MUST NOT write staged queue files into `world/holding/channel/`
+* new queue families (for example GPU job orchestration) SHOULD allocate a dedicated lane such as `world/holding/gpu/`
+* lane ownership and stage semantics MUST remain explicit and non-overlapping
+* when a new lane adopts queue semantics, it SHOULD mirror channel-style staging (`input/`, `runtime/`, `produce/success/`, `produce/fail/`) unless the owning spec states otherwise
+
+**MVP:** lane-per-runtime namespace discipline
+
+---
+
 ## 4. Agent verb surface (authoritative)
 
 Agents MAY use only:

@@ -1,0 +1,4 @@
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+su name probe one ob text "ping" fromtext text "Return exactly: one" for name mind to name text probe one out be write do
+su name probe two ob text "ping" fromtext text "Return exactly: two" for name mind to name text probe two out be write do
+su name probe three ob text "ping" fromtext text "Return exactly: three" for name mind to name text probe three out be write do

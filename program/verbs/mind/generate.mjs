@@ -252,8 +252,9 @@ export async function runGenerate({
     let backendResponse = null;
     let backendErrorText = "";
     let attempts = 0;
-    const baseAttempts = 2;
-    const loadingAttempts = 8;
+    // Fail fast in production runs: retries can amplify provider thrashing.
+    const baseAttempts = 1;
+    const loadingAttempts = 1;
     while (attempts < loadingAttempts) {
       attempts += 1;
       backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });

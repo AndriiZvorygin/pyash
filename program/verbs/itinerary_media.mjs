@@ -19,7 +19,6 @@ import {
   runFfmpegConcatVideos
 } from "../../command/itinerary_to_video.mjs";
 import { callPromptMind, buildPromptifyPacket } from "../../command/itinerary_promptify.mjs";
-import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 import { renderSayValue } from "./say.mjs";
 
@@ -326,7 +325,7 @@ function promptifyModel(sentence, rememberFn) {
   const mindFact = rememberFn?.(mindName);
   const model = String(mindFact?.as?.name ?? "").trim();
   if (model) return model;
-  return process.env.PYA_DRAW_PROMPT_MODEL || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct";
+  return resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct";
 }
 
 function promptifyHost(sentence, rememberFn) {
@@ -922,7 +921,6 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
 }
 
 export async function drawFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
-  await enforceAutoDischarge({ activatingClass: "draw", rememberFn });
   const cuts = await resolveItineraryCuts(sentence?.from, { rememberFn });
   const outputDir = resolveFilenameFromCase(sentence?.to, rememberFn) || defaultDrawOutputDir();
   const { resolved: outputResolved, outside, agentCwd } = resolveAgentPath(outputDir, { rememberFn });
@@ -1042,7 +1040,6 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
   const continuityWindow = Number.isFinite(continuityWindowRaw) && continuityWindowRaw >= 0
     ? Math.floor(continuityWindowRaw)
     : 1;
-  await enforceAutoDischarge({ activatingClass: "mind", activatingModel: model, rememberFn });
   const fullScript = cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
   const series = [];
   const promptHistory = [];

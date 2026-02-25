@@ -346,6 +346,157 @@ Runtime contract for this profile:
 - downstream `from name <platform>` resolves via latest platform artifact locator,
 - replay/debug remains available through newspaper + artifacts even without explicit file paths in the refinery.
 
+Holding lane rule:
+- teaching-video checkpoint/queue state MUST NOT use `world/holding/channel/` (reserved for channel runtime).
+- if a queued runtime manager is used for teaching-video (for example GPU queueing), it must use a separate lane (for example `world/holding/gpu/`) with its own lifecycle contract.
+
+### 6.2.5 GPU holding lane profile (normative)
+
+When teaching-video uses a GPU queue manager, it SHOULD follow the same lifecycle pattern as channel spooling.
+
+Canonical lane:
+- `world/holding/gpu/`
+
+Required lifecycle:
+1. enqueue normalized jobs into `input/`
+2. claim/move jobs into `runtime/`
+3. move completed jobs into `produce/success/` or `produce/fail/`
+
+Required behavior:
+1. claim/lease semantics MUST be scoped by run/stage identity (for example run-id + stage + section/cut key)
+2. warm-start checkpointing MUST avoid replaying already completed jobs
+3. queue writes and stage transitions MUST use atomic same-filesystem operations (temp-write + rename, then stage rename)
+4. records MUST remain auditable as `.pya` artifacts for each stage transition
+
+Queue semantics note:
+- this is intentionally parallel to channel spool semantics in `24-channel-contract.md` section `7.1`, but scoped to teaching-video GPU workloads.
+
+Envelope/file pattern (normative):
+- queue files in `input/`, `runtime/`, and `produce/*/` MUST be Pyash sentence envelopes (`.pya`), not ad hoc JSON.
+- incoming files SHOULD use a canonical `queue envelope` map sentence that includes:
+1. queue phase/stage
+2. queued timestamp
+3. retry count
+4. lane/type identity (`gpu`)
+5. run/stage key (run-id, stage name, section/cut/sentence identity as applicable)
+6. payload handle/reference
+- outgoing files in `produce/success/` and `produce/fail/` SHOULD keep the same envelope identity and append outcome facts:
+1. outcome status (`success` or `fail`)
+2. completed timestamp
+3. result artifact handle/hash on success
+4. short defect text/code on failure
+- transitions between lifecycle directories MUST preserve envelope traceability so one logical job can be followed across stages.
+
+Canonical envelope examples:
+
+Input (`world/holding/gpu/input/*.pya`):
+```pyash
+su name gpu queue envelope be map def
+su name phase ob text "input" ya
+su name queued at ob date 2026-02-25T18:10:00.000Z ya
+su name retry count ob num 0 ya
+su name lane type ob text "gpu" ya
+su name run id ob text "20260225-130-teaching-video-from-filename" ya
+su name stage name ob text "draw" ya
+su name item id ob text "section-001-cut-003" ya
+su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
+su name gpu queue envelope prah
+```
+
+Success (`world/holding/gpu/produce/success/*.pya`):
+```pyash
+su name gpu queue envelope be map def
+su name phase ob text "produce-success" ya
+su name queued at ob date 2026-02-25T18:10:00.000Z ya
+su name completed at ob date 2026-02-25T18:10:02.000Z ya
+su name retry count ob num 0 ya
+su name lane type ob text "gpu" ya
+su name run id ob text "20260225-130-teaching-video-from-filename" ya
+su name stage name ob text "draw" ya
+su name item id ob text "section-001-cut-003" ya
+su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
+su name outcome ob text "success" ya
+su name result artifact ob text "artifact draw-003 sha256:abc123..." ya
+su name gpu queue envelope prah
+```
+
+Fail (`world/holding/gpu/produce/fail/*.pya`):
+```pyash
+su name gpu queue envelope be map def
+su name phase ob text "produce-fail" ya
+su name queued at ob date 2026-02-25T18:10:00.000Z ya
+su name completed at ob date 2026-02-25T18:10:05.000Z ya
+su name retry count ob num 1 ya
+su name lane type ob text "gpu" ya
+su name run id ob text "20260225-130-teaching-video-from-filename" ya
+su name stage name ob text "draw" ya
+su name item id ob text "section-001-cut-003" ya
+su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
+su name outcome ob text "fail" ya
+su name defect code ob text "draw defective" ya
+su name defect text ob text "provider request failed: timeout" ya
+su name gpu queue envelope prah
+```
+
+Router reuse profile (normative):
+- the existing router operation pattern (`input`, `produce`, `health`) MAY be reused for GPU queue orchestration.
+- if reused, endpoint identities MUST be lane-scoped (for example `from name gpu queue`, `to name stage draw`) and MUST NOT impersonate channel endpoints.
+- lane isolation still applies: GPU router traffic remains in `world/holding/gpu/` and channel router traffic remains in `world/holding/channel/`.
+
+### 6.2.6 Evoker async contract (normative)
+
+From the Pyash evoker side, queued GPU work should be promise-like and aspect-driven.
+
+Canonical lifecycle:
+1. `vyah start` submits work and returns a duty handle
+2. `vyah status` reports current state for the duty handle
+3. `vyah await` blocks for completion and returns final success/fail result
+
+Canonical examples:
+
+Start:
+```pyash
+su name draw-job-001
+from name section draw prompts
+to name stage draw
+vyah start
+be gpu do
+```
+
+Expected result shape:
+```pyash
+su name draw-job-001 as name running be duty ya
+```
+
+Status:
+```pyash
+su name draw-job-001 vyah status be gpu do
+```
+
+Await:
+```pyash
+su name draw-job-001 vyah await be gpu do
+```
+
+Completion example:
+```pyash
+su name draw-job-001
+vyah await success
+ob text "artifact draw-003 sha256:abc123..."
+be gpu ya
+```
+
+Failure example:
+```pyash
+su name draw-job-001
+vyah await fail
+ob text "draw defective: provider request failed: timeout"
+be gpu ya
+```
+
+Lowering note:
+- implementations MAY lower this contract to router-like `input`/`produce`/`health` internals and `world/holding/gpu/` envelopes, but the evoker-facing API should remain aspect-first (`start`, `status`, `await`).
+
 ## 6.3 Draw workflow storage and resolution
 
 Workflows are backend-owned files. Canonical root:

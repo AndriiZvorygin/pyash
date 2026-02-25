@@ -184,6 +184,17 @@ Additional requirements:
 3. Implementations MUST preserve auditable `.pya` records at each stage.
 4. Queue writes and stage transitions MUST use atomic same-filesystem file operations (temp-write + rename, then rename across stage dirs).
 
+## 7.2 Holding Lane Isolation (Normative)
+
+`world/holding/channel/` is reserved for channel runtime queues (for example Matrix input/produce lifecycle).
+
+Rules:
+
+1. Non-channel pipelines (for example teaching-video, draw, hear, qwen-say orchestration) MUST NOT write queue state under `world/holding/channel/`.
+2. New runtime queue families MUST use a dedicated lane under `world/holding/<lane>/` (for example `world/holding/gpu/`).
+3. Cross-lane reuse is not allowed; each lane owns its own lifecycle directories and checkpoint semantics.
+4. Router/channel tooling MUST treat unknown lanes as out of scope and must not mutate them.
+
 ## 8. Health Produce Requirements (Normative)
 
 `as wo health` produce MUST include enough data to diagnose intake mode and fallback:
@@ -220,3 +231,13 @@ Required behavior:
 2. Keep `ob text` short and operator-readable.
 3. Write outcomes to the same per-agent channel newspaper (`YYYYMMDD-channel-<channel>-<agent>.pya`).
 4. Outcome logging MUST be best-effort and MUST NOT crash channel runtime if newspaper append fails.
+
+## 10. Router Pattern Reuse Boundary (Normative)
+
+The router operation shape (`input`, `produce`, `health`) is reusable, but this spec remains channel-scoped.
+
+Rules:
+
+1. Non-channel systems MAY reuse the operation pattern, but MUST define lane-specific endpoint identity and payload contracts in their own spec.
+2. Reuse MUST NOT write into `world/holding/channel/` or depend on channel-specific endpoint strings.
+3. Channel contract validation in `program/agent/channel_core/contract.mjs` remains authoritative for channel runtimes only.

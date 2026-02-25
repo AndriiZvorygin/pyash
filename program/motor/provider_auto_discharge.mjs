@@ -6,6 +6,10 @@ import { dischargeQwenSayBackend } from "./say_admin.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import { doRemember, remember } from "../remember/index.mjs";
 
+// Emergency hard-off switch: when true, auto discharge is completely disabled
+// regardless of runtime/default configuration.
+const AUTO_DISCHARGE_HARD_DISABLED = true;
+
 function normalizeClassList(values = []) {
   const out = [];
   const seen = new Set();
@@ -146,6 +150,9 @@ function modelMatchesTarget(candidate, target) {
 export async function enforceAutoDischarge({ activatingClass, activatingModel = "", rememberFn } = {}) {
   const activeClass = String(activatingClass ?? "").trim().toLowerCase();
   if (!activeClass) return { changed: false, activated: "", released: [] };
+  if (AUTO_DISCHARGE_HARD_DISABLED) {
+    return { changed: false, activated: activeClass, released: [] };
+  }
   const previousClass = activeProviderClass({ rememberFn });
   if (!autoDischargeEnabled({ rememberFn })) {
     return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
