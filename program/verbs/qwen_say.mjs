@@ -566,7 +566,7 @@ export async function qwenSay(
   await fs.writeFile(promptSeriesPath, promptSeriesText, "utf8");
   recordArtifact({
     locator: promptSeriesPath,
-    producer,
+    producer: `${producer} prompts`,
     bytes: Buffer.from(promptSeriesText, "utf8"),
     kind: "series"
   });

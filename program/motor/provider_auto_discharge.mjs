@@ -100,7 +100,14 @@ async function releaseQwenSay({ classes = [], rememberFn, released = [] } = {}) 
       return true;
     }
   } catch {
-    // best-effort release
+    // fallback to draw-style discharge for comfyui-backed qwen say paths
+    try {
+      await dischargeDrawBackend({ rememberFn });
+      pushReleased(released, "qwen say");
+      return true;
+    } catch {
+      // best-effort release
+    }
   }
   return false;
 }
