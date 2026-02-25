@@ -13,8 +13,31 @@ su name thumbnail heading burn from filename image with text heading to filename
   su name result ret
 prah
 
+su name thumbnail heading burn from filename image with text heading to filename output by num y ratio be ceremony def
+  exists su name cmd ob text "node command/thumbnail_heading_burn.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text image path be text do
+  ob name image path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --text-stdin --y-ratio " to name cmd be plus do
+  ob num of by of this to name text heading y ratio be text do
+  ob name heading y ratio to name cmd be plus do
+  ob text " --max-width-ratio 0.82" to name cmd be plus do
+  ob text of cmd fromtext text of with of this be command do
+  su name result ret
+prah
+
 su name thumbnail heading burn from filename image with name text heading to filename output be ceremony def
   su name result from filename of from of this with text of ob of with of this to filename of to of this be thumbnail heading burn do
+  su name result ret
+prah
+
+su name thumbnail heading burn from filename image with name text heading to filename output by num y ratio be ceremony def
+  su name result from filename of from of this with text of ob of with of this to filename of to of this by num of by of this be thumbnail heading burn do
   su name result ret
 prah
 

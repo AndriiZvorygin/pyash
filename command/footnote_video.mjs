@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
 function usage() {
-  return "Usage: node command/footnote_video.mjs <input-video.mp4> <input.srt> <output-video.mp4> [--mode plain|karaoke] [--font-size <num>] [--margin-v <num>] [--font-name <text>]";
+  return "Usage: node command/footnote_video.mjs <input-video.mp4> <input.srt> <output-video.mp4> [--mode plain|karaoke] [--font-size <num>] [--margin-v <num>] [--margin-ratio <num>] [--font-name <text>]";
 }
 
 function parseArgs(argv) {
@@ -19,6 +19,7 @@ function parseArgs(argv) {
     mode: "plain",
     fontSize: null,
     marginV: null,
+    marginRatio: null,
     fontName: "DejaVu Sans",
     width: null,
     height: null,
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     if (arg === "--mode") out.mode = String(args[++i] ?? "plain").trim().toLowerCase();
     else if (arg === "--font-size") out.fontSize = Number(args[++i] ?? "54");
     else if (arg === "--margin-v") out.marginV = Number(args[++i] ?? "80");
+    else if (arg === "--margin-ratio") out.marginRatio = Number(args[++i] ?? "0.58");
     else if (arg === "--font-name") out.fontName = String(args[++i] ?? "").trim() || "DejaVu Sans";
     else if (arg === "--width") out.width = Number(args[++i] ?? "");
     else if (arg === "--height") out.height = Number(args[++i] ?? "");
@@ -38,6 +40,7 @@ function parseArgs(argv) {
   if (out.mode !== "plain" && out.mode !== "karaoke" && out.mode !== "wordflow") throw new Error("mode must be plain, karaoke, or wordflow");
   if (out.fontSize != null && (!Number.isFinite(out.fontSize) || out.fontSize <= 0)) throw new Error("font-size must be > 0");
   if (out.marginV != null && (!Number.isFinite(out.marginV) || out.marginV < 0)) throw new Error("margin-v must be >= 0");
+  if (out.marginRatio != null && (!Number.isFinite(out.marginRatio) || out.marginRatio < 0 || out.marginRatio > 1)) throw new Error("margin-ratio must be between 0 and 1");
   if (out.width != null && (!Number.isFinite(out.width) || out.width <= 0)) throw new Error("width must be > 0");
   if (out.height != null && (!Number.isFinite(out.height) || out.height <= 0)) throw new Error("height must be > 0");
   if (out.maxLineChars != null && (!Number.isFinite(out.maxLineChars) || out.maxLineChars <= 0)) throw new Error("max-line-chars must be > 0");
@@ -407,7 +410,7 @@ export async function main(argv = process.argv) {
   const height = opts.height ?? probed?.height ?? 1280;
   const marginV = Math.floor(
     clamp(
-      opts.marginV ?? Math.round(height * SUBTITLE_ZONE_DEFAULT_RATIO),
+      opts.marginV ?? Math.round(height * (opts.marginRatio ?? SUBTITLE_ZONE_DEFAULT_RATIO)),
       Math.round(height * SUBTITLE_ZONE_TOP_RATIO),
       Math.round(height * SUBTITLE_ZONE_BOTTOM_RATIO)
     )
