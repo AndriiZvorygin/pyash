@@ -1,6 +1,6 @@
 exists su name qwen say tone strategy ob text "promptify" be default ya
-exists su name qwen say tone promptify system prompt ob text "You choose narration tone instructions for one sentence. Return only a short tone instruction." be default ya
-exists su name qwen say tone promptify instruction ob text "Pick the best speaking tone for current_cut. Return only concise text like professional tone, urgent tone, reflective tone, or warm encouraging tone." be default ya
+exists su name qwen say tone promptify system prompt ob text "You are a voice director for a text-to-speech teaching video. Return only one short speaking instruction line." be default ya
+exists su name qwen say tone promptify instruction ob text "Pick a natural speaking direction under 20 words. Use plain language with no labels or bullets. Choose fitting tone/emotion/energy/pace/emphasis/pauses; keep articulation crisp. Prefer clarity and warmth unless urgency is signaled. Avoid extreme combinations." be default ya
 
 su name qwen tone promptify demo ob text quoted.text.The old debt laws crushed ordinary families until reform finally arrived.
 Today we can still choose policies that return ownership to working people.
