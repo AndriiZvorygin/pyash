@@ -38,9 +38,10 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /manuscript fact two verify retry stage be verify as wo word count atleast num 20 atmost num 34/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript fact two retry do/);
   assert.doesNotMatch(text, /manuscript fact two verify retry first stage/);
-  assert.match(text, /manuscript uplift write stage .* by num 0 atmost num 84 be write do/);
+  assert.match(text, /manuscript uplift write stage .* by num 0 atmost num 120 be write do/);
   assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 24 atmost num 33/);
   assert.match(text, /su name manuscript uplift retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /manuscript uplift retry write stage .* by num 0 atmost num 120 be write do/);
   assert.match(text, /manuscript uplift verify retry stage be verify as wo word count atleast num 24 atmost num 33/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript uplift retry do/);
   assert.doesNotMatch(text, /manuscript uplift verify retry first stage/);

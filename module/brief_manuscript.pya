@@ -211,14 +211,14 @@ su name manuscript uplift retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript uplift pass be equally from text true then be depart do
   su name manuscript uplift retry request begin stage ob text "SEGMENT:\n" to name text manuscript uplift retry request be text do
   ob name text output to name manuscript uplift retry request be plus do
-  su name manuscript uplift retry write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
+  su name manuscript uplift retry write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 120 be write do
   su name manuscript uplift verify retry stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
   ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
   ob name text manuscript uplift pass be equally from text true then be depart do
 prah
 
 su name manuscript uplift checked to name text output be ceremony def
-  su name manuscript uplift write stage ob name text manuscript uplift request fromtext name brief video script uplift prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
+  su name manuscript uplift write stage ob name text manuscript uplift request fromtext name brief video script uplift prompt for name brief video script mind to name text output by num 0 atmost num 120 be write do
   su name manuscript uplift verify stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
   ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
   fromindex num 1 toindex num 3 be manuscript uplift retry do
