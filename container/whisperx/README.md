@@ -42,3 +42,39 @@ Optional diarization token:
   - `{"type":"log","text":"..."}`
   - `{"type":"result", ...}` (final success payload)
   - `{"type":"error", ...}` (final error payload)
+- Stream events are emitted by the worker and proxied by `server.py` verbatim.
+- Worker stdout is serialized (one active worker job at a time) to prevent output interleaving across clients.
+
+Streaming example:
+
+- `curl -N -s http://whisperx:8000/transcribe_stream -H 'Content-Type: application/json' -d '{"input":"/workplace/path/to/audio.wav","output_srt":"/workplace/artifacts/stream.srt","language":"en","model":"large-v3"}'`
+
+Expected stream shape:
+
+- Multiple `type:"log"` lines while work runs (`load_model`, `transcribe`, `align`, `write srt/json`).
+- Exactly one terminal line:
+  - `type:"result"` on success.
+  - `type:"error"` on failure.
+
+Concurrency note:
+
+- A single worker process has one stdout stream, so stream requests are processed one at a time per worker.
+- If the client disconnects mid-stream, the server kills the worker to avoid stale GPU jobs.
+
+## Verification
+
+Use service URL from inside the workspace container:
+
+- Health:
+  - `curl -s http://whisperx:8000/health`
+- Streaming transcription (NDJSON logs + final result):
+  - `curl -N -s http://whisperx:8000/transcribe_stream -H 'Content-Type: application/json' -d '{"input":"/workplace/artifacts/20260225-166-teaching-video-from-filename/sections/paragraph-0/audio.wav","output_srt":"/workplace/artifacts/whisperx-stream-test.srt","language":"en","model":"large-v3"}'`
+- Discharge:
+  - `curl -s -X POST http://whisperx:8000/discharge -H 'Content-Type: application/json' -d '{}'`
+
+Expected behavior:
+
+- First transcribe loads the worker/model; later transcribes reuse hot caches.
+- `/discharge` kills the worker process so GPU memory can return to baseline (0 MiB for the WhisperX worker process).
+- Pyash discharge shortcut is available via:
+  - `./run examples/pyash/discharge-hear-backend.pya`
