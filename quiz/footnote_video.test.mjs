@@ -38,6 +38,22 @@ test("footnote_video parseArgs accepts wordflow mode", () => {
   assert.equal(opts.mode, "wordflow");
 });
 
+test("footnote_video parseArgs accepts margin ratio", () => {
+  const opts = parseArgs([
+    "node",
+    "command/footnote_video.mjs",
+    "in.mp4",
+    "in.srt",
+    "out.mp4",
+    "--mode",
+    "karaoke",
+    "--margin-ratio",
+    "0.1"
+  ]);
+  assert.equal(opts.mode, "karaoke");
+  assert.equal(opts.marginRatio, 0.1);
+});
+
 test("footnote_video buildAssFromSrt emits karaoke timing tags", () => {
   const srt = [
     "1",

@@ -17,6 +17,27 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   su name result ret
 prah
 
+su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output by num margin ratio be ceremony def
+  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of with of this to name text video path be text do
+  ob name video path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text subtitle path be text do
+  ob name subtitle path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --mode plain --margin-ratio " to name cmd be plus do
+  ob num of by of this to name text margin ratio text be text do
+  ob name margin ratio text to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo karaoke be ceremony def
   exists su name cmd ob text "node command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
@@ -36,6 +57,27 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   su name result ret
 prah
 
+su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo karaoke by num margin ratio be ceremony def
+  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of with of this to name text video path be text do
+  ob name video path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text subtitle path be text do
+  ob name subtitle path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --mode karaoke --margin-ratio " to name cmd be plus do
+  ob num of by of this to name text margin ratio text be text do
+  ob name margin ratio text to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo wordflow be ceremony def
   exists su name cmd ob text "node command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
@@ -51,6 +93,27 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob text " --mode wordflow" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo wordflow by num margin ratio be ceremony def
+  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of with of this to name text video path be text do
+  ob name video path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text subtitle path be text do
+  ob name subtitle path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --mode wordflow --margin-ratio " to name cmd be plus do
+  ob num of by of this to name text margin ratio text be text do
+  ob name margin ratio text to name cmd be plus do
   ob text of cmd be command do
   su name result ret
 prah
