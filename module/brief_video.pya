@@ -333,7 +333,7 @@ su name teaching video section tell mapper ob text section manuscript fromindex 
   su name section audio stage ob name text section audio path to name filename section audio be filename do
 
   su name section telling stage ob text of ob of this to filename of ob of section audio be qwen say do
-  su name section audio output stage ob filename of ob of section telling stage be filename do
+  su name section audio output stage ob filename of ob of section audio stage be filename do
   su name section audio output stage ret
 prah
 
@@ -341,7 +341,7 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
-  su name section audio input stage ob filename of this to name filename section audio input be filename do
+  su name section audio input stage ob filename of ob of this to name filename section audio input be filename do
 
   su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
@@ -356,7 +356,7 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
-  su name section srt input stage ob filename of this to name filename section srt input be filename do
+  su name section srt input stage ob filename of ob of this to name filename section srt input be filename do
 
   su name section draw directory path stage ob name text section root to name text section draw directory path be text do
   ob text "/draw" to name section draw directory path be plus do
@@ -382,7 +382,7 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
-  su name section video input stage ob filename of this to name filename section video input be filename do
+  su name section video input stage ob filename of ob of this to name filename section video input be filename do
 
   su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
