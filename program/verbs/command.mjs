@@ -770,13 +770,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   let input = null;
   if (sentence.from?.filename) {
     input = await fs.readFile(sentence.from.filename, "utf8");
-  } else if (sentence.from) {
-    const resolved = renderSayValue(sentence.from, { rememberFn });
+  }
+  if (input === null && sentence.fromtext) {
+    const resolved = renderSayValue(sentence.fromtext, { rememberFn });
     if (resolved !== undefined && resolved !== null) {
       input = String(resolved);
     }
-  } else if (sentence.fromtext) {
-    const resolved = renderSayValue(sentence.fromtext, { rememberFn });
+  }
+  if (input === null && sentence.from) {
+    const resolved = renderSayValue(sentence.from, { rememberFn });
     if (resolved !== undefined && resolved !== null) {
       input = String(resolved);
     }

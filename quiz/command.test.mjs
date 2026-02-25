@@ -107,3 +107,16 @@ test("command rewrites node command/* by discovering run root from agent cwd", a
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("command prefers fromtext input when sentence has from la provenance", async () => {
+  const sentence = {
+    mood: "do",
+    be: "command",
+    ob: { text: "cat" },
+    from: { la: { be: "mind" } },
+    fromtext: { text: "hello from fromtext" }
+  };
+  const result = await command(sentence, { remember: () => null });
+  assertCommandSucceeded(result);
+  assert.equal(String(result?.ob?.text ?? "").trim(), "hello from fromtext");
+});

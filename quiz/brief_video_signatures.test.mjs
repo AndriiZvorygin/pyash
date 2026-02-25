@@ -165,15 +165,19 @@ test("section mappers normalize current item to filename before media verbs", as
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(
     source,
-    /teaching video section hear mapper[\s\S]*ob filename of this to name filename section audio input be filename do[\s\S]*from filename of ob of section audio input stage become wo srt/u
+    /teaching video section tell mapper[\s\S]*ob filename of ob of section audio stage be filename do/u
   );
   assert.match(
     source,
-    /teaching video section video mapper[\s\S]*ob filename of this to name filename section srt input be filename do[\s\S]*from filename of ob of section srt input stage during/u
+    /teaching video section hear mapper[\s\S]*ob filename of ob of this to name filename section audio input be filename do[\s\S]*from filename of ob of section audio input stage become wo srt/u
   );
   assert.match(
     source,
-    /teaching video section footnote mapper[\s\S]*ob filename of this to name filename section video input be filename do[\s\S]*with filename of ob of section video input stage become wo video/u
+    /teaching video section video mapper[\s\S]*ob filename of ob of this to name filename section srt input be filename do[\s\S]*from filename of ob of section srt input stage during/u
+  );
+  assert.match(
+    source,
+    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*with filename of ob of section video input stage become wo video/u
   );
 });
 
