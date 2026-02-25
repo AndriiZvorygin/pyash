@@ -10,6 +10,18 @@ function resolveSayHost({ rememberFn } = {}) {
   );
 }
 
+function resolveQwenSayHost({ rememberFn } = {}) {
+  return (
+    resolveConfigText("qwen say host", { rememberFn }) ||
+    resolveConfigText("say host", { rememberFn }) ||
+    resolveConfigText("draw host", { rememberFn }) ||
+    process.env.PYA_QWEN_SAY_HOST ||
+    process.env.PYA_SAY_HOST ||
+    process.env.PYA_DRAW_HOST ||
+    "http://localhost:8188"
+  );
+}
+
 export function resolveSayBackend({ rememberFn } = {}) {
   return String(
     resolveConfigText("say backend default", { rememberFn }) ||
@@ -48,6 +60,22 @@ export async function dischargeSayBackend({ rememberFn } = {}) {
   const host = resolveSayHost({ rememberFn }).replace(/\/$/, "");
   await postJson(`${host}/free`, { unload_models: true, free_memory: true });
   return { backend, discharged: true };
+}
+
+export async function dischargeQwenSayBackend({ rememberFn } = {}) {
+  const host = resolveQwenSayHost({ rememberFn }).replace(/\/$/, "");
+  try {
+    await postEmpty(`${host}/interrupt`);
+  } catch {
+    // best-effort interrupt
+  }
+  try {
+    await postJson(`${host}/queue`, { clear: true });
+  } catch {
+    // best-effort queue clear
+  }
+  await postJson(`${host}/free`, { unload_models: true, free_memory: true });
+  return { host, discharged: true };
 }
 
 export async function restartSayBackend({ rememberFn } = {}) {

@@ -217,6 +217,39 @@ test("auto discharge hear unloads draw and warm ollama minds", async () => {
   }
 });
 
+test("auto discharge hear unloads qwen say backend host", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "draw host" }, ob: { text: "http://draw.local:8188" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say host" }, ob: { text: "http://qwen-say.local:8188" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "ollama host" }, ob: { text: "http://ollama.local:11434" }, be: "default" });
+
+  const calls = [];
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const method = init?.method ?? "GET";
+    const asText = String(url);
+    calls.push(`${method} ${asText}`);
+    if (asText.endsWith("/api/ps")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ models: [] })
+      };
+    }
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
+  };
+  try {
+    const result = await enforceAutoDischarge({ activatingClass: "hear" });
+    assert.equal(result.changed, true);
+    assert.ok(result.released.includes("qwen say"));
+    assert.ok(calls.some(line => line.includes("POST http://qwen-say.local:8188/free")));
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
 test("auto discharge waits after gpu class switch when settle ms is configured", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });

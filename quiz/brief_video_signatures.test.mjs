@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -55,4 +56,12 @@ test("teaching video verbs accept vector dependency forms", async () => {
     const handler = lookupSignatureHandler(signature);
     assert.equal(typeof handler, "function", `missing signature handler: ${signature}`);
   }
+});
+
+test("teaching video pipeline burns heading into opening second", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /su name opening heading stage[\s\S]*be video heading burn do/u
+  );
 });

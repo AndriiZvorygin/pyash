@@ -83,6 +83,26 @@ su name brief video manuscript improve from text source to name text manuscript 
   su name manuscript out ret
 prah
 
+su name video heading burn from filename video with text heading to filename output be ceremony def
+  exists su name cmd ob text "node command/video_heading_burn.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text video path be text do
+  ob name video path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\"" to name cmd be plus do
+  ob text " --text-stdin --seconds 1 --y-ratio 0.60 --max-width-ratio 0.82" to name cmd be plus do
+  ob text of cmd fromtext text of with of this be command do
+  su name result ret
+prah
+
+su name video heading burn from filename video with name text heading to filename output be ceremony def
+  su name result from filename of from of this with text of ob of with of this to filename of to of this be video heading burn do
+  su name result ret
+prah
+
 su name brief video from text manuscript be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
 
@@ -252,10 +272,11 @@ su name teaching video from text manuscript be ceremony def
   su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
   su name final concatenate stage from name teaching section clips fromstate wo itinerary become wo video be concatenate do
+  su name opening heading stage from filename of ob of final concatenate stage with name text video heading to filename of ob of final concatenate stage be video heading burn do
 
   su name draw discharge stage as wo draw be discharge do
 
-  su name result ob filename of ob of final concatenate stage be teaching video ya
+  su name result ob filename of ob of opening heading stage be teaching video ya
   su name result ret
 prah
 

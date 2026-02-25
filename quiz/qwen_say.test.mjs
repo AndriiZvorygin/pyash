@@ -31,6 +31,9 @@ test("qwen say fixture records audio and metadata artifacts", async () => {
     const metadata = records.find(s => s.be === "artifact" && s.as?.name === "metadata");
     assert.ok(audio, "records audio artifact");
     assert.ok(metadata, "records metadata artifact");
+    const promptSeriesPath = path.resolve("artifacts/say/section-say-prompts.series.pya");
+    const promptSeriesText = await fs.readFile(promptSeriesPath, "utf8");
+    assert.match(promptSeriesText, /su name section say prompts be series def/u);
   } finally {
     delete process.env.PYA_SAY_COMFYUI_FIXTURE_FILE;
     clearExchangeRecorder();
@@ -133,6 +136,9 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
     assert.equal(concatCalled, 1);
     assert.ok(chunkInputs.length > 1);
     assert.ok(chunkInputs.every((entry) => entry.trim().length > 0));
+    const promptSeriesPath = path.join(outDir, "section-say-prompts.series.pya");
+    const promptSeriesText = await fs.readFile(promptSeriesPath, "utf8");
+    assert.match(promptSeriesText, /su name section say prompts be series def/u);
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
