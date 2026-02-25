@@ -74,3 +74,21 @@ test("cut from text splits manuscript paragraphs into itinerary rows", async () 
   assert.match(String(series[1]?.ob?.text ?? ""), /political accountability/u);
   assert.match(String(series[2]?.ob?.text ?? ""), /ownership concentration/u);
 });
+
+test("cut from text as sentence splits manuscript into sentence itinerary rows", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: "Solon canceled debt bondage. He widened ownership rights? Athens changed."
+    },
+    as: { text: "sentence" },
+    to: { name: "teaching sentences", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 3);
+  assert.match(String(series[0]?.ob?.text ?? ""), /debt bondage/u);
+  assert.match(String(series[1]?.ob?.text ?? ""), /ownership rights/u);
+  assert.match(String(series[2]?.ob?.text ?? ""), /Athens changed/u);
+});

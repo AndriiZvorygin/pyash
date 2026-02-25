@@ -3,9 +3,15 @@ import argparse
 import gc
 import json
 import os
-import shutil
 import subprocess
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, Dict, Optional, Tuple
+
+
+_WORKER_LOCK = threading.Lock()
+_RPC_LOCK = threading.Lock()
+_WORKER_PROC: Optional[subprocess.Popen] = None
 
 
 def _json(handler: BaseHTTPRequestHandler, code: int, payload: dict):
@@ -17,177 +23,62 @@ def _json(handler: BaseHTTPRequestHandler, code: int, payload: dict):
   handler.wfile.write(body)
 
 
-def _run_whisperx(payload: dict):
-  input_path = str(payload.get("input") or "").strip()
-  if not input_path:
-    return 400, {"error": "input required"}
-  if not os.path.exists(input_path):
-    return 404, {"error": f"input not found: {input_path}"}
-
-  output_srt = str(payload.get("output_srt") or "").strip()
-  output_dir = str(payload.get("output_dir") or "").strip() or os.path.dirname(output_srt)
-  if not output_dir:
-    output_dir = "/tmp"
-
-  model = str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3")
-  language = str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en")
-  compute_type = str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8")
-  device = str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "").strip()
-  diarize = bool(payload.get("diarize"))
-
-  os.makedirs(output_dir, exist_ok=True)
-  cmd = [
-    "whisperx",
-    input_path,
-    "--model", model,
-    "--language", language,
-    "--compute_type", compute_type,
-    "--output_format", "srt",
-    "--output_dir", output_dir
-  ]
-  if device:
-    cmd.extend(["--device", device])
-  if diarize:
-    cmd.append("--diarize")
-    token = os.environ.get("HF_TOKEN", "").strip()
-    if token:
-      cmd.extend(["--hf_token", token])
-
-  proc = subprocess.run(cmd, capture_output=True, text=True)
-  if proc.returncode != 0:
-    return 500, {
-      "error": "whisperx failed",
-      "status": proc.returncode,
-      "stderr": proc.stderr[-4000:],
-      "stdout": proc.stdout[-2000:]
-    }
-
-  stem = os.path.splitext(os.path.basename(input_path))[0]
-  generated_srt = os.path.join(output_dir, f"{stem}.srt")
-  if not os.path.exists(generated_srt):
-    return 500, {"error": f"generated srt missing: {generated_srt}"}
-
-  if output_srt:
-    os.makedirs(os.path.dirname(output_srt) or ".", exist_ok=True)
-    if os.path.abspath(generated_srt) != os.path.abspath(output_srt):
-      shutil.copyfile(generated_srt, output_srt)
-    final_srt = output_srt
-  else:
-    final_srt = generated_srt
-
-  generated_json = os.path.join(output_dir, f"{stem}.json")
-  return 200, {
-    "output_srt": final_srt,
-    "output_json": generated_json if os.path.exists(generated_json) else "",
-    "model": model,
-    "language": language,
-    "diarize": diarize
-  }
-
-
 def _send_ndjson(handler: BaseHTTPRequestHandler, payload: dict):
   line = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
   handler.wfile.write(line)
   handler.wfile.flush()
 
 
-def _stream_whisperx(handler: BaseHTTPRequestHandler, payload: dict):
-  input_path = str(payload.get("input") or "").strip()
-  if not input_path:
-    _json(handler, 400, {"error": "input required"})
-    return
-  if not os.path.exists(input_path):
-    _json(handler, 404, {"error": f"input not found: {input_path}"})
-    return
+def _ensure_worker() -> subprocess.Popen:
+  global _WORKER_PROC
+  with _WORKER_LOCK:
+    if _WORKER_PROC is not None and _WORKER_PROC.poll() is None:
+      return _WORKER_PROC
+    _WORKER_PROC = subprocess.Popen(
+      ["python3", "/service/worker.py"],
+      stdin=subprocess.PIPE,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      text=True,
+      bufsize=1
+    )
+    return _WORKER_PROC
 
-  output_srt = str(payload.get("output_srt") or "").strip()
-  output_dir = str(payload.get("output_dir") or "").strip() or os.path.dirname(output_srt)
-  if not output_dir:
-    output_dir = "/tmp"
 
-  model = str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3")
-  language = str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en")
-  compute_type = str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8")
-  device = str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "").strip()
-  diarize = bool(payload.get("diarize"))
-
-  os.makedirs(output_dir, exist_ok=True)
-  cmd = [
-    "whisperx",
-    input_path,
-    "--model", model,
-    "--language", language,
-    "--compute_type", compute_type,
-    "--output_format", "srt",
-    "--output_dir", output_dir
-  ]
-  if device:
-    cmd.extend(["--device", device])
-  if diarize:
-    cmd.append("--diarize")
-    token = os.environ.get("HF_TOKEN", "").strip()
-    if token:
-      cmd.extend(["--hf_token", token])
-
-  handler.send_response(200)
-  handler.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-  handler.send_header("Cache-Control", "no-cache")
-  handler.end_headers()
-
-  proc = subprocess.Popen(
-    cmd,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    bufsize=1
-  )
-  logs = []
+def _worker_rpc(req: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
+  proc = _ensure_worker()
+  assert proc.stdin is not None
   assert proc.stdout is not None
-  for raw_line in proc.stdout:
-    line = str(raw_line).rstrip("\r\n")
-    if not line:
-      continue
-    logs.append(line)
-    if len(logs) > 300:
-      logs = logs[-300:]
-    _send_ndjson(handler, {"type": "log", "text": line})
-  proc.wait()
 
-  if proc.returncode != 0:
-    _send_ndjson(handler, {
-      "type": "error",
-      "error": "whisperx failed",
-      "status": proc.returncode,
-      "stderr": "\n".join(logs[-120:])
-    })
-    return
+  with _RPC_LOCK:
+    proc.stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
+    proc.stdin.flush()
 
-  stem = os.path.splitext(os.path.basename(input_path))[0]
-  generated_srt = os.path.join(output_dir, f"{stem}.srt")
-  if not os.path.exists(generated_srt):
-    _send_ndjson(handler, {"type": "error", "error": f"generated srt missing: {generated_srt}"})
-    return
+    while True:
+      line = proc.stdout.readline()
+      if line:
+        try:
+          resp = json.loads(line)
+        except Exception:
+          # Some backends emit plain logs; ignore and keep reading RPC response.
+          continue
+        code = int(resp.get("code") or 500)
+        return code, resp
 
-  if output_srt:
-    os.makedirs(os.path.dirname(output_srt) or ".", exist_ok=True)
-    if os.path.abspath(generated_srt) != os.path.abspath(output_srt):
-      shutil.copyfile(generated_srt, output_srt)
-    final_srt = output_srt
-  else:
-    final_srt = generated_srt
+      if proc.poll() is not None:
+        err_tail = ""
+        try:
+          if proc.stderr is not None:
+            err_tail = proc.stderr.read()[-4000:]
+        except Exception:
+          pass
+        return 500, {"error": "worker exited", "status": proc.returncode, "stderr": err_tail}
 
-  generated_json = os.path.join(output_dir, f"{stem}.json")
-  _send_ndjson(handler, {
-    "type": "result",
-    "output_srt": final_srt,
-    "output_json": generated_json if os.path.exists(generated_json) else "",
-    "model": model,
-    "language": language,
-    "diarize": diarize
-  })
+      if line == "":
+        return 500, {"error": "worker returned empty response"}
 
 
-def _discharge():
+def _torch_discharge_local() -> None:
   try:
     import torch  # type: ignore
     if torch.cuda.is_available():
@@ -196,6 +87,78 @@ def _discharge():
   except Exception:
     pass
   gc.collect()
+
+
+def _kill_worker() -> None:
+  global _WORKER_PROC
+  with _WORKER_LOCK:
+    if _WORKER_PROC is None:
+      return
+    proc = _WORKER_PROC
+    _WORKER_PROC = None
+
+  try:
+    if proc.poll() is None:
+      proc.terminate()
+      try:
+        proc.wait(timeout=5)
+      except Exception:
+        proc.kill()
+  except Exception:
+    pass
+
+
+def _run_whisperx(payload: dict) -> Tuple[int, Dict[str, Any]]:
+  input_path = str(payload.get("input") or "").strip()
+  if input_path == "":
+    return 400, {"error": "input required"}
+  if os.path.exists(input_path) is False:
+    return 404, {"error": f"input not found: {input_path}"}
+
+  output_srt = str(payload.get("output_srt") or "").strip()
+  output_dir = str(payload.get("output_dir") or "").strip() or (os.path.dirname(output_srt) if output_srt else "")
+  if output_dir == "":
+    output_dir = "/tmp"
+
+  req = {
+    "op": "transcribe",
+    "input": input_path,
+    "output_dir": output_dir,
+    "output_srt": output_srt,
+    "model": str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3"),
+    "language": str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en"),
+    "compute_type": str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8"),
+    "device": str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "cuda").strip() or "cuda"
+  }
+  return _worker_rpc(req)
+
+
+def _stream_whisperx(handler: BaseHTTPRequestHandler, payload: dict):
+  input_path = str(payload.get("input") or "").strip()
+  if input_path == "":
+    _json(handler, 400, {"error": "input required"})
+    return
+  if os.path.exists(input_path) is False:
+    _json(handler, 404, {"error": f"input not found: {input_path}"})
+    return
+
+  handler.send_response(200)
+  handler.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+  handler.send_header("Cache-Control", "no-cache")
+  handler.end_headers()
+
+  _send_ndjson(handler, {"type": "log", "text": "worker transcribe begin"})
+  code, body = _run_whisperx(payload)
+  if code != 200:
+    _send_ndjson(handler, {"type": "error", **body})
+    return
+  _send_ndjson(handler, {"type": "log", "text": "worker transcribe done"})
+  _send_ndjson(handler, {"type": "result", **body})
+
+
+def _discharge() -> Tuple[int, Dict[str, Any]]:
+  _kill_worker()
+  _torch_discharge_local()
   return 200, {"ok": True, "be": "discharge"}
 
 

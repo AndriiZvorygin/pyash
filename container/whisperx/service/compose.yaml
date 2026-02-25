@@ -10,6 +10,7 @@ services:
       - ${WHISPERX_WORKSPACE:-../../..}:/workplace
       - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/cache:/cache
       - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/server.py:/service/server.py:ro
+      - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/service/worker.py:/service/worker.py:ro
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
       - WHISPERX_MODEL=${WHISPERX_MODEL:-base}
