@@ -81,6 +81,28 @@ function resolvePostProcessFilter({ rememberFn = remember } = {}) {
   );
 }
 
+function quotePyashText(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+
+function renderSayPromptSeries(chunks = [], instructs = []) {
+  const lines = ["su name section say prompts be series def"];
+  for (let i = 0; i < chunks.length; i += 1) {
+    const idx = String(i + 1).padStart(3, "0");
+    const since = Number(i).toFixed(3);
+    const until = Number(i + 1).toFixed(3);
+    const chunkText = quotePyashText(chunks[i] ?? "");
+    const instructText = quotePyashText(instructs[i] ?? "");
+    lines.push(`su name cut ${idx} since num ${since} until num ${until} ob text ${chunkText} fromtext text ${instructText} ya`);
+  }
+  lines.push("prah");
+  return `${lines.join("\n")}\n`;
+}
+
+function resolveSayPromptSeriesPath(outputPath = "") {
+  return path.join(path.dirname(String(outputPath ?? "")), "section-say-prompts.series.pya");
+}
+
 async function pathExists(filename) {
   try {
     await fs.access(filename);
@@ -537,6 +559,16 @@ export async function qwenSay(
     producer,
     bytes: Buffer.from(metadataText, "utf8"),
     kind: "metadata"
+  });
+
+  const promptSeriesPath = resolveSayPromptSeriesPath(outputPath);
+  const promptSeriesText = renderSayPromptSeries(chunks, chunkInstructs);
+  await fs.writeFile(promptSeriesPath, promptSeriesText, "utf8");
+  recordArtifact({
+    locator: promptSeriesPath,
+    producer,
+    bytes: Buffer.from(promptSeriesText, "utf8"),
+    kind: "series"
   });
 
   if (artifact?.su?.name) {

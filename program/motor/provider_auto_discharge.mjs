@@ -2,6 +2,7 @@ import { resolveConfigBool, resolveConfigNum, resolveConfigSeries } from "../con
 import { dischargeDrawBackend } from "./draw_admin.mjs";
 import { dischargeHearBackend } from "./hear_admin.mjs";
 import { dischargeOllamaMind, listWarmOllamaMinds } from "./ollama_admin.mjs";
+import { dischargeQwenSayBackend } from "./say_admin.mjs";
 import { emitExchangeSentence } from "../bridge/exchange.mjs";
 import { doRemember, remember } from "../remember/index.mjs";
 
@@ -83,6 +84,27 @@ function gpuExclusiveClasses({ rememberFn } = {}) {
   return normalizeClassList([...configured, ...baseline]);
 }
 
+function pushReleased(released = [], name = "") {
+  const normalized = String(name ?? "").trim().toLowerCase();
+  if (!normalized) return released;
+  if (!released.includes(normalized)) released.push(normalized);
+  return released;
+}
+
+async function releaseQwenSay({ classes = [], rememberFn, released = [] } = {}) {
+  if (!classes.includes("qwen say")) return false;
+  try {
+    const qwenSay = await dischargeQwenSayBackend({ rememberFn });
+    if (qwenSay?.discharged) {
+      pushReleased(released, "qwen say");
+      return true;
+    }
+  } catch {
+    // best-effort release
+  }
+  return false;
+}
+
 function normalizeModelRef(value) {
   const text = String(value ?? "").trim().toLowerCase();
   if (!text) return { raw: "", base: "", tag: "" };
@@ -128,10 +150,11 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
       drawReleased = false;
     }
     const released = drawReleased ? ["draw"] : [];
+    await releaseQwenSay({ classes, rememberFn, released });
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
-        if (hear?.discharged) released.push("hear");
+        if (hear?.discharged) pushReleased(released, "hear");
       } catch {
         // best-effort release
       }
@@ -152,7 +175,7 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
           // best-effort release
         }
       }
-      if (toDischarge.length > 0 && !released.includes("mind")) released.push("mind");
+      if (toDischarge.length > 0) pushReleased(released, "mind");
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
@@ -160,6 +183,8 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
   }
 
   if (activeClass === "draw") {
+    const released = [];
+    await releaseQwenSay({ classes, rememberFn, released });
     let warm = [];
     try {
       warm = await listWarmOllamaMinds({ rememberFn });
@@ -173,11 +198,11 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
         // best-effort release
       }
     }
-    const released = warm.length ? ["mind"] : [];
+    if (warm.length > 0) pushReleased(released, "mind");
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
-        if (hear?.discharged) released.push("hear");
+        if (hear?.discharged) pushReleased(released, "hear");
       } catch {
         // best-effort release
       }
@@ -209,11 +234,11 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
       }
     }
     const released = drawReleased ? ["draw"] : [];
-    if (warm.length > 0) released.push("mind");
+    if (warm.length > 0) pushReleased(released, "mind");
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
-        if (hear?.discharged) released.push("hear");
+        if (hear?.discharged) pushReleased(released, "hear");
       } catch {
         // best-effort release
       }
@@ -245,7 +270,8 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
       }
     }
     const released = drawReleased ? ["draw"] : [];
-    if (warm.length > 0) released.push("mind");
+    await releaseQwenSay({ classes, rememberFn, released });
+    if (warm.length > 0) pushReleased(released, "mind");
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
     return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
