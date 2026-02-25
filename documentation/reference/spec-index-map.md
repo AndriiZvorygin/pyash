@@ -20,6 +20,7 @@ Use this when the cheat sheet is not enough.
 - **Module system + runner contract** → `11-modules.md`
 - **Web search** → `12-web-and-browser.md`
 - **Teaching-video refinery pipeline** → `25-teaching-video.md`
+- **Editable/resumable teaching-video flow (draft)** → `documentation/reference/editable-teaching-video-flow.md`
 - **Verify output envelope (provisional)** → `documentation/reference/verify-envelope.md`
 - **Verify count modes (word/letter count)** → `documentation/reference/verify-count-modes.md`
 - **Better compare refinery profile (reference)** → `documentation/reference/better-compare-refinery.md`

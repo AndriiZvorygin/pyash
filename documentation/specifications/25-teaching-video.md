@@ -1,6 +1,6 @@
 # 25. Teaching Video
 
-Purpose: define a lean v0 refinery pipeline for slideshow-style teaching videos using sentence-shaped media steps.
+Purpose: define the normative teaching-video refinery pipeline for editable, resumable slideshow-style video generation using sentence-shaped media steps.
 
 ## 1. Scope
 
@@ -9,7 +9,9 @@ This spec covers:
 - telling-first timing,
 - itinerary/cut timeline units,
 - photograph generation per cut,
-- deterministic video assembly.
+- deterministic video assembly,
+- paragraph-wise section clip generation (`.mp4` per paragraph/section),
+- editable intermediate artifacts and selective rebuild on rerun.
 
 This spec does not cover:
 - branching timelines,
@@ -28,15 +30,23 @@ This spec does not cover:
 | `be itinerary def` | ordered timeline container | teaching timeline source of truth |
 | `su name <x> be cut ya` | single timeline unit | photograph/text/audio window metadata |
 
-## 3. Canonical v0 refinery flow
+## 3. Canonical refinery flow (normative)
 
-Order is normative for v0:
-1. create manuscript text,
-2. generate telling audio,
-3. derive SRT timing via hear,
-4. cut into 5-7 second units,
-5. draw one-or-more teaching photographs per cut,
-6. concatenate into final video.
+Order is normative:
+1. resolve manuscript text,
+2. split manuscript into deterministic paragraph/section units,
+3. for each paragraph, run a full section pipeline:
+   - generate section telling audio,
+   - derive section SRT timing via hear,
+   - cut into 5-7 second units,
+   - generate/persist draw prompt itinerary via promptify,
+   - draw one-or-more teaching photographs per cut,
+   - concatenate section media into section video,
+   - burn section subtitles (`footnote`) to produce section clip `.mp4`,
+4. emit section clip artifacts as they complete,
+5. concatenate section clips into final video.
+
+Section clips are first-class outputs. Users should be able to inspect completed section `.mp4` files while later sections are still building.
 
 The flow should be declared and executed as a refinery (`be refinery def ... prah`, then `be refinery do`).
 
@@ -54,6 +64,10 @@ Canonical signatures (v0 quick block):
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
 - `from name <itinerary> fromstate wo itinerary become wo video to filename <path> be concatenate do`
 - `from ve name itinerary <itinerary> name photographs <photos> fromstate wo itinerary become wo video to filename <path> be concatenate do`
+
+Section clip profile (normative extension):
+- each paragraph section produces a deterministic section clip filename (for example `paragraph-001.mp4`),
+- final video concatenates section clip itinerary in section order.
 
 ## 4. Starter signatures
 
@@ -250,6 +264,7 @@ TSV relation:
 - Cut boundaries are monotonic and non-overlapping.
 - Concatenate consumes itinerary in declaration order.
 - File outputs should use deterministic names by cut id.
+- Section clip outputs should use deterministic names by section id (`paragraph-001.mp4`, `paragraph-002.mp4`, ...).
 - When `photographs` is produced, consumers should resolve images from the `photographs` series/manifest contract, not filename-prefix heuristics.
 - On single-GPU systems, provider switching between `mind` and `draw` should follow auto-discharge policy from `08-tools-and-mcp.md` and `23-configure.md`.
 
@@ -259,7 +274,31 @@ TSV relation:
 - In newspaper mode (`newspaper enabled` is `truth`), implementations should persist replayable stage artifacts in the background and emit artifact/exchange records.
 - Explicit filename signatures remain valid and useful for checkpoint/debug control, but are not required to obtain replayability under newspaper mode.
 
-### 6.2.1 Name-only refinery profile
+### 6.2.2 Editable stage artifacts (normative)
+
+Teaching-video implementations must persist editable source artifacts for stages users are expected to tune:
+- draw prompt itinerary (per section),
+- title/heading/description text,
+- optional per-section script text.
+
+Promptify contract:
+- promptify output for draw must be persisted as a concrete artifact (for example `draw-prompts.series.pya`) and treated as draw input source on rebuild runs.
+- in-memory itinerary alone is insufficient for editable rebuild workflows.
+
+### 6.2.3 Rebuild and missing-file behavior (normative)
+
+When rerunning with the same run context:
+- stage reuse is allowed only if required stage outputs are present.
+- if a required output artifact file is missing, checkpoint reuse for that stage is invalid and the stage must rerun.
+- downstream stages depending on that output must be recomputed from dependency rules.
+
+This enables operator workflow:
+1. edit intermediate artifact text (for example prompt itinerary or heading),
+2. delete chosen downstream artifact(s),
+3. rerun,
+4. regenerate only missing/outdated outputs.
+
+### 6.2.4 Name-only refinery profile
 
 For teach-video refineries that target clean sentence wiring and minimal file-path churn:
 - prefer `from name <platform>` links between stages,
@@ -272,7 +311,7 @@ Runtime contract for this profile:
 - downstream `from name <platform>` resolves via latest platform artifact locator,
 - replay/debug remains available through newspaper + artifacts even without explicit file paths in the refinery.
 
-## 6.1 Draw workflow storage and resolution
+## 6.3 Draw workflow storage and resolution
 
 Workflows are backend-owned files. Canonical root:
 - `./draw/<backend>/`
@@ -301,7 +340,9 @@ Implementations should report sentence-shaped errors with these names:
 Implementation conforms when:
 - the canonical flow is executable end-to-end,
 - itinerary/cut records are reproducible,
-- final video assembly follows itinerary order,
+- section clip assembly follows section order and emits per-section `.mp4` outputs,
+- final video assembly follows section clip order,
+- editable stage artifacts are persisted and usable for rerun rebuild,
 - every platform surfaces sentence-shaped results/errors.
 
 ## 9. Canonical refinery template
