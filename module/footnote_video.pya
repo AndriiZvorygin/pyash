@@ -32,8 +32,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob text " --mode plain --margin-ratio " to name cmd be plus do
-  ob num of by of this to name text margin ratio text be text do
-  ob name margin ratio text to name cmd be plus do
+  ob num of by of this to name cmd be plus do
   ob text of cmd be command do
   su name result ret
 prah
@@ -72,8 +71,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob text " --mode karaoke --margin-ratio " to name cmd be plus do
-  ob num of by of this to name text margin ratio text be text do
-  ob name margin ratio text to name cmd be plus do
+  ob num of by of this to name cmd be plus do
   ob text of cmd be command do
   su name result ret
 prah
@@ -112,8 +110,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob text " --mode wordflow --margin-ratio " to name cmd be plus do
-  ob num of by of this to name text margin ratio text be text do
-  ob name margin ratio text to name cmd be plus do
+  ob num of by of this to name cmd be plus do
   ob text of cmd be command do
   su name result ret
 prah

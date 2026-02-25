@@ -24,8 +24,7 @@ su name thumbnail heading burn from filename image with text heading to filename
   ob name output path to name cmd be plus do
   ob text "\"" to name cmd be plus do
   ob text " --text-stdin --y-ratio " to name cmd be plus do
-  ob num of by of this to name text heading y ratio be text do
-  ob name heading y ratio to name cmd be plus do
+  ob num of by of this to name cmd be plus do
   ob text " --max-width-ratio 0.82" to name cmd be plus do
   ob text of cmd fromtext text of with of this be command do
   su name result ret
