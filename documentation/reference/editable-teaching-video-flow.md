@@ -25,16 +25,19 @@ This document captures:
 
 Current `be teaching video do` flow in `module/brief_video.pya`:
 1. source manuscript text (no manuscript generation),
-2. title/heading/description generation,
-3. `qwen say` audio generation,
-4. `hear` to SRT,
-5. `cut` itinerary generation,
-6. draw promptify over cut itinerary,
-7. draw per-cut images,
-8. thumbnail prompt + thumbnail image + heading burn,
-9. `concatenate` slideshow video,
-10. `footnote` subtitle burn,
-11. draw discharge.
+2. title/heading/description generation and thumbnail prompt/render,
+3. split manuscript paragraphs into section itinerary (`cut from text`),
+4. map each section through a section renderer:
+   - section `qwen say`,
+   - section `hear`,
+   - section `cut`,
+   - section draw `promptify`,
+   - section `draw`,
+   - section `concatenate`,
+   - section `footnote` (wordflow),
+5. write section clip series manifest,
+6. final `concatenate` over section clip itinerary rows,
+7. draw discharge.
 
 Current promptify coverage:
 - draw promptify: implemented (`module/brief_video.pya`, `be promptify do` in `program/verbs/itinerary_media.mjs`).
@@ -43,8 +46,10 @@ Current promptify coverage:
 
 Current artifact behavior:
 - draw writes image artifacts and can write a `.series.pya` manifest for photographs.
+- cut from filename/text writes a `.series.pya` itinerary manifest when run id is available.
+- promptify writes a run-scoped `.series.pya` itinerary manifest, with `by num` suffix support for per-section isolation.
 - pipeline produces run artifacts and metadata records through exchange/artifact recording.
-- refinery checkpoint reuse is hash-based on sentence/deps/scope and does not validate artifact file presence before reusing a checkpointed stage result.
+- checkpoint reuse validates required output file presence before reuse (`run`, `runjs`, `runc`).
 
 ## 3. Target Editable Flow
 
@@ -127,11 +132,11 @@ Profile selection should be a data input (map/name), not hardcoded per module co
 
 | Area | Implemented now | Gap |
 | --- | --- | --- |
-| Teaching video end-to-end flow | yes (`module/brief_video.pya`) | long-form section orchestration not split into per-section clips |
-| Draw promptify generation | yes | promptify result not persisted as canonical editable stage artifact |
+| Teaching video end-to-end flow | yes (`module/brief_video.pya`) | paragraph index formatting is numeric (`paragraph-1`) rather than zero-padded |
+| Draw promptify generation | yes | no optional human-readable `.txt` companion prompt plan export |
 | Qwen-say tone promptify | yes | no project-level editable tone plan artifact |
-| Artifacts and run recording | yes | stage checkpoint reuse does not require output-file existence |
-| Manual edit and partial rebuild | partial (manual file edits possible) | no formal dependency-aware selective rebuild contract |
+| Artifacts and run recording | yes | transpiled checkpoint payload still stores only result sentence line (no exported artifact set) |
+| Manual edit and partial rebuild | partial (delete-missing rerun works) | no dependency timestamp/hash invalidation policy beyond missing-file detection |
 | Aspect ratio support | shorts map present | explicit 16:9 profile + selection contract not formalized |
 
 ## 8. Proposed Incremental Plan

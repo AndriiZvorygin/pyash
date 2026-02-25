@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { cutFromFilenameToNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { cutFromFilenameToNameItinerary, cutFromTextToNameItinerary } from "../program/verbs/itinerary_media.mjs";
 
 test("cut groups rapid subtitle rows into target window cuts", async () => {
   const dir = path.resolve("quiz/sandpit");
@@ -48,4 +48,29 @@ test("cut groups rapid subtitle rows into target window cuts", async () => {
   assert.match(String(series[0]?.ob?.text ?? ""), /third line/);
   assert.equal(series[1]?.since?.num, 6);
   assert.equal(series[1]?.until?.num, 7.9);
+});
+
+test("cut from text splits manuscript paragraphs into itinerary rows", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: [
+        "Solon canceled debt bondage and reset land power.",
+        "",
+        "He forced political accountability through law and participation.",
+        "",
+        "Today, ownership concentration still predicts instability."
+      ].join("\n")
+    },
+    to: { name: "teaching sections", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 3);
+  assert.equal(series[0]?.since?.num, 0);
+  assert.equal(series[2]?.until?.num, 3);
+  assert.match(String(series[0]?.ob?.text ?? ""), /debt bondage/u);
+  assert.match(String(series[1]?.ob?.text ?? ""), /political accountability/u);
+  assert.match(String(series[2]?.ob?.text ?? ""), /ownership concentration/u);
 });

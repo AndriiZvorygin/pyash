@@ -232,7 +232,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
       if (priorHash && priorHash !== hash) {
         throwErrorSentence({
           name: "hash inconsistency",
-          message: "hash inconsistency",
+          message: `hash inconsistency at ${normalized}`,
           from: { name: "exchange" },
           raw: { locator: normalized }
         });

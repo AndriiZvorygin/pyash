@@ -9,6 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
+function assertNoUnexpectedErrors(errors = []) {
+  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  assert.deepEqual(unexpected, []);
+}
+
 async function runScript(scriptRelPath, args) {
   const originalArgv = process.argv;
   const originalLog = console.log;
@@ -63,7 +68,7 @@ test("run uses timezone from config when writing run start", async () => {
     await fs.writeFile(programPath, "su name ok ob text \"done\" be write do\n", "utf8");
     process.chdir(tmpDir);
     const { errors } = await runScript("command/run_pya_program.mjs", ["--newspaper", "--run-id", "tz-run", programPath]);
-    assert.equal(errors.join("\n"), "");
+    assertNoUnexpectedErrors(errors);
     const newspaperPath = path.join(tmpDir, "newspaper", "tz-run.pya");
     const output = await fs.readFile(newspaperPath, "utf8");
     const runLine = output.split("\n").find(line => line.includes(" be run ya"));

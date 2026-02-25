@@ -51,14 +51,34 @@ export function normalizeDownloadSentence(sentence) {
 }
 
 export function shouldBootstrapNumberForVerb({ be, sentence, addressedName }) {
+  const hasTextIntent = (() => {
+    const slotHasTextIntent = (slot) => {
+      if (!slot || typeof slot !== "object") return false;
+      if (slot.text !== undefined) return true;
+      const typeWords = Array.isArray(slot.nameTypeWords)
+        ? slot.nameTypeWords.map((word) => String(word).toLowerCase())
+        : [];
+      if (typeWords.includes("text")) return true;
+      const genitiveChain = Array.isArray(slot.genitive?.chain)
+        ? slot.genitive.chain
+        : [];
+      const tail = String(genitiveChain.at(-1) ?? "").toLowerCase();
+      return tail === "text";
+    };
+    return slotHasTextIntent(sentence?.ob) ||
+      slotHasTextIntent(sentence?.from) ||
+      slotHasTextIntent(sentence?.to);
+  })();
   const durationFields = ["second", "minute", "hour", "day", "week", "month"];
   const hasDuration =
     sentence?.ob &&
     durationFields.some((field) => sentence.ob?.[field] !== undefined);
+  const normalizedBe = String(be || "").replace(/\s+/g, "").toLowerCase();
+  if (normalizedBe === "plus" && hasTextIntent) return false;
   return Boolean(
     addressedName &&
     !hasDuration &&
-    ["plus", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes((be || "").replace(/\s+/g, "").toLowerCase())
+    ["plus", "subtract", "multiply", "divide", "invert", "exponential", "produce", "chip", "twicecrescent", "remains"].includes(normalizedBe)
   );
 }
 

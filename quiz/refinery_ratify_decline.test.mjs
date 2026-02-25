@@ -10,6 +10,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
+function assertNoUnexpectedErrors(errors = []) {
+  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  assert.deepEqual(unexpected, []);
+}
+
 test("declined ratify records decision and exits refinery without aborting program", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ratify-"));
   const programPath = path.join(tempDir, "ratify-decline.pya");
@@ -28,7 +33,7 @@ test("declined ratify records decision and exits refinery without aborting progr
     "n\n"
   );
 
-  assert.equal(errors.join("\n"), "");
+  assertNoUnexpectedErrors(errors);
   const payload = JSON.parse(logs.join(""));
   assert.equal(payload.result?.be, "number");
   assert.equal(payload.result?.ob?.num, 9);

@@ -478,6 +478,7 @@ async function main() {
   const timeZone = resolveTimeZone(remember);
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
+  doRemember({ mood: "ya", su: { name: "run id" }, ob: { text: String(runId) }, be: "text" });
   const newspaperLines = [];
   setRunNewspaperLines(newspaperLines);
   let newspaperTextArtifactCounter = 0;

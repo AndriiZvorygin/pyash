@@ -377,7 +377,9 @@ export async function handleImperative({
   let fn = null;
   let defEntry = getDefinitionEntry(be);
   let defResolvedBySignature = false;
-  const hasLoopRegisters = sentence.fromindex != null || sentence.toindex != null;
+  const hasLoopRegisters =
+    (sentence.fromindex != null || sentence.toindex != null) &&
+    !(sentence.fromindex?.register || sentence.toindex?.register);
   const hasAtAll = sentence.at?.name === "all" || sentence.at === "all";
 
   const sigWords = deriveSignatureFromCall(sentence, { remember: memory.remember });
@@ -530,7 +532,11 @@ export async function handleImperative({
     const defSentence = memory.allRemember()[defEntry.index];
     const defSignatureWords = defSentence?.signatureWords;
     const callSignatureWords = sigWords;
-    if (!defResolvedBySignature && Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
+    const hasRegisteredSequenceContext =
+      sentence.fromindex?.register === true ||
+      sentence.toindex?.register === true ||
+      sentence.atindex?.register === true;
+    if (!hasRegisteredSequenceContext && !defResolvedBySignature && Array.isArray(defSignatureWords) && defSignatureWords.length > 0 && Array.isArray(callSignatureWords) && callSignatureWords.length > 0) {
       const defSigKey = joinSignatureWords(defSignatureWords);
       const callSigKey = joinSignatureWords(callSignatureWords);
       const relaxedCallSigKey = baseSigWords ? joinSignatureWords(baseSigWords) : null;
