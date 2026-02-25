@@ -402,7 +402,7 @@ su name teaching video section prompt mapper ob filename section cuts fromindex 
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section cuts input stage ob filename of ob of this to name filename section cuts input be filename do
 
-  exists su name section cuts itinerary stage ob filename of ob of section cuts input stage be itinerary ya
+  exists su name section cuts itinerary stage ob name filename section cuts input stage be itinerary ya
   su name section prompt stage from name section cuts itinerary stage ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of ob of section index stage be promptify do
 
   su name section prompts output stage ob filename of ob of section prompt stage be filename do
@@ -419,7 +419,7 @@ su name teaching video section draw mapper ob filename section prompts fromindex
   ob text "/draw" to name section draw directory path be plus do
   su name section draw directory stage ob name text section draw directory path to name filename section draw directory be filename do
 
-  exists su name section prompts itinerary stage ob filename of ob of section prompts input stage be itinerary ya
+  exists su name section prompts itinerary stage ob name filename section prompts input stage be itinerary ya
   ob name text draw widescreen mode be equally from text "truth" then su name section draw stage from name section prompts itinerary stage fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of section draw directory be draw do
   ob name text draw widescreen mode be equally from text "lie" then su name section draw stage from name section prompts itinerary stage fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of section draw directory be draw do
 
@@ -437,11 +437,16 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   ob text "/audio.wav" to name section audio path be plus do
   su name video cuts audio filename ob name text section audio path be text do
 
+  su name section draw directory path stage ob name text section root to name text section draw directory path be text do
+  ob text "/draw" to name section draw directory path be plus do
+  su name video cuts images directory ob name text section draw directory path stage be text do
+  exists su name video cuts prefix ob text "section-draw-stage" be text ya
+
   su name section video path stage ob name text section root to name text section video path be text do
   ob text "/section.mp4" to name section video path be plus do
   su name section video stage ob name text section video path to name filename section video be filename do
 
-  exists su name section cuts itinerary stage ob filename of ob of section cuts input stage be itinerary ya
+  exists su name section cuts itinerary stage ob name filename section cuts input stage be itinerary ya
   su name section concatenate stage from name section cuts itinerary stage fromstate wo itinerary become wo video to filename of ob of section video be concatenate do
   su name section video output stage ob filename of ob of section concatenate stage be filename do
   su name section video output stage ret

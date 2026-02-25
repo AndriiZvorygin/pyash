@@ -7,6 +7,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { allRemember, remember } from "../remember/index.mjs";
 import { resolveAgentPath } from "../library/agent_cwd.mjs";
 import { state } from "../bridge/state.mjs";
+import { resolveConfigText } from "../configure/env.mjs";
 import { parseSrtToCuts, parseItineraryPya, renderItineraryPya } from "../../command/itinerary_io.mjs";
 import { outputPathForCut, promptFromCut, runDraw } from "../../command/itinerary_to_draw_images.mjs";
 import {
@@ -181,6 +182,30 @@ async function persistItineraryManifest({
 }
 
 async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
+  const parseCutsFromFilename = async (filename) => {
+    const { resolved, outside, agentCwd } = resolveAgentPath(filename, { rememberFn });
+    if (outside) {
+      throwErrorSentence({
+        name: "itinerary defective",
+        message: `itinerary defective: outside agent cwd (${agentCwd})`,
+        from: { name: "itinerary" },
+        raw: { filename }
+      });
+    }
+    const text = await fs.readFile(resolved, "utf8");
+    const parsed = parseItineraryPya(text);
+    return parsed.cuts;
+  };
+
+  const directFilename = typeof fromCase?.filename === "string" ? fromCase.filename : "";
+  if (directFilename.trim()) return parseCutsFromFilename(directFilename);
+
+  const directText = typeof fromCase?.text === "string" ? fromCase.text : "";
+  if (directText.trim()) {
+    const parsed = parseItineraryPya(directText);
+    return parsed.cuts;
+  }
+
   const dependencyNamesFromVectorCase = (source) => {
     const values = Array.isArray(source?.ve?.values)
       ? source.ve.values.map((value) => String(value ?? "").trim()).filter(Boolean)
@@ -234,8 +259,8 @@ async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
       raw: { from: fromCase }
     });
   }
-  const fact = rememberFn(name);
-  if (!fact) {
+  const rootFact = rememberFn(name);
+  if (!rootFact) {
     throwErrorSentence({
       name: "itinerary defective",
       message: `itinerary defective: missing ${name}`,
@@ -243,22 +268,28 @@ async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
       raw: { from: fromCase }
     });
   }
+  const dereferenceFact = (fact) => {
+    const seen = new Set();
+    let current = fact;
+    let depth = 0;
+    while (current && depth < 16) {
+      const aliasName = typeof current?.ob?.name === "string" ? current.ob.name.trim() : "";
+      if (!aliasName) break;
+      if (seen.has(aliasName)) break;
+      seen.add(aliasName);
+      const nextFact = rememberFn(aliasName);
+      if (!nextFact) break;
+      current = nextFact;
+      depth += 1;
+    }
+    return current;
+  };
+  const fact = dereferenceFact(rootFact);
 
   const filename = typeof fact?.ob?.filename === "string" ? fact.ob.filename : "";
   if (filename.trim()) {
-    const { resolved, outside, agentCwd } = resolveAgentPath(filename, { rememberFn });
-    if (outside) {
-      throwErrorSentence({
-        name: "itinerary defective",
-        message: `itinerary defective: outside agent cwd (${agentCwd})`,
-        from: { name: "itinerary" },
-        raw: { filename }
-      });
-    }
     try {
-      const text = await fs.readFile(resolved, "utf8");
-      const parsed = parseItineraryPya(text);
-      return parsed.cuts;
+      return await parseCutsFromFilename(filename);
     } catch {
       // fall through to inline or series payload when persisted locator is unavailable
     }
@@ -1247,7 +1278,12 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
   }
 
   const outputFileForDefaults = requestedOutputFile || defaultOutputFilename;
-  const imagesDir = videoImagesDir(rememberFn, { outputFile: outputFileForDefaults });
+  const outputDir = path.dirname(outputResolved.resolved);
+  const sectionOutput = outputDir.includes(`${path.sep}sections${path.sep}paragraph-`);
+  const configuredImagesDir = String(rememberFn("video cuts images directory")?.ob?.text ?? "").trim();
+  const imagesDir = configuredImagesDir
+    ? videoImagesDir(rememberFn, { outputFile: outputFileForDefaults })
+    : (sectionOutput ? path.join(outputDir, "draw") : videoImagesDir(rememberFn, { outputFile: outputFileForDefaults }));
   const audioFile = videoAudioFilename(rememberFn, { outputFile: outputFileForDefaults });
   const imageDirResolved = resolveAgentPath(imagesDir, { rememberFn });
   const audioResolved = resolveAgentPath(audioFile, { rememberFn });
@@ -1259,7 +1295,8 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       raw: { sentence }
     });
   }
-  const prefix = videoPrefix(rememberFn, { outputFile: outputFileForDefaults });
+  const configuredPrefix = String(rememberFn("video cuts prefix")?.ob?.text ?? "").trim();
+  const prefix = configuredPrefix || (sectionOutput ? "section-draw-stage" : videoPrefix(rememberFn, { outputFile: outputFileForDefaults }));
   const fps = videoFps(rememberFn);
   const audioDurationSeconds = await getAudioDurationSeconds(audioResolved.resolved);
   const timeline = buildTimelineItems(cuts, audioDurationSeconds);
@@ -1293,7 +1330,25 @@ export async function concatenateFromNameItinerary(sentence, { remember: remembe
       }
     }
     if (!image) {
-      image = await findImageForCut(imageDirResolved.resolved, prefix, cut.index);
+      const fallbackDirs = [imageDirResolved.resolved];
+      const sectionDrawDir = path.join(outputDir, "draw");
+      if (!fallbackDirs.includes(sectionDrawDir)) fallbackDirs.push(sectionDrawDir);
+      for (const candidateDir of fallbackDirs) {
+        try {
+          image = await findImageForCut(candidateDir, prefix, cut.index);
+          if (image) break;
+        } catch {
+          try {
+            image = await findImageForCut(candidateDir, "", cut.index);
+            if (image) break;
+          } catch {
+            image = "";
+          }
+        }
+      }
+      if (!image) {
+        image = await findImageForCut(imageDirResolved.resolved, prefix, cut.index);
+      }
     }
     items.push({ ...cut, image });
   }
@@ -1493,7 +1548,6 @@ export const signatures = [
   { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
   { signatureWords: ["be", "promptify", "by", "num", "for", "name", "mind", "from", "name", "itinerary", "fromtext", "name", "text", "ob", "text", "to", "name", "itinerary"], handler: promptifyFromNameItinerary },
-
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "itinerary", "fromstate", "wo", "itinerary"], handler: concatenateFromNameItinerary },
   { signatureWords: ["be", "concatenate", "become", "wo", "video", "from", "name", "series", "fromstate", "wo", "itinerary", "to", "filename"], handler: concatenateFromNameItinerary },
