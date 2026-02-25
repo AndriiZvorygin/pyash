@@ -176,3 +176,15 @@ test("section mappers normalize current item to filename before media verbs", as
     /teaching video section footnote mapper[\s\S]*ob filename of this to name filename section video input be filename do[\s\S]*with filename of ob of section video input stage become wo video/u
   );
 });
+
+test("qwen tone promptify instruction enforces single-line style with example output", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /exists su name qwen say tone promptify instruction ob text quoted\.text\.Return exactly one single-line speaking direction sentence for TTS\./u
+  );
+  assert.match(
+    source,
+    /Example output \(single line\):[\s\S]*Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis\./u
+  );
+});
