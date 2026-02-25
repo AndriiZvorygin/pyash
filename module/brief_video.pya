@@ -284,7 +284,7 @@ exists su name teaching video section window seconds ob num 6 be default ya
 su name teaching video section root from num section index to name text section root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
   ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
-  ob text "artifacts/" to name text section root be plus do
+  ob text "artifacts/" to name text section root be text do
   ob name text teaching video run id to name section root be plus do
   ob text "/sections/paragraph-" to name section root be plus do
   ob num of from of this to name section root be plus do
@@ -294,14 +294,14 @@ prah
 su name teaching video run root to name text teaching video run root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
   ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
-  ob text "artifacts/" to name text teaching video run root be plus do
+  ob text "artifacts/" to name text teaching video run root be text do
   ob name text teaching video run id to name teaching video run root be plus do
   su name teaching video run root ret
 prah
 
 su name teaching video stage manifest filename from text stage stem to name filename stage manifest be ceremony def
   su name run root stage to name text teaching video run root be teaching video run root do
-  ob name text teaching video run root to name text stage manifest path be plus do
+  ob name text teaching video run root to name text stage manifest path be text do
   ob text "/" to name stage manifest path be plus do
   ob text of from of this to name stage manifest path be plus do
   ob text ".series.pya" to name stage manifest path be plus do
@@ -314,7 +314,7 @@ su name teaching video section tell mapper ob text section manuscript fromindex 
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
-  su name section audio path stage ob name text section root to name text section audio path be plus do
+  su name section audio path stage ob name text section root to name text section audio path be text do
   ob text "/audio.wav" to name section audio path be plus do
   su name section audio stage ob name text section audio path to name filename section audio be filename do
 
@@ -328,7 +328,7 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
-  su name section srt path stage ob name text section root to name text section srt path be plus do
+  su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
 
@@ -342,11 +342,11 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
-  su name section draw directory path stage ob name text section root to name text section draw directory path be plus do
+  su name section draw directory path stage ob name text section root to name text section draw directory path be text do
   ob text "/draw" to name section draw directory path be plus do
   su name section draw directory stage ob name text section draw directory path to name filename section draw directory be filename do
 
-  su name section video path stage ob name text section root to name text section video path be plus do
+  su name section video path stage ob name text section root to name text section video path be text do
   ob text "/section.mp4" to name section video path be plus do
   su name section video stage ob name text section video path to name filename section video be filename do
 
@@ -367,11 +367,11 @@ su name teaching video section footnote mapper ob filename section video fromind
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
-  su name section srt path stage ob name text section root to name text section srt path be plus do
+  su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
 
-  su name section clip path stage ob name text section root to name text section clip path be plus do
+  su name section clip path stage ob name text section root to name text section clip path be text do
   ob text "/section-footnote.mp4" to name section clip path be plus do
   su name section clip stage ob name text section clip path to name filename section clip be filename do
 
@@ -415,7 +415,19 @@ su name teaching video from text manuscript be ceremony def
   su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
   su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
+  su name section clip manifest filename stage from text "teaching-section-clips-footnote" to name filename section clip manifest be teaching video stage manifest filename do
+  su name footnote clip glob stage to name text footnote clip glob be teaching video run root do
+  ob text "/sections/paragraph-*/section-footnote.mp4" to name footnote clip glob be plus do
+  su name section clip manifest path stage to name text section clip manifest path be teaching video run root do
+  ob text "/teaching-section-clips-footnote.series.pya" to name section clip manifest path be plus do
+  ob text "if [ ! -f \"" to name text section clip scrub command be text do
+  ob name text section clip manifest path to name section clip scrub command be plus do
+  ob text "\" ]; then rm -f " to name section clip scrub command be plus do
+  ob name text footnote clip glob to name section clip scrub command be plus do
+  ob text "; fi" to name section clip scrub command be plus do
+  ob name text section clip scrub command be command do
   su name section clip series stage from name teaching section videos by name teaching video section footnote mapper to name text teaching section clips be series map do
+  su name section clip manifest write stage ob name section clip series stage to filename of ob of section clip manifest filename stage be write do
 
   su name final concatenate stage from name teaching section clips fromstate wo itinerary become wo video be concatenate do
   su name opening heading stage from filename of ob of final concatenate stage with name text video heading to filename of ob of final concatenate stage by num of ob of video heading y ratio stage be video heading burn do

@@ -136,3 +136,27 @@ test("teaching video branch conditions stay single-line to avoid double executio
     /be equally from text "" then\s*\n\s*ob text "manual"/u
   );
 });
+
+test("teaching video writes footnote stage manifest and scrubs missing footnote clips", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /from text "teaching-section-clips-footnote" to name filename section clip manifest be teaching video stage manifest filename do/u
+  );
+  assert.match(
+    source,
+    /\/teaching-section-clips-footnote\.series\.pya" to name section clip manifest path be plus do/u
+  );
+  assert.match(
+    source,
+    /ob text "; fi" to name section clip scrub command be plus do/u
+  );
+  assert.match(
+    source,
+    /ob name text section clip scrub command be command do/u
+  );
+  assert.match(
+    source,
+    /ob name section clip series stage to filename of ob of section clip manifest filename stage be write do/u
+  );
+});
