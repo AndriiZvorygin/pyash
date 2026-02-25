@@ -63,6 +63,9 @@ export async function copy(sentence, { remember: rememberFn = remember } = {}) {
       raw: { resolvedSrc }
     });
   }
+  if (resolvedSrc === resolvedDest) {
+    return { ob: { filename: resolvedDest }, be: "copy" };
+  }
   await fs.mkdir(path.dirname(resolvedDest), { recursive: true });
   if (isDir && recursive) {
     if (typeof fs.cp !== "function") {
