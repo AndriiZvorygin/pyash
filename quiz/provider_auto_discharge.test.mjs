@@ -59,6 +59,35 @@ test("auto discharge draw unloads warm ollama minds", async () => {
   }
 });
 
+test("auto discharge does not report mind released when ollama discharge fails", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "ollama host" }, ob: { text: "http://ollama.local:11434" }, be: "default" });
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const asText = String(url);
+    if (asText.endsWith("/api/ps")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ models: [{ model: "a" }] })
+      };
+    }
+    if (asText.endsWith("/api/generate")) {
+      return { ok: false, status: 500, statusText: "boom", json: async () => ({}) };
+    }
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
+  };
+  try {
+    const result = await enforceAutoDischarge({ activatingClass: "draw" });
+    assert.equal(result.released.includes("mind"), false);
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
 test("auto discharge qwen say unloads draw and warm ollama minds", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
