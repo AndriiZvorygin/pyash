@@ -446,7 +446,6 @@ export async function qwenSay(
     planChunkInstructsFn = planChunkInstructs
   } = {}
 ) {
-  await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
   const text = String(renderSayValue(sentence.ob ?? {}, { rememberFn }) ?? "");
   if (!text.trim()) {
     throwErrorSentence({
@@ -477,6 +476,9 @@ export async function qwenSay(
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   let postProcessApplied = false;
+
+  // Discharge right before synthesis so tone promptify can reuse a warm mind model.
+  await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
 
   if (chunks.length <= 1) {
     await runSayFn({
