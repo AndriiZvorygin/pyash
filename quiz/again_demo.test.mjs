@@ -7,6 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
+function assertNoUnexpectedErrors(errors = []) {
+  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  assert.deepEqual(unexpected, []);
+}
+
 async function runScript(scriptRelPath, args) {
   const originalArgv = process.argv;
   const originalLog = console.log;
@@ -50,8 +55,8 @@ test("again demo replays from newspaper", async () => {
   const script = "command/run_pya_program.mjs";
 
   const first = await runScript(script, ["--newspaper", "--run-id", runId, examplePath]);
-  assert.equal(first.errors.join("\n"), "");
+  assertNoUnexpectedErrors(first.errors);
 
   const replay = await runScript(script, ["--again", "--run-id", runId, examplePath]);
-  assert.equal(replay.errors.join("\n"), "");
+  assertNoUnexpectedErrors(replay.errors);
 });

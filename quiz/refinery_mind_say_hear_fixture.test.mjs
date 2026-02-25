@@ -7,6 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
+function assertNoUnexpectedErrors(errors = []) {
+  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  assert.deepEqual(unexpected, []);
+}
+
 async function runScript(scriptRelPath, args) {
   const originalArgv = process.argv;
   const originalLog = console.log;
@@ -55,7 +60,7 @@ test("refinery mind -> say -> hear fixture loop emits transcript", async () => {
       "loop",
       "examples/pyash/refinery-mind-say-hear-fixture.pya"
     ]);
-    assert.equal(errors.join("\n"), "");
+    assertNoUnexpectedErrors(errors);
     assert.ok(logs.join("\n").includes("Fixture transcript."), "transcript should print");
   } finally {
     delete process.env.PYA_MIND_RESPONSE;

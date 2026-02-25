@@ -61,6 +61,11 @@ function renderItineraryPya({ itineraryName, cuts }) {
     const name = String(cut?.name || `cut ${String(cut?.index ?? "").padStart(3, "0")}`).trim();
     const since = Number(cut?.since ?? 0);
     const until = Number(cut?.until ?? 0);
+    const filename = String(cut?.obFilename ?? "").trim();
+    if (filename) {
+      lines.push(`su name ${name} since num ${since.toFixed(3)} until num ${until.toFixed(3)} ob filename ${quoteText(filename)} ya`);
+      continue;
+    }
     const text = quoteText(String(cut?.obText ?? ""));
     lines.push(`su name ${name} since num ${since.toFixed(3)} until num ${until.toFixed(3)} ob text ${text} ya`);
   }
@@ -74,6 +79,7 @@ function parseItineraryPya(text) {
   let ordinal = 0;
   const headPattern = /^su name (.+?) be series def$/u;
   const cutPattern = /^su name (.+?) since num ([+-]?\d+(?:\.\d+)?) until num ([+-]?\d+(?:\.\d+)?) ob text ("(?:\\.|[^"\\])*") ya$/u;
+  const cutFilenamePattern = /^su name (.+?) since num ([+-]?\d+(?:\.\d+)?) until num ([+-]?\d+(?:\.\d+)?) ob filename ("(?:\\.|[^"\\])*") ya$/u;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -85,15 +91,18 @@ function parseItineraryPya(text) {
       }
     }
     const m = cutPattern.exec(line);
-    if (!m) continue;
+    const mf = cutFilenamePattern.exec(line);
+    if (!m && !mf) continue;
     ordinal += 1;
-    const name = String(m[1] ?? "").trim();
-    const since = Number(m[2] ?? "0");
-    const until = Number(m[3] ?? "0");
-    const obText = parsePyaTextLiteral(String(m[4] ?? "\"\""));
+    const match = m ?? mf;
+    const name = String(match?.[1] ?? "").trim();
+    const since = Number(match?.[2] ?? "0");
+    const until = Number(match?.[3] ?? "0");
+    const literal = parsePyaTextLiteral(String(match?.[4] ?? "\"\""));
     const parsedIndex = Number((/(\d+)/.exec(name)?.[1]) ?? "");
     const index = Number.isFinite(parsedIndex) ? parsedIndex : ordinal;
-    cuts.push({ index, name, since, until, obText });
+    if (m) cuts.push({ index, name, since, until, obText: literal });
+    else cuts.push({ index, name, since, until, obFilename: String(literal ?? "") });
   }
   if (!itineraryName) throw new Error("itinerary defective: missing series header");
   if (!cuts.length) throw new Error("itinerary defective: missing cuts");

@@ -211,6 +211,13 @@ to name itinerary teaching cuts
 be cut do
 ```
 
+Text to section itinerary:
+```pyash
+from text "paragraph one\n\nparagraph two\n\nparagraph three"
+to name itinerary teaching sections
+be cut do
+```
+
 Behavior:
 - `during num` is target cut duration in seconds,
 - implementation should keep each cut near target (default 6),
@@ -224,6 +231,15 @@ from ve name itinerary teaching cuts name photographs photos
 fromstate wo itinerary
 become wo video
 to filename "artifacts/video/teaching.mp4"
+be concatenate do
+```
+
+Section clips to final video:
+```pyash
+from name teaching section clips
+fromstate wo itinerary
+become wo video
+to filename "artifacts/video/teaching-final.mp4"
 be concatenate do
 ```
 
@@ -394,10 +410,6 @@ prah
 from name teaching video loop be refinery do
 ```
 
-Terminology note:
-- use `platform` for refinery execution nodes,
-- use `scene` for media content represented by each cut.
-
 ## 10. Strict signature matrix (v0)
 
 Valid `draw` forms:
@@ -424,7 +436,10 @@ Valid `footnote` forms:
 
 Valid `cut` forms:
 - `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
+- `from text <manuscript> to name itinerary <name> be cut do`
+- `from name <text> to name itinerary <name> be cut do`
 
 Valid `concatenate` forms:
 - `from name <itinerary> fromstate wo itinerary become wo video to filename <path> be concatenate do`
 - `from ve name <itinerary> name <dependency> fromstate wo itinerary become wo video to filename <path> be concatenate do`
+- `from name <series-of-clip-filenames> fromstate wo itinerary become wo video to filename <path> be concatenate do`

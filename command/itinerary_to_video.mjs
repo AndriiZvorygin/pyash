@@ -76,6 +76,19 @@ async function createConcatListFile(items) {
   return { dir, file };
 }
 
+async function createVideoConcatListFile(videoFiles = []) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-clip-concat-"));
+  const file = path.join(dir, "list.txt");
+  const lines = [];
+  for (const entry of videoFiles) {
+    const clipPath = path.resolve(String(entry ?? "").trim());
+    if (!clipPath) continue;
+    lines.push(`file '${clipPath.replace(/'/g, "'\\''")}'`);
+  }
+  await fs.writeFile(file, `${lines.join("\n")}\n`, "utf8");
+  return { dir, file };
+}
+
 function runFfmpeg({ listFile, audioFile, outputFile, fps }) {
   const args = [
     "-y",
@@ -88,6 +101,33 @@ function runFfmpeg({ listFile, audioFile, outputFile, fps }) {
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     "-shortest",
+    "-movflags", "+faststart",
+    outputFile
+  ];
+  return new Promise((resolve, reject) => {
+    let stderr = "";
+    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
+    proc.stderr.on("data", (chunk) => { stderr += String(chunk ?? ""); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else {
+        const clipped = stderr.length > 8000 ? `${stderr.slice(0, 4000)}\n...\n${stderr.slice(-4000)}` : stderr;
+        reject(new Error(`ffmpeg failed status=${code}: ${clipped}`));
+      }
+    });
+  });
+}
+
+function runFfmpegConcatVideos({ listFile, outputFile }) {
+  const args = [
+    "-y",
+    "-f", "concat",
+    "-safe", "0",
+    "-i", listFile,
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
     "-movflags", "+faststart",
     outputFile
   ];
@@ -154,7 +194,17 @@ function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
   return out;
 }
 
-export { indexPrefix, findImageForCut, createConcatListFile, runFfmpeg, parseArgs, getAudioDurationSeconds, buildTimelineItems };
+export {
+  indexPrefix,
+  findImageForCut,
+  createConcatListFile,
+  createVideoConcatListFile,
+  runFfmpeg,
+  runFfmpegConcatVideos,
+  parseArgs,
+  getAudioDurationSeconds,
+  buildTimelineItems
+};
 
 export async function main() {
   const opts = parseArgs(process.argv);

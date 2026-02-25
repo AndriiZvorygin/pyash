@@ -11,7 +11,8 @@ function resolveSeries(sentence, { rememberFn = remember } = {}) {
   const name = sentence?.from?.name ?? sentence?.from?.text;
   if (!name) return null;
   const fact = rememberFn(name);
-  if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return null;
+  const isSeriesLike = fact && (fact.be === "series" || fact.be === "itinerary") && Array.isArray(fact.ob?.series);
+  if (!isSeriesLike) return null;
   return { name, entries: fact.ob.series };
 }
 
@@ -49,6 +50,7 @@ function buildElementSentence(base, entry, index, count, mapper) {
   if (base.become) elem.become = base.become;
   if (base.during) elem.during = base.during;
   if (base.with) elem.with = base.with;
+  if (base.to) elem.to = base.to;
   if (base.at) elem.at = base.at;
 
   if (entry?.from) elem.from = entry.from;
@@ -93,6 +95,8 @@ function normalizeResult(res) {
   if (res && typeof res === "object") {
     if (res.num !== undefined) return { mood: "ya", ob: { num: res.num }, be: "number" };
     if (res.text !== undefined) return { mood: "ya", ob: { text: res.text }, be: "text" };
+    if (res.filename !== undefined) return { mood: "ya", ob: { filename: String(res.filename) }, be: "filename" };
+    if (res.name !== undefined) return { mood: "ya", ob: { name: String(res.name) }, be: "name" };
     if (res.boolean !== undefined) return { mood: "ya", ob: { boolean: res.boolean }, be: "boolean" };
     if (res.ve?.values) return { mood: "ya", ob: { ve: res.ve }, be: "vector" };
   }
@@ -129,6 +133,8 @@ export async function seriesMap(sentence, { remember: rememberFn = remember } = 
     const elemSentence = buildElementSentence(sentence, entry, i, count, mapper);
 
     pushMemoryContext({ seedFromCurrent: true });
+    doRemember({ mood: "ya", su: { name: "fromindex" }, ob: { num: i }, be: "number" });
+    doRemember({ mood: "ya", su: { name: "toindex" }, ob: { num: count - 1 }, be: "number" });
     const prevEvoke = state.currentEvoke;
     const prevEvokeRef = state.currentEvokeRef;
     state.currentEvoke = elemSentence;
@@ -188,4 +194,29 @@ export const signatures = [
   { signatureWords: ["be", "series", "map", "from", "name", "series", "by", "mind"], handler: seriesMap },
   { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "series", "to", "name", "text"], handler: seriesMap },
   { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "series"], handler: seriesMap }
+  ,
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "num", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "num"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "num", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "num", "from", "name", "itinerary"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "text", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "text", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "text", "from", "name", "itinerary"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "mind", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "name", "mind"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "mind", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "name", "mind", "from", "name", "itinerary"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "text", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "text", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "text", "from", "name", "itinerary"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "num", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "num"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "num", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "num", "from", "name", "itinerary"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "mind", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "from", "name", "itinerary", "by", "mind"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "itinerary", "to", "name", "text"], handler: seriesMap },
+  { signatureWords: ["be", "series", "map", "by", "mind", "from", "name", "itinerary"], handler: seriesMap }
 ];

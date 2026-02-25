@@ -9,9 +9,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
+function assertNoUnexpectedErrors(errors = []) {
+  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  assert.deepEqual(unexpected, []);
+}
+
 test("run_pya_program.mjs outputs result in gross mode", async () => {
   const { logs, errors } = await runScript("command/run_pya_program.mjs", ["--gross", "examples/pyash/evoke-registers.pya"]);
-  assert.equal(errors.join("\n"), "");
+  assertNoUnexpectedErrors(errors);
 
   const payload = JSON.parse(logs.join(""));
   assert.ok(Array.isArray(payload.outputs));
@@ -24,7 +29,7 @@ test("run_pya_program.mjs outputs result in gross mode", async () => {
 
 test("run_pya_program.mjs prints program with --full", async () => {
   const { logs, errors } = await runScript("command/run_pya_program.mjs", ["--full", "examples/pyash/evoke-registers.pya"]);
-  assert.equal(errors.join("\n"), "");
+  assertNoUnexpectedErrors(errors);
   const output = logs.join("\n");
   assert.match(output, /Program:\n/);
   assert.match(output, /Result:\n/);
@@ -58,7 +63,7 @@ test("run_pya_program.mjs uses default say mapping", async () => {
   process.env.PYA_PIPER_FIXTURE = output;
   try {
     const { errors } = await runScript("command/run_pya_program.mjs", ["examples/pyash/say-piper.pya"]);
-    assert.equal(errors.join("\n"), "");
+    assertNoUnexpectedErrors(errors);
     const data = await fs.readFile("artifacts/say/piper-demo.wav", "utf8");
     assert.equal(data, output);
   } finally {
