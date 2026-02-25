@@ -44,6 +44,7 @@ exists su name qwen say tone default ob text "speak as a compassionate teacher" 
 exists su name qwen say tone strategy ob text "heuristic" be default ya
 exists su name qwen say tone promptify system prompt ob text "You are a voice director for a text to speech teaching video. Return only one speaking direction line for Qwen3 instructions." be default ya
 exists su name qwen say tone promptify instruction ob text "Return exactly one single-line speaking direction sentence for TTS. Required shape: tone words, pace phrase, articulation phrase, pause phrase, emphasis phrase. Rules: one line only, plain text, no labels or bullets, under 22 words, warm teacher style unless urgency is explicit. Example output (single line): Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis." be default ya
+exists su name mind keep alive ob num 300 be default ya
 exists su name qwen say post process ob bool truth be default ya
 exists su name qwen say post process filter ob text "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" be default ya
 exists su name draw backend default ob text "comfyui" be default ya

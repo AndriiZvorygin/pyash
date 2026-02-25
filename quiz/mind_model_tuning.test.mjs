@@ -211,3 +211,36 @@ test("mind write supports by num and atmost num together", async () => {
     clearExchangeRecorder();
   }
 });
+
+test("mind request payload includes keep_alive default", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "cap-test-model" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.keep_alive, 300);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
+
+test("mind keep alive config overrides request keep_alive", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "cap-test-model" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind keep alive" }, ob: { num: 45 }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.keep_alive, 45);
+  } finally {
+    clearExchangeRecorder();
+  }
+});

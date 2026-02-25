@@ -210,6 +210,39 @@ test("auto discharge mind keeps target ollama model warm", async () => {
   }
 });
 
+test("auto discharge mind keeps target ollama quantized variant warm", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "draw host" }, ob: { text: "http://draw.local:8188" }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "ollama host" }, ob: { text: "http://ollama.local:11434" }, be: "default" });
+
+  const calls = [];
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const method = init?.method ?? "GET";
+    const asText = String(url);
+    const body = init?.body ? JSON.parse(String(init.body)) : null;
+    calls.push({ method, url: asText, body });
+    if (asText.endsWith("/api/ps")) {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ models: [{ model: "qwen3-vl:8b-instruct:Q4_K_M" }] })
+      };
+    }
+    return { ok: true, status: 200, statusText: "OK", json: async () => ({}) };
+  };
+  try {
+    const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
+    assert.equal(result.released.includes("mind"), false);
+    const unloadCalls = calls.filter(call => call.url.endsWith("/api/generate"));
+    assert.equal(unloadCalls.length, 0);
+  } finally {
+    globalThis.fetch = priorFetch;
+  }
+});
+
 test("auto discharge hear unloads draw and warm ollama minds", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: true }, be: "default" });

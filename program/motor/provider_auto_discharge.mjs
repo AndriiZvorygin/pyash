@@ -135,8 +135,10 @@ function modelMatchesTarget(candidate, target) {
   const right = normalizeModelRef(target);
   if (!left.raw || !right.raw) return false;
   if (left.raw === right.raw) return true;
+  if (left.raw.startsWith(`${right.raw}:`) || right.raw.startsWith(`${left.raw}:`)) return true;
   if (left.base !== right.base) return false;
   if (!left.tag || !right.tag) return true;
+  if (left.tag.startsWith(`${right.tag}:`) || right.tag.startsWith(`${left.tag}:`)) return true;
   if (left.tag === "latest" || right.tag === "latest") return true;
   return left.tag === right.tag;
 }
