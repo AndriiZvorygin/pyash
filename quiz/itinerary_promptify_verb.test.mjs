@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -37,6 +38,10 @@ test("promptify converts itinerary cuts into per-cut image prompts", async () =>
     await interpret(sentence);
     const resultFact = remember("result");
     assert.equal(resultFact?.be, "itinerary");
+    const resultFilename = String(resultFact?.ob?.filename ?? "");
+    assert.match(resultFilename, /artifacts\/(?:promptify\/[0-9]{14}-[0-9a-f]{6}|[0-9]{8}-[0-9]{3}-.+)\/.+\.series\.pya$/u);
+    const manifestText = await fs.readFile(resultFilename, "utf8");
+    assert.match(manifestText, /^su name teaching draw prompts be series def$/mu);
     const rows = Array.isArray(resultFact?.ob?.series) ? resultFact.ob.series : [];
     assert.equal(rows.length, 2);
     assert.match(String(rows[0]?.ob?.text ?? ""), /prompt:instruction:\s*Turn this cut into an image prompt\./u);
