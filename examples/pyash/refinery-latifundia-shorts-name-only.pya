@@ -4,7 +4,7 @@ su name draw size shorts be map def
   su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
 prah
 
-ob filename text manuscript to filename video short be input ya
+ob filename text manuscript be input ya
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name brief video script mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
 

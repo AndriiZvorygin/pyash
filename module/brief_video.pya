@@ -285,10 +285,11 @@ su name teaching video from text manuscript to filename video short be ceremony 
   su name manuscript stage ob name text teaching video script source to name text manuscript out be text do
   su name result stage from text of ob of manuscript out be teaching video do
   su name output path stage ob filename of to of this to name filename output path be filename do
-  su name output path text stage ob text of ob of output path to name text output path text be text do
+  su name output path text stage ob text of ob of filename output path to name text output path text be text do
   ob name text output path text be equally from text "[object Object]" then ob filename of ob of result stage to name filename output path be filename do
-  su name copy stage from filename of ob of result stage to filename of ob of output path be copy do
-  su name result out stage ob filename of ob of output path be teaching video ya
+  ob name text output path text be equally from text "" then ob filename of ob of result stage to name filename output path be filename do
+  su name copy stage from filename of ob of result stage to filename of ob of filename output path be copy do
+  su name result out stage ob filename of ob of filename output path be teaching video ya
   su name result out stage ret
 prah
 
