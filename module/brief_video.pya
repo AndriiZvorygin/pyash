@@ -159,8 +159,7 @@ prah
 
 su name current footnote mode to name text footnote mode current be ceremony def
   ob text "wordflow" to name text footnote mode current be text do
-  ob name text draw widescreen mode be equally from text "truth" then
-    ob text "karaoke" to name text footnote mode current be text do
+  ob name text draw widescreen mode be equally from text "truth" then ob text "karaoke" to name text footnote mode current be text do
   su name footnote mode current ret
 prah
 
@@ -222,12 +221,9 @@ su name brief video from text manuscript be ceremony def
 
   su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video be concatenate do
 
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "karaoke" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "plain" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "wordflow" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "karaoke" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "plain" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "wordflow" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to name concatenate platform as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
 
   su name draw discharge stage as wo draw be discharge do
 
@@ -273,12 +269,9 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of to of this be concatenate do
 
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "karaoke" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "plain" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "wordflow" then
-    su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "karaoke" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "plain" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "wordflow" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
 
   su name draw discharge stage as wo draw be discharge do
 
@@ -290,8 +283,7 @@ exists su name teaching video section window seconds ob num 6 be default ya
 
 su name teaching video section root from num section index to name text section root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
-  ob name text teaching video run id be equally from text "" then
-  ob text "manual" to name text teaching video run id be text do
+  ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
   ob text "artifacts/" to name text section root be plus do
   ob name text teaching video run id to name section root be plus do
   ob text "/sections/paragraph-" to name section root be plus do
@@ -299,16 +291,56 @@ su name teaching video section root from num section index to name text section 
   su name section root ret
 prah
 
-su name teaching video section render from text section manuscript with num section index to name filename section clip be ceremony def
-  su name section root stage from num of with of this to name text section root be teaching video section root do
+su name teaching video run root to name text teaching video run root be ceremony def
+  su name run id stage ob name run id to name text teaching video run id be text do
+  ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
+  ob text "artifacts/" to name text teaching video run root be plus do
+  ob name text teaching video run id to name teaching video run root be plus do
+  su name teaching video run root ret
+prah
+
+su name teaching video stage manifest filename from text stage stem to name filename stage manifest be ceremony def
+  su name run root stage to name text teaching video run root be teaching video run root do
+  ob name text teaching video run root to name text stage manifest path be plus do
+  ob text "/" to name stage manifest path be plus do
+  ob text of from of this to name stage manifest path be plus do
+  ob text ".series.pya" to name stage manifest path be plus do
+  su name stage manifest stage ob name text stage manifest path to name filename stage manifest be filename do
+  su name stage manifest stage ret
+prah
+
+su name teaching video section tell mapper ob text section manuscript fromindex num 0 be ceremony def
+  su name section index stage ob num of fromindex of this to name num section index be plus do
+  ob num 1 to name section index be plus do
+  su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
   su name section audio path stage ob name text section root to name text section audio path be plus do
   ob text "/audio.wav" to name section audio path be plus do
   su name section audio stage ob name text section audio path to name filename section audio be filename do
 
+  su name section telling stage ob text of ob of this to filename of ob of section audio be qwen say do
+  su name section audio output stage ob filename of ob of section telling stage be filename do
+  su name section audio output stage ret
+prah
+
+su name teaching video section hear mapper ob filename section audio fromindex num 0 be ceremony def
+  su name section index stage ob num of fromindex of this to name num section index be plus do
+  ob num 1 to name section index be plus do
+  su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
+
   su name section srt path stage ob name text section root to name text section srt path be plus do
   ob text "/captions.srt" to name section srt path be plus do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
+
+  su name section hear stage from filename of ob of this become wo srt to filename of ob of section srt be hear do
+  su name section srt output stage ob filename of ob of section hear stage be filename do
+  su name section srt output stage ret
+prah
+
+su name teaching video section video mapper ob filename section srt fromindex num 0 be ceremony def
+  su name section index stage ob num of fromindex of this to name num section index be plus do
+  ob num 1 to name section index be plus do
+  su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
   su name section draw directory path stage ob name text section root to name text section draw directory path be plus do
   ob text "/draw" to name section draw directory path be plus do
@@ -318,40 +350,40 @@ su name teaching video section render from text section manuscript with num sect
   ob text "/section.mp4" to name section video path be plus do
   su name section video stage ob name text section video path to name filename section video be filename do
 
-  su name section clip path stage ob name text section root to name text section clip path be plus do
-  ob text "/section-footnote.mp4" to name section clip path be plus do
-  su name section clip stage ob name text section clip path to name filename section clip be filename do
+  su name section cut stage from filename of ob of this during num of ob of teaching video section window seconds to name itinerary section cuts by num of ob of section index stage be cut do
 
-  su name section telling stage ob text of from of this to filename of ob of section audio be qwen say do
-  su name section hear stage from name section telling stage become wo srt to filename of ob of section srt be hear do
-
-  su name section cut stage from filename of ob of section srt during num of ob of teaching video section window seconds to name itinerary section cuts by num of with of this be cut do
-
-  su name section prompt stage from name itinerary section cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of with of this be promptify do
-  su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
-  su name footnote mode stage to name text footnote mode current be current footnote mode do
+  su name section prompt stage from name itinerary section cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of ob of section index stage be promptify do
 
   ob name text draw widescreen mode be equally from text "truth" then su name section draw stage from name itinerary section draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of section draw directory be draw do
   ob name text draw widescreen mode be equally from text "lie" then su name section draw stage from name itinerary section draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of section draw directory be draw do
 
   su name section concatenate stage from name itinerary section cuts fromstate wo itinerary become wo video to filename of ob of section video be concatenate do
+  su name section video output stage ob filename of ob of section concatenate stage be filename do
+  su name section video output stage ret
+prah
 
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "karaoke" then
-    su name section footnote stage from filename of ob of section hear stage fromstate wo srt with filename of ob of section concatenate stage become wo video to filename of ob of section clip as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "plain" then
-    su name section footnote stage from filename of ob of section hear stage fromstate wo srt with filename of ob of section concatenate stage become wo video to filename of ob of section clip by num of ob of subtitle margin ratio stage be footnote do
-  ob name text footnote mode current of ob of footnote mode stage be equally from text "wordflow" then
-    su name section footnote stage from filename of ob of section hear stage fromstate wo srt with filename of ob of section concatenate stage become wo video to filename of ob of section clip as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+su name teaching video section footnote mapper ob filename section video fromindex num 0 be ceremony def
+  su name section index stage ob num of fromindex of this to name num section index be plus do
+  ob num 1 to name section index be plus do
+  su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
+
+  su name section srt path stage ob name text section root to name text section srt path be plus do
+  ob text "/captions.srt" to name section srt path be plus do
+  su name section srt stage ob name text section srt path to name filename section srt be filename do
+
+  su name section clip path stage ob name text section root to name text section clip path be plus do
+  ob text "/section-footnote.mp4" to name section clip path be plus do
+  su name section clip stage ob name text section clip path to name filename section clip be filename do
+
+  su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
+  su name footnote mode stage to name text footnote mode current be current footnote mode do
+
+  ob text of ob of footnote mode stage be equally from text "karaoke" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "plain" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "wordflow" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
 
   su name section clip output stage ob filename of ob of section footnote stage be filename do
   su name section clip output stage ret
-prah
-
-su name teaching video section mapper ob text section manuscript fromindex num 0 be ceremony def
-  su name section index stage ob num of fromindex of this to name num section index be plus do
-  ob num 1 to name section index be plus do
-  su name section clip stage from text of ob of this with num of ob of section index to name filename section clip be teaching video section render do
-  su name section clip stage ret
 prah
 
 su name teaching video from text manuscript be ceremony def
@@ -369,7 +401,11 @@ su name teaching video from text manuscript be ceremony def
 
   su name section itinerary stage from text of ob of manuscript out to name itinerary teaching sections be cut do
 
-  su name section clip series stage from name teaching sections by name teaching video section mapper to name text teaching section clips be series map do
+  su name section audio series stage from name teaching sections by name teaching video section tell mapper to name text teaching section audios be series map do
+
+  su name section srt series stage from name teaching section audios by name teaching video section hear mapper to name text teaching section srts be series map do
+
+  su name section video series stage from name teaching section srts by name teaching video section video mapper to name text teaching section videos be series map do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
   exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
@@ -378,6 +414,8 @@ su name teaching video from text manuscript be ceremony def
   ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
   su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
   su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name section clip series stage from name teaching section videos by name teaching video section footnote mapper to name text teaching section clips be series map do
 
   su name final concatenate stage from name teaching section clips fromstate wo itinerary become wo video be concatenate do
   su name opening heading stage from filename of ob of final concatenate stage with name text video heading to filename of ob of final concatenate stage by num of ob of video heading y ratio stage be video heading burn do
