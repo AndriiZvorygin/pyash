@@ -94,6 +94,14 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
     if (!GENITIVE_TEXT_TAILS.has(tail)) continue;
     const resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
     if (resolved === null || resolved === undefined) continue;
+    if (String(resolved).trim() === "[object Object]") {
+      throwErrorSentence({
+        name: "genitive io defective",
+        message: "genitive io defective: resolved to [object Object]",
+        from: { name: "interpret" },
+        raw: { key, tail, resolved }
+      });
+    }
     if (tail === "filename") {
       sentence[key] = { filename: String(resolved) };
     } else if (tail === "text") {
@@ -175,6 +183,14 @@ function guardSourceFilenames(sentence, { rememberFn } = {}) {
   for (const slot of slots) {
     const raw = String(slot.value ?? "");
     if (!raw) continue;
+    if (raw.trim() === "[object Object]") {
+      throwErrorSentence({
+        name: "file or directory unavailable",
+        message: "file or directory unavailable: [object Object]",
+        from: be || "interpret",
+        raw: { role: slot.role, value: slot.value }
+      });
+    }
     if (/^https?:\/\//i.test(raw)) continue;
     const resolved = resolveSourceFilename(raw, { rememberFn });
     if (!resolved) continue;
