@@ -183,14 +183,16 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
         warm = [];
       }
       const toDischarge = warm.filter(model => !modelMatchesTarget(model, targetModel));
+      let dischargedCount = 0;
       for (const model of toDischarge) {
         try {
           await dischargeOllamaMind(model, { rememberFn });
+          dischargedCount += 1;
         } catch {
           // best-effort release
         }
       }
-      if (toDischarge.length > 0) pushReleased(released, "mind");
+      if (dischargedCount > 0) pushReleased(released, "mind");
     }
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
@@ -206,14 +208,16 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     } catch {
       warm = [];
     }
+    let dischargedCount = 0;
     for (const model of warm) {
       try {
         await dischargeOllamaMind(model, { rememberFn });
+        dischargedCount += 1;
       } catch {
         // best-effort release
       }
     }
-    if (warm.length > 0) pushReleased(released, "mind");
+    if (dischargedCount > 0) pushReleased(released, "mind");
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
@@ -241,15 +245,17 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     } catch {
       warm = [];
     }
+    let dischargedCount = 0;
     for (const model of warm) {
       try {
         await dischargeOllamaMind(model, { rememberFn });
+        dischargedCount += 1;
       } catch {
         // best-effort release
       }
     }
     const released = drawReleased ? ["draw"] : [];
-    if (warm.length > 0) pushReleased(released, "mind");
+    if (dischargedCount > 0) pushReleased(released, "mind");
     if (classes.includes("hear")) {
       try {
         const hear = await dischargeHearBackend({ rememberFn });
@@ -277,16 +283,18 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
     } catch {
       warm = [];
     }
+    let dischargedCount = 0;
     for (const model of warm) {
       try {
         await dischargeOllamaMind(model, { rememberFn });
+        dischargedCount += 1;
       } catch {
         // best-effort release
       }
     }
     const released = drawReleased ? ["draw"] : [];
     await releaseQwenSay({ classes, rememberFn, released });
-    if (warm.length > 0) pushReleased(released, "mind");
+    if (dischargedCount > 0) pushReleased(released, "mind");
     const result = { changed: released.length > 0, activated: activeClass, released };
     emitAutoDischarge(result);
     return finalizeAutoDischarge(result, { activeClass, previousClass, rememberFn });
