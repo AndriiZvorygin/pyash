@@ -68,9 +68,9 @@ const SUBTITLE_OUTLINE_RATIO_DEFAULT = 0.11;
 const SUBTITLE_SHADOW_RATIO_MIN = 0.02;
 const SUBTITLE_SHADOW_RATIO_MAX = 0.03;
 const SUBTITLE_SHADOW_RATIO_DEFAULT = 0.025;
-const SUBTITLE_ZONE_TOP_RATIO = 0.40;
-const SUBTITLE_ZONE_BOTTOM_RATIO = 0.70;
-const SUBTITLE_ZONE_DEFAULT_RATIO = 0.58;
+const SUBTITLE_BOTTOM_MARGIN_RATIO_DEFAULT = 0.10;
+const SUBTITLE_BOTTOM_MARGIN_RATIO_MIN = 0.02;
+const SUBTITLE_BOTTOM_MARGIN_RATIO_MAX = 0.45;
 
 function splitWords(text = "") {
   return String(text ?? "").trim().split(/\s+/).filter(Boolean);
@@ -301,8 +301,8 @@ function buildAssFromSrt(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // White bold text with black outline and soft shadow (no background box).
-    `Style: Default,${fontName},${fontSize},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${resolvedOutline},${resolvedShadow},8,${marginLR},${marginLR},${marginV},1`,
+    // Bottom-centered subtitles. Karaoke uses yellow secondary color so active words visibly highlight.
+    `Style: Default,${fontName},${fontSize},${mode === "karaoke" ? "&H00FFFFFF,&H0000D7FF" : "&H00FFFFFF,&H00FFFFFF"},&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${resolvedOutline},${resolvedShadow},2,${marginLR},${marginLR},${marginV},1`,
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
@@ -408,11 +408,12 @@ export async function main(argv = process.argv) {
   const probed = await probeVideoSize(inputVideo);
   const width = opts.width ?? probed?.width ?? 720;
   const height = opts.height ?? probed?.height ?? 1280;
+  const marginRatio = opts.marginRatio ?? SUBTITLE_BOTTOM_MARGIN_RATIO_DEFAULT;
   const marginV = Math.floor(
     clamp(
-      opts.marginV ?? Math.round(height * (opts.marginRatio ?? SUBTITLE_ZONE_DEFAULT_RATIO)),
-      Math.round(height * SUBTITLE_ZONE_TOP_RATIO),
-      Math.round(height * SUBTITLE_ZONE_BOTTOM_RATIO)
+      opts.marginV ?? Math.round(height * marginRatio),
+      Math.round(height * SUBTITLE_BOTTOM_MARGIN_RATIO_MIN),
+      Math.round(height * SUBTITLE_BOTTOM_MARGIN_RATIO_MAX)
     )
   );
   const marginLR = Math.max(16, Math.round(width * 0.10));

@@ -105,7 +105,7 @@ test("footnote_video resolveRenderOutputPath avoids in-place writes", () => {
   assert.equal(different, "/tmp/out.mp4");
 });
 
-test("footnote_video style uses white text with black outline and top-zone margin", () => {
+test("footnote_video style uses white text with black outline and bottom-zone margin", () => {
   const srt = [
     "1",
     "00:00:00,000 --> 00:00:03,000",
@@ -123,5 +123,5 @@ test("footnote_video style uses white text with black outline and top-zone margi
   const styleLine = ass.split("\n").find((line) => line.startsWith("Style: Default,"));
   assert.ok(styleLine);
   assert.match(styleLine, /,72,/u);
-  assert.match(styleLine, /,1,7\.92,1\.8,8,108,108,720,1$/u);
+  assert.match(styleLine, /,1,7\.92,1\.8,2,108,108,720,1$/u);
 });
