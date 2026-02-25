@@ -39,3 +39,14 @@ test("copy directory source fails", async () => {
   const dest = path.join(dir, "out", "copy.txt");
   await assert.rejects(() => run(`be copy ob filename "${dir}" to filename "${dest}" do`));
 });
+
+test("copy no-ops when source and destination match", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "copy-"));
+  const file = path.join(dir, "same.txt");
+  await fs.writeFile(file, "alpha", "utf8");
+  const res = await run(`be copy ob filename "${file}" to filename "${file}" do`);
+  assert.equal(res?.value?.filename, file);
+  const data = await fs.readFile(file, "utf8");
+  assert.equal(data, "alpha");
+});
