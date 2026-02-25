@@ -5,7 +5,7 @@ import { throwErrorSentence } from "../../error.mjs";
 import { makeStream } from "../../library/runtimePrimitives.mjs";
 import { toolListFromMap } from "./tooling.mjs";
 import { recordMindAnswer } from "./series.mjs";
-import { resolveConfigText } from "../../configure/env.mjs";
+import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
 import { remember } from "../../remember/index.mjs";
 
 function buildPromptText(messages) {
@@ -84,6 +84,12 @@ export async function runGenerate({
     }
     if (typeof tuning.think === "boolean") payload.think = tuning.think;
   };
+  const applyKeepAlive = (payload) => {
+    if (!payload || typeof payload !== "object") return;
+    const configured = resolveConfigNum("mind keep alive", { rememberFn: remember });
+    const keepAlive = Number.isFinite(Number(configured)) ? Math.max(0, Math.trunc(Number(configured))) : 300;
+    payload.keep_alive = keepAlive;
+  };
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
   const toolList = toolListFromMap(toolMapName);
@@ -118,6 +124,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
@@ -217,6 +224,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
@@ -226,6 +234,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
