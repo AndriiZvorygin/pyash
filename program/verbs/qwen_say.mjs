@@ -58,14 +58,14 @@ function resolveTonePromptifyModel({ rememberFn = remember } = {}) {
 function resolveTonePromptifySystem({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("qwen say tone promptify system prompt", { rememberFn }) ||
-    "You are a narration tone planner for text to speech. Return only one short speaking instruction for the current sentence."
+    "You are a voice director for a text-to-speech teaching video. Return only one short speaking instruction line."
   );
 }
 
 function resolveTonePromptifyInstruction({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("qwen say tone promptify instruction", { rememberFn }) ||
-    "Choose the best speaking instruction for this sentence. Return only concise tone text like: professional tone, urgent tone, reflective tone, warm encouraging tone."
+    "Pick a natural speaking direction under 20 words. Use plain language with no labels or bullets. Choose fitting tone/emotion/energy/pace/emphasis/pauses; keep articulation crisp. Prefer clarity and warmth unless urgency is signaled. Avoid extreme combinations."
   );
 }
 
