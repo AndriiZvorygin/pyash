@@ -6,7 +6,7 @@ import { getRefinery, removeRefinery } from "../bridge/refinery.mjs";
 import { dischargeOllamaMind, listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
 import { dischargeDrawBackend } from "../motor/draw_admin.mjs";
 import { dischargeHearBackend } from "../motor/hear_admin.mjs";
-import { dischargeSayBackend } from "../motor/say_admin.mjs";
+import { dischargeQwenSayBackend, dischargeSayBackend } from "../motor/say_admin.mjs";
 
 function resolveTargetName(sentence, { rememberFn }) {
   const ob = sentence?.ob ?? {};
@@ -71,7 +71,7 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
   const targetNames = resolveTargetNames(sentence);
   const targetName = resolveTargetName(sentence, { rememberFn });
   const dischargeType = resolveDischargeType(sentence);
-  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw" && dischargeType !== "hear" && dischargeType !== "say") {
+  if (dischargeType && dischargeType !== "mcp" && dischargeType !== "refinery" && dischargeType !== "ollama" && dischargeType !== "mind" && dischargeType !== "draw" && dischargeType !== "hear" && dischargeType !== "say" && dischargeType !== "qwen" && dischargeType !== "qwen say") {
     throwErrorSentence({
       name: "discharge target defective",
       message: `discharge target defective: ${dischargeType}`,
@@ -99,11 +99,28 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
   }
   if (dischargeType === "say") {
     const result = await dischargeSayBackend({ rememberFn });
+    if (result?.backend === "comfyui") {
+      try {
+        await dischargeQwenSayBackend({ rememberFn });
+      } catch {
+        // keep legacy say discharge successful even if qwen endpoint rejects
+      }
+    }
     return {
       mood: "ya",
       be: "discharge",
       as: { wo: "say" },
       from: { name: result.backend },
+      ob: { boolean: true }
+    };
+  }
+  if (dischargeType === "qwen" || dischargeType === "qwen say") {
+    const result = await dischargeQwenSayBackend({ rememberFn });
+    return {
+      mood: "ya",
+      be: "discharge",
+      as: { wo: "qwen say" },
+      fromstate: { text: result.host },
       ob: { boolean: true }
     };
   }
@@ -180,6 +197,8 @@ export const signatures = [
   { signatureWords: ["be", "discharge", "as", "wo", "draw"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "hear"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "say"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "qwen"], handler: discharge },
+  { signatureWords: ["be", "discharge", "as", "wo", "qwen", "say"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "ollama"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "wo", "ollama", "ob", "vec", "text"], handler: discharge },
   { signatureWords: ["be", "discharge", "as", "name", "num", "ob", "text"], handler: discharge },
