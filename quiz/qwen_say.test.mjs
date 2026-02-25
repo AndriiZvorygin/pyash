@@ -8,7 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { doRemember, forget, remember } from "../program/remember/index.mjs";
-import { normalizeQwenSayChunkText, qwenSay, splitQwenSayTextChunks } from "../program/verbs/qwen_say.mjs";
+import { normalizeQwenSayChunkText, qwenSay, sanitizeQwenSayScriptText, splitQwenSayTextChunks } from "../program/verbs/qwen_say.mjs";
 
 test("qwen say fixture records audio and metadata artifacts", async () => {
   forget();
@@ -91,6 +91,25 @@ test("normalizeQwenSayChunkText appends an extra terminal period", () => {
   assert.equal(normalizeQwenSayChunkText("No final marker"), "No final marker..");
   assert.equal(normalizeQwenSayChunkText("Already complete."), "Already complete..");
   assert.equal(normalizeQwenSayChunkText("Question?"), "Question?.");
+});
+
+test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () => {
+  assert.equal(
+    sanitizeQwenSayScriptText("God is love (1st John 4:8)."),
+    "God is love first John chapter 4 verse 8."
+  );
+  assert.equal(
+    sanitizeQwenSayScriptText("Matthew 5 : 16 and Mark 11:26"),
+    "Matthew chapter 5 verse 16 and Mark chapter 11 verse 26"
+  );
+  assert.equal(
+    sanitizeQwenSayScriptText("Hope! Keep-going; stay \"steady\"."),
+    "Hope? Keep going, stay steady."
+  );
+  assert.doesNotMatch(
+    sanitizeQwenSayScriptText("A (test) with / odd # punctuation!"),
+    /[()\/#!:"'`;[\]{}<>\\|@#$%^&*_+=~\-]/u
+  );
 });
 
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
@@ -208,6 +227,50 @@ test("qwenSay keeps short text in a single synthesis call", async () => {
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
+});
+
+test("qwenSay sanitizes numeric citation colons before synthesis", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-citation-sanitize-out-"));
+  const output = path.join(outDir, "out.wav");
+  const seenTexts = [];
+  const runSayFn = async ({ text, output: chunkFile }) => {
+    seenTexts.push(String(text ?? ""));
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_citation"));
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        ob: { text: "God is love (1st John 4:8). Let your light shine (Matthew 5:16)." },
+        to: { filename: output }
+      },
+      { runSayFn }
+    );
+    assert.equal(seenTexts.length, 1);
+    assert.match(seenTexts[0], /chapter 4 verse 8/u);
+    assert.match(seenTexts[0], /chapter 5 verse 16/u);
+    assert.doesNotMatch(seenTexts[0], /\d:\d/u);
+    assert.doesNotMatch(seenTexts[0], /\d\.\d/u);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("splitQwenSayTextChunks does not split chapter verse references into numeric fragments", () => {
+  const source = [
+    "God is love 1st John 4.8.",
+    "The unveiling of God is Christ in you Colossians 1.27, the true light John 1.9, revealing love.",
+    "You are God's temple 1st Corinthians 3.16, light of the world Matthew 5.14, salt of the earth Matthew 5.13."
+  ].join(" ").repeat(6);
+  const chunks = splitQwenSayTextChunks(source);
+  assert.ok(chunks.length > 1);
+  assert.equal(chunks[0].startsWith("God is love"), true);
+  assert.equal(chunks.some((chunk) => /^\d+[.,]?\s*$/.test(chunk.trim())), false);
 });
 
 test("qwenSay treats as text as tone override when it is not a workflow name", async () => {

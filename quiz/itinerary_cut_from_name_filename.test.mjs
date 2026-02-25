@@ -62,3 +62,21 @@ test("cut splits long single srt segment into multiple windows", async () => {
   assert.equal(series[4]?.since?.num, 24);
   assert.equal(series[4]?.until?.num, 25);
 });
+
+test("cut from text sentence mode keeps scripture refs within sentence", async () => {
+  forget();
+  const source = "God is love 1st John 4.8. The true light gives light to everyone John 1.9.";
+  doRemember({ mood: "ya", su: { name: "script source" }, ob: { text: source }, be: "text" });
+
+  await interpret(
+    parse('su name cut stage from name script source as text "sentence" to name itinerary scripture cuts be cut do')
+  );
+
+  const itinerary = remember("scripture cuts");
+  assert.equal(itinerary?.be, "itinerary");
+  const series = Array.isArray(itinerary?.ob?.series) ? itinerary.ob.series : [];
+  assert.equal(series.length, 2);
+  assert.match(String(series[0]?.ob?.text ?? ""), /4\.8/u);
+  assert.match(String(series[1]?.ob?.text ?? ""), /1\.9/u);
+  assert.equal(/^\d+[.,]?$/.test(String(series[0]?.ob?.text ?? "").trim()), false);
+});
