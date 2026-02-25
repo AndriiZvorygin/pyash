@@ -300,8 +300,10 @@ test("auto discharge skips settle wait when gpu class does not change", async ()
   const priorFetch = globalThis.fetch;
   const priorSetTimeout = globalThis.setTimeout;
   let waited = false;
+  const calls = [];
   globalThis.fetch = async (url) => {
     const asText = String(url);
+    calls.push(asText);
     if (asText.endsWith("/api/ps")) {
       return {
         ok: true,
@@ -320,7 +322,9 @@ test("auto discharge skips settle wait when gpu class does not change", async ()
   try {
     const result = await enforceAutoDischarge({ activatingClass: "mind", activatingModel: "qwen3-vl:8b-instruct" });
     assert.equal(waited, false);
+    assert.equal(result.changed, false);
     assert.equal(result.waitedMs ?? 0, 0);
+    assert.equal(calls.length, 0);
   } finally {
     globalThis.fetch = priorFetch;
     globalThis.setTimeout = priorSetTimeout;
