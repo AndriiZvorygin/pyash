@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.join(path.dirname(__filename), "..");
 
-test("runc refinery checkpoints reuse prior results", async () => {
+test("runc refinery reruns stage when checkpoint output file is missing", async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-refinery-checkpoint-c-"));
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, [
@@ -48,5 +48,5 @@ test("runc refinery checkpoints reuse prior results", async () => {
   } catch {
     recreated = false;
   }
-  assert.equal(recreated, false);
+  assert.equal(recreated, true);
 });
