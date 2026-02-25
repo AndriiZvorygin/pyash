@@ -28,11 +28,14 @@ Current `be teaching video do` flow in `module/brief_video.pya`:
 2. title/heading/description generation and thumbnail prompt/render,
 3. split manuscript paragraphs into section itinerary (`cut from text`),
 4. map each section through a section renderer:
-   - section `qwen say`,
+   - section sentence split,
+   - qwen-say tone/direction promptify per sentence,
+   - sentence-wise `qwen say`,
+   - sentence audio assemble into section narration audio,
    - section `hear`,
    - section `cut`,
    - section draw `promptify`,
-   - section `draw`,
+   - section `draw` (including thumbnail generation in draw stage),
    - section `concatenate`,
    - section `footnote` (wordflow),
 5. write section clip series manifest,
@@ -55,10 +58,12 @@ Current artifact behavior:
 
 ### 3.1 Section-wise execution
 
-For long manuscripts, pipeline should process:
-- section 001 -> section clip 001,
-- section 002 -> section clip 002,
-- ...
+For long manuscripts, pipeline should process in stage order over all sections:
+- section itinerary for all sections,
+- qwen-say tone promptify plan for all section sentences,
+- sentence-wise qwen-say for all sections,
+- section audio assemble for all sections,
+- hear/cut/promptify/draw/concatenate/footnote for all sections,
 - final assemble from section clips.
 
 Section boundaries should be deterministic and persisted as source artifacts.
@@ -88,9 +93,10 @@ Each stage should have:
 - explicit dependency list.
 
 Rebuild decision for each stage:
-- rerun when output is missing,
-- rerun when any dependency is newer/changed,
-- otherwise reuse.
+- identify per-item outputs (section/cut/sentence),
+- rerun only items whose output is missing/stale/failed,
+- reuse completed items,
+- avoid full-stage regeneration by default.
 
 ## 4. Promptify Artifact Contract (Needed)
 
@@ -101,6 +107,10 @@ Required persisted outputs:
 - optional `draw-prompts.txt` human-readable export.
 
 Draw stage must read from persisted prompt itinerary for rebuild runs.
+
+Thumbnail in draw stage (normative for this flow):
+- thumbnail render is part of draw stage outputs and participates in the same rebuild contract.
+- thumbnail should not be treated as a late detached stage after draw completion.
 
 Rationale:
 - users can edit prompt text directly,
@@ -114,11 +124,15 @@ Current gap:
 
 Required behavior:
 - checkpoint reuse must be conditional on artifact existence for that stage output contract.
-- if required output file is missing, checkpoint is invalid for that stage and stage reruns.
+- if required output file is missing, checkpoint is invalid for that item and only that missing item reruns.
 - this applies transitively for downstream dependents.
 
 Optional stronger mode:
 - verify both existence and recorded hash match before reuse.
+
+Manifest format requirement:
+- platform manifests must be stored as Pyash series files (`.series.pya`).
+- each row should be one sentence per output file/item, carrying status and artifact metadata.
 
 ## 6. Aspect Ratio Profiles
 
