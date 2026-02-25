@@ -5,7 +5,8 @@ Optional WhisperX backend for `hear ... become wo srt`.
 ## Files
 
 - `service/compose.yaml` - WhisperX service definition.
-- `service/server.py` - thin HTTP wrapper over WhisperX CLI.
+- `service/server.py` - HTTP service that manages a long-lived worker process.
+- `service/worker.py` - GPU worker that loads WhisperX models and serves transcribe RPCs.
 - `command/begin.sh` - start service.
 - `command/stop.sh` - stop service.
 
@@ -22,6 +23,18 @@ From inside `pyash`, set:
 Optional diarization token:
 
 - set `HF_TOKEN` in shell environment before starting compose.
+
+## Runtime Model
+
+- The server keeps a dedicated worker process alive after the first `/transcribe`.
+- The worker keeps WhisperX model/alignment objects hot in GPU memory for fast follow-up calls.
+- `POST /discharge` terminates the worker so CUDA context is released and VRAM can drop back to zero.
+
+## Endpoints
+
+- `GET /health` -> service health.
+- `POST /transcribe` -> run one transcription request.
+- `POST /discharge` -> stop worker and release GPU memory.
 
 ## Streaming Logs
 
