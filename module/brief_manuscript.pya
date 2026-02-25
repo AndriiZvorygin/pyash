@@ -2,6 +2,7 @@ exists su name brief video script mind be mind as name "qwen3-vl:8b-instruct" fr
 exists su name brief video script hook mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You write one short hook line for a history short. Follow constraints exactly." ya
 exists su name brief video script hook retry mind be mind as name "qwen3-vl:8b-instruct" fromtext name brief video script hook retry prompt ya
 exists su name brief video script body retry mind be mind as name "qwen3-vl:8b-instruct" fromtext name brief video script body retry prompt ya
+exists su name brief video script source thrust verify mind be mind as name "qwen3-vl:8b-instruct" fromtext name brief video script source thrust verify prompt ya
 
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
@@ -106,179 +107,179 @@ Rules:
 - No labels, no bullets, no markdown, no surrounding quotes.
 .text.quoted be text ya
 
+exists su name brief video script source thrust verify prompt ob text quoted.text.Good. Here is a much cleaner rubric, with a hard boundary between history and present-day commentary.
+
+SOURCE-THRUST VERIFICATION RUBRIC
+
+Goal: Determine whether the historical content of the SCRIPT is grounded in the TRANSCRIPT.
+
+Step 1 - Separate Content Types
+
+A) Historical content
+Any sentence that refers to:
+
+- named historical person
+- historical event
+- law, reform, policy
+- specific historical action or mechanism
+
+B) Present-day parallels and commentary
+Any sentence about:
+
+- modern society
+- today, modern crisis, current generation
+- moral framing, warnings, calls to action
+
+Only evaluate A.
+Ignore B completely when deciding PASS or FAIL.
+
+Step 2 - Evaluate Historical Accuracy
+
+For historical sentences only, judge:
+
+1. Factual Presence
+Are the core elements of the claim clearly present in the TRANSCRIPT?
+
+2. Added Specificity
+Does the SCRIPT add concrete historical details that do not appear in the TRANSCRIPT?
+
+3. Meaning Drift
+Does the SCRIPT materially exaggerate or alter what the TRANSCRIPT says?
+
+Decision Rules
+
+PASS if:
+
+- Every historical claim is clearly supported by the TRANSCRIPT
+- No new historical facts are introduced
+- No major exaggeration or distortion occurs
+
+FAIL if:
+
+- Any historical claim lacks clear support
+- Any new historical fact is added
+- The meaning of a historical reform, event, or mechanism is materially altered
+
+Output reasoning briefly.
+Final line must be exactly:
+
+PASS
+or
+FAIL.text.quoted be text ya
+
+su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript fact one pass be equally from text true then be depart do
+  su name manuscript fact one retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
+  ob name text output to name manuscript fact one retry request be plus do
+  su name manuscript fact one retry write stage ob name manuscript fact one retry request fromtext name brief video script fact one retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
+  su name manuscript fact one verify retry stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
+  ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
+  ob name text manuscript fact one pass be equally from text true then be depart do
+prah
+
 su name manuscript fact one checked to name text output be ceremony def
   su name manuscript fact one write stage ob name text manuscript fact one request fromtext name brief video script fact one prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
   su name manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
   ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
-  ob name text manuscript fact one pass be equally from text false then
-  ob name text output to name manuscript fact one retry request be plus do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry first write stage ob name manuscript fact one retry request fromtext name brief video script fact one retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one verify retry first stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
-  ob name text manuscript fact one pass be equally from text false then
-  ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry second request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
-  ob name text manuscript fact one pass be equally from text false then
-  ob name text output to name manuscript fact one retry request be plus do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry second write stage ob name manuscript fact one retry request fromtext name brief video script fact one retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one verify retry second stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
-  ob name text manuscript fact one pass be equally from text false then
-  ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry third request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
-  ob name text manuscript fact one pass be equally from text false then
-  ob name text output to name manuscript fact one retry request be plus do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one retry third write stage ob name manuscript fact one retry request fromtext name brief video script fact one retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one verify retry third stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
-  ob name text manuscript fact one pass be equally from text false then
-  ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-
+  fromindex num 1 toindex num 3 be manuscript fact one retry do
   ob name text manuscript fact one pass be equally from text false then
   su name manuscript fact one guarantee stage ob bool lie fromtext text "manuscript fact one word count defective" be guarantee do
   su name manuscript fact one return stage ob name text output be text do
+prah
+
+su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript fact two pass be equally from text true then be depart do
+  su name manuscript fact two retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact two retry request be text do
+  ob name text output to name manuscript fact two retry request be plus do
+  su name manuscript fact two retry write stage ob name manuscript fact two retry request fromtext name brief video script fact two retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
+  su name manuscript fact two verify retry stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
+  ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
+  ob name text manuscript fact two pass be equally from text true then be depart do
 prah
 
 su name manuscript fact two checked to name text output be ceremony def
   su name manuscript fact two write stage ob name text manuscript fact two request fromtext name brief video script fact two prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
   su name manuscript fact two verify stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
   ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact two retry request be text do
-  ob name text manuscript fact two pass be equally from text false then
-  ob name text output to name manuscript fact two retry request be plus do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry first write stage ob name manuscript fact two retry request fromtext name brief video script fact two retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two verify retry first stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
-  ob name text manuscript fact two pass be equally from text false then
-  ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry second request begin stage ob text "SEGMENT:\n" to name text manuscript fact two retry request be text do
-  ob name text manuscript fact two pass be equally from text false then
-  ob name text output to name manuscript fact two retry request be plus do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry second write stage ob name manuscript fact two retry request fromtext name brief video script fact two retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two verify retry second stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
-  ob name text manuscript fact two pass be equally from text false then
-  ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry third request begin stage ob text "SEGMENT:\n" to name text manuscript fact two retry request be text do
-  ob name text manuscript fact two pass be equally from text false then
-  ob name text output to name manuscript fact two retry request be plus do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two retry third write stage ob name manuscript fact two retry request fromtext name brief video script fact two retry prompt for name brief video script mind to name text output by num 0 atmost num 72 be write do
-  ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two verify retry third stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
-  ob name text manuscript fact two pass be equally from text false then
-  ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-
+  fromindex num 1 toindex num 3 be manuscript fact two retry do
   ob name text manuscript fact two pass be equally from text false then
   su name manuscript fact two guarantee stage ob bool lie fromtext text "manuscript fact two word count defective" be guarantee do
   su name manuscript fact two return stage ob name text output be text do
+prah
+
+su name manuscript uplift retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript uplift pass be equally from text true then be depart do
+  su name manuscript uplift retry request begin stage ob text "SEGMENT:\n" to name text manuscript uplift retry request be text do
+  ob name text output to name manuscript uplift retry request be plus do
+  su name manuscript uplift retry write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
+  su name manuscript uplift verify retry stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
+  ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
+  ob name text manuscript uplift pass be equally from text true then be depart do
 prah
 
 su name manuscript uplift checked to name text output be ceremony def
   su name manuscript uplift write stage ob name text manuscript uplift request fromtext name brief video script uplift prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
   su name manuscript uplift verify stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
   ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry request begin stage ob text "SEGMENT:\n" to name text manuscript uplift retry request be text do
-  ob name text manuscript uplift pass be equally from text false then
-  ob name text output to name manuscript uplift retry request be plus do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry first write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift verify retry first stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
-  ob name text manuscript uplift pass be equally from text false then
-  ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry second request begin stage ob text "SEGMENT:\n" to name text manuscript uplift retry request be text do
-  ob name text manuscript uplift pass be equally from text false then
-  ob name text output to name manuscript uplift retry request be plus do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry second write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift verify retry second stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
-  ob name text manuscript uplift pass be equally from text false then
-  ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry third request begin stage ob text "SEGMENT:\n" to name text manuscript uplift retry request be text do
-  ob name text manuscript uplift pass be equally from text false then
-  ob name text output to name manuscript uplift retry request be plus do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift retry third write stage ob name manuscript uplift retry request fromtext name brief video script uplift retry prompt for name brief video script mind to name text output by num 0 atmost num 84 be write do
-  ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift verify retry third stage be verify as wo word count atleast num 24 atmost num 33 from name text output to name map manuscript uplift verify do
-  ob name text manuscript uplift pass be equally from text false then
-  ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-
+  fromindex num 1 toindex num 3 be manuscript uplift retry do
   ob name text manuscript uplift pass be equally from text false then
   su name manuscript uplift guarantee stage ob bool lie fromtext text "manuscript uplift word count defective" be guarantee do
   su name manuscript uplift return stage ob name text output be text do
+prah
+
+su name manuscript hook retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript hook pass be equally from text true then be depart do
+  su name manuscript hook retry request begin stage ob text "HOOK:\n" to name text manuscript hook retry request be text do
+  ob name text output to name manuscript hook retry request be plus do
+  su name manuscript hook retry write stage ob name manuscript hook retry request for name brief video script hook retry mind to name text output by num 0 atmost num 18 be write do
+  su name manuscript hook verify retry stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
+  ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
+  ob name text manuscript hook pass be equally from text true then be depart do
 prah
 
 su name manuscript hook checked to name text output be ceremony def
   su name manuscript hook write stage ob name text manuscript hook request fromtext name brief video script hook prompt for name brief video script hook mind to name text output by num 0 atmost num 18 be write do
   su name manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
   ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry request begin stage ob text "HOOK:\n" to name text manuscript hook retry request be text do
-  ob name text manuscript hook pass be equally from text false then
-  ob name text output to name manuscript hook retry request be plus do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry first write stage ob name manuscript hook retry request for name brief video script hook retry mind to name text output by num 0 atmost num 18 be write do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook verify retry first stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
-  ob name text manuscript hook pass be equally from text false then
-  ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry second request begin stage ob text "HOOK:\n" to name text manuscript hook retry request be text do
-  ob name text manuscript hook pass be equally from text false then
-  ob name text output to name manuscript hook retry request be plus do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry second write stage ob name manuscript hook retry request for name brief video script hook retry mind to name text output by num 0 atmost num 18 be write do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook verify retry second stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
-  ob name text manuscript hook pass be equally from text false then
-  ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry third request begin stage ob text "HOOK:\n" to name text manuscript hook retry request be text do
-  ob name text manuscript hook pass be equally from text false then
-  ob name text output to name manuscript hook retry request be plus do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook retry third write stage ob name manuscript hook retry request for name brief video script hook retry mind to name text output by num 0 atmost num 18 be write do
-  ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook verify retry third stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
-  ob name text manuscript hook pass be equally from text false then
-  ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-
+  fromindex num 1 toindex num 3 be manuscript hook retry do
   ob name text manuscript hook pass be equally from text false then
   su name manuscript hook guarantee stage ob bool lie fromtext text "manuscript hook word count defective" be guarantee do
   su name manuscript hook return stage ob name text output be text do
 prah
 
-su name brief manuscript from text manuscript to name text manuscript out be ceremony def
+su name manuscript source thrust checked to name map output be ceremony def
+  su name manuscript source thrust write stage ob name text manuscript source thrust request for name brief video script source thrust verify mind to name text manuscript source thrust review by num 0 atmost num 240 be write do
+  su name manuscript source thrust verdict tail stage ob name text manuscript source thrust review atmost num 1 to name text manuscript source thrust verdict line be line tail do
+  ob text "" to name text manuscript source thrust verdict be text do
+  ob text "false" to name text manuscript source thrust pass be text do
+  ob name text manuscript source thrust verdict line from text "/^\\s*PASS\\s*$/i" be resemble then
+  ob text "PASS" to name text manuscript source thrust verdict be text do
+  ob name text manuscript source thrust verdict line from text "/^\\s*PASS\\s*$/i" be resemble then
+  ob text "true" to name text manuscript source thrust pass be text do
+  ob name text manuscript source thrust verdict line from text "/^\\s*FAIL\\s*$/i" be resemble then
+  ob text "FAIL" to name text manuscript source thrust verdict be text do
+  ob name text manuscript source thrust verdict be equally from text "" then
+  su name manuscript source thrust verdict guarantee stage ob bool lie fromtext text "manuscript source thrust verdict defective" be guarantee do
+  su name output be map def
+    su name pass ob name text manuscript source thrust pass ya
+    su name verdict ob name text manuscript source thrust verdict ya
+    su name review ob name text manuscript source thrust review ya
+  prah
+  su name output ret
+prah
+
+su name manuscript total retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript total pass be equally from text true then be depart do
+  su name manuscript body retry stage ob name text manuscript body out for name brief video script body retry mind to name text manuscript body out by num 0 atmost num 180 be write do
+  su name manuscript out retry begin stage ob name text manuscript hook out to name text manuscript out be text do
+  su name manuscript out retry join stage ob text "\n\n" to name manuscript out be plus do
+  su name manuscript out retry body stage ob name text manuscript body out to name manuscript out be plus do
+  su name manuscript total retry verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
+  ob text of pass of manuscript total verify to name text manuscript total pass be text do
+  ob name text manuscript total pass be equally from text true then be depart do
+prah
+
+su name manuscript draft checked from text manuscript to name text manuscript out be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
 
   su name manuscript fact one request stage ob name text brief video script source to name text manuscript fact one request be text do
@@ -313,48 +314,39 @@ su name brief manuscript from text manuscript to name text manuscript out be cer
 
   su name manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
   ob text of pass of manuscript total verify to name text manuscript total pass be text do
-
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript body retry first stage ob name text manuscript body out for name brief video script body retry mind to name text manuscript body out by num 0 atmost num 180 be write do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry first begin stage ob name text manuscript hook out to name text manuscript out be text do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry first join stage ob text "\n\n" to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry first body stage ob name text manuscript body out to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript total retry first verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
-  ob name text manuscript total pass be equally from text false then
-  ob text of pass of manuscript total verify to name text manuscript total pass be text do
-
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript body retry second stage ob name text manuscript body out for name brief video script body retry mind to name text manuscript body out by num 0 atmost num 180 be write do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry second begin stage ob name text manuscript hook out to name text manuscript out be text do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry second join stage ob text "\n\n" to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry second body stage ob name text manuscript body out to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript total retry second verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
-  ob name text manuscript total pass be equally from text false then
-  ob text of pass of manuscript total verify to name text manuscript total pass be text do
-
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript body retry third stage ob name text manuscript body out for name brief video script body retry mind to name text manuscript body out by num 0 atmost num 180 be write do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry third begin stage ob name text manuscript hook out to name text manuscript out be text do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry third join stage ob text "\n\n" to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript out retry third body stage ob name text manuscript body out to name manuscript out be plus do
-  ob name text manuscript total pass be equally from text false then
-  su name manuscript total retry third verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
-  ob name text manuscript total pass be equally from text false then
-  ob text of pass of manuscript total verify to name text manuscript total pass be text do
-
+  fromindex num 1 toindex num 3 be manuscript total retry do
   ob name text manuscript total pass be equally from text false then
   su name manuscript total guarantee stage ob bool lie fromtext text "manuscript total word count defective" be guarantee do
+
+  su name manuscript out ret
+prah
+
+su name manuscript source thrust from text transcript with text script to name map output be ceremony def
+  su name manuscript source thrust request begin stage ob text "TRANSCRIPT:\n" to name text manuscript source thrust request be text do
+  su name manuscript source thrust request source stage ob text of ob of from of this to name manuscript source thrust request be plus do
+  su name manuscript source thrust request script header stage ob text "\n\nSCRIPT:\n" to name manuscript source thrust request be plus do
+  su name manuscript source thrust request script stage ob text of ob of with of this to name manuscript source thrust request be plus do
+  su name output stage to name map output be manuscript source thrust checked do
+  su name output ret
+prah
+
+su name manuscript source thrust retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript source thrust pass be equally from text true then be depart do
+  su name manuscript draft retry stage from text of ob of brief video script source to name text manuscript out be manuscript draft checked do
+  su name manuscript source thrust verify retry stage from text of ob of brief video script source with text of ob of manuscript out to name map manuscript source thrust verify be manuscript source thrust do
+  ob text of pass of manuscript source thrust verify to name text manuscript source thrust pass be text do
+  ob name text manuscript source thrust pass be equally from text true then be depart do
+prah
+
+su name brief manuscript from text manuscript to name text manuscript out be ceremony def
+  su name script source stage ob text of from of this to name text brief video script source be text do
+
+  su name manuscript draft stage from text of ob of brief video script source to name text manuscript out be manuscript draft checked do
+  su name manuscript source thrust verify stage from text of ob of brief video script source with text of ob of manuscript out to name map manuscript source thrust verify be manuscript source thrust do
+  ob text of pass of manuscript source thrust verify to name text manuscript source thrust pass be text do
+  fromindex num 1 toindex num 3 be manuscript source thrust retry do
+  ob name text manuscript source thrust pass be equally from text false then
+  su name manuscript source thrust guarantee stage ob bool lie fromtext text "manuscript source thrust defective" be guarantee do
 
   su name manuscript out ret
 prah
