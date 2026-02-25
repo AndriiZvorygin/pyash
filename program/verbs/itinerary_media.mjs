@@ -7,7 +7,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { allRemember, remember } from "../remember/index.mjs";
 import { resolveAgentPath } from "../library/agent_cwd.mjs";
 import { state } from "../bridge/state.mjs";
-import { parseSrtToCuts, parseItineraryPya } from "../../command/itinerary_io.mjs";
+import { parseSrtToCuts, parseItineraryPya, renderItineraryPya } from "../../command/itinerary_io.mjs";
 import { outputPathForCut, promptFromCut, runDraw } from "../../command/itinerary_to_draw_images.mjs";
 import { buildTimelineItems, createConcatListFile, findImageForCut, getAudioDurationSeconds, runFfmpeg } from "../../command/itinerary_to_video.mjs";
 import { callPromptMind, buildPromptifyPacket } from "../../command/itinerary_promptify.mjs";
@@ -155,15 +155,6 @@ async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
     });
   }
 
-  const seriesCuts = itineraryCutsFromSeriesFact(fact);
-  if (seriesCuts.length) return seriesCuts;
-
-  const inlineText = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
-  if (inlineText.trim()) {
-    const parsed = parseItineraryPya(inlineText);
-    return parsed.cuts;
-  }
-
   const filename = typeof fact?.ob?.filename === "string" ? fact.ob.filename : "";
   if (filename.trim()) {
     const { resolved, outside, agentCwd } = resolveAgentPath(filename, { rememberFn });
@@ -175,8 +166,21 @@ async function resolveItineraryCuts(fromCase, { rememberFn = remember } = {}) {
         raw: { filename }
       });
     }
-    const text = await fs.readFile(resolved, "utf8");
-    const parsed = parseItineraryPya(text);
+    try {
+      const text = await fs.readFile(resolved, "utf8");
+      const parsed = parseItineraryPya(text);
+      return parsed.cuts;
+    } catch {
+      // fall through to inline or series payload when persisted locator is unavailable
+    }
+  }
+
+  const seriesCuts = itineraryCutsFromSeriesFact(fact);
+  if (seriesCuts.length) return seriesCuts;
+
+  const inlineText = typeof fact?.ob?.text === "string" ? fact.ob.text : "";
+  if (inlineText.trim()) {
+    const parsed = parseItineraryPya(inlineText);
     return parsed.cuts;
   }
 
@@ -956,7 +960,49 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
       be: "promptify"
     });
   }
-  return { ob: { series }, be: "itinerary" };
+
+  const outputHandle = platformOutputHandleName(sentence, "promptify");
+  const outputPrefix = normalizePlatformHandleToPrefix(outputHandle, "promptify");
+  const runId = String(getExchangeRunId?.() ?? "").trim();
+  const outputFile = runId
+    ? path.join("artifacts", runId, `${outputPrefix}.series.pya`)
+    : path.join("artifacts", "promptify", buildRunTag(), `${outputPrefix}.series.pya`);
+  const outputResolved = resolveAgentPath(outputFile, { rememberFn });
+  if (outputResolved.outside) {
+    throwErrorSentence({
+      name: "promptify defective",
+      message: `promptify defective: outside agent cwd (${outputResolved.agentCwd})`,
+      from: { name: "promptify" },
+      raw: { sentence }
+    });
+  }
+  await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
+  const itineraryText = renderItineraryPya({
+    itineraryName: targetName || "draw prompts",
+    cuts: series.map((row, i) => ({
+      index: Number(row?.by?.num ?? (i + 1)),
+      name: String(row?.su?.name ?? `cut ${String(i + 1).padStart(3, "0")}`),
+      since: Number(row?.since?.num ?? 0),
+      until: Number(row?.until?.num ?? row?.since?.num ?? 0),
+      obText: String(row?.ob?.text ?? "")
+    }))
+  });
+  await fs.writeFile(outputResolved.resolved, itineraryText, "utf8");
+  const itineraryBytes = await fs.readFile(outputResolved.resolved);
+  const itineraryArtifact = recordArtifact({
+    locator: outputResolved.resolved,
+    producer: String(sentence?.su?.name ?? "promptify"),
+    bytes: itineraryBytes,
+    kind: "series"
+  });
+  emitExchangeSentence({
+    mood: "ya",
+    su: { name: "promptify itinerary manifest" },
+    ob: { filename: outputResolved.resolved },
+    be: "artifact",
+    accordingto: itineraryArtifact?.su?.name ? { name: itineraryArtifact.su.name } : undefined
+  });
+  return { ob: { series, filename: outputResolved.resolved }, be: "itinerary" };
 }
 
 export async function concatenateFromNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
