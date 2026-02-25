@@ -327,12 +327,13 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
+  su name section audio input stage ob filename of this to name filename section audio input be filename do
 
   su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
 
-  su name section hear stage from filename of ob of this become wo srt to filename of ob of section srt be hear do
+  su name section hear stage from filename of ob of section audio input stage become wo srt to filename of ob of section srt be hear do
   su name section srt output stage ob filename of ob of section hear stage be filename do
   su name section srt output stage ret
 prah
@@ -341,6 +342,7 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
+  su name section srt input stage ob filename of this to name filename section srt input be filename do
 
   su name section draw directory path stage ob name text section root to name text section draw directory path be text do
   ob text "/draw" to name section draw directory path be plus do
@@ -350,7 +352,7 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   ob text "/section.mp4" to name section video path be plus do
   su name section video stage ob name text section video path to name filename section video be filename do
 
-  su name section cut stage from filename of ob of this during num of ob of teaching video section window seconds to name itinerary section cuts by num of ob of section index stage be cut do
+  su name section cut stage from filename of ob of section srt input stage during num of ob of teaching video section window seconds to name itinerary section cuts by num of ob of section index stage be cut do
 
   su name section prompt stage from name itinerary section cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary section draw prompts by num of ob of section index stage be promptify do
 
@@ -366,6 +368,7 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
+  su name section video input stage ob filename of this to name filename section video input be filename do
 
   su name section srt path stage ob name text section root to name text section srt path be text do
   ob text "/captions.srt" to name section srt path be plus do
@@ -378,9 +381,9 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
-  ob text of ob of footnote mode stage be equally from text "karaoke" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob text of ob of footnote mode stage be equally from text "plain" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip by num of ob of subtitle margin ratio stage be footnote do
-  ob text of ob of footnote mode stage be equally from text "wordflow" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of this become wo video to filename of ob of section clip as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "karaoke" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "plain" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "wordflow" then su name section footnote stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
 
   su name section clip output stage ob filename of ob of section footnote stage be filename do
   su name section clip output stage ret
