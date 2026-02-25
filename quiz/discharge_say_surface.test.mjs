@@ -23,8 +23,9 @@ test("discharge as wo say frees comfyui when say backend is comfyui", async () =
   try {
     const out = await interpret(parse("be discharge as wo say do"));
     assert.equal(out?.value?.boolean, true);
-    assert.equal(calls.length, 1);
-    assert.ok(calls[0].url.endsWith("/free"));
+    assert.ok(calls.some(call => call.url.endsWith("/free")));
+    assert.ok(calls.some(call => call.url.endsWith("/interrupt")));
+    assert.ok(calls.some(call => call.url.endsWith("/queue")));
   } finally {
     globalThis.fetch = originalFetch;
     forget();
