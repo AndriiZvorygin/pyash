@@ -44,6 +44,20 @@ next_cut: [[next_cut]]
 full_script: [[full_script]]
 previous_prompt_1: [[previous_prompt_1]]
 previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
+exists su name qwen say tone promptify instruction ob text quoted.text.Return exactly one single-line speaking direction sentence for TTS.
+
+Required shape:
+Tone words, pace phrase, articulation phrase, pause phrase, emphasis phrase.
+
+Rules:
+1. One line only, plain text.
+2. No labels, bullets, code fences, or extra commentary.
+3. Do not mention instruction/current_cut/previous_cut/full_script field names.
+4. Keep it under 22 words.
+5. Prefer warm teacher style unless urgency is explicit.
+
+Example output (single line):
+Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis..text.quoted be text ya
 
 exists su name thumbnail system prompt ob text quoted.text.You are a YouTube Shorts thumbnail prompt director.
 

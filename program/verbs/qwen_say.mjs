@@ -65,7 +65,7 @@ function resolveTonePromptifySystem({ rememberFn = remember } = {}) {
 function resolveTonePromptifyInstruction({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("qwen say tone promptify instruction", { rememberFn }) ||
-    "Pick one natural speaking direction under 20 words. Tone options: friendly teacher professional narrator conversational authoritative reflective. Emotion options: neutral warm calm enthusiastic serious inspiring concerned. Energy options: low medium high. Pace options: slow moderate slightly fast. Emphasis options: none key words numbers contrast. Pause options: none brief pauses after key terms pause before conclusion micro pauses between clauses. Prefer clarity and warmth unless urgency appears. Avoid repeating reflective tone across adjacent cuts. Use reflective only for retrospective or lesson summary lines. No labels. No bullets."
+    "Return exactly one single-line speaking direction sentence for TTS. Required shape: tone words, pace phrase, articulation phrase, pause phrase, emphasis phrase. Rules: one line only, plain text, no labels or bullets, under 22 words, warm teacher style unless urgency is explicit. Example output (single line): Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis."
   );
 }
 
@@ -274,7 +274,7 @@ async function promptifyToneInstructs(
       mood: "do",
       su: { name: `qwen say tone request ${String(index).padStart(3, "0")}` },
       ob: { text: packet },
-      fromtext: { text: systemPrompt },
+      fromtext: { text: instruction },
       fromstate: { text: host },
       as: { text: model },
       by: { num: index },
