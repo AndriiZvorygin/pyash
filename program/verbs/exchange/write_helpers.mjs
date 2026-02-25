@@ -138,6 +138,16 @@ function systemdTextFromMapName(name, { rememberFn } = {}) {
   return emitSystemdIniFromSections(sections);
 }
 
+function seriesSentenceToPyash(fact = {}) {
+  const name = String(fact?.su?.name ?? "").trim();
+  const entries = Array.isArray(fact?.ob?.series) ? fact.ob.series : [];
+  if (!name || entries.length === 0) return sentenceToPyash(fact);
+  const lines = [`su name ${name} be series def`];
+  for (const entry of entries) lines.push(sentenceToPyash(entry));
+  lines.push("prah");
+  return lines.join("\n");
+}
+
 function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
   if (format === "yaml") {
     const textValue = typeof ob.text === "string"
@@ -177,6 +187,9 @@ function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
   }
   if (ob.name && rememberFn) {
     const fact = rememberFn(ob.name);
+    if (fact?.be === "series" && Array.isArray(fact?.ob?.series)) {
+      return seriesSentenceToPyash(fact);
+    }
     if (fact?.be === "json map" || fact?.be === "map" || fact?.be === "csv map") {
       if (fact.be === "json map" && format === "yaml") {
         const json = jsonObjectFromMapSentence(fact, { remember: rememberFn, seen: new Set(), sourceName: "write", allowHollowVector: true });
