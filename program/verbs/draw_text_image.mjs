@@ -7,7 +7,6 @@ import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { recordArtifact } from "../bridge/exchange.mjs";
-import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { getExchangeRunId } from "../bridge/exchange.mjs";
 
 function resolvePromptPart(value, { rememberFn = remember } = {}) {
@@ -106,7 +105,6 @@ async function runDraw({ prompt, workflowName, host, output, width = null, heigh
 }
 
 export async function drawTextImage(sentence, { remember: rememberFn = remember } = {}) {
-  await enforceAutoDischarge({ activatingClass: "draw", rememberFn });
   const systemPrompt = resolvePromptPart(sentence?.fromtext, { rememberFn });
   const userPrompt = resolvePromptPart(sentence?.ob, { rememberFn });
   const prompt = combinePrompt({ systemPrompt, userPrompt });

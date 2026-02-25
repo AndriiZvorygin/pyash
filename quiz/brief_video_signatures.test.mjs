@@ -161,6 +161,18 @@ test("teaching video writes footnote stage manifest and scrubs missing footnote 
   );
 });
 
+test("teaching video thumbnail comes from section draw output (no extra thumbnail mind prompt)", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /section video series stage[\s\S]*thumbnail section root stage[\s\S]*\/draw\/section-draw-stage-cut-001\.png[\s\S]*thumbnail heading stage/u
+  );
+  assert.doesNotMatch(
+    source,
+    /teaching video from text manuscript[\s\S]*brief video internal thumbnail mind/u
+  );
+});
+
 test("section mappers normalize current item to filename before media verbs", async () => {
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(

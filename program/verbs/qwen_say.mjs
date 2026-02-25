@@ -10,7 +10,6 @@ import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
-import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 import { buildPromptifyPacket, callPromptMind } from "../../command/itinerary_promptify.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
@@ -50,6 +49,7 @@ function resolveTonePromptifyHost({ rememberFn = remember } = {}) {
 function resolveTonePromptifyModel({ rememberFn = remember } = {}) {
   return (
     resolveConfigText("qwen say tone model", { rememberFn }) ||
+    resolveConfigText("mind model", { rememberFn }) ||
     process.env.PYA_MIND_MODEL ||
     "qwen3-vl:8b-instruct"
   );
@@ -476,9 +476,6 @@ export async function qwenSay(
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   let postProcessApplied = false;
-
-  // Discharge right before synthesis so tone promptify can reuse a warm mind model.
-  await enforceAutoDischarge({ activatingClass: "qwen say", rememberFn });
 
   if (chunks.length <= 1) {
     await runSayFn({

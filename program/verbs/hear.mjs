@@ -16,7 +16,6 @@ import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStream
 import { handleHearStream } from "./hear/run_stream.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
-import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -283,7 +282,6 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
         });
       }
       if (wantsSrt) {
-        await enforceAutoDischarge({ activatingClass: "hear", rememberFn });
         const host = resolveHearHost({ rememberFn });
         const whisperxModel = resolveHearWhisperxModel({ rememberFn });
         const language = resolveHearLanguage({ rememberFn });

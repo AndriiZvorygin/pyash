@@ -13,7 +13,7 @@ function parseArgs(argv) {
   const out = {
     inputFile: args[0],
     outputFile: args[1],
-    model: process.env.PYA_DRAW_PROMPT_MODEL || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct",
+    model: process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct",
     host: process.env.OLLAMA_HOST || "http://localhost:11434",
     systemPrompt: "Use the provided fields to generate one image prompt. Follow instruction exactly and return only prompt text."
   };

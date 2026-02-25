@@ -3,6 +3,12 @@ import dns from "node:dns";
 import { spawn, spawnSync } from "node:child_process";
 import { attachImagesToMessages } from "./ollama_image_payload.mjs";
 
+function requestTimeoutMs() {
+  const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
+  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+  return 30000;
+}
+
 function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
@@ -62,7 +68,7 @@ async function requestJson(endpoint, body) {
   let res;
   const payload = JSON.stringify(body);
   const controller = new AbortController();
-  let timeout = setTimeout(() => controller.abort(), 3000);
+  let timeout = setTimeout(() => controller.abort(), requestTimeoutMs());
   try {
     res = await fetch(endpoint, {
       method: "POST",
@@ -76,7 +82,7 @@ async function requestJson(endpoint, body) {
     if (fallback) {
       try {
         const retryController = new AbortController();
-        timeout = setTimeout(() => retryController.abort(), 3000);
+        timeout = setTimeout(() => retryController.abort(), requestTimeoutMs());
         res = await fetch(fallback, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -114,7 +120,7 @@ async function requestStream(endpoint, body) {
   let res;
   const payload = JSON.stringify(body);
   const controller = new AbortController();
-  let timeout = setTimeout(() => controller.abort(), 3000);
+  let timeout = setTimeout(() => controller.abort(), requestTimeoutMs());
   try {
     res = await fetch(endpoint, {
       method: "POST",
@@ -128,7 +134,7 @@ async function requestStream(endpoint, body) {
     if (fallback) {
       try {
         const retryController = new AbortController();
-        timeout = setTimeout(() => retryController.abort(), 3000);
+        timeout = setTimeout(() => retryController.abort(), requestTimeoutMs());
         res = await fetch(fallback, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

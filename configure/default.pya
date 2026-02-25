@@ -35,6 +35,7 @@ exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" b
 exists su name see default prompter ob la be see ko ob text "Describe the image." be default ya
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name draw host ob text "http://localhost:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya
@@ -50,9 +51,9 @@ exists su name qwen say post process filter ob text "highpass=f=60,acompressor=t
 exists su name draw backend default ob text "comfyui" be default ya
 exists su name draw workflow root ob filename "./draw/" be default ya
 exists su name draw workflow default ob text "Z-Image-TSV" be default ya
-exists su name provider auto discharge ob bool truth be default ya
+exists su name provider auto discharge ob bool lie be default ya
 exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" "qwen say" be default ya
-exists su name provider auto discharge settle ms ob num 1200 be default ya
+exists su name provider auto discharge settle ms ob num 3000 be default ya
 exists su name newspaper enabled ob bool truth be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
