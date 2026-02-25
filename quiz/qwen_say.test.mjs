@@ -429,3 +429,50 @@ test("qwenSay falls back to heuristic instructs when planner returns empty", asy
     await fs.rm(outDir, { recursive: true, force: true });
   }
 });
+
+test("qwenSay uses tone manifest instructs from from filename", async () => {
+  forget();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say post process" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "qwen say tone strategy" }, ob: { text: "heuristic" }, be: "default" });
+  const outDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-qwen-tone-manifest-out-"));
+  const output = path.join(outDir, "out.wav");
+  const manifest = path.join(outDir, "section-tone-prompts.series.pya");
+  await fs.writeFile(
+    manifest,
+    [
+      "su name section tone prompts be series def",
+      "su name cut 001 since num 0.000 until num 1.000 ob text \"Warm teacher, moderate pace, crisp articulation, brief pauses, gentle emphasis.\" ya",
+      "su name cut 002 since num 1.000 until num 2.000 ob text \"Serious teacher, steady pace, clear articulation, brief pauses, stronger emphasis on warning terms.\" ya",
+      "prah",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  const seenInstructs = [];
+  const runSayFn = async ({ instruct, output: chunkFile }) => {
+    seenInstructs.push(String(instruct ?? ""));
+    await fs.writeFile(chunkFile, Buffer.from("RIFF_tone_manifest"));
+  };
+  const concatAudioFn = async ({ output: outFile }) => {
+    await fs.writeFile(outFile, Buffer.from("RIFF_tone_manifest_concat"));
+  };
+  try {
+    await qwenSay(
+      {
+        mood: "do",
+        be: "qwen say",
+        su: { name: "voice" },
+        from: { filename: manifest },
+        ob: { text: "Sentence one. Sentence two." },
+        to: { filename: output }
+      },
+      { runSayFn, concatAudioFn }
+    );
+    assert.equal(seenInstructs.length, 2);
+    assert.match(seenInstructs[0], /Warm teacher/u);
+    assert.match(seenInstructs[1], /Serious teacher/u);
+  } finally {
+    await fs.rm(outDir, { recursive: true, force: true });
+  }
+});

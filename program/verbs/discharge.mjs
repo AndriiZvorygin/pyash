@@ -89,12 +89,13 @@ export async function discharge(sentence, { remember: rememberFn = remember } = 
     };
   }
   if (dischargeType === "hear") {
-    await dischargeHearBackend({ rememberFn });
+    const result = await dischargeHearBackend({ rememberFn });
     return {
       mood: "ya",
       be: "discharge",
       as: { wo: "hear" },
-      ob: { boolean: true }
+      from: { name: result?.backend || "hear" },
+      ob: { boolean: Boolean(result?.discharged) }
     };
   }
   if (dischargeType === "say") {

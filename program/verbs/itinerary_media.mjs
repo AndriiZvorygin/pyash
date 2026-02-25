@@ -111,6 +111,18 @@ function splitTextParagraphs(text = "") {
     .filter(Boolean);
 }
 
+function splitTextSentences(text = "") {
+  const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
+  if (!source) return [];
+  const normalized = source.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  const matches = normalized.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
+  const sentences = (matches ?? [normalized])
+    .map((entry) => String(entry ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  return sentences;
+}
+
 function itinerarySuffixFromSentence(sentence = {}) {
   const raw = Number(sentence?.by?.num);
   if (!Number.isFinite(raw) || raw <= 0) return "";
@@ -892,7 +904,8 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
       raw: { sentence }
     });
   }
-  const sections = splitTextParagraphs(sourceText);
+  const mode = String(sentence?.as?.text ?? "").trim().toLowerCase();
+  const sections = mode === "sentence" ? splitTextSentences(sourceText) : splitTextParagraphs(sourceText);
   if (!sections.length) {
     throwErrorSentence({
       name: "itinerary defective",
@@ -1412,6 +1425,16 @@ export const signatures = [
   { signatureWords: ["be", "cut", "from", "name", "filename", "to", "name", "itinerary"], handler: cutFromNameFilenameToNameItinerary },
   { signatureWords: ["be", "cut", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
   { signatureWords: ["be", "cut", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "by", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "by", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "from", "name", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "by", "num", "from", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "as", "text", "by", "num", "from", "name", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "by", "num", "from", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
+  { signatureWords: ["be", "cut", "by", "num", "from", "name", "text", "as", "text", "to", "name", "itinerary"], handler: cutFromTextToNameItinerary },
 
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawFromNameItinerary },
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "from", "name", "itinerary", "fromstate", "wo", "text", "ob", "text", "to", "filename", "with", "name", "map"], handler: drawFromNameItinerary },

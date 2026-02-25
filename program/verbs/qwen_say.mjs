@@ -10,6 +10,7 @@ import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { parseItineraryPya } from "../../command/itinerary_io.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
   return (
@@ -76,6 +77,27 @@ async function pathExists(filename) {
     return true;
   } catch {
     return false;
+  }
+}
+
+function resolveFilenameFromCase(value = {}, rememberFn = remember) {
+  if (typeof value?.filename === "string" && value.filename.trim()) return value.filename.trim();
+  const fromName = String(value?.name ?? "").trim();
+  if (!fromName) return "";
+  const fact = rememberFn?.(fromName);
+  return String(fact?.ob?.filename ?? "").trim();
+}
+
+async function resolveToneManifestInstructs(sentence, { rememberFn = remember } = {}) {
+  const filename = resolveFilenameFromCase(sentence?.from, rememberFn);
+  if (!filename) return [];
+  try {
+    const text = await fs.readFile(filename, "utf8");
+    const parsed = parseItineraryPya(text);
+    const cuts = Array.isArray(parsed?.cuts) ? parsed.cuts : [];
+    return cuts.map((cut) => String(cut?.obText ?? "").trim()).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
@@ -353,17 +375,32 @@ export async function qwenSay(
   const { workflowName, workflowRoot, toneDefault, toneOverride } = await resolveWorkflowAndTone(sentence, { rememberFn, pathExistsFn });
   const host = resolveHost({ rememberFn });
   const toneStrategy = resolveToneStrategy({ rememberFn });
-  const chunks = splitQwenSayTextChunks(text);
-  const tonePlan = await planChunkInstructsFn(chunks, {
-    rememberFn,
-    toneOverride,
-    toneDefault,
-    toneStrategy
-  });
-  const chunkInstructs = Array.isArray(tonePlan?.instructs) && tonePlan.instructs.length === chunks.length
-    ? tonePlan.instructs
-    : resolveChunkInstructs(chunks, { toneDefault, toneOverride });
-  const toneStrategyResolved = String(tonePlan?.strategy ?? "").trim() || (toneOverride ? "override" : toneStrategy);
+  const manifestInstructs = await resolveToneManifestInstructs(sentence, { rememberFn });
+  const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks: manifestInstructs.length > 0 });
+  let chunkInstructs = [];
+  let toneStrategyResolved = "";
+  if (String(toneOverride ?? "").trim()) {
+    chunkInstructs = chunks.map(() => String(toneOverride).trim());
+    toneStrategyResolved = "override";
+  } else if (manifestInstructs.length > 0) {
+    chunkInstructs = chunks.map((chunk, i) => {
+      const fromManifest = normalizeToneInstruction(manifestInstructs[i] ?? "", toneDefault);
+      if (fromManifest) return fromManifest;
+      return inferChunkTone(chunk, toneDefault);
+    });
+    toneStrategyResolved = manifestInstructs.length === chunks.length ? "manifest" : "manifest-fallback";
+  } else {
+    const tonePlan = await planChunkInstructsFn(chunks, {
+      rememberFn,
+      toneOverride,
+      toneDefault,
+      toneStrategy
+    });
+    chunkInstructs = Array.isArray(tonePlan?.instructs) && tonePlan.instructs.length === chunks.length
+      ? tonePlan.instructs
+      : resolveChunkInstructs(chunks, { toneDefault, toneOverride });
+    toneStrategyResolved = String(tonePlan?.strategy ?? "").trim() || toneStrategy;
+  }
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   let postProcessApplied = false;
@@ -490,8 +527,12 @@ export const signatures = [
   { signatureWords: ["be", "qwen say", "ob", "name", "hollow", "to", "filename"], handler: qwenSay },
   { signatureWords: ["be", "qwen say", "ob", "name", "vec", "to", "filename"], handler: qwenSay },
   { signatureWords: ["be", "qwen say", "ob", "vec", "to", "filename"], handler: qwenSay },
+  { signatureWords: ["be", "qwen say", "from", "filename", "ob", "text", "to", "filename"], handler: qwenSay },
+  { signatureWords: ["be", "qwen say", "from", "filename", "ob", "name", "text", "to", "filename"], handler: qwenSay },
   { signatureWords: ["be", "qwen say", "as", "text", "ob", "text"], handler: qwenSay },
   { signatureWords: ["be", "qwen say", "as", "text", "ob", "name", "text"], handler: qwenSay },
   { signatureWords: ["be", "qwen say", "as", "text", "ob", "text", "to", "filename"], handler: qwenSay },
-  { signatureWords: ["be", "qwen say", "as", "text", "ob", "name", "text", "to", "filename"], handler: qwenSay }
+  { signatureWords: ["be", "qwen say", "as", "text", "ob", "name", "text", "to", "filename"], handler: qwenSay },
+  { signatureWords: ["be", "qwen say", "from", "filename", "as", "text", "ob", "text", "to", "filename"], handler: qwenSay },
+  { signatureWords: ["be", "qwen say", "from", "filename", "as", "text", "ob", "name", "text", "to", "filename"], handler: qwenSay }
 ];
