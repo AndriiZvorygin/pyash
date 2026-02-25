@@ -42,8 +42,8 @@ exists su name say workflow root ob filename "./say/" be default ya
 exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
 exists su name qwen say tone default ob text "speak as a compassionate teacher" be default ya
 exists su name qwen say tone strategy ob text "heuristic" be default ya
-exists su name qwen say tone promptify system prompt ob text "You are a narration tone planner for text to speech. Return only one short speaking instruction for the current sentence." be default ya
-exists su name qwen say tone promptify instruction ob text "Choose the best speaking instruction for this sentence. Return only concise tone text like: professional tone, urgent tone, reflective tone, warm encouraging tone." be default ya
+exists su name qwen say tone promptify system prompt ob text "You are a voice director for a text to speech teaching video. Return only one speaking direction line for Qwen3 instructions." be default ya
+exists su name qwen say tone promptify instruction ob text "Pick one natural speaking direction under 20 words. Tone options: friendly teacher professional narrator conversational authoritative reflective. Emotion options: neutral warm calm enthusiastic serious inspiring concerned. Energy options: low medium high. Pace options: slow moderate slightly fast. Emphasis options: none key words numbers contrast. Pause options: none brief pauses after key terms pause before conclusion micro pauses between clauses. Prefer clarity and warmth unless urgency appears. Avoid repeating reflective tone across adjacent cuts. Use reflective only for retrospective or lesson summary lines. No labels. No bullets." be default ya
 exists su name qwen say post process ob bool truth be default ya
 exists su name qwen say post process filter ob text "highpass=f=60,acompressor=threshold=-20dB:ratio=3,alimiter=limit=-2dB" be default ya
 exists su name draw backend default ob text "comfyui" be default ya
