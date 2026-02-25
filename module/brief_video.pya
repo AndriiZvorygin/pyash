@@ -173,8 +173,9 @@ su name current video heading y ratio to name num video heading y ratio be cerem
 prah
 
 su name current subtitle margin ratio to name num subtitle margin ratio be ceremony def
-  ob name text draw widescreen mode be equally from text "truth" then ob num of subtitle_margin_ratio of draw size widescreen to name num subtitle margin ratio be plus do
-  ob name text draw widescreen mode be equally from text "lie" then ob num of subtitle_margin_ratio of draw size shorts to name num subtitle margin ratio be plus do
+  ob num of subtitle margin ratio override to name num subtitle margin ratio be plus do
+  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "truth" then ob num of subtitle_margin_ratio of draw size widescreen to name num subtitle margin ratio be plus do
+  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "lie" then ob num of subtitle_margin_ratio of draw size shorts to name num subtitle margin ratio be plus do
   su name subtitle margin ratio ret
 prah
 
