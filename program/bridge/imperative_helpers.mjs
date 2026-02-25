@@ -1,5 +1,9 @@
 import { throwErrorSentence } from "../error.mjs";
 
+function looksObjectMarker(value) {
+  return String(value ?? "").trim() === "[object Object]";
+}
+
 export function resolveInlineGenitive(genitive, state) {
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
   if (chainArr.length === 0) return undefined;
@@ -87,9 +91,25 @@ export function applyResolvedTypedValue(value, tail, resolved) {
   if (resolved === null || resolved === undefined) return false;
   switch (tail) {
     case "text":
+      if (looksObjectMarker(resolved)) {
+        throwErrorSentence({
+          name: "typed genitive defective",
+          message: "typed genitive defective: resolved to [object Object]",
+          from: { name: "interpret" },
+          raw: { tail, resolved }
+        });
+      }
       value.text = String(resolved);
       return true;
     case "filename":
+      if (looksObjectMarker(resolved)) {
+        throwErrorSentence({
+          name: "typed genitive defective",
+          message: "typed genitive defective: resolved filename to [object Object]",
+          from: { name: "interpret" },
+          raw: { tail, resolved }
+        });
+      }
       value.filename = String(resolved);
       return true;
     case "bool":

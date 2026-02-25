@@ -20,3 +20,12 @@ test("resolve genitive for from/to filename in io cases", async () => {
   assert.equal(written, "hello");
   assert.equal(commandResult?.value?.text, "hello");
 });
+
+test("genitive io fails fast when filename resolves to object marker", async () => {
+  forget();
+  await run("exists su name bad path ob name bogus ya");
+  await assert.rejects(
+    async () => run("ob text \"hello\" to filename of ob of bad path be write do"),
+    /resolved filename to \[object Object\]/u
+  );
+});
