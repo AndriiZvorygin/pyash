@@ -93,21 +93,26 @@ function pushReleased(released = [], name = "") {
 
 async function releaseQwenSay({ classes = [], rememberFn, released = [] } = {}) {
   if (!classes.includes("qwen say")) return false;
+  let releasedAny = false;
   try {
     const qwenSay = await dischargeQwenSayBackend({ rememberFn });
     if (qwenSay?.discharged) {
-      pushReleased(released, "qwen say");
-      return true;
+      releasedAny = true;
     }
   } catch {
-    // fallback to draw-style discharge for comfyui-backed qwen say paths
-    try {
-      await dischargeDrawBackend({ rememberFn });
-      pushReleased(released, "qwen say");
-      return true;
-    } catch {
-      // best-effort release
-    }
+    // best-effort release
+  }
+  // Also release draw host explicitly because some qwen say workflows share the
+  // same comfy runtime even when qwen-specific host settings diverge.
+  try {
+    await dischargeDrawBackend({ rememberFn });
+    releasedAny = true;
+  } catch {
+    // best-effort release
+  }
+  if (releasedAny) {
+    pushReleased(released, "qwen say");
+    return true;
   }
   return false;
 }

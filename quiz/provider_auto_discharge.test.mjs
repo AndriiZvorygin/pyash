@@ -245,6 +245,7 @@ test("auto discharge hear unloads qwen say backend host", async () => {
     assert.equal(result.changed, true);
     assert.ok(result.released.includes("qwen say"));
     assert.ok(calls.some(line => line.includes("POST http://qwen-say.local:8188/free")));
+    assert.ok(calls.some(line => line.includes("POST http://draw.local:8188/free")));
   } finally {
     globalThis.fetch = priorFetch;
   }
