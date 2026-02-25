@@ -358,6 +358,10 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section srt input stage ob filename of ob of this to name filename section srt input be filename do
 
+  su name section audio path stage ob name text section root to name text section audio path be text do
+  ob text "/audio.wav" to name section audio path be plus do
+  su name video cuts audio filename ob name text section audio path be text do
+
   su name section draw directory path stage ob name text section root to name text section draw directory path be text do
   ob text "/draw" to name section draw directory path be plus do
   su name section draw directory stage ob name text section draw directory path to name filename section draw directory be filename do
