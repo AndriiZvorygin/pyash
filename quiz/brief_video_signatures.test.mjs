@@ -112,3 +112,27 @@ test("layout helpers expose widescreen karaoke and shorts wordflow map values", 
   assert.equal(String(tallMode?.result?.text), "wordflow");
   assert.equal(Number(tallMargin?.result?.num), 0.1);
 });
+
+test("footnote branch compares direct stage text value", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.match(
+    source,
+    /ob text of ob of footnote mode stage be equally from text "karaoke"/u
+  );
+  assert.match(
+    source,
+    /ob text of ob of footnote mode stage be equally from text "wordflow"/u
+  );
+});
+
+test("teaching video branch conditions stay single-line to avoid double execution", async () => {
+  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  assert.doesNotMatch(
+    source,
+    /be equally from text "karaoke" then\s*\n\s*su name (?:footnote|section footnote) platform/u
+  );
+  assert.doesNotMatch(
+    source,
+    /be equally from text "" then\s*\n\s*ob text "manual"/u
+  );
+});
