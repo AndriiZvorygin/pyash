@@ -171,7 +171,9 @@ export async function main(argv = process.argv) {
   const fontSize = Math.floor(clamp(Math.min(baseSize, widthBound), height * 0.032, height * 0.072));
   const borderW = Math.max(2, Math.round(fontSize * 0.11));
   const shadow = Math.max(1, Math.round(fontSize * 0.03));
-  const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h/2)`;
+  // Treat y-ratio as the lower anchor of the heading block so 0.60 sits
+  // meaningfully above subtitle lanes instead of centering through them.
+  const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h)`;
   const enableExpr = `lt(t\\,${Number(opts.seconds).toFixed(3)})`;
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-heading-"));

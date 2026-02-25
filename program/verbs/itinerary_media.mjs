@@ -117,9 +117,12 @@ function splitTextSentences(text = "") {
   if (!source) return [];
   const normalized = source.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
   if (!normalized) return [];
-  const matches = normalized.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
-  const sentences = (matches ?? [normalized])
-    .map((entry) => String(entry ?? "").replace(/\s+/g, " ").trim())
+  const protectedRefs = normalized
+    .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
+    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
+  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
+  const sentences = (matches ?? [protectedRefs])
+    .map((entry) => String(entry ?? "").replace(/§/g, ".").replace(/\s+/g, " ").trim())
     .filter(Boolean);
   return sentences;
 }

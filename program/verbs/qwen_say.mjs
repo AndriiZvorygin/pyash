@@ -150,8 +150,13 @@ function countWords(text = "") {
 function splitSentences(paragraph = "") {
   const normalized = String(paragraph ?? "").replace(/\s+/g, " ").trim();
   if (!normalized) return [];
-  const matches = normalized.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
-  const out = (matches ?? [normalized]).map(s => String(s ?? "").trim()).filter(Boolean);
+  const protectedRefs = normalized
+    .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
+    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
+  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
+  const out = (matches ?? [protectedRefs])
+    .map(s => String(s ?? "").replace(/§/g, ".").trim())
+    .filter(Boolean);
   return out.length ? out : [normalized];
 }
 
@@ -175,6 +180,35 @@ export function normalizeQwenSayChunkText(text = "") {
   if (!chunk) return "";
   if (hasTerminalSentencePunctuation(chunk)) return `${chunk}.`;
   return `${chunk}..`;
+}
+
+export function sanitizeQwenSayScriptText(text = "") {
+  const source = String(text ?? "");
+  if (!source) return "";
+
+  let sanitized = source;
+  sanitized = sanitized.replace(/\r\n/g, "\n").replace(/\n+/g, " ");
+  sanitized = sanitized.replace(/\b1st\b/gi, "first");
+  sanitized = sanitized.replace(/\b2nd\b/gi, "second");
+  sanitized = sanitized.replace(/\b3rd\b/gi, "third");
+  sanitized = sanitized.replace(/\b(\d+)th\b/gi, "$1");
+  sanitized = sanitized.replace(/(\d+)\s*:\s*(\d+)/g, "chapter $1 verse $2");
+  sanitized = sanitized.replace(/(\d+)\s*\.\s*(\d+)/g, "chapter $1 verse $2");
+  sanitized = sanitized.replace(/[：؛;]/g, ",");
+  sanitized = sanitized.replace(/[!]/g, "?");
+  sanitized = sanitized.replace(/[“”"‘’'`]/g, " ");
+  sanitized = sanitized.replace(/[()[\]{}<>]/g, " ");
+  sanitized = sanitized.replace(/[\/\\|@#$%^&*_+=~]/g, " ");
+  sanitized = sanitized.replace(/[—–-]/g, " ");
+  sanitized = sanitized.replace(/[^\p{L}\p{N}\s,?.]/gu, " ");
+  sanitized = sanitized.replace(/,+/g, ",");
+  sanitized = sanitized.replace(/\.+/g, ".");
+  sanitized = sanitized.replace(/\?+/g, "?");
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
+  sanitized = sanitized.replace(/\s+([,.?])/g, "$1");
+  sanitized = sanitized.replace(/([,.?])(?=[^\s,.?])/g, "$1 ");
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
+  return sanitized;
 }
 
 export function splitQwenSayTextChunks(text = "", { forceSentenceChunks = false } = {}) {
@@ -407,7 +441,7 @@ export async function qwenSay(
 
   if (chunks.length <= 1) {
     await runSayFn({
-      text: chunks[0] ?? text,
+      text: sanitizeQwenSayScriptText(chunks[0] ?? text),
       instruct: chunkInstructs[0] ?? toneDefault,
       workflowName,
       workflowRoot,
@@ -422,7 +456,7 @@ export async function qwenSay(
         const chunkText = chunks[i];
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
         await runSayFn({
-          text: normalizeQwenSayChunkText(chunkText),
+          text: sanitizeQwenSayScriptText(normalizeQwenSayChunkText(chunkText)),
           instruct: chunkInstructs[i] ?? toneDefault,
           workflowName,
           workflowRoot,
