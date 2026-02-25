@@ -152,6 +152,9 @@ export async function enforceAutoDischarge({ activatingClass, activatingModel = 
   if (!classes.includes(activeClass)) {
     return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
   }
+  if (previousClass && previousClass === activeClass) {
+    return finalizeAutoDischarge({ changed: false, activated: activeClass, released: [] }, { activeClass, previousClass, rememberFn });
+  }
 
   if (activeClass === "mind") {
     let drawReleased = false;
