@@ -122,3 +122,19 @@ test("cut from text as sentence fails fast for unspeakable sentence content", as
     /cut defective: sentence source has no speakable content/u
   );
 });
+
+test("cut from text as sentence keeps initialism periods and avoids micro sentence fragments", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: "In 46 A.D. the last emperor was deposed."
+    },
+    as: { text: "sentence" },
+    to: { name: "initialism sentence", nameTypeWords: ["itinerary"] }
+  });
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 1);
+  assert.match(String(series[0]?.ob?.text ?? ""), /In 46 A\.D\./u);
+  assert.doesNotMatch(String(series[0]?.ob?.text ?? ""), /^D\.$/u);
+});

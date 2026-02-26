@@ -119,7 +119,8 @@ function splitTextSentences(text = "") {
   if (!normalized) return [];
   const protectedRefs = normalized
     .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
-    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
+    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2")
+    .replace(/\b((?:[A-Za-z]\.){2,})/g, (m) => m.replaceAll(".", "§"));
   const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?:["'”’)\]]+)?(?=\s|$)|$)/g);
   const sentences = (matches ?? [protectedRefs])
     .map((entry) => String(entry ?? "").replace(/§/g, ".").replace(/\s+/g, " ").trim())
@@ -130,6 +131,49 @@ function splitTextSentences(text = "") {
 
 function hasSpeakableContent(text = "") {
   return /[\p{L}\p{N}]/u.test(String(text ?? ""));
+}
+
+function sectionWordTokens(text = "") {
+  return String(text ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function validateSectionCoverage({ sourceText = "", sections = [], mode = "", sentence = {} } = {}) {
+  const sourceTokens = sectionWordTokens(sourceText);
+  const mergedTokens = sectionWordTokens((Array.isArray(sections) ? sections : []).join(" "));
+  if (!sourceTokens.length || !mergedTokens.length) return;
+  if (mergedTokens.length !== sourceTokens.length) {
+    throwErrorSentence({
+      name: "cut defective",
+      message: "cut defective: section coverage mismatch",
+      from: { name: "cut" },
+      raw: {
+        sentence,
+        mode,
+        sourceWords: sourceTokens.length,
+        sectionWords: mergedTokens.length,
+        sourceHead: sourceTokens.slice(0, 8).join(" "),
+        sectionHead: mergedTokens.slice(0, 8).join(" ")
+      }
+    });
+  }
+  for (let i = 0; i < sourceTokens.length; i += 1) {
+    if (sourceTokens[i] !== mergedTokens[i]) {
+      throwErrorSentence({
+        name: "cut defective",
+        message: "cut defective: section coverage mismatch",
+        from: { name: "cut" },
+        raw: {
+          sentence,
+          mode,
+          atindex: i,
+          sourceWord: sourceTokens[i],
+          sectionWord: mergedTokens[i],
+          sourceHead: sourceTokens.slice(0, 8).join(" "),
+          sectionHead: mergedTokens.slice(0, 8).join(" ")
+        }
+      });
+    }
+  }
 }
 
 function itinerarySuffixFromSentence(sentence = {}) {
@@ -996,6 +1040,18 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
         raw: { sentence, sourceText }
       });
     }
+    const micro = sections.find((entry) => {
+      const tokens = sectionWordTokens(entry);
+      return tokens.length === 1 && tokens[0].length === 1;
+    });
+    if (micro !== undefined) {
+      throwErrorSentence({
+        name: "cut defective",
+        message: "cut defective: sentence splitting produced micro sentence",
+        from: { name: "cut" },
+        raw: { sentence, section: micro }
+      });
+    }
   }
   if (!sections.length) {
     throwErrorSentence({
@@ -1005,6 +1061,7 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
       raw: { sentence }
     });
   }
+  validateSectionCoverage({ sourceText, sections, mode, sentence });
   const series = sections.map((sectionText, index) => ({
     mood: "ya",
     su: { name: `cut ${String(index + 1).padStart(3, "0")}` },
