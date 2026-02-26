@@ -69,6 +69,14 @@ test("qwen say fails fast when text path is unresolved", async () => {
   );
 });
 
+test("qwen say fails fast for hollow input", async () => {
+  forget();
+  await assert.rejects(
+    async () => interpret(parse("ob hollow be qwen say do")),
+    /qwen say input hollow error/u
+  );
+});
+
 test("splitQwenSayTextChunks keeps short text as one chunk", () => {
   const chunks = splitQwenSayTextChunks("One short paragraph with a couple sentences. Nothing too long.");
   assert.equal(chunks.length, 1);
@@ -96,20 +104,16 @@ test("normalizeQwenSayChunkText appends an extra terminal period", () => {
 test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () => {
   assert.equal(
     sanitizeQwenSayScriptText("God is love (1st John 4:8)."),
-    "God is love first John chapter 4 verse 8."
+    "God is love (first John four point eight)."
   );
   assert.equal(
     sanitizeQwenSayScriptText("Matthew 5 : 16 and Mark 11:26"),
-    "Matthew chapter 5 verse 16 and Mark chapter 11 verse 26"
+    "Matthew five point sixteen and Mark eleven point twenty six"
   );
-  assert.equal(
-    sanitizeQwenSayScriptText("Hope! Keep-going; stay \"steady\"."),
-    "Hope? Keep going, stay steady."
-  );
-  assert.doesNotMatch(
-    sanitizeQwenSayScriptText("A (test) with / odd # punctuation!"),
-    /[()\/#!:"'`;[\]{}<>\\|@#$%^&*_+=~\-]/u
-  );
+  assert.equal(sanitizeQwenSayScriptText("God’s 50% promise"), "God's fifty percent promise");
+  assert.match(sanitizeQwenSayScriptText("don't remove apostrophes"), /don't/u);
+  assert.equal(sanitizeQwenSayScriptText("In 2026 we compare 1975 and 476."), "In twenty-twenty-six we compare nineteen-seventy-five and four-seventy-six.");
+  assert.equal(sanitizeQwenSayScriptText("Budget is 65,000 now."), "Budget is sixty-five-thousand now.");
 });
 
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
@@ -252,13 +256,22 @@ test("qwenSay sanitizes numeric citation colons before synthesis", async () => {
       { runSayFn }
     );
     assert.equal(seenTexts.length, 1);
-    assert.match(seenTexts[0], /chapter 4 verse 8/u);
-    assert.match(seenTexts[0], /chapter 5 verse 16/u);
+    assert.match(seenTexts[0], /four point eight/u);
+    assert.match(seenTexts[0], /five point sixteen/u);
+    assert.match(seenTexts[0], /\.\.$/u);
     assert.doesNotMatch(seenTexts[0], /\d:\d/u);
-    assert.doesNotMatch(seenTexts[0], /\d\.\d/u);
   } finally {
     await fs.rm(outDir, { recursive: true, force: true });
   }
+});
+
+test("sanitizeQwenSayScriptText uses map overrides when provided", () => {
+  const text = sanitizeQwenSayScriptText("1st John 4:8 is 50%", {
+    ordinal1st: "First",
+    pointWord: "dot",
+    percent: "pct"
+  });
+  assert.equal(text, "First John four dot eight is fifty pct");
 });
 
 test("splitQwenSayTextChunks does not split chapter verse references into numeric fragments", () => {
