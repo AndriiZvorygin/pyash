@@ -109,3 +109,16 @@ test("cut from text as sentence keeps closing quote with sentence and avoids orp
   assert.match(String(series[0]?.ob?.text ?? ""), /won.t enlist/u);
   assert.doesNotMatch(String(series[0]?.ob?.text ?? ""), /^["'“”’]+$/u);
 });
+
+test("cut from text as sentence fails fast for unspeakable sentence content", async () => {
+  await assert.rejects(
+    async () => cutFromTextToNameItinerary({
+      mood: "do",
+      be: "cut",
+      from: { text: "”" },
+      as: { text: "sentence" },
+      to: { name: "bad sentences", nameTypeWords: ["itinerary"] }
+    }),
+    /cut defective: sentence source has no speakable content/u
+  );
+});

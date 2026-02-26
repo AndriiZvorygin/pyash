@@ -157,9 +157,10 @@ function splitSentences(paragraph = "") {
   const protectedRefs = normalized
     .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
     .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
-  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
+  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?:["'”’)\]]+)?(?=\s|$)|$)/g);
   const out = (matches ?? [protectedRefs])
     .map(s => String(s ?? "").replace(/§/g, ".").trim())
+    .filter((entry) => /[\p{L}\p{N}]/u.test(entry))
     .filter(Boolean);
   return out.length ? out : [normalized];
 }

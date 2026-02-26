@@ -95,6 +95,14 @@ test("splitQwenSayTextChunks splits long input sentence by sentence", () => {
   assert.ok(chunks.every((chunk) => chunk.trim().length > 0));
 });
 
+test("splitQwenSayTextChunks does not emit quote-only chunk from closing quote punctuation", () => {
+  const text = "Instead of restoring land and dignity, they claimed “Canadians won’t enlist.”";
+  const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks: true });
+  assert.equal(chunks.length, 1);
+  assert.match(String(chunks[0] ?? ""), /won.t enlist/u);
+  assert.doesNotMatch(String(chunks[0] ?? ""), /^["'“”’)\].,!?\s]+$/u);
+});
+
 test("normalizeQwenSayChunkText appends an extra terminal period", () => {
   assert.equal(normalizeQwenSayChunkText("No final marker"), "No final marker..");
   assert.equal(normalizeQwenSayChunkText("Already complete."), "Already complete..");
