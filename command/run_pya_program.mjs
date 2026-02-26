@@ -266,8 +266,8 @@ function rewriteSentenceTextForNewspaper(sentence, {
           const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
           const relLocator = path.join(
             "artifacts",
-            "newspaper",
             sanitizeRunId(runId || "run"),
+            "newspaper",
             `text-${String(idx).padStart(6, "0")}.txt`
           ).replace(/[\\]+/g, "/");
           const artifact = recordArtifact({

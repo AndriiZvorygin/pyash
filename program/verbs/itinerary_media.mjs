@@ -120,16 +120,17 @@ function splitTextSentences(text = "") {
   const protectedRefs = normalized
     .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
     .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
-  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g);
+  const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?:["'”’)\]]+)?(?=\s|$)|$)/g);
   const sentences = (matches ?? [protectedRefs])
     .map((entry) => String(entry ?? "").replace(/§/g, ".").replace(/\s+/g, " ").trim())
+    .filter((entry) => /[\p{L}\p{N}]/u.test(entry))
     .filter(Boolean);
   return sentences;
 }
 
 function itinerarySuffixFromSentence(sentence = {}) {
   const raw = Number(sentence?.by?.num);
-  if (!Number.isFinite(raw) || raw <= 0) return "";
+  if (!Number.isFinite(raw) || raw < 0) return "";
   return `-${String(Math.trunc(raw)).padStart(3, "0")}`;
 }
 
@@ -155,6 +156,28 @@ async function persistItineraryManifest({
     });
   }
   await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
+  // Retry/resume safety: if manifest already exists for this run path, reuse it
+  // so non-deterministic stages (e.g. promptify) do not rewrite and trip hash checks.
+  try {
+    await fs.access(outputResolved.resolved);
+    const existingBytes = await fs.readFile(outputResolved.resolved);
+    const existingArtifact = recordArtifact({
+      locator: outputResolved.resolved,
+      producer: String(sentence?.su?.name ?? fallbackPrefix),
+      bytes: existingBytes,
+      kind: "series"
+    });
+    emitExchangeSentence({
+      mood: "ya",
+      su: { name: `${fallbackPrefix} itinerary manifest` },
+      ob: { filename: outputResolved.resolved },
+      be: "artifact",
+      accordingto: existingArtifact?.su?.name ? { name: existingArtifact.su.name } : undefined
+    });
+    return outputResolved.resolved;
+  } catch {
+    // No existing manifest yet; continue and write fresh below.
+  }
   const itineraryText = renderItineraryPya({
     itineraryName,
     cuts: series.map((entry, idx) => ({
@@ -789,10 +812,13 @@ function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = 
   return `${lines.join("\n")}\n`;
 }
 
-async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode }) {
+async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode, startDelaySeconds = 0 }) {
   const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/footnote_video.mjs");
   const args = [runner, inputVideo, inputSrt, outputVideo];
   if (mode) args.push("--mode", mode);
+  if (Number.isFinite(startDelaySeconds) && startDelaySeconds > 0) {
+    args.push("--start-delay-seconds", String(startDelaySeconds));
+  }
   return new Promise((resolve, reject) => {
     let stdout = "";
     let stderr = "";
@@ -1140,49 +1166,14 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
     });
   }
 
-  const outputHandle = platformOutputHandleName(sentence, "promptify");
-  const outputPrefix = normalizePlatformHandleToPrefix(outputHandle, "promptify");
-  const outputSuffix = itinerarySuffixFromSentence(sentence);
-  const runId = String(getExchangeRunId?.() ?? "").trim();
-  const outputFile = runId
-    ? path.join("artifacts", runId, `${outputPrefix}${outputSuffix}.series.pya`)
-    : path.join("artifacts", "promptify", buildRunTag(), `${outputPrefix}${outputSuffix}.series.pya`);
-  const outputResolved = resolveAgentPath(outputFile, { rememberFn });
-  if (outputResolved.outside) {
-    throwErrorSentence({
-      name: "promptify defective",
-      message: `promptify defective: outside agent cwd (${outputResolved.agentCwd})`,
-      from: { name: "promptify" },
-      raw: { sentence }
-    });
-  }
-  await fs.mkdir(path.dirname(outputResolved.resolved), { recursive: true });
-  const itineraryText = renderItineraryPya({
+  const manifestFilename = await persistItineraryManifest({
+    sentence,
     itineraryName: targetName || "draw prompts",
-    cuts: series.map((row, i) => ({
-      index: Number(row?.by?.num ?? (i + 1)),
-      name: String(row?.su?.name ?? `cut ${String(i + 1).padStart(3, "0")}`),
-      since: Number(row?.since?.num ?? 0),
-      until: Number(row?.until?.num ?? row?.since?.num ?? 0),
-      obText: String(row?.ob?.text ?? "")
-    }))
+    series,
+    rememberFn,
+    fallbackPrefix: "promptify"
   });
-  await fs.writeFile(outputResolved.resolved, itineraryText, "utf8");
-  const itineraryBytes = await fs.readFile(outputResolved.resolved);
-  const itineraryArtifact = recordArtifact({
-    locator: outputResolved.resolved,
-    producer: String(sentence?.su?.name ?? "promptify"),
-    bytes: itineraryBytes,
-    kind: "series"
-  });
-  emitExchangeSentence({
-    mood: "ya",
-    su: { name: "promptify itinerary manifest" },
-    ob: { filename: outputResolved.resolved },
-    be: "artifact",
-    accordingto: itineraryArtifact?.su?.name ? { name: itineraryArtifact.su.name } : undefined
-  });
-  return { ob: { series, filename: outputResolved.resolved }, be: "itinerary" };
+  return { ob: { series, filename: manifestFilename }, be: "itinerary" };
 }
 
 function clipFilenameFromCut(cut = {}) {
@@ -1439,6 +1430,11 @@ export async function footnoteVideo(sentence, { remember: rememberFn = remember 
   }
   await fs.mkdir(path.dirname(outputVideo.resolved), { recursive: true });
   const mode = String(sentence?.as?.wo ?? sentence?.as?.text ?? "").trim().toLowerCase();
+  const startDelaySeconds = (() => {
+    const raw = Number(sentence?.during?.num);
+    if (Number.isFinite(raw) && raw >= 0) return raw;
+    return 0.05;
+  })();
   const samePath = path.resolve(inputVideo.resolved) === path.resolve(outputVideo.resolved);
   const renderOutput = samePath
     ? path.join(path.dirname(outputVideo.resolved), `${path.basename(outputVideo.resolved, path.extname(outputVideo.resolved))}.footnote.tmp${path.extname(outputVideo.resolved) || ".mp4"}`)
@@ -1447,7 +1443,8 @@ export async function footnoteVideo(sentence, { remember: rememberFn = remember 
     inputVideo: inputVideo.resolved,
     inputSrt: inputSrt.resolved,
     outputVideo: renderOutput,
-    mode: mode || undefined
+    mode: mode || undefined,
+    startDelaySeconds
   });
   if (samePath) {
     await fs.rename(renderOutput, outputVideo.resolved);

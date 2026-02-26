@@ -92,3 +92,20 @@ test("cut from text as sentence splits manuscript into sentence itinerary rows",
   assert.match(String(series[1]?.ob?.text ?? ""), /ownership rights/u);
   assert.match(String(series[2]?.ob?.text ?? ""), /Athens changed/u);
 });
+
+test("cut from text as sentence keeps closing quote with sentence and avoids orphan quote cut", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: "Instead of restoring land and dignity, they claimed “Canadians won’t enlist.”"
+    },
+    as: { text: "sentence" },
+    to: { name: "quoted sentence", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 1);
+  assert.match(String(series[0]?.ob?.text ?? ""), /won.t enlist/u);
+  assert.doesNotMatch(String(series[0]?.ob?.text ?? ""), /^["'“”’]+$/u);
+});

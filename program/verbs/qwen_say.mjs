@@ -9,7 +9,7 @@ import { renderSayValue } from "./say.mjs";
 import { emitExchangeSentence, recordArtifact } from "../bridge/exchange.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { canonicalJsonStringify, metadataPathForOutput, resolveOutputPath, sha256 } from "./piper_utils.mjs";
-import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigMapText, resolveConfigText } from "../configure/env.mjs";
 import { parseItineraryPya } from "../../command/itinerary_io.mjs";
 
 function resolveHost({ rememberFn = remember } = {}) {
@@ -147,6 +147,10 @@ function countWords(text = "") {
   return matches ? matches.length : 0;
 }
 
+function hasSpeakableContent(text = "") {
+  return /[\p{L}\p{N}]/u.test(String(text ?? ""));
+}
+
 function splitSentences(paragraph = "") {
   const normalized = String(paragraph ?? "").replace(/\s+/g, " ").trim();
   if (!normalized) return [];
@@ -175,6 +179,82 @@ function hasTerminalSentencePunctuation(text = "") {
   return /[.!?…]["')\]]*$/u.test(String(text ?? "").trim());
 }
 
+function numberToWords(numRaw) {
+  const num = Number(numRaw);
+  if (!Number.isFinite(num) || num < 0) return String(numRaw ?? "");
+  const n = Math.trunc(num);
+  const ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+  const teens = ["ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+  const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  if (n < 10) return ones[n];
+  if (n < 20) return teens[n - 10];
+  if (n < 100) {
+    const t = Math.trunc(n / 10);
+    const o = n % 10;
+    return o ? `${tens[t]} ${ones[o]}` : tens[t];
+  }
+  if (n < 1000) {
+    const h = Math.trunc(n / 100);
+    const rest = n % 100;
+    return rest ? `${ones[h]} hundred ${numberToWords(rest)}` : `${ones[h]} hundred`;
+  }
+  if (n < 1000000) {
+    const th = Math.trunc(n / 1000);
+    const rest = n % 1000;
+    return rest ? `${numberToWords(th)} thousand ${numberToWords(rest)}` : `${numberToWords(th)} thousand`;
+  }
+  return String(n);
+}
+
+function twoDigitWords(num) {
+  const n = Math.max(0, Math.trunc(Number(num) || 0));
+  if (n < 10) return numberToWords(n);
+  if (n < 20) return numberToWords(n);
+  const tens = Math.trunc(n / 10) * 10;
+  const ones = n % 10;
+  if (!ones) return numberToWords(tens);
+  return `${numberToWords(tens)}-${numberToWords(ones)}`;
+}
+
+function yearToWords(valueRaw) {
+  const value = Math.trunc(Number(valueRaw));
+  if (!Number.isFinite(value) || value < 100) return "";
+  if (value >= 1000) {
+    const high = Math.trunc(value / 100);
+    const low = value % 100;
+    if (low === 0) return `${twoDigitWords(high)}-hundred`;
+    return `${twoDigitWords(high)}-${twoDigitWords(low)}`;
+  }
+  const high = Math.trunc(value / 100);
+  const low = value % 100;
+  if (!low) return `${numberToWords(high)}-hundred`;
+  return `${numberToWords(high)}-${twoDigitWords(low)}`;
+}
+
+function integerToWordsHyphenated(valueRaw) {
+  const value = Math.trunc(Number(valueRaw));
+  if (!Number.isFinite(value) || value < 0) return String(valueRaw ?? "");
+  if (value < 100) return twoDigitWords(value);
+  const scales = [
+    { size: 1000000000, name: "billion" },
+    { size: 1000000, name: "million" },
+    { size: 1000, name: "thousand" }
+  ];
+  for (const scale of scales) {
+    if (value >= scale.size) {
+      const high = Math.trunc(value / scale.size);
+      const rem = value % scale.size;
+      const left = integerToWordsHyphenated(high);
+      if (!rem) return `${left}-${scale.name}`;
+      return `${left}-${scale.name}-${integerToWordsHyphenated(rem)}`;
+    }
+  }
+  const hundreds = Math.trunc(value / 100);
+  const rem = value % 100;
+  if (!rem) return `${numberToWords(hundreds)}-hundred`;
+  return `${numberToWords(hundreds)}-hundred-${twoDigitWords(rem)}`;
+}
+
 export function normalizeQwenSayChunkText(text = "") {
   const chunk = String(text ?? "").replace(/\s+/g, " ").trim();
   if (!chunk) return "";
@@ -182,31 +262,57 @@ export function normalizeQwenSayChunkText(text = "") {
   return `${chunk}..`;
 }
 
-export function sanitizeQwenSayScriptText(text = "") {
+function ensureTrailingDoublePeriod(text = "") {
+  const chunk = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!chunk) return "";
+  if (chunk.endsWith("..")) return chunk;
+  if (chunk.endsWith(".")) return `${chunk}.`;
+  return `${chunk}..`;
+}
+
+function resolveQwenSaySanitizeMap({ rememberFn = remember } = {}) {
+  return {
+    percent: resolveConfigMapText("qwen say sanitize map", "percent", { rememberFn }) || "percent",
+    referenceSeparator: resolveConfigMapText("qwen say sanitize map", "reference separator", { rememberFn }) || ".",
+    ordinal1st: resolveConfigMapText("qwen say sanitize map", "ordinal 1st", { rememberFn }) || "first",
+    ordinal2nd: resolveConfigMapText("qwen say sanitize map", "ordinal 2nd", { rememberFn }) || "second",
+    ordinal3rd: resolveConfigMapText("qwen say sanitize map", "ordinal 3rd", { rememberFn }) || "third",
+    pointWord: resolveConfigMapText("qwen say sanitize map", "point word", { rememberFn }) || "point"
+  };
+}
+
+export function sanitizeQwenSayScriptText(text = "", mapConfig = {}) {
   const source = String(text ?? "");
   if (!source) return "";
+  const percentWord = String(mapConfig?.percent ?? "percent").trim() || "percent";
+  const referenceSeparatorRaw = String(mapConfig?.referenceSeparator ?? ".").trim() || ".";
+  const referenceSeparator = /[A-Za-z]/.test(referenceSeparatorRaw) && !/\s/.test(referenceSeparatorRaw)
+    ? ` ${referenceSeparatorRaw} `
+    : referenceSeparatorRaw;
+  const ordinal1st = String(mapConfig?.ordinal1st ?? "first").trim() || "first";
+  const ordinal2nd = String(mapConfig?.ordinal2nd ?? "second").trim() || "second";
+  const ordinal3rd = String(mapConfig?.ordinal3rd ?? "third").trim() || "third";
+  const pointWord = String(mapConfig?.pointWord ?? "point").trim() || "point";
 
   let sanitized = source;
   sanitized = sanitized.replace(/\r\n/g, "\n").replace(/\n+/g, " ");
-  sanitized = sanitized.replace(/\b1st\b/gi, "first");
-  sanitized = sanitized.replace(/\b2nd\b/gi, "second");
-  sanitized = sanitized.replace(/\b3rd\b/gi, "third");
-  sanitized = sanitized.replace(/\b(\d+)th\b/gi, "$1");
-  sanitized = sanitized.replace(/(\d+)\s*:\s*(\d+)/g, "chapter $1 verse $2");
-  sanitized = sanitized.replace(/(\d+)\s*\.\s*(\d+)/g, "chapter $1 verse $2");
-  sanitized = sanitized.replace(/[：؛;]/g, ",");
-  sanitized = sanitized.replace(/[!]/g, "?");
-  sanitized = sanitized.replace(/[“”"‘’'`]/g, " ");
-  sanitized = sanitized.replace(/[()[\]{}<>]/g, " ");
-  sanitized = sanitized.replace(/[\/\\|@#$%^&*_+=~]/g, " ");
-  sanitized = sanitized.replace(/[—–-]/g, " ");
-  sanitized = sanitized.replace(/[^\p{L}\p{N}\s,?.]/gu, " ");
-  sanitized = sanitized.replace(/,+/g, ",");
-  sanitized = sanitized.replace(/\.+/g, ".");
-  sanitized = sanitized.replace(/\?+/g, "?");
-  sanitized = sanitized.replace(/\s+/g, " ").trim();
-  sanitized = sanitized.replace(/\s+([,.?])/g, "$1");
-  sanitized = sanitized.replace(/([,.?])(?=[^\s,.?])/g, "$1 ");
+  sanitized = sanitized.replace(/\b1st\b/gi, ordinal1st);
+  sanitized = sanitized.replace(/\b2nd\b/gi, ordinal2nd);
+  sanitized = sanitized.replace(/\b3rd\b/gi, ordinal3rd);
+  sanitized = sanitized.replace(/(\d+)\s*:\s*(\d+)/g, `$1${referenceSeparator}$2`);
+  sanitized = sanitized.replace(/(\d+)\s*\.\s*(\d+)/g, `$1${referenceSeparator}$2`);
+  sanitized = sanitized.replace(/(\d+)\.(\d+)/g, (_, left, right) => {
+    return `${numberToWords(left)} ${pointWord} ${numberToWords(right)}`;
+  });
+  sanitized = sanitized.replace(/%/g, ` ${percentWord}`);
+  sanitized = sanitized.replace(/\b(\d{1,3}(?:,\d{3})+)\b/g, (_, grouped) => {
+    const numeric = Number(String(grouped).replace(/,/g, ""));
+    return integerToWordsHyphenated(numeric);
+  });
+  sanitized = sanitized.replace(/\b(\d{3,4})\b/g, (_, yearToken) => yearToWords(yearToken));
+  sanitized = sanitized.replace(/\b(\d+)\b/g, (_, digits) => integerToWordsHyphenated(digits));
+  // Keep apostrophes and common punctuation; only normalize typographic variants.
+  sanitized = sanitized.replace(/[“”]/g, "\"").replace(/[‘’]/g, "'");
   sanitized = sanitized.replace(/\s+/g, " ").trim();
   return sanitized;
 }
@@ -394,6 +500,14 @@ export async function qwenSay(
     planChunkInstructsFn = planChunkInstructs
   } = {}
 ) {
+  if (sentence?.ob?.hollow) {
+    throwErrorSentence({
+      name: "qwen say input hollow error",
+      message: "qwen say input hollow error",
+      from: { name: "qwen say" },
+      raw: { sentence }
+    });
+  }
   const text = String(renderSayValue(sentence.ob ?? {}, { rememberFn }) ?? "");
   if (!text.trim()) {
     throwErrorSentence({
@@ -403,6 +517,14 @@ export async function qwenSay(
       raw: { sentence }
     });
   }
+  if (!hasSpeakableContent(text)) {
+    throwErrorSentence({
+      name: "qwen say defective",
+      message: "qwen say defective: empty speakable text",
+      from: { name: "qwen say" },
+      raw: { sentence, text }
+    });
+  }
 
   const outputPath = resolveOutputPath(sentence, { ext: ".wav" });
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -410,6 +532,7 @@ export async function qwenSay(
   const host = resolveHost({ rememberFn });
   const toneStrategy = resolveToneStrategy({ rememberFn });
   const manifestInstructs = await resolveToneManifestInstructs(sentence, { rememberFn });
+  const sanitizeMap = resolveQwenSaySanitizeMap({ rememberFn });
   const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks: manifestInstructs.length > 0 });
   let chunkInstructs = [];
   let toneStrategyResolved = "";
@@ -438,10 +561,26 @@ export async function qwenSay(
   const postProcessEnabled = resolvePostProcessEnabled({ rememberFn });
   const postProcessFilter = resolvePostProcessFilter({ rememberFn });
   let postProcessApplied = false;
+  const preparedChunks = chunks.map((chunk, index) => ({
+    index,
+    raw: String(chunk ?? ""),
+    text: ensureTrailingDoublePeriod(
+      sanitizeQwenSayScriptText(normalizeQwenSayChunkText(chunk), sanitizeMap)
+    )
+  }));
+  const emptyChunk = preparedChunks.find((entry) => !hasSpeakableContent(entry.text));
+  if (emptyChunk) {
+    throwErrorSentence({
+      name: "qwen say defective",
+      message: "qwen say defective: empty speakable chunk",
+      from: { name: "qwen say" },
+      raw: { sentence, atindex: emptyChunk.index, chunk: emptyChunk.raw, text: emptyChunk.text }
+    });
+  }
 
   if (chunks.length <= 1) {
     await runSayFn({
-      text: sanitizeQwenSayScriptText(chunks[0] ?? text),
+      text: preparedChunks[0]?.text ?? "",
       instruct: chunkInstructs[0] ?? toneDefault,
       workflowName,
       workflowRoot,
@@ -453,10 +592,10 @@ export async function qwenSay(
     const chunkFiles = [];
     try {
       for (let i = 0; i < chunks.length; i += 1) {
-        const chunkText = chunks[i];
+        const chunkText = preparedChunks[i]?.text ?? "";
         const chunkOutput = path.join(chunkDir, `chunk-${String(i + 1).padStart(3, "0")}.wav`);
         await runSayFn({
-          text: sanitizeQwenSayScriptText(normalizeQwenSayChunkText(chunkText)),
+          text: chunkText,
           instruct: chunkInstructs[i] ?? toneDefault,
           workflowName,
           workflowRoot,
