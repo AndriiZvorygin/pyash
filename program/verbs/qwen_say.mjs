@@ -156,13 +156,42 @@ function splitSentences(paragraph = "") {
   if (!normalized) return [];
   const protectedRefs = normalized
     .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")
-    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2");
+    .replace(/(\d)\s*:\s*(\d)/g, "$1§$2")
+    // Keep common initialism dots (e.g., A.D., U.S.) from being treated as sentence boundaries.
+    .replace(/\b((?:[A-Za-z]\.){2,})/g, (m) => m.replaceAll(".", "§"));
   const matches = protectedRefs.match(/[^.!?]+(?:[.!?]+(?:["'”’)\]]+)?(?=\s|$)|$)/g);
   const out = (matches ?? [protectedRefs])
     .map(s => String(s ?? "").replace(/§/g, ".").trim())
     .filter((entry) => /[\p{L}\p{N}]/u.test(entry))
     .filter(Boolean);
   return out.length ? out : [normalized];
+}
+
+function wordTokens(text = "") {
+  return String(text ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function assertChunkIntegrity(text = "", chunks = []) {
+  const source = wordTokens(text);
+  const merged = wordTokens((Array.isArray(chunks) ? chunks : []).join(" "));
+  if (!source.length || !merged.length) return;
+  const sourceHead = source.slice(0, 6).join(" ");
+  const mergedHead = merged.slice(0, 6).join(" ");
+  const coverage = merged.length / Math.max(1, source.length);
+  if (mergedHead !== sourceHead || coverage < 0.9) {
+    throwErrorSentence({
+      name: "qwen say defective",
+      message: "qwen say defective: chunk integrity mismatch",
+      from: { name: "qwen say" },
+      raw: {
+        sourceHead,
+        mergedHead,
+        sourceWords: source.length,
+        mergedWords: merged.length,
+        coverage
+      }
+    });
+  }
 }
 
 function splitByWordBudget(text = "", maxWords = 90) {
@@ -305,6 +334,8 @@ export function sanitizeQwenSayScriptText(text = "", mapConfig = {}) {
   sanitized = sanitized.replace(/(\d+)\.(\d+)/g, (_, left, right) => {
     return `${numberToWords(left)} ${pointWord} ${numberToWords(right)}`;
   });
+  // Qwen TTS can clip lead-ins around colons; normalize remaining colons to commas.
+  sanitized = sanitized.replace(/:/g, ",");
   sanitized = sanitized.replace(/%/g, ` ${percentWord}`);
   sanitized = sanitized.replace(/\b(\d{1,3}(?:,\d{3})+)\b/g, (_, grouped) => {
     const numeric = Number(String(grouped).replace(/,/g, ""));
@@ -535,6 +566,7 @@ export async function qwenSay(
   const manifestInstructs = await resolveToneManifestInstructs(sentence, { rememberFn });
   const sanitizeMap = resolveQwenSaySanitizeMap({ rememberFn });
   const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks: manifestInstructs.length > 0 });
+  assertChunkIntegrity(text, chunks);
   let chunkInstructs = [];
   let toneStrategyResolved = "";
   if (String(toneOverride ?? "").trim()) {

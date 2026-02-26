@@ -103,6 +103,15 @@ test("splitQwenSayTextChunks does not emit quote-only chunk from closing quote p
   assert.doesNotMatch(String(chunks[0] ?? ""), /^["'“”’)\].,!?\s]+$/u);
 });
 
+test("splitQwenSayTextChunks keeps initialism periods and leading sentence content", () => {
+  const text = "In China, the Northern Wei and then the mighty Tang Dynasty (from Four Eighty five A.D. until mid-8th century) implemented the Equal-Field System.";
+  const chunks = splitQwenSayTextChunks(text, { forceSentenceChunks: true });
+  assert.equal(chunks.length, 1);
+  assert.match(String(chunks[0] ?? ""), /^In China/u);
+  assert.match(String(chunks[0] ?? ""), /A\.D\./u);
+  assert.doesNotMatch(String(chunks[0] ?? ""), /^D\.\.$/u);
+});
+
 test("normalizeQwenSayChunkText appends an extra terminal period", () => {
   assert.equal(normalizeQwenSayChunkText("No final marker"), "No final marker..");
   assert.equal(normalizeQwenSayChunkText("Already complete."), "Already complete..");
@@ -122,6 +131,7 @@ test("sanitizeQwenSayScriptText rewrites numeric colons used in citations", () =
   assert.match(sanitizeQwenSayScriptText("don't remove apostrophes"), /don't/u);
   assert.equal(sanitizeQwenSayScriptText("In 2026 we compare 1975 and 476."), "In twenty-twenty-six we compare nineteen-seventy-five and four-seventy-six.");
   assert.equal(sanitizeQwenSayScriptText("Budget is 65,000 now."), "Budget is sixty-five-thousand now.");
+  assert.equal(sanitizeQwenSayScriptText("The people gave one man total power: the poet."), "The people gave one man total power, the poet.");
 });
 
 test("qwenSay chunks long text and concatenates chunk outputs", async () => {
@@ -137,7 +147,7 @@ test("qwenSay chunks long text and concatenates chunk outputs", async () => {
     "Sentence four keeps the flow moving with more substance.",
     "Sentence five brings another concrete example to the script.",
     "Sentence six closes the paragraph while staying clear."
-  ].join(" ").repeat(8);
+  ].join(" ").concat(" ").repeat(8).trim();
 
   const chunkInputs = [];
   let concatCalled = 0;
