@@ -128,6 +128,10 @@ function splitTextSentences(text = "") {
   return sentences;
 }
 
+function hasSpeakableContent(text = "") {
+  return /[\p{L}\p{N}]/u.test(String(text ?? ""));
+}
+
 function itinerarySuffixFromSentence(sentence = {}) {
   const raw = Number(sentence?.by?.num);
   if (!Number.isFinite(raw) || raw < 0) return "";
@@ -965,7 +969,34 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     });
   }
   const mode = String(sentence?.as?.text ?? "").trim().toLowerCase();
+  if (mode === "sentence" && !hasSpeakableContent(sourceText)) {
+    throwErrorSentence({
+      name: "cut defective",
+      message: "cut defective: sentence source has no speakable content",
+      from: { name: "cut" },
+      raw: { sentence, sourceText }
+    });
+  }
   const sections = mode === "sentence" ? splitTextSentences(sourceText) : splitTextParagraphs(sourceText);
+  if (mode === "sentence") {
+    const invalid = sections.find((entry) => !hasSpeakableContent(entry));
+    if (invalid !== undefined) {
+      throwErrorSentence({
+        name: "cut defective",
+        message: "cut defective: sentence splitting produced unspeakable sentence",
+        from: { name: "cut" },
+        raw: { sentence, section: invalid }
+      });
+    }
+    if (!sections.length && hasSpeakableContent(sourceText)) {
+      throwErrorSentence({
+        name: "cut defective",
+        message: "cut defective: sentence splitting produced no speakable sentences",
+        from: { name: "cut" },
+        raw: { sentence, sourceText }
+      });
+    }
+  }
   if (!sections.length) {
     throwErrorSentence({
       name: "itinerary defective",
