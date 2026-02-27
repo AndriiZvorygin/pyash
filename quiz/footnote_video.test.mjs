@@ -54,6 +54,19 @@ test("footnote_video parseArgs accepts margin ratio", () => {
   assert.equal(opts.marginRatio, 0.1);
 });
 
+test("footnote_video parseArgs accepts subtitle start delay", () => {
+  const opts = parseArgs([
+    "node",
+    "command/footnote_video.mjs",
+    "in.mp4",
+    "in.srt",
+    "out.mp4",
+    "--start-delay-seconds",
+    "0.05"
+  ]);
+  assert.equal(opts.startDelaySeconds, 0.05);
+});
+
 test("footnote_video buildAssFromSrt emits karaoke timing tags", () => {
   const srt = [
     "1",
@@ -81,6 +94,19 @@ test("footnote_video buildAssFromSrt emits plain text subtitles", () => {
   const ass = buildAssFromSrt(srt, { mode: "plain" });
   assert.match(ass, /plain line/u);
   assert.doesNotMatch(ass, /\{\\k/u);
+});
+
+test("footnote_video buildAssFromSrt offsets dialogue start with startDelaySeconds", () => {
+  const srt = [
+    "1",
+    "00:00:00,000 --> 00:00:01,000",
+    "plain line",
+    ""
+  ].join("\n");
+  const ass = buildAssFromSrt(srt, { mode: "plain", startDelaySeconds: 0.05 });
+  const line = ass.split("\n").find((entry) => entry.startsWith("Dialogue:"));
+  assert.ok(line);
+  assert.match(String(line), /Dialogue: 0,0:00:00\.05,0:00:01\.05,/u);
 });
 
 test("footnote_video buildAssFromSrt emits grouped dialogue in wordflow mode", () => {

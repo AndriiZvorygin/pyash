@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseSrtToCuts } from "./itinerary_io.mjs";
 
 function usage() {
-  return "Usage: node command/footnote_video.mjs <input-video.mp4> <input.srt> <output-video.mp4> [--mode plain|karaoke] [--font-size <num>] [--margin-v <num>] [--margin-ratio <num>] [--font-name <text>]";
+  return "Usage: node command/footnote_video.mjs <input-video.mp4> <input.srt> <output-video.mp4> [--mode plain|karaoke] [--font-size <num>] [--margin-v <num>] [--margin-ratio <num>] [--start-delay-seconds <num>] [--font-name <text>]";
 }
 
 function parseArgs(argv) {
@@ -20,6 +20,7 @@ function parseArgs(argv) {
     fontSize: null,
     marginV: null,
     marginRatio: null,
+    startDelaySeconds: 0,
     fontName: "DejaVu Sans",
     width: null,
     height: null,
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     else if (arg === "--font-size") out.fontSize = Number(args[++i] ?? "54");
     else if (arg === "--margin-v") out.marginV = Number(args[++i] ?? "80");
     else if (arg === "--margin-ratio") out.marginRatio = Number(args[++i] ?? "0.58");
+    else if (arg === "--start-delay-seconds") out.startDelaySeconds = Number(args[++i] ?? "0");
     else if (arg === "--font-name") out.fontName = String(args[++i] ?? "").trim() || "DejaVu Sans";
     else if (arg === "--width") out.width = Number(args[++i] ?? "");
     else if (arg === "--height") out.height = Number(args[++i] ?? "");
@@ -41,6 +43,9 @@ function parseArgs(argv) {
   if (out.fontSize != null && (!Number.isFinite(out.fontSize) || out.fontSize <= 0)) throw new Error("font-size must be > 0");
   if (out.marginV != null && (!Number.isFinite(out.marginV) || out.marginV < 0)) throw new Error("margin-v must be >= 0");
   if (out.marginRatio != null && (!Number.isFinite(out.marginRatio) || out.marginRatio < 0 || out.marginRatio > 1)) throw new Error("margin-ratio must be between 0 and 1");
+  if (!Number.isFinite(out.startDelaySeconds) || out.startDelaySeconds < 0 || out.startDelaySeconds > 10) {
+    throw new Error("start-delay-seconds must be between 0 and 10");
+  }
   if (out.width != null && (!Number.isFinite(out.width) || out.width <= 0)) throw new Error("width must be > 0");
   if (out.height != null && (!Number.isFinite(out.height) || out.height <= 0)) throw new Error("height must be > 0");
   if (out.maxLineChars != null && (!Number.isFinite(out.maxLineChars) || out.maxLineChars <= 0)) throw new Error("max-line-chars must be > 0");
@@ -269,10 +274,23 @@ function buildAssFromSrt(
     playResY = 1280,
     marginLR = 80,
     outline = null,
-    shadow = null
+    shadow = null,
+    startDelaySeconds = 0
   } = {}
 ) {
-  const cuts = parseSrtToCuts(srtText);
+  const shiftSeconds = Math.max(0, Number(startDelaySeconds) || 0);
+  const cuts = parseSrtToCuts(srtText).map((cut) => {
+    if (shiftSeconds <= 0) return cut;
+    const since = Number(cut?.since ?? 0);
+    const until = Number(cut?.until ?? since);
+    const duration = Math.max(0.05, until - since);
+    const shiftedSince = since + shiftSeconds;
+    return {
+      ...cut,
+      since: shiftedSince,
+      until: shiftedSince + duration
+    };
+  });
   const resolvedOutline = Number.isFinite(outline) && outline > 0
     ? Number(outline)
     : Number(
@@ -460,7 +478,8 @@ export async function main(argv = process.argv) {
     playResY: height,
     marginLR,
     outline,
-    shadow
+    shadow,
+    startDelaySeconds: opts.startDelaySeconds
   });
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-footnote-"));
   const assFile = path.join(tmpDir, "subtitle.ass");
