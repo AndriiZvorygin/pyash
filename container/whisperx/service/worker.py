@@ -3,12 +3,18 @@ import gc
 import json
 import os
 import sys
+import time
 import traceback
 from typing import Any, Dict, Tuple
 
 
 _MODEL_CACHE: Dict[Tuple[str, str, str], Any] = {}
 _ALIGN_CACHE: Dict[Tuple[str, str], Tuple[Any, Any]] = {}
+
+
+def _emit(obj: Dict[str, Any]) -> None:
+  sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+  sys.stdout.flush()
 
 
 def _fmt_srt_time(seconds: float) -> str:
@@ -42,24 +48,34 @@ def _write_srt(path: str, segments: list) -> None:
     f.write("\n".join(lines))
 
 
-def _get_whisper_model(model_name: str, device: str, compute_type: str):
+def _get_whisper_model(model_name: str, device: str, compute_type: str, stream: bool):
   key = (model_name, device, compute_type)
   model = _MODEL_CACHE.get(key)
   if model is None:
     import whisperx  # type: ignore
+    if stream:
+      _emit({"type": "log", "text": f"load_model {model_name} device={device} compute_type={compute_type}"})
+    t0 = time.time()
     model = whisperx.load_model(model_name, device=device, compute_type=compute_type)
     _MODEL_CACHE[key] = model
+    if stream:
+      _emit({"type": "log", "text": f"load_model done {time.time() - t0:.2f}s"})
   return model
 
 
-def _get_align(language: str, device: str):
+def _get_align(language: str, device: str, stream: bool):
   key = (language, device)
   value = _ALIGN_CACHE.get(key)
   if value is None:
     import whisperx  # type: ignore
+    if stream:
+      _emit({"type": "log", "text": f"load_align_model language={language} device={device}"})
+    t0 = time.time()
     align_model, metadata = whisperx.load_align_model(language_code=language, device=device)
     value = (align_model, metadata)
     _ALIGN_CACHE[key] = value
+    if stream:
+      _emit({"type": "log", "text": f"load_align_model done {time.time() - t0:.2f}s"})
   return value
 
 
@@ -74,8 +90,8 @@ def _torch_discharge() -> None:
   gc.collect()
 
 
-def _handle_transcribe(req: Dict[str, Any]) -> Dict[str, Any]:
-  import whisperx  # type: ignore
+def _transcribe_core(req: Dict[str, Any], stream: bool) -> Dict[str, Any]:
+  import shutil
 
   input_path = str(req.get("input") or "").strip()
   if input_path == "":
@@ -91,29 +107,52 @@ def _handle_transcribe(req: Dict[str, Any]) -> Dict[str, Any]:
   device = str(req.get("device") or "cuda").strip() or "cuda"
 
   os.makedirs(output_dir, exist_ok=True)
+  import whisperx  # type: ignore
 
+  if stream:
+    _emit({"type": "log", "text": f"load_audio {input_path}"})
+  t0 = time.time()
   audio = whisperx.load_audio(input_path)
-  wx = _get_whisper_model(model, device, compute_type)
-  result = wx.transcribe(audio, language=language)
+  if stream:
+    _emit({"type": "log", "text": f"load_audio done {time.time() - t0:.2f}s"})
 
-  align_model, metadata = _get_align(language, device)
+  wx = _get_whisper_model(model, device, compute_type, stream=stream)
+
+  if stream:
+    _emit({"type": "log", "text": f"transcribe language={language}"})
+  t0 = time.time()
+  result = wx.transcribe(audio, language=language)
+  if stream:
+    _emit({"type": "log", "text": f"transcribe done {time.time() - t0:.2f}s"})
+
+  align_model, metadata = _get_align(language, device, stream=stream)
+
+  if stream:
+    _emit({"type": "log", "text": "align segments"})
+  t0 = time.time()
   result = whisperx.align(result["segments"], align_model, metadata, audio, device)
+  if stream:
+    _emit({"type": "log", "text": f"align done {time.time() - t0:.2f}s"})
 
   stem = os.path.splitext(os.path.basename(input_path))[0]
   generated_srt = os.path.join(output_dir, f"{stem}.srt")
+  generated_json = os.path.join(output_dir, f"{stem}.json")
+
+  if stream:
+    _emit({"type": "log", "text": f"write srt {generated_srt}"})
   _write_srt(generated_srt, result.get("segments", []))
 
   if output_srt:
     os.makedirs(os.path.dirname(output_srt) or ".", exist_ok=True)
     if os.path.abspath(generated_srt) != os.path.abspath(output_srt):
-      import shutil
       shutil.copyfile(generated_srt, output_srt)
     final_srt = output_srt
   else:
     final_srt = generated_srt
 
-  generated_json = os.path.join(output_dir, f"{stem}.json")
   try:
+    if stream:
+      _emit({"type": "log", "text": f"write json {generated_json}"})
     with open(generated_json, "w", encoding="utf-8") as f:
       json.dump(result, f, ensure_ascii=False, indent=2)
   except Exception:
@@ -137,34 +176,41 @@ def main() -> None:
     try:
       req = json.loads(line)
     except Exception:
-      sys.stdout.write(json.dumps({"ok": False, "code": 400, "error": "invalid json"}) + "\n")
-      sys.stdout.flush()
+      _emit({"ok": False, "code": 400, "error": "invalid json"})
       continue
 
     op = str(req.get("op") or "")
     try:
       if op == "transcribe":
-        resp = _handle_transcribe(req)
+        _emit(_transcribe_core(req, stream=False))
+      elif op == "transcribe_stream":
+        _emit({"type": "log", "text": "start"})
+        resp = _transcribe_core(req, stream=True)
+        if resp.get("ok"):
+          _emit({"type": "result", **resp})
+        else:
+          _emit({"type": "error", **resp})
       elif op == "discharge":
         _MODEL_CACHE.clear()
         _ALIGN_CACHE.clear()
         _torch_discharge()
-        resp = {"ok": True, "code": 200, "be": "discharge"}
+        _emit({"ok": True, "code": 200, "be": "discharge"})
       elif op == "ping":
-        resp = {"ok": True, "code": 200, "be": "pong"}
+        _emit({"ok": True, "code": 200, "be": "pong"})
       else:
-        resp = {"ok": False, "code": 404, "error": "unknown op"}
+        _emit({"ok": False, "code": 404, "error": "unknown op"})
     except Exception as err:
-      resp = {
+      stream_error = {
         "ok": False,
         "code": 500,
         "error": "worker exception",
         "detail": str(err),
         "trace": traceback.format_exc()[-4000:]
       }
-
-    sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
+      if op == "transcribe_stream":
+        _emit({"type": "error", **stream_error})
+      else:
+        _emit(stream_error)
 
 
 if __name__ == "__main__":

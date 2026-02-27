@@ -21,7 +21,15 @@ su name draw size widescreen be map def
 prah
 exists su name draw widescreen mode ob text "lie" be default ya
 
-exists su name draw system prompt ob text "Educational cinematic still image, no visible text or letters, no watermark. Clean composition, soft natural light, high detail." be text ya
+exists su name draw system prompt ob text "Educational editorial illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, clean shapes, soft natural light, high detail." be text ya
+exists su name qwen say sanitize map be map def
+su name percent ob text "percent" ya
+su name reference separator ob text "." ya
+su name ordinal 1st ob text "first" ya
+su name ordinal 2nd ob text "second" ya
+su name ordinal 3rd ob text "third" ya
+su name point word ob text "point" ya
+prah
 exists su name draw promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
 
 Follow these rules:

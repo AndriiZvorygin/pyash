@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 
 _WORKER_LOCK = threading.Lock()
-_RPC_LOCK = threading.Lock()
+_WORKER_IO_LOCK = threading.Lock()
 _WORKER_PROC: Optional[subprocess.Popen] = None
 
 
@@ -50,7 +50,7 @@ def _worker_rpc(req: Dict[str, Any]) -> Tuple[int, Dict[str, Any]]:
   assert proc.stdin is not None
   assert proc.stdout is not None
 
-  with _RPC_LOCK:
+  with _WORKER_IO_LOCK:
     proc.stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
     proc.stdin.flush()
 
@@ -120,9 +120,14 @@ def _run_whisperx(payload: dict) -> Tuple[int, Dict[str, Any]]:
   if output_dir == "":
     output_dir = "/tmp"
 
-  req = {
-    "op": "transcribe",
-    "input": input_path,
+  req = _build_worker_request(payload, op="transcribe", output_dir=output_dir, output_srt=output_srt)
+  return _worker_rpc(req)
+
+
+def _build_worker_request(payload: dict, op: str, output_dir: str, output_srt: str) -> Dict[str, Any]:
+  return {
+    "op": op,
+    "input": str(payload.get("input") or "").strip(),
     "output_dir": output_dir,
     "output_srt": output_srt,
     "model": str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3"),
@@ -130,10 +135,51 @@ def _run_whisperx(payload: dict) -> Tuple[int, Dict[str, Any]]:
     "compute_type": str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8"),
     "device": str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "cuda").strip() or "cuda"
   }
-  return _worker_rpc(req)
 
 
-def _stream_whisperx(handler: BaseHTTPRequestHandler, payload: dict):
+def _stream_from_worker(handler: BaseHTTPRequestHandler, req: Dict[str, Any]) -> None:
+  proc = _ensure_worker()
+  assert proc.stdin is not None
+  assert proc.stdout is not None
+
+  handler.send_response(200)
+  handler.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+  handler.send_header("Cache-Control", "no-cache")
+  handler.end_headers()
+
+  try:
+    with _WORKER_IO_LOCK:
+      proc.stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
+      proc.stdin.flush()
+
+      while True:
+        line = proc.stdout.readline()
+        if line == "":
+          raise RuntimeError("worker stdout closed")
+        try:
+          obj = json.loads(line)
+        except Exception:
+          obj = {"type": "log", "text": line.strip()}
+
+        out = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+        handler.wfile.write(out)
+        handler.wfile.flush()
+
+        event_type = str(obj.get("type") or "")
+        if event_type == "result" or event_type == "error":
+          return
+  except (BrokenPipeError, ConnectionResetError):
+    _kill_worker()
+  except Exception as err:
+    try:
+      msg = {"type": "error", "ok": False, "code": 500, "error": "stream failed", "detail": str(err)}
+      handler.wfile.write((json.dumps(msg) + "\n").encode("utf-8"))
+      handler.wfile.flush()
+    except Exception:
+      pass
+
+
+def _run_whisperx_stream(handler: BaseHTTPRequestHandler, payload: dict) -> None:
   input_path = str(payload.get("input") or "").strip()
   if input_path == "":
     _json(handler, 400, {"error": "input required"})
@@ -142,18 +188,13 @@ def _stream_whisperx(handler: BaseHTTPRequestHandler, payload: dict):
     _json(handler, 404, {"error": f"input not found: {input_path}"})
     return
 
-  handler.send_response(200)
-  handler.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-  handler.send_header("Cache-Control", "no-cache")
-  handler.end_headers()
+  output_srt = str(payload.get("output_srt") or "").strip()
+  output_dir = str(payload.get("output_dir") or "").strip() or (os.path.dirname(output_srt) if output_srt else "")
+  if output_dir == "":
+    output_dir = "/tmp"
 
-  _send_ndjson(handler, {"type": "log", "text": "worker transcribe begin"})
-  code, body = _run_whisperx(payload)
-  if code != 200:
-    _send_ndjson(handler, {"type": "error", **body})
-    return
-  _send_ndjson(handler, {"type": "log", "text": "worker transcribe done"})
-  _send_ndjson(handler, {"type": "result", **body})
+  req = _build_worker_request(payload, op="transcribe_stream", output_dir=output_dir, output_srt=output_srt)
+  _stream_from_worker(handler, req)
 
 
 def _discharge() -> Tuple[int, Dict[str, Any]]:
@@ -186,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
       _json(self, code, body)
       return
     if self.path == "/transcribe_stream":
-      _stream_whisperx(self, payload)
+      _run_whisperx_stream(self, payload)
       return
     if self.path == "/discharge":
       code, body = _discharge()
