@@ -62,7 +62,7 @@ export function handleMindSentenceJs(context, helpers) {
   }
   lines.push(`const cfg = mindConfigs.get(${JSON.stringify(mindName)}) || {};`);
   lines.push(`const host = cfg.space || ((typeof process !== "undefined" && process.env?.OLLAMA_HOST) ? process.env.OLLAMA_HOST : undefined) || "http://localhost:11434";`);
-  lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3-vl:8b-instruct\""};`);
+  lines.push(`const model = ${explicitModel ?? "cfg.model || \"qwen3.5:9b\""};`);
   const windowVal = sentence.by?.num ?? sentence.by?.quantity?.num ?? ob.window?.num ?? null;
   const windowLiteral = historyWindowLiteral(windowVal, "cfg.window");
   const dialogue = `${mindName} story`;

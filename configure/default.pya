@@ -31,11 +31,14 @@ from filename "./module/brief_video.pya" ob name brief video to name brief video
 from filename "./module/brief_video.pya" ob name teaching video to name teaching video be import do
 exists su say be default ob name piper command say ya
 exists su name mind backend be default ob name ollama command mind ya
-exists su name see default mind ob la be see ko as text "qwen3-vl:8b-instruct" be default ya
+exists su name see default mind ob la be see ko as text "qwen3.5:9b" be default ya
 exists su name see default prompter ob la be see ko ob text "Describe the image." be default ya
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
-exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
+su name mind configure be map def
+  su name think ob bool lie ya
+prah
 exists su name draw host ob text "http://localhost:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya
@@ -91,7 +94,7 @@ su name sandbox configure be map def
   su name max output bytes ob num 1048576 ya
   su name command env allowlist ob ve text "HOME" "LANG" "LC_ALL" "PATH" "PWD" "SHELL" "TERM" "TMPDIR" "USER" ya
 prah
-exists su name mind be mind from name http://localhost:11434 via state "qwen3-vl:8b-instruct" ya
+exists su name mind be mind from name http://localhost:11434 via state "qwen3.5:9b" ya
 exists su name verify brief prompter ob text "Verify TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya
 exists su name verify mind brief be mind as name "bespoke-minicheck:latest" fromtext name verify brief prompter ya
 exists su name review brief prompter ob text "Review TASK, ANSWER, and FLOW TRANSCRIPT. Give concise reasoning. Last non-empty line must be PASS, FAIL, or confidence 0..1." be text ya

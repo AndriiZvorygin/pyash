@@ -242,7 +242,7 @@ su name brief video from text manuscript be ceremony def
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
-  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
   su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
@@ -290,7 +290,7 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
-  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
   su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
@@ -635,7 +635,7 @@ su name music video from filename audio be ceremony def
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
-  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
   su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name mind draw discharge stage as wo mind be discharge do

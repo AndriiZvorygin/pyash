@@ -62,7 +62,7 @@ test("compiled write to mind builds messages payload and uses helper transport",
   assert.equal(calls.length, 2, "helper should be called for each say");
   const [payload] = calls;
   assert.equal(payload.host, "http://localhost:11434");
-  assert.equal(payload.model, "qwen3-vl:8b-instruct");
+  assert.equal(payload.model, "qwen3.5:9b");
   assert.equal(payload.messages.at(-1).content, "hello");
   assert.equal(payload.messages.at(-1).role, "user");
   assert.ok(payload.messages.every(m => m.role && m.content !== undefined));

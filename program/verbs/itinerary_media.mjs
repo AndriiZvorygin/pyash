@@ -444,7 +444,7 @@ function promptifyModel(sentence, rememberFn) {
   const mindFact = rememberFn?.(mindName);
   const model = String(mindFact?.as?.name ?? "").trim();
   if (model) return model;
-  return resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "qwen3-vl:8b-instruct";
+  return resolveConfigText("mind model", { rememberFn }) || process.env.PYA_MIND_MODEL || "qwen3.5:9b";
 }
 
 function promptifyHost(sentence, rememberFn) {
