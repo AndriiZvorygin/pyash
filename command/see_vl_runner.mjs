@@ -256,7 +256,7 @@ async function main() {
   const host = resolveHost(args.host);
   const openAiEndpoint = `${host.replace(/\/$/, "")}/v1/chat/completions`;
   const openAiBody = {
-    model: args.model ?? "qwen3-vl:8b",
+    model: args.model ?? "qwen3.5:9b",
     messages: [{ role: "user", content: [{ type: "text", text: effectivePrompt }, ...openAiParts] }],
     max_tokens: Number.isFinite(args.maxTokens) ? args.maxTokens : undefined
   };
@@ -281,7 +281,7 @@ async function main() {
       ollamaImages
     );
     const ollamaBody = {
-      model: args.model ?? "qwen3-vl:8b",
+      model: args.model ?? "qwen3.5:9b",
       messages: ollamaMessages
     };
     response = await requestJson(ollamaEndpoint, ollamaBody);

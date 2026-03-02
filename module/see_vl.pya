@@ -39,7 +39,7 @@ prah
 su name see from filename input ob text prompter to name text output be ceremony def
   ob text of ob of this to name text prompter be text do
   ob filename of from of this to name text image path be text do
-  exists su name mind ob text "qwen3-vl:8b-instruct" be text ya
+  ob text of mind model to name text mind be text do
   exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
   ob text " --image \"" to name cmd be plus do
   ob name image path to name cmd be plus do
@@ -58,7 +58,7 @@ prah
 su name see from filename input ob text prompter be ceremony def
   ob text of ob of this to name text prompter be text do
   ob filename of from of this to name text image path be text do
-  exists su name mind ob text "qwen3-vl:8b-instruct" be text ya
+  ob text of mind model to name text mind be text do
   exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
   ob text " --image \"" to name cmd be plus do
   ob name image path to name cmd be plus do
@@ -115,7 +115,7 @@ prah
 su name see from filename input to name text output be ceremony def
   exists su name prompter ob text "Describe the image." be text ya
   ob filename of from of this to name text image path be text do
-  exists su name mind ob text "qwen3-vl:8b-instruct" be text ya
+  ob text of mind model to name text mind be text do
   exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
   ob text " --image \"" to name cmd be plus do
   ob name image path to name cmd be plus do
@@ -134,7 +134,7 @@ prah
 su name see from filename input be ceremony def
   exists su name prompter ob text "Describe the image." be text ya
   ob filename of from of this to name text image path be text do
-  exists su name mind ob text "qwen3-vl:8b-instruct" be text ya
+  ob text of mind model to name text mind be text do
   exists su name cmd ob text "node command/see_vl_runner.mjs --prompt-stdin" be text ya
   ob text " --image \"" to name cmd be plus do
   ob name image path to name cmd be plus do
