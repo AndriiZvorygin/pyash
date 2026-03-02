@@ -138,3 +138,24 @@ test("cut from text as sentence keeps initialism periods and avoids micro senten
   assert.match(String(series[0]?.ob?.text ?? ""), /In 46 A\.D\./u);
   assert.doesNotMatch(String(series[0]?.ob?.text ?? ""), /^D\.$/u);
 });
+
+test("cut from text as sentence during num spreads cuts evenly across total duration", async () => {
+  const out = await cutFromTextToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: {
+      text: "Line one. Line two. Line three."
+    },
+    as: { text: "sentence" },
+    during: { num: 30 },
+    to: { name: "lyric cuts", nameTypeWords: ["itinerary"] }
+  });
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 3);
+  assert.equal(series[0]?.since?.num, 0);
+  assert.equal(series[0]?.until?.num, 10);
+  assert.equal(series[1]?.since?.num, 10);
+  assert.equal(series[1]?.until?.num, 20);
+  assert.equal(series[2]?.since?.num, 20);
+  assert.equal(series[2]?.until?.num, 30);
+});

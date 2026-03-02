@@ -693,8 +693,17 @@ export function recordPlatform(sentence) {
     runtimeActionSentence = { ...actionSentence };
     const runtimeFrom = { ...(runtimeActionSentence.from ?? {}) };
     delete runtimeFrom.ve;
-    delete runtimeFrom.name;
-    delete runtimeFrom.nameTypeWords;
+    const keepTypedFromName = Boolean(
+      (consumedDependencyName || consumedDependencyVector)
+      && Array.isArray(primaryFromCase?.nameTypeWords)
+      && primaryFromCase.nameTypeWords.length > 0
+      && typeof primaryFromCase?.name === "string"
+      && primaryFromCase.name.trim().length > 0
+    );
+    if (!keepTypedFromName) {
+      delete runtimeFrom.name;
+      delete runtimeFrom.nameTypeWords;
+    }
     const cleaned = Object.fromEntries(Object.entries(runtimeFrom).filter(([, v]) => v !== undefined));
     if (Object.keys(cleaned).length > 0) runtimeActionSentence.from = cleaned;
     else delete runtimeActionSentence.from;

@@ -18,7 +18,7 @@ function parseArgs(argv) {
     text: null,
     textStdin: false,
     yRatio: 0.42,
-    maxWidthRatio: 0.82,
+    maxWidthRatio: 0.42,
     fontFile: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
   };
   for (let i = 2; i < args.length; i += 1) {
@@ -33,8 +33,8 @@ function parseArgs(argv) {
   if (!Number.isFinite(out.yRatio) || out.yRatio < 0.38 || out.yRatio > 0.48) {
     throw new Error("y-ratio must be between 0.38 and 0.48");
   }
-  if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.60 || out.maxWidthRatio > 0.95) {
-    throw new Error("max-width-ratio must be between 0.60 and 0.95");
+  if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.30 || out.maxWidthRatio > 0.95) {
+    throw new Error("max-width-ratio must be between 0.30 and 0.95");
   }
   return out;
 }
@@ -148,14 +148,21 @@ export async function main(argv = process.argv) {
   const headingLines = layoutHeadingLines(headingText);
   const headingForBurn = headingLines.join("\n");
   const { width, height } = await probeImageSize(inputImage);
+  const lineCount = Math.max(1, headingLines.length);
   const maxLineChars = Math.max(...headingLines.map((line) => line.length), 1);
-  const usableWidth = Math.floor(width * opts.maxWidthRatio);
-  const baseSize = Math.floor(clamp(height * 0.062, height * 0.045, height * 0.068));
+  const panelWidth = Math.floor(width * opts.maxWidthRatio);
+  const usableWidth = Math.max(80, panelWidth - Math.floor(width * 0.02));
+  const targetBlockHeight = Math.floor(height * 0.25);
+  const perLineTarget = Math.floor((targetBlockHeight - Math.max(0, lineCount - 1) * 4) / lineCount);
+  const baseSize = Math.floor(clamp(perLineTarget, height * 0.060, height * 0.160));
   const widthBound = Math.floor((usableWidth / Math.max(1, maxLineChars)) / 0.62);
-  const fontSize = Math.floor(clamp(Math.min(baseSize, widthBound), height * 0.038, height * 0.068));
+  const fontSize = Math.floor(clamp(Math.min(baseSize, widthBound), height * 0.050, height * 0.160));
   const borderW = Math.max(2, Math.round(fontSize * 0.11));
   const shadow = Math.max(1, Math.round(fontSize * 0.03));
   const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h/2)`;
+  const panelLeft = Math.floor(width * (1 - opts.maxWidthRatio));
+  const panelPad = Math.floor(width * 0.01);
+  const xExpr = `${panelLeft + panelPad} + (${Math.max(1, usableWidth)}-text_w)/2`;
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-thumb-"));
   const textFile = path.join(tmpDir, "heading.txt");
@@ -169,7 +176,7 @@ export async function main(argv = process.argv) {
     "fontcolor=white",
     `fontsize=${fontSize}`,
     "line_spacing=4",
-    "x=(w-text_w)/2",
+    `x=${xExpr}`,
     `y=${yExpr}`,
     `borderw=${borderW}`,
     "bordercolor=black",

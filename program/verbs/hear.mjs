@@ -119,14 +119,6 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       raw: { aspect }
     });
   }
-  if (wantsSrt && aspectKey === "stream") {
-    throwErrorSentence({
-      name: "hear defective",
-      message: "hear defective: stream does not support srt",
-      from: { name: "hear" },
-      raw: { sentence }
-    });
-  }
 
   const fixture = resolveConfigText("hear fixture", { rememberFn });
   const defaultFact = rememberFn?.("hear");
@@ -169,7 +161,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   let backend = "fixture";
   let model = null;
   const inputPath = resolveHearInputPath(sentence, { rememberFn }) || resolveEvokeInputPath({ rememberFn });
-  if (aspectKey === "stream") {
+  if (aspectKey === "stream" && !wantsSrt) {
     const streamResult = await handleHearStream({ sentence, rememberFn, fixture, hearStreamProcesses });
     if (streamResult?.stream) return streamResult.stream;
     transcript = streamResult?.transcript ?? transcript;
@@ -269,7 +261,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
       backend = "whisper-stream";
       model = modelPath;
     }
-  } else if (aspectKey !== "stream") {
+  } else if (aspectKey !== "stream" || wantsSrt) {
     if (fixture !== undefined) {
       transcript = sanitizeTranscript(fixture);
     } else {
@@ -307,7 +299,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
             language,
             model: whisperxModel,
             diarize: wantsSpeakerDiarize,
-            streamLogs: hearWhisperxLogStreamingEnabled(rememberFn),
+            streamLogs: aspectKey === "stream" || hearWhisperxLogStreamingEnabled(rememberFn),
             onLog: (line) => {
               const text = String(line ?? "").trim();
               if (!text) return;
@@ -434,7 +426,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     inputSha256: sha256(inputBytes),
     outputSha256: sha256(transcriptBytes),
     format: wantsSrt ? "srt" : "text",
-    streaming: false
+    streaming: aspectKey === "stream"
   };
   const metadataText = canonicalJsonStringify(metadata);
   await fs.mkdir(path.dirname(metadataPath), { recursive: true });
@@ -501,6 +493,9 @@ export const signatures = [
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "filename", "to", "filename", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename", "to", "filename", "vyah", "stream"], handler: hear },
+  { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt", "from", "filename", "to", "filename", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "filename", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "become", "wo", "srt", "from", "name", "text", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "as", "wo", "speaker", "become", "wo", "srt"], handler: hear },

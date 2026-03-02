@@ -1,5 +1,5 @@
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do
@@ -18,7 +18,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
 prah
 
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output by num margin ratio be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do
@@ -38,7 +38,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
 prah
 
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo karaoke be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do
@@ -57,7 +57,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
 prah
 
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo karaoke by num margin ratio be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do
@@ -77,7 +77,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
 prah
 
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo wordflow be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do
@@ -96,7 +96,7 @@ su name footnote from filename subtitle fromstate wo srt with filename video bec
 prah
 
 su name footnote from filename subtitle fromstate wo srt with filename video become wo video to filename output as wo wordflow by num margin ratio be ceremony def
-  exists su name cmd ob text "node command/footnote_video.mjs" be text ya
+  exists su name cmd ob text "node /workplace/command/footnote_video.mjs" be text ya
   ob text " \"" to name cmd be plus do
   ob filename of with of this to name text video path be text do
   ob name video path to name cmd be plus do

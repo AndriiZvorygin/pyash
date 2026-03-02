@@ -43,8 +43,10 @@ async function findImageForCut(imagesDir, prefix, cutIndex) {
   const normalizedPrefix = String(prefix ?? "").trim();
   const stem = normalizedPrefix ? `${normalizedPrefix}-cut-${idx}` : `-cut-${idx}`;
   const found = names
+    .map((name) => String(name ?? ""))
     .filter((name) => {
-      if (!name.toLowerCase().endsWith(".png")) return false;
+      const lower = name.toLowerCase();
+      if (!lower.endsWith(".png")) return false;
       if (normalizedPrefix) return name.startsWith(stem);
       return name.includes(stem);
     })
@@ -177,6 +179,26 @@ async function getAudioDurationSeconds(audioFile) {
 
 function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
   const rows = Array.isArray(cuts) ? cuts : [];
+  const normalizedAudioDuration = Number(audioDurationSeconds);
+  const canEvenlyDistributeByAudio = Number.isFinite(normalizedAudioDuration) && normalizedAudioDuration > 0
+    && rows.length > 0
+    && rows.every((cut, i) => {
+      const since = Number(cut?.since ?? NaN);
+      const until = Number(cut?.until ?? NaN);
+      return Number.isFinite(since)
+        && Number.isFinite(until)
+        && Math.abs(since - i) < 1e-6
+        && Math.abs(until - (i + 1)) < 1e-6;
+    });
+  if (canEvenlyDistributeByAudio) {
+    const slice = normalizedAudioDuration / rows.length;
+    return rows.map((cut, i) => {
+      const duration = i === rows.length - 1
+        ? Math.max(0.05, normalizedAudioDuration - (slice * (rows.length - 1)))
+        : Math.max(0.05, slice);
+      return { ...cut, duration };
+    });
+  }
   const out = [];
   for (let i = 0; i < rows.length; i += 1) {
     const cut = rows[i];

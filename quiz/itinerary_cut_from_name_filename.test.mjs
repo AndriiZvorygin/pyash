@@ -80,3 +80,28 @@ test("cut from text sentence mode keeps scripture refs within sentence", async (
   assert.match(String(series[1]?.ob?.text ?? ""), /1\.9/u);
   assert.equal(/^\d+[.,]?$/.test(String(series[0]?.ob?.text ?? "").trim()), false);
 });
+
+test("cut from name text sentence mode during num applies even durations", async () => {
+  forget();
+  doRemember({
+    mood: "ya",
+    su: { name: "lyrics source" },
+    ob: { text: "First line. Second line. Third line." },
+    be: "text"
+  });
+
+  await interpret(
+    parse('su name cut stage from name lyrics source as text "sentence" during num 30 to name itinerary lyric cuts be cut do')
+  );
+
+  const itinerary = remember("lyric cuts");
+  assert.equal(itinerary?.be, "itinerary");
+  const series = Array.isArray(itinerary?.ob?.series) ? itinerary.ob.series : [];
+  assert.equal(series.length, 3);
+  assert.equal(series[0]?.since?.num, 0);
+  assert.equal(series[0]?.until?.num, 10);
+  assert.equal(series[1]?.since?.num, 10);
+  assert.equal(series[1]?.until?.num, 20);
+  assert.equal(series[2]?.since?.num, 20);
+  assert.equal(series[2]?.until?.num, 30);
+});

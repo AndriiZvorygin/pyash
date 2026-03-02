@@ -49,17 +49,19 @@ test("hear become wo srt defaults to artifacts output path", async () => {
   }
 });
 
-test("hear stream rejects become wo srt", async () => {
+test("hear stream supports become wo srt", async () => {
   forget();
-  process.env.PYA_HEAR_FIXTURE = "line";
+  process.env.PYA_HEAR_FIXTURE = "line one\nline two";
   try {
     const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "hear-srt-"));
     const inputPath = path.join(dir, "stream.wav");
+    const outputPath = path.join(dir, "stream.srt");
     await fs.writeFile(inputPath, "fake-audio", "utf8");
-    await assert.rejects(
-      run(`su name live from filename "${inputPath}" become wo srt be hear vyah stream do`),
-      /hear defective: stream does not support srt/u
-    );
+    const result = await run(`su name live from filename "${inputPath}" become wo srt to filename "${outputPath}" be hear vyah stream do`);
+    assert.equal(result?.value?.filename, outputPath);
+    const srt = await fs.readFile(outputPath, "utf8");
+    assert.match(srt, /line one/u);
+    assert.match(srt, /-->/u);
   } finally {
     delete process.env.PYA_HEAR_FIXTURE;
   }
