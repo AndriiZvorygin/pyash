@@ -81,10 +81,13 @@ Output exactly one image-generation prompt for a single scroll-stopping scene ba
 Hard rules:
 1. Image-only. Absolutely no visible text, letters, words, numbers, logos, watermarks, captions, subtitles, UI, signs, posters, book pages, tablets, engraved writing, or title cards.
 2. Do not ask for text overlay and do not include any wording inside the image scene.
-3. Pick the strongest hook moment from the script and render it as a concrete visual scene with clear subject, action, and stakes.
-4. Favor emotional intensity, cinematic lighting, strong contrast, depth, and clean composition.
-5. Keep prompt under 120 words and specific to visuals.
-6. Output only the final image prompt.
+3. Use a person-centric composition: a clear human subject with visible face and strong expression tied to the hook moment.
+4. Prefer one person covered in the script. If the script names a person, anchor the scene to that person.
+5. Pick the strongest hook moment from the script and render it as a concrete visual scene with clear subject, action, and stakes.
+6. Favor emotional intensity, cinematic lighting, strong contrast, depth, and clean composition.
+7. Keep prompt under 120 words and specific to visuals.
+8. Composition layout: keep the expressive face/subject on the left side, and keep the right side cleaner/simpler for later heading overlay.
+9. Output only the final image prompt.
 
 Context contains FULL SCRIPT and IMAGE PROMPTS ITINERARY. Use both to choose a hook frame that represents the video and opens with high curiosity..text.quoted be text ya
 exists su name thumbnail context template ob text quoted.text.FULL SCRIPT:
@@ -516,19 +519,22 @@ su name teaching video from text manuscript be ceremony def
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
+  su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
+  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
 
   su name mind draw discharge stage as wo mind be discharge do
   su name section draw series stage from name teaching section prompts by name teaching video section draw mapper to name text teaching section draws be series map do
+  su name thumbnail directory path stage to name text thumbnail directory path be teaching video run root do
+  ob text "/thumbnail" to name thumbnail directory path be plus do
+  su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
+  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
+  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
   su name draw discharge before concatenate stage as wo draw be discharge do
   su name section video series stage from name teaching section cuts by name teaching video section concatenate mapper to name text teaching section videos be series map do
-
-  su name thumbnail section root stage from num 0 to name text thumbnail section root be teaching video section root do
-  su name thumbnail image path stage ob name text thumbnail section root to name text thumbnail image path be text do
-  ob text "/draw/section-draw-stage-cut-001.png" to name thumbnail image path be plus do
-  su name thumbnail platform ob name text thumbnail image path to name filename thumbnail source be filename do
-  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
-  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
   su name section clip manifest filename stage from text "teaching-section-clips-footnote" to name filename section clip manifest be teaching video stage manifest filename do
   su name footnote clip glob stage to name text footnote clip glob be teaching video run root do
@@ -604,6 +610,103 @@ su name teaching video wide from filename manuscript to filename video short be 
   su name result ret
 prah
 
+su name music video from filename audio be ceremony def
+  su name mind preflight discharge stage as wo mind be discharge do
+  su name draw preflight discharge stage as wo draw be discharge do
+  su name hear preflight discharge stage as wo hear be discharge do
+  su name qwen say preflight discharge stage as wo "qwen say" be discharge do
+
+  su name thumbnail heading y ratio stage to name num thumbnail heading y ratio be current thumbnail heading y ratio do
+  su name video heading y ratio stage to name num video heading y ratio be current video heading y ratio do
+  su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
+  su name footnote mode stage to name text footnote mode current be current footnote mode do
+
+  su name run root stage to name text music video run root be teaching video run root do
+
+  su name captions path stage ob name text music video run root to name text captions path be text do
+  ob text "/captions.srt" to name captions path be plus do
+  su name captions filename stage ob name text captions path to name filename captions filename be filename do
+
+  su name hear stage from filename of from of this become wo srt to filename of ob of captions filename stage be hear do
+  su name captions output stage ob filename of ob of hear stage be filename do
+
+  su name captions text stage from filename of ob of captions output stage become wo text to name text manuscript out be read do
+  su name cut stage from filename of ob of captions output stage during num of ob of teaching video section window seconds to name itinerary teaching cuts by num 0 be cut do
+
+  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
+  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
+  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
+  su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
+  su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
+  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+
+  su name mind draw discharge stage as wo mind be discharge do
+
+  su name draw directory path stage ob name text music video run root to name text draw directory path be text do
+  ob text "/draw" to name draw directory path be plus do
+  su name draw directory stage ob name text draw directory path to name filename draw directory be filename do
+  ob name text draw widescreen mode be equally from text "truth" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw directory stage be draw do
+  ob name text draw widescreen mode be equally from text "lie" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw directory stage be draw do
+
+  su name thumbnail directory path stage to name text thumbnail directory path be teaching video run root do
+  ob text "/thumbnail" to name thumbnail directory path be plus do
+  su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
+  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
+  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
+  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
+  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
+
+  su name draw discharge before concatenate stage as wo draw be discharge do
+
+  su name video cuts audio filename ob text of filename of from of this be text do
+  su name video cuts images directory ob name text draw directory path stage be text do
+  exists su name video cuts prefix ob text "draw-stage" be text ya
+
+  su name video path stage ob name text music video run root to name text video path be text do
+  ob text "/music-video.mp4" to name video path be plus do
+  su name video filename stage ob name text video path to name filename video filename be filename do
+  su name concatenate stage from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of ob of video filename stage be concatenate do
+
+  su name footnote path stage ob name text music video run root to name text footnote path be text do
+  ob text "/music-video-footnote.mp4" to name footnote path be plus do
+  su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
+  ob text of ob of footnote mode stage be equally from text "karaoke" then su name footnote stage from filename of ob of captions output stage fromstate wo srt with filename of ob of concatenate stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "plain" then su name footnote stage from filename of ob of captions output stage fromstate wo srt with filename of ob of concatenate stage become wo video to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage be footnote do
+  ob text of ob of footnote mode stage be equally from text "wordflow" then su name footnote stage from filename of ob of captions output stage fromstate wo srt with filename of ob of concatenate stage become wo video to filename of ob of footnote filename stage as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+
+  su name opening heading stage from filename of ob of footnote stage with name text video heading to filename of ob of footnote stage by num of ob of video heading y ratio stage be video heading burn do
+  su name draw discharge stage as wo draw be discharge do
+
+  su name result ob filename of ob of opening heading stage be music video ya
+  su name result ret
+prah
+
+su name music video from filename audio to filename video short be ceremony def
+  su name result stage from filename of from of this be music video do
+  su name output path stage ob filename of to of this to name filename output path be filename do
+  su name output path text stage ob text of ob of filename output path to name text output path text be text do
+  ob name text output path text be equally from text "[object Object]" then ob filename of ob of result stage to name filename output path be filename do
+  ob name text output path text be equally from text "" then ob filename of ob of result stage to name filename output path be filename do
+  su name copy stage from filename of ob of result stage to filename of ob of filename output path be copy do
+  su name result out stage ob filename of ob of filename output path be music video ya
+  su name result out stage ret
+prah
+
+su name music video wide from filename audio be ceremony def
+  su name draw widescreen mode ob text "truth" ya
+  su name result from filename of from of this be music video do
+  su name draw widescreen mode ob text "lie" ya
+  su name result ret
+prah
+
+su name music video wide from filename audio to filename video short be ceremony def
+  su name draw widescreen mode ob text "truth" ya
+  su name result from filename of from of this to filename of to of this be music video do
+  su name draw widescreen mode ob text "lie" ya
+  su name result ret
+prah
+
 su name brief video from filename manuscript be ceremony def
   su name source stage from filename of from of this become wo text to name text manuscript source be read do
   su name result from text of ob of manuscript source be brief video do
@@ -618,3 +721,4 @@ prah
 
 exists su name brief video be export ya
 exists su name teaching video be export ya
+exists su name music video be export ya

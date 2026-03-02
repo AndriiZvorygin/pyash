@@ -158,10 +158,13 @@ function collectInputDeclarations(entries = []) {
 
 function parseBindingTailWords(bindingWords = []) {
   const joined = bindingWords.join(" ").trim();
-  if (!joined) return { explicit: [], shorthand: null };
+  if (!joined) return { explicit: [], shorthand: null, shorthandValues: [] };
   const tokens = tokenize(joined).map(normalizeToken).filter(Boolean);
   if (tokens.length === 1 && tokens[0] !== "ob") {
-    return { explicit: [], shorthand: tokens[0] };
+    return { explicit: [], shorthand: tokens[0], shorthandValues: [tokens[0]] };
+  }
+  if (tokens.length > 1 && !tokens.includes("ob")) {
+    return { explicit: [], shorthand: null, shorthandValues: tokens };
   }
   const explicit = [];
   let index = 0;
@@ -206,7 +209,7 @@ function parseBindingTailWords(bindingWords = []) {
     explicit.push({ transport: String(transport), value: String(value), handle: String(handle) });
     index += 6;
   }
-  return { explicit, shorthand: null };
+  return { explicit, shorthand: null, shorthandValues: [] };
 }
 
 function materializeBindingFact({ handle, transport, value }) {
@@ -323,20 +326,29 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
     }
     byHandle.set(handle, port);
   }
-  const { explicit, shorthand } = parseBindingTailWords(bindingWords);
+  const { explicit, shorthand, shorthandValues } = parseBindingTailWords(bindingWords);
   const bound = new Map();
-  if (shorthand !== null) {
+  if (shorthand !== null || (Array.isArray(shorthandValues) && shorthandValues.length > 0)) {
     const filenameInputs = inputs.filter(port => String(port?.transport ?? "") === "filename");
-    if (filenameInputs.length !== 1) {
+    const values = Array.isArray(shorthandValues) && shorthandValues.length > 0
+      ? shorthandValues.map(v => String(v))
+      : [String(shorthand)];
+    if (values.length === 1 && filenameInputs.length === 1) {
+      const port = filenameInputs[0];
+      bound.set(String(port.handle), { handle: String(port.handle), transport: "filename", value: String(values[0]) });
+    } else if (values.length === filenameInputs.length) {
+      for (let i = 0; i < filenameInputs.length; i += 1) {
+        const port = filenameInputs[i];
+        bound.set(String(port.handle), { handle: String(port.handle), transport: "filename", value: String(values[i]) });
+      }
+    } else {
       throwErrorSentence({
         name: "input binding defective",
-        message: "input binding defective: shorthand requires exactly one filename input port",
+        message: "input binding defective: shorthand positional args must match filename input count",
         from: { name: "run" },
-        raw: { declarations, shorthand }
+        raw: { declarations, shorthand, shorthandValues: values }
       });
     }
-    const port = filenameInputs[0];
-    bound.set(String(port.handle), { handle: String(port.handle), transport: "filename", value: String(shorthand) });
   }
   for (const row of explicit) {
     const handle = String(row?.handle ?? "").trim();

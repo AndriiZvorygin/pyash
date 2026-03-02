@@ -1,0 +1,18 @@
+ob filename text manuscript be input ya
+exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name draw widescreen mode ob text "lie" be default ya
+exists su name subtitle margin ratio override ob num 0.40 be num ya
+
+exists su name draw size shorts be map def
+su name width ob num 720 ya
+su name height ob num 1280 ya
+su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
+su name thumbnail_heading_y_ratio ob num 0.42 ya
+su name video_heading_y_ratio ob num 0.60 ya
+su name subtitle_margin_ratio ob num 0.40 ya
+su name footnote_mode ob text "wordflow" ya
+prah
+
+su name music demo from filename of ob of manuscript be music video do
+
+su name result out ob name music demo be write do
