@@ -8,6 +8,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { recordArtifact } from "../bridge/exchange.mjs";
 import { getExchangeRunId } from "../bridge/exchange.mjs";
+import { enforceAutoDischarge } from "../motor/provider_auto_discharge.mjs";
 
 function resolvePromptPart(value, { rememberFn = remember } = {}) {
   if (!value) return "";
@@ -120,6 +121,7 @@ export async function drawTextImage(sentence, { remember: rememberFn = remember 
   const host = resolveHost({ rememberFn });
   const output = String(sentence?.to?.filename ?? "").trim() || defaultOutputPath();
   const { width, height, negativePrompt } = resolveDrawSizeFromMap(sentence, { rememberFn });
+  await enforceAutoDischarge({ activatingClass: "draw", rememberFn });
   await runDraw({ prompt, workflowName, host, output, width, height, negativePrompt });
   const bytes = await fs.readFile(path.resolve(output));
   recordArtifact({ locator: output, producer: "draw", bytes, kind: "image" });
@@ -128,6 +130,22 @@ export async function drawTextImage(sentence, { remember: rememberFn = remember 
 }
 
 export const signatures = [
+  { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "with", "name", "map", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "with", "name", "map", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "with", "name", "map"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "image", "fromstate", "wo", "text", "ob", "text", "with", "name", "map"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "with", "name", "map", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "with", "name", "map", "to", "filename"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "with", "name", "map"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text"], handler: drawTextImage },
+  { signatureWords: ["be", "draw", "as", "text", "become", "wo", "photograph", "fromstate", "wo", "text", "ob", "text", "with", "name", "map"], handler: drawTextImage },
   { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawTextImage },
   { signatureWords: ["be", "draw", "become", "wo", "image", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "with", "name", "map", "to", "filename"], handler: drawTextImage },
   { signatureWords: ["be", "draw", "as", "text", "become", "wo", "image", "fromstate", "wo", "text", "fromtext", "text", "ob", "text", "to", "filename"], handler: drawTextImage },

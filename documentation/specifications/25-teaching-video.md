@@ -64,17 +64,6 @@ Dependency link encoding:
 - use `from name <dependency>` for one dependency,
 - use `from ve name <dep1> name <dep2> ...` for multiple dependencies.
 
-Canonical signatures (v0 quick block):
-- `ob text <prompt> fromstate wo text become wo photograph to filename <path> be draw do`
-- `from filename <path> ob text <prompt> fromstate wo photograph become wo photograph to filename <path> be draw do`
-- `from filename <path> ob text <prompt> fromstate wo photograph become wo video to filename <path> be draw do`
-- `from name <itinerary> ob text <prompt> fromstate wo text become wo photograph to name photographs <name> be draw do`
-- `from filename <audio> become wo srt to filename <path> be hear do`
-- `from filename <audio> become wo srt to name text <out> be hear do`
-- `from filename <srt> during num <seconds> to name itinerary <name> be cut do`
-- `from name <itinerary> fromstate wo itinerary become wo video to filename <path> be concatenate do`
-- `from ve name itinerary <itinerary> name photographs <photos> fromstate wo itinerary become wo video to filename <path> be concatenate do`
-
 Section clip profile (normative extension):
 - each paragraph section produces a deterministic section clip filename (for example `paragraph-001.mp4`),
 - final video concatenates section clip itinerary in section order.
@@ -92,36 +81,7 @@ Platform manifest contract (normative):
 
 ### 4.1 Draw
 
-Text to teaching photograph:
-```pyash
-ob text "prompt text"
-fromstate wo text
-become wo photograph
-to filename "artifacts/draw/shot-001.png"
-be draw do
-```
-
-Photograph to teaching photograph:
-```pyash
-from filename "artifacts/draw/source.png"
-ob text "prompt text"
-fromstate wo photograph
-become wo photograph
-to filename "artifacts/draw/shot-002.png"
-be draw do
-```
-
-Photograph to teaching video:
-```pyash
-from filename "artifacts/draw/source.png"
-ob text "motion prompt text"
-fromstate wo photograph
-become wo video
-to filename "artifacts/draw/shot-003.mp4"
-be draw do
-```
-
-Cuts to photographs artifact family:
+Canonical example:
 ```pyash
 from name teaching cuts
 ob text "Generate one photograph per cut from its footnote text."
@@ -161,7 +121,7 @@ Prompt assembly and override (normative):
 
 ### 4.2 Hear SRT
 
-Audio to SRT file:
+Canonical example:
 ```pyash
 from filename "artifacts/say/teaching.wav"
 become wo srt
@@ -169,27 +129,9 @@ to filename "artifacts/footnote/teaching.srt"
 be hear do
 ```
 
-Audio to SRT text:
-```pyash
-from filename "artifacts/say/teaching.wav"
-become wo srt
-to name text footnote out
-be hear do
-```
-
 ### 4.2.1 Footnote (styled/baked captions)
 
 `footnote` consumes SRT + video and emits a video with burned captions.
-
-Plain:
-```pyash
-from filename "artifacts/footnote/teaching.srt"
-fromstate wo srt
-with filename "artifacts/video/teaching.mp4"
-become wo video
-to filename "artifacts/video/teaching-footnote.mp4"
-be footnote do
-```
 
 Karaoke:
 ```pyash
@@ -222,18 +164,11 @@ Current layout behavior (implemented):
 
 ### 4.3 Cut
 
-SRT to itinerary:
+Canonical example:
 ```pyash
 from filename "artifacts/footnote/teaching.srt"
 during num 6
 to name itinerary teaching cuts
-be cut do
-```
-
-Text to section itinerary:
-```pyash
-from text "paragraph one\n\nparagraph two\n\nparagraph three"
-to name itinerary teaching sections
 be cut do
 ```
 
@@ -244,21 +179,12 @@ Behavior:
 
 ### 4.4 Concatenate
 
-Itinerary + photographs to video:
+Canonical example:
 ```pyash
 from ve name itinerary teaching cuts name photographs photos
 fromstate wo itinerary
 become wo video
 to filename "artifacts/video/teaching.mp4"
-be concatenate do
-```
-
-Section clips to final video:
-```pyash
-from name teaching section clips
-fromstate wo itinerary
-become wo video
-to filename "artifacts/video/teaching-final.mp4"
 be concatenate do
 ```
 
@@ -352,150 +278,21 @@ Holding lane rule:
 
 ### 6.2.5 GPU holding lane profile (normative)
 
-When teaching-video uses a GPU queue manager, it SHOULD follow the same lifecycle pattern as channel spooling.
+When teaching-video uses a GPU queue manager, it follows a lane-isolated channel-like lifecycle in `world/holding/gpu/`:
+1. enqueue to `input/`,
+2. claim into `runtime/`,
+3. emit `produce/success/` or `produce/fail/`.
 
-Canonical lane:
-- `world/holding/gpu/`
-
-Required lifecycle:
-1. enqueue normalized jobs into `input/`
-2. claim/move jobs into `runtime/`
-3. move completed jobs into `produce/success/` or `produce/fail/`
-
-Required behavior:
-1. claim/lease semantics MUST be scoped by run/stage identity (for example run-id + stage + section/cut key)
-2. warm-start checkpointing MUST avoid replaying already completed jobs
-3. queue writes and stage transitions MUST use atomic same-filesystem operations (temp-write + rename, then stage rename)
-4. records MUST remain auditable as `.pya` artifacts for each stage transition
-
-Queue semantics note:
-- this is intentionally parallel to channel spool semantics in `24-channel-contract.md` section `7.1`, but scoped to teaching-video GPU workloads.
-
-Envelope/file pattern (normative):
-- queue files in `input/`, `runtime/`, and `produce/*/` MUST be Pyash sentence envelopes (`.pya`), not ad hoc JSON.
-- incoming files SHOULD use a canonical `queue envelope` map sentence that includes:
-1. queue phase/stage
-2. queued timestamp
-3. retry count
-4. lane/type identity (`gpu`)
-5. run/stage key (run-id, stage name, section/cut/sentence identity as applicable)
-6. payload handle/reference
-- outgoing files in `produce/success/` and `produce/fail/` SHOULD keep the same envelope identity and append outcome facts:
-1. outcome status (`success` or `fail`)
-2. completed timestamp
-3. result artifact handle/hash on success
-4. short defect text/code on failure
-- transitions between lifecycle directories MUST preserve envelope traceability so one logical job can be followed across stages.
-
-Canonical envelope examples:
-
-Input (`world/holding/gpu/input/*.pya`):
-```pyash
-su name gpu queue envelope be map def
-su name phase ob text "input" ya
-su name queued at ob date 2026-02-25T18:10:00.000Z ya
-su name retry count ob num 0 ya
-su name lane type ob text "gpu" ya
-su name run id ob text "20260225-130-teaching-video-from-filename" ya
-su name stage name ob text "draw" ya
-su name item id ob text "section-001-cut-003" ya
-su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
-su name gpu queue envelope prah
-```
-
-Success (`world/holding/gpu/produce/success/*.pya`):
-```pyash
-su name gpu queue envelope be map def
-su name phase ob text "produce-success" ya
-su name queued at ob date 2026-02-25T18:10:00.000Z ya
-su name completed at ob date 2026-02-25T18:10:02.000Z ya
-su name retry count ob num 0 ya
-su name lane type ob text "gpu" ya
-su name run id ob text "20260225-130-teaching-video-from-filename" ya
-su name stage name ob text "draw" ya
-su name item id ob text "section-001-cut-003" ya
-su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
-su name outcome ob text "success" ya
-su name result artifact ob text "artifact draw-003 sha256:abc123..." ya
-su name gpu queue envelope prah
-```
-
-Fail (`world/holding/gpu/produce/fail/*.pya`):
-```pyash
-su name gpu queue envelope be map def
-su name phase ob text "produce-fail" ya
-su name queued at ob date 2026-02-25T18:10:00.000Z ya
-su name completed at ob date 2026-02-25T18:10:05.000Z ya
-su name retry count ob num 1 ya
-su name lane type ob text "gpu" ya
-su name run id ob text "20260225-130-teaching-video-from-filename" ya
-su name stage name ob text "draw" ya
-su name item id ob text "section-001-cut-003" ya
-su name payload ref ob text "artifacts/.../draw-prompts.series.pya#cut-003" ya
-su name outcome ob text "fail" ya
-su name defect code ob text "draw defective" ya
-su name defect text ob text "provider request failed: timeout" ya
-su name gpu queue envelope prah
-```
-
-Router reuse profile (normative):
-- the existing router operation pattern (`input`, `produce`, `health`) MAY be reused for GPU queue orchestration.
-- if reused, endpoint identities MUST be lane-scoped (for example `from name gpu queue`, `to name stage draw`) and MUST NOT impersonate channel endpoints.
-- lane isolation still applies: GPU router traffic remains in `world/holding/gpu/` and channel router traffic remains in `world/holding/channel/`.
+Queue files are `.pya` envelopes, transitions are atomic (temp-write + rename), claims are run/stage scoped, and records are auditable.
 
 ### 6.2.6 Evoker async contract (normative)
 
-From the Pyash evoker side, queued GPU work should be promise-like and aspect-driven.
+From the evoker side, queued GPU work is aspect-first:
+1. `vyah start` (submit + handle),
+2. `vyah status` (poll),
+3. `vyah await` (terminal success/fail).
 
-Canonical lifecycle:
-1. `vyah start` submits work and returns a duty handle
-2. `vyah status` reports current state for the duty handle
-3. `vyah await` blocks for completion and returns final success/fail result
-
-Canonical examples:
-
-Start:
-```pyash
-su name draw-job-001
-from name section draw prompts
-to name stage draw
-vyah start
-be gpu do
-```
-
-Expected result shape:
-```pyash
-su name draw-job-001 as name running be duty ya
-```
-
-Status:
-```pyash
-su name draw-job-001 vyah status be gpu do
-```
-
-Await:
-```pyash
-su name draw-job-001 vyah await be gpu do
-```
-
-Completion example:
-```pyash
-su name draw-job-001
-vyah await success
-ob text "artifact draw-003 sha256:abc123..."
-be gpu ya
-```
-
-Failure example:
-```pyash
-su name draw-job-001
-vyah await fail
-ob text "draw defective: provider request failed: timeout"
-be gpu ya
-```
-
-Lowering note:
-- implementations MAY lower this contract to router-like `input`/`produce`/`health` internals and `world/holding/gpu/` envelopes, but the evoker-facing API should remain aspect-first (`start`, `status`, `await`).
+Implementations may lower this to router-like internals, but the public API remains `start/status/await`.
 
 ## 6.3 Draw workflow storage and resolution
 
