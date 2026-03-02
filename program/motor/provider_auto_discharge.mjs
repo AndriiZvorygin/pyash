@@ -8,7 +8,7 @@ import { doRemember, remember } from "../remember/index.mjs";
 
 // Emergency hard-off switch: when true, auto discharge is completely disabled
 // regardless of runtime/default configuration.
-const AUTO_DISCHARGE_HARD_DISABLED = true;
+const AUTO_DISCHARGE_HARD_DISABLED = false;
 
 function normalizeClassList(values = []) {
   const out = [];

@@ -190,10 +190,12 @@ async function persistItineraryManifest({
   fallbackPrefix = "itinerary"
 } = {}) {
   const runId = String(getExchangeRunId?.() ?? "").trim();
-  if (!runId) return "";
   const outputHandle = platformOutputHandleName(sentence, fallbackPrefix);
   const outputPrefix = `${normalizePlatformHandleToPrefix(outputHandle, fallbackPrefix)}${itinerarySuffixFromSentence(sentence)}`;
-  const outputFile = path.join("artifacts", runId, `${outputPrefix}.series.pya`);
+  const outputRoot = runId
+    ? path.join("artifacts", runId)
+    : path.join("artifacts", fallbackPrefix, buildRunTag());
+  const outputFile = path.join(outputRoot, `${outputPrefix}.series.pya`);
   const outputResolved = resolveAgentPath(outputFile, { rememberFn });
   if (outputResolved.outside) {
     throwErrorSentence({

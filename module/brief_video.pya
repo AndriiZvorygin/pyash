@@ -242,8 +242,8 @@ su name brief video from text manuscript be ceremony def
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
-  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
 
@@ -290,8 +290,8 @@ su name brief video from text manuscript to filename video short be ceremony def
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
 
-  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
 
@@ -392,7 +392,7 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section srt output stage ret
 prah
 
-su name teaching video section cut mapper ob filename section srt fromindex num 0 be ceremony def
+su name teaching video section video mapper ob filename section srt fromindex num 0 be ceremony def
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
@@ -513,28 +513,25 @@ su name teaching video from text manuscript be ceremony def
   su name section srt series stage from name teaching section audios by name teaching video section hear mapper to name text teaching section srts be series map do
 
   su name hear discharge stage as wo hear be discharge do
-  su name section cut series stage from name teaching section srts by name teaching video section cut mapper to name text teaching section cuts be series map do
+  su name section cut series stage from name teaching section srts by name teaching video section video mapper to name text teaching section cuts be series map do
 
   su name section prompt series stage from name teaching section cuts by name teaching video section prompt mapper to name text teaching section prompts be series map do
   su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
-  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
 
   su name mind draw discharge stage as wo mind be discharge do
   su name section draw series stage from name teaching section prompts by name teaching video section draw mapper to name text teaching section draws be series map do
-  su name thumbnail directory path stage to name text thumbnail directory path be teaching video run root do
-  ob text "/thumbnail" to name thumbnail directory path be plus do
-  su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
-  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
-  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
-  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
-  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
   su name draw discharge before concatenate stage as wo draw be discharge do
   su name section video series stage from name teaching section cuts by name teaching video section concatenate mapper to name text teaching section videos be series map do
+  su name thumbnail section root stage from num 1 to name text thumbnail section root be teaching video section root do
+  su name thumbnail platform path stage ob name text thumbnail section root stage to name text thumbnail platform path be text do
+  ob text "/draw/section-draw-stage-cut-001.png" to name thumbnail platform path be plus do
+  su name thumbnail platform stage ob name text thumbnail platform path to name filename thumbnail platform be filename do
+  su name thumbnail heading stage from filename of ob of thumbnail platform stage with name text video heading to filename of ob of thumbnail platform stage by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
+  su name thumbnail stage ob filename of ob of thumbnail heading stage to name filename thumbnail be filename do
 
   su name section clip manifest filename stage from text "teaching-section-clips-footnote" to name filename section clip manifest be teaching video stage manifest filename do
   su name footnote clip glob stage to name text footnote clip glob be teaching video run root do
@@ -638,8 +635,8 @@ su name music video from filename audio be ceremony def
   su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
   su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
-  exists su name brief video internal thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name brief video internal thumbnail mind to name text thumbnail prompt be write do
+  exists su name shorts thumbnail mind be mind as name "qwen3-vl:8b-instruct" fromtext name thumbnail system prompt ya
+  su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
   su name mind draw discharge stage as wo mind be discharge do
 
