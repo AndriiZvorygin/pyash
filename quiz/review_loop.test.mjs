@@ -146,6 +146,32 @@ test("verify loop guarantee draft regex failure triggers retry and stores succes
   assert.match(String(success?.guarantee?.text ?? ""), /draft regex=match/);
 });
 
+test("verify loop enforces TARGET_WORDS deterministically", async () => {
+  forget();
+
+  await run('exists su name target gen count ob num 0 be number ya');
+  await run('su name target gen ob text input to name text output be ceremony def');
+  await run('ob num 1 to name target gen count be plus do');
+  await run('ob name target gen count from num 1 be equally then ob text "" to name text output be text do');
+  await run('ob name target gen count from num 2 be equally then ob text "two" to name text output be text do');
+  await run('ob name target gen count from num 2 be giant then ob text "two" to name text output be text do');
+  await run('su name output ret');
+  await run('prah');
+  await run('su name target reviewer ob text input to name text output be ceremony def');
+  await run(`ob text quoted.text.looks fine
+PASS
+.text.quoted to name text output be text do`);
+  await run('su name output ret');
+  await run('prah');
+
+  await run('ob text "TARGET_WORDS: 1-1\\nTask." for name target gen by name target reviewer atleast num 0.8 atmost num 3 to name text result be verify loop do');
+
+  const result = String(remember("result")?.ob?.text ?? "");
+  assert.equal(result, "two");
+  assert.equal(remember("verify loop attempts used")?.ob?.num, 2);
+  assert.match(String(remember("verify loop guarantee")?.ob?.text ?? ""), /target words=match/);
+});
+
 test("verify loop can run with guarantee only and no reviewer", async () => {
   forget();
 
