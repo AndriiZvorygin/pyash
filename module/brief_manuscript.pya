@@ -4,6 +4,7 @@ exists su name brief video script hook retry mind be mind fromtext name brief vi
 exists su name brief video script body retry mind be mind fromtext name brief video script body retry prompt ya
 exists su name brief video script source thrust verify mind be mind fromtext name brief video script source thrust verify prompt ya
 exists su name brief video script source thrust repair mind be mind fromtext name brief video script source thrust repair prompt ya
+exists su name brief video script source thrust repair retry mind be mind fromtext name brief video script source thrust repair retry prompt ya
 
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
@@ -197,6 +198,19 @@ Rules:
 - No labels, no bullets, no markdown, no surrounding quotes.
 .text.quoted be text ya
 
+exists su name brief video script source thrust repair retry prompt ob text quoted.text.Rewrite SCRIPT so every historical claim is grounded in TRANSCRIPT.
+
+Task:
+- Keep dramatic spoken-prose style and modern parallels.
+- Use exactly 90 words.
+- End with this exact sentence: Subscribe for more.
+
+Rules:
+- Do not add historical people, places, events, laws, or mechanisms beyond TRANSCRIPT.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+.text.quoted be text ya
+
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact one pass be equally from text true then be depart do
   su name manuscript fact one retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
@@ -355,6 +369,18 @@ su name manuscript source thrust from text transcript with text script to name t
   su name pass ret
 prah
 
+su name manuscript source thrust repair retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript source thrust repair pass be equally from text true then be depart do
+  su name manuscript source thrust repair retry request begin stage ob text "TRANSCRIPT:\n" to name text manuscript source thrust repair retry request be text do
+  su name manuscript source thrust repair retry request source stage ob name text brief video script source to name manuscript source thrust repair retry request be plus do
+  su name manuscript source thrust repair retry request script header stage ob text "\n\nSCRIPT:\n" to name manuscript source thrust repair retry request be plus do
+  su name manuscript source thrust repair retry request script stage ob name text manuscript out to name manuscript source thrust repair retry request be plus do
+  su name manuscript source thrust repair retry write stage ob name text manuscript source thrust repair retry request for name brief video script source thrust repair retry mind to name text manuscript out by num 0 atmost num 150 be write do
+  su name manuscript source thrust repair retry verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript source thrust repair verify do
+  ob text of pass of manuscript source thrust repair verify to name text manuscript source thrust repair pass be text do
+  ob name text manuscript source thrust repair pass be equally from text true then be depart do
+prah
+
 su name manuscript source thrust repaired from text transcript with text script to name text manuscript out be ceremony def
   su name manuscript source thrust repair request begin stage ob text "TRANSCRIPT:\n" to name text manuscript source thrust repair request be text do
   su name manuscript source thrust repair request source stage ob text of from of this to name manuscript source thrust repair request be plus do
@@ -363,6 +389,7 @@ su name manuscript source thrust repaired from text transcript with text script 
   su name manuscript source thrust repair write stage ob name text manuscript source thrust repair request for name brief video script source thrust repair mind to name text manuscript out by num 0 atmost num 180 be write do
   su name manuscript source thrust repair verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript source thrust repair verify do
   ob text of pass of manuscript source thrust repair verify to name text manuscript source thrust repair pass be text do
+  fromindex num 1 toindex num 3 be manuscript source thrust repair retry do
   ob name text manuscript source thrust repair pass be equally from text false then
   su name manuscript source thrust repair guarantee stage ob bool lie fromtext text "manuscript source thrust repair word count defective" be guarantee do
   su name manuscript out ret
