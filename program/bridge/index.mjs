@@ -184,6 +184,37 @@ export async function interpret(sentence) {
   const isRefineryDef = mood === "def" && be === "refinery";
   const isRefineryPrah = mood === "prah" && be === "refinery";
   const insideRefinery = isInsideRefinery();
+  const isParagraphDef = mood === "def" && sentence.be === "ceremony";
+  const insideParagraph = state.definitionStack.length > 0;
+
+  if (isParagraphDef) {
+    state.definitionStack.push(su?.name ?? null);
+  }
+
+  // While recording a ceremony body, map blocks should be stored as source lines
+  // instead of being executed/condensed into a single ya-map fact.
+  if (insideParagraph && !state.executingBody) {
+    if (isMapDef) {
+      state.mapStack.push({
+        name: su?.name ?? null,
+        kind: be,
+        entries: [],
+        header: {},
+        definitionRecordOnly: true
+      });
+      doRemember(sentence);
+      return { recorded: true };
+    }
+    if (state.mapStack.length > 0) {
+      doRemember(sentence);
+      if (mood === "prah") state.mapStack.pop();
+      return { recorded: true };
+    }
+    if (mood !== "prah" && !isParagraphDef) {
+      doRemember(sentence);
+      return { recorded: true };
+    }
+  }
 
   if (isMapDef) {
     const header = {};
@@ -303,18 +334,6 @@ export async function interpret(sentence) {
   if (!state.lastCondition && mood !== "then") {
     state.lastCondition = true;
     return { skipped: true };
-  }
-
-  const isParagraphDef = mood === "def" && sentence.be === "ceremony";
-  const insideParagraph = state.definitionStack.length > 0;
-
-  if (isParagraphDef) {
-    state.definitionStack.push(su?.name ?? null);
-  }
-
-  if (insideParagraph && !state.executingBody && mood !== "prah" && !isParagraphDef) {
-    doRemember(sentence);
-    return { recorded: true };
   }
 
   if (mood === "prah") {
