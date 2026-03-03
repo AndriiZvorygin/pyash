@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget } from "../program/remember/index.mjs";
+import { forget, remember } from "../program/remember/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords, lookupSignature } from "../program/bridge/signature.mjs";
 
 test("brief manuscript module registers text and filename signatures", async () => {
@@ -26,6 +26,7 @@ test("brief manuscript module registers text and filename signatures", async () 
 
 test("brief manuscript module keeps staged word-count verifies including total bounds", async () => {
   const text = await fs.readFile("module/brief_manuscript.pya", "utf8");
+  assert.match(text, /exists su name brief video script hook mind be mind fromtext name brief video script hook prompt ya/);
   assert.match(text, /exists su name brief video script cta mind be mind fromtext name brief video script cta prompt ya/);
   assert.match(text, /exists su name brief video script cta retry mind be mind fromtext name brief video script cta retry prompt ya/);
   assert.match(text, /exists su name brief video script cta prompt ob text quoted\.text\.Write one short call to action for this same short\./);
@@ -38,7 +39,8 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /su name manuscript ending connector from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript sentence complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript hook complete from text line to name text pass be ceremony def/);
-  assert.match(text, /ob text of from of this from text "\/\[\.\?\]\\\\s\*\$\/" be resemble then/);
+  assert.match(text, /ob name text manuscript sentence complete line from text "\/\[\.!\?\]\\\\s\*\$\/" be resemble then/);
+  assert.match(text, /ob name text manuscript hook complete line from text "\/\[\.\?\]\\\\s\*\$\/" be resemble then/);
   assert.match(text, /manuscript fact one write stage .* be verify loop do/);
   assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34/);
   assert.match(text, /manuscript fact one complete stage from text of ob of output to name text manuscript fact one complete pass be manuscript sentence complete do/);
@@ -79,7 +81,7 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110/);
   assert.match(text, /su name manuscript total retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript total retry verify stage be verify as wo word count atleast num 70 atmost num 110/);
-  assert.match(text, /fromindex num 1 toindex num 3 be manuscript total retry do/);
+  assert.doesNotMatch(text, /fromindex num 1 toindex num 3 be manuscript total retry do/);
   assert.match(text, /manuscript out cta stage ob name text manuscript cta out to name manuscript out be plus do/);
   assert.doesNotMatch(text, /manuscript total retry first verify stage/);
   assert.match(text, /brief video script source thrust verify prompt ob text quoted\.text\.Good\. Here is a much cleaner rubric/);
@@ -97,4 +99,24 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.doesNotMatch(text, /manuscript source thrust verify retry first stage/);
   assert.match(text, /manuscript source thrust guarantee stage ob bool lie fromtext text "manuscript source thrust defective" be guarantee do/);
   assert.match(text, /be depart do/);
+});
+
+test("brief manuscript completion ceremonies reject sentence fragments", async () => {
+  forget();
+  await interpret(parse('from filename "./module/brief_manuscript.pya" to name brief manuscript be import do'));
+
+  await interpret(parse('su name demo from text "Families lost homes to debt traps." to name text pass be manuscript sentence complete do'));
+  assert.equal(remember("pass")?.ob?.text, "true");
+
+  await interpret(parse('su name demo from text "Families lost homes to debt traps" to name text pass be manuscript sentence complete do'));
+  assert.equal(remember("pass")?.ob?.text, "false");
+
+  await interpret(parse('su name demo from text "Families lost homes and." to name text pass be manuscript sentence complete do'));
+  assert.equal(remember("pass")?.ob?.text, "false");
+
+  await interpret(parse('su name demo from text "Will families regain ownership?" to name text pass be manuscript hook complete do'));
+  assert.equal(remember("pass")?.ob?.text, "true");
+
+  await interpret(parse('su name demo from text "Will families regain ownership" to name text pass be manuscript hook complete do'));
+  assert.equal(remember("pass")?.ob?.text, "false");
 });
