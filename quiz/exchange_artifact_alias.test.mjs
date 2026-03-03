@@ -66,3 +66,18 @@ test("recordArtifact does not create duplicate run alias when locator is already
     clearExchangeRecorder();
   }
 });
+
+test("recordArtifact materializes run-folder locator when missing", async () => {
+  const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-exchange-alias-"));
+  setExchangeRecorder({ record: () => {}, runRoot });
+  setExchangeRunId("run-004");
+  try {
+    const locator = "artifacts/run-004/newspaper/text-000001.txt";
+    const bytes = Buffer.from("hello-newspaper", "utf8");
+    recordArtifact({ locator, producer: "newspaper", bytes });
+    const materialized = await fs.readFile(path.join(runRoot, locator), "utf8");
+    assert.equal(materialized, "hello-newspaper");
+  } finally {
+    clearExchangeRecorder();
+  }
+});

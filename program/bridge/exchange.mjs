@@ -196,6 +196,32 @@ function linkRunAlias({ name, target, locator } = {}) {
   return rel;
 }
 
+function materializeLocator({ locator, target, bytes } = {}) {
+  if (!locator || isUri(locator)) return null;
+  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const abs = path.resolve(runRoot, locator);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  if (fs.existsSync(abs)) return abs;
+  if (target && path.resolve(target) !== abs) {
+    try {
+      fs.linkSync(target, abs);
+      return abs;
+    } catch {
+      try {
+        fs.symlinkSync(target, abs);
+        return abs;
+      } catch {
+        // Fall through and write bytes directly.
+      }
+    }
+  }
+  if (bytes) {
+    fs.writeFileSync(abs, bytes);
+    return abs;
+  }
+  return null;
+}
+
 function nextArtifactName() {
   const base = sanitizeAliasPart("artifact");
   const count = artifactNameCounts.get(base) ?? 0;
@@ -241,6 +267,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     }
     if (hash && bytes) {
       const written = writeContentAddressed({ hash, locator: normalized, bytes });
+      materializeLocator({ locator: normalized, target: written?.absolute, bytes });
       linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
     }
     return {
@@ -267,6 +294,7 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind } =
     sentence.fromtext = { text: hash };
     artifactHashes.set(sentence.su.name, hash);
     const written = writeContentAddressed({ hash, locator: normalized, bytes });
+    materializeLocator({ locator: normalized, target: written?.absolute, bytes });
     linkRunAlias({ name: sentence.su.name, target: written?.absolute, locator: normalized });
   }
   if (size != null) {
