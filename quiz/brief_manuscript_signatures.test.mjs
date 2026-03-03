@@ -56,8 +56,13 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript total retry do/);
   assert.doesNotMatch(text, /manuscript total retry first verify stage/);
   assert.match(text, /brief video script source thrust verify prompt ob text quoted\.text\.Good\. Here is a much cleaner rubric/);
-  assert.match(text, /manuscript source thrust write stage .* by num 0 atmost num 220 be write do/);
+  assert.match(text, /brief video script source thrust intent ob text quoted\.text\.The generator is asked to write a short spoken script/);
+  assert.match(text, /brief video script source thrust verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
+  assert.match(text, /manuscript source thrust write stage .* by num 0 atmost num 280 be write do/);
   assert.match(text, /manuscript source thrust verdict tail stage ob name text manuscript source thrust review atmost num 1 to name text manuscript source thrust verdict line be line tail do/);
+  assert.match(text, /manuscript source thrust verdict request begin stage ob text "VERIFIER_ANALYSIS:\\n" to name text manuscript source thrust verdict request be text do/);
+  assert.match(text, /for name brief video script source thrust verdict mind to name text manuscript source thrust verdict raw by num 0 atmost num 8 be write do/);
+  assert.match(text, /manuscript source thrust request intent header stage ob text "\\n\\nGENERATOR_INTENT:\\n" to name text manuscript source thrust request be plus do/);
   assert.match(text, /manuscript source thrust verify stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do/);
   assert.match(text, /su name manuscript source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript source thrust verify retry stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do/);
