@@ -77,6 +77,7 @@ Rules:
 - Between 6 and 9 words.
 - Must match the provided body content.
 - Dramatic and curiosity-driven.
+- Must end with "." or "?".
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 .text.quoted be text ya
@@ -86,6 +87,7 @@ exists su name brief video script hook retry prompt ob text quoted.text.Rewrite 
 Rules:
 - Write between 6 and 9 words.
 - Preserve the same core meaning.
+- End with "." or "?".
 - Output one line only.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes.
@@ -254,7 +256,12 @@ su name manuscript sentence complete from text line to name text pass be ceremon
 prah
 
 su name manuscript hook complete from text line to name text pass be ceremony def
-  su name manuscript hook ending connector stage from text of from of this to name text pass be manuscript ending connector do
+  ob text "false" to name text pass be text do
+  ob text of from of this from text "/[.?]\\s*$/" be resemble then
+  ob text "true" to name text pass be text do
+  su name manuscript hook ending connector stage from text of from of this to name text manuscript hook ending connector pass be manuscript ending connector do
+  ob name text manuscript hook ending connector pass be equally from text false then
+  ob text "false" to name text pass be text do
   su name pass ret
 prah
 
