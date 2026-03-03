@@ -1,12 +1,12 @@
 ob filename text tweet be input ya
 
-exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
-  su name max tokens ob num 40 ya
+  su name max tokens ob num 64 ya
 prah
-exists su name chirp mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You write concise, high-engagement social replies." ya
-exists su name chirp clamp mind be mind as name "qwen3-vl:8b-instruct" fromtext text "You rewrite one short question under hard constraints. Output only one plain-text question line." ya
+exists su name chirp mind be mind as name "qwen3.5:9b" fromtext text "You write concise, high-engagement social replies." ya
+exists su name chirp clamp mind be mind as name "qwen3.5:9b" fromtext text "You rewrite one short question under hard constraints. Output only one plain-text question line." ya
 
 exists su name chirp hook prompt ob text quoted.text.Write a super short, bold first-line Hook (max 8 words) for a reply to this tweet.
 
@@ -19,8 +19,10 @@ exists su name chirp value prompt ob text quoted.text.Add one punchy Value line 
 
 Rules:
 - Deliver one fresh insight, data point, personal example, or missing angle.
+- Focus on a different aspect than the prior segment.
+- Do not repeat prior segment wording or same core claim.
 - Specific and useful, no fluff.
-- Keep the value between 60 and 85 characters.
+- Keep the value between 60 and 110 characters.
 - Plain text only.
 - Output ONLY the value line(s)..text.quoted be text ya
 
@@ -28,6 +30,8 @@ exists su name chirp question prompt ob text quoted.text.End with one specific e
 
 Rules:
 - Open-ended but targeted.
+- Ask from a different angle than the prior segment.
+- Do not restate prior segment wording or same core claim.
 - Plain text only.
 - Output ONLY the question line..text.quoted be text ya
 
@@ -35,55 +39,124 @@ exists su name chirp question clamp prompt ob text quoted.text.Rewrite the user 
 
 Hard rules:
 - One line only, plain text only.
-- 5 to 12 words.
-- 25 to 48 characters total.
+- 5 to 16 words.
+- 25 to 80 characters total.
 - Must end with question mark.
 - Keep the same meaning as the draft.
+- If you cannot satisfy all rules, output exactly: What housing policy helps families most?
 - Output ONLY the rewritten question line..text.quoted be text ya
 
-su name chirp hook checked to name text output be ceremony def
-  su name chirp hook write stage ob name text hookreq fromtext name chirp hook prompt for name chirp mind to name text output be write do
+su name chirp hook retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text chirp hook pass be equally from text true then be depart do
+  su name chirp hook write retry stage ob name text hookreq fromtext name chirp hook prompt for name chirp mind to name text output by num 0 be write do
   su name chirp hook words verify stage be verify as wo word count atleast num 4 atmost num 8 from name text output to name map chirp hook words verify do
   su name chirp hook letters verify stage be verify as wo letter count atleast num 15 atmost num 45 from name text output to name map chirp hook letters verify do
   ob text of pass of chirp hook words verify to name text chirp hook words pass be text do
   ob text of pass of chirp hook letters verify to name text chirp hook letters pass be text do
+  ob text "true" to name text chirp hook pass be text do
   ob name text chirp hook words pass be equally from text false then
-  su name chirp hook words guarantee stage ob bool lie fromtext text "chirp hook word count defective" be guarantee do
+  ob text "false" to name text chirp hook pass be text do
   ob name text chirp hook letters pass be equally from text false then
-  su name chirp hook letters guarantee stage ob bool lie fromtext text "chirp hook letter count defective" be guarantee do
+  ob text "false" to name text chirp hook pass be text do
+  ob name text chirp hook pass be equally from text true then be depart do
+prah
+
+su name chirp hook checked to name text output be ceremony def
+  su name chirp hook write stage ob name text hookreq fromtext name chirp hook prompt for name chirp mind to name text output by num 0 be write do
+  su name chirp hook words verify stage be verify as wo word count atleast num 4 atmost num 8 from name text output to name map chirp hook words verify do
+  su name chirp hook letters verify stage be verify as wo letter count atleast num 15 atmost num 45 from name text output to name map chirp hook letters verify do
+  ob text of pass of chirp hook words verify to name text chirp hook words pass be text do
+  ob text of pass of chirp hook letters verify to name text chirp hook letters pass be text do
+  ob text "true" to name text chirp hook pass be text do
+  ob name text chirp hook words pass be equally from text false then
+  ob text "false" to name text chirp hook pass be text do
+  ob name text chirp hook letters pass be equally from text false then
+  ob text "false" to name text chirp hook pass be text do
+  fromindex num 1 toindex num 3 be chirp hook retry do
+  ob name text chirp hook pass be equally from text false then
+  su name chirp hook words guarantee stage ob bool lie fromtext text "chirp hook constraints defective" be guarantee do
   su name chirp hook return stage ob name text output be text do
 prah
 
-su name chirp value checked to name text output be ceremony def
-  su name chirp value write stage ob name text valuereq fromtext name chirp value prompt for name chirp mind to name text output be write do
+su name chirp value retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text chirp value pass be equally from text true then be depart do
+  su name chirp value write retry stage ob name text valuereq fromtext name chirp value prompt for name chirp mind to name text output by num 0 be write do
   su name chirp value words verify stage be verify as wo word count atleast num 12 atmost num 35 from name text output to name map chirp value words verify do
-  su name chirp value letters verify stage be verify as wo letter count atleast num 60 atmost num 85 from name text output to name map chirp value letters verify do
+  su name chirp value letters verify stage be verify as wo letter count atleast num 60 atmost num 110 from name text output to name map chirp value letters verify do
   ob text of pass of chirp value words verify to name text chirp value words pass be text do
   ob text of pass of chirp value letters verify to name text chirp value letters pass be text do
+  ob text "true" to name text chirp value pass be text do
   ob name text chirp value words pass be equally from text false then
-  su name chirp value words guarantee stage ob bool lie fromtext text "chirp value word count defective" be guarantee do
+  ob text "false" to name text chirp value pass be text do
   ob name text chirp value letters pass be equally from text false then
-  su name chirp value letters guarantee stage ob bool lie fromtext text "chirp value letter count defective" be guarantee do
+  ob text "false" to name text chirp value pass be text do
+  ob name text chirp value pass be equally from text true then be depart do
+prah
+
+su name chirp value checked from text prior to name text output be ceremony def
+  su name chirp value write stage ob name text valuereq fromtext name chirp value prompt for name chirp mind to name text output by num 0 be write do
+  su name chirp value words verify stage be verify as wo word count atleast num 12 atmost num 35 from name text output to name map chirp value words verify do
+  su name chirp value letters verify stage be verify as wo letter count atleast num 60 atmost num 110 from name text output to name map chirp value letters verify do
+  ob text of pass of chirp value words verify to name text chirp value words pass be text do
+  ob text of pass of chirp value letters verify to name text chirp value letters pass be text do
+  ob text "true" to name text chirp value pass be text do
+  ob name text chirp value words pass be equally from text false then
+  ob text "false" to name text chirp value pass be text do
+  ob name text chirp value letters pass be equally from text false then
+  ob text "false" to name text chirp value pass be text do
+  fromindex num 1 toindex num 3 be chirp value retry do
+  ob name text chirp value pass be equally from text false then
+  su name chirp value words guarantee stage ob bool lie fromtext text "chirp value constraints defective" be guarantee do
   su name chirp value return stage ob name text output be text do
 prah
 
-su name chirp question checked to name text output be ceremony def
-  su name chirp question write stage ob name text questionreq fromtext name chirp question prompt for name chirp mind to name text output be write do
-  su name chirp question clamp stage ob name text output fromtext name chirp question clamp prompt for name chirp clamp mind to name text output be write do
-  su name chirp question words verify stage be verify as wo word count atleast num 5 atmost num 12 from name text output to name map chirp question words verify do
-  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 48 from name text output to name map chirp question letters verify do
+su name chirp question retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text chirp question pass be equally from text true then be depart do
+  su name chirp question write retry stage ob name text questionreq fromtext name chirp question prompt for name chirp mind to name text output by num 0 atmost num 24 be write do
+  su name chirp question clamp retry stage ob name text output fromtext name chirp question clamp prompt for name chirp clamp mind to name text output by num 0 atmost num 18 be write do
+  ob text "false" to name text chirp question punctuation pass be text do
+  ob name text output from text "/\\?\\s*$/" be resemble then
+  ob text "true" to name text chirp question punctuation pass be text do
+  ob name text chirp question punctuation pass be equally from text false then
+  ob text "?" to name output be plus do
+  su name chirp question words verify stage be verify as wo word count atleast num 5 atmost num 16 from name text output to name map chirp question words verify do
+  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 80 from name text output to name map chirp question letters verify do
   ob text of pass of chirp question words verify to name text chirp question words pass be text do
   ob text of pass of chirp question letters verify to name text chirp question letters pass be text do
+  ob text "true" to name text chirp question pass be text do
   ob name text chirp question words pass be equally from text false then
-  su name chirp question words guarantee stage ob bool lie fromtext text "chirp question word count defective" be guarantee do
+  ob text "false" to name text chirp question pass be text do
   ob name text chirp question letters pass be equally from text false then
-  su name chirp question letters guarantee stage ob bool lie fromtext text "chirp question letter count defective" be guarantee do
+  ob text "false" to name text chirp question pass be text do
+  ob name text chirp question pass be equally from text true then be depart do
+prah
+
+su name chirp question checked from text prior to name text output be ceremony def
+  su name chirp question write stage ob name text questionreq fromtext name chirp question prompt for name chirp mind to name text output by num 0 atmost num 24 be write do
+  su name chirp question clamp stage ob name text output fromtext name chirp question clamp prompt for name chirp clamp mind to name text output by num 0 atmost num 18 be write do
+  ob text "false" to name text chirp question punctuation pass be text do
+  ob name text output from text "/\\?\\s*$/" be resemble then
+  ob text "true" to name text chirp question punctuation pass be text do
+  ob name text chirp question punctuation pass be equally from text false then
+  ob text "?" to name output be plus do
+  su name chirp question words verify stage be verify as wo word count atleast num 5 atmost num 16 from name text output to name map chirp question words verify do
+  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 80 from name text output to name map chirp question letters verify do
+  ob text of pass of chirp question words verify to name text chirp question words pass be text do
+  ob text of pass of chirp question letters verify to name text chirp question letters pass be text do
+  ob text "true" to name text chirp question pass be text do
+  ob name text chirp question words pass be equally from text false then
+  ob text "false" to name text chirp question pass be text do
+  ob name text chirp question letters pass be equally from text false then
+  ob text "false" to name text chirp question pass be text do
+  fromindex num 1 toindex num 3 be chirp question retry do
+  ob name text chirp question pass be equally from text false then
+  su name chirp question words guarantee stage ob bool lie fromtext text "chirp question constraints defective" be guarantee do
   su name chirp question return stage ob name text output be text do
 prah
 
 su name chirp total checked to name text output be ceremony def
   su name chirp total words verify stage be verify as wo word count atleast num 21 atmost num 55 from name text totalreq to name map chirptotalwordsreport do
-  su name chirp total letters verify stage be verify as wo letter count atleast num 100 atmost num 180 from name text totalreq to name map chirptotallettersreport do
+  su name chirp total letters verify stage be verify as wo letter count atleast num 100 atmost num 320 from name text totalreq to name map chirptotallettersreport do
   ob text of pass of chirptotalwordsreport to name text chirp total words pass be text do
   ob text of pass of chirptotallettersreport to name text chirp total letters pass be text do
   ob name text chirp total words pass be equally from text false then
@@ -103,7 +176,7 @@ su name chirp reply run be refinery def
   su name chirp value request hook stage ob name text hookout to name valuereq be plus do
   su name chirp value request source header stage ob text "\n\nORIGINAL TWEET:\n" to name valuereq be plus do
   su name chirp value request source stage ob name text chirpsource to name valuereq be plus do
-  su name chirp value stage to name text valueout be chirp value checked do
+  su name chirp value stage from text of ob of hookout to name text valueout be chirp value checked do
 
   su name chirp question request begin stage ob text "HOOK:\n" to name text questionreq be text do
   su name chirp question request hook stage ob name text hookout to name questionreq be plus do
@@ -111,7 +184,7 @@ su name chirp reply run be refinery def
   su name chirp question request value stage ob name text valueout to name questionreq be plus do
   su name chirp question request source header stage ob text "\n\nORIGINAL TWEET:\n" to name questionreq be plus do
   su name chirp question request source stage ob name text chirpsource to name questionreq be plus do
-  su name chirp question stage to name text questionout be chirp question checked do
+  su name chirp question stage from text of ob of valueout to name text questionout be chirp question checked do
 
   su name chirp out begin stage ob name text hookout to name text chirpout be text do
   su name chirp out join one stage ob text "\n" to name chirpout be plus do
