@@ -246,31 +246,26 @@ su name manuscript ending connector from text line to name text pass be ceremony
   su name manuscript ending connector pass local ret
 prah
 
+su name manuscript sentence polish from text line to name map result be ceremony def
+  su name manuscript sentence polish verify stage be verify as wo sentence complete ob text of from of this to name map result do
+  su name result ret
+prah
+
 su name manuscript sentence complete from text line to name text pass be ceremony def
-  su name manuscript sentence complete line stage ob text of from of this to name text manuscript sentence complete line be text do
-  ob text "false" to name text pass be text do
-  ob name text manuscript sentence complete line from text "/[.!?]\\s*$/" be resemble then
-  ob text "true" to name text pass be text do
-  su name manuscript sentence ending connector stage from text of ob of manuscript sentence complete line to name text manuscript sentence ending connector pass be manuscript ending connector do
-  ob name text manuscript sentence ending connector pass be equally from text false then
-  ob text "false" to name text pass be text do
+  su name manuscript sentence complete verify stage from text of from of this to name map manuscript sentence complete verify be manuscript sentence polish do
+  ob text of pass of manuscript sentence complete verify to name text pass be text do
   su name pass ret
 prah
 
 su name manuscript hook complete from text line to name text pass be ceremony def
-  su name manuscript hook complete line stage ob text of from of this to name text manuscript hook complete line be text do
-  ob text "false" to name text pass be text do
-  ob name text manuscript hook complete line from text "/[.?]\\s*$/" be resemble then
-  ob text "true" to name text pass be text do
-  su name manuscript hook ending connector stage from text of ob of manuscript hook complete line to name text manuscript hook ending connector pass be manuscript ending connector do
-  ob name text manuscript hook ending connector pass be equally from text false then
-  ob text "false" to name text pass be text do
+  su name manuscript hook complete verify stage from text of from of this to name map manuscript hook complete verify be manuscript sentence polish do
+  ob text of pass of manuscript hook complete verify to name text pass be text do
   su name pass ret
 prah
 
 su name manuscript cta complete from text line to name text pass be ceremony def
-  su name manuscript cta complete line stage ob text of from of this to name text manuscript cta complete line be text do
-  su name manuscript cta ending connector stage from text of ob of manuscript cta complete line to name text pass be manuscript ending connector do
+  su name manuscript cta complete verify stage from text of from of this to name map manuscript cta complete verify be manuscript sentence polish do
+  ob text of pass of manuscript cta complete verify to name text pass be text do
   su name pass ret
 prah
 
@@ -281,7 +276,9 @@ su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript fact one retry write stage ob name text manuscript fact one retry request for name brief video script fact one retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript fact one verify retry stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
   ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-  su name manuscript fact one complete retry stage from text of ob of output to name text manuscript fact one complete pass be manuscript sentence complete do
+  su name manuscript fact one complete retry stage be verify as wo sentence complete from name text output to name map manuscript fact one complete verify do
+  ob text of fixed of manuscript fact one complete verify to name text output be text do
+  ob text of pass of manuscript fact one complete verify to name text manuscript fact one complete pass be text do
   ob name text manuscript fact one complete pass be equally from text false then
   ob text "false" to name text manuscript fact one pass be text do
   ob name text manuscript fact one pass be equally from text true then be depart do
@@ -291,12 +288,14 @@ su name manuscript fact one checked to name text output be ceremony def
   su name manuscript fact one write stage ob name text manuscript fact one request for name brief video script fact one mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact one verify do
   ob text of pass of manuscript fact one verify to name text manuscript fact one pass be text do
-  su name manuscript fact one complete stage from text of ob of output to name text manuscript fact one complete pass be manuscript sentence complete do
+  su name manuscript fact one complete stage be verify as wo sentence complete from name text output to name map manuscript fact one complete verify do
+  ob text of fixed of manuscript fact one complete verify to name text output be text do
+  ob text of pass of manuscript fact one complete verify to name text manuscript fact one complete pass be text do
   ob name text manuscript fact one complete pass be equally from text false then
   ob text "false" to name text manuscript fact one pass be text do
   fromindex num 1 toindex num 3 be manuscript fact one retry do
   ob name text manuscript fact one pass be equally from text false then
-  su name manuscript fact one guarantee stage ob bool lie fromtext text "manuscript fact one word count defective" be guarantee do
+  su name manuscript fact one guarantee stage ob bool lie fromtext text "manuscript fact one constraints defective" be guarantee do
   su name manuscript fact one return stage ob name text output be text do
 prah
 
@@ -307,7 +306,9 @@ su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript fact two retry write stage ob name text manuscript fact two retry request for name brief video script fact two retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript fact two verify retry stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
   ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-  su name manuscript fact two complete retry stage from text of ob of output to name text manuscript fact two complete pass be manuscript sentence complete do
+  su name manuscript fact two complete retry stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do
+  ob text of fixed of manuscript fact two complete verify to name text output be text do
+  ob text of pass of manuscript fact two complete verify to name text manuscript fact two complete pass be text do
   ob name text manuscript fact two complete pass be equally from text false then
   ob text "false" to name text manuscript fact two pass be text do
   ob name text manuscript fact two pass be equally from text true then be depart do
@@ -317,12 +318,14 @@ su name manuscript fact two checked to name text output be ceremony def
   su name manuscript fact two write stage ob name text manuscript fact two request for name brief video script fact two mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript fact two verify stage be verify as wo word count atleast num 20 atmost num 34 from name text output to name map manuscript fact two verify do
   ob text of pass of manuscript fact two verify to name text manuscript fact two pass be text do
-  su name manuscript fact two complete stage from text of ob of output to name text manuscript fact two complete pass be manuscript sentence complete do
+  su name manuscript fact two complete stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do
+  ob text of fixed of manuscript fact two complete verify to name text output be text do
+  ob text of pass of manuscript fact two complete verify to name text manuscript fact two complete pass be text do
   ob name text manuscript fact two complete pass be equally from text false then
   ob text "false" to name text manuscript fact two pass be text do
   fromindex num 1 toindex num 3 be manuscript fact two retry do
   ob name text manuscript fact two pass be equally from text false then
-  su name manuscript fact two guarantee stage ob bool lie fromtext text "manuscript fact two word count defective" be guarantee do
+  su name manuscript fact two guarantee stage ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
   su name manuscript fact two return stage ob name text output be text do
 prah
 
@@ -333,7 +336,9 @@ su name manuscript uplift retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript uplift retry write stage ob name text manuscript uplift retry request for name brief video script uplift retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript uplift verify retry stage be verify as wo word count atleast num 18 atmost num 40 from name text output to name map manuscript uplift verify do
   ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-  su name manuscript uplift complete retry stage from text of ob of output to name text manuscript uplift complete pass be manuscript sentence complete do
+  su name manuscript uplift complete retry stage be verify as wo sentence complete from name text output to name map manuscript uplift complete verify do
+  ob text of fixed of manuscript uplift complete verify to name text output be text do
+  ob text of pass of manuscript uplift complete verify to name text manuscript uplift complete pass be text do
   ob name text manuscript uplift complete pass be equally from text false then
   ob text "false" to name text manuscript uplift pass be text do
   ob name text manuscript uplift pass be equally from text true then be depart do
@@ -343,12 +348,14 @@ su name manuscript uplift checked to name text output be ceremony def
   su name manuscript uplift write stage ob name text manuscript uplift request for name brief video script uplift mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript uplift verify stage be verify as wo word count atleast num 18 atmost num 40 from name text output to name map manuscript uplift verify do
   ob text of pass of manuscript uplift verify to name text manuscript uplift pass be text do
-  su name manuscript uplift complete stage from text of ob of output to name text manuscript uplift complete pass be manuscript sentence complete do
+  su name manuscript uplift complete stage be verify as wo sentence complete from name text output to name map manuscript uplift complete verify do
+  ob text of fixed of manuscript uplift complete verify to name text output be text do
+  ob text of pass of manuscript uplift complete verify to name text manuscript uplift complete pass be text do
   ob name text manuscript uplift complete pass be equally from text false then
   ob text "false" to name text manuscript uplift pass be text do
   fromindex num 1 toindex num 3 be manuscript uplift retry do
   ob name text manuscript uplift pass be equally from text false then
-  su name manuscript uplift guarantee stage ob bool lie fromtext text "manuscript uplift word count defective" be guarantee do
+  su name manuscript uplift guarantee stage ob bool lie fromtext text "manuscript uplift constraints defective" be guarantee do
   su name manuscript uplift return stage ob name text output be text do
 prah
 
@@ -359,7 +366,9 @@ su name manuscript hook retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript hook retry write stage ob name text manuscript hook retry request for name brief video script hook retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript hook verify retry stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
   ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-  su name manuscript hook complete retry stage from text of ob of output to name text manuscript hook complete pass be manuscript hook complete do
+  su name manuscript hook complete retry stage be verify as wo sentence complete from name text output to name map manuscript hook complete verify do
+  ob text of fixed of manuscript hook complete verify to name text output be text do
+  ob text of pass of manuscript hook complete verify to name text manuscript hook complete pass be text do
   ob name text manuscript hook complete pass be equally from text false then
   ob text "false" to name text manuscript hook pass be text do
   ob name text manuscript hook pass be equally from text true then be depart do
@@ -369,12 +378,14 @@ su name manuscript hook checked to name text output be ceremony def
   su name manuscript hook write stage ob name text manuscript hook request for name brief video script hook mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 9 from name text output to name map manuscript hook verify do
   ob text of pass of manuscript hook verify to name text manuscript hook pass be text do
-  su name manuscript hook complete stage from text of ob of output to name text manuscript hook complete pass be manuscript hook complete do
+  su name manuscript hook complete stage be verify as wo sentence complete from name text output to name map manuscript hook complete verify do
+  ob text of fixed of manuscript hook complete verify to name text output be text do
+  ob text of pass of manuscript hook complete verify to name text manuscript hook complete pass be text do
   ob name text manuscript hook complete pass be equally from text false then
   ob text "false" to name text manuscript hook pass be text do
   fromindex num 1 toindex num 3 be manuscript hook retry do
   ob name text manuscript hook pass be equally from text false then
-  su name manuscript hook guarantee stage ob bool lie fromtext text "manuscript hook word count defective" be guarantee do
+  su name manuscript hook guarantee stage ob bool lie fromtext text "manuscript hook constraints defective" be guarantee do
   su name manuscript hook return stage ob name text output be text do
 prah
 
@@ -385,7 +396,9 @@ su name manuscript cta retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript cta retry write stage ob name text manuscript cta retry request for name brief video script cta retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript cta verify retry stage be verify as wo word count atleast num 2 atmost num 4 from name text output to name map manuscript cta verify do
   ob text of pass of manuscript cta verify to name text manuscript cta pass be text do
-  su name manuscript cta complete retry stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do
+  su name manuscript cta complete retry stage be verify as wo sentence complete from name text output to name map manuscript cta complete verify do
+  ob text of fixed of manuscript cta complete verify to name text output be text do
+  ob text of pass of manuscript cta complete verify to name text manuscript cta complete pass be text do
   ob name text manuscript cta complete pass be equally from text false then
   ob text "false" to name text manuscript cta pass be text do
   ob name text manuscript cta pass be equally from text true then be depart do
@@ -395,7 +408,9 @@ su name manuscript cta checked to name text output be ceremony def
   su name manuscript cta write stage ob name text manuscript cta request for name brief video script cta mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript cta verify stage be verify as wo word count atleast num 2 atmost num 4 from name text output to name map manuscript cta verify do
   ob text of pass of manuscript cta verify to name text manuscript cta pass be text do
-  su name manuscript cta complete stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do
+  su name manuscript cta complete stage be verify as wo sentence complete from name text output to name map manuscript cta complete verify do
+  ob text of fixed of manuscript cta complete verify to name text output be text do
+  ob text of pass of manuscript cta complete verify to name text manuscript cta complete pass be text do
   ob name text manuscript cta complete pass be equally from text false then
   ob text "false" to name text manuscript cta pass be text do
   fromindex num 1 toindex num 3 be manuscript cta retry do
