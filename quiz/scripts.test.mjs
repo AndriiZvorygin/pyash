@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { runScript } from "./helpers/run_script.mjs";
 
@@ -69,5 +70,23 @@ test("run_pya_program.mjs uses default say mapping", async () => {
   } finally {
     delete process.env.PYA_PIPER_FIXTURE;
     await fs.rm("artifacts/say/piper-demo.wav", { force: true });
+  }
+});
+
+test("run_pya_program.mjs writes produce.txt for text results", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-produce-"));
+  const programPath = path.join(tmpDir, "produce-test.pya");
+  const runId = "produce-artifact-test";
+  const outDir = path.join(repoRoot, "artifacts", runId);
+  try {
+    await fs.writeFile(programPath, 'ob text "hello produce artifact" to name text result be text do ya\n', "utf8");
+    const { errors } = await runScript("command/run_pya_program.mjs", ["--run-id", runId, programPath]);
+    assertNoUnexpectedErrors(errors);
+    const content = await fs.readFile(path.join(outDir, "produce.txt"), "utf8");
+    assert.equal(content.trim(), "hello produce artifact");
+  } finally {
+    await fs.rm(programPath, { force: true });
+    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(outDir, { recursive: true, force: true });
   }
 });
