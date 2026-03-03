@@ -36,10 +36,13 @@ Current module stage sequence:
 5. compose manuscript body,
 6. generate hook from manuscript body, then verify word count (`6..9`),
 7. assemble final manuscript as `hook + blank line + body`,
-8. verify final manuscript total word count (`70..110`), fail deterministically if out-of-bounds.
+8. verify final manuscript total word count (`70..110`), fail deterministically if out-of-bounds,
+9. verify source-thrust against transcript with a reviewer mind; reviewer output must include:
+   - one short reasoning paragraph,
+   - final line exactly `PASS` or `FAIL`.
 
 Stage behavior details:
-- fact one/fact two/uplift/hook each use bounded mind decode (`atmost`) and one retry pass before guarantee failure.
+- fact one/fact two/uplift/hook generation now routes through `verify loop` (generator + verifier loop) before deterministic word-count guard checks.
 - total manuscript check also retries once by rewriting body text under bounded decode.
 
 ## 4. Prompt contract
@@ -51,6 +54,7 @@ The module maintains separate prompt facts for:
 - hook.
 
 Each stage prompt requests plain prose output with no markdown/bullets/labels.
+The source-thrust verifier prompt requires reasoning plus a terminal verdict line (`PASS`/`FAIL`).
 
 ## 5. Output contract
 
