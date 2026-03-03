@@ -110,6 +110,8 @@ exists su name brief video script fact two retry prompt ob text quoted.text.Rewr
 
 Rules:
 - Preserve the same historical fact and modern parallel.
+- Contrast the prior segment by focusing on a different supported aspect of the transcript.
+- Do not repeat prior segment wording or core claim.
 - Keep dramatic spoken-prose tone.
 - Output one sentence only.
 - Count words carefully and return exactly 24 words.
@@ -155,6 +157,7 @@ Rules:
 - Fail only on clear mismatch, clear unsupported historical claims, or clear instruction break.
 - Use the TASK and CANDIDATE exactly as provided.
 - If TASK includes `TARGET_WORDS: X-Y`, count candidate words and fail when outside that inclusive range.
+- If TASK includes `PRIOR SEGMENT:`, fail when CANDIDATE repeats the prior segment wording or same core claim.
 
 Output:
 - First output one short reasoning paragraph (2-4 sentences).
@@ -269,6 +272,17 @@ su name manuscript cta complete from text line to name text pass be ceremony def
   su name pass ret
 prah
 
+su name manuscript segment distinct from text line with text prior to name text pass be ceremony def
+  su name manuscript segment distinct line verify stage be verify as wo sentence complete ob text of from of this to name map manuscript segment distinct line verify do
+  su name manuscript segment distinct prior verify stage be verify as wo sentence complete ob text of with of this to name map manuscript segment distinct prior verify do
+  ob text of fixed of manuscript segment distinct line verify to name text linefixed be text do
+  ob text of fixed of manuscript segment distinct prior verify to name text priorfixed be text do
+  ob text "true" to name text pass be text do
+  su name linefixed be equally from name priorfixed then
+  ob text "false" to name text pass be text do
+  su name pass ret
+prah
+
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact one pass be equally from text true then be depart do
   su name manuscript fact one retry request begin stage ob text "TARGET_WORDS: 20-34\nSEGMENT:\n" to name text manuscript fact one retry request be text do
@@ -309,7 +323,10 @@ su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript fact two complete retry stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do
   ob text of fixed of manuscript fact two complete verify to name text output be text do
   ob text of pass of manuscript fact two complete verify to name text manuscript fact two complete pass be text do
+  su name manuscript fact two distinct retry stage from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   ob name text manuscript fact two complete pass be equally from text false then
+  ob text "false" to name text manuscript fact two pass be text do
+  ob name text manuscript fact two distinct pass be equally from text false then
   ob text "false" to name text manuscript fact two pass be text do
   ob name text manuscript fact two pass be equally from text true then be depart do
 prah
@@ -321,7 +338,10 @@ su name manuscript fact two checked to name text output be ceremony def
   su name manuscript fact two complete stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do
   ob text of fixed of manuscript fact two complete verify to name text output be text do
   ob text of pass of manuscript fact two complete verify to name text manuscript fact two complete pass be text do
+  su name manuscript fact two distinct stage from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   ob name text manuscript fact two complete pass be equally from text false then
+  ob text "false" to name text manuscript fact two pass be text do
+  ob name text manuscript fact two distinct pass be equally from text false then
   ob text "false" to name text manuscript fact two pass be text do
   fromindex num 1 toindex num 3 be manuscript fact two retry do
   ob name text manuscript fact two pass be equally from text false then

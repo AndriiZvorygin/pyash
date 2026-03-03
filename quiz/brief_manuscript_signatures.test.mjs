@@ -41,6 +41,7 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /su name manuscript sentence complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript hook complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript cta complete from text line to name text pass be ceremony def/);
+  assert.match(text, /su name manuscript segment distinct from text line with text prior to name text pass be ceremony def/);
   assert.match(text, /manuscript sentence polish verify stage be verify as wo sentence complete ob text of from of this to name map result do/);
   assert.match(text, /manuscript fact one write stage .* be verify loop do/);
   assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34/);
@@ -53,9 +54,11 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /manuscript fact two write stage .* be verify loop do/);
   assert.match(text, /manuscript fact two verify stage be verify as wo word count atleast num 20 atmost num 34/);
   assert.match(text, /manuscript fact two complete stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do/);
+  assert.match(text, /manuscript fact two distinct stage from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do/);
   assert.match(text, /su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript fact two verify retry stage be verify as wo word count atleast num 20 atmost num 34/);
   assert.match(text, /manuscript fact two complete retry stage be verify as wo sentence complete from name text output to name map manuscript fact two complete verify do/);
+  assert.match(text, /manuscript fact two distinct retry stage from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript fact two retry do/);
   assert.doesNotMatch(text, /manuscript fact two verify retry first stage/);
   assert.match(text, /manuscript uplift write stage .* be verify loop do/);
@@ -136,4 +139,10 @@ test("brief manuscript completion ceremonies reject sentence fragments", async (
 
   await interpret(parse('su name demo from text "Restore land and." to name text pass be manuscript cta complete do'));
   assert.equal(remember("pass")?.ob?.text, "false");
+
+  await interpret(parse('su name demo from text "Restore land ownership now" with text "Restore land ownership now." to name text pass be manuscript segment distinct do'));
+  assert.equal(remember("pass")?.ob?.text, "false");
+
+  await interpret(parse('su name demo from text "Restore land ownership now" with text "Restore family farms now." to name text pass be manuscript segment distinct do'));
+  assert.equal(remember("pass")?.ob?.text, "true");
 });
