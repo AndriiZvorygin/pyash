@@ -60,10 +60,10 @@ test("brief video manuscript improve uses transcript text instead of object coer
     }
 
     const payload = decodeMindRequest(records, {
-      mindName: "brief manuscript internal brief video script mind",
+      mindName: "brief manuscript internal brief video script fact one mind",
       requestNum: 1
     });
-    assert.ok(payload?.prompt, "expected first brief-manuscript mind request payload");
+    assert.ok(payload?.prompt, "expected first brief-manuscript fact-one request payload");
     assert.match(payload.prompt, /Solon restored land rights for citizens\./);
     assert.doesNotMatch(payload.prompt, /\[object Object\]/);
   } finally {
