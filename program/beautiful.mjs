@@ -56,8 +56,17 @@ export function npToPyash(np = {}) {
     if (quotedBlockMatch) {
       return `text ${np.text}`;
     }
-    if (typeof np.text === "string" && /[\n\r]/.test(np.text)) {
-      return `text quoted.text.${np.text}.text.quoted`;
+    const renderText = (() => {
+      if (typeof np.text !== "string") return np.text;
+      if (/[\n\r]/u.test(np.text)) return np.text;
+      if (!/\\[nr]/u.test(np.text)) return np.text;
+      return np.text
+        .replace(/\\r\\n/gu, "\n")
+        .replace(/\\n/gu, "\n")
+        .replace(/\\r/gu, "\n");
+    })();
+    if (typeof renderText === "string" && /[\n\r]/.test(renderText)) {
+      return `text quoted.text.${renderText}.text.quoted`;
     }
     return `text ${JSON.stringify(np.text)}`;
   }
