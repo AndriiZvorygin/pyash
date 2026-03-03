@@ -110,7 +110,11 @@ function evaluateTargetWordsGuarantee(task, draft) {
 
 function deriveNumPredictFromTargetWords(range) {
   if (!range) return null;
-  const raw = Math.ceil(Number(range.atmost) * 1.4);
+  const upper = Number(range.atmost);
+  const lower = Number(range.atleast);
+  const width = Math.max(0, upper - lower);
+  // Keep generation close to the upper word bound so retries do not drift long.
+  const raw = upper + Math.max(2, Math.ceil(width * 0.15));
   if (!Number.isFinite(raw)) return null;
   return Math.max(12, Math.min(220, raw));
 }
