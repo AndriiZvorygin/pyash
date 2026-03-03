@@ -58,3 +58,15 @@ test("equally compares su against another su value", async () => {
   const res2 = await run("su name lhs ob what que");
   assert.equal(res2, "exists su name lhs ob num 6 be number ya");
 });
+
+test("equally compares text su against another text su value", async () => {
+  forget();
+
+  await run('exists su name lhs ob text "same line" be text ya');
+  await run('exists su name rhs ob text "same line" be text ya');
+  await run("exists su name hits ob num 0 be number ya");
+  await run("su name lhs be equally from name rhs then");
+  await run("ob num 1 to name hits be plus do");
+  const res = await run("su name hits ob what que");
+  assert.equal(res, "exists su name hits ob num 1 be number ya");
+});

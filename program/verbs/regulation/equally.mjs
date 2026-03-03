@@ -15,6 +15,10 @@ export const signatures = [
   { signatureWords: ["be", "equally", "from", "name", "num", "su", "num"], handler: equally_subj_num_from_num },
   { signatureWords: ["be", "equally", "from", "name", "num"], handler: equally_subj_num_from_num },
   { signatureWords: ["be", "equally", "from", "name", "num", "ob", "num"], handler: equally_subj_num_from_num },
+  { signatureWords: ["be", "equally", "from", "name", "text", "su", "text"], handler: equally_subj_num_from_num },
+  { signatureWords: ["be", "equally", "from", "name", "text"], handler: equally_subj_num_from_num },
+  { signatureWords: ["be", "equally", "from", "name", "text", "ob", "text"], handler: equally_subj_num_from_num },
+  { signatureWords: ["be", "equally", "from", "name", "text", "ob", "name", "text"], handler: equally_subj_num_from_num },
   { signatureWords: ["be", "equally", "from", "text", "ob", "text"], handler: equally_subj_num_from_num },
   { signatureWords: ["be", "equally", "from", "text", "ob", "name", "text"], handler: equally_subj_num_from_num },
   { signatureWords: ["be", "equally", "from", "text"], handler: equally_subj_num_from_num }
