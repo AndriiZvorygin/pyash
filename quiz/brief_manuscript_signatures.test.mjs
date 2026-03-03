@@ -39,10 +39,10 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript fact two retry do/);
   assert.doesNotMatch(text, /manuscript fact two verify retry first stage/);
   assert.match(text, /manuscript uplift write stage .* by num 0 atmost num 120 be write do/);
-  assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 24 atmost num 33/);
+  assert.match(text, /manuscript uplift verify stage be verify as wo word count atleast num 18 atmost num 40/);
   assert.match(text, /su name manuscript uplift retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /manuscript uplift retry write stage .* by num 0 atmost num 120 be write do/);
-  assert.match(text, /manuscript uplift verify retry stage be verify as wo word count atleast num 24 atmost num 33/);
+  assert.match(text, /manuscript uplift retry write stage .* by num 0 atmost num 64 be write do/);
+  assert.match(text, /manuscript uplift verify retry stage be verify as wo word count atleast num 18 atmost num 40/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript uplift retry do/);
   assert.doesNotMatch(text, /manuscript uplift verify retry first stage/);
   assert.match(text, /manuscript hook verify stage be verify as wo word count atleast num 6 atmost num 9/);
@@ -56,11 +56,11 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript total retry do/);
   assert.doesNotMatch(text, /manuscript total retry first verify stage/);
   assert.match(text, /brief video script source thrust verify prompt ob text quoted\.text\.Good\. Here is a much cleaner rubric/);
-  assert.match(text, /manuscript source thrust write stage .* by num 0 atmost num 240 be write do/);
+  assert.match(text, /manuscript source thrust write stage .* by num 0 atmost num 12 be write do/);
   assert.match(text, /manuscript source thrust verdict tail stage ob name text manuscript source thrust review atmost num 1 to name text manuscript source thrust verdict line be line tail do/);
-  assert.match(text, /manuscript source thrust verify stage from text of ob of brief video script source with text of ob of manuscript out to name map manuscript source thrust verify be manuscript source thrust do/);
+  assert.match(text, /manuscript source thrust verify stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do/);
   assert.match(text, /su name manuscript source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /manuscript source thrust verify retry stage from text of ob of brief video script source with text of ob of manuscript out to name map manuscript source thrust verify be manuscript source thrust do/);
+  assert.match(text, /manuscript source thrust verify retry stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript source thrust retry do/);
   assert.doesNotMatch(text, /manuscript source thrust verify retry first stage/);
   assert.match(text, /manuscript source thrust guarantee stage ob bool lie fromtext text "manuscript source thrust defective" be guarantee do/);
