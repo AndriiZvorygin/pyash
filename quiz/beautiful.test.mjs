@@ -16,6 +16,13 @@ test("npToPyash gracefully handles empty NP", () => {
   assert.equal(npToPyash({}), "");
 });
 
+test("npToPyash renders escaped newlines as quoted text block", () => {
+  assert.equal(
+    npToPyash({ text: "alpha\\n\\nbeta" }),
+    "text quoted.text.alpha\n\nbeta.text.quoted"
+  );
+});
+
 test("sentenceToPyash prints su only", () => {
   const sentence = {
     mood: "ya",
