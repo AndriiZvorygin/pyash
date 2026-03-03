@@ -3,6 +3,7 @@ exists su name brief video script hook mind be mind fromtext text "You write one
 exists su name brief video script hook retry mind be mind fromtext name brief video script hook retry prompt ya
 exists su name brief video script body retry mind be mind fromtext name brief video script body retry prompt ya
 exists su name brief video script source thrust verify mind be mind fromtext name brief video script source thrust verify prompt ya
+exists su name brief video script source thrust repair mind be mind fromtext name brief video script source thrust repair prompt ya
 
 exists su name brief video script fact one prompt ob text quoted.text.You are writing spoken script lines for a 30-60 second history short.
 
@@ -181,6 +182,21 @@ or
 FAIL
 No other words.text.quoted be text ya
 
+exists su name brief video script source thrust repair prompt ob text quoted.text.You are revising a short script to keep historical claims strictly grounded in the source transcript.
+
+Task:
+- Rewrite SCRIPT so every historical claim is supported by TRANSCRIPT.
+- Remove or soften any unsupported historical specifics.
+- Keep dramatic spoken-prose style and modern parallels.
+- Keep total length between 70 and 110 words.
+- End with this exact sentence: Subscribe for more.
+
+Rules:
+- Do not add any historical person, event, law, place, or mechanism that is not in TRANSCRIPT.
+- Keep plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes.
+.text.quoted be text ya
+
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact one pass be equally from text true then be depart do
   su name manuscript fact one retry request begin stage ob text "SEGMENT:\n" to name text manuscript fact one retry request be text do
@@ -339,9 +355,22 @@ su name manuscript source thrust from text transcript with text script to name t
   su name pass ret
 prah
 
+su name manuscript source thrust repaired from text transcript with text script to name text manuscript out be ceremony def
+  su name manuscript source thrust repair request begin stage ob text "TRANSCRIPT:\n" to name text manuscript source thrust repair request be text do
+  su name manuscript source thrust repair request source stage ob text of from of this to name manuscript source thrust repair request be plus do
+  su name manuscript source thrust repair request script header stage ob text "\n\nSCRIPT:\n" to name manuscript source thrust repair request be plus do
+  su name manuscript source thrust repair request script stage ob text of with of this to name manuscript source thrust repair request be plus do
+  su name manuscript source thrust repair write stage ob name text manuscript source thrust repair request for name brief video script source thrust repair mind to name text manuscript out by num 0 atmost num 180 be write do
+  su name manuscript source thrust repair verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript source thrust repair verify do
+  ob text of pass of manuscript source thrust repair verify to name text manuscript source thrust repair pass be text do
+  ob name text manuscript source thrust repair pass be equally from text false then
+  su name manuscript source thrust repair guarantee stage ob bool lie fromtext text "manuscript source thrust repair word count defective" be guarantee do
+  su name manuscript out ret
+prah
+
 su name manuscript source thrust retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript source thrust pass be equally from text true then be depart do
-  su name manuscript draft retry stage from text of ob of brief video script source to name text manuscript out be manuscript draft checked do
+  su name manuscript source thrust repair retry stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript out be manuscript source thrust repaired do
   su name manuscript source thrust verify retry stage from text of ob of brief video script source with text of ob of manuscript out to name text manuscript source thrust pass be manuscript source thrust do
   ob name text manuscript source thrust pass be equally from text true then be depart do
 prah
