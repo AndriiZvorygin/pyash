@@ -83,6 +83,31 @@ function parseVerdictFromLastLine(verifyText, threshold) {
   return { pass: false, score: null, lastLine };
 }
 
+function countWords(text) {
+  const matches = String(text ?? "").trim().match(/\S+/gu);
+  return matches ? matches.length : 0;
+}
+
+function parseTargetWordsRange(task) {
+  const match = String(task ?? "").match(/TARGET_WORDS:\s*(\d+)\s*-\s*(\d+)/iu);
+  if (!match) return null;
+  const atleast = Number(match[1]);
+  const atmost = Number(match[2]);
+  if (!Number.isFinite(atleast) || !Number.isFinite(atmost) || atleast > atmost) return null;
+  return { atleast, atmost };
+}
+
+function evaluateTargetWordsGuarantee(task, draft) {
+  const range = parseTargetWordsRange(task);
+  if (!range) return null;
+  const words = countWords(draft);
+  const pass = words >= range.atleast && words <= range.atmost;
+  const text = pass
+    ? `target words=match count=${words} range=${range.atleast}-${range.atmost}`
+    : `target words=mismatch count=${words} range=${range.atleast}-${range.atmost}`;
+  return { pass, text };
+}
+
 function seriesEntryCount(seriesName) {
   if (!seriesName) return 0;
   const fact = remember(seriesName);
@@ -402,6 +427,15 @@ export async function verifyLoop(sentence) {
           : `ok: command status=0 output=${guarantee.output}`;
       } else {
         lastGuaranteeText = `fail: ${guarantee.error}`;
+      }
+    }
+    const targetWordsGuarantee = evaluateTargetWordsGuarantee(task, finalDraft);
+    if (targetWordsGuarantee) {
+      lastGuaranteePass = lastGuaranteePass && targetWordsGuarantee.pass;
+      if (lastGuaranteeText === "not run") {
+        lastGuaranteeText = targetWordsGuarantee.text;
+      } else {
+        lastGuaranteeText = `${lastGuaranteeText}; ${targetWordsGuarantee.text}`;
       }
     }
 
