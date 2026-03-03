@@ -268,6 +268,12 @@ su name manuscript hook complete from text line to name text pass be ceremony de
   su name pass ret
 prah
 
+su name manuscript cta complete from text line to name text pass be ceremony def
+  su name manuscript cta complete line stage ob text of from of this to name text manuscript cta complete line be text do
+  su name manuscript cta ending connector stage from text of ob of manuscript cta complete line to name text pass be manuscript ending connector do
+  su name pass ret
+prah
+
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact one pass be equally from text true then be depart do
   su name manuscript fact one retry request begin stage ob text "TARGET_WORDS: 20-34\nSEGMENT:\n" to name text manuscript fact one retry request be text do
@@ -379,7 +385,7 @@ su name manuscript cta retry fromindex num 0 toindex num 0 be ceremony def
   su name manuscript cta retry write stage ob name text manuscript cta retry request for name brief video script cta retry mind by name brief video script stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
   su name manuscript cta verify retry stage be verify as wo word count atleast num 2 atmost num 4 from name text output to name map manuscript cta verify do
   ob text of pass of manuscript cta verify to name text manuscript cta pass be text do
-  su name manuscript cta complete retry stage from text of ob of output to name text manuscript cta complete pass be manuscript hook complete do
+  su name manuscript cta complete retry stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do
   ob name text manuscript cta complete pass be equally from text false then
   ob text "false" to name text manuscript cta pass be text do
   ob name text manuscript cta pass be equally from text true then be depart do
@@ -389,12 +395,12 @@ su name manuscript cta checked to name text output be ceremony def
   su name manuscript cta write stage ob name text manuscript cta request for name brief video script cta mind by name brief video script stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
   su name manuscript cta verify stage be verify as wo word count atleast num 2 atmost num 4 from name text output to name map manuscript cta verify do
   ob text of pass of manuscript cta verify to name text manuscript cta pass be text do
-  su name manuscript cta complete stage from text of ob of output to name text manuscript cta complete pass be manuscript hook complete do
+  su name manuscript cta complete stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do
   ob name text manuscript cta complete pass be equally from text false then
   ob text "false" to name text manuscript cta pass be text do
   fromindex num 1 toindex num 3 be manuscript cta retry do
   ob name text manuscript cta pass be equally from text false then
-  su name manuscript cta guarantee stage ob bool lie fromtext text "manuscript cta word count defective" be guarantee do
+  su name manuscript cta guarantee stage ob bool lie fromtext text "manuscript cta constraints defective" be guarantee do
   su name manuscript cta return stage ob name text output be text do
 prah
 

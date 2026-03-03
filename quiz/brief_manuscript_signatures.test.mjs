@@ -39,6 +39,7 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /su name manuscript ending connector from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript sentence complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript hook complete from text line to name text pass be ceremony def/);
+  assert.match(text, /su name manuscript cta complete from text line to name text pass be ceremony def/);
   assert.match(text, /ob name text manuscript sentence complete line from text "\/\[\.!\?\]\\\\s\*\$\/" be resemble then/);
   assert.match(text, /ob name text manuscript hook complete line from text "\/\[\.\?\]\\\\s\*\$\/" be resemble then/);
   assert.match(text, /manuscript fact one write stage .* be verify loop do/);
@@ -77,7 +78,10 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /manuscript cta verify stage be verify as wo word count atleast num 2 atmost num 4/);
   assert.match(text, /su name manuscript cta retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript cta verify retry stage be verify as wo word count atleast num 2 atmost num 4/);
+  assert.match(text, /manuscript cta complete retry stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript cta retry do/);
+  assert.match(text, /manuscript cta complete stage from text of ob of output to name text manuscript cta complete pass be manuscript cta complete do/);
+  assert.match(text, /manuscript cta guarantee stage ob bool lie fromtext text "manuscript cta constraints defective" be guarantee do/);
   assert.match(text, /manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110/);
   assert.match(text, /su name manuscript total retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript total retry verify stage be verify as wo word count atleast num 70 atmost num 110/);
@@ -118,5 +122,11 @@ test("brief manuscript completion ceremonies reject sentence fragments", async (
   assert.equal(remember("pass")?.ob?.text, "true");
 
   await interpret(parse('su name demo from text "Will families regain ownership" to name text pass be manuscript hook complete do'));
+  assert.equal(remember("pass")?.ob?.text, "false");
+
+  await interpret(parse('su name demo from text "Restore land ownership today" to name text pass be manuscript cta complete do'));
+  assert.equal(remember("pass")?.ob?.text, "true");
+
+  await interpret(parse('su name demo from text "Restore land and." to name text pass be manuscript cta complete do'));
   assert.equal(remember("pass")?.ob?.text, "false");
 });
