@@ -30,11 +30,11 @@ The filename form reads source text first, then delegates to text-source form.
 
 Current module stage sequence:
 1. source resolve from input text,
-2. generate fact one from source, then verify word count (`20..34`),
-3. generate fact two from `fact one + source`, then verify word count (`20..34`),
-4. generate uplifting close from `fact one + fact two + source`, then verify word count (`24..33`),
+2. generate fact one from source, then verify word count (`20..34`) and sentence completeness,
+3. generate fact two from `fact one + source`, then verify word count (`20..34`) and sentence completeness,
+4. generate uplifting close from `fact one + fact two + source`, then verify word count (`24..33`) and sentence completeness,
 5. compose manuscript body,
-6. generate hook from manuscript body, then verify word count (`6..9`),
+6. generate hook from manuscript body, then verify word count (`6..9`) and sentence completeness,
 7. assemble final manuscript as `hook + blank line + body`,
 8. verify final manuscript total word count (`70..110`), fail deterministically if out-of-bounds,
 9. verify source-thrust against transcript with a reviewer mind; reviewer output must include:
@@ -43,6 +43,7 @@ Current module stage sequence:
 
 Stage behavior details:
 - fact one/fact two/uplift/hook generation now routes through `verify loop` (generator + verifier loop) before deterministic word-count guard checks.
+- sentence-complete guard uses `be verify as wo sentence complete`; if a line is complete but missing terminal punctuation, it is auto-normalized by appending `.`.
 - total manuscript check also retries once by rewriting body text under bounded decode.
 
 ## 4. Prompt contract

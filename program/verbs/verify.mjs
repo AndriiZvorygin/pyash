@@ -19,6 +19,7 @@ function resolveVerifyMode(sentence) {
   if (!mode || mode === "pyash") return "pyash";
   if (mode === "word count") return "word count";
   if (mode === "letter count") return "letter count";
+  if (mode === "sentence complete") return "sentence complete";
   throwVerifyError(`verify defective: unsupported mode ${mode}`, { sentence });
 }
 
@@ -67,6 +68,36 @@ function countLetters(text) {
   return Array.from(String(text ?? "")).length;
 }
 
+const sentenceEndingConnector = /\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\s*[.!?]*\s*$/i;
+
+function verifySentenceCompleteText(text) {
+  const trimmed = String(text ?? "").trim();
+  const words = countWords(trimmed);
+  const hasTerminalPunctuation = /[.!?]\s*$/.test(trimmed);
+  const hasContinuationPunctuation = /[,;:]\s*$/.test(trimmed);
+  const endsWithConnector = sentenceEndingConnector.test(trimmed);
+  const pass =
+    trimmed.length > 0
+    && words > 0
+    && !hasContinuationPunctuation
+    && !endsWithConnector;
+  const fixed = pass && !hasTerminalPunctuation ? `${trimmed}.` : trimmed;
+  let reason = "ok";
+  if (!trimmed) reason = "empty text";
+  else if (hasContinuationPunctuation) reason = "continuation punctuation";
+  else if (endsWithConnector) reason = "ending connector";
+  else if (!hasTerminalPunctuation) reason = "missing terminal punctuation";
+  return {
+    pass,
+    words,
+    hasTerminalPunctuation,
+    hasContinuationPunctuation,
+    endsWithConnector,
+    fixed,
+    reason
+  };
+}
+
 async function resolveCountSourceText(sentence, { rememberFn = remember } = {}) {
   if (typeof sentence?.ob?.text === "string") {
     return { text: sentence.ob.text, source: "ob text" };
@@ -111,10 +142,34 @@ async function verifyCount(sentence, { mode, rememberFn = remember } = {}) {
   };
 }
 
+async function verifySentenceComplete(sentence, { rememberFn = remember } = {}) {
+  const { text, source } = await resolveCountSourceText(sentence, { rememberFn });
+  const report = verifySentenceCompleteText(text);
+  return {
+    ob: {
+      map: {
+        pass: report.pass,
+        words: report.words,
+        source,
+        mode: "sentence complete",
+        reason: report.reason,
+        terminal: report.hasTerminalPunctuation,
+        continuation: report.hasContinuationPunctuation,
+        connector: report.endsWithConnector,
+        fixed: report.fixed
+      }
+    },
+    be: "map"
+  };
+}
+
 export async function verify(sentence, { remember: rememberFn = remember } = {}) {
   const mode = resolveVerifyMode(sentence);
   if (mode === "word count" || mode === "letter count") {
     return verifyCount(sentence, { mode, rememberFn });
+  }
+  if (mode === "sentence complete") {
+    return verifySentenceComplete(sentence, { rememberFn });
   }
   const { text, source } = await resolvePyashSourceText(sentence, { rememberFn });
   const report = verifyPyashText(text, { source });
@@ -151,6 +206,36 @@ function buildCountModeSignatures(mode) {
   }));
 }
 
+const sentenceModeSignatureTails = [
+  ["from", "filename"],
+  ["from", "name", "num"],
+  ["from", "name", "text"],
+  ["from", "name", "filename"],
+  ["ob", "text"],
+  ["from", "filename", "to", "name", "num"],
+  ["from", "filename", "to", "name", "text"],
+  ["from", "filename", "to", "name", "map"],
+  ["from", "name", "num", "to", "name", "num"],
+  ["from", "name", "num", "to", "name", "text"],
+  ["from", "name", "num", "to", "name", "map"],
+  ["from", "name", "text", "to", "name", "num"],
+  ["from", "name", "text", "to", "name", "text"],
+  ["from", "name", "text", "to", "name", "map"],
+  ["from", "name", "filename", "to", "name", "num"],
+  ["from", "name", "filename", "to", "name", "text"],
+  ["from", "name", "filename", "to", "name", "map"],
+  ["ob", "text", "to", "name", "num"],
+  ["ob", "text", "to", "name", "text"],
+  ["ob", "text", "to", "name", "map"]
+];
+
+function buildSentenceModeSignatures(mode) {
+  return sentenceModeSignatureTails.map((tail) => ({
+    signatureWords: ["be", "verify", "as", "wo", mode, ...tail],
+    handler: verify
+  }));
+}
+
 export const signatures = [
   { signatureWords: ["be", "verify", "from", "filename", "as", "wo", "pyash"], handler: verify },
   { signatureWords: ["be", "verify", "from", "filename", "as", "wo", "pyash", "do"], handler: verify },
@@ -173,7 +258,8 @@ export const signatures = [
   { signatureWords: ["be", "verify", "as", "wo", "pyash", "ob", "text", "to", "name", "series"], handler: verify },
   { signatureWords: ["be", "verify", "as", "wo", "pyash", "ob", "text", "to", "name", "series", "do"], handler: verify },
   ...buildCountModeSignatures("word count"),
-  ...buildCountModeSignatures("letter count")
+  ...buildCountModeSignatures("letter count"),
+  ...buildSentenceModeSignatures("sentence complete")
 ];
 
 export default verify;
