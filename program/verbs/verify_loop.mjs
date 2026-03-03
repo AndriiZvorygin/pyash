@@ -108,6 +108,13 @@ function evaluateTargetWordsGuarantee(task, draft) {
   return { pass, text };
 }
 
+function deriveNumPredictFromTargetWords(range) {
+  if (!range) return null;
+  const raw = Math.ceil(Number(range.atmost) * 1.4);
+  if (!Number.isFinite(raw)) return null;
+  return Math.max(12, Math.min(220, raw));
+}
+
 function seriesEntryCount(seriesName) {
   if (!seriesName) return 0;
   const fact = remember(seriesName);
@@ -132,7 +139,7 @@ function formatSeriesTranscript(seriesName, { maxLines = 40, fromIndex = 0 } = {
   return lines.slice(Math.max(0, lines.length - Math.max(1, Math.trunc(maxLines)))).join("\n");
 }
 
-async function invokeMind({ mindName, prompt, outputName, toolMapName }) {
+async function invokeMind({ mindName, prompt, outputName, toolMapName, numPredict = null }) {
   const interpret = await resolveInterpret();
   const call = {
     mood: "do",
@@ -145,6 +152,9 @@ async function invokeMind({ mindName, prompt, outputName, toolMapName }) {
   if (!toolMapName) call.by = { num: 0 };
   if (toolMapName) {
     call.with = { name: toolMapName, nameTypeWords: ["map"] };
+  }
+  if (Number.isFinite(Number(numPredict))) {
+    call.atmost = { num: Number(numPredict) };
   }
   await interpret(call);
   return resolveFactText(outputName);
@@ -348,6 +358,8 @@ export async function verifyLoop(sentence) {
     verify: String(priorSuccess?.verify?.text ?? ""),
     guarantee: String(priorSuccess?.guarantee?.text ?? "")
   };
+  const targetWordsRange = parseTargetWordsRange(task);
+  const targetWordsNumPredict = deriveNumPredictFromTargetWords(targetWordsRange);
   let latestPrompt = task;
   let finalDraft = "";
   let lastReviewText = "";
@@ -372,7 +384,8 @@ export async function verifyLoop(sentence) {
         mindName: generatorName,
         prompt: latestPrompt,
         outputName: draftName,
-        toolMapName
+        toolMapName,
+        numPredict: targetWordsNumPredict
       });
     } else if (generatorIsRefinery) {
       finalDraft = await invokeRefinery({

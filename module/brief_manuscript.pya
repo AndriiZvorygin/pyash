@@ -61,7 +61,7 @@ Rules:
 exists su name brief video script hook prompt ob text quoted.text.Write one opening hook line for this short.
 
 Rules:
-- Exactly 6-9 words.
+- Between 6 and 9 words.
 - Must match the provided body content.
 - Dramatic and curiosity-driven.
 - Plain text only.
@@ -71,6 +71,7 @@ Rules:
 exists su name brief video script hook retry prompt ob text quoted.text.Rewrite the provided hook to exactly 6-9 words.
 
 Rules:
+- Write between 6 and 9 words.
 - Preserve the same core meaning.
 - Output one line only.
 - Plain text only.
