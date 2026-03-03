@@ -241,7 +241,7 @@ Rules:
 su name manuscript ending connector from text line to name text pass be ceremony def
   su name manuscript ending connector line stage ob text of from of this to name text manuscript ending connector line be text do
   ob text "true" to name text manuscript ending connector pass local be text do
-  ob name text manuscript ending connector line from text "/\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|to|for|from|with|without|of|in|on|at|by|as|into|onto|over|under|through|across|between|among|before|after|during|toward|towards|against|via|per|up|down|off|out|around|about|is|are|was|were|be|been|being|can|could|should|would|will|may|might|must|do|does|did|have|has|had|a|an|the)\\s*[.!?]*\\s*$/i" be resemble then
+  ob name text manuscript ending connector line from text "/\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\\s*[.!?]*\\s*$/i" be resemble then
   ob text "false" to name text manuscript ending connector pass local be text do
   su name manuscript ending connector pass local ret
 prah
