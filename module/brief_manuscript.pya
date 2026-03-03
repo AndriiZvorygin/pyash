@@ -1,5 +1,5 @@
 exists su name brief video script mind be mind fromtext text "You are a master Shorts script writer for history repeats today teaching content." ya
-exists su name brief video script hook mind be mind fromtext text "You write one short hook line for a history short. Follow constraints exactly." ya
+exists su name brief video script hook mind be mind fromtext name brief video script hook prompt ya
 exists su name brief video script hook retry mind be mind fromtext name brief video script hook retry prompt ya
 exists su name brief video script cta mind be mind fromtext name brief video script cta prompt ya
 exists su name brief video script cta retry mind be mind fromtext name brief video script cta retry prompt ya
@@ -239,27 +239,30 @@ Rules:
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
 su name manuscript ending connector from text line to name text pass be ceremony def
-  ob text "true" to name text pass be text do
-  ob text of from of this from text "/\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|to|for|from|with|without|of|in|on|at|by|as|into|onto|over|under|through|across|between|among|before|after|during|toward|towards|against|via|per|up|down|off|out|around|about|is|are|was|were|be|been|being|can|could|should|would|will|may|might|must|do|does|did|have|has|had|a|an|the)\\s*[.!?]*\\s*$/i" be resemble then
-  ob text "false" to name text pass be text do
-  su name pass ret
+  su name manuscript ending connector line stage ob text of from of this to name text manuscript ending connector line be text do
+  ob text "true" to name text manuscript ending connector pass local be text do
+  ob name text manuscript ending connector line from text "/\\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|to|for|from|with|without|of|in|on|at|by|as|into|onto|over|under|through|across|between|among|before|after|during|toward|towards|against|via|per|up|down|off|out|around|about|is|are|was|were|be|been|being|can|could|should|would|will|may|might|must|do|does|did|have|has|had|a|an|the)\\s*[.!?]*\\s*$/i" be resemble then
+  ob text "false" to name text manuscript ending connector pass local be text do
+  su name manuscript ending connector pass local ret
 prah
 
 su name manuscript sentence complete from text line to name text pass be ceremony def
+  su name manuscript sentence complete line stage ob text of from of this to name text manuscript sentence complete line be text do
   ob text "false" to name text pass be text do
-  ob text of from of this from text "/[.!?]\\s*$/" be resemble then
+  ob name text manuscript sentence complete line from text "/[.!?]\\s*$/" be resemble then
   ob text "true" to name text pass be text do
-  su name manuscript sentence ending connector stage from text of from of this to name text manuscript sentence ending connector pass be manuscript ending connector do
+  su name manuscript sentence ending connector stage from text of ob of manuscript sentence complete line to name text manuscript sentence ending connector pass be manuscript ending connector do
   ob name text manuscript sentence ending connector pass be equally from text false then
   ob text "false" to name text pass be text do
   su name pass ret
 prah
 
 su name manuscript hook complete from text line to name text pass be ceremony def
+  su name manuscript hook complete line stage ob text of from of this to name text manuscript hook complete line be text do
   ob text "false" to name text pass be text do
-  ob text of from of this from text "/[.?]\\s*$/" be resemble then
+  ob name text manuscript hook complete line from text "/[.?]\\s*$/" be resemble then
   ob text "true" to name text pass be text do
-  su name manuscript hook ending connector stage from text of from of this to name text manuscript hook ending connector pass be manuscript ending connector do
+  su name manuscript hook ending connector stage from text of ob of manuscript hook complete line to name text manuscript hook ending connector pass be manuscript ending connector do
   ob name text manuscript hook ending connector pass be equally from text false then
   ob text "false" to name text pass be text do
   su name pass ret
@@ -478,7 +481,6 @@ su name manuscript draft checked from text manuscript to name text manuscript ou
 
   su name manuscript total verify stage be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
   ob text of pass of manuscript total verify to name text manuscript total pass be text do
-  fromindex num 1 toindex num 3 be manuscript total retry do
   ob name text manuscript total pass be equally from text false then
   su name manuscript total guarantee stage ob bool lie fromtext text "manuscript total word count defective" be guarantee do
 
