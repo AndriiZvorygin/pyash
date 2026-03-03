@@ -842,10 +842,24 @@ async function main() {
     const abs = path.resolve(process.cwd(), "artifacts", String(runId));
     console.error(`artifacts folder: ${abs}`);
   };
+  const writeProduceTextArtifact = async () => {
+    if (result?.ob?.text === undefined) return null;
+    const dir = path.resolve(process.cwd(), "artifacts", String(runId));
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, "produce.txt");
+    let payload = String(result.ob.text ?? "");
+    if (!payload.includes("\n") && payload.includes("\\n")) {
+      payload = payload.replace(/\\n/g, "\n");
+    }
+    const text = payload.endsWith("\n") ? payload : `${payload}\n`;
+    await fs.writeFile(filePath, text, "utf8");
+    return filePath;
+  };
   if (runError) {
     printArtifactsFolderHint();
     throw runError;
   }
+  await writeProduceTextArtifact();
 
   if (full) {
     console.log("\nResult:");
