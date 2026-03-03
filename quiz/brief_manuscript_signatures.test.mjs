@@ -118,6 +118,9 @@ test("brief manuscript completion ceremonies reject sentence fragments", async (
   await interpret(parse('su name demo from text "Families lost homes and." to name text pass be manuscript sentence complete do'));
   assert.equal(remember("pass")?.ob?.text, "false");
 
+  await interpret(parse('su name demo from text "Families lost homes on." to name text pass be manuscript sentence complete do'));
+  assert.equal(remember("pass")?.ob?.text, "true");
+
   await interpret(parse('su name demo from text "Will families regain ownership?" to name text pass be manuscript hook complete do'));
   assert.equal(remember("pass")?.ob?.text, "true");
 
