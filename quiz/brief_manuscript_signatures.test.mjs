@@ -31,9 +31,14 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /exists su name brief video script cta prompt ob text quoted\.text\.Write one short call to action for this same short\./);
   assert.match(text, /exists su name brief video script cta retry prompt ob text quoted\.text\.Rewrite the provided call to action to exactly 2-4 words\./);
   assert.match(text, /exists su name brief video script body retry prompt ob text quoted\.text\.Rewrite the provided manuscript body to 62-97 words total\./);
+  assert.match(text, /exists su name brief video script hook prompt ob text quoted\.text\.Write one opening hook line for this short\./);
+  assert.match(text, /- Must end with "\." or "\?"\./);
+  assert.match(text, /exists su name brief video script hook retry prompt ob text quoted\.text\.Rewrite the provided hook to exactly 6-9 words\./);
+  assert.match(text, /- End with "\." or "\?"\./);
   assert.match(text, /su name manuscript ending connector from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript sentence complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript hook complete from text line to name text pass be ceremony def/);
+  assert.match(text, /ob text of from of this from text "\/\[\.\?\]\\\\s\*\$\/" be resemble then/);
   assert.match(text, /manuscript fact one write stage .* be verify loop do/);
   assert.match(text, /manuscript fact one verify stage be verify as wo word count atleast num 20 atmost num 34/);
   assert.match(text, /manuscript fact one complete stage from text of ob of output to name text manuscript fact one complete pass be manuscript sentence complete do/);
