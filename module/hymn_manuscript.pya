@@ -1,0 +1,229 @@
+exists su name mind model ob text "qwen3.5:9b" be default ya
+su name mind configure be map def
+  su name think ob bool lie ya
+  su name max tokens ob num 96 ya
+prah
+
+exists su name hymn verse one mind be mind fromtext name hymn verse one prompt ya
+exists su name hymn chorus mind be mind fromtext name hymn chorus prompt ya
+exists su name hymn verse two mind be mind fromtext name hymn verse two prompt ya
+exists su name hymn bridge mind be mind fromtext name hymn bridge prompt ya
+
+exists su name hymn verse one prompt ob text quoted.text.You are writing Verse 1 of a lyrical song based on source text.
+
+Rules:
+- 3 to 5 short lines.
+- 22 to 70 words total.
+- Ground imagery and facts in the provided source text.
+- Emotional, singable language.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name hymn chorus prompt ob text quoted.text.You are writing the Chorus of a lyrical song.
+
+Rules:
+- 2 to 4 short lines.
+- 10 to 42 words total.
+- Memorable and repeatable refrain.
+- Keep the core theme tied to the source and Verse 1.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name hymn verse two prompt ob text quoted.text.You are writing Verse 2 of the same lyrical song.
+
+Rules:
+- 3 to 5 short lines.
+- 22 to 70 words total.
+- Focus on a different supported aspect than Verse 1.
+- Do not repeat Verse 1 wording.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name hymn bridge prompt ob text quoted.text.You are writing the Bridge of the same lyrical song.
+
+Rules:
+- 2 to 4 short lines.
+- 12 to 50 words total.
+- Create an emotional turn or resolution.
+- Keep continuity with prior sections.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+su name hymn verse one retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn verse one pass be equally from text true then be depart do
+  su name hymn verse one write retry stage ob name text verse one request fromtext name hymn verse one prompt for name hymn verse one mind to name text output by num 0 atmost num 96 be write do
+  su name hymn verse one verify retry stage be verify as wo word count atleast num 22 atmost num 70 from name text output to name map hymn verse one verify do
+  ob text of pass of hymn verse one verify to name text hymn verse one pass be text do
+  ob name text hymn verse one pass be equally from text true then be depart do
+prah
+
+su name hymn verse one checked to name text output be ceremony def
+  su name hymn verse one write stage ob name text verse one request fromtext name hymn verse one prompt for name hymn verse one mind to name text output by num 0 atmost num 96 be write do
+  su name hymn verse one verify stage be verify as wo word count atleast num 22 atmost num 70 from name text output to name map hymn verse one verify do
+  ob text of pass of hymn verse one verify to name text hymn verse one pass be text do
+  fromindex num 1 toindex num 3 be hymn verse one retry do
+  ob name text hymn verse one pass be equally from text false then
+  su name hymn verse one guarantee stage ob bool lie fromtext text "hymn verse one constraints defective" be guarantee do
+  su name hymn verse one return stage ob name text output be text do
+prah
+
+su name hymn chorus retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn chorus pass be equally from text true then be depart do
+  su name hymn chorus write retry stage ob name text chorus request fromtext name hymn chorus prompt for name hymn chorus mind to name text output by num 0 atmost num 64 be write do
+  su name hymn chorus verify retry stage be verify as wo word count atleast num 10 atmost num 42 from name text output to name map hymn chorus verify do
+  ob text of pass of hymn chorus verify to name text hymn chorus pass be text do
+  ob name text hymn chorus pass be equally from text true then be depart do
+prah
+
+su name hymn chorus checked to name text output be ceremony def
+  su name hymn chorus write stage ob name text chorus request fromtext name hymn chorus prompt for name hymn chorus mind to name text output by num 0 atmost num 64 be write do
+  su name hymn chorus verify stage be verify as wo word count atleast num 10 atmost num 42 from name text output to name map hymn chorus verify do
+  ob text of pass of hymn chorus verify to name text hymn chorus pass be text do
+  fromindex num 1 toindex num 3 be hymn chorus retry do
+  ob name text hymn chorus pass be equally from text false then
+  su name hymn chorus guarantee stage ob bool lie fromtext text "hymn chorus constraints defective" be guarantee do
+  su name hymn chorus return stage ob name text output be text do
+prah
+
+su name hymn verse two retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn verse two pass be equally from text true then be depart do
+  su name hymn verse two write retry stage ob name text verse two request fromtext name hymn verse two prompt for name hymn verse two mind to name text output by num 0 atmost num 96 be write do
+  su name hymn verse two verify retry stage be verify as wo word count atleast num 22 atmost num 70 from name text output to name map hymn verse two verify do
+  ob text of pass of hymn verse two verify to name text hymn verse two pass be text do
+  ob name text hymn verse two pass be equally from text true then be depart do
+prah
+
+su name hymn verse two checked to name text output be ceremony def
+  su name hymn verse two write stage ob name text verse two request fromtext name hymn verse two prompt for name hymn verse two mind to name text output by num 0 atmost num 96 be write do
+  su name hymn verse two verify stage be verify as wo word count atleast num 22 atmost num 70 from name text output to name map hymn verse two verify do
+  ob text of pass of hymn verse two verify to name text hymn verse two pass be text do
+  fromindex num 1 toindex num 3 be hymn verse two retry do
+  ob name text hymn verse two pass be equally from text false then
+  su name hymn verse two guarantee stage ob bool lie fromtext text "hymn verse two constraints defective" be guarantee do
+  su name hymn verse two return stage ob name text output be text do
+prah
+
+su name hymn bridge retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn bridge pass be equally from text true then be depart do
+  su name hymn bridge write retry stage ob name text bridge request fromtext name hymn bridge prompt for name hymn bridge mind to name text output by num 0 atmost num 80 be write do
+  su name hymn bridge verify retry stage be verify as wo word count atleast num 12 atmost num 50 from name text output to name map hymn bridge verify do
+  ob text of pass of hymn bridge verify to name text hymn bridge pass be text do
+  ob name text hymn bridge pass be equally from text true then be depart do
+prah
+
+su name hymn bridge checked to name text output be ceremony def
+  su name hymn bridge write stage ob name text bridge request fromtext name hymn bridge prompt for name hymn bridge mind to name text output by num 0 atmost num 80 be write do
+  su name hymn bridge verify stage be verify as wo word count atleast num 12 atmost num 50 from name text output to name map hymn bridge verify do
+  ob text of pass of hymn bridge verify to name text hymn bridge pass be text do
+  fromindex num 1 toindex num 3 be hymn bridge retry do
+  ob name text hymn bridge pass be equally from text false then
+  su name hymn bridge guarantee stage ob bool lie fromtext text "hymn bridge constraints defective" be guarantee do
+  su name hymn bridge return stage ob name text output be text do
+prah
+
+su name hymn manuscript draft from text source to name text manuscript out be ceremony def
+  su name source stage ob text of from of this to name text hymn source be text do
+
+  su name verse one request begin stage ob text quoted.text.SOURCE TEXT:
+.text.quoted to name text verse one request be text do
+  su name verse one request source stage ob name text hymn source to name verse one request be plus do
+  su name verse one stage to name text verse one out be hymn verse one checked do
+
+  su name chorus request begin stage ob text quoted.text.SOURCE TEXT:
+.text.quoted to name text chorus request be text do
+  su name chorus request source stage ob name text hymn source to name chorus request be plus do
+  su name chorus request verse one header stage ob text quoted.text.
+
+VERSE 1:
+.text.quoted to name chorus request be plus do
+  su name chorus request verse one stage ob name text verse one out to name chorus request be plus do
+  su name chorus stage to name text chorus out be hymn chorus checked do
+
+  su name verse two request begin stage ob text quoted.text.SOURCE TEXT:
+.text.quoted to name text verse two request be text do
+  su name verse two request source stage ob name text hymn source to name verse two request be plus do
+  su name verse two request verse one header stage ob text quoted.text.
+
+VERSE 1:
+.text.quoted to name verse two request be plus do
+  su name verse two request verse one stage ob name text verse one out to name verse two request be plus do
+  su name verse two request chorus header stage ob text quoted.text.
+
+CHORUS:
+.text.quoted to name verse two request be plus do
+  su name verse two request chorus stage ob name text chorus out to name verse two request be plus do
+  su name verse two stage to name text verse two out be hymn verse two checked do
+
+  su name bridge request begin stage ob text quoted.text.SOURCE TEXT:
+.text.quoted to name text bridge request be text do
+  su name bridge request source stage ob name text hymn source to name bridge request be plus do
+  su name bridge request verse one header stage ob text quoted.text.
+
+VERSE 1:
+.text.quoted to name bridge request be plus do
+  su name bridge request verse one stage ob name text verse one out to name bridge request be plus do
+  su name bridge request chorus header stage ob text quoted.text.
+
+CHORUS:
+.text.quoted to name bridge request be plus do
+  su name bridge request chorus stage ob name text chorus out to name bridge request be plus do
+  su name bridge request verse two header stage ob text quoted.text.
+
+VERSE 2:
+.text.quoted to name bridge request be plus do
+  su name bridge request verse two stage ob name text verse two out to name bridge request be plus do
+  su name bridge stage to name text bridge out be hymn bridge checked do
+
+  su name hymn out begin stage ob text quoted.text.Verse 1
+.text.quoted to name text hymn out be text do
+  su name hymn out verse one stage ob name text verse one out to name hymn out be plus do
+  su name hymn out chorus one header stage ob text quoted.text.
+
+Chorus
+.text.quoted to name hymn out be plus do
+  su name hymn out chorus one stage ob name text chorus out to name hymn out be plus do
+  su name hymn out verse two header stage ob text quoted.text.
+
+Verse 2
+.text.quoted to name hymn out be plus do
+  su name hymn out verse two stage ob name text verse two out to name hymn out be plus do
+  su name hymn out chorus two header stage ob text quoted.text.
+
+Chorus
+.text.quoted to name hymn out be plus do
+  su name hymn out chorus two stage ob name text chorus out to name hymn out be plus do
+  su name hymn out bridge header stage ob text quoted.text.
+
+Bridge
+.text.quoted to name hymn out be plus do
+  su name hymn out bridge stage ob name text bridge out to name hymn out be plus do
+  su name hymn out chorus three header stage ob text quoted.text.
+
+Chorus
+.text.quoted to name hymn out be plus do
+  su name hymn out chorus three stage ob name text chorus out to name hymn out be plus do
+
+  su name hymn write stage ob name text hymn out be write do
+  su name hymn return stage ob name text hymn out be text do
+prah
+
+su name hymn manuscript from text source to name text manuscript out be ceremony def
+  su name draft stage from text of from of this to name text manuscript out be hymn manuscript draft do
+  su name manuscript out ret
+prah
+
+su name hymn manuscript from filename source to name text manuscript out be ceremony def
+  su name source stage from filename of from of this become wo text to name text hymn source be read do
+  su name draft stage from text of ob of hymn source to name text manuscript out be hymn manuscript draft do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo hymn from text source to name text manuscript out be ceremony def
+  su name draft stage from text of from of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo hymn from filename source to name text manuscript out be ceremony def
+  su name draft stage from filename of from of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
