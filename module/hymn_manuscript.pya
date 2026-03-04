@@ -172,186 +172,44 @@ Rules:
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
-exists su name hymn retry template ob text quoted.text.TARGET_WORDS: [[target_words]]
-[[meta]][[blocks]]SEGMENT:
-[[segment]].text.quoted be text ya
-
-exists su name hymn retry target ob text "" be text ya
-exists su name hymn retry meta ob text "" be text ya
-exists su name hymn retry blocks ob text "" be text ya
-exists su name hymn retry segment ob text "" be text ya
-
-su name hymn retry map be map def
-  su text "[[target_words]]" ob name text hymn retry target ya
-  su text "[[meta]]" ob name text hymn retry meta ya
-  su text "[[blocks]]" ob name text hymn retry blocks ya
-  su text "[[segment]]" ob name text hymn retry segment ya
+su name hymn intro checks be series def
+  su name word_min ob num 8 ya
+  su name word_max ob num 15 ya
 prah
 
-su name hymn verse one retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn verse one pass be equally from text true then be depart do
-  ob text "35-45" to name text hymn retry target be text do
-  ob text "FORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn verse one retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn verse one retry request do
-  su name hymn verse one write retry stage ob name text hymn verse one retry request for name hymn verse one mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn verse one verify retry stage be verify as wo word count atleast num 35 atmost num 45 from name text output to name map hymn verse one verify do
-  ob text of pass of hymn verse one verify to name text hymn verse one pass be text do
-  ob name text hymn verse one pass be equally from text true then be depart do
+su name hymn verse one checks be series def
+  su name word_min ob num 35 ya
+  su name word_max ob num 45 ya
 prah
 
-su name hymn intro retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn intro pass be equally from text true then be depart do
-  ob text "8-15" to name text hymn retry target be text do
-  ob text "SECTION_ROLE: INTRO_TOPIC_HOOK\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn intro retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn intro retry request do
-  su name hymn intro write retry stage ob name text hymn intro retry request for name hymn intro mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn intro verify retry stage be verify as wo word count atleast num 8 atmost num 15 from name text output to name map hymn intro verify do
-  ob text of pass of hymn intro verify to name text hymn intro pass be text do
-  ob name text hymn intro pass be equally from text true then be depart do
+su name hymn chorus checks be series def
+  su name word_min ob num 18 ya
+  su name word_max ob num 25 ya
 prah
 
-su name hymn intro checked to name text output be ceremony def
-  su name hymn intro write stage ob name text intro request for name hymn intro mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn intro verify stage be verify as wo word count atleast num 8 atmost num 15 from name text output to name map hymn intro verify do
-  ob text of pass of hymn intro verify to name text hymn intro pass be text do
-  fromindex num 1 toindex num 3 be hymn intro retry do
-  ob name text hymn intro pass be equally from text false then
-  su name hymn intro guarantee stage ob bool lie fromtext text "hymn intro constraints defective" be guarantee do
-  su name hymn intro return stage ob name text output be text do
+su name hymn final chorus checks be series def
+  su name word_min ob num 18 ya
+  su name word_max ob num 25 ya
 prah
 
-su name hymn verse one checked to name text output be ceremony def
-  su name hymn verse one write stage ob name text verse one request for name hymn verse one mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn verse one verify stage be verify as wo word count atleast num 35 atmost num 45 from name text output to name map hymn verse one verify do
-  ob text of pass of hymn verse one verify to name text hymn verse one pass be text do
-  fromindex num 1 toindex num 3 be hymn verse one retry do
-  ob name text hymn verse one pass be equally from text false then
-  su name hymn verse one guarantee stage ob bool lie fromtext text "hymn verse one constraints defective" be guarantee do
-  su name hymn verse one return stage ob name text output be text do
+su name hymn verse two checks be series def
+  su name word_min ob num 35 ya
+  su name word_max ob num 45 ya
 prah
 
-su name hymn chorus retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn chorus pass be equally from text true then be depart do
-  ob text "18-25" to name text hymn retry target be text do
-  ob text "FORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn chorus retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn chorus retry request do
-  su name hymn chorus write retry stage ob name text hymn chorus retry request for name hymn chorus mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn chorus verify retry stage be verify as wo word count atleast num 18 atmost num 25 from name text output to name map hymn chorus verify do
-  ob text of pass of hymn chorus verify to name text hymn chorus pass be text do
-  ob name text hymn chorus pass be equally from text true then be depart do
+su name hymn bridge checks be series def
+  su name word_min ob num 12 ya
+  su name word_max ob num 20 ya
 prah
 
-su name hymn chorus checked to name text output be ceremony def
-  su name hymn chorus write stage ob name text chorus request for name hymn chorus mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn chorus verify stage be verify as wo word count atleast num 18 atmost num 25 from name text output to name map hymn chorus verify do
-  ob text of pass of hymn chorus verify to name text hymn chorus pass be text do
-  fromindex num 1 toindex num 3 be hymn chorus retry do
-  ob name text hymn chorus pass be equally from text false then
-  su name hymn chorus guarantee stage ob bool lie fromtext text "hymn chorus constraints defective" be guarantee do
-  su name hymn chorus return stage ob name text output be text do
+su name hymn outro checks be series def
+  su name word_min ob num 8 ya
+  su name word_max ob num 15 ya
 prah
 
-su name hymn final chorus retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn final chorus pass be equally from text true then be depart do
-  ob text "18-25" to name text hymn retry target be text do
-  ob text "SECTION_ROLE: FINAL_CHORUS_REINFORCEMENT\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\n" to name text hymn retry meta be text do
-  su name hymn final chorus retry blocks begin stage ob text "PRIOR SEGMENT:\n" to name text hymn final chorus retry blocks be text do
-  ob name text final chorus prior to name hymn final chorus retry blocks be plus do
-  ob text "\n\nLATEST ATTEMPT:\n" to name hymn final chorus retry blocks be plus do
-  ob name text output to name hymn final chorus retry blocks be plus do
-  ob text "\n\n" to name hymn final chorus retry blocks be plus do
-  ob name text hymn final chorus retry blocks to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn final chorus retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn final chorus retry request do
-  su name hymn final chorus write retry stage ob name text hymn final chorus retry request for name hymn final chorus mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn final chorus verify retry stage be verify as wo word count atleast num 18 atmost num 25 from name text output to name map hymn final chorus verify do
-  ob text of pass of hymn final chorus verify to name text hymn final chorus pass be text do
-  ob name text hymn final chorus pass be equally from text true then be depart do
-prah
-
-su name hymn final chorus checked to name text output be ceremony def
-  su name hymn final chorus write stage ob name text final chorus request for name hymn final chorus mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn final chorus verify stage be verify as wo word count atleast num 18 atmost num 25 from name text output to name map hymn final chorus verify do
-  ob text of pass of hymn final chorus verify to name text hymn final chorus pass be text do
-  fromindex num 1 toindex num 3 be hymn final chorus retry do
-  ob name text hymn final chorus pass be equally from text false then
-  su name hymn final chorus guarantee stage ob bool lie fromtext text "hymn final chorus constraints defective" be guarantee do
-  su name hymn final chorus return stage ob name text output be text do
-prah
-
-su name hymn verse two retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn verse two pass be equally from text true then be depart do
-  ob text "35-45" to name text hymn retry target be text do
-  ob text "FORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn verse two retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn verse two retry request do
-  su name hymn verse two write retry stage ob name text hymn verse two retry request for name hymn verse two mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn verse two verify retry stage be verify as wo word count atleast num 35 atmost num 45 from name text output to name map hymn verse two verify do
-  ob text of pass of hymn verse two verify to name text hymn verse two pass be text do
-  ob name text hymn verse two pass be equally from text true then be depart do
-prah
-
-su name hymn verse two checked to name text output be ceremony def
-  su name hymn verse two write stage ob name text verse two request for name hymn verse two mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn verse two verify stage be verify as wo word count atleast num 35 atmost num 45 from name text output to name map hymn verse two verify do
-  ob text of pass of hymn verse two verify to name text hymn verse two pass be text do
-  fromindex num 1 toindex num 3 be hymn verse two retry do
-  ob name text hymn verse two pass be equally from text false then
-  su name hymn verse two guarantee stage ob bool lie fromtext text "hymn verse two constraints defective" be guarantee do
-  su name hymn verse two return stage ob name text output be text do
-prah
-
-su name hymn bridge retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn bridge pass be equally from text true then be depart do
-  ob text "12-20" to name text hymn retry target be text do
-  ob text "RHYME_MODE: FREE_OR_ABAB\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn bridge retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn bridge retry request do
-  su name hymn bridge write retry stage ob name text hymn bridge retry request for name hymn bridge mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn bridge verify retry stage be verify as wo word count atleast num 12 atmost num 20 from name text output to name map hymn bridge verify do
-  ob text of pass of hymn bridge verify to name text hymn bridge pass be text do
-  ob name text hymn bridge pass be equally from text true then be depart do
-prah
-
-su name hymn bridge checked to name text output be ceremony def
-  su name hymn bridge write stage ob name text bridge request for name hymn bridge mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn bridge verify stage be verify as wo word count atleast num 12 atmost num 20 from name text output to name map hymn bridge verify do
-  ob text of pass of hymn bridge verify to name text hymn bridge pass be text do
-  fromindex num 1 toindex num 3 be hymn bridge retry do
-  ob name text hymn bridge pass be equally from text false then
-  su name hymn bridge guarantee stage ob bool lie fromtext text "hymn bridge constraints defective" be guarantee do
-  su name hymn bridge return stage ob name text output be text do
-prah
-
-su name hymn outro retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn outro pass be equally from text true then be depart do
-  ob text "8-15" to name text hymn retry target be text do
-  ob text "SECTION_ROLE: OUTRO_CLOSURE\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AA\n" to name text hymn retry meta be text do
-  ob text "" to name text hymn retry blocks be text do
-  ob name text output to name text hymn retry segment be text do
-  su name hymn outro retry request stage be instead ob name hymn retry map in name hymn retry template to name text hymn outro retry request do
-  su name hymn outro write retry stage ob name text hymn outro retry request for name hymn outro mind by name hymn stage verify mind atleast num 0.8 atmost num 2 to name text output be verify loop do
-  su name hymn outro verify retry stage be verify as wo word count atleast num 8 atmost num 15 from name text output to name map hymn outro verify do
-  ob text of pass of hymn outro verify to name text hymn outro pass be text do
-  ob name text hymn outro pass be equally from text true then be depart do
-prah
-
-su name hymn outro checked to name text output be ceremony def
-  su name hymn outro write stage ob name text outro request for name hymn outro mind by name hymn stage verify mind atleast num 0.8 atmost num 3 to name text output be verify loop do
-  su name hymn outro verify stage be verify as wo word count atleast num 8 atmost num 15 from name text output to name map hymn outro verify do
-  ob text of pass of hymn outro verify to name text hymn outro pass be text do
-  fromindex num 1 toindex num 3 be hymn outro retry do
-  ob name text hymn outro pass be equally from text false then
-  su name hymn outro guarantee stage ob bool lie fromtext text "hymn outro constraints defective" be guarantee do
-  su name hymn outro return stage ob name text output be text do
+su name hymn section verify from text request for name section mind accordingto name checks to name text output be ceremony def
+  su name hymn section verify run platform ob text of from of this for name of for of this among name hymn stage verify mind accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 3 to name text output be verify platform do
+  su name output ret
 prah
 
 su name hymn source thrust checked to name text pass be ceremony def
@@ -386,13 +244,13 @@ su name hymn manuscript draft checked from text source to name text manuscript o
 
   su name intro request begin stage ob text "TARGET_WORDS: 8-15\nSECTION_ROLE: INTRO_TOPIC_HOOK\nSOURCE TEXT:\n" to name text intro request be text do
   su name intro request source stage ob name text hymn source to name intro request be plus do
-  su name intro stage to name text intro out be hymn intro checked do
+  su name intro stage from text of ob of intro request for name hymn intro mind accordingto name hymn intro checks to name text intro out be hymn section verify do
 
   su name verse one request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: CONCEPT_INTRO\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nSOURCE TEXT:\n" to name text verse one request be text do
   su name verse one request source stage ob name text hymn source to name verse one request be plus do
   su name verse one request intro header stage ob text "\n\nINTRO:\n" to name verse one request be plus do
   su name verse one request intro stage ob name text intro out to name verse one request be plus do
-  su name verse one stage to name text verse one out be hymn verse one checked do
+  su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
 
   su name chorus request begin stage ob text "TARGET_WORDS: 18-25\nSECTION_ROLE: MEMORY_ANCHOR\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\nSOURCE TEXT:\n" to name text chorus request be text do
   su name chorus request source stage ob name text hymn source to name chorus request be plus do
@@ -400,7 +258,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name chorus request intro stage ob name text intro out to name chorus request be plus do
   su name chorus request verse one header stage ob text "\n\nVERSE 1:\n" to name chorus request be plus do
   su name chorus request verse one stage ob name text verse one out to name chorus request be plus do
-  su name chorus stage to name text chorus out be hymn chorus checked do
+  su name chorus stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus out be hymn section verify do
 
   su name verse two request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: EXPLANATION_EXAMPLES\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nPRIOR SEGMENT:\n" to name text verse two request be text do
   su name verse two request verse one stage ob name text verse one out to name verse two request be plus do
@@ -408,7 +266,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name verse two request chorus stage ob name text chorus out to name verse two request be plus do
   su name verse two request source header stage ob text "\n\nSOURCE TEXT:\n" to name verse two request be plus do
   su name verse two request source stage ob name text hymn source to name verse two request be plus do
-  su name verse two stage to name text verse two out be hymn verse two checked do
+  su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
 
   su name bridge request begin stage ob text "TARGET_WORDS: 12-20\nSECTION_ROLE: REFLECTION_SHIFT\nRHYME_MODE: FREE_OR_ABAB\nVERSE 1:\n" to name text bridge request be text do
   su name bridge request verse one stage ob name text verse one out to name bridge request be plus do
@@ -418,7 +276,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name bridge request verse two stage ob name text verse two out to name bridge request be plus do
   su name bridge request source header stage ob text "\n\nSOURCE TEXT:\n" to name bridge request be plus do
   su name bridge request source stage ob name text hymn source to name bridge request be plus do
-  su name bridge stage to name text bridge out be hymn bridge checked do
+  su name bridge stage from text of ob of bridge request for name hymn bridge mind accordingto name hymn bridge checks to name text bridge out be hymn section verify do
 
   su name final chorus prior stage ob name text chorus out to name text final chorus prior be text do
   su name final chorus request begin stage ob text "TARGET_WORDS: 18-25\nSECTION_ROLE: FINAL_CHORUS_REINFORCEMENT\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\nPRIOR SEGMENT:\n" to name text final chorus request be text do
@@ -427,7 +285,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name final chorus request bridge stage ob name text bridge out to name final chorus request be plus do
   su name final chorus request source header stage ob text "\n\nSOURCE TEXT:\n" to name final chorus request be plus do
   su name final chorus request source stage ob name text hymn source to name final chorus request be plus do
-  su name final chorus stage to name text final chorus out be hymn final chorus checked do
+  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
 
   su name outro request begin stage ob text "TARGET_WORDS: 8-15\nSECTION_ROLE: OUTRO_CLOSURE\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AA\nCORE LESSON:\n" to name text outro request be text do
   su name outro request chorus stage ob name text final chorus out to name outro request be plus do
@@ -435,7 +293,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name outro request bridge stage ob name text bridge out to name outro request be plus do
   su name outro request source header stage ob text "\n\nSOURCE TEXT:\n" to name outro request be plus do
   su name outro request source stage ob name text hymn source to name outro request be plus do
-  su name outro stage to name text outro out be hymn outro checked do
+  su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do
 
   su name hymn out begin stage ob text quoted.text.[intro]
 .text.quoted to name text hymn out be text do
