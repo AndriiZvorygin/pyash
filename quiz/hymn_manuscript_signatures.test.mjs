@@ -39,8 +39,10 @@ test("hymn manuscript module keeps verse chorus bridge staged flow", async () =>
   assert.match(text, /fromindex num 1 toindex num 3 be hymn chorus retry do/);
   assert.match(text, /fromindex num 1 toindex num 3 be hymn verse two retry do/);
   assert.match(text, /fromindex num 1 toindex num 3 be hymn bridge retry do/);
-  assert.match(text, /hymn out begin stage ob text quoted\.text\.Verse 1/);
+  assert.match(text, /hymn out begin stage ob text quoted\.text\.\[verse 1\]/);
   assert.match(text, /hymn out chorus one header stage ob text quoted\.text\./);
+  assert.match(text, /\[chorus\]/);
   assert.match(text, /hymn out bridge header stage ob text quoted\.text\./);
+  assert.match(text, /\[bridge\]/);
   assert.match(text, /hymn out chorus three stage ob name text chorus out to name hymn out be plus do/);
 });
