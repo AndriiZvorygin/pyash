@@ -228,8 +228,13 @@ su name manuscript segment distinct from text line with text prior to name text 
   su name pass ret
 prah
 
+su name manuscript platform verify from text request for name platform mind accordingto name checks series to name text output be ceremony def
+  su name manuscript platform verify run platform ob text of from of this for name of for of this among name brief video script platform verify mind accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 3 to name text output be verify platform do
+  su name output ret
+prah
+
 su name manuscript fact two verify to name text output be ceremony def
-  su name manuscript fact two platform ob name text manuscript fact two request for name brief video script fact two mind among name brief video script platform verify mind accordingto name manuscript fact two checks atleast num 0.8 fromindex num 1 toindex num 3 to name text output be verify platform do
+  su name manuscript fact two platform from text of ob of manuscript fact two request for name brief video script fact two mind accordingto name manuscript fact two checks to name text output be manuscript platform verify do
   su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   ob name text manuscript fact two distinct pass be equally from text false then
   su name manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
@@ -261,7 +266,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   su name manuscript fact one request begin platform ob text "TARGET_WORDS: 20-34\nTRANSCRIPT:\n" to name text manuscript fact one request be text do
   su name manuscript fact one request platform ob name text brief video script source to name manuscript fact one request be plus do
-  su name manuscript fact one platform ob name text manuscript fact one request for name brief video script fact one mind among name brief video script platform verify mind accordingto name manuscript fact one checks atleast num 0.8 fromindex num 1 toindex num 3 to name text manuscript fact one out be verify platform do
+  su name manuscript fact one platform from text of ob of manuscript fact one request for name brief video script fact one mind accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do
 
   su name manuscript fact two request begin platform ob text "TARGET_WORDS: 20-34\nPRIOR SEGMENT:\n" to name text manuscript fact two request be text do
   su name manuscript fact two request prior platform ob name text manuscript fact one out to name manuscript fact two request be plus do
@@ -275,7 +280,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript uplift request fact two platform ob name text manuscript fact two out to name manuscript uplift request be plus do
   su name manuscript uplift request source header platform ob text "\n\nTRANSCRIPT:\n" to name manuscript uplift request be plus do
   su name manuscript uplift request source platform ob name text brief video script source to name manuscript uplift request be plus do
-  su name manuscript uplift platform ob name text manuscript uplift request for name brief video script uplift mind among name brief video script platform verify mind accordingto name manuscript uplift checks atleast num 0.8 fromindex num 1 toindex num 3 to name text manuscript uplift out be verify platform do
+  su name manuscript uplift platform from text of ob of manuscript uplift request for name brief video script uplift mind accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
 
   su name manuscript body begin platform ob name text manuscript fact one out to name text manuscript body out be text do
   su name manuscript body fact two join platform ob text "\n\n" to name manuscript body out be plus do
@@ -285,11 +290,11 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   su name manuscript hook request begin platform ob text "TARGET_WORDS: 6-9\nHOOK CONTEXT:\n" to name text manuscript hook request be text do
   su name manuscript hook request platform ob name text manuscript body out to name manuscript hook request be plus do
-  su name manuscript hook platform ob name text manuscript hook request for name brief video script hook mind among name brief video script platform verify mind accordingto name manuscript hook checks atleast num 0.8 fromindex num 1 toindex num 3 to name text manuscript hook out be verify platform do
+  su name manuscript hook platform from text of ob of manuscript hook request for name brief video script hook mind accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do
 
   su name manuscript cta request begin platform ob text "TARGET_WORDS: 2-4\nPASSAGE:\n" to name text manuscript cta request be text do
   su name manuscript cta request platform ob name text manuscript body out to name manuscript cta request be plus do
-  su name manuscript cta platform ob name text manuscript cta request for name brief video script cta mind among name brief video script platform verify mind accordingto name manuscript cta checks atleast num 0.8 fromindex num 1 toindex num 3 to name text manuscript cta out be verify platform do
+  su name manuscript cta platform from text of ob of manuscript cta request for name brief video script cta mind accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
 
   su name manuscript out begin platform ob name text manuscript hook out to name text manuscript out be text do
   su name manuscript out join platform ob text "\n\n" to name manuscript out be plus do
