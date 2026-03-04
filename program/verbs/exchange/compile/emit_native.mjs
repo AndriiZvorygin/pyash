@@ -7,6 +7,7 @@ import { handleNativeLicense } from "./emit_native/license.mjs";
 import { handleNativeCopy } from "./emit_native/copy.mjs";
 import { handleNativeDirectory } from "./emit_native/directory.mjs";
 import { handleNativeDelete } from "./emit_native/delete.mjs";
+import { handleNativePathJoin } from "./emit_native/path_join.mjs";
 
 export function handleNativeSentence(context, helpers) {
   const existsResult = handleNativeExists(context, helpers);
@@ -35,6 +36,9 @@ export function handleNativeSentence(context, helpers) {
 
   const deleteResult = handleNativeDelete(context, helpers);
   if (deleteResult) return deleteResult;
+
+  const pathJoinResult = handleNativePathJoin(context, helpers);
+  if (pathJoinResult) return pathJoinResult;
 
   return null;
 }
