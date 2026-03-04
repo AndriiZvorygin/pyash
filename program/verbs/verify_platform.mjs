@@ -109,6 +109,13 @@ function countWords(text) {
   return matches ? matches.length : 0;
 }
 
+function countNonEmptyLines(text) {
+  return String(text ?? "")
+    .split(/\r?\n/u)
+    .map(line => line.trim())
+    .filter(Boolean).length;
+}
+
 const sentenceEndingConnector = /\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\s*[.!?]*\s*$/iu;
 
 function isSentenceComplete(text) {
@@ -228,6 +235,13 @@ function throwVerifyPlatformError(message, sentence) {
   });
 }
 
+function errorToText(error) {
+  if (!error) return "unknown platform error";
+  if (typeof error?.message === "string" && error.message.trim()) return error.message.trim();
+  if (typeof error?.ob?.text === "string" && error.ob.text.trim()) return error.ob.text.trim();
+  return String(error);
+}
+
 function resolveSeriesEntryName(entry) {
   if (!entry) return "";
   if (typeof entry === "string") return entry.trim();
@@ -292,7 +306,9 @@ function evaluateDeterministicChecks(candidate, checks, sentence) {
   const rows = [];
   for (let index = 0; index < checks.length; index += 1) {
     const entry = checks[index] ?? {};
-    const name = String(entry?.su?.name ?? "").trim().toLowerCase();
+    const rawName = String(entry?.su?.name ?? "").trim().toLowerCase();
+    const nameParts = rawName.split(/\s+/u).filter(Boolean);
+    const name = nameParts.at(-1) ?? "";
     let pass = false;
     let detail = "unknown";
 
@@ -306,6 +322,16 @@ function evaluateDeterministicChecks(candidate, checks, sentence) {
       const words = countWords(candidate);
       pass = words <= max;
       detail = `words=${words} max=${max}`;
+    } else if (name === "line_count_min") {
+      const min = resolveCheckNum(entry?.ob, sentence, "line_count_min");
+      const lines = countNonEmptyLines(candidate);
+      pass = lines >= min;
+      detail = `lines=${lines} min=${min}`;
+    } else if (name === "line_count_max") {
+      const max = resolveCheckNum(entry?.ob, sentence, "line_count_max");
+      const lines = countNonEmptyLines(candidate);
+      pass = lines <= max;
+      detail = `lines=${lines} max=${max}`;
     } else if (name === "sentence_complete") {
       const expected = resolveCheckBool(entry?.ob, sentence);
       const actual = isSentenceComplete(candidate);
@@ -390,38 +416,70 @@ export async function verifyPlatform(sentence) {
   for (let attempt = fromIndex; attempt <= toIndex; attempt += 1) {
     attemptsUsed += 1;
     const draftName = `verify platform draft ${attempt}`;
-    finalDraft = await invokePlatform({
-      platformName: generatorName,
-      prompt: latestPrompt,
-      outputName: draftName
-    });
+    let generationErrorText = "";
+    try {
+      finalDraft = await invokePlatform({
+        platformName: generatorName,
+        prompt: latestPrompt,
+        outputName: draftName
+      });
+    } catch (error) {
+      generationErrorText = errorToText(error);
+      finalDraft = "";
+    }
 
     let allVerifierPass = true;
     const verifierRows = [];
-    for (let idx = 0; idx < verifierNames.length; idx += 1) {
-      const verifierName = verifierNames[idx];
-      const reviewPrompt = buildVerifierPrompt({
-        task,
-        candidate: finalDraft,
-        verifierName
-      });
-      const reviewName = `verify platform verifier ${attempt} ${idx + 1}`;
-      const verifyText = await invokePlatform({
-        platformName: verifierName,
-        prompt: reviewPrompt,
-        outputName: reviewName
-      });
-      const verdict = parseVerdictFromLastLine(verifyText, minScore, maxScore);
+    if (generationErrorText) {
       const row = {
-        index: idx + 1,
-        name: verifierName,
-        pass: Boolean(verdict.pass),
-        score: verdict.score,
-        lastLine: verdict.lastLine,
-        text: verifyText
+        index: 1,
+        name: generatorName,
+        pass: false,
+        score: 0,
+        lastLine: generationErrorText,
+        text: generationErrorText
       };
       verifierRows.push(row);
-      if (!row.pass) allVerifierPass = false;
+      allVerifierPass = false;
+    } else {
+      for (let idx = 0; idx < verifierNames.length; idx += 1) {
+        const verifierName = verifierNames[idx];
+        const reviewPrompt = buildVerifierPrompt({
+          task,
+          candidate: finalDraft,
+          verifierName
+        });
+        const reviewName = `verify platform verifier ${attempt} ${idx + 1}`;
+        try {
+          const verifyText = await invokePlatform({
+            platformName: verifierName,
+            prompt: reviewPrompt,
+            outputName: reviewName
+          });
+          const verdict = parseVerdictFromLastLine(verifyText, minScore, maxScore);
+          const row = {
+            index: idx + 1,
+            name: verifierName,
+            pass: Boolean(verdict.pass),
+            score: verdict.score,
+            lastLine: verdict.lastLine,
+            text: verifyText
+          };
+          verifierRows.push(row);
+          if (!row.pass) allVerifierPass = false;
+        } catch (error) {
+          const errorText = errorToText(error);
+          verifierRows.push({
+            index: idx + 1,
+            name: verifierName,
+            pass: false,
+            score: 0,
+            lastLine: errorText,
+            text: errorText
+          });
+          allVerifierPass = false;
+        }
+      }
     }
     lastVerifierFeedback = verifierRows;
 
@@ -454,7 +512,17 @@ export async function verifyPlatform(sentence) {
   if (lastCheckFeedback.length) rememberMap("verify platform last checks", { rows: lastCheckFeedback });
 
   if (!pass) {
-    throwVerifyPlatformError("verify platform defective: retries exhausted", sentence);
+    const verifierSummary = lastVerifierFeedback
+      .map(row => `${row.name}:${row.lastLine || (row.pass ? "PASS" : "FAIL")}`)
+      .join("; ");
+    const checkSummary = lastCheckFeedback
+      .map(row => `${row.name}:${row.detail}`)
+      .join("; ");
+    const detailParts = [];
+    if (verifierSummary) detailParts.push(`verifier=${verifierSummary}`);
+    if (checkSummary) detailParts.push(`checks=${checkSummary}`);
+    const detail = detailParts.length ? ` (${detailParts.join(" | ")})` : "";
+    throwVerifyPlatformError(`verify platform defective: retries exhausted${detail}`, sentence);
   }
 
   if (outputName) rememberText(outputName, finalDraft);

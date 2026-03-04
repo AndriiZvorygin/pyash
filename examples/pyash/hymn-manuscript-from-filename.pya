@@ -3,3 +3,4 @@ from filename "../../module/hymn_manuscript.pya" to name hymn manuscript be impo
 ob filename text source be input ya
 
 su name song from filename of ob of source to name text song out be hymn manuscript do
+ob name text song out be write do
