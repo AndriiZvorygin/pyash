@@ -1,0 +1,35 @@
+ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
+
+exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise hymn judge. Return only A or B." ya
+
+from filename "../../module/hymn_manuscript.pya" ob name hymn manuscript to name hymn manuscript be import do
+from filename "../../module/better_compare.pya" ob name better compare to name better compare be import do
+
+su name mind configure be map def
+  su name think ob bool lie ya
+  su name max tokens ob num 220 ya
+prah
+
+exists su name text better compare hymn judge prompter ob text quoted.text.You are comparing two educational hymn manuscripts.
+
+Pick the better lyric using these priorities:
+1. Clear educational meaning.
+2. Faithfulness to the source transcript.
+3. Strong hook, chorus memory, and emotional resolution.
+4. Singable line rhythm and section cohesion.
+
+Return only A or B..text.quoted be text ya
+
+su name hymn source platform from filename of ob of source become wo text to name text hymn source be read do
+
+su name hymn source draft ob text source to name text manuscript out be ceremony def
+  su name hymn source draft run stage from text of ob of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
+su name hymn final stage from la ob text of ob of hymn source to name text hymn scratch be hymn source draft do ko ob text of ob of better compare hymn judge prompter to name text hymn final atmost num 6 be better compare do
+
+su name hymn final ob name text hymn final be write do
+
+as wo ollama be discharge do
