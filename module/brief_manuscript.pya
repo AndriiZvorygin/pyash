@@ -168,6 +168,64 @@ Rules:
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
+exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-34
+TRANSCRIPT:
+[[source]].text.quoted be text ya
+
+exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-34
+PRIOR SEGMENT:
+[[prior]]
+
+TRANSCRIPT:
+[[source]].text.quoted be text ya
+
+exists su name manuscript uplift request template ob text quoted.text.TARGET_WORDS: 18-40
+SEGMENT 1:
+[[fact_one]]
+
+SEGMENT 2:
+[[fact_two]]
+
+TRANSCRIPT:
+[[source]].text.quoted be text ya
+
+exists su name manuscript hook request template ob text quoted.text.TARGET_WORDS: 6-9
+HOOK CONTEXT:
+[[body]].text.quoted be text ya
+
+exists su name manuscript cta request template ob text quoted.text.TARGET_WORDS: 2-4
+PASSAGE:
+[[body]].text.quoted be text ya
+
+exists su name manuscript source thrust request template ob text quoted.text.TRANSCRIPT:
+[[transcript]]
+
+GENERATOR_INTENT:
+[[intent]]
+
+SCRIPT:
+[[script]].text.quoted be text ya
+
+exists su name manuscript replacement source ob text "" be text ya
+exists su name manuscript replacement prior ob text "" be text ya
+exists su name manuscript replacement fact one ob text "" be text ya
+exists su name manuscript replacement fact two ob text "" be text ya
+exists su name manuscript replacement body ob text "" be text ya
+exists su name manuscript replacement transcript ob text "" be text ya
+exists su name manuscript replacement intent ob text "" be text ya
+exists su name manuscript replacement script ob text "" be text ya
+
+su name manuscript request replacements be map def
+  su text "[[source]]" ob name text manuscript replacement source ya
+  su text "[[prior]]" ob name text manuscript replacement prior ya
+  su text "[[fact_one]]" ob name text manuscript replacement fact one ya
+  su text "[[fact_two]]" ob name text manuscript replacement fact two ya
+  su text "[[body]]" ob name text manuscript replacement body ya
+  su text "[[transcript]]" ob name text manuscript replacement transcript ya
+  su text "[[intent]]" ob name text manuscript replacement intent ya
+  su text "[[script]]" ob name text manuscript replacement script ya
+prah
+
 su name manuscript fact one checks be series def
   su name word_min ob num 20 ya
   su name word_max ob num 34 ya
@@ -264,22 +322,19 @@ prah
 su name manuscript draft verify from text manuscript to name text manuscript out be ceremony def
   su name script source platform ob text of from of this to name text brief video script source be text do
 
-  su name manuscript fact one request begin platform ob text "TARGET_WORDS: 20-34\nTRANSCRIPT:\n" to name text manuscript fact one request be text do
-  su name manuscript fact one request platform ob name text brief video script source to name manuscript fact one request be plus do
+  ob name text brief video script source to name text manuscript replacement source be text do
+  su name manuscript fact one request platform ob name map manuscript request replacements in name text manuscript fact one request template to name text manuscript fact one request be instead do
   su name manuscript fact one platform from text of ob of manuscript fact one request for name brief video script fact one mind accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do
 
-  su name manuscript fact two request begin platform ob text "TARGET_WORDS: 20-34\nPRIOR SEGMENT:\n" to name text manuscript fact two request be text do
-  su name manuscript fact two request prior platform ob name text manuscript fact one out to name manuscript fact two request be plus do
-  su name manuscript fact two request source header platform ob text "\n\nTRANSCRIPT:\n" to name manuscript fact two request be plus do
-  su name manuscript fact two request source platform ob name text brief video script source to name manuscript fact two request be plus do
+  ob name text manuscript fact one out to name text manuscript replacement prior be text do
+  ob name text brief video script source to name text manuscript replacement source be text do
+  su name manuscript fact two request platform ob name map manuscript request replacements in name text manuscript fact two request template to name text manuscript fact two request be instead do
   su name manuscript fact two platform to name text manuscript fact two out be manuscript fact two verify do
 
-  su name manuscript uplift request begin platform ob text "TARGET_WORDS: 18-40\nSEGMENT 1:\n" to name text manuscript uplift request be text do
-  su name manuscript uplift request fact one platform ob name text manuscript fact one out to name manuscript uplift request be plus do
-  su name manuscript uplift request fact two header platform ob text "\n\nSEGMENT 2:\n" to name manuscript uplift request be plus do
-  su name manuscript uplift request fact two platform ob name text manuscript fact two out to name manuscript uplift request be plus do
-  su name manuscript uplift request source header platform ob text "\n\nTRANSCRIPT:\n" to name manuscript uplift request be plus do
-  su name manuscript uplift request source platform ob name text brief video script source to name manuscript uplift request be plus do
+  ob name text manuscript fact one out to name text manuscript replacement fact one be text do
+  ob name text manuscript fact two out to name text manuscript replacement fact two be text do
+  ob name text brief video script source to name text manuscript replacement source be text do
+  su name manuscript uplift request platform ob name map manuscript request replacements in name text manuscript uplift request template to name text manuscript uplift request be instead do
   su name manuscript uplift platform from text of ob of manuscript uplift request for name brief video script uplift mind accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
 
   su name manuscript body begin platform ob name text manuscript fact one out to name text manuscript body out be text do
@@ -288,12 +343,12 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript body uplift join platform ob text "\n\n" to name manuscript body out be plus do
   su name manuscript body uplift platform ob name text manuscript uplift out to name manuscript body out be plus do
 
-  su name manuscript hook request begin platform ob text "TARGET_WORDS: 6-9\nHOOK CONTEXT:\n" to name text manuscript hook request be text do
-  su name manuscript hook request platform ob name text manuscript body out to name manuscript hook request be plus do
+  ob name text manuscript body out to name text manuscript replacement body be text do
+  su name manuscript hook request platform ob name map manuscript request replacements in name text manuscript hook request template to name text manuscript hook request be instead do
   su name manuscript hook platform from text of ob of manuscript hook request for name brief video script hook mind accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do
 
-  su name manuscript cta request begin platform ob text "TARGET_WORDS: 2-4\nPASSAGE:\n" to name text manuscript cta request be text do
-  su name manuscript cta request platform ob name text manuscript body out to name manuscript cta request be plus do
+  ob name text manuscript body out to name text manuscript replacement body be text do
+  su name manuscript cta request platform ob name map manuscript request replacements in name text manuscript cta request template to name text manuscript cta request be instead do
   su name manuscript cta platform from text of ob of manuscript cta request for name brief video script cta mind accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
 
   su name manuscript out begin platform ob name text manuscript hook out to name text manuscript out be text do
@@ -311,12 +366,12 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 prah
 
 su name manuscript source thrust from text transcript with text script to name text pass be ceremony def
-  su name manuscript source thrust request begin platform ob text "TRANSCRIPT:\n" to name text manuscript source thrust request be text do
-  su name manuscript source thrust request source platform ob text of from of this to name text manuscript source thrust request be plus do
-  su name manuscript source thrust request intent header platform ob text "\n\nGENERATOR_INTENT:\n" to name text manuscript source thrust request be plus do
-  su name manuscript source thrust request intent platform ob text of ob of brief video script source thrust intent to name text manuscript source thrust request be plus do
-  su name manuscript source thrust request script header platform ob text "\n\nSCRIPT:\n" to name text manuscript source thrust request be plus do
-  su name manuscript source thrust request script platform ob text of with of this to name text manuscript source thrust request be plus do
+  su name manuscript source thrust transcript platform ob text of from of this to name text manuscript source thrust transcript be text do
+  su name manuscript source thrust script platform ob text of with of this to name text manuscript source thrust script be text do
+  ob name text manuscript source thrust transcript to name text manuscript replacement transcript be text do
+  ob name text brief video script source thrust intent to name text manuscript replacement intent be text do
+  ob name text manuscript source thrust script to name text manuscript replacement script be text do
+  su name manuscript source thrust request platform ob name map manuscript request replacements in name text manuscript source thrust request template to name text manuscript source thrust request be instead do
   su name pass platform to name text pass be manuscript source thrust verify do
   su name pass ret
 prah
