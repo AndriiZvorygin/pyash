@@ -67,7 +67,7 @@ test("teaching video pipeline burns heading into opening second", async () => {
 });
 
 test("widescreen mode selects one ratio set without summing", async () => {
-  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
     /su name current thumbnail heading y ratio[\s\S]*draw widescreen mode be equally from text "truth"[\s\S]*draw size widescreen[\s\S]*draw widescreen mode be equally from text "lie"[\s\S]*draw size shorts/u
@@ -83,7 +83,7 @@ test("widescreen mode selects one ratio set without summing", async () => {
 });
 
 test("widescreen defaults keep karaoke subtitles near bottom", async () => {
-  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
     /su name draw size widescreen be map def[\s\S]*subtitle_margin_ratio ob num 0\.10[\s\S]*footnote_mode ob text "karaoke"/u
@@ -91,7 +91,7 @@ test("widescreen defaults keep karaoke subtitles near bottom", async () => {
 });
 
 test("current footnote mode resolves widescreen karaoke and tall wordflow", async () => {
-  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
     /su name current footnote mode[\s\S]*ob text "wordflow"[\s\S]*draw widescreen mode be equally from text "truth" then[\s\S]*ob text "karaoke"/u
@@ -114,7 +114,7 @@ test("layout helpers expose widescreen karaoke and shorts wordflow map values", 
 });
 
 test("footnote mode helper centralizes mode branch selection", async () => {
-  const source = await fs.readFile("module/brief_video.pya", "utf8");
+  const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
     /su name footnote by mode from filename captions with filename video to filename output by num subtitle margin with text mode to name filename clip be ceremony def/u

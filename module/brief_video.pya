@@ -1,25 +1,19 @@
 from filename "./brief_manuscript.pya" ob name brief manuscript to name brief manuscript be import do
 from filename "./better_compare.pya" ob name better compare to name better compare be import do
-
-su name draw size shorts be map def
-  su name width ob num 720 ya
-  su name height ob num 1280 ya
-  su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
-  su name thumbnail_heading_y_ratio ob num 0.42 ya
-  su name video_heading_y_ratio ob num 0.60 ya
-  su name subtitle_margin_ratio ob num 0.10 ya
-  su name footnote_mode ob text "wordflow" ya
-prah
-su name draw size widescreen be map def
-  su name width ob num 1280 ya
-  su name height ob num 720 ya
-  su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text" ya
-  su name thumbnail_heading_y_ratio ob num 0.42 ya
-  su name video_heading_y_ratio ob num 0.60 ya
-  su name subtitle_margin_ratio ob num 0.10 ya
-  su name footnote_mode ob text "karaoke" ya
-prah
-exists su name draw widescreen mode ob text "lie" be default ya
+from filename "./video_common.pya" ob name draw size shorts to name draw size shorts be import do
+from filename "./video_common.pya" ob name draw size widescreen to name draw size widescreen be import do
+from filename "./video_common.pya" ob name draw widescreen mode to name draw widescreen mode be import do
+from filename "./video_common.pya" ob name teaching video section window seconds to name teaching video section window seconds be import do
+from filename "./video_common.pya" ob name video heading burn to name video heading burn be import do
+from filename "./video_common.pya" ob name current thumbnail heading y ratio to name current thumbnail heading y ratio be import do
+from filename "./video_common.pya" ob name current video heading y ratio to name current video heading y ratio be import do
+from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
+from filename "./video_common.pya" ob name current footnote mode to name current footnote mode be import do
+from filename "./video_common.pya" ob name footnote by mode to name footnote by mode be import do
+from filename "./video_common.pya" ob name widescreen subtitle margin ratio to name widescreen subtitle margin ratio be import do
+from filename "./video_common.pya" ob name shorts subtitle margin ratio to name shorts subtitle margin ratio be import do
+from filename "./video_common.pya" ob name widescreen footnote mode to name widescreen footnote mode be import do
+from filename "./video_common.pya" ob name shorts footnote mode to name shorts footnote mode be import do
 
 exists su name draw system prompt ob text "Educational editorial illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, clean shapes, soft natural light, high detail." be text ya
 exists su name qwen say sanitize map be map def
@@ -129,90 +123,6 @@ su name brief video manuscript improve from text source to name text manuscript 
   su name manuscript out ret
 prah
 
-exists su name video heading burn command template ob text quoted.text.node command/video_heading_burn.mjs "[[video_path]]" "[[output_path]]" --text-stdin --seconds 1 --y-ratio [[y_ratio]] --max-width-ratio 0.82.text.quoted be text ya
-su name video heading burn replacements be map def
-  su text "[[video_path]]" ob name text video path ya
-  su text "[[output_path]]" ob name text output path ya
-  su text "[[y_ratio]]" ob name num y ratio ya
-su name video heading burn replacements be map prah
-
-su name video heading burn from filename video with text heading to filename output be ceremony def
-  su name result from filename of from of this with text of with of this to filename of to of this by num 0.60 be video heading burn do
-  su name result ret
-prah
-
-su name video heading burn from filename video with text heading to filename output by num y ratio be ceremony def
-  ob filename of from of this to name text video path be text do
-  ob filename of to of this to name text output path be text do
-  su name command stage ob name map video heading burn replacements in name text video heading burn command template to name text cmd be instead do
-  ob name text cmd fromtext text of with of this be command do
-  su name result ret
-prah
-
-su name video heading burn from filename video with name text heading to filename output be ceremony def
-  su name result from filename of from of this with text of ob of with of this to filename of to of this be video heading burn do
-  su name result ret
-prah
-
-su name video heading burn from filename video with name text heading to filename output by num y ratio be ceremony def
-  su name result from filename of from of this with text of ob of with of this to filename of to of this by num of by of this be video heading burn do
-  su name result ret
-prah
-
-su name current thumbnail heading y ratio to name num thumbnail heading y ratio be ceremony def
-  ob name text draw widescreen mode be equally from text "truth" then ob num of thumbnail_heading_y_ratio of draw size widescreen to name num thumbnail heading y ratio be plus do
-  ob name text draw widescreen mode be equally from text "lie" then ob num of thumbnail_heading_y_ratio of draw size shorts to name num thumbnail heading y ratio be plus do
-  su name thumbnail heading y ratio ret
-prah
-
-su name current video heading y ratio to name num video heading y ratio be ceremony def
-  ob name text draw widescreen mode be equally from text "truth" then ob num of video_heading_y_ratio of draw size widescreen to name num video heading y ratio be plus do
-  ob name text draw widescreen mode be equally from text "lie" then ob num of video_heading_y_ratio of draw size shorts to name num video heading y ratio be plus do
-  su name video heading y ratio ret
-prah
-
-su name current subtitle margin ratio to name num subtitle margin ratio be ceremony def
-  ob num of subtitle margin ratio override to name num subtitle margin ratio be plus do
-  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "truth" then ob num of subtitle_margin_ratio of draw size widescreen to name num subtitle margin ratio be plus do
-  ob num of ob of subtitle margin ratio be equally from num 0 then ob name text draw widescreen mode be equally from text "lie" then ob num of subtitle_margin_ratio of draw size shorts to name num subtitle margin ratio be plus do
-  su name subtitle margin ratio ret
-prah
-
-su name current footnote mode to name text footnote mode current be ceremony def
-  ob text "wordflow" to name text footnote mode current be text do
-  ob name text draw widescreen mode be equally from text "truth" then ob text "karaoke" to name text footnote mode current be text do
-  su name footnote mode current ret
-prah
-
-su name footnote by mode from filename captions with filename video to filename output by num subtitle margin with text mode to name filename clip be ceremony def
-  ob text of with of this to name text footnote mode chosen be text do
-  ob name text footnote mode chosen be equally from text "karaoke" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this as wo karaoke by num of by of this be footnote do
-  ob name text footnote mode chosen be equally from text "plain" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this by num of by of this be footnote do
-  ob name text footnote mode chosen be equally from text "wordflow" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this as wo wordflow by num of by of this be footnote do
-  su name clip stage ob filename of ob of footnote stage to name filename clip be filename do
-  su name clip stage ret
-prah
-
-su name widescreen subtitle margin ratio to name num widescreen subtitle margin ratio be ceremony def
-  ob num of subtitle_margin_ratio of draw size widescreen to name num widescreen subtitle margin ratio be plus do
-  su name widescreen subtitle margin ratio ret
-prah
-
-su name shorts subtitle margin ratio to name num shorts subtitle margin ratio be ceremony def
-  ob num of subtitle_margin_ratio of draw size shorts to name num shorts subtitle margin ratio be plus do
-  su name shorts subtitle margin ratio ret
-prah
-
-su name widescreen footnote mode to name text widescreen footnote mode be ceremony def
-  ob text of footnote_mode of draw size widescreen to name text widescreen footnote mode be text do
-  su name widescreen footnote mode ret
-prah
-
-su name shorts footnote mode to name text shorts footnote mode be ceremony def
-  ob text of footnote_mode of draw size shorts to name text shorts footnote mode be text do
-  su name shorts footnote mode ret
-prah
-
 su name brief video from text manuscript be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
 
@@ -266,8 +176,6 @@ su name brief video from text manuscript to filename video short be ceremony def
   su name result out stage ob filename of to of this be brief video ya
   su name result out stage ret
 prah
-
-exists su name teaching video section window seconds ob num 6 be default ya
 
 su name teaching video section root from num section index to name text section root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
