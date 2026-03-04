@@ -11,11 +11,11 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile to C lowers path join to deterministic snprintf", async () => {
+test("compile to C lowers concatenate become wo filename to deterministic snprintf", async () => {
   forget();
 
   const pyash = [
-    "ob ve text \"artifacts\" \"./run-001\" \"video.mp4\" to name text out be path join do"
+    "ob ve text \"artifacts\" \"./run-001\" \"video.mp4\" to name text out be concatenate become wo filename do"
   ].join("\n");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);
@@ -25,11 +25,11 @@ test("compile to C lowers path join to deterministic snprintf", async () => {
   assert.match(c, /snprintf\(out, PYA_TEXT_CAP, "%s", "artifacts\/run-001\/video\.mp4"\);/);
 });
 
-test("compile to C supports filename-typed path join targets", async () => {
+test("compile to C supports filename-typed concatenate become wo filename targets", async () => {
   forget();
 
   const pyash = [
-    "ob ve text \"artifacts\" \"run-001\" \"video.mp4\" to name filename out file be path join do"
+    "ob ve text \"artifacts\" \"run-001\" \"video.mp4\" to name filename out file be concatenate become wo filename do"
   ].join("\n");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state c to text output be compile do`);
   const result = await interpret(sentence);

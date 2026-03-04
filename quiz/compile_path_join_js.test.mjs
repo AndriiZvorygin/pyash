@@ -12,11 +12,11 @@ function unwrapQuoted(text, lang) {
     .replace(new RegExp(`\\s*\\.${lang}\\.quoted\\s*$`), "");
 }
 
-test("compile to JS lowers path join to text output", async () => {
+test("compile to JS lowers concatenate become wo filename to text output", async () => {
   forget();
 
   const pyash = [
-    "ob ve text \"artifacts\" \"./run-001\" \"video.mp4\" to name text out be path join do"
+    "ob ve text \"artifacts\" \"./run-001\" \"video.mp4\" to name text out be concatenate become wo filename do"
   ].join("\n");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
@@ -29,11 +29,11 @@ test("compile to JS lowers path join to text output", async () => {
   assert.equal(sandbox.out?.ob?.text, "artifacts/run-001/video.mp4");
 });
 
-test("compile to JS lowers path join to filename output", async () => {
+test("compile to JS lowers concatenate become wo filename to filename output", async () => {
   forget();
 
   const pyash = [
-    "ob ve text \"artifacts\" \"run-001\" \"video.mp4\" to name filename out file be path join do"
+    "ob ve text \"artifacts\" \"run-001\" \"video.mp4\" to name filename out file be concatenate become wo filename do"
   ].join("\n");
   const sentence = parse(`from text quoted.pyash.${pyash}.pyash.quoted to state javascript to text output be compile do`);
   const result = await interpret(sentence);
