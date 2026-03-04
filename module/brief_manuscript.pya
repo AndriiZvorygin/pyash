@@ -253,7 +253,7 @@ prah
 su name manuscript cta checks be series def
   su name word_min ob num 2 ya
   su name word_max ob num 4 ya
-  su name sentence_complete ob bool truth ya
+  su name sentence_complete ob bool lie ya
 prah
 
 su name manuscript ending connector from text line to name text pass be ceremony def
@@ -286,13 +286,42 @@ su name manuscript segment distinct from text line with text prior to name text 
   su name pass ret
 prah
 
-su name manuscript platform verify from text request for name platform mind accordingto name checks series to name text output be ceremony def
-  su name manuscript platform verify run platform ob text of from of this for name of for of this among name brief video script platform verify mind accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 3 to name text output be verify platform do
+su name brief video script platform pass ob text packet to name text verdict be ceremony def
+  ob text PASS to name text verdict be text do
+prah
+
+su name brief video script fact one platform ob text request to name text output be ceremony def
+  su name brief video script fact one write platform ob text of ob of this for name brief video script fact one mind to name text output by num 0 atmost num 52 be write do
+  su name output ret
+prah
+
+su name brief video script fact two platform ob text request to name text output be ceremony def
+  su name brief video script fact two write platform ob text of ob of this for name brief video script fact two mind to name text output by num 0 atmost num 52 be write do
+  su name output ret
+prah
+
+su name brief video script uplift platform ob text request to name text output be ceremony def
+  su name brief video script uplift write platform ob text of ob of this for name brief video script uplift mind to name text output by num 0 atmost num 64 be write do
+  su name output ret
+prah
+
+su name brief video script hook platform ob text request to name text output be ceremony def
+  su name brief video script hook write platform ob text of ob of this for name brief video script hook mind to name text output by num 0 atmost num 20 be write do
+  su name output ret
+prah
+
+su name brief video script cta platform ob text request to name text output be ceremony def
+  su name brief video script cta write platform ob text of ob of this for name brief video script cta mind to name text output by num 0 atmost num 12 be write do
+  su name output ret
+prah
+
+su name manuscript platform verify from text request for text platform accordingto name checks series to name text output be ceremony def
+  su name manuscript platform verify run platform ob text of from of this for text of for of this among name brief video script platform pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
   su name output ret
 prah
 
 su name manuscript fact two verify to name text output be ceremony def
-  su name manuscript fact two platform from text of ob of manuscript fact two request for name brief video script fact two mind accordingto name manuscript fact two checks to name text output be manuscript platform verify do
+  su name manuscript fact two platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
   su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   ob name text manuscript fact two distinct pass be equally from text false then
   su name manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
@@ -324,7 +353,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   ob name text brief video script source to name text manuscript replacement source be text do
   su name manuscript fact one request platform ob name map manuscript request replacements in name text manuscript fact one request template to name text manuscript fact one request be instead do
-  su name manuscript fact one platform from text of ob of manuscript fact one request for name brief video script fact one mind accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do
+  su name manuscript fact one platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do
 
   ob name text manuscript fact one out to name text manuscript replacement prior be text do
   ob name text brief video script source to name text manuscript replacement source be text do
@@ -335,7 +364,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   ob name text manuscript fact two out to name text manuscript replacement fact two be text do
   ob name text brief video script source to name text manuscript replacement source be text do
   su name manuscript uplift request platform ob name map manuscript request replacements in name text manuscript uplift request template to name text manuscript uplift request be instead do
-  su name manuscript uplift platform from text of ob of manuscript uplift request for name brief video script uplift mind accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
+  su name manuscript uplift platform from text of ob of manuscript uplift request for text "brief video script uplift platform" accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
 
   su name manuscript body begin platform ob name text manuscript fact one out to name text manuscript body out be text do
   su name manuscript body fact two join platform ob text "\n\n" to name manuscript body out be plus do
@@ -345,11 +374,11 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   ob name text manuscript body out to name text manuscript replacement body be text do
   su name manuscript hook request platform ob name map manuscript request replacements in name text manuscript hook request template to name text manuscript hook request be instead do
-  su name manuscript hook platform from text of ob of manuscript hook request for name brief video script hook mind accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do
+  su name manuscript hook platform from text of ob of manuscript hook request for text "brief video script hook platform" accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do
 
   ob name text manuscript body out to name text manuscript replacement body be text do
   su name manuscript cta request platform ob name map manuscript request replacements in name text manuscript cta request template to name text manuscript cta request be instead do
-  su name manuscript cta platform from text of ob of manuscript cta request for name brief video script cta mind accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
+  su name manuscript cta platform from text of ob of manuscript cta request for text "brief video script cta platform" accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
 
   su name manuscript out begin platform ob name text manuscript hook out to name text manuscript out be text do
   su name manuscript out join platform ob text "\n\n" to name manuscript out be plus do
