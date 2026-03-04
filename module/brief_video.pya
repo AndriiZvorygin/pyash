@@ -254,50 +254,10 @@ prah
 
 su name brief video from text manuscript to filename video short be ceremony def
   su name script source stage ob text of from of this to name text brief video script source be text do
-
-  su name manuscript stage from text of ob of brief video script source to name text manuscript out be brief video manuscript improve do
-
-  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube Shorts title (max 70 chars). Plain text only." for name mind to name text video title be write do
-
-  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
-
-  su name description stage ob name text manuscript out fromtext text "Write a YouTube Shorts description based on the script. Output exactly two brief prose paragraphs (1-2 sentences each) that summarize the key claim and why it matters. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols). Do not output hashtags. Plain text only." for name mind to name text video description be write do
-
-  exists su name video thumbnail seconds ob num 1 be default ya
-  su name thumbnail heading y ratio stage to name num thumbnail heading y ratio be current thumbnail heading y ratio do
-  su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
-  su name footnote mode stage to name text footnote mode current be current footnote mode do
-
-  su name telling ob name manuscript out be qwen say do
-
-  su name hear platform from name telling become wo srt be hear do
-
-  su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
-
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
-
-  su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
-
-  exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
-
-  su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
-
-  su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
-  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
-
-  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
-
-  su name concatenate platform from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of to of this be concatenate do
-
-  ob text of ob of footnote mode stage be equally from text "karaoke" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob text of ob of footnote mode stage be equally from text "plain" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this by num of ob of subtitle margin ratio stage be footnote do
-  ob text of ob of footnote mode stage be equally from text "wordflow" then su name footnote platform from filename of ob of hear platform fromstate wo srt with filename of ob of concatenate platform become wo video to filename of to of this as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
-
-  su name draw discharge stage as wo draw be discharge do
-
-  su name result ob filename of ob of footnote platform be brief video ya
-  su name result ret
+  su name built stage from text of ob of brief video script source be brief video do
+  su name copy stage ob filename of ob of built stage to filename of to of this be copy do
+  su name result out stage ob filename of to of this be brief video ya
+  su name result out stage ret
 prah
 
 exists su name teaching video section window seconds ob num 6 be default ya
