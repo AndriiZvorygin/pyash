@@ -12,7 +12,7 @@ Purpose: define low-level runtime primitives and IR contracts used by interprete
 | `evoke` (clause mode) | execute embedded sentence template | reusable clause-driven calls with deterministic override |
 | `instead` (map mode) | deterministic literal replacement | map-driven packet/text assembly |
 | `verify platform` | generator+verifier retry primitive | reusable stage verification with deterministic checks |
-| `path join` | deterministic path assembly | compact path building without repeated `be plus` chains |
+| `concatenate become wo filename` | deterministic path assembly | compact path building without repeated `be plus` chains |
 
 ## 2. Lifecycle concepts
 
@@ -194,20 +194,20 @@ Conformance requires:
 - deterministic multi-verifier aggregation,
 - identical pass/fail outcomes across interpreter/JS/C for equivalent inputs.
 
-## 11. Path Join Primitive (`path join`)
+## 11. Filename Concatenate Primitive (`concatenate become wo filename`)
 
-`path join` constructs deterministic filesystem-like paths from segments without ad hoc text concatenation.
+`concatenate become wo filename` constructs deterministic filesystem-like paths from segments without ad hoc text concatenation.
 
 Canonical text output form:
 
 ```pyash
-ob ve text "artifacts" "run-001" "sections" "paragraph-1" to name text path out be path join do
+ob ve text "artifacts" "run-001" "sections" "paragraph-1" to name text path out be concatenate become wo filename do
 ```
 
 Canonical filename output form:
 
 ```pyash
-ob ve text "artifacts" "run-001" "video.mp4" to filename output be path join do
+ob ve text "artifacts" "run-001" "video.mp4" to filename output be concatenate become wo filename do
 ```
 
 ### 11.1 Accepted segment values
@@ -217,7 +217,7 @@ Each segment must be one of:
 - `filename`
 - `num` (stringified in base-10)
 
-Otherwise runtime raises `be error do` with name `path join segment defective`.
+Otherwise runtime raises `be error do` with name `concatenate filename segment defective`.
 
 ### 11.2 Join normalization
 

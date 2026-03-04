@@ -47,13 +47,13 @@ function resolveLiteralSegments(sentence) {
 export function handleNativePathJoin(context, helpers) {
   const { sentence, baseBe, lang, locals, declared, declaredTypes, cHelpers, rememberFlag } = context;
   const { sanitizeName, markDeclared } = helpers;
-  if (baseBe !== "path join") return null;
+  if (!(baseBe === "concatenate" && sentence?.become?.wo === "filename")) return null;
 
   const targetName = sentence?.to?.name ?? null;
   if (!targetName) {
     throwErrorSentence({
       name: "compile error",
-      message: "compile: path join target missing (use to name ...)",
+      message: "compile: concatenate become wo filename target missing (use to name ...)",
       from: { name: "compile" },
       raw: { sentence }
     });
@@ -65,7 +65,7 @@ export function handleNativePathJoin(context, helpers) {
   } catch (err) {
     throwErrorSentence({
       name: "compile error",
-      message: `compile: path join ${String(err?.message ?? "unsupported")}`,
+      message: `compile: concatenate become wo filename ${String(err?.message ?? "unsupported")}`,
       from: { name: "compile" },
       raw: { sentence }
     });

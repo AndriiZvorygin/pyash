@@ -1,11 +1,11 @@
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
-function throwPathJoinError(message, sentence) {
+function throwConcatenateFilenameError(message, sentence) {
   throwErrorSentence({
-    name: "path join segment defective",
+    name: "concatenate filename segment defective",
     message,
-    from: { name: "path join" },
+    from: { name: "concatenate" },
     raw: { sentence }
   });
 }
@@ -13,12 +13,12 @@ function throwPathJoinError(message, sentence) {
 function segmentFromFactName(name, sentence) {
   const fact = remember(name);
   if (!fact) {
-    throwPathJoinError("path join segment defective: missing named segment", sentence);
+    throwConcatenateFilenameError("concatenate filename segment defective: missing named segment", sentence);
   }
   if (typeof fact?.ob?.text === "string") return fact.ob.text;
   if (typeof fact?.ob?.filename === "string") return fact.ob.filename;
   if (Number.isFinite(Number(fact?.ob?.num))) return String(Number(fact.ob.num));
-  throwPathJoinError("path join segment defective: named segment must be text or filename or num", sentence);
+  throwConcatenateFilenameError("concatenate filename segment defective: named segment must be text or filename or num", sentence);
 }
 
 function segmentFromValue(value, sentence) {
@@ -26,7 +26,7 @@ function segmentFromValue(value, sentence) {
   if (typeof value === "string") return value;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   if (typeof value !== "object") {
-    throwPathJoinError("path join segment defective: unsupported segment value", sentence);
+    throwConcatenateFilenameError("concatenate filename segment defective: unsupported segment value", sentence);
   }
   if (typeof value.text === "string") return value.text;
   if (typeof value.filename === "string") return value.filename;
@@ -34,7 +34,7 @@ function segmentFromValue(value, sentence) {
   if (typeof value.name === "string" && value.name.trim()) {
     return segmentFromFactName(value.name.trim(), sentence);
   }
-  throwPathJoinError("path join segment defective: unsupported segment value", sentence);
+  throwConcatenateFilenameError("concatenate filename segment defective: unsupported segment value", sentence);
 }
 
 function segmentsFromVector(ob, sentence) {
@@ -45,7 +45,7 @@ function segmentsFromVector(ob, sentence) {
     if (type === "num") {
       const num = Number(value);
       if (!Number.isFinite(num)) {
-        throwPathJoinError("path join segment defective: num segment invalid", sentence);
+        throwConcatenateFilenameError("concatenate filename segment defective: num segment invalid", sentence);
       }
       return String(num);
     }
@@ -62,7 +62,7 @@ function segmentsFromSeries(name, sentence) {
 
 function segmentsFromNamedSource(name, sentence) {
   const fact = remember(name);
-  if (!fact) throwPathJoinError("path join segment defective: named source missing", sentence);
+  if (!fact) throwConcatenateFilenameError("concatenate filename segment defective: named source missing", sentence);
 
   if (fact.be === "vector" && Array.isArray(fact?.ob?.ve?.values)) {
     return segmentsFromVector(fact.ob, sentence);
@@ -91,7 +91,7 @@ function normalizeJoin(segments) {
   return `${absolute ? "/" : ""}${parts.join("/")}`;
 }
 
-export async function pathJoin(sentence) {
+export async function concatenateBecomeWoFilename(sentence) {
   const ob = sentence?.ob ?? {};
   let segments = [];
 
@@ -106,7 +106,7 @@ export async function pathJoin(sentence) {
   ) {
     segments = [segmentFromValue(ob, sentence)];
   } else {
-    throwPathJoinError("path join segment defective: expected vector or scalar segments", sentence);
+    throwConcatenateFilenameError("concatenate filename segment defective: expected vector or scalar segments", sentence);
   }
 
   const joined = normalizeJoin(segments);
@@ -149,14 +149,14 @@ const signatureSet = new Set();
 
 for (const obType of OB_TYPES) {
   for (const toType of TO_TYPES) {
-    const words = ["be", "path", "join", "ob", ...obType, "to", ...toType];
+    const words = ["be", "concatenate", "become", "wo", "filename", "ob", ...obType, "to", ...toType];
     const key = words.join(" ");
     if (signatureSet.has(key)) continue;
     signatureSet.add(key);
-    signatureEntries.push({ signatureWords: words, handler: pathJoin });
+    signatureEntries.push({ signatureWords: words, handler: concatenateBecomeWoFilename });
   }
 }
 
 export const signatures = signatureEntries;
 
-export default pathJoin;
+export default concatenateBecomeWoFilename;
