@@ -11,7 +11,6 @@ exists su name hymn verse two mind be mind fromtext name hymn verse two prompt y
 exists su name hymn bridge mind be mind fromtext name hymn bridge prompt ya
 exists su name hymn intro mind be mind fromtext name hymn intro prompt ya
 exists su name hymn outro mind be mind fromtext name hymn outro prompt ya
-exists su name hymn stage verify mind be mind fromtext name hymn stage verify prompt ya
 exists su name hymn source thrust verify mind be mind fromtext name hymn source thrust verify prompt ya
 exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya
 exists su name hymn source thrust intent ob text quoted.text.The generator is asked to write singable lyrics from the source text. Treat poetic language as style, but fail when concrete historical facts are unsupported or materially altered..text.quoted be text ya
@@ -24,8 +23,8 @@ Teaching role:
 - Preview what will be learned.
 
 Rules:
-- 1 to 2 short lines.
-- 8 to 15 words total.
+- 1 short line.
+- 8 to 12 words total.
 - Clear, simple vocabulary.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -37,7 +36,7 @@ Rules:
 - In each couplet, line 1 and line 2 should rhyme at the end.
 - Use clear rhyme scheme `AABB`.
 - Keep each line short and lyrical (roughly 6-10 words).
-- 35 to 45 words total.
+- 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
 - Emotional, singable language.
 - Avoid paragraph-like prose sentences.
@@ -49,8 +48,8 @@ exists su name hymn chorus prompt ob text quoted.text.You are writing the Chorus
 Rules:
 - Write 2 rhyming couplets (4 short lines).
 - Use rhyme scheme `AAAA` or `AABB`.
-- Keep each line short and lyrical (roughly 5-8 words).
-- 18 to 25 words total.
+- Keep each line short and lyrical (roughly 4-5 words).
+- 18 to 22 words total.
 - Memorable and repeatable refrain.
 - Keep the core theme tied to the source and Verse 1.
 - Avoid paragraph-like prose sentences.
@@ -66,8 +65,8 @@ Teaching role:
 Rules:
 - Write 2 rhyming couplets (4 short lines).
 - Use rhyme scheme `AAAA` or `AABB`.
-- Keep each line short and lyrical (roughly 5-8 words).
-- 18 to 25 words total.
+- Keep each line short and lyrical (roughly 4-5 words).
+- 18 to 22 words total.
 - Keep the same core message as the prior chorus.
 - Use fresh wording; do not copy the prior chorus line-for-line.
 - Avoid paragraph-like prose sentences.
@@ -81,7 +80,7 @@ Rules:
 - In each couplet, line 1 and line 2 should rhyme at the end.
 - Use clear rhyme scheme `AABB`.
 - Keep each line short and lyrical (roughly 6-10 words).
-- 35 to 45 words total.
+- 30 to 38 words total.
 - Focus on a different supported aspect than Verse 1.
 - Do not repeat Verse 1 wording.
 - Avoid paragraph-like prose sentences.
@@ -114,25 +113,6 @@ Rules:
 - Clear, simple vocabulary.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
-
-exists su name hymn stage verify prompt ob text quoted.text.You verify whether a candidate lyric section fits its task instructions.
-
-Rules:
-- Be practical and not overly strict.
-- Prefer PASS when support is plausible and constraints are mostly satisfied.
-- Fail only on clear mismatch, clear unsupported historical claims, or clear instruction break.
-- Use the TASK and CANDIDATE exactly as provided.
-- If TASK includes `TARGET_WORDS: X-Y`, count candidate words and fail when outside that inclusive range.
-- If TASK includes `PRIOR SEGMENT:`, fail when CANDIDATE repeats the prior segment wording or same core claim.
-- If TASK includes `FORMAT: RHYMING_COUPLETS`, fail when CANDIDATE is not line-broken couplets or reads like plain paragraph prose.
-- If TASK includes `FORMAT: RHYMING_COUPLETS`, fail when paired lines do not end in clear rhyme sounds.
-- For `FORMAT: RHYMING_COUPLETS`, fail if line count is odd or line lengths look like long prose sentences.
-
-Output:
-- First output one short reasoning paragraph (2-4 sentences).
-- Final line must be exactly PASS or FAIL.
-- No bullets, no labels, no markdown.
-- No text after the final verdict line..text.quoted be text ya
 
 exists su name hymn source thrust verify prompt ob text quoted.text.Verify whether the historical content in LYRIC is grounded in TRANSCRIPT.
 
@@ -174,41 +154,59 @@ Rules:
 
 su name hymn intro checks be series def
   su name word_min ob num 8 ya
-  su name word_max ob num 15 ya
+  su name word_max ob num 20 ya
+  su name line_count_min ob num 1 ya
+  su name line_count_max ob num 2 ya
 prah
 
 su name hymn verse one checks be series def
-  su name word_min ob num 35 ya
-  su name word_max ob num 45 ya
+  su name word_min ob num 24 ya
+  su name word_max ob num 50 ya
+  su name line_count_min ob num 4 ya
+  su name line_count_max ob num 4 ya
 prah
 
 su name hymn chorus checks be series def
-  su name word_min ob num 18 ya
-  su name word_max ob num 25 ya
+  su name word_min ob num 14 ya
+  su name word_max ob num 36 ya
+  su name line_count_min ob num 4 ya
+  su name line_count_max ob num 4 ya
 prah
 
 su name hymn final chorus checks be series def
-  su name word_min ob num 18 ya
-  su name word_max ob num 25 ya
+  su name word_min ob num 14 ya
+  su name word_max ob num 36 ya
+  su name line_count_min ob num 4 ya
+  su name line_count_max ob num 4 ya
 prah
 
 su name hymn verse two checks be series def
-  su name word_min ob num 35 ya
-  su name word_max ob num 45 ya
+  su name word_min ob num 24 ya
+  su name word_max ob num 50 ya
+  su name line_count_min ob num 4 ya
+  su name line_count_max ob num 4 ya
 prah
 
 su name hymn bridge checks be series def
-  su name word_min ob num 12 ya
-  su name word_max ob num 20 ya
+  su name word_min ob num 10 ya
+  su name word_max ob num 32 ya
+  su name line_count_min ob num 2 ya
+  su name line_count_max ob num 4 ya
 prah
 
 su name hymn outro checks be series def
-  su name word_min ob num 8 ya
-  su name word_max ob num 15 ya
+  su name word_min ob num 6 ya
+  su name word_max ob num 18 ya
+  su name line_count_min ob num 2 ya
+  su name line_count_max ob num 2 ya
 prah
 
-su name hymn section verify from text request for name section mind accordingto name checks to name text output be ceremony def
-  su name hymn section verify run platform ob text of from of this for name of for of this among name hymn stage verify mind accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 3 to name text output be verify platform do
+su name hymn stage pass ob text packet to name text verdict be ceremony def
+  ob text PASS to name text verdict be text do
+prah
+
+su name hymn section verify from text request for name platform mind accordingto name checks series to name text output be ceremony def
+  su name hymn section verify run platform ob text of from of this for name of for of this among name hymn stage pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 8 to name text output be verify platform do
   su name output ret
 prah
 
@@ -334,7 +332,6 @@ su name hymn manuscript draft checked from text source to name text manuscript o
 .text.quoted to name hymn out be plus do
   su name hymn out outro stage ob name text outro out to name hymn out be plus do
 
-  su name hymn write stage ob name text hymn out be write do
   su name hymn out ret
 prah
 

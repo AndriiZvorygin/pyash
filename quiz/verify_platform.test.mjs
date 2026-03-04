@@ -96,3 +96,60 @@ test("verify platform score gate applies atleast threshold", async () => {
     /verify platform defective: retries exhausted/
   );
 });
+
+test("verify platform accepts qualified deterministic check names", async () => {
+  forget();
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob text \"ok\" to name text draft out be text do");
+  await run("prah");
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name module internal must_match_pattern ob text \"^ok$\" ya");
+  await run("prah");
+
+  await run("ob text \"task\" for name draft maker among name pass verifier accordingto name checks fromindex num 1 toindex num 1 to name text result be verify platform do");
+  assert.equal(remember("result")?.ob?.text, "ok");
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
+});
+
+test("verify platform treats generator platform errors as retryable", async () => {
+  forget();
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await assert.rejects(
+    () => run("ob text \"task\" for name missing generator among name pass verifier fromindex num 1 toindex num 2 to name text result be verify platform do"),
+    /verify platform defective: retries exhausted/
+  );
+
+  assert.equal(remember("verify platform attempts used")?.ob?.num, 2);
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "max retries");
+});
+
+test("verify platform supports line_count_min and line_count_max checks", async () => {
+  forget();
+
+  await run("su name draft maker ob text task to name text draft out be ceremony def");
+  await run("ob text quoted.text.line one\nline two.text.quoted to name text draft out be text do");
+  await run("prah");
+
+  await run("su name pass verifier ob text packet to name text verdict be ceremony def");
+  await run("ob text PASS to name text verdict be text do");
+  await run("prah");
+
+  await run("su name checks be series def");
+  await run("su name line_count_min ob num 2 ya");
+  await run("su name line_count_max ob num 2 ya");
+  await run("prah");
+
+  await run("ob text \"task\" for name draft maker among name pass verifier accordingto name checks fromindex num 1 toindex num 1 to name text result be verify platform do");
+  assert.equal(remember("result")?.ob?.text, "line one\nline two");
+  assert.equal(remember("verify platform stop reason")?.ob?.text, "pass");
+});
