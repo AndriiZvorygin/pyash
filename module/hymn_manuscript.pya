@@ -174,32 +174,32 @@ VERSE 2:
   su name bridge request verse two stage ob name text verse two out to name bridge request be plus do
   su name bridge stage to name text bridge out be hymn bridge checked do
 
-  su name hymn out begin stage ob text quoted.text.Verse 1
+  su name hymn out begin stage ob text quoted.text.[verse 1]
 .text.quoted to name text hymn out be text do
   su name hymn out verse one stage ob name text verse one out to name hymn out be plus do
   su name hymn out chorus one header stage ob text quoted.text.
 
-Chorus
+[chorus]
 .text.quoted to name hymn out be plus do
   su name hymn out chorus one stage ob name text chorus out to name hymn out be plus do
   su name hymn out verse two header stage ob text quoted.text.
 
-Verse 2
+[verse 2]
 .text.quoted to name hymn out be plus do
   su name hymn out verse two stage ob name text verse two out to name hymn out be plus do
   su name hymn out chorus two header stage ob text quoted.text.
 
-Chorus
+[chorus]
 .text.quoted to name hymn out be plus do
   su name hymn out chorus two stage ob name text chorus out to name hymn out be plus do
   su name hymn out bridge header stage ob text quoted.text.
 
-Bridge
+[bridge]
 .text.quoted to name hymn out be plus do
   su name hymn out bridge stage ob name text bridge out to name hymn out be plus do
   su name hymn out chorus three header stage ob text quoted.text.
 
-Chorus
+[chorus]
 .text.quoted to name hymn out be plus do
   su name hymn out chorus three stage ob name text chorus out to name hymn out be plus do
 
