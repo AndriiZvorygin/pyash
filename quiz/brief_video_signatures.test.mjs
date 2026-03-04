@@ -113,15 +113,19 @@ test("layout helpers expose widescreen karaoke and shorts wordflow map values", 
   assert.equal(Number(tallMargin?.result?.num), 0.1);
 });
 
-test("footnote branch compares direct stage text value", async () => {
+test("footnote mode helper centralizes mode branch selection", async () => {
   const source = await fs.readFile("module/brief_video.pya", "utf8");
   assert.match(
     source,
-    /ob text of ob of footnote mode stage be equally from text "karaoke"/u
+    /su name footnote by mode from filename captions with filename video to filename output by num subtitle margin with text mode to name filename clip be ceremony def/u
   );
   assert.match(
     source,
-    /ob text of ob of footnote mode stage be equally from text "wordflow"/u
+    /ob name text footnote mode chosen be equally from text "karaoke" then su name footnote stage/u
+  );
+  assert.match(
+    source,
+    /ob name text footnote mode chosen be equally from text "wordflow" then su name footnote stage/u
   );
 });
 
@@ -189,7 +193,11 @@ test("section mappers normalize current item to filename before media verbs", as
   );
   assert.match(
     source,
-    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*with filename of ob of section video input stage become wo video/u
+    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*be footnote by mode do/u
+  );
+  assert.match(
+    source,
+    /su name teaching video section leaf from num section index with text leaf to name filename section file be ceremony def/u
   );
 });
 
