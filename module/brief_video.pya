@@ -129,35 +129,23 @@ su name brief video manuscript improve from text source to name text manuscript 
   su name manuscript out ret
 prah
 
+exists su name video heading burn command template ob text quoted.text.node command/video_heading_burn.mjs "[[video_path]]" "[[output_path]]" --text-stdin --seconds 1 --y-ratio [[y_ratio]] --max-width-ratio 0.82.text.quoted be text ya
+su name video heading burn replacements be map def
+  su text "[[video_path]]" ob name text video path ya
+  su text "[[output_path]]" ob name text output path ya
+  su text "[[y_ratio]]" ob name num y ratio ya
+su name video heading burn replacements be map prah
+
 su name video heading burn from filename video with text heading to filename output be ceremony def
-  exists su name cmd ob text "node command/video_heading_burn.mjs" be text ya
-  ob text " \"" to name cmd be plus do
-  ob filename of from of this to name text video path be text do
-  ob name video path to name cmd be plus do
-  ob text "\"" to name cmd be plus do
-  ob text " \"" to name cmd be plus do
-  ob filename of to of this to name text output path be text do
-  ob name output path to name cmd be plus do
-  ob text "\"" to name cmd be plus do
-  ob text " --text-stdin --seconds 1 --y-ratio 0.60 --max-width-ratio 0.82" to name cmd be plus do
-  ob text of cmd fromtext text of with of this be command do
+  su name result from filename of from of this with text of with of this to filename of to of this by num 0.60 be video heading burn do
   su name result ret
 prah
 
 su name video heading burn from filename video with text heading to filename output by num y ratio be ceremony def
-  exists su name cmd ob text "node command/video_heading_burn.mjs" be text ya
-  ob text " \"" to name cmd be plus do
   ob filename of from of this to name text video path be text do
-  ob name video path to name cmd be plus do
-  ob text "\"" to name cmd be plus do
-  ob text " \"" to name cmd be plus do
   ob filename of to of this to name text output path be text do
-  ob name output path to name cmd be plus do
-  ob text "\"" to name cmd be plus do
-  ob text " --text-stdin --seconds 1 --y-ratio " to name cmd be plus do
-  ob num of by of this to name cmd be plus do
-  ob text " --max-width-ratio 0.82" to name cmd be plus do
-  ob text of cmd fromtext text of with of this be command do
+  su name command stage ob name map video heading burn replacements in name text video heading burn command template to name text cmd be instead do
+  ob name text cmd fromtext text of with of this be command do
   su name result ret
 prah
 
@@ -317,27 +305,28 @@ exists su name teaching video section window seconds ob num 6 be default ya
 su name teaching video section root from num section index to name text section root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
   ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
-  ob text "artifacts/" to name text section root be text do
-  ob name text teaching video run id to name section root be plus do
-  ob text "/sections/paragraph-" to name section root be plus do
-  ob num of from of this to name section root be plus do
+  ob text "paragraph-" to name text section paragraph segment be text do
+  ob num of from of this to name section paragraph segment be plus do
+  ob text "artifacts" to name text section artifacts segment be text do
+  ob text "sections" to name text section group segment be text do
+  ob ve name "text section artifacts segment" "text teaching video run id" "text section group segment" "text section paragraph segment" to name text section root be path join do
   su name section root ret
 prah
 
 su name teaching video run root to name text teaching video run root be ceremony def
   su name run id stage ob name run id to name text teaching video run id be text do
   ob name text teaching video run id be equally from text "" then ob text "manual" to name text teaching video run id be text do
-  ob text "artifacts/" to name text teaching video run root be text do
-  ob name text teaching video run id to name teaching video run root be plus do
+  ob text "artifacts" to name text teaching video artifacts segment be text do
+  ob ve name "text teaching video artifacts segment" "text teaching video run id" to name text teaching video run root be path join do
   su name teaching video run root ret
 prah
 
 su name teaching video stage manifest filename from text stage stem to name filename stage manifest be ceremony def
   su name run root stage to name text teaching video run root be teaching video run root do
-  ob name text teaching video run root to name text stage manifest path be text do
-  ob text "/" to name stage manifest path be plus do
-  ob text of from of this to name stage manifest path be plus do
-  ob text ".series.pya" to name stage manifest path be plus do
+  ob text of from of this to name text stage stem be text do
+  ob text ".series.pya" to name text stage manifest stem be text do
+  ob name text stage stem to name stage manifest stem be plus do
+  ob ve name "text teaching video run root" "text stage manifest stem" to name text stage manifest path be path join do
   su name stage manifest stage ob name text stage manifest path to name filename stage manifest be filename do
   su name stage manifest stage ret
 prah
@@ -347,12 +336,12 @@ su name teaching video section tell mapper ob text section manuscript fromindex 
   ob num 1 to name section index be plus do
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
 
-  su name section tone prompts path stage ob name text section root to name text section tone prompts path be text do
-  ob text "/section-tone-prompts.series.pya" to name section tone prompts path be plus do
+  ob text "section-tone-prompts.series.pya" to name text section tone prompts leaf be text do
+  ob ve name "text section root" "text section tone prompts leaf" to name text section tone prompts path be path join do
   su name section tone prompts stage ob name text section tone prompts path to name filename section tone prompts be filename do
 
-  su name section audio path stage ob name text section root to name text section audio path be text do
-  ob text "/audio.wav" to name section audio path be plus do
+  ob text "audio.wav" to name text section audio leaf be text do
+  ob ve name "text section root" "text section audio leaf" to name text section audio path be path join do
   su name section audio stage ob name text section audio path to name filename section audio be filename do
 
   su name section telling stage from filename of ob of section tone prompts stage ob text of ob of this to filename of ob of section audio be qwen say do
@@ -368,8 +357,8 @@ su name teaching video section tone mapper ob text section manuscript fromindex 
   su name section sentence itinerary stage from text of ob of this as text "sentence" to name itinerary section tone sentences by num of ob of section index stage be cut do
   su name section tone prompt stage from name section tone sentences ob text of ob of qwen say tone promptify packet template fromtext name qwen say tone promptify instruction for name mind to name itinerary section tone prompts by num of ob of section index stage be promptify do
 
-  su name section tone prompts path stage ob name text section root to name text section tone prompts path be text do
-  ob text "/section-tone-prompts.series.pya" to name section tone prompts path be plus do
+  ob text "section-tone-prompts.series.pya" to name text section tone prompts leaf be text do
+  ob ve name "text section root" "text section tone prompts leaf" to name text section tone prompts path be path join do
   su name section tone prompts filename stage ob name text section tone prompts path to name filename section tone prompts filename be filename do
   su name section tone prompts copy stage ob filename of ob of section tone prompt stage to filename of ob of section tone prompts filename stage be copy do
 
@@ -383,8 +372,8 @@ su name teaching video section hear mapper ob filename section audio fromindex n
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section audio input stage ob filename of ob of this to name filename section audio input be filename do
 
-  su name section srt path stage ob name text section root to name text section srt path be text do
-  ob text "/captions.srt" to name section srt path be plus do
+  ob text "captions.srt" to name text section srt leaf be text do
+  ob ve name "text section root" "text section srt leaf" to name text section srt path be path join do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
 
   su name section hear stage from filename of ob of section audio input stage become wo srt to filename of ob of section srt be hear do
@@ -398,8 +387,8 @@ su name teaching video section video mapper ob filename section srt fromindex nu
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section srt input stage ob filename of ob of this to name filename section srt input be filename do
 
-  su name section cuts path stage ob name text section root to name text section cuts path be text do
-  ob text "/section-cuts.series.pya" to name section cuts path be plus do
+  ob text "section-cuts.series.pya" to name text section cuts leaf be text do
+  ob ve name "text section root" "text section cuts leaf" to name text section cuts path be path join do
   su name section cuts stage ob name text section cuts path to name filename section cuts be filename do
 
   su name section cut stage from filename of ob of section srt input stage during num of ob of teaching video section window seconds to name itinerary section cuts itinerary by num of ob of section index stage be cut do
@@ -427,8 +416,8 @@ su name teaching video section draw mapper ob filename section prompts fromindex
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section prompts input stage ob filename of ob of this to name filename section prompts input be filename do
 
-  su name section draw directory path stage ob name text section root to name text section draw directory path be text do
-  ob text "/draw" to name section draw directory path be plus do
+  ob text "draw" to name text section draw directory leaf be text do
+  ob ve name "text section root" "text section draw directory leaf" to name text section draw directory path be path join do
   su name section draw directory stage ob name text section draw directory path to name filename section draw directory be filename do
 
   exists su name section prompts itinerary stage ob name filename section prompts input stage be itinerary ya
@@ -445,17 +434,17 @@ su name teaching video section concatenate mapper ob filename section cuts fromi
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section cuts input stage ob filename of ob of this to name filename section cuts input be filename do
 
-  su name section audio path stage ob name text section root to name text section audio path be text do
-  ob text "/audio.wav" to name section audio path be plus do
+  ob text "audio.wav" to name text section audio leaf be text do
+  ob ve name "text section root" "text section audio leaf" to name text section audio path be path join do
   su name video cuts audio filename ob name text section audio path be text do
 
-  su name section draw directory path stage ob name text section root to name text section draw directory path be text do
-  ob text "/draw" to name section draw directory path be plus do
-  su name video cuts images directory ob name text section draw directory path stage be text do
+  ob text "draw" to name text section draw directory leaf be text do
+  ob ve name "text section root" "text section draw directory leaf" to name text section draw directory path be path join do
+  su name video cuts images directory ob name text section draw directory path be text do
   exists su name video cuts prefix ob text "section-draw-stage" be text ya
 
-  su name section video path stage ob name text section root to name text section video path be text do
-  ob text "/section.mp4" to name section video path be plus do
+  ob text "section.mp4" to name text section video leaf be text do
+  ob ve name "text section root" "text section video leaf" to name text section video path be path join do
   su name section video stage ob name text section video path to name filename section video be filename do
 
   exists su name section cuts itinerary stage ob name filename section cuts input stage be itinerary ya
@@ -470,12 +459,12 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name section root stage from num of ob of section index stage to name text section root be teaching video section root do
   su name section video input stage ob filename of ob of this to name filename section video input be filename do
 
-  su name section srt path stage ob name text section root to name text section srt path be text do
-  ob text "/captions.srt" to name section srt path be plus do
+  ob text "captions.srt" to name text section srt leaf be text do
+  ob ve name "text section root" "text section srt leaf" to name text section srt path be path join do
   su name section srt stage ob name text section srt path to name filename section srt be filename do
 
-  su name section clip path stage ob name text section root to name text section clip path be text do
-  ob text "/section-footnote.mp4" to name section clip path be plus do
+  ob text "section-footnote.mp4" to name text section clip leaf be text do
+  ob ve name "text section root" "text section clip leaf" to name text section clip path be path join do
   su name section clip stage ob name text section clip path to name filename section clip be filename do
 
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
@@ -620,8 +609,8 @@ su name music video from filename audio be ceremony def
 
   su name run root stage to name text music video run root be teaching video run root do
 
-  su name captions path stage ob name text music video run root to name text captions path be text do
-  ob text "/captions.srt" to name captions path be plus do
+  ob text "captions.srt" to name text captions leaf be text do
+  ob ve name "text music video run root" "text captions leaf" to name text captions path be path join do
   su name captions filename stage ob name text captions path to name filename captions filename be filename do
 
   su name hear stage from filename of from of this become wo srt to filename of ob of captions filename stage be hear do
@@ -640,14 +629,15 @@ su name music video from filename audio be ceremony def
 
   su name mind draw discharge stage as wo mind be discharge do
 
-  su name draw directory path stage ob name text music video run root to name text draw directory path be text do
-  ob text "/draw" to name draw directory path be plus do
+  ob text "draw" to name text draw directory leaf be text do
+  ob ve name "text music video run root" "text draw directory leaf" to name text draw directory path be path join do
   su name draw directory stage ob name text draw directory path to name filename draw directory be filename do
   ob name text draw widescreen mode be equally from text "truth" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw directory stage be draw do
   ob name text draw widescreen mode be equally from text "lie" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw directory stage be draw do
 
   su name thumbnail directory path stage to name text thumbnail directory path be teaching video run root do
-  ob text "/thumbnail" to name thumbnail directory path be plus do
+  ob text "thumbnail" to name text thumbnail directory leaf be text do
+  ob ve name "text thumbnail directory path" "text thumbnail directory leaf" to name text thumbnail directory path be path join do
   su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
   ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
   ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
@@ -657,16 +647,16 @@ su name music video from filename audio be ceremony def
   su name draw discharge before concatenate stage as wo draw be discharge do
 
   su name video cuts audio filename ob text of filename of from of this be text do
-  su name video cuts images directory ob name text draw directory path stage be text do
+  su name video cuts images directory ob name text draw directory path be text do
   exists su name video cuts prefix ob text "draw-stage" be text ya
 
-  su name video path stage ob name text music video run root to name text video path be text do
-  ob text "/music-video.mp4" to name video path be plus do
+  ob text "music-video.mp4" to name text video leaf be text do
+  ob ve name "text music video run root" "text video leaf" to name text video path be path join do
   su name video filename stage ob name text video path to name filename video filename be filename do
   su name concatenate stage from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of ob of video filename stage be concatenate do
 
-  su name footnote path stage ob name text music video run root to name text footnote path be text do
-  ob text "/music-video-footnote.mp4" to name footnote path be plus do
+  ob text "music-video-footnote.mp4" to name text footnote leaf be text do
+  ob ve name "text music video run root" "text footnote leaf" to name text footnote path be path join do
   su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
   ob text of ob of footnote mode stage be equally from text "karaoke" then su name footnote stage from filename of ob of captions output stage fromstate wo srt with filename of ob of concatenate stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
   ob text of ob of footnote mode stage be equally from text "plain" then su name footnote stage from filename of ob of captions output stage fromstate wo srt with filename of ob of concatenate stage become wo video to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage be footnote do
