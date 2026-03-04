@@ -45,7 +45,8 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.doesNotMatch(text, /su name manuscript cta complete from text line to name text pass be ceremony def/);
   assert.match(text, /su name manuscript segment distinct from text line with text prior to name text pass be ceremony def/);
   assert.match(text, /manuscript sentence polish verify platform be verify as wo sentence complete ob text of from of this to name map result do/);
-  assert.doesNotMatch(text, /su name manuscript platform verify from text request for name platform mind accordingto name checks to name text output be ceremony def/);
+  assert.match(text, /su name manuscript platform verify from text request for name platform mind accordingto name checks series to name text output be ceremony def/);
+  assert.match(text, /manuscript platform verify run platform ob text of from of this for name of for of this among name brief video script platform verify mind accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 3 to name text output be verify platform do/);
   assert.match(text, /su name manuscript fact one checks be series def/);
   assert.match(text, /su name manuscript fact two checks be series def/);
   assert.match(text, /su name manuscript uplift checks be series def/);
@@ -61,13 +62,13 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /su name word_max ob num 4 ya/);
   assert.match(text, /su name sentence_complete ob bool truth ya/);
   assert.match(text, /be verify platform do/);
-  assert.match(text, /manuscript fact one platform ob name text manuscript fact one request for name brief video script fact one mind among name brief video script platform verify mind accordingto name manuscript fact one checks atleast num 0\.8 fromindex num 1 toindex num 3 to name text manuscript fact one out be verify platform do/);
-  assert.match(text, /manuscript fact two platform ob name text manuscript fact two request for name brief video script fact two mind among name brief video script platform verify mind accordingto name manuscript fact two checks atleast num 0\.8 fromindex num 1 toindex num 3 to name text output be verify platform do/);
+  assert.match(text, /manuscript fact one platform from text of ob of manuscript fact one request for name brief video script fact one mind accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do/);
+  assert.match(text, /manuscript fact two platform from text of ob of manuscript fact two request for name brief video script fact two mind accordingto name manuscript fact two checks to name text output be manuscript platform verify do/);
   assert.match(text, /manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do/);
   assert.match(text, /manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do/);
-  assert.match(text, /manuscript uplift platform ob name text manuscript uplift request for name brief video script uplift mind among name brief video script platform verify mind accordingto name manuscript uplift checks atleast num 0\.8 fromindex num 1 toindex num 3 to name text manuscript uplift out be verify platform do/);
-  assert.match(text, /manuscript hook platform ob name text manuscript hook request for name brief video script hook mind among name brief video script platform verify mind accordingto name manuscript hook checks atleast num 0\.8 fromindex num 1 toindex num 3 to name text manuscript hook out be verify platform do/);
-  assert.match(text, /manuscript cta platform ob name text manuscript cta request for name brief video script cta mind among name brief video script platform verify mind accordingto name manuscript cta checks atleast num 0\.8 fromindex num 1 toindex num 3 to name text manuscript cta out be verify platform do/);
+  assert.match(text, /manuscript uplift platform from text of ob of manuscript uplift request for name brief video script uplift mind accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do/);
+  assert.match(text, /manuscript hook platform from text of ob of manuscript hook request for name brief video script hook mind accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do/);
+  assert.match(text, /manuscript cta platform from text of ob of manuscript cta request for name brief video script cta mind accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do/);
   assert.match(text, /manuscript total verify platform be verify as wo word count atleast num 70 atmost num 110/);
   assert.doesNotMatch(text, /su name manuscript total retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /manuscript out cta platform ob name text manuscript cta out to name manuscript out be plus do/);

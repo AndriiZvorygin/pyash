@@ -44,6 +44,12 @@ function resolveGenitiveLiteral(genitive, { state, memory, depth = 0, seen = new
       }
     }
     if (curr && typeof curr === "object" && curr.name && memory) {
+      // When explicitly traversing "... -> name", preserve the literal slot name.
+      // This avoids coercing through remembered facts and producing [object Object].
+      if (part === "name") {
+        curr = curr.name;
+        continue;
+      }
       const fact = memory.remember(curr.name);
       if (fact) curr = part === "ob" ? fact : (fact.ob ?? fact);
     }

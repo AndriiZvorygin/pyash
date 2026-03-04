@@ -38,6 +38,24 @@ test("be text accepts genitive name values resolved from this cases", async () =
   assert.equal(remember("out")?.ob?.text, "gen loop");
 });
 
+test("genitive name traversal keeps for-name usable as mind target", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = "fixture answer";
+  try {
+    await interpret(parse("su name relay for name mind target ob text task to name text output be ceremony def"));
+    await interpret(parse("ob text of ob of this for name of for of this to name text output be write do"));
+    await interpret(parse("su name output ret"));
+    await interpret(parse("prah"));
+    await interpret(parse("exists su name demo mind be mind as name \"qwen3:8b\" fromtext text \"helper\" ya"));
+    await interpret(parse("ob text \"hello\" for name mind demo mind to name text out be relay do"));
+    assert.equal(remember("out")?.ob?.text, "fixture answer");
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("be text can write into map slots via to genitive", async () => {
   forget();
   await interpret(parse("su name produce be map def"));
