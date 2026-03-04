@@ -65,6 +65,7 @@ import reporter, { signatures as reporterSignatures } from "./reporter.mjs";
 import errorSieve, { signatures as errorSieveSignatures } from "./error_sieve.mjs";
 import successSieve, { signatures as successSieveSignatures } from "./success_sieve.mjs";
 import verifyLoop, { signatures as verifyLoopSignatures } from "./verify_loop.mjs";
+import verifyPlatform, { signatures as verifyPlatformSignatures } from "./verify_platform.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 import lineTail, { signatures as lineTailSignatures } from "./line_tail.mjs";
 import cast, { signatures as castSignatures } from "./cast.mjs";
@@ -77,6 +78,7 @@ import establish, { signatures as establishSignatures } from "./establish.mjs";
 import improve, { signatures as improveSignatures } from "./improve.mjs";
 import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
+import pathJoin, { signatures as pathJoinSignatures } from "./path_join.mjs";
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 
@@ -135,6 +137,7 @@ export {
   errorSieve,
   successSieve,
   verifyLoop,
+  verifyPlatform,
   rememberPersistent,
   lineTail,
   cast,
@@ -147,6 +150,7 @@ export {
   improve,
   router,
   verify,
+  pathJoin,
   itineraryMedia,
   drawTextImage
 };
@@ -219,6 +223,7 @@ export const builtInSignatures = [
   ...errorSieveSignatures,
   ...successSieveSignatures,
   ...verifyLoopSignatures,
+  ...verifyPlatformSignatures,
   ...rememberSignatures,
   ...lineTailSignatures,
   ...castSignatures,
@@ -231,6 +236,7 @@ export const builtInSignatures = [
   ...improveSignatures,
   ...routerSignatures,
   ...verifySignatures,
+  ...pathJoinSignatures,
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,
 ];
