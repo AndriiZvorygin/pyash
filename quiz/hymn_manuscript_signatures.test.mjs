@@ -25,7 +25,7 @@ test("hymn manuscript module registers both hymn signatures and as-wo alias", as
   }
 });
 
-test("hymn manuscript module keeps educational staged flow with verifier loops", async () => {
+test("hymn manuscript module keeps educational staged flow with verify platform", async () => {
   const text = await fs.readFile("module/hymn_manuscript.pya", "utf8");
   assert.match(text, /exists su name hymn intro prompt ob text quoted\.text\.You are writing the Intro/);
   assert.match(text, /exists su name hymn verse one prompt ob text quoted\.text\.You are writing Verse 1/);
@@ -44,20 +44,23 @@ test("hymn manuscript module keeps educational staged flow with verifier loops",
   assert.match(text, /hymn stage verify prompt ob text quoted\.text\.You verify whether a candidate lyric section fits its task instructions\./);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether the historical content in LYRIC is grounded in TRANSCRIPT\./);
   assert.match(text, /hymn source thrust verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
-  assert.match(text, /hymn intro write stage .* be verify loop do/);
-  assert.match(text, /hymn verse one write stage .* be verify loop do/);
-  assert.match(text, /hymn chorus write stage .* be verify loop do/);
-  assert.match(text, /hymn verse two write stage .* be verify loop do/);
-  assert.match(text, /hymn bridge write stage .* be verify loop do/);
-  assert.match(text, /hymn final chorus write stage .* be verify loop do/);
-  assert.match(text, /hymn outro write stage .* be verify loop do/);
-  assert.match(text, /hymn intro write retry stage .* be verify loop do/);
-  assert.match(text, /hymn verse one write retry stage .* be verify loop do/);
-  assert.match(text, /hymn chorus write retry stage .* be verify loop do/);
-  assert.match(text, /hymn verse two write retry stage .* be verify loop do/);
-  assert.match(text, /hymn bridge write retry stage .* be verify loop do/);
-  assert.match(text, /hymn final chorus write retry stage .* be verify loop do/);
-  assert.match(text, /hymn outro write retry stage .* be verify loop do/);
+  assert.match(text, /su name hymn intro checks be series def/);
+  assert.match(text, /su name hymn verse one checks be series def/);
+  assert.match(text, /su name hymn chorus checks be series def/);
+  assert.match(text, /su name hymn final chorus checks be series def/);
+  assert.match(text, /su name hymn verse two checks be series def/);
+  assert.match(text, /su name hymn bridge checks be series def/);
+  assert.match(text, /su name hymn outro checks be series def/);
+  assert.match(text, /su name hymn section verify from text request for name section mind accordingto name checks to name text output be ceremony def/);
+  assert.match(text, /hymn section verify run platform ob text of from of this for name of for of this among name hymn stage verify mind accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 3 to name text output be verify platform do/);
+  assert.match(text, /su name intro stage from text of ob of intro request for name hymn intro mind accordingto name hymn intro checks to name text intro out be hymn section verify do/);
+  assert.match(text, /su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do/);
+  assert.match(text, /su name chorus stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus out be hymn section verify do/);
+  assert.match(text, /su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do/);
+  assert.match(text, /su name bridge stage from text of ob of bridge request for name hymn bridge mind accordingto name hymn bridge checks to name text bridge out be hymn section verify do/);
+  assert.match(text, /su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do/);
+  assert.match(text, /su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do/);
+  assert.doesNotMatch(text, /be verify loop do/);
   assert.match(text, /su name hymn source thrust checked to name text pass be ceremony def/);
   assert.match(text, /su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do/);
@@ -65,20 +68,6 @@ test("hymn manuscript module keeps educational staged flow with verifier loops",
   assert.match(text, /su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do/);
   assert.match(text, /exists su name hymn manuscript be export ya/);
   assert.match(text, /exists su name manuscript as wo hymn be export ya/);
-  assert.match(text, /su name hymn intro retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn verse one retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn chorus retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn verse two retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn bridge retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn final chorus retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /su name hymn outro retry fromindex num 0 toindex num 0 be ceremony def/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn intro retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn verse one retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn chorus retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn verse two retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn bridge retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn final chorus retry do/);
-  assert.match(text, /fromindex num 1 toindex num 3 be hymn outro retry do/);
   assert.match(text, /su name final chorus request begin stage ob text "TARGET_WORDS: 18-25\\nSECTION_ROLE: FINAL_CHORUS_REINFORCEMENT/);
   assert.match(text, /su name final chorus request prior stage ob name text final chorus prior to name final chorus request be plus do/);
   assert.match(text, /hymn out begin stage ob text quoted\.text\.\[intro\]/);
