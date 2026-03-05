@@ -167,6 +167,26 @@ docker compose -f container/pyash/service/compose.yaml up --build
 
 `container/build.sh` is kept as a wrapper to call the command script.
 
+### Optional registry defaults via `configure/secret.pya`
+
+If you want one-command image publishing from any machine, add these facts to `configure/secret.pya`:
+
+```text
+su name container image repo ob text "liberit/pyash" ya
+su name container image push ob bool truth ya
+su name container image push latest ob bool truth ya
+```
+
+Behavior:
+- When `container image repo` is set and you do not pass `--tag`, buildx tags as `repo:YYYYMMDD`.
+- If `container image push latest` is `truth`, it also tags `repo:latest`.
+- If `container image push` is `truth` and you do not pass `--push/--load`, it pushes by default.
+- If no repo is set, builds stay local and use `pyash-dev`.
+
+CLI flags still win over config:
+- `--tag` replaces configured default tags (repeat `--tag` for multiple tags).
+- `--push` / `--load` override default push behavior.
+
 ## Python ML tooling (optional)
 
 The image includes Python + venv. For Transformers / vLLM or diffusion tooling:

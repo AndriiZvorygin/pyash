@@ -7,7 +7,7 @@ source "$PROJECT_ROOT/command/container_preflight.sh"
 
 build_args=()
 platform=""
-tag="pyash-dev"
+image_tags=("pyash-dev")
 use_buildx=true
 cache_dir="$PROJECT_ROOT/container/pyash/.buildx-cache"
 push=false
@@ -15,6 +15,27 @@ load=false
 no_restart=false
 codex_version=""
 codex_refresh=""
+tag_explicit=false
+push_explicit=false
+secret_file="$PROJECT_ROOT/configure/secret.pya"
+
+pya_secret_read_text() {
+  local key="$1"
+  [[ -f "$secret_file" ]] || return 0
+  local line
+  line="$(grep -F "su name ${key} ob text " "$secret_file" | tail -n1 || true)"
+  [[ -n "$line" ]] || return 0
+  sed -E 's/.* ob text "([^"]*)".*/\1/' <<<"$line"
+}
+
+pya_secret_read_bool() {
+  local key="$1"
+  [[ -f "$secret_file" ]] || return 0
+  local line
+  line="$(grep -F "su name ${key} ob bool " "$secret_file" | tail -n1 || true)"
+  [[ -n "$line" ]] || return 0
+  sed -E 's/.* ob bool (truth|lie).*/\1/' <<<"$line"
+}
 
 while [[ $# -gt 0 ]]; do
   arg="$1"
@@ -40,7 +61,11 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --tag)
-      tag="${2:-}"
+      if [[ "$tag_explicit" != true ]]; then
+        image_tags=()
+      fi
+      image_tags+=("${2:-}")
+      tag_explicit=true
       shift 2
       ;;
     --cache-dir)
@@ -53,6 +78,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --push)
       push=true
+      push_explicit=true
       shift
       ;;
     --load)
@@ -72,6 +98,8 @@ Notes:
   - Multi-arch builds require --platform and --push (registry tag required).
   - Single-arch builds can use --load (default when using buildx).
   - Cache is stored at ./container/.buildx-cache unless overridden.
+  - Repeat --tag to publish multiple tags in one buildx run.
+  - If configure/secret.pya sets container image repo/push keys, those defaults are used when --tag/--push are not passed.
   - Use --codex-version to force a Codex layer rebuild.
   - Use --new-codex as a shorthand for --codex-version latest.
 EOF
@@ -92,6 +120,21 @@ EOF
       ;;
   esac
 done
+
+if [[ "$tag_explicit" != true ]]; then
+  publish_repo="$(pya_secret_read_text "container image repo")"
+  publish_enabled="$(pya_secret_read_bool "container image push")"
+  publish_latest="$(pya_secret_read_bool "container image push latest")"
+  if [[ -n "${publish_repo:-}" ]]; then
+    image_tags=("${publish_repo}:$(date +%Y%m%d)")
+    if [[ "$publish_latest" == "truth" ]]; then
+      image_tags+=("${publish_repo}:latest")
+    fi
+    if [[ "$push_explicit" != true && "$publish_enabled" == "truth" ]]; then
+      push=true
+    fi
+  fi
+fi
 
 if [[ -n "$codex_version" ]]; then
   codex_refresh="$(date +%s)"
@@ -169,7 +212,7 @@ if [[ "$use_buildx" == true ]]; then
   fi
 
   # Validate push requires registry tag
-  if [[ "$push" == true && "$tag" == "pyash-dev" ]]; then
+  if [[ "$push" == true && "${image_tags[0]}" == "pyash-dev" ]]; then
     echo "error: --push requires --tag <registry/image>" >&2
     exit 2
   fi
@@ -199,9 +242,11 @@ if [[ "$use_buildx" == true ]]; then
   # Build with buildx
   buildx_args=(
     -f "$PROJECT_ROOT/container/pyash/Dockerfile"
-    -t "$tag"
     --platform "$platform"
   )
+  for one_tag in "${image_tags[@]}"; do
+    buildx_args+=(-t "$one_tag")
+  done
   if [[ -n "$codex_version" ]]; then
     buildx_args+=(--build-arg "CODEX_VERSION=$codex_version")
     buildx_args+=(--build-arg "CODEX_REFRESH=$codex_refresh")
@@ -225,6 +270,9 @@ if [[ "$use_buildx" == true ]]; then
 
 else
   # Use docker compose build
+  if [[ "${#image_tags[@]}" -gt 0 && "${image_tags[0]}" != "pyash-dev" ]]; then
+    echo "warn: custom --tag/configured tags are only applied with buildx; compose build keeps service image tag." >&2
+  fi
   if [[ -n "$codex_version" ]]; then
     build_args+=(--build-arg "CODEX_VERSION=$codex_version")
     build_args+=(--build-arg "CODEX_REFRESH=$codex_refresh")
