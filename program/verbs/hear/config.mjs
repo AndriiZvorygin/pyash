@@ -79,6 +79,23 @@ function resolveHearWhisperxModel({ rememberFn } = {}) {
   return resolveConfigText("hear whisperx model", { rememberFn }) || "large-v3";
 }
 
+function resolveHearQwenHost({ rememberFn } = {}) {
+  return (
+    resolveConfigText("hear qwen host", { rememberFn }) ||
+    resolveConfigText("say host", { rememberFn }) ||
+    resolveConfigText("draw host", { rememberFn }) ||
+    "http://localhost:8188"
+  );
+}
+
+function resolveHearWorkflowRoot({ rememberFn } = {}) {
+  return resolveConfigText("hear workflow root", { rememberFn }) || "./hear/";
+}
+
+function resolveHearWorkflowDefault({ rememberFn } = {}) {
+  return resolveConfigText("hear workflow default", { rememberFn }) || "qwen3-asr-timestamps-attn2";
+}
+
 function resolveHearInputPath(sentence, { rememberFn } = {}) {
   if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
   if (typeof sentence?.from?.text === "string") return sentence.from.text;
@@ -109,5 +126,8 @@ export {
   resolveHearInputPath,
   resolveHearBackend,
   resolveHearHost,
-  resolveHearWhisperxModel
+  resolveHearWhisperxModel,
+  resolveHearQwenHost,
+  resolveHearWorkflowRoot,
+  resolveHearWorkflowDefault
 };

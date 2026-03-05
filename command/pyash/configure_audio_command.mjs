@@ -4,6 +4,7 @@ import readline from "node:readline/promises";
 function normalizeBackend(raw, fallback = "whisper") {
   const value = String(raw ?? "").trim().toLowerCase();
   if (value === "whisperx") return "whisperx";
+  if (value === "qwen") return "qwen";
   if (value === "whisper") return "whisper";
   return fallback;
 }
@@ -45,7 +46,7 @@ async function collectAudioInteractive({ prior, textOut }) {
     };
 
     textOut("Audio Configure");
-    const backend = normalizeBackend(await ask("Hear backend (whisper|whisperx)", prior.backend || "whisper"));
+    const backend = normalizeBackend(await ask("Hear backend (whisper|whisperx|qwen)", prior.backend || "whisper"));
     const whisperxEnabled = await askYesNo("Enable whisperx service on begin", backend === "whisperx" || String(prior.whisperxEnabled).toLowerCase() === "truth");
     const host = normalizeHost(await ask("WhisperX host", prior.host || "http://whisperx:8000"));
     const model = normalizeModel(await ask("WhisperX model", prior.model || "large-v3"));
@@ -57,8 +58,8 @@ async function collectAudioInteractive({ prior, textOut }) {
 
 function audioVerification(cfg) {
   const errors = [];
-  if (cfg.backend !== "whisper" && cfg.backend !== "whisperx") {
-    errors.push({ code: "invalid_backend", message: "backend must be whisper or whisperx" });
+  if (cfg.backend !== "whisper" && cfg.backend !== "whisperx" && cfg.backend !== "qwen") {
+    errors.push({ code: "invalid_backend", message: "backend must be whisper, whisperx, or qwen" });
   }
   if (!String(cfg.host ?? "").trim()) {
     errors.push({ code: "missing_host", message: "host is required" });

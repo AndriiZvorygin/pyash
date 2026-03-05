@@ -1,0 +1,6 @@
+su name audio input path ob text "4.inputs.audio" ya
+su name language path ob text "2.inputs.language" ya
+su name context path ob text "2.inputs.context" ya
+su name return timestamps path ob text "2.inputs.return_timestamps" ya
+su name transcript path ob text "10.source" ya
+su name timestamps path ob text "5.source" ya

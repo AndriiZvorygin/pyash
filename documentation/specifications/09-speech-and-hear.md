@@ -24,6 +24,12 @@ Hear SRT:
 from filename "audio.wav" become wo srt to filename "audio.srt" be hear do
 ```
 
+Qwen hear backend (ComfyUI):
+```pyash
+exists su name hear backend default ob text "qwen" be default ya
+from filename "audio.wav" become wo srt to filename "audio.srt" be hear do
+```
+
 Hear stream:
 ```pyash
 su name mic stream vyah stream be hear do

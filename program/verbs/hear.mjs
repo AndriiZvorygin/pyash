@@ -10,12 +10,13 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
 import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
-import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel } from "./hear/config.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault } from "./hear/config.mjs";
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
+import { transcribeWithQwenComfyui } from "./hear/qwen_comfyui.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -83,7 +84,13 @@ function resolveEvokeInputPath({ rememberFn } = {}) {
   return null;
 }
 
-export async function hear(sentence, { remember: rememberFn = remember } = {}) {
+export async function hear(
+  sentence,
+  {
+    remember: rememberFn = remember,
+    transcribeQwenFn = transcribeWithQwenComfyui
+  } = {}
+) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "hear", caseKey: "vyah" });
   const aspectKey = aspect === "dweh" ? "timebox" : aspect;
@@ -161,7 +168,7 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
   let backend = "fixture";
   let model = null;
   const inputPath = resolveHearInputPath(sentence, { rememberFn }) || resolveEvokeInputPath({ rememberFn });
-  if (aspectKey === "stream" && !wantsSrt) {
+  if (aspectKey === "stream" && !wantsSrt && hearBackend !== "qwen") {
     const streamResult = await handleHearStream({ sentence, rememberFn, fixture, hearStreamProcesses });
     if (streamResult?.stream) return streamResult.stream;
     transcript = streamResult?.transcript ?? transcript;
@@ -169,6 +176,14 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
     model = streamResult?.model ?? model;
   }
   if (aspectKey === "timebox") {
+    if (hearBackend === "qwen") {
+      throwErrorSentence({
+        name: "hear defective",
+        message: "hear defective: qwen backend does not support vyah timebox",
+        from: { name: "hear" },
+        raw: { backend: hearBackend }
+      });
+    }
     const durationSeconds = Number(sentence?.during?.num ?? sentence?.during);
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
       throwErrorSentence({
@@ -273,7 +288,53 @@ export async function hear(sentence, { remember: rememberFn = remember } = {}) {
           raw: { sentence }
         });
       }
-      if (wantsSrt) {
+      if (hearBackend === "qwen") {
+        const host = resolveHearQwenHost({ rememberFn });
+        const workflowRoot = resolveHearWorkflowRoot({ rememberFn });
+        const workflowName = resolveHearWorkflowDefault({ rememberFn });
+        const language = resolveHearLanguage({ rememberFn });
+        const context = resolveHearPrompt(sentence);
+        backend = "qwen-comfyui";
+        model = workflowName;
+        emitExchangeSentence({
+          mood: "do",
+          su: { name: "hear request qwen" },
+          from: { filename: inputPath },
+          to: { filename: outputPath },
+          fromstate: { text: host },
+          as: { text: workflowName },
+          be: "hear"
+        });
+        try {
+          const payload = await transcribeQwenFn({
+            inputPath,
+            host,
+            workflowRoot,
+            workflowName,
+            language,
+            context,
+            returnTimestamps: wantsSrt
+          });
+          transcript = wantsSrt ? String(payload?.srt ?? "") : sanitizeTranscript(payload?.transcript ?? "");
+          emitExchangeSentence({
+            mood: "ya",
+            su: { name: "hear result qwen" },
+            from: { filename: inputPath },
+            ob: { filename: outputPath },
+            fromstate: { text: host },
+            as: { text: workflowName },
+            fromtext: payload?.timestampsRaw ? { text: clipLogText(payload.timestampsRaw, 1200) } : undefined,
+            be: "hear"
+          });
+        } catch (err) {
+          throwErrorSentence({
+            name: "hear defective",
+            message: `hear defective: ${err?.message ?? "qwen hear failed"}`,
+            from: { name: "hear" },
+            raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
+          });
+        }
+      } else if (wantsSrt) {
         const host = resolveHearHost({ rememberFn });
         const whisperxModel = resolveHearWhisperxModel({ rememberFn });
         const language = resolveHearLanguage({ rememberFn });
