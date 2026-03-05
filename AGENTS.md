@@ -56,6 +56,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Prefer lean modular designs over compatibility layers: remove obsolete paths instead of stacking legacy flags, aliases, or fallback branches unless the user explicitly asks for backward compatibility.
 - Keep defaults scoped by stability: put universal, environment-level defaults in `configure/default.pya`; keep example/run-specific filenames, prefixes, and paths in the example `.pya` files.
 - If intent, spec mapping, or expected behavior is unclear, stop and ask a targeted clarification question before coding; do not assume and proceed on uncertain interpretations.
+- When a refinery fails, first isolate the failing component with a focused example or targeted test, fix that component, then reintegrate and re-run the full refinery end-to-end before considering the task complete.
 
 ## Spec Discipline
 - Implement behavior from specification first; do not ship ad hoc heuristics as permanent fixes.
