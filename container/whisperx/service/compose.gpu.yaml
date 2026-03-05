@@ -1,0 +1,3 @@
+services:
+  whisperx:
+    gpus: all

@@ -21,6 +21,5 @@ services:
       - TORCH_HOME=/cache/torch
       - MPLCONFIGDIR=/cache/matplotlib
       - NLTK_DATA=/cache/nltk_data
-    gpus: all
     extra_hosts:
       - host.docker.internal:host-gateway
