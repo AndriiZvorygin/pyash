@@ -74,6 +74,24 @@ search_only="lie"
 vnc_enabled="truth"
 restart_container="lie"
 
+docker_has_nvidia_runtime() {
+  local runtimes
+  runtimes="$(docker info --format '{{json .Runtimes}}' 2>/dev/null || true)"
+  [[ "$runtimes" == *"nvidia"* ]]
+}
+
+host_has_nvidia_gpu() {
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    nvidia-smi -L >/dev/null 2>&1
+    return $?
+  fi
+  [[ -c /dev/nvidiactl || -d /proc/driver/nvidia/gpus ]]
+}
+
+whisperx_can_use_gpu() {
+  host_has_nvidia_gpu && docker_has_nvidia_runtime
+}
+
 if [[ -z "${ai_host:-}" ]]; then
   ai_host="http://mriczo:11434"
 fi
@@ -173,11 +191,20 @@ if [[ "${web_search_enabled:-lie}" == "truth" || "$search_only" == "truth" ]]; t
   full_compose_args+=(-f "$PROJECT_ROOT/container/searxng/service/compose.yaml")
 fi
 if [[ "$search_only" != "truth" && "${whisperx_enabled:-lie}" == "truth" ]]; then
+  whisperx_gpu_compose="$PROJECT_ROOT/container/whisperx/service/compose.gpu.yaml"
   whisperx_cache_root="$PROJECT_ROOT/container/whisperx/cache"
   mkdir -p "$whisperx_cache_root/huggingface" "$whisperx_cache_root/torch" "$whisperx_cache_root/matplotlib" "$whisperx_cache_root/nltk_data"
   chmod -R 0777 "$whisperx_cache_root" 2>/dev/null || true
   compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
   full_compose_args+=(-f "$PROJECT_ROOT/container/whisperx/service/compose.yaml")
+
+  if whisperx_can_use_gpu; then
+    compose_args+=(-f "$whisperx_gpu_compose")
+    full_compose_args+=(-f "$whisperx_gpu_compose")
+  else
+    export WHISPERX_DEVICE="cpu"
+    echo "warning: Docker NVIDIA GPU runtime not detected; starting whisperx in CPU mode."
+  fi
 fi
 
 if [[ ${#compose_args[@]} -eq 0 ]]; then
