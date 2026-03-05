@@ -611,6 +611,7 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
     let stdout = "";
     let stderr = "";
     let exceededOutputLimit = false;
+    let timedOut = false;
     let timeoutHandle = null;
     const checkOutputLimit = () => {
       if (!(typeof maxOutputBytes === "number" && maxOutputBytes > 0)) return;
@@ -635,10 +636,11 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
       if (exceededOutputLimit) {
         stderr += `output exceeded ${maxOutputBytes} bytes`;
       }
-      resolve({ status, stdout, stderr });
+      resolve({ status, signal: proc.signalCode ?? null, stdout, stderr, timedOut, exceededOutputLimit });
     });
     if (typeof timeoutMs === "number" && timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
+        timedOut = true;
         proc.kill("SIGKILL");
         stderr += `timeout after ${timeoutMs}ms`;
       }, timeoutMs);
@@ -906,12 +908,15 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       policyMode: policy.mode,
       policySource: policy.source,
       status: res.status ?? 0,
+      signal: res.signal ?? null,
+      timedOut: res.timedOut === true,
       stdoutLength: stdout.length,
       stderrLength: stderr.length,
       stderr: stderr.slice(0, 200)
     })}`);
   }
-  if (res.status) {
+  const failed = Boolean(res.status) || Boolean(res.signal) || res.timedOut === true || res.exceededOutputLimit === true;
+  if (failed) {
     emitCommandAudit({
       requestId,
       stage: "result",
@@ -919,14 +924,21 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       policy,
       decision: "error",
       sentence,
-      resultSentence: { mood: "do", be: "error", su: { name: "command defective" }, ob: { text: `status=${res.status ?? 0}` } },
+      resultSentence: { mood: "do", be: "error", su: { name: "command defective" }, ob: { text: `status=${res.status ?? 0} signal=${res.signal ?? ""}` } },
       rememberFn
     });
     throwErrorSentence({
       name: "command defective",
-      message: `command defective: status=${res.status ?? 0} stderr=${JSON.stringify(res.stderr ?? "")}`,
+      message: `command defective: status=${res.status ?? 0} signal=${res.signal ?? ""} stderr=${JSON.stringify(res.stderr ?? "")}`,
       from: { la: sentence },
-      raw: { status: res.status ?? 0, stderr: res.stderr ?? "", stdout: res.stdout ?? "" }
+      raw: {
+        status: res.status ?? 0,
+        signal: res.signal ?? "",
+        timedOut: res.timedOut === true,
+        exceededOutputLimit: res.exceededOutputLimit === true,
+        stderr: res.stderr ?? "",
+        stdout: res.stdout ?? ""
+      }
     });
   }
   const output = String(res.stdout ?? "");

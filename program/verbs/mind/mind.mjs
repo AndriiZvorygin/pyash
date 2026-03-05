@@ -321,6 +321,7 @@ export async function mind_to_name_text(sentence, {
   const effectiveModelTuning = (() => {
     const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
     if (typeof configuredThink === "boolean") tuning.think = configuredThink;
+    if (typeof tuning.think !== "boolean") tuning.think = false;
     if (configuredNumPredict !== null) tuning.numPredict = configuredNumPredict;
     if (callNumPredict !== null) tuning.numPredict = callNumPredict;
     return tuning;

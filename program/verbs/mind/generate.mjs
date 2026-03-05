@@ -33,6 +33,21 @@ function isLoadingModelError(text) {
     || lower.includes("loading model");
 }
 
+function extractBackendResponseText(backendResponse) {
+  const text = backendResponse?.response
+    ?? backendResponse?.message?.content
+    ?? backendResponse?.output_text
+    ?? backendResponse?.text
+    ?? "";
+  return String(text ?? "");
+}
+
+function isLoadingBackendResponse(backendResponse, backendErrorText) {
+  if (isLoadingModelError(backendErrorText)) return true;
+  const doneReason = String(backendResponse?.done_reason ?? "").toLowerCase().trim();
+  return doneReason === "load" || doneReason === "loading";
+}
+
 function normalizeVisionInput(input) {
   if (!input || typeof input !== "object") return null;
   const kind = String(input?.kind ?? "").toLowerCase().trim();
@@ -252,18 +267,17 @@ export async function runGenerate({
     let backendResponse = null;
     let backendErrorText = "";
     let attempts = 0;
-    // Fail fast in production runs: retries can amplify provider thrashing.
-    const baseAttempts = 1;
-    const loadingAttempts = 1;
-    while (attempts < loadingAttempts) {
+    // Retry once when the backend reports a model-loading style empty response.
+    const maxAttempts = 2;
+    while (attempts < maxAttempts) {
       attempts += 1;
       backendResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
       backendErrorText = String(backendResponse?.error ?? "").trim();
-      responseText = backendResponse?.response ?? backendResponse?.message?.content ?? "";
+      responseText = extractBackendResponseText(backendResponse);
       if (responseText) break;
-      const loadingModel = isLoadingModelError(backendErrorText);
-      const maxAttempts = loadingModel ? loadingAttempts : baseAttempts;
+      const loadingModel = isLoadingBackendResponse(backendResponse, backendErrorText);
       if (attempts >= maxAttempts) break;
+      if (!loadingModel) break;
       const waitMs = loadingModel ? Math.min(4000, 500 * attempts) : 250;
       await new Promise(resolve => setTimeout(resolve, waitMs));
     }

@@ -1,0 +1,8 @@
+ob filename text manuscript be input ya
+exists su name mind model ob text "qwen3.5:9b" be default ya
+
+su name source stage from filename of ob of manuscript become wo text to name text source be read do
+
+su name title stage ob name text source fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text title be write do
+
+su name title out ob name text title be write do
