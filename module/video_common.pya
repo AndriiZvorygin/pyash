@@ -34,8 +34,14 @@ prah
 su name video heading burn from filename video with text heading to filename output by num y ratio be ceremony def
   ob filename of from of this to name text video path be text do
   ob filename of to of this to name text output path be text do
-  su name command stage ob name map video heading burn replacements in name text video heading burn command template to name text cmd be instead do
-  ob name text cmd fromtext text of with of this be command do
+  ob text "node command/video_heading_burn.mjs \"" to name text cmd be text do
+  ob name text video path to name cmd be plus do
+  ob text "\" \"" to name cmd be plus do
+  ob name text output path to name cmd be plus do
+  ob text "\" --text-stdin --seconds 1 --y-ratio " to name cmd be plus do
+  ob num of by of this to name cmd be plus do
+  ob text " --max-width-ratio 0.82" to name cmd be plus do
+  ob text of cmd fromtext text of with of this be command do
   su name result ret
 prah
 

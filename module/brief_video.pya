@@ -139,12 +139,15 @@ su name brief video from text manuscript be ceremony def
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
+  su name mind discharge before telling stage as wo mind be discharge do
   su name telling ob name manuscript out be qwen say do
 
+  su name qwen say discharge before hear stage as wo "qwen say" be discharge do
   su name hear platform from name telling become wo srt be hear do
 
   su name cut platform from name hear platform during num 6 to name itinerary teaching cuts be cut do
 
+  su name hear discharge before prompt stage as wo hear be discharge do
   su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
 
   su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
@@ -152,6 +155,7 @@ su name brief video from text manuscript be ceremony def
   exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
   su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
 
+  su name mind discharge before draw stage as wo mind be discharge do
   su name draw platform from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to name photographs photos be draw do
 
   su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts be draw do
@@ -190,7 +194,8 @@ prah
 
 su name teaching video section leaf from num section index with text leaf to name filename section file be ceremony def
   su name section root stage from num of from of this to name text section root be teaching video section root do
-  ob ve name "text section root" "text of with of this" to name text section file path be concatenate become wo filename do
+  ob text of with of this to name text section leaf segment be text do
+  ob ve name "text section root" "text section leaf segment" to name text section file path be concatenate become wo filename do
   su name section file stage ob name text section file path to name filename section file be filename do
   su name section file stage ret
 prah
@@ -321,7 +326,10 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
-  su name section clip output stage from filename of ob of section srt stage with filename of ob of section video input stage to filename of ob of section clip stage by num of ob of subtitle margin ratio stage with text of ob of footnote mode stage to name filename section clip output be footnote by mode do
+  ob text of ob of footnote mode stage to name text section footnote mode chosen be text do
+  ob name text section footnote mode chosen be equally from text "karaoke" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
+  ob name text section footnote mode chosen be equally from text "plain" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage by num of ob of subtitle margin ratio stage be footnote do
+  ob name text section footnote mode chosen be equally from text "wordflow" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
   su name section clip output stage ret
 prah
 
@@ -362,7 +370,7 @@ su name teaching video from text manuscript be ceremony def
 
   su name draw discharge before concatenate stage as wo draw be discharge do
   su name section video series stage from name teaching section cuts by name teaching video section concatenate mapper to name text teaching section videos be series map do
-  su name thumbnail section root stage from num 1 to name text thumbnail section root be teaching video section root do
+  su name thumbnail section root stage from num 0 to name text thumbnail section root be teaching video section root do
   su name thumbnail platform path stage ob name text thumbnail section root stage to name text thumbnail platform path be text do
   ob text "/draw/section-draw-stage-cut-001.png" to name thumbnail platform path be plus do
   su name thumbnail platform stage ob name text thumbnail platform path to name filename thumbnail platform be filename do

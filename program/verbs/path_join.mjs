@@ -10,8 +10,31 @@ function throwConcatenateFilenameError(message, sentence) {
   });
 }
 
+function resolveFactAlias(name) {
+  const raw = String(name ?? "").trim();
+  if (!raw) return raw;
+  if (remember(raw)) return raw;
+  const candidates = [];
+
+  const typed = raw.match(/^(text|filename|num)\s+(.+)$/iu);
+  if (typed) candidates.push(String(typed[2] ?? "").trim());
+
+  const thisRef = raw.match(/^(?:text|filename|num)\s+of\s+(.+)\s+of\s+this$/iu);
+  if (thisRef) candidates.push(String(thisRef[1] ?? "").trim());
+
+  const plainThisRef = raw.match(/^of\s+(.+)\s+of\s+this$/iu);
+  if (plainThisRef) candidates.push(String(plainThisRef[1] ?? "").trim());
+
+  for (const candidate of candidates) {
+    if (candidate && remember(candidate)) return candidate;
+  }
+
+  return raw;
+}
+
 function segmentFromFactName(name, sentence) {
-  const fact = remember(name);
+  const resolved = resolveFactAlias(name);
+  const fact = remember(resolved);
   if (!fact) {
     throwConcatenateFilenameError("concatenate filename segment defective: missing named segment", sentence);
   }
@@ -61,13 +84,14 @@ function segmentsFromSeries(name, sentence) {
 }
 
 function segmentsFromNamedSource(name, sentence) {
-  const fact = remember(name);
+  const resolved = resolveFactAlias(name);
+  const fact = remember(resolved);
   if (!fact) throwConcatenateFilenameError("concatenate filename segment defective: named source missing", sentence);
 
   if (fact.be === "vector" && Array.isArray(fact?.ob?.ve?.values)) {
     return segmentsFromVector(fact.ob, sentence);
   }
-  const fromSeries = segmentsFromSeries(name, sentence);
+  const fromSeries = segmentsFromSeries(resolved, sentence);
   if (fromSeries) return fromSeries;
   return [segmentFromValue(fact.ob ?? fact, sentence)];
 }
