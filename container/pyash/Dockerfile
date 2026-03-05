@@ -6,6 +6,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    docker.io \
+    docker-buildx \
+    docker-compose-v2 \
     dnsutils \
     git \
     openssh-client \

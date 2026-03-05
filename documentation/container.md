@@ -159,6 +159,8 @@ exists su name openai base url ob text "http://host.docker.internal:11434" be de
 docker compose -f container/pyash/service/compose.yaml up --build
 ```
 
+The compose service mounts the host Docker socket (`/var/run/docker.sock`) into the Pyash container so in-container agents can build/run sibling containers on the host daemon.
+
 ### Build + restart helper
 
 ```bash
@@ -204,6 +206,9 @@ pip install transformers vllm
 ## What’s included in the image
 
 - Ubuntu 24.04
+- docker.io (Docker CLI)
+- docker-buildx (`docker buildx`)
+- docker-compose-v2 (`docker compose`)
 - Node.js 22 LTS
 - build-essential, cmake, pkg-config
 - python3, venv, pip
