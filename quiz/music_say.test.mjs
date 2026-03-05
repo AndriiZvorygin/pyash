@@ -51,6 +51,9 @@ test("music say maps with name map options into runner payload", async () => {
         ob: {
           map: {
             bpm: { num: 90 },
+            seed: { num: 123456 },
+            seconds: { num: 10 },
+            duration: { num: 10 },
             timesignature: { text: "4" },
             language: { text: "en" },
             keyscale: { text: "C major" }
@@ -79,6 +82,9 @@ test("music say maps with name map options into runner payload", async () => {
 
   assert.deepEqual(seenOptions, {
     bpm: 90,
+    seed: 123456,
+    seconds: 10,
+    duration: 10,
     timesignature: "4",
     language: "en",
     keyscale: "C major"
