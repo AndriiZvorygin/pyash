@@ -2,6 +2,7 @@ ob filename text lyrics be input ya
 from filename of ob of lyrics become wo text to name text lyrics text be read do
 
 su name music options be map def
+  su name seed ob num 424242 ya
   su name seconds ob num 12 ya
   su name duration ob num 12 ya
   su name bpm ob num 84 ya
