@@ -72,6 +72,9 @@ exists su name hear model ob text "caterer/hear/template/whisper/ggml-base.bin" 
 exists su name hear backend default ob text "whisper" be default ya
 exists su name hear host ob text "http://localhost:8000" be default ya
 exists su name hear whisperx model ob text "large-v3" be default ya
+exists su name hear qwen host ob text "http://localhost:8188" be default ya
+exists su name hear workflow root ob filename "./hear/" be default ya
+exists su name hear workflow default ob text "qwen3-asr-timestamps-attn2" be default ya
 exists su name whisperx enabled ob bool lie be default ya
 exists su name download extra ob ve text "--cookies-from-browser" "firefox" ya
 exists su name download extra default ob la be download as wo video ko with name download extra be default ya
