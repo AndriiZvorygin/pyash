@@ -17,3 +17,10 @@ Self-contained assets for the Pyash dev container.
 - Build: `./container/pyash/command/build.sh`
 - Start/enter: `./container/pyash/command/begin.sh`
 - Restart: `./container/pyash/command/restart.sh`
+
+Optional publish defaults can be set in `configure/secret.pya` with:
+- `container image repo`
+- `container image push`
+- `container image push latest`
+
+See `documentation/container.md` for full behavior and examples.
