@@ -10,6 +10,7 @@ services:
     volumes:
       - ../../..:/workplace
       - ../minds:/minds
+      - /var/run/docker.sock:/var/run/docker.sock
     stdin_open: true
     tty: true
     environment:
