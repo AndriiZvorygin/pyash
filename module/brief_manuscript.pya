@@ -15,7 +15,7 @@ Task:
 - Write 2-3 short spoken sentences.
 - Use one shocking historical fact from the transcript.
 - Tie it to a clear modern parallel.
-- Keep this segment between 20 and 34 words.
+- Keep this segment between 20 and 44 words.
 
 Rules:
 - Dramatic, authoritative tone.
@@ -31,7 +31,7 @@ Task:
 - Write 2-3 short spoken sentences.
 - Use a different shocking historical fact than the one already used.
 - Tie it to a clear modern parallel.
-- Keep this segment between 20 and 34 words.
+- Keep this segment between 20 and 44 words.
 
 Rules:
 - Do not repeat the same person/event/core claim from the prior segment.
@@ -168,11 +168,11 @@ Rules:
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
-exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-34
+exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-44
 TRANSCRIPT:
 [[source]].text.quoted be text ya
 
-exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-34
+exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-44
 PRIOR SEGMENT:
 [[prior]]
 
@@ -228,13 +228,13 @@ prah
 
 su name manuscript fact one checks be series def
   su name word_min ob num 20 ya
-  su name word_max ob num 34 ya
+  su name word_max ob num 44 ya
   su name sentence_complete ob bool truth ya
 prah
 
 su name manuscript fact two checks be series def
   su name word_min ob num 20 ya
-  su name word_max ob num 34 ya
+  su name word_max ob num 44 ya
   su name sentence_complete ob bool truth ya
 prah
 
@@ -253,7 +253,6 @@ prah
 su name manuscript cta checks be series def
   su name word_min ob num 2 ya
   su name word_max ob num 4 ya
-  su name sentence_complete ob bool lie ya
 prah
 
 su name manuscript ending connector from text line to name text pass be ceremony def
@@ -323,9 +322,16 @@ prah
 su name manuscript fact two verify to name text output be ceremony def
   su name manuscript fact two platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
   su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
+  fromindex num 1 toindex num 3 be manuscript fact two retry do
   ob name text manuscript fact two distinct pass be equally from text false then
   su name manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
   su name output ret
+prah
+
+su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript fact two distinct pass be equally from text true then be depart do
+  su name manuscript fact two retry platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
+  su name manuscript fact two distinct retry platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
 prah
 
 su name manuscript source thrust verify to name text pass be ceremony def
@@ -386,7 +392,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript out cta join platform ob text "\n\n" to name manuscript out be plus do
   su name manuscript out cta platform ob name text manuscript cta out to name manuscript out be plus do
 
-  su name manuscript total verify platform be verify as wo word count atleast num 70 atmost num 110 from name text manuscript out to name map manuscript total verify do
+  su name manuscript total verify platform be verify as wo word count atleast num 70 atmost num 140 from name text manuscript out to name map manuscript total verify do
   ob text of pass of manuscript total verify to name text manuscript total pass be text do
   ob name text manuscript total pass be equally from text false then
   su name manuscript total guarantee platform ob bool lie fromtext text "manuscript total word count defective" be guarantee do

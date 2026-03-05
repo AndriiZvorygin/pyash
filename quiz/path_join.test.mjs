@@ -40,6 +40,15 @@ test("concatenate become wo filename resolves vector segments from named source"
   assert.equal(remember("joined")?.ob?.text, "2026/3/4");
 });
 
+test("concatenate become wo filename resolves typed name aliases in ve name segments", async () => {
+  forget();
+
+  await run('ob text "artifacts" to name text root be text do');
+  await run('ob text "run-001" to name text runid be text do');
+  await run('ob ve name "text root" "text runid" to name text joined be concatenate become wo filename do');
+  assert.equal(remember("joined")?.ob?.text, "artifacts/run-001");
+});
+
 test("concatenate become wo filename rejects invalid named segment values", async () => {
   forget();
 
