@@ -1,8 +1,120 @@
-# Android Executive Lifecycle (Reference)
+# Android Control Surface and Executive Lifecycle (Reference)
 
-Purpose: describe a practical lifecycle blueprint for the Android executive module that manages `world/holding/android/` and performs ADB-side execution. This document is non-normative reference guidance.
+Purpose: describe a practical control-surface contract and lifecycle blueprint for the Android executive module that manages `world/holding/android/` and performs ADB-side execution. This document is non-normative reference guidance.
 
-## 1. Role
+## 1. Scope
+
+This reference covers:
+- lane ownership and queue lifecycle for Android orchestration,
+- public async control contract (`vyah start` / `vyah status` / `vyah await`),
+- device lease rules to avoid conflicting command execution,
+- adapter/runtime boundaries for ADB-facing execution.
+
+This reference does not cover:
+- UI design for operators,
+- long-term artifact retention policies,
+- non-Android device families.
+
+## 2. Control-Surface Contract (Reference Profile)
+
+### 2.1 Holding lane ownership
+
+Android runtime should use `world/holding/android/` and should not write queue state to `world/holding/channel/`.
+
+Recommended lifecycle directories:
+1. `input/`
+2. `runtime/`
+3. `produce/waiting/`
+4. `produce/success/`
+5. `produce/fail/`
+6. `artifacts/`
+7. `tmp/`
+
+Queue records should be `.pya` envelopes and stage transitions should use atomic same-filesystem operations.
+
+### 2.2 Queue lifecycle
+
+Recommended flow:
+1. inbound command envelopes are written to `input/`,
+2. claimed envelopes move to `runtime/`,
+3. completion emits result envelopes to `produce/waiting/`,
+4. delivery/dispatch acks move runtime files to `produce/success/` or `produce/fail/`.
+
+Retry profile:
+1. retries are bounded and explicit,
+2. retry count is envelope metadata,
+3. terminal failures preserve auditable failure envelopes.
+
+### 2.3 Public async contract
+
+Android orchestration should expose:
+1. `vyah start` — submit command work and return a command handle,
+2. `vyah status` — return current state for a handle,
+3. `vyah await` — block/poll until terminal success/fail.
+
+Terminal states:
+1. `success`
+2. `fail`
+3. `cancel` (optional, if cancellation is supported)
+
+Status payload should include:
+1. `device id`,
+2. `queued at`,
+3. `started at` (if running),
+4. `finished at` (if terminal),
+5. short operator-readable summary text.
+
+### 2.4 Command envelope contract (v0)
+
+Minimum envelope fields:
+1. `phase` (`input` or `produce`),
+2. `queued at` (ISO date-time),
+3. `device id` (target device serial/logical id),
+4. `agent name` (owner identity),
+5. `payload` (sentence payload),
+6. one stable command identity (`command id` or `payload id`).
+
+Command payload should remain sentence-shaped (`be command do` style) and avoid ad hoc JSON blobs for core routing.
+
+### 2.5 Device lease and concurrency
+
+To prevent conflicting orchestration on one ADB target:
+1. enforce a single active lease per `device id` by default,
+2. keep leases heartbeat/TTL-based so stale workers can be reclaimed,
+3. scope claims by both `device id` and `agent name`,
+4. allow concurrent execution on one device only when explicitly configured.
+
+Recommended default:
+- one worker slot per device (`max in-flight per device = 1`).
+
+### 2.6 Adapter/runtime boundary
+
+Android runtime is split into:
+1. queue/runtime core (lane ownership, retries, audit records),
+2. adapter layer (ADB or broker execution, external IO).
+
+Reference rules:
+1. adapter may execute commands and return sentence-shaped results,
+2. adapter errors should map to typed failure outcomes without crashing scheduler loop,
+3. runtime should operate with a mock adapter for tests.
+
+### 2.7 Scheduler topology
+
+Recommended phase decomposition:
+1. `android poll` (ingest),
+2. `android input` (claim + execute),
+3. `android produce` (dispatch/ack).
+
+`android probe` may be used as an alias of `android poll`.
+
+### 2.8 Suggested error names
+
+- `android queue defective`
+- `android device lease defective`
+- `android command defective`
+- `android produce defective`
+
+## 3. Role
 
 The Android executive is the runtime manager that:
 - watches Android lane queues,
@@ -10,7 +122,7 @@ The Android executive is the runtime manager that:
 - runs ADB commands through an adapter or broker,
 - records auditable queue transitions and outcomes.
 
-## 2. Lifecycle phases
+## 4. Lifecycle phases
 
 ### 2.1 Bootstrap
 
@@ -48,7 +160,7 @@ The Android executive is the runtime manager that:
 1. Release device lease on terminal completion.
 2. If worker dies, lease TTL/heartbeat reclamation returns capacity.
 
-## 3. Handle state model (for `start/status/await`)
+## 5. Handle state model (for `start/status/await`)
 
 Suggested states:
 1. `queued`
@@ -65,7 +177,7 @@ Suggested timestamps:
 
 `status` should be monotonic (no backward transition from terminal states).
 
-## 4. Failure handling profile
+## 6. Failure handling profile
 
 Recommended defect classes:
 - `android device offline`
@@ -79,14 +191,14 @@ Recommended behavior:
 2. policy or syntax defects fail fast (no retries),
 3. repeated device-offline defects mark device as temporarily degraded.
 
-## 5. Safety profile
+## 7. Safety profile
 
 1. Prefer explicit command allowlists.
 2. Deny shell expansion patterns by default unless explicitly permitted.
 3. Redact sensitive output segments before newspaper logging.
 4. Keep per-device concurrency default at `1`.
 
-## 6. Observability profile
+## 8. Observability profile
 
 Emit sentence outcomes for:
 1. startup/health,
@@ -100,7 +212,7 @@ Recommended metrics:
 - per-device success/fail rates,
 - p50/p95 command duration.
 
-## 7. Recovery profile
+## 9. Recovery profile
 
 On executive restart:
 1. scan stale `runtime/` claims,
@@ -110,11 +222,10 @@ On executive restart:
 
 Warm-start should avoid replaying already terminalized commands.
 
-## 8. Relationship to normative specs
+## 10. Relationship to core specs
 
-Normative behavior remains in:
-- `documentation/specifications/26-android-control-surface.md`
-- `documentation/specifications/15-world.md`
+Core references:
+- `documentation/specifications/15-world.md` (holding lane ownership)
 - `documentation/specifications/04-runtime-primitives.md` (`vyah` lifecycle terms)
 
 This reference is an implementation guide for module authors and operators.
