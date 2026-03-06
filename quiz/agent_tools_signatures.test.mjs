@@ -44,3 +44,19 @@ test("agent tools map exposes standard tool signatures", async () => {
     assert.ok(toolMap.has(sigKey), `missing signature: ${sigKey}`);
   }
 });
+
+test("agent tools map shortens long mcp tool names using readable subject words", async () => {
+  forget();
+  const toolSentences = [
+    "su name agent tools be map def",
+    "su name read markdown be read from filename input fromstate wo html become wo markdown can",
+    "prah"
+  ];
+  await defineToolMap(toolSentences);
+
+  const { tools, toolMap } = buildToolSchemas("agent tools");
+  const names = tools.map((tool) => tool?.function?.name).filter(Boolean);
+  assert.ok(names.includes("be_read_markdown_from_filename"));
+  assert.ok(!names.includes("be_read_become_wo_markdown_from_filename_fromstate_wo_html"));
+  assert.ok(toolMap.has("be_read_markdown_from_filename"));
+});

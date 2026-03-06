@@ -140,6 +140,29 @@ function toolFunctionNameFromSignature(signatureWords) {
     .replace(/^_+|_+$/g, "");
 }
 
+function normalizedWords(value = "") {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .filter(Boolean);
+}
+
+function buildReadableToolName({ sentence, caseKeys = [] } = {}) {
+  const verbWords = normalizedWords(sentence?.be);
+  const subjectWords = normalizedWords(sentence?.su?.name);
+  if (!verbWords.length || !subjectWords.length) return "";
+  if (subjectWords[0] !== verbWords[0]) return "";
+  const extraWords = subjectWords.slice(1);
+  if (!extraWords.length) return "";
+
+  const words = ["be", ...subjectWords];
+  for (const caseKey of caseKeys) {
+    words.push(caseKey, ...toolTypeWordsFromValue(sentence?.[caseKey], caseKey));
+  }
+  return toolFunctionNameFromSignature(words);
+}
+
 export function buildToolSchemas(toolMapName) {
   if (!toolMapName) return { tools: [], toolMap: new Map(), toolBlock: "" };
   const fact = remember(toolMapName);
@@ -178,10 +201,12 @@ export function buildToolSchemas(toolMapName) {
       properties[caseKey] = { type: toolSchemaType(typeWords) };
       required.push(caseKey);
     }
+    const readableToolName = buildReadableToolName({ sentence: cap.sentence, caseKeys });
+    const finalToolName = toolName.length > 48 && readableToolName ? readableToolName : toolName;
     tools.push({
       type: "function",
       function: {
-        name: toolName,
+        name: finalToolName,
         description: cap.canonical,
         signature: signatureName,
         parameters: {
@@ -191,7 +216,7 @@ export function buildToolSchemas(toolMapName) {
         }
       }
     });
-    toolMap.set(toolName, cap.sentence);
+    toolMap.set(finalToolName, cap.sentence);
     toolMap.set(signatureName, cap.sentence);
   }
   const toolBlock = `TOOLS:\n${caps.map(c => c.canonical).join("\n")}`;
