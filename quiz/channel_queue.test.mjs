@@ -79,7 +79,35 @@ test("channel queue enqueues and claims oldest input envelope with parsed payloa
 
   const first = await claimOldestInputEnvelope(worldRoot, { workerTag: "router" });
   assert.equal(first?.envelope?.eventId, "$old");
+  assert.equal(first?.envelope?.lane, "durable");
   assert.equal(first?.envelope?.payloadSentence?.ob?.text, "oldest");
+});
+
+test("channel queue preserves explicit lane metadata", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-channel-queue-lane-"));
+  const worldRoot = path.join(root, "world");
+  const payload = eventToSentence({
+    payloadId: "news-20260213-0200",
+    fromEndpoint: "channel matrix room !room:server",
+    toEndpoint: "agent mricge",
+    payloadText: "lane check",
+    targetAgentName: "mricge",
+    sessionId: "session name matrix_room"
+  });
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-02-13T18:35:10.000Z",
+    lane: "fast",
+    channelType: "matrix",
+    identity: "@mricge:matrix.liberit.ca",
+    agentName: "mricge",
+    roomName: "!room:server",
+    eventId: "$lane",
+    payloadSentence: payload
+  });
+
+  const claim = await claimOldestInputEnvelope(worldRoot, { workerTag: "router", lane: "fast" });
+  assert.equal(claim?.envelope?.lane, "fast");
 });
 
 test("channel queue supports produce queue claims and success/fail transitions", async () => {

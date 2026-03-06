@@ -25,7 +25,7 @@ test("world mvp writes activity and files under world root", async () => {
     `be list do`,
     `ob text "Hello from the commons." to filename "notes/hello.txt" be write do`,
     `be read ob wo tail atmost num 10 from filename ".activity.pya" do`,
-    `be sleep do`
+    `be wait do`
   ].join("\n");
 
   try {
@@ -41,7 +41,7 @@ test("world mvp writes activity and files under world root", async () => {
     assert.match(activityText, /be go ya/);
     assert.match(activityText, /be list ya/);
     assert.match(activityText, /be write ya/);
-    assert.match(activityText, /be sleep ya/);
+    assert.match(activityText, /be wait ya/);
 
     const note = await fs.readFile(notePath, "utf8");
     assert.equal(note.trim(), "Hello from the commons.");

@@ -153,6 +153,55 @@ Then ensure Pyash uses it via `configure/default.pya` or:
 exists su name openai base url ob text "http://host.docker.internal:11434" be default ya
 ```
 
+## Android host worker (recommended: shared spool)
+
+For container-first Pyash with a phone attached to the host, prefer a shared spool model:
+- container runs your Pyash macros and writes Android envelopes to `world/holding/android/`,
+- host runs the Android worker loop and executes local `adb`,
+- container reads handle/outcome state from the same shared `world/`.
+
+Start host worker from the same repo checkout:
+
+```bash
+npm run android:worker -- --interval-ms 400
+```
+
+Run container with the repo mounted (same `world/` path inside container):
+
+```bash
+docker run --rm -it \
+  -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
+  -w /workplace \
+  pyash-dev
+```
+
+Notes:
+- this avoids network bridge complexity; host is the only side touching ADB.
+- for one-shot host processing use: `npm run android:worker -- --once`.
+- worker heartbeat is written in presence format at `world/house/android-host-worker/.presence.pya`.
+
+## Android host bridge (optional fallback)
+
+If you cannot run the host worker loop, you can use HTTP bridge mode (`container -> host ADB`):
+
+```bash
+npm run android:bridge -- --host 0.0.0.0 --port 5057 --token "change-me"
+```
+
+Container env:
+
+```bash
+docker run --rm -it \
+  --add-host=host.docker.internal:host-gateway \
+  -e PYASH_ANDROID_BRIDGE_URL=http://host.docker.internal:5057 \
+  -e PYASH_ANDROID_BRIDGE_TOKEN=change-me \
+  -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
+  -w /workplace \
+  pyash-dev
+```
+
 ## Docker compose (orchestrate)
 
 ```bash

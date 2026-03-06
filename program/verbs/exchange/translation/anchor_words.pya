@@ -13,6 +13,12 @@ su name ratification ob text "ratify" as wo verb ya
 su name lookouts ob text "lookout" as wo noun ya
 su name verification ob text "verify" as wo verb ya
 su name concatenation ob text "concatenate" as wo verb ya
+su name observation ob text "observe" as wo verb ya
+su name glider ob text "glide" as wo verb ya
+su name scroll-bar ob text "scroll" as wo verb ya
+su name waiting ob text "wait" as wo verb ya
 prah
+
+
 
 

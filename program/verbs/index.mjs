@@ -58,6 +58,7 @@ import orVerb, { signatures as orSignatures } from "./or.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import sleep, { signatures as sleepSignatures } from "./sleep.mjs";
+import wait, { signatures as waitSignatures } from "./wait.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
 import del, { signatures as deleteSignatures } from "./delete.mjs";
 import session, { signatures as sessionSignatures } from "./session.mjs";
@@ -82,6 +83,7 @@ import verify, { signatures as verifySignatures } from "./verify.mjs";
 import concatenateFilename, { signatures as concatenateFilenameSignatures } from "./path_join.mjs";
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
+import android, { signatures as androidSignatures } from "./android.mjs";
 
 export {
   plus,
@@ -130,6 +132,7 @@ export {
   health,
   go,
   copy,
+  wait,
   sleep,
   session,
   touch,
@@ -154,7 +157,8 @@ export {
   verify,
   concatenateFilename,
   itineraryMedia,
-  drawTextImage
+  drawTextImage,
+  android
 };
 
 export const builtInSignatures = [
@@ -217,6 +221,7 @@ export const builtInSignatures = [
   ...orSignatures,
   ...renameSignatures,
   ...searchSignatures,
+  ...waitSignatures,
   ...sleepSignatures,
   ...sessionSignatures,
   ...touchSignatures,
@@ -242,4 +247,5 @@ export const builtInSignatures = [
   ...concatenateFilenameSignatures,
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,
+  ...androidSignatures,
 ];

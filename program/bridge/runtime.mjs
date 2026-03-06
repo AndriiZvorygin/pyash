@@ -4,6 +4,11 @@ import { makeAck, makeRuntimeError, makeDuty, makeStream, getState } from "../li
 const LIFECYCLE_ASPECTS = new Set(["await", "finish", "cancel"]);
 
 export function handleLifecycleAspect(sentence, { remember, doRemember }) {
+  // Domain verbs like Android may use vyah for their own async handle lifecycle.
+  // Skip generic runtime lifecycle interception for those verbs.
+  const verb = String(sentence?.be ?? "").trim().toLowerCase();
+  if (verb === "android" || verb.startsWith("android ")) return null;
+
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: sentence?.be, caseKey: "vyah" });
   if (!LIFECYCLE_ASPECTS.has(aspect)) return null;

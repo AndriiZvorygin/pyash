@@ -2,7 +2,6 @@ import {
   VYAH_ASPECT_MODIFIERS,
   VYAH_ASPECT_ALIASES,
   VYAH_TENSE_MODIFIERS,
-  VYAH_OUTCOME_MODIFIERS,
   VYAH_ATTITUDINAL_MODIFIERS
 } from "./keywords.mjs";
 import { throwErrorSentence } from "../../error.mjs";
@@ -15,7 +14,6 @@ const ASPECT_ALIAS_MAP = new Map(
   ])
 );
 const TENSE_SET = new Set(VYAH_TENSE_MODIFIERS);
-const OUTCOME_SET = new Set(VYAH_OUTCOME_MODIFIERS);
 const ATTITUDE_SET = new Set(VYAH_ATTITUDINAL_MODIFIERS);
 const OUTCOME_ALIAS_MAP = new Map([
   ["sloh", "success"]
@@ -29,7 +27,6 @@ export function normalizeVyahAspectToken(token) {
 export function splitVyahModifiers(values = []) {
   const aspects = [];
   const tenses = [];
-  const outcomes = [];
   const attitudinal = [];
   const other = [];
 
@@ -39,12 +36,11 @@ export function splitVyahModifiers(values = []) {
     if (!token) continue;
     if (ASPECT_SET.has(token)) aspects.push(token);
     else if (TENSE_SET.has(token)) tenses.push(token);
-    else if (OUTCOME_SET.has(token)) outcomes.push(token);
     else if (ATTITUDE_SET.has(token)) attitudinal.push(token);
     else other.push(token);
   }
 
-  return { aspects, tenses, outcomes, attitudinal, other };
+  return { aspects, tenses, attitudinal, other };
 }
 
 export function getEffectiveVyahAspect(values = [], { verb = "", caseKey = "vyah" } = {}) {
@@ -61,6 +57,6 @@ export function getEffectiveVyahAspect(values = [], { verb = "", caseKey = "vyah
 }
 
 export function orderVyahModifiers(values = []) {
-  const { aspects, tenses, other, outcomes, attitudinal } = splitVyahModifiers(values);
-  return [...aspects, ...tenses, ...other, ...outcomes, ...attitudinal];
+  const { aspects, tenses, attitudinal, other } = splitVyahModifiers(values);
+  return [...aspects, ...tenses, ...attitudinal, ...other];
 }

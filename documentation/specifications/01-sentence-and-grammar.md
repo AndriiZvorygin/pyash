@@ -23,7 +23,7 @@ su name <subject> <cases...> be <verb> <mood>
 | `become` | conversion target | output state/format transformation |
 | `during` | temporal bound | duration/validity window |
 | `since` | start timestamp | provenance/start of validity |
-| `vyah` | aspect/tense/outcome modifiers | lifecycle/time/stance overlay |
+| `vyah` | aspect/tense/attitudinal modifiers | lifecycle/time/stance overlay |
 | `be` | predicate verb | action or fact predicate |
 
 ## 3. Compositional case table (axis x context)
@@ -76,7 +76,7 @@ Common non-compositional/high-frequency cases:
 | `by` | quantity/rate/step slot | `by num 5` |
 | `atmost` | upper limit constraint | `atmost num 262144` |
 | `until` | deadline/end bound | `until date "2026-02-14T00:00:00.000Z"` |
-| `vyah` | aspect/tense/outcome modifiers | `vyah iterative` |
+| `vyah` | aspect/tense/attitudinal modifiers | `vyah iterative` |
 | `be` | predicate verb | `be interpret do` |
 
 ## 5. Mood table

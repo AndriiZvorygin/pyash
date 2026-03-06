@@ -25,6 +25,11 @@ Purpose: define low-level runtime primitives and IR contracts used by interprete
 | canceled | `vyah cancel success` |
 | failed | `vyah fail` |
 
+Execution-lane profile for async starts:
+- `vyah ... soon` => fast lane (non-spooled/in-process path when supported),
+- `vyah ... future` => durable lane (holding/spool queue path),
+- omit tense => implementation default lane (recommended default: durable for external IO surfaces).
+
 ## 3. IR boundary
 
 Runtime IR must preserve:
