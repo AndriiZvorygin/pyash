@@ -140,7 +140,7 @@ Step 2 - Evaluate Historical Accuracy
 For historical sentences only, judge:
 
 1. Factual Presence
-Are the core elements of the claim clearly present in the TRANSCRIPT?
+Are the core elements of the claim present in the TRANSCRIPT, even if the SCRIPT compresses them into shorter spoken phrasing?
 
 2. Added Specificity
 Does the SCRIPT add concrete historical details that do not appear in the TRANSCRIPT?
@@ -152,18 +152,20 @@ Decision Rules
 
 PASS if:
 
-- Every historical claim is clearly supported by the TRANSCRIPT
+- Every historical claim is supported by the TRANSCRIPT, including faithful spoken compression
 - No new historical facts are introduced
 - No major exaggeration or distortion occurs
 
 FAIL if:
 
-- Any historical claim lacks clear support
+- Any historical claim introduces a genuinely new historical fact or mechanism not present in the TRANSCRIPT
 - Any new historical fact is added
 - The meaning of a historical reform, event, or mechanism is materially altered
 
 Tie-break policy:
 - If support is plausible but phrasing is rhetorical, choose PASS.
+- If the SCRIPT compresses multiple nearby transcript details into one short spoken line without adding a new historical actor, date, law, or mechanism, choose PASS.
+- If the SCRIPT states an implication that is an obvious reading of the transcript rather than a new fact, choose PASS.
 - Fail only on clear unsupported historical claims or clear added historical facts.
 - Do not fail only for style, intensity, or modern-parallel rhetoric.
 
