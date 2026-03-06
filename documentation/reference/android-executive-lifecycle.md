@@ -384,3 +384,213 @@ Behavior:
 2. picks a ready (`device`) target (or prompts when multiple are attached),
 3. asks confirmation,
 4. writes/updates `exists su name android device id ob text "<serial>" be default ya` in `configure/secret.pya`.
+
+## 14. Deterministic UI Target Resolution (Reference)
+
+Goal: resolve UI targets using progressively weaker methods, from structural certainty toward vision inference, with LLM reasoning only as last fallback.
+
+Execution stops at the first successful resolution.
+
+### 14.1 Resolution priority
+
+1. direct element id lookup,
+2. accessibility tree search,
+3. structural selector matching,
+4. text label matching,
+5. spatial heuristics,
+6. vision detection,
+7. LLM reasoning fallback.
+
+### 14.2 Stage 1 — Direct id lookup (deterministic)
+
+Preferred identifiers:
+1. `resource-id`,
+2. `view-id`,
+3. accessibility id.
+
+Procedure:
+1. observe accessibility tree,
+2. search exact id match,
+3. read bounds,
+4. tap bounds center.
+
+Example selector:
+
+```text
+id=com.android.settings:id/button_ok
+```
+
+### 14.3 Stage 2 — Accessibility tree search
+
+Example data collection:
+
+```bash
+adb shell uiautomator dump /sdcard/view.xml
+adb pull /sdcard/view.xml
+```
+
+Parse fields:
+1. class,
+2. text,
+3. content-desc,
+4. resource-id,
+5. bounds,
+6. clickable,
+7. enabled.
+
+Example rule:
+
+```text
+node.class == "android.widget.Button"
+AND node.text == "Next"
+```
+
+### 14.4 Stage 3 — Structural selector matching
+
+When exact ids drift across builds, apply deterministic selector matching over the tree.
+
+Examples:
+
+```text
+Button[text="Next"]
+EditText[hint="Email"]
+RecyclerView > Button[text="Continue"]
+```
+
+Selector features:
+1. class,
+2. index,
+3. hierarchy path,
+4. attribute filters.
+
+### 14.5 Stage 4 — Text matching
+
+Procedure:
+1. collect visible nodes with text,
+2. normalize text,
+3. score string similarity,
+4. pick highest scoring node above threshold.
+
+Example score profile:
+1. exact match = `1.0`,
+2. case-insensitive match = `0.95`,
+3. fuzzy distance = `0.8`,
+4. substring = `0.7`.
+
+### 14.6 Stage 5 — Spatial heuristics
+
+Use layout conventions when structure/text are insufficient.
+
+Typical anchors:
+1. primary button -> bottom center,
+2. back -> top left,
+3. next -> bottom right,
+4. search -> top region.
+
+Procedure:
+1. filter clickable nodes,
+2. apply spatial scoring,
+3. combine with text and clickability.
+
+Example:
+
+```text
+score = text_weight + spatial_weight + clickability_weight
+```
+
+### 14.7 Stage 6 — Vision detection
+
+Use when accessibility signal is absent or defective.
+
+Capture:
+
+```bash
+adb exec-out screencap -p > screen.png
+```
+
+Run detector (for example DETR/YOLO/Grounding-DINO or UI-specific detectors), produce candidate bounds, and tap center.
+
+### 14.8 Stage 7 — LLM reasoning fallback
+
+Use only if stages 1-6 cannot resolve confidently.
+
+Inputs to model:
+1. screenshot,
+2. parsed accessibility tree,
+3. candidate list with bounds,
+4. goal.
+
+Expected return is structured and minimal, for example:
+
+```text
+element=2
+```
+
+Runtime then maps index back to candidate bounds and executes interaction deterministically.
+
+### 14.9 Coordinate execution primitives
+
+Tap:
+
+```bash
+adb shell input tap X Y
+```
+
+Type:
+
+```bash
+adb shell input text "example@email.com"
+```
+
+Swipe:
+
+```bash
+adb shell input swipe x1 y1 x2 y2 duration
+```
+
+### 14.10 Deterministic resolution algorithm
+
+```text
+resolve_target(goal):
+  if id_match(goal): return element
+  if accessibility_match(goal): return element
+  if selector_match(goal): return element
+  if text_match(goal): return best_element
+  if spatial_match(goal): return best_element
+  if vision_detect(goal): return bounding_box
+  return llm_reason(goal)
+```
+
+### 14.11 Caching and robustness profile
+
+Cache successful selectors/fingerprints to reduce repeated inference.
+
+Recommended cache items:
+1. selector text (`Button[text="Continue"]`),
+2. element fingerprint (`hash(class + text + parent_class + index)`),
+3. optional anchor relation (`below "Password"`, `right of "Cancel"`).
+
+Recommended stability rule:
+1. require candidate presence for at least two consecutive frames before action.
+
+### 14.12 Reliability/cost gradient
+
+1. id lookup: extremely high reliability, minimal cost.
+2. accessibility tree: very high reliability, low cost.
+3. selectors: high reliability, low cost.
+4. text match: moderate reliability, low cost.
+5. spatial heuristics: moderate reliability, low cost.
+6. vision detection: moderate reliability, medium cost.
+7. LLM fallback: variable reliability, high cost.
+
+### 14.13 Mapping to Android verb surface
+
+This reference pipeline composes directly from the current verbs:
+1. `be android observe vyah start future do` for screenshot and optional tree dump,
+2. `be android tap vyah start future do`,
+3. `be android glide vyah start future do`,
+4. `be android type vyah start future do`,
+5. `be android begin vyah start future do`,
+6. `accordingto text "<handle>" vyah status|await be android do`.
+
+Implementations should preserve stage decision traces in Android outcome/newspaper records for auditability.
