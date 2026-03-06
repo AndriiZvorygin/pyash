@@ -3,7 +3,6 @@ import {
   VYAH_ASPECT_MODIFIERS,
   VYAH_ASPECT_ALIASES,
   VYAH_TENSE_MODIFIERS,
-  VYAH_OUTCOME_MODIFIERS,
   VYAH_ATTITUDINAL_MODIFIERS
 } from "../../library/grammar/keywords.mjs";
 
@@ -66,7 +65,6 @@ export function vectorFormatHelper() {
     `const VYAH_ASPECT = ${JSON.stringify(VYAH_ASPECT_MODIFIERS)};`,
     `const VYAH_ASPECT_ALIAS = ${JSON.stringify(VYAH_ASPECT_ALIASES)};`,
     `const VYAH_TENSE = ${JSON.stringify(VYAH_TENSE_MODIFIERS)};`,
-    `const VYAH_OUTCOME = ${JSON.stringify(VYAH_OUTCOME_MODIFIERS)};`,
     `const VYAH_ATTITUDE = ${JSON.stringify(VYAH_ATTITUDINAL_MODIFIERS)};`,
     "function formatNp(np = {}) {",
     "  if (np.la) return `la ${formatSentence(np.la)} ko`;",
@@ -83,7 +81,6 @@ export function vectorFormatHelper() {
     "function orderVyah(values = []) {",
     "  const aspects = [];",
     "  const tenses = [];",
-    "  const outcomes = [];",
     "  const attitudes = [];",
     "  const other = [];",
     "  for (const raw of values) {",
@@ -92,11 +89,10 @@ export function vectorFormatHelper() {
     "    if (!token) continue;",
     "    if (VYAH_ASPECT.includes(token)) aspects.push(token);",
     "    else if (VYAH_TENSE.includes(token)) tenses.push(token);",
-    "    else if (VYAH_OUTCOME.includes(token)) outcomes.push(token);",
     "    else if (VYAH_ATTITUDE.includes(token)) attitudes.push(token);",
     "    else other.push(token);",
     "  }",
-    "  return [...aspects, ...tenses, ...other, ...outcomes, ...attitudes];",
+    "  return [...aspects, ...tenses, ...attitudes, ...other];",
     "}",
     "function formatSentence(sentence = {}) {",
     "  const parts = [];",
