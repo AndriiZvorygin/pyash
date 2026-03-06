@@ -225,7 +225,7 @@ Lane model:
 Current reserved lanes:
 
 * `world/holding/channel/` is reserved for channel adapters/router runtime spool (`documentation/specifications/24-channel-contract.md`)
-* `world/holding/android/` is reserved for Android control-surface queue spool (`documentation/specifications/26-android-control-surface.md`)
+* `world/holding/android/` is reserved for Android control-surface queue spool (`documentation/reference/android-executive-lifecycle.md`)
 
 Isolation rules:
 

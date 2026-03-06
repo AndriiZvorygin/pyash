@@ -1,6 +1,6 @@
 # Specifications Index
 
-Purpose: normative spec set for Pyash. This folder is intentionally compact: <=24 files, each <=16KB.
+Purpose: normative spec set for Pyash. This folder is intentionally compact: <=20 files, each <=16KB.
 
 ## Core order
 
@@ -27,7 +27,6 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 18. `23-configure.md` — configure routes and managed write contract.
 19. `24-channel-contract.md` — channel/router input-produce-health contract.
 20. `25-teaching-video.md` — teaching-video refinery pipeline contract.
-21. `26-android-control-surface.md` — Android holding-lane orchestration contract.
 
 ## Reference docs (non-normative)
 
@@ -50,5 +49,4 @@ Archived long-form drafts:
 - scheduler/agent/session/memory issue -> `18-pyash-agent.md`
 - command approval/sandbox issue -> `19-ops-safety.md`
 - channel routing issue -> `24-channel-contract.md`
-- android orchestration lane issue -> `26-android-control-surface.md`
-- android executive lifecycle/operator issue -> `documentation/reference/android-executive-lifecycle.md`
+- android orchestration lane and executive lifecycle issue -> `documentation/reference/android-executive-lifecycle.md`
