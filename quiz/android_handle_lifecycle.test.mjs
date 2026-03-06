@@ -36,7 +36,7 @@ test("android status and await follow handle lifecycle through runtime", async (
   const queued = await run('su name handle one from text "emulator-5554" vyah start be android verify do');
   assert.equal(queued?.vyah?.name, "start");
 
-  const queuedStatus = await run('accordingto text "handle one" be android status do');
+  const queuedStatus = await run('accordingto text "handle one" vyah status be android do');
   assert.equal(queuedStatus?.ob?.text, "queued");
 
   await runAndroidInputOnce({
@@ -53,10 +53,21 @@ test("android status and await follow handle lifecycle through runtime", async (
   assert.equal(afterState?.status, "success");
   assert.equal(afterState?.summary, "verify ok");
 
-  const awaited = await run('accordingto text "handle one" during num 2000 be android await do');
+  const awaited = await run('accordingto text "handle one" during num 2000 vyah await be android do');
   assert.equal(awaited?.vyah?.name, "await");
   assert.equal(awaited?.ob?.text, "success");
   assert.equal(awaited?.fromstate?.text, "verify ok");
+});
+
+test("android vyah await does not require su name runtime target", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-vyah-await-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await run('su name handle two from text "emulator-5554" vyah start be android verify do');
+  const queuedStatus = await run('accordingto text "handle two" vyah status be android do');
+  assert.equal(queuedStatus?.ob?.text, "queued");
 });
 
 test("android device lease enforces busy state and supports release", async () => {

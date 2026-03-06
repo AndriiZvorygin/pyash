@@ -4,7 +4,7 @@ su name android wakeup home be ceremony def
   su name home key ob text "KEYCODE_HOME" vyah start be android press do
   be android input do
   be android produce do
-  accordingto text "home key" during num 8000 be android await do
+  accordingto text "home key" during num 8000 vyah await be android do
 prah
 
 be android wakeup home do

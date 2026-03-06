@@ -226,8 +226,8 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
   const vyahMode = readVyahMode(call);
   const intent = ensureIntent(normalizeIntent(call?.be), call);
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
-  if (intent === "status") return handleStatus(call, { worldRoot });
-  if (intent === "await") return handleAwait(call, { worldRoot });
+  if (intent === "status" || vyahMode === "status") return handleStatus(call, { worldRoot });
+  if (intent === "await" || vyahMode === "await") return handleAwait(call, { worldRoot });
   const phase = await handlePhaseRun(intent, { worldRoot });
   if (phase) return phase;
   if (vyahMode !== "start") {
@@ -297,6 +297,9 @@ export const signatures = [
   { signatureWords: ["be", "android", "status", "accordingto", "text"], handler: android },
   { signatureWords: ["be", "android", "await", "accordingto", "text"], handler: android },
   { signatureWords: ["be", "android", "await", "accordingto", "text", "during", "num"], handler: android },
+  { signatureWords: ["be", "android", "accordingto", "text", "vyah", "status"], handler: android },
+  { signatureWords: ["be", "android", "accordingto", "text", "vyah", "await"], handler: android },
+  { signatureWords: ["be", "android", "accordingto", "text", "during", "num", "vyah", "await"], handler: android },
   { signatureWords: ["be", "android", "poll"], handler: android },
   { signatureWords: ["be", "android", "probe"], handler: android },
   { signatureWords: ["be", "android", "input"], handler: android },
