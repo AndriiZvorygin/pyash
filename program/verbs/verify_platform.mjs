@@ -210,13 +210,10 @@ function buildRetryPrompt({ task, candidate, verifierFeedback, checkFeedback }) 
     .map((row) => `${row.name}: ${row.detail}`)
     .join("\n");
   return [
-    "Revise candidate so every verifier and deterministic check passes.",
+    "Generate a fresh candidate so every verifier and deterministic check passes.",
     "",
     "TASK:",
     task,
-    "",
-    "LAST CANDIDATE:",
-    candidate,
     "",
     "VERIFIER RESULTS:",
     verifierLines || "none",
