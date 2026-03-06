@@ -66,7 +66,8 @@ export async function runAndroidInputOnce({
   adapter,
   maxItems = 10,
   maxRetries = 2,
-  leaseTtlMs = 30000
+  leaseTtlMs = 30000,
+  lane = ""
 } = {}) {
   const runtimeAdapter = adapter || createAdbAdapter({ worldRoot });
   const max = Math.max(1, Math.trunc(Number(maxItems) || 10));
@@ -78,7 +79,7 @@ export async function runAndroidInputOnce({
   let lastInputAt = "";
 
   for (let index = 0; index < max; index += 1) {
-    const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "android-input" });
+    const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "android-input", lane });
     if (!claimed) break;
     const envelope = claimed?.envelope ?? {};
     received += 1;
@@ -105,6 +106,7 @@ export async function runAndroidInputOnce({
         await writeAndroidHandleState(worldRoot, commandId, {
           status: "running",
           startedAt: new Date().toISOString(),
+          lane: String(envelope?.lane || "durable"),
           summary: "running"
         });
         try {
@@ -138,6 +140,7 @@ export async function runAndroidInputOnce({
       if (commandId) {
         await writeAndroidHandleState(worldRoot, commandId, {
           status: success ? "success" : "fail",
+          lane: String(envelope?.lane || "durable"),
           finishedAt: new Date().toISOString(),
           summary
         });
@@ -171,6 +174,7 @@ export async function runAndroidInputOnce({
       if (commandId) {
         await writeAndroidHandleState(worldRoot, commandId, {
           status: "fail",
+          lane: String(envelope?.lane || "durable"),
           finishedAt: new Date().toISOString(),
           summary: shortText(String(err?.message ?? err), 220) || "runtime fail"
         });
@@ -216,14 +220,15 @@ export async function runAndroidInputOnce({
 export async function runAndroidProduceOnce({
   worldRoot,
   maxItems = 10,
-  maxRetries = 1
+  maxRetries = 1,
+  lane = ""
 } = {}) {
   const max = Math.max(1, Math.trunc(Number(maxItems) || 10));
   const retryMax = Math.max(0, Math.trunc(Number(maxRetries) || 1));
 
   let sent = 0;
   for (let index = 0; index < max; index += 1) {
-    const claimed = await claimOldestProduceEnvelope(worldRoot, { workerTag: "android-produce" });
+    const claimed = await claimOldestProduceEnvelope(worldRoot, { workerTag: "android-produce", lane });
     if (!claimed) break;
     const envelope = claimed?.envelope ?? {};
     try {
@@ -253,17 +258,20 @@ export async function runAndroidOnce({
   worldRoot,
   adapter,
   inputMaxItems = 10,
-  produceMaxItems = 10
+  produceMaxItems = 10,
+  lane = ""
 } = {}) {
   const poll = await runAndroidPollOnce({ worldRoot });
   const input = await runAndroidInputOnce({
     worldRoot,
     adapter,
-    maxItems: inputMaxItems
+    maxItems: inputMaxItems,
+    lane
   });
   const produce = await runAndroidProduceOnce({
     worldRoot,
-    maxItems: produceMaxItems
+    maxItems: produceMaxItems,
+    lane
   });
   const depth = await queueDepth(worldRoot);
   return {

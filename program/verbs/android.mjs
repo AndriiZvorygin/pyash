@@ -4,6 +4,11 @@ import path from "node:path";
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
+import {
+  ASYNC_LANE_DURABLE,
+  ASYNC_LANE_FAST,
+  resolveAsyncLane
+} from "../library/async_lane.mjs";
 import { enqueueInputEnvelope } from "../agent/android_core/queue.mjs";
 import {
   readAndroidHandleState,
@@ -11,6 +16,7 @@ import {
   isTerminalHandleStatus
 } from "../agent/android/state.mjs";
 import { appendAndroidOutcome } from "../agent/android/outcome.mjs";
+import { createAdbAdapter } from "../agent/android/adapter_adb.mjs";
 import {
   runAndroidOnce,
   runAndroidPollOnce,
@@ -101,7 +107,7 @@ function buildPayloadSentence(call = {}, intent = "") {
   return next;
 }
 
-function queuedSentence({ commandId, intent, deviceId }) {
+function queuedSentence({ commandId, intent, deviceId, lane = ASYNC_LANE_DURABLE, stateText = "queued" }) {
   return {
     mood: "ya",
     su: { name: commandId },
@@ -109,7 +115,8 @@ function queuedSentence({ commandId, intent, deviceId }) {
     vyah: { ve: { type: "name", values: ["start", "success"] } },
     as: { name: intent },
     from: { text: deviceId },
-    ob: { text: "queued" },
+    fromstate: { text: lane },
+    ob: { text: stateText },
     since: { date: nowIso() }
   };
 }
@@ -143,6 +150,7 @@ function statusSentence({ mode = "status", state = null, handleId = "" } = {}) {
     vyah: { ve: { type: "name", values: vyahValues } },
     as: { name: String(current.intent || "").trim() || "unknown" },
     from: { text: String(current.deviceId || "").trim() || "" },
+    totext: { text: String(current.lane || "").trim() || "" },
     ob: { text: status },
     fromstate: { text: String(current.summary || "").trim() || "" },
     since: { date: String(current.queuedAt || "").trim() || "" },
@@ -246,6 +254,106 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
   const deviceId = ensureDeviceId(resolveDeviceId(call, { rememberFn }), call);
   const agentName = resolveAgentName(call, { rememberFn });
   const queuedAt = nowIso();
+  const lane = resolveAsyncLane(call, { defaultLane: ASYNC_LANE_DURABLE, verb: "android" }).lane;
+  const payloadSentence = buildPayloadSentence(call, intent);
+
+  if (lane === ASYNC_LANE_FAST) {
+    const adapter = createAdbAdapter({ worldRoot });
+    const startedAt = nowIso();
+    await writeAndroidHandleState(worldRoot, commandId, {
+      handleId: commandId,
+      intent,
+      deviceId,
+      agentName,
+      lane,
+      status: "running",
+      queuedAt: startedAt,
+      startedAt,
+      summary: "running"
+    });
+    try {
+      await appendAndroidOutcome(worldRoot, {
+        agentName,
+        handleId: commandId,
+        intent,
+        state: "running",
+        deviceId,
+        message: "running"
+      });
+    } catch {
+      // best-effort only
+    }
+    try {
+      const result = await adapter.execute({
+        worldRoot,
+        envelope: {
+          deviceId,
+          identity: "adb://local",
+          agentName,
+          commandId,
+          payloadId: commandId,
+          lane,
+          payloadSentence
+        },
+        intent,
+        deviceId,
+        agentName,
+        payloadSentence
+      });
+      const success = result?.success !== false;
+      const summary = String(result?.summary ?? (success ? "ok" : "fail")).trim() || (success ? "ok" : "fail");
+      await writeAndroidHandleState(worldRoot, commandId, {
+        status: success ? "success" : "fail",
+        finishedAt: nowIso(),
+        summary
+      });
+      try {
+        await appendAndroidOutcome(worldRoot, {
+          agentName,
+          handleId: commandId,
+          intent,
+          state: success ? "success" : "fail",
+          deviceId,
+          message: summary
+        });
+      } catch {
+        // best-effort only
+      }
+      return queuedSentence({
+        commandId,
+        intent,
+        deviceId,
+        lane,
+        stateText: success ? "success" : "fail"
+      });
+    } catch (err) {
+      const summary = String(err?.message ?? err).trim() || "fail";
+      await writeAndroidHandleState(worldRoot, commandId, {
+        status: "fail",
+        finishedAt: nowIso(),
+        summary
+      });
+      try {
+        await appendAndroidOutcome(worldRoot, {
+          agentName,
+          handleId: commandId,
+          intent,
+          state: "fail",
+          deviceId,
+          message: summary
+        });
+      } catch {
+        // best-effort only
+      }
+      return queuedSentence({
+        commandId,
+        intent,
+        deviceId,
+        lane,
+        stateText: "fail"
+      });
+    }
+  }
 
   await enqueueInputEnvelope(worldRoot, {
     queuedAt,
@@ -254,13 +362,15 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
     agentName,
     commandId,
     payloadId: commandId,
-    payloadSentence: buildPayloadSentence(call, intent)
+    lane,
+    payloadSentence
   });
   await writeAndroidHandleState(worldRoot, commandId, {
     handleId: commandId,
     intent,
     deviceId,
     agentName,
+    lane,
     status: "queued",
     queuedAt,
     summary: "queued"
@@ -278,7 +388,7 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
     // outcome logging must be best-effort and must not break command submission
   }
 
-  return queuedSentence({ commandId, intent, deviceId });
+  return queuedSentence({ commandId, intent, deviceId, lane, stateText: "queued" });
 }
 
 export default android;
