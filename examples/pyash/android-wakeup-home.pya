@@ -1,7 +1,7 @@
 su name android wakeup home be ceremony def
-  ob text "KEYCODE_WAKEUP" be android press do
-  ob ve num 540 2000 540 300 be android glide do
-  su name home key ob text "KEYCODE_HOME" be android press do
+  ob text "KEYCODE_WAKEUP" vyah start be android press do
+  ob ve num 540 2000 540 300 vyah start be android glide do
+  su name home key ob text "KEYCODE_HOME" vyah start be android press do
   be android input do
   be android produce do
   accordingto text "home key" during num 8000 be android await do

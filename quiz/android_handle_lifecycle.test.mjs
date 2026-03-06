@@ -33,7 +33,7 @@ test("android status and await follow handle lifecycle through runtime", async (
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  const queued = await run('su name handle one from text "emulator-5554" be android verify do');
+  const queued = await run('su name handle one from text "emulator-5554" vyah start be android verify do');
   assert.equal(queued?.vyah?.name, "start");
 
   const queuedStatus = await run('accordingto text "handle one" be android status do');
