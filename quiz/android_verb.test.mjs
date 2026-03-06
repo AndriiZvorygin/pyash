@@ -31,7 +31,7 @@ test("android verify sentence enqueues command envelope with queued status", asy
 
   const result = await run('su name cmd verify 1 from text "emulator-5554" vyah start be android verify do');
   assert.equal(result?.be, "android command");
-  assert.equal(result?.vyah?.name, "start");
+  assert.deepEqual(result?.vyah?.ve?.values, ["start", "success"]);
   assert.equal(result?.as?.name, "verify");
   assert.equal(result?.from?.text, "emulator-5554");
 

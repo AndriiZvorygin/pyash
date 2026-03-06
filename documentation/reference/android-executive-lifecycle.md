@@ -206,6 +206,14 @@ Emit sentence outcomes for:
 3. command start/finish/fail,
 4. retry and terminal failure.
 
+Reference runtime now appends Android outcome lines to:
+- `world/newspaper/YYYYMMDD-android-<agent>.pya`
+
+Suggested outcome shape:
+1. `su name <handle> ... vyah queued success ... be android outcome ya`
+2. `su name <handle> ... vyah running success ... be android outcome ya`
+3. `su name <handle> ... vyah success|fail ... be android outcome ya`
+
 Recommended metrics:
 - queue depth by phase,
 - lease contention count,

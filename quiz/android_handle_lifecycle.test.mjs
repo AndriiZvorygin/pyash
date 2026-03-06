@@ -34,7 +34,7 @@ test("android status and await follow handle lifecycle through runtime", async (
   setWorldRoot(worldRoot);
 
   const queued = await run('su name handle one from text "emulator-5554" vyah start be android verify do');
-  assert.equal(queued?.vyah?.name, "start");
+  assert.deepEqual(queued?.vyah?.ve?.values, ["start", "success"]);
 
   const queuedStatus = await run('accordingto text "handle one" vyah status be android do');
   assert.equal(queuedStatus?.ob?.text, "queued");
@@ -54,7 +54,7 @@ test("android status and await follow handle lifecycle through runtime", async (
   assert.equal(afterState?.summary, "verify ok");
 
   const awaited = await run('accordingto text "handle one" during num 2000 vyah await be android do');
-  assert.equal(awaited?.vyah?.name, "await");
+  assert.deepEqual(awaited?.vyah?.ve?.values, ["await", "success"]);
   assert.equal(awaited?.ob?.text, "success");
   assert.equal(awaited?.fromstate?.text, "verify ok");
 });
