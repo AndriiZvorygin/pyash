@@ -7,6 +7,17 @@ Pyash is a compact, speakable language that can be interpreted or compiled to Ja
 - Optional: reachable Ollama HTTP server for `mind` (`OLLAMA_HOST`, default `http://localhost:11434`).
 - Environment variables are documented in `configure/env.example`.
 
+## Config Boundaries (Host vs Container)
+- `configure/default.pya`: portable defaults that should work on host and container.
+- `configure/container.pya`: container-only routing overrides (for example `host.docker.internal`, `searxng`, `whisperx` service hosts).
+- `configure/secret.pya`: personal secrets and host-local values only; do not put container service hostnames here.
+
+Safety check command:
+```bash
+npm run config:safety
+# or: node command/check_local_config_safety.mjs --root /path/to/repo
+```
+
 ## Container quick start
 ```bash
 ./introductory

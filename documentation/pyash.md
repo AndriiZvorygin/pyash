@@ -123,6 +123,18 @@ These helpers use the `caterer/pyac/lyac` dictionaries via `command/ryan.mjs`.
 
 ---
 
+### Local configuration boundaries
+
+To keep host and container runs stable, keep configuration scope strict:
+
+- `configure/default.pya`: shared portable defaults.
+- `configure/container.pya`: container-only network/routes (`host.docker.internal`, service aliases like `searxng` and `whisperx`).
+- `configure/secret.pya`: secrets and local host settings only; do not store container service hostnames here.
+
+Use `node command/check_local_config_safety.mjs` (or `npm run config:safety`) to catch container hostnames accidentally placed in `configure/secret.pya`.
+
+---
+
 ### Declarations vs. assignments
 
 Pyash keeps declarations explicit when compiling to code targets:
