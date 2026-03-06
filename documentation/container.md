@@ -174,9 +174,9 @@ The compose service mounts the host Docker socket (`/var/run/docker.sock`) into 
 If you want one-command image publishing from any machine, add these facts to `configure/secret.pya`:
 
 ```text
-su name container image repo ob text "liberit/pyash" ya
-su name container image push ob bool truth ya
-su name container image push latest ob bool truth ya
+exists su name container image repo ob text "liberit/pyash" be default ya
+exists su name container image push ob bool truth be default ya
+exists su name container image push latest ob bool truth be default ya
 ```
 
 Behavior:

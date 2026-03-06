@@ -26,7 +26,12 @@ pya_secret_read_text() {
   local key="$1"
   [[ -f "$secret_file" ]] || return 0
   local line
-  line="$(grep -F "su name ${key} ob text " "$secret_file" | tail -n1 || true)"
+  line="$(
+    {
+      grep -F "exists su name ${key} ob text " "$secret_file" || true
+      grep -F "su name ${key} ob text " "$secret_file" || true
+    } | tail -n1
+  )"
   [[ -n "$line" ]] || return 0
   sed -E 's/.* ob text "([^"]*)".*/\1/' <<<"$line"
 }
@@ -35,7 +40,12 @@ pya_secret_read_bool() {
   local key="$1"
   [[ -f "$secret_file" ]] || return 0
   local line
-  line="$(grep -F "su name ${key} ob bool " "$secret_file" | tail -n1 || true)"
+  line="$(
+    {
+      grep -F "exists su name ${key} ob bool " "$secret_file" || true
+      grep -F "su name ${key} ob bool " "$secret_file" || true
+    } | tail -n1
+  )"
   [[ -n "$line" ]] || return 0
   sed -E 's/.* ob bool (truth|lie).*/\1/' <<<"$line"
 }
