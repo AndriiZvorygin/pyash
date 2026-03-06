@@ -10,6 +10,16 @@ function toArgs(deviceId, args = []) {
   return ["-s", serial, ...args.map((value) => String(value))];
 }
 
+function resolveAndroidBridgeUrl() {
+  const value = String(process.env.PYASH_ANDROID_BRIDGE_URL ?? "").trim();
+  if (!value) return "";
+  return value.replace(/\/+$/, "");
+}
+
+function resolveAndroidBridgeToken() {
+  return String(process.env.PYASH_ANDROID_BRIDGE_TOKEN ?? "").trim();
+}
+
 function runAdbRaw({ deviceId, args = [], timeoutMs = 20000 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn("adb", toArgs(deviceId, args), { stdio: ["ignore", "pipe", "pipe"] });
@@ -38,6 +48,52 @@ function runAdbRaw({ deviceId, args = [], timeoutMs = 20000 } = {}) {
       reject(new Error(`android adb defective (${code}): ${args.join(" ")} ${stderr.trim()}`.trim()));
     });
   });
+}
+
+async function runAdbBridge({ deviceId, args = [], timeoutMs = 20000, bridgeUrl = "", bridgeToken = "" } = {}) {
+  const endpoint = `${String(bridgeUrl).replace(/\/+$/, "")}/adb/run`;
+  const headers = {
+    "content-type": "application/json"
+  };
+  if (bridgeToken) headers["x-pyash-token"] = bridgeToken;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      deviceId: String(deviceId ?? "").trim(),
+      args: args.map((value) => String(value)),
+      timeoutMs: Math.max(1000, Math.trunc(Number(timeoutMs) || 20000))
+    })
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`android adb bridge defective (${response.status}): ${shortText(body, 180) || response.statusText}`);
+  }
+  const data = await response.json();
+  const code = Number(data?.code);
+  const stdout = String(data?.stdout ?? "").trim();
+  const stderr = String(data?.stderr ?? "").trim();
+  if (!Number.isFinite(code)) {
+    throw new Error("android adb bridge defective: missing numeric code");
+  }
+  if (code !== 0) {
+    throw new Error(`android adb defective (${code}): ${args.join(" ")} ${stderr}`.trim());
+  }
+  return { stdout, stderr, code };
+}
+
+async function runAdbAuto({ deviceId, args = [], timeoutMs = 20000 } = {}) {
+  const bridgeUrl = resolveAndroidBridgeUrl();
+  if (bridgeUrl) {
+    return runAdbBridge({
+      deviceId,
+      args,
+      timeoutMs,
+      bridgeUrl,
+      bridgeToken: resolveAndroidBridgeToken()
+    });
+  }
+  return runAdbRaw({ deviceId, args, timeoutMs });
 }
 
 function shortText(value, max = 220) {
@@ -240,7 +296,7 @@ async function acceptIntent({ deviceId, payloadSentence, runAdb } = {}) {
   return { success: true, summary: `accept ok ${remote} -> ${path.basename(local)}` };
 }
 
-export function createAdbAdapter({ worldRoot, runAdb = runAdbRaw } = {}) {
+export function createAdbAdapter({ worldRoot, runAdb = runAdbAuto } = {}) {
   return {
     async execute({ envelope, intent, deviceId, payloadSentence } = {}) {
       const selectedDeviceId = String(deviceId ?? envelope?.deviceId ?? "").trim();

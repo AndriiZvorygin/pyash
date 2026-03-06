@@ -153,6 +153,32 @@ Then ensure Pyash uses it via `configure/default.pya` or:
 exists su name openai base url ob text "http://host.docker.internal:11434" be default ya
 ```
 
+## Android host bridge (container -> host ADB)
+
+If your phone is attached to the host (not inside the container), run a small host bridge:
+
+```bash
+npm run android:bridge -- --host 0.0.0.0 --port 5057 --token "change-me"
+```
+
+Then run the container with host gateway mapping and bridge env vars:
+
+```bash
+docker run --rm -it \
+  --add-host=host.docker.internal:host-gateway \
+  -e PYASH_ANDROID_BRIDGE_URL=http://host.docker.internal:5057 \
+  -e PYASH_ANDROID_BRIDGE_TOKEN=change-me \
+  -v "$PWD:/workplace" \
+  -v "$PWD/minds:/minds" \
+  -w /workplace \
+  pyash-dev
+```
+
+Notes:
+- without `PYASH_ANDROID_BRIDGE_URL`, Android runtime uses local `adb` directly.
+- bridge endpoint is `POST /adb/run` and only allows `adb shell|push|pull` roots.
+- keep the token non-empty outside local trusted networks.
+
 ## Docker compose (orchestrate)
 
 ```bash
