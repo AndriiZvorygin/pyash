@@ -97,6 +97,7 @@ Reference rules:
 1. adapter may execute commands and return sentence-shaped results,
 2. adapter errors should map to typed failure outcomes without crashing scheduler loop,
 3. runtime should operate with a mock adapter for tests.
+4. when `PYASH_ANDROID_BRIDGE_URL` is set, adapter may delegate ADB execution to a host bridge (`POST /adb/run`) instead of spawning local `adb`.
 
 ### 2.7 Scheduler topology
 
