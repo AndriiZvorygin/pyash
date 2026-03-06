@@ -345,6 +345,8 @@ A compact verb mapping that keeps agent control small:
 7. `be android begin vyah start do` -> app launch (`monkey`) or URL open (`am start`).
 8. `be android send vyah start do` -> `adb push`.
 9. `be android accept vyah start do` -> `adb pull`.
+10. `accordingto text "<handle>" vyah status be android do` -> query async handle status.
+11. `accordingto text "<handle>" during num 8000 vyah await be android do` -> wait for terminal handle state.
 
 Implementations may keep these as adapter-level intents and lower to raw ADB commands inside the Android executive.
 
