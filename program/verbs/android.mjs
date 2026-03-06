@@ -36,6 +36,12 @@ function normalizeIntent(rawBe = "") {
   return lower;
 }
 
+function readVyahMode(sentence = {}) {
+  const values = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
+  const first = String(values[0] ?? "").trim().toLowerCase();
+  return first;
+}
+
 function resolveDeviceId(sentence = {}, { rememberFn = remember } = {}) {
   const direct = String(sentence?.from?.text ?? "").trim();
   if (direct) return direct;
@@ -217,12 +223,21 @@ async function handlePhaseRun(intent, { worldRoot } = {}) {
 }
 
 export async function android(call, { remember: rememberFn = remember } = {}) {
+  const vyahMode = readVyahMode(call);
   const intent = ensureIntent(normalizeIntent(call?.be), call);
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
   if (intent === "status") return handleStatus(call, { worldRoot });
   if (intent === "await") return handleAwait(call, { worldRoot });
   const phase = await handlePhaseRun(intent, { worldRoot });
   if (phase) return phase;
+  if (vyahMode !== "start") {
+    throwErrorSentence({
+      name: "android command defective",
+      message: `android command defective: ${intent} requires vyah start`,
+      from: { name: "android" },
+      raw: { call }
+    });
+  }
   const commandId = resolveCommandId(call);
   const deviceId = ensureDeviceId(resolveDeviceId(call, { rememberFn }), call);
   const agentName = resolveAgentName(call, { rememberFn });
@@ -253,32 +268,32 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
 export default android;
 
 export const signatures = [
-  { signatureWords: ["be", "android", "verify"], handler: android },
-  { signatureWords: ["be", "android", "verify", "from", "text"], handler: android },
-  { signatureWords: ["be", "android", "verify", "from", "text", "to", "name", "text"], handler: android },
-  { signatureWords: ["be", "android", "observe"], handler: android },
-  { signatureWords: ["be", "android", "observe", "from", "text"], handler: android },
-  { signatureWords: ["be", "android", "observe", "from", "text", "to", "filename"], handler: android },
-  { signatureWords: ["be", "android", "tap", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "tap", "from", "text", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "glide", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "glide", "from", "text", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "glide", "during", "num", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "glide", "during", "num", "from", "text", "ob", "vec", "num"], handler: android },
-  { signatureWords: ["be", "android", "scroll", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "scroll", "from", "text", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "scroll", "during", "num", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "scroll", "during", "num", "from", "text", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "press", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "press", "from", "text", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "type", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "type", "from", "text", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "begin", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "begin", "from", "text", "ob", "text"], handler: android },
-  { signatureWords: ["be", "android", "send", "from", "filename", "to", "text"], handler: android },
-  { signatureWords: ["be", "android", "send", "from", "filename", "fromstate", "text", "to", "text"], handler: android },
-  { signatureWords: ["be", "android", "accept", "from", "text", "to", "filename"], handler: android },
-  { signatureWords: ["be", "android", "accept", "from", "text", "fromstate", "text", "to", "filename"], handler: android },
+  { signatureWords: ["be", "android", "verify", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "verify", "from", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "verify", "from", "text", "to", "name", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "observe", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "observe", "from", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "observe", "from", "text", "to", "filename", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "tap", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "tap", "from", "text", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "glide", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "glide", "from", "text", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "glide", "during", "num", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "glide", "during", "num", "from", "text", "ob", "vec", "num", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "scroll", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "scroll", "from", "text", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "scroll", "during", "num", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "scroll", "during", "num", "from", "text", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "press", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "press", "from", "text", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "type", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "type", "from", "text", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "begin", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "begin", "from", "text", "ob", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "send", "from", "filename", "to", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "send", "from", "filename", "fromstate", "text", "to", "text", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "accept", "from", "text", "to", "filename", "vyah", "start"], handler: android },
+  { signatureWords: ["be", "android", "accept", "from", "text", "fromstate", "text", "to", "filename", "vyah", "start"], handler: android },
   { signatureWords: ["be", "android", "status", "accordingto", "text"], handler: android },
   { signatureWords: ["be", "android", "await", "accordingto", "text"], handler: android },
   { signatureWords: ["be", "android", "await", "accordingto", "text", "during", "num"], handler: android },

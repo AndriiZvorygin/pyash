@@ -29,7 +29,7 @@ test("android verify sentence enqueues command envelope with queued status", asy
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  const result = await run('su name cmd verify 1 from text "emulator-5554" be android verify do');
+  const result = await run('su name cmd verify 1 from text "emulator-5554" vyah start be android verify do');
   assert.equal(result?.be, "android command");
   assert.equal(result?.vyah?.name, "start");
   assert.equal(result?.as?.name, "verify");
@@ -47,7 +47,7 @@ test("android tap sentence keeps coordinate vector payload for lowering", async 
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  await run('su name cmd tap 1 from text "emulator-5554" ob ve num 120 640 be android tap do');
+  await run('su name cmd tap 1 from text "emulator-5554" ob ve num 120 640 vyah start be android tap do');
   const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
   const payload = claimed?.envelope?.payloadSentence;
   assert.equal(payload?.be, "android tap");
@@ -60,7 +60,7 @@ test("android press sentence keeps keyevent payload for lowering", async () => {
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  await run('from text "emulator-5554" ob text "KEYCODE_HOME" be android press do');
+  await run('from text "emulator-5554" ob text "KEYCODE_HOME" vyah start be android press do');
   const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
   const payload = claimed?.envelope?.payloadSentence;
   assert.equal(payload?.be, "android press");
@@ -75,7 +75,7 @@ test("android send sentence supports remote transfer arguments", async () => {
   const localPath = path.join(root, "local.txt");
   await fs.writeFile(localPath, "hello\n", "utf8");
 
-  await run(`from filename "${localPath}" fromstate text "emulator-5554" to text "/sdcard/Download/local.txt" be android send do`);
+  await run(`from filename "${localPath}" fromstate text "emulator-5554" to text "/sdcard/Download/local.txt" vyah start be android send do`);
   const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
   const payload = claimed?.envelope?.payloadSentence;
   assert.equal(payload?.be, "android send");
@@ -91,7 +91,7 @@ test("android verb requires device id when no default is configured", async () =
   setWorldRoot(worldRoot);
 
   await assert.rejects(
-    () => run('be android verify do'),
+    () => run('vyah start be android verify do'),
     (err) => err?.sentence?.su?.name === "android command defective"
   );
 });
@@ -102,7 +102,7 @@ test("android phase verbs run without shelling out", async () => {
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  await run('from text "emulator-5554" be android verify do');
+  await run('from text "emulator-5554" vyah start be android verify do');
   const inputResult = await run("be android input do");
   const produceResult = await run("be android produce do");
   assert.equal(inputResult?.as?.name, "input");
@@ -123,8 +123,20 @@ test("android verbs use configured default device id when from text is omitted",
     be: "text"
   });
 
-  await run('su name default verify be android verify do');
+  await run('su name default verify vyah start be android verify do');
   const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
   assert.equal(claimed?.envelope?.deviceId, "emulator-5554");
   assert.equal(claimed?.envelope?.payloadSentence?.be, "android verify");
+});
+
+test("android action requires explicit vyah start", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-verb-vyah-start-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await assert.rejects(
+    () => run('from text "emulator-5554" ob text "KEYCODE_HOME" be android press do'),
+    (err) => String(err?.message ?? "").includes("Unknown verb/signature")
+  );
 });
