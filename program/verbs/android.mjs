@@ -4,6 +4,11 @@ import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
 import { enqueueInputEnvelope } from "../agent/android_core/queue.mjs";
+import {
+  readAndroidHandleState,
+  writeAndroidHandleState,
+  isTerminalHandleStatus
+} from "../agent/android/state.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -95,9 +100,84 @@ function queuedSentence({ commandId, intent, deviceId }) {
   };
 }
 
+function statusSentence({ mode = "status", state = null, handleId = "" } = {}) {
+  const current = state || {};
+  const status = String(current.status || "missing").trim() || "missing";
+  return {
+    mood: "ya",
+    su: { name: String(handleId || current.handleId || "").trim() || String(handleId || "android-handle") },
+    be: "android command",
+    vyah: { name: mode === "await" ? "await" : "status" },
+    as: { name: String(current.intent || "").trim() || "unknown" },
+    from: { text: String(current.deviceId || "").trim() || "" },
+    ob: { text: status },
+    fromstate: { text: String(current.summary || "").trim() || "" },
+    since: { date: String(current.queuedAt || "").trim() || "" },
+    during: { date: String(current.finishedAt || current.updatedAt || "").trim() || "" }
+  };
+}
+
+async function handleStatus(call, { worldRoot } = {}) {
+  const handleId = String(call?.accordingto?.text ?? call?.su?.name ?? "").trim();
+  if (!handleId) {
+    throwErrorSentence({
+      name: "android command defective",
+      message: "android command defective: status requires accordingto text <handle id>",
+      from: { name: "android" },
+      raw: { call }
+    });
+  }
+  const state = await readAndroidHandleState(worldRoot, handleId);
+  if (!state) {
+    throwErrorSentence({
+      name: "android command defective",
+      message: `android command defective: unknown handle ${JSON.stringify(handleId)}`,
+      from: { name: "android" },
+      raw: { call }
+    });
+  }
+  return statusSentence({ mode: "status", state, handleId });
+}
+
+async function handleAwait(call, { worldRoot } = {}) {
+  const handleId = String(call?.accordingto?.text ?? call?.su?.name ?? "").trim();
+  if (!handleId) {
+    throwErrorSentence({
+      name: "android command defective",
+      message: "android command defective: await requires accordingto text <handle id>",
+      from: { name: "android" },
+      raw: { call }
+    });
+  }
+  const timeoutMs = Math.max(1000, Math.trunc(Number(call?.during?.num) || 120000));
+  const pollMs = 250;
+  const start = Date.now();
+
+  while ((Date.now() - start) <= timeoutMs) {
+    const state = await readAndroidHandleState(worldRoot, handleId);
+    if (!state) {
+      throwErrorSentence({
+        name: "android command defective",
+        message: `android command defective: unknown handle ${JSON.stringify(handleId)}`,
+        from: { name: "android" },
+        raw: { call }
+      });
+    }
+    if (isTerminalHandleStatus(state.status)) {
+      return statusSentence({ mode: "await", state, handleId });
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+
+  const current = await readAndroidHandleState(worldRoot, handleId);
+  return statusSentence({ mode: "await", state: current || { status: "timeout" }, handleId });
+}
+
 export async function android(call, { remember: rememberFn = remember } = {}) {
   const intent = ensureIntent(normalizeIntent(call?.be), call);
   const worldRoot = resolveWorldRoot({ rememberFn });
+  if (intent === "status") return handleStatus(call, { worldRoot });
+  if (intent === "await") return handleAwait(call, { worldRoot });
   const commandId = resolveCommandId(call);
   const deviceId = ensureDeviceId(resolveDeviceId(call, { rememberFn }), call);
   const agentName = resolveAgentName(call, { rememberFn });
@@ -111,6 +191,15 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
     commandId,
     payloadId: commandId,
     payloadSentence: buildPayloadSentence(call, intent)
+  });
+  await writeAndroidHandleState(worldRoot, commandId, {
+    handleId: commandId,
+    intent,
+    deviceId,
+    agentName,
+    status: "queued",
+    queuedAt,
+    summary: "queued"
   });
 
   return queuedSentence({ commandId, intent, deviceId });
@@ -133,5 +222,8 @@ export const signatures = [
   { signatureWords: ["be", "android", "type", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "begin", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "send", "from", "filename", "fromstate", "text", "to", "text"], handler: android },
-  { signatureWords: ["be", "android", "accept", "from", "text", "fromstate", "text", "to", "filename"], handler: android }
+  { signatureWords: ["be", "android", "accept", "from", "text", "fromstate", "text", "to", "filename"], handler: android },
+  { signatureWords: ["be", "android", "status", "accordingto", "text"], handler: android },
+  { signatureWords: ["be", "android", "await", "accordingto", "text"], handler: android },
+  { signatureWords: ["be", "android", "await", "accordingto", "text", "during", "num"], handler: android }
 ];
