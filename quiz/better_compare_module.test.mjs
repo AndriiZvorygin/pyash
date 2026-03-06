@@ -78,7 +78,7 @@ test("better compare promotes B and continues until cap", async () => {
   }
 });
 
-test("better compare surfaces malformed judge output as refinery stage failure", async () => {
+test("better compare fails on malformed judge output", async () => {
   const original = process.env.PYA_MIND_RESPONSE;
   process.env.PYA_MIND_RESPONSE = "maybe";
   try {
@@ -87,10 +87,10 @@ test("better compare surfaces malformed judge output as refinery stage failure",
     await run('from filename "./module/better_compare.pya" to name better compare be import do');
     await setupGenerator();
 
-    await run('su name run from la ob text "task" to name text scratch be draft gen do ko ob text "pick better" to name text winner atmost num 3 be better compare do');
-
-    assert.match(remember("winner")?.ob?.text ?? "", /platform defective/);
-    assert.ok((remember("draft count")?.ob?.num ?? 0) > 2);
+    await assert.rejects(
+      () => run('su name run from la ob text "task" to name text scratch be draft gen do ko ob text "pick better" to name text winner atmost num 3 be better compare do'),
+      /better-compare-judge-defective/
+    );
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
