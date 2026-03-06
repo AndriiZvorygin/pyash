@@ -15,6 +15,11 @@ This reference does not cover:
 - long-term artifact retention policies,
 - non-Android device families.
 
+Recommended deployment profile for container-first workflows:
+1. container writers enqueue into shared `world/holding/android/`,
+2. host worker processes queue phases (`poll/input/produce`) with local ADB,
+3. writers consume handle/outcome state from shared `world/`.
+
 ## 2. Control-Surface Contract (Reference Profile)
 
 ### 2.1 Holding lane ownership
