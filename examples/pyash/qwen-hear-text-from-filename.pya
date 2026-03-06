@@ -1,0 +1,3 @@
+exists su name hear backend default ob text "qwen" be default ya
+ob filename text recording be input ya
+from filename of ob of recording to filename "artifacts/hear/qwen-hear-text-from-filename.txt" be hear do
