@@ -92,8 +92,8 @@ su name command configure be map def
 prah
 su name sandbox configure be map def
   su name network ob bool lie ya
-  su name cwd ob filename "/workplace" ya
-  su name writable roots ob ve filename "/workplace" "/tmp" ya
+  su name cwd ob filename "." ya
+  su name writable roots ob ve filename "." "/tmp" ya
   su name timeout ms ob num 120000 ya
   su name max output bytes ob num 1048576 ya
   su name command env allowlist ob ve text "HOME" "LANG" "LC_ALL" "PATH" "PWD" "SHELL" "TERM" "TMPDIR" "USER" ya
