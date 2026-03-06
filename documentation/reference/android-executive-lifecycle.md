@@ -124,38 +124,38 @@ The Android executive is the runtime manager that:
 
 ## 4. Lifecycle phases
 
-### 2.1 Bootstrap
+### 4.1 Bootstrap
 
 1. Load runtime config and policy allowlists.
 2. Discover reachable devices (`adb devices` or broker inventory).
 3. Prime lane directories and lease registry.
 4. Emit startup health outcome (`ready` or `degraded`).
 
-### 2.2 Poll
+### 4.2 Poll
 
 1. Read pending work from `world/holding/android/input/`.
 2. Filter by target `device id`, `agent name`, and policy scope.
 3. Select oldest eligible envelopes first.
 
-### 2.3 Claim
+### 4.3 Claim
 
 1. Attempt atomic claim from `input/` to `runtime/`.
 2. Acquire per-device lease (default one active command per device).
 3. On lease failure, requeue with bounded retry/backoff.
 
-### 2.4 Execute
+### 4.4 Execute
 
 1. Validate command against allowlist profile.
 2. Execute via adapter (`adb -s <device> ...`) or broker endpoint.
 3. Capture exit code, stdout/stderr summary, timing, and transport defects.
 
-### 2.5 Produce
+### 4.5 Produce
 
 1. Write result envelope to `produce/waiting/`.
 2. Include `vyah success|fail`, operator-readable summary, and handle ids.
 3. Move runtime file to `produce/success/` or `produce/fail/`.
 
-### 2.6 Release
+### 4.6 Release
 
 1. Release device lease on terminal completion.
 2. If worker dies, lease TTL/heartbeat reclamation returns capacity.
@@ -229,3 +229,119 @@ Core references:
 - `documentation/specifications/04-runtime-primitives.md` (`vyah` lifecycle terms)
 
 This reference is an implementation guide for module authors and operators.
+
+## 11. Minimal ADB Primitive Profile
+
+For an agent-controlled phone, the minimal capability set is:
+1. observe the screen,
+2. press/type,
+3. launch apps or URLs,
+4. transfer files,
+5. know device state.
+
+### 11.1 Device primitives
+
+```bash
+adb devices
+adb shell getprop
+adb shell getprop ro.product.model
+adb shell getprop ro.build.version.release
+```
+
+### 11.2 Screen observation
+
+```bash
+adb shell screencap -p /sdcard/screen.png
+adb pull /sdcard/screen.png
+adb shell wm size
+adb shell dumpsys input | grep SurfaceOrientation
+```
+
+### 11.3 UI structure observation (optional)
+
+```bash
+adb shell uiautomator dump /sdcard/ui.xml
+adb pull /sdcard/ui.xml
+```
+
+### 11.4 Navigation and input
+
+```bash
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell input keyevent KEYCODE_HOME
+adb shell input keyevent KEYCODE_BACK
+adb shell input keyevent KEYCODE_APP_SWITCH
+adb shell input tap X Y
+adb shell input swipe X1 Y1 X2 Y2
+adb shell input text "hello%sworld"
+adb shell input keyevent KEYCODE_ENTER
+```
+
+### 11.5 App control and foreground activity
+
+```bash
+adb shell monkey -p PACKAGE -c android.intent.category.LAUNCHER 1
+adb shell am start -a android.intent.action.VIEW -d "URL"
+adb shell dumpsys window | grep mCurrentFocus
+```
+
+### 11.6 File transfer
+
+```bash
+adb push localfile /sdcard/path/file
+adb pull /sdcard/path/file
+```
+
+### 11.7 Optional media interaction
+
+```bash
+adb shell input keyevent KEYCODE_MEDIA_PLAY_PAUSE
+```
+
+### 11.8 Absolute minimal command set
+
+```text
+adb devices
+adb shell screencap
+adb pull
+adb shell input tap
+adb shell input swipe
+adb shell input text
+adb shell input keyevent
+adb shell monkey
+adb shell am start
+adb push
+adb shell wm size
+adb shell dumpsys window
+```
+
+### 11.9 Typical agent loop
+
+```text
+screenshot
+-> vision model
+-> agent reasoning
+-> tap / swipe / type
+-> repeat
+```
+
+Optional enhancement:
+
+```text
+screenshot + uiautomator dump
+-> agent reasoning
+-> tap / swipe / type
+```
+
+## 12. Small Pyash Verb Surface (Reference Mapping)
+
+A compact verb mapping that keeps agent control small:
+1. `be android inspect do` -> `adb devices`, `getprop`, `wm size`, foreground activity checks.
+2. `be android observe do` -> screenshot capture/pull and optional `uiautomator dump`.
+3. `be android tap do` -> `adb shell input tap`.
+4. `be android swipe do` -> `adb shell input swipe`.
+5. `be android type do` -> `adb shell input text` and keyevents.
+6. `be android open do` -> app launch (`monkey`) or URL open (`am start`).
+7. `be android transfer do` -> `adb push` / `adb pull`.
+
+Implementations may keep these as adapter-level intents and lower to raw ADB commands inside the Android executive.
