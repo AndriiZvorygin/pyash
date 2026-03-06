@@ -1,6 +1,6 @@
 # Specifications Index
 
-Purpose: normative spec set for Pyash. This folder is intentionally compact: <=20 files, each <=16KB.
+Purpose: normative spec set for Pyash. This folder is intentionally compact: <=24 files, each <=16KB.
 
 ## Core order
 
@@ -33,6 +33,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 
 Moved out of `specifications/` to keep core spec compact:
 - `documentation/reference/cheat-sheet.md`
+- `documentation/reference/android-executive-lifecycle.md`
 - `documentation/reference/spec-index-map.md`
 - `documentation/reference/spec-implementation-map.md`
 - `documentation/reference/instead-replacement.md`
@@ -49,3 +50,4 @@ Archived long-form drafts:
 - command approval/sandbox issue -> `19-ops-safety.md`
 - channel routing issue -> `24-channel-contract.md`
 - android orchestration lane issue -> `26-android-control-surface.md`
+- android executive lifecycle/operator issue -> `documentation/reference/android-executive-lifecycle.md`
