@@ -353,7 +353,7 @@ Implementations may keep these as adapter-level intents and lower to raw ADB com
 To avoid hard-coding serials in examples, set a default device in local `configure/secret.pya`:
 
 ```pyash
-su name android device id ob text "187a09d37d81" ya
+exists su name android device id ob text "187a09d37d81" be default ya
 ```
 
 When set, `be android ... do` calls can omit `from text <device id>`.
@@ -368,4 +368,4 @@ Behavior:
 1. runs `adb devices -l`,
 2. picks a ready (`device`) target (or prompts when multiple are attached),
 3. asks confirmation,
-4. writes/updates `su name android device id ob text "<serial>" ya` in `configure/secret.pya`.
+4. writes/updates `exists su name android device id ob text "<serial>" be default ya` in `configure/secret.pya`.

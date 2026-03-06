@@ -1,6 +1,6 @@
 su name android wakeup home be ceremony def
-  su name wakeup key ob text "KEYCODE_WAKEUP" be android press do
-  su name unlock glide ob ve num 540 2000 540 300 be android glide do
+  ob text "KEYCODE_WAKEUP" be android press do
+  ob ve num 540 2000 540 300 be android glide do
   su name home key ob text "KEYCODE_HOME" be android press do
   be android input do
   be android produce do
