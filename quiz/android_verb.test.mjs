@@ -53,6 +53,19 @@ test("android tap sentence keeps coordinate vector payload for lowering", async 
   assert.deepEqual(payload?.ob?.ve?.values, [120, 640]);
 });
 
+test("android press sentence keeps keyevent payload for lowering", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-verb-press-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await run('from text "emulator-5554" ob text "KEYCODE_HOME" be android press do');
+  const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
+  const payload = claimed?.envelope?.payloadSentence;
+  assert.equal(payload?.be, "android press");
+  assert.equal(payload?.ob?.text, "KEYCODE_HOME");
+});
+
 test("android send sentence supports remote transfer arguments", async () => {
   forget();
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-verb-send-"));

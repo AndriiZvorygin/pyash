@@ -220,6 +220,7 @@ export const signatures = [
   { signatureWords: ["be", "android", "glide", "during", "num", "from", "text", "ob", "vec", "num"], handler: android },
   { signatureWords: ["be", "android", "scroll", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "scroll", "during", "num", "from", "text", "ob", "text"], handler: android },
+  { signatureWords: ["be", "android", "press", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "type", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "begin", "from", "text", "ob", "text"], handler: android },
   { signatureWords: ["be", "android", "send", "from", "filename", "fromstate", "text", "to", "text"], handler: android },

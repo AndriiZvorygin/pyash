@@ -1,0 +1,10 @@
+su name android wakeup home from text serial be ceremony def
+  su name wakeup key from text of from of this ob text "KEYCODE_WAKEUP" be android press do
+  su name unlock glide from text of from of this ob ve num 540 2000 540 300 be android glide do
+  su name home key from text of from of this ob text "KEYCODE_HOME" be android press do
+  ob text "node command/android_run.mjs --once --phase input" to name text input step be command do
+  ob text "node command/android_run.mjs --once --phase produce" to name text produce step be command do
+  accordingto text "home key" during num 8000 be android await do
+prah
+
+from text "187a09d37d81" be android wakeup home do
