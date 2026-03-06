@@ -38,4 +38,5 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 
 Notes:
 - Mind examples expect an Ollama server; say/command examples may require `piper`, `espeak-ng`, or other local tools.
+- Android examples are queue-driven; run `npm run android:worker` on the ADB host (shared `world/`) before invoking Android examples from container.
 - Some examples write outputs under `examples/out/` or `quiz/sandpit/`.

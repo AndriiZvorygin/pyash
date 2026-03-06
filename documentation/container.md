@@ -179,6 +179,7 @@ docker run --rm -it \
 Notes:
 - this avoids network bridge complexity; host is the only side touching ADB.
 - for one-shot host processing use: `npm run android:worker -- --once`.
+- worker heartbeat is written in presence format at `world/house/android-host-worker/.presence.pya`.
 
 ## Android host bridge (optional fallback)
 

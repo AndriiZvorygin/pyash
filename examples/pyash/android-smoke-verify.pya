@@ -1,7 +1,5 @@
 su name android smoke verify be ceremony def
   su name android smoke handle vyah start future be android verify do
-  be android input do
-  be android produce do
   accordingto text "android smoke handle" during num 8000 vyah await be android do
 prah
 

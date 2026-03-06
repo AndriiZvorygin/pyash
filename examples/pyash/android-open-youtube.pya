@@ -3,8 +3,6 @@ from filename "./modules/android_intro.pya" ob name android introductory home-pa
 su name android opening youtube be ceremony def
   be android introductory home-page do
   su name youtube opening ob text "com.google.android.youtube" vyah start future be android begin do
-  be android input do
-  be android produce do
   accordingto text "youtube opening" during num 10000 vyah await be android do
 prah
 

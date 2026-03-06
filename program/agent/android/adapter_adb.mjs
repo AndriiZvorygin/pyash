@@ -37,6 +37,10 @@ function runAdbRaw({ deviceId, args = [], timeoutMs = 20000 } = {}) {
     });
     child.on("error", (err) => {
       clearTimeout(timer);
+      if (err?.code === "ENOENT") {
+        reject(new Error("android adb unavailable: install adb or run host worker (npm run android:worker); optional bridge: PYASH_ANDROID_BRIDGE_URL"));
+        return;
+      }
       reject(err);
     });
     child.on("close", (code) => {
