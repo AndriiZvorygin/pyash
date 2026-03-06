@@ -8,6 +8,7 @@ import { registerSignatureHandler, clearSignatureHandlers } from "../program/bri
 import { loadDefaultConfig, readFlagValue } from "./run_pya_helpers.mjs";
 import { resolveWorldRoot } from "../program/library/world.mjs";
 import { runAndroidOnce } from "../program/agent/android/index.mjs";
+import { updateAgentPresence } from "../program/agent/presence.mjs";
 
 function usage() {
   return "Usage: node command/android_host_worker.mjs [--world <path>] [--interval-ms 400] [--once]";
@@ -39,6 +40,15 @@ function shortIsoNow() {
   return new Date().toISOString();
 }
 
+async function updateAndroidWorkerPresence({ worldRoot, latestIso }) {
+  await updateAgentPresence({
+    worldRoot,
+    agentName: "android-host-worker",
+    latestIso,
+    touchedFiles: [path.join(worldRoot, "holding", "android")]
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
@@ -55,6 +65,8 @@ async function main() {
   const runOnce = args.includes("--once");
 
   do {
+    const cycleIso = shortIsoNow();
+    await updateAndroidWorkerPresence({ worldRoot, latestIso: cycleIso });
     const result = await runAndroidOnce({
       worldRoot,
       inputMaxItems: 20,
@@ -66,7 +78,7 @@ async function main() {
     const queue = Number(result?.queueDepth ?? 0);
     if (received > 0 || handled > 0 || sent > 0 || queue > 0) {
       console.log(
-        `${shortIsoNow()} android worker: received=${received} handled=${handled} sent=${sent} queue=${queue}`
+        `${cycleIso} android worker: received=${received} handled=${handled} sent=${sent} queue=${queue}`
       );
     }
     if (runOnce) break;

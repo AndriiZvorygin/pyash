@@ -71,6 +71,18 @@ test("android vyah await does not require su name runtime target", async () => {
   assert.equal(queuedStatus?.ob?.text, "queued");
 });
 
+test("android await timeout includes host worker hint when presence is missing", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-await-timeout-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await run('su name handle timeout from text "emulator-5554" vyah start future be android verify do');
+  const awaited = await run('accordingto text "handle timeout" during num 1000 vyah await be android do');
+  assert.equal(awaited?.ob?.text, "queued");
+  assert.match(String(awaited?.fromstate?.text ?? ""), /start host worker: npm run android:worker/);
+});
+
 test("android device lease enforces busy state and supports release", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-lease-"));
   const worldRoot = path.join(root, "world");

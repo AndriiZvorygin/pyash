@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
@@ -158,6 +159,33 @@ function statusSentence({ mode = "status", state = null, handleId = "" } = {}) {
   };
 }
 
+async function readAndroidWorkerPresence(worldRoot) {
+  const primaryPath = path.join(worldRoot, "house", "android-host-worker", ".presence.pya");
+  const fallbackPath = path.join(worldRoot, "presence", "android-host-worker.pya");
+  const candidates = [primaryPath, fallbackPath];
+  for (const presencePath of candidates) {
+    try {
+      const text = await fs.readFile(presencePath, "utf8");
+      const match = String(text).match(/during\s+date\s+"([^"]+)"/i);
+      const latestIso = String(match?.[1] ?? "").trim();
+      if (!latestIso) continue;
+      const latestMs = Date.parse(latestIso);
+      if (!Number.isFinite(latestMs)) continue;
+      const ageMs = Math.max(0, Date.now() - latestMs);
+      return {
+        found: true,
+        stale: ageMs > 15000,
+        latestIso,
+        ageMs
+      };
+    } catch (err) {
+      if (err?.code === "ENOENT") continue;
+      throw err;
+    }
+  }
+  return { found: false, stale: true, latestIso: "", ageMs: null };
+}
+
 async function handleStatus(call, { worldRoot } = {}) {
   const handleId = String(call?.accordingto?.text ?? call?.su?.name ?? "").trim();
   if (!handleId) {
@@ -211,7 +239,19 @@ async function handleAwait(call, { worldRoot } = {}) {
   }
 
   const current = await readAndroidHandleState(worldRoot, handleId);
-  return statusSentence({ mode: "await", state: current || { status: "timeout" }, handleId });
+  const base = current || { status: "timeout" };
+  const presence = await readAndroidWorkerPresence(worldRoot);
+  const pending = !isTerminalHandleStatus(base.status);
+  if (pending) {
+    if (!presence.found || presence.stale) {
+      base.summary = `await timeout: handle still ${base.status}; android worker presence missing/stale. start host worker: npm run android:worker`;
+    } else {
+      base.summary = `await timeout: handle still ${base.status}; android worker present (last heartbeat ${presence.latestIso})`;
+    }
+  } else if (!base.summary) {
+    base.summary = "await timeout";
+  }
+  return statusSentence({ mode: "await", state: base, handleId });
 }
 
 async function handlePhaseRun(intent, { worldRoot } = {}) {
