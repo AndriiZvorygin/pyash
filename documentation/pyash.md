@@ -135,6 +135,18 @@ Use `node command/check_local_config_safety.mjs` (or `npm run config:safety`) to
 
 ---
 
+### Runtime pause verbs
+
+Use `be wait do` for short synchronization pauses in active runtime flows.
+
+Use `be sleep do` for consolidation lifecycle entry (review/memory compaction and optional LoRA/SFT preparation), not for short action timing.
+
+Canonical quick pause sentence:
+
+`be wait do`
+
+---
+
 ### Declarations vs. assignments
 
 Pyash keeps declarations explicit when compiling to code targets:
