@@ -35,6 +35,7 @@ Moved out of `specifications/` to keep core spec compact:
 - `documentation/reference/spec-index-map.md`
 - `documentation/reference/spec-implementation-map.md`
 - `documentation/reference/instead-replacement.md`
+- `documentation/reference/music-module.md`
 
 Archived long-form drafts:
 - `documentation/recipes/spec-archive/`
