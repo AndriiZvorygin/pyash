@@ -60,7 +60,10 @@ async function main() {
   for (const item of violations) {
     console.error(`- line ${item.line}: ${item.marker} :: ${item.text}`);
   }
-  console.error("move container routing values to configure/container.pya");
+  console.error("how to fix:");
+  console.error("1. Move container routing values from configure/secret.pya to configure/container.pya");
+  console.error("2. Keep configure/secret.pya for secrets and host-local endpoints (for example localhost)");
+  console.error("3. Re-run: npm run config:safety");
   process.exit(1);
 }
 

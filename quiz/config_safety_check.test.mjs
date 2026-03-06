@@ -30,9 +30,17 @@ test("config safety checker fails when secret file contains container hosts", as
     "utf8"
   );
   const out = runChecker(rootDir);
+  const stderr = String(out.stderr ?? "");
   assert.notEqual(out.status, 0);
-  assert.match(String(out.stderr ?? ""), /config safety: fail/i);
-  assert.match(String(out.stderr ?? ""), /host\.docker\.internal/i);
+  assert.match(stderr, /config safety: fail/i, `expected failure banner in stderr\n${stderr}`);
+  assert.match(stderr, /host\.docker\.internal/i, `expected violating host marker in stderr\n${stderr}`);
+  assert.match(stderr, /how to fix:/i, `expected remediation section in stderr\n${stderr}`);
+  assert.match(
+    stderr,
+    /Move container routing values from configure\/secret\.pya to configure\/container\.pya/i,
+    `expected explicit move instruction in stderr\n${stderr}`
+  );
+  assert.match(stderr, /Re-run: npm run config:safety/i, `expected explicit re-run instruction in stderr\n${stderr}`);
 });
 
 test("config safety checker passes when secret file is host-safe", async () => {
