@@ -15,6 +15,9 @@ This spec does not cover:
 - long-term artifact retention policies,
 - non-Android device families.
 
+Implementation lifecycle guidance is documented in the non-normative reference:
+- `documentation/reference/android-executive-lifecycle.md`
+
 ## 2. Holding lane ownership (normative)
 
 Android runtime MUST use `world/holding/android/` and MUST NOT write queue state to `world/holding/channel/`.
