@@ -1,6 +1,6 @@
 # 03. Vyah And Aspect
 
-Purpose: define `vyah` modifiers (aspect, tense, outcome, attitudinal) and their canonical emission rules.
+Purpose: define `vyah` modifiers (aspect, tense, attitudinal) and their canonical emission rules.
 
 ## 1. Scope
 
@@ -21,7 +21,6 @@ This spec must stay aligned with:
 - `VYAH_ASPECT_MODIFIERS`
 - `VYAH_ASPECT_ALIASES`
 - `VYAH_TENSE_MODIFIERS`
-- `VYAH_OUTCOME_MODIFIERS`
 - `VYAH_ATTITUDINAL_MODIFIERS`
 
 ## 3. Aspect inventory (implemented)
@@ -67,22 +66,13 @@ Canonical tense words currently accepted:
 | Distant-future reference | `far_future` | Mark far-future intent. |
 | Next-day reference | `tomorrow` | Anchor meaning to next day window. |
 
-## 5. Outcome and attitudinal inventory (implemented)
-
-Outcome modifiers:
-
-| Outcome class | Word | Purpose |
-| --- | --- | --- |
-| Positive completion | `success` | Mark successful result/completion. |
-| Negative completion | `fail` | Mark failed result/completion. |
-
-Attitudinal modifiers:
+## 5. Attitudinal inventory (implemented)
 
 | Attitudinal class | Word | Purpose |
 | --- | --- | --- |
 | Satisfaction | `satisfied` | Mark satisfied stance. |
-| Positive stance | `success` | Mark favorable/positive stance. |
-| Negative stance | `fail` | Mark unfavorable/negative stance. |
+| Positive result/stance | `success` | Mark favorable/positive stance and successful completion signal. |
+| Negative result/stance | `fail` | Mark unfavorable/negative stance and failed completion signal. |
 | Epistemic positive | `hope` | Mark hopeful expectation. |
 | Epistemic uncertainty | `doubt` | Mark uncertainty/skepticism. |
 | Threat stance | `fear` | Mark concern/fear. |
@@ -110,13 +100,20 @@ Attitudinal modifiers:
 - at most one aspect modifier per sentence.
 - multiple aspect modifiers are invalid.
 
-3. Canonical emission:
+3. Canonical modifier ordering:
+- emit `vyah` members in this order:
+  - aspect
+  - tense
+  - attitudinal
+- unknown/non-inventory members emit after the canonical buckets.
+
+4. Canonical emission:
 - aliases parse, but emitted form must use canonical token (`cron` -> `habit`).
 
-4. Determinism:
+5. Determinism:
 - given same base sentence + same `vyah` list, runtime must emit identical normalized `vyah` output.
 
-5. Recurrence guidance:
+6. Recurrence guidance:
 - for periodic calendar scheduling, use `per` with units (`second`, `minute`, `hour`, `day`);
   use `vyah habit` to mark habitual behavior semantics when needed.
 
@@ -137,7 +134,7 @@ Alias normalization (`cron` -> `habit`):
 su name matrix probe vyah cron be schedule do
 ```
 
-Outcome/attitudinal marker:
+Attitudinal marker (also used as success/fail completion signal):
 ```pyash
 su name run result vyah success be text ya
 ```
@@ -153,6 +150,7 @@ Implementation conforms when it:
 - parses implemented `vyah` inventories from runtime keywords,
 - enforces at-most-one-aspect rule,
 - emits normalized canonical aspect tokens,
+- emits canonical ordering (`aspect -> tense -> attitudinal`, then unknown tokens),
 - preserves `vyah` facts in surfaced sentences and recording paths where enabled.
 
 ## 9. Extended reference
