@@ -210,8 +210,8 @@ Reference runtime now appends Android outcome lines to:
 - `world/newspaper/YYYYMMDD-android-<agent>.pya`
 
 Suggested outcome shape:
-1. `su name <handle> ... vyah queued success ... be android outcome ya`
-2. `su name <handle> ... vyah running success ... be android outcome ya`
+1. `su name <handle> ... vyah success queued ... be android outcome ya`
+2. `su name <handle> ... vyah success running ... be android outcome ya`
 3. `su name <handle> ... vyah success|fail ... be android outcome ya`
 
 Recommended metrics:
@@ -344,17 +344,22 @@ screenshot + uiautomator dump
 ## 12. Small Pyash Verb Surface (Reference Mapping)
 
 A compact verb mapping that keeps agent control small:
-1. `be android verify vyah start do` -> `adb devices`, `getprop`, `wm size`, foreground activity checks.
-2. `be android observe vyah start do` -> screenshot capture/pull and optional `uiautomator dump`.
-3. `be android tap vyah start do` -> `adb shell input tap`.
-4. `be android glide vyah start do` -> `adb shell input swipe`.
-5. `be android scroll vyah start do` -> scroll gesture profile (lowered to `adb shell input swipe ...`).
-6. `be android type vyah start do` -> `adb shell input text` and keyevents.
-7. `be android begin vyah start do` -> app launch (`monkey`) or URL open (`am start`).
-8. `be android send vyah start do` -> `adb push`.
-9. `be android accept vyah start do` -> `adb pull`.
+1. `be android verify vyah start future do` -> durable queued verify (`adb devices`, `getprop`, `wm size`, foreground activity checks).
+2. `be android observe vyah start future do` -> durable queued screenshot capture/pull and optional `uiautomator dump`.
+3. `be android tap vyah start future do` -> durable queued `adb shell input tap`.
+4. `be android glide vyah start future do` -> durable queued `adb shell input swipe`.
+5. `be android scroll vyah start future do` -> durable queued scroll gesture profile (lowered to `adb shell input swipe ...`).
+6. `be android type vyah start future do` -> durable queued `adb shell input text` and keyevents.
+7. `be android begin vyah start future do` -> durable queued app launch (`monkey`) or URL open (`am start`).
+8. `be android send vyah start future do` -> durable queued `adb push`.
+9. `be android accept vyah start future do` -> durable queued `adb pull`.
 10. `accordingto text "<handle>" vyah status be android do` -> query async handle status.
 11. `accordingto text "<handle>" during num 8000 vyah await be android do` -> wait for terminal handle state.
+
+Lane notes:
+- `vyah ... future` selects durable spool/holding execution.
+- `vyah ... soon` selects fast in-process execution.
+- when tense is omitted, Android defaults to durable.
 
 Implementations may keep these as adapter-level intents and lower to raw ADB commands inside the Android executive.
 

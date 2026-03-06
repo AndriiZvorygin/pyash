@@ -69,7 +69,26 @@ test("android queue enqueues and claims oldest input envelope with parsed payloa
 
   const first = await claimOldestInputEnvelope(worldRoot, { workerTag: "android-router" });
   assert.equal(first?.envelope?.commandId, "cmd-old");
+  assert.equal(first?.envelope?.lane, "durable");
   assert.equal(first?.envelope?.payloadSentence?.ob?.text, "adb shell getprop ro.build.version.release");
+});
+
+test("android queue preserves explicit lane metadata", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-queue-lane-"));
+  const worldRoot = path.join(root, "world");
+
+  await enqueueInputEnvelope(worldRoot, {
+    queuedAt: "2026-03-06T12:00:10.000Z",
+    lane: "fast",
+    deviceId: "emulator-5554",
+    identity: "adb://localhost:5037",
+    agentName: "mricge",
+    commandId: "cmd-fast",
+    payloadSentence: PAYLOAD_OLD
+  });
+
+  const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "android-router", lane: "fast" });
+  assert.equal(claimed?.envelope?.lane, "fast");
 });
 
 test("android queue supports produce claims and success/fail transitions", async () => {

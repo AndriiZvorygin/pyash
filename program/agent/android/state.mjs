@@ -73,6 +73,7 @@ function stateToText(state = {}) {
   const entries = [
     { key: "handle id", type: "text", value: quoteText(state.handleId || "") },
     { key: "intent", type: "text", value: quoteText(state.intent || "") },
+    { key: "lane", type: "text", value: quoteText(state.lane || "durable") },
     { key: "device id", type: "text", value: quoteText(state.deviceId || "") },
     { key: "agent name", type: "text", value: quoteText(state.agentName || "") },
     { key: "status", type: "text", value: quoteText(state.status || "queued") },
@@ -91,6 +92,7 @@ function stateFromText(text) {
   const out = {
     handleId: "",
     intent: "",
+    lane: "durable",
     deviceId: "",
     agentName: "",
     status: "queued",
@@ -103,6 +105,7 @@ function stateFromText(text) {
   for (const entry of entries) {
     if (entry.key === "handle id") out.handleId = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "intent") out.intent = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "lane") out.lane = String(parseQuoted(entry.valueRaw) ?? "").trim() || "durable";
     if (entry.key === "device id") out.deviceId = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "agent name") out.agentName = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "status") out.status = String(parseQuoted(entry.valueRaw) ?? "").trim() || "queued";
@@ -139,6 +142,7 @@ export async function writeAndroidHandleState(worldRoot, handleId, nextState = {
   const base = current || {
     handleId: String(handleId ?? "").trim(),
     intent: "",
+    lane: "durable",
     deviceId: "",
     agentName: "",
     status: "queued",

@@ -33,11 +33,12 @@ test("android status and await follow handle lifecycle through runtime", async (
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  const queued = await run('su name handle one from text "emulator-5554" vyah start be android verify do');
+  const queued = await run('su name handle one from text "emulator-5554" vyah start future be android verify do');
   assert.deepEqual(queued?.vyah?.ve?.values, ["start", "success"]);
 
   const queuedStatus = await run('accordingto text "handle one" vyah status be android do');
   assert.equal(queuedStatus?.ob?.text, "queued");
+  assert.equal(queuedStatus?.totext?.text, "durable");
 
   await runAndroidInputOnce({
     worldRoot,
@@ -65,7 +66,7 @@ test("android vyah await does not require su name runtime target", async () => {
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  await run('su name handle two from text "emulator-5554" vyah start be android verify do');
+  await run('su name handle two from text "emulator-5554" vyah start future be android verify do');
   const queuedStatus = await run('accordingto text "handle two" vyah status be android do');
   assert.equal(queuedStatus?.ob?.text, "queued");
 });

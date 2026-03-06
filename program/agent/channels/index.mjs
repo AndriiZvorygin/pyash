@@ -1038,6 +1038,7 @@ async function dispatchChannelEvents({
             responseText: content
           });
           await enqueueProduceEnvelope(worldRootResolved, {
+            lane: "durable",
             channelType,
             identity: String(channelConfig?.user ?? "").trim(),
             agentName: targetAgent,
@@ -1104,6 +1105,7 @@ async function dispatchChannelEvents({
             responseText: content
           });
           await enqueueProduceEnvelope(worldRootResolved, {
+            lane: "durable",
             channelType,
             identity: String(channelConfig?.user ?? "").trim(),
             agentName: targetAgent,
@@ -1288,6 +1290,7 @@ async function dispatchChannelEvents({
       });
       if (outputMode === "queue") {
         await enqueueProduceEnvelope(worldRootResolved, {
+          lane: "durable",
           channelType,
           identity: String(channelConfig?.user ?? "").trim(),
           agentName: targetAgent,
@@ -1399,7 +1402,8 @@ export async function runChannelPollOnce({
   channelConfig,
   adapter,
   agentHouse,
-  dedupLimit = 2000
+  dedupLimit = 2000,
+  lane = "durable"
 }) {
   if (!agentName) throw new Error("runChannelPollOnce requires agentName");
   if (!channelType) throw new Error("runChannelPollOnce requires channelType");
@@ -1473,6 +1477,7 @@ export async function runChannelPollOnce({
         }
       }
       await enqueueInputEnvelope(worldRoot, {
+        lane,
         channelType,
         identity: String(channelConfig?.user ?? "").trim(),
         agentName,
@@ -1533,7 +1538,8 @@ export async function runChannelInputOnce({
   agentHouse,
   dedupLimit = 2000,
   maxItems = 10,
-  concurrency = 2
+  concurrency = 2,
+  lane = "durable"
 }) {
   if (!agentName) throw new Error("runChannelInputOnce requires agentName");
   if (!channelType) throw new Error("runChannelInputOnce requires channelType");
@@ -1554,7 +1560,8 @@ export async function runChannelInputOnce({
     const claimed = await claimOldestInputEnvelope(worldRoot, {
       workerTag: `${agentName}-input`,
       channelType,
-      agentName
+      agentName,
+      lane
     });
     if (!claimed) break;
     claims.push(claimed);
@@ -1672,7 +1679,8 @@ export async function runChannelProduceOnce({
   adapter,
   agentHouse,
   dedupLimit = 2000,
-  maxItems = 10
+  maxItems = 10,
+  lane = "durable"
 }) {
   if (!agentName) throw new Error("runChannelProduceOnce requires agentName");
   if (!channelType) throw new Error("runChannelProduceOnce requires channelType");
@@ -1694,7 +1702,8 @@ export async function runChannelProduceOnce({
     const claim = await claimOldestProduceEnvelope(worldRoot, {
       workerTag: `${agentName}-produce`,
       channelType,
-      agentName
+      agentName,
+      lane
     });
     if (!claim) break;
     const retryCount = Math.max(0, Math.trunc(Number(claim?.envelope?.retryCount) || 0));

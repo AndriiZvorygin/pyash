@@ -28,7 +28,7 @@ test("android lifecycle appends queued/running/success outcomes to newspaper", a
   const worldRoot = path.join(root, "world");
   setWorldRoot(worldRoot);
 
-  await run('su name handle news from text "emulator-5554" vyah start be android verify do');
+  await run('su name handle news from text "emulator-5554" vyah start future be android verify do');
   await runAndroidInputOnce({
     worldRoot,
     adapter: {
@@ -44,7 +44,7 @@ test("android lifecycle appends queued/running/success outcomes to newspaper", a
   const androidLog = files.find((name) => name.includes("-android-agent.pya"));
   assert.ok(androidLog, "expected android newspaper log");
   const text = await fs.readFile(path.join(newspaperDir, androidLog), "utf8");
-  assert.match(text, /vyah queued success/);
-  assert.match(text, /vyah running success/);
+  assert.match(text, /vyah success queued/);
+  assert.match(text, /vyah success running/);
   assert.match(text, /vyah success/);
 });

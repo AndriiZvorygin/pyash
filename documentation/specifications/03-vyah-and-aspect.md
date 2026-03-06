@@ -66,6 +66,11 @@ Canonical tense words currently accepted:
 | Distant-future reference | `far_future` | Mark far-future intent. |
 | Next-day reference | `tomorrow` | Anchor meaning to next day window. |
 
+Execution-lane profile (for async `vyah start` surfaces):
+- `soon` is the standard fast-lane selector.
+- `future` is the standard durable/spooled-lane selector.
+- `soon` and `future` together are invalid (`vyah tense invalid`).
+
 ## 5. Attitudinal inventory (implemented)
 
 | Attitudinal class | Word | Purpose |
