@@ -8,6 +8,7 @@ import {
 } from "../android_core/queue.mjs";
 import { createAdbAdapter } from "./adapter_adb.mjs";
 import { writeAndroidHandleState } from "./state.mjs";
+import { appendAndroidOutcome } from "./outcome.mjs";
 import {
   acquireAndroidDeviceLease,
   heartbeatAndroidDeviceLease,
@@ -40,7 +41,7 @@ function outcomeSentence({ envelope, success, intent, summary } = {}) {
     su: { name: handle },
     be: "android outcome",
     as: { name: intent || "unknown" },
-    vyah: { name: success ? "success" : "fail" },
+    vyah: { ve: { type: "name", values: [success ? "success" : "fail"] } },
     ob: { text: shortText(summary || (success ? "ok" : "fail"), 280) }
   };
 }
@@ -106,6 +107,18 @@ export async function runAndroidInputOnce({
           startedAt: new Date().toISOString(),
           summary: "running"
         });
+        try {
+          await appendAndroidOutcome(worldRoot, {
+            agentName: envelope.agentName,
+            handleId: commandId,
+            intent,
+            state: "running",
+            deviceId: envelope.deviceId,
+            message: "running"
+          });
+        } catch {
+          // best-effort logging only
+        }
       }
       await heartbeatAndroidDeviceLease(worldRoot, {
         deviceId: envelope.deviceId,
@@ -128,6 +141,18 @@ export async function runAndroidInputOnce({
           finishedAt: new Date().toISOString(),
           summary
         });
+        try {
+          await appendAndroidOutcome(worldRoot, {
+            agentName: envelope.agentName,
+            handleId: commandId,
+            intent,
+            state: success ? "success" : "fail",
+            deviceId: envelope.deviceId,
+            message: summary
+          });
+        } catch {
+          // best-effort logging only
+        }
       }
       await enqueueProduceEnvelope(worldRoot, {
         queuedAt: new Date().toISOString(),
@@ -149,6 +174,18 @@ export async function runAndroidInputOnce({
           finishedAt: new Date().toISOString(),
           summary: shortText(String(err?.message ?? err), 220) || "runtime fail"
         });
+        try {
+          await appendAndroidOutcome(worldRoot, {
+            agentName: envelope.agentName,
+            handleId: commandId,
+            intent,
+            state: "fail",
+            deviceId: envelope.deviceId,
+            message: shortText(String(err?.message ?? err), 220) || "runtime fail"
+          });
+        } catch {
+          // best-effort logging only
+        }
       }
       await ackRuntimeEnvelopeFail(worldRoot, {
         runtimePath: claimed.path,

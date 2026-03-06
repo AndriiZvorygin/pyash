@@ -10,6 +10,7 @@ import {
   writeAndroidHandleState,
   isTerminalHandleStatus
 } from "../agent/android/state.mjs";
+import { appendAndroidOutcome } from "../agent/android/outcome.mjs";
 import {
   runAndroidOnce,
   runAndroidPollOnce,
@@ -105,7 +106,7 @@ function queuedSentence({ commandId, intent, deviceId }) {
     mood: "ya",
     su: { name: commandId },
     be: "android command",
-    vyah: { name: "start" },
+    vyah: { ve: { type: "name", values: ["start", "success"] } },
     as: { name: intent },
     from: { text: deviceId },
     ob: { text: "queued" },
@@ -132,11 +133,14 @@ function phaseSentence({ phase = "all", result = {} } = {}) {
 function statusSentence({ mode = "status", state = null, handleId = "" } = {}) {
   const current = state || {};
   const status = String(current.status || "missing").trim() || "missing";
+  const vyahValues = status === "success" || status === "fail" || status === "cancel"
+    ? [mode, status]
+    : [mode];
   return {
     mood: "ya",
     su: { name: String(handleId || current.handleId || "").trim() || String(handleId || "android-handle") },
     be: "android command",
-    vyah: { name: mode === "await" ? "await" : "status" },
+    vyah: { ve: { type: "name", values: vyahValues } },
     as: { name: String(current.intent || "").trim() || "unknown" },
     from: { text: String(current.deviceId || "").trim() || "" },
     ob: { text: status },
@@ -261,6 +265,18 @@ export async function android(call, { remember: rememberFn = remember } = {}) {
     queuedAt,
     summary: "queued"
   });
+  try {
+    await appendAndroidOutcome(worldRoot, {
+      agentName,
+      handleId: commandId,
+      intent,
+      state: "queued",
+      deviceId,
+      message: "queued"
+    });
+  } catch {
+    // outcome logging must be best-effort and must not break command submission
+  }
 
   return queuedSentence({ commandId, intent, deviceId });
 }
