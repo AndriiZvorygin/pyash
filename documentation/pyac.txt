@@ -1187,6 +1187,10 @@ Also for streams that have a certain buffer size, can have a circular buffer, wi
 indicator of the current location, maybe using locative case.
 For flow-based-programming can have one or more functions listed in the vocative case,
 that will be activated to process new stream input. also good for "push" notifications.
+Current runtime note (2026):
+`be wait do` is the canonical short synchronization pause.
+`be sleep do` is reserved for consolidation lifecycle work (review, memory compaction, and
+optional LoRA/SFT preparation), not for short action timing.
 4.5
 Rank
 The rank or priority can be designated, possibly as part of the topic case, using prefix
