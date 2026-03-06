@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import path from "node:path";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -175,7 +176,7 @@ async function handleAwait(call, { worldRoot } = {}) {
 
 export async function android(call, { remember: rememberFn = remember } = {}) {
   const intent = ensureIntent(normalizeIntent(call?.be), call);
-  const worldRoot = resolveWorldRoot({ rememberFn });
+  const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
   if (intent === "status") return handleStatus(call, { worldRoot });
   if (intent === "await") return handleAwait(call, { worldRoot });
   const commandId = resolveCommandId(call);

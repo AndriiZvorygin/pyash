@@ -1,0 +1,8 @@
+su name android smoke verify from text serial be ceremony def
+  su name android smoke handle from text of from of this be android verify do
+  ob text "node command/android_run.mjs --once --phase input" to name text input step be command do
+  ob text "node command/android_run.mjs --once --phase produce" to name text produce step be command do
+  accordingto text "android smoke handle" during num 8000 be android await do
+prah
+
+from text "187a09d37d81" be android smoke verify do
