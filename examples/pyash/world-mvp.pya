@@ -7,4 +7,4 @@ to name text "commons" be go do
 be list do
 ob text "Hello from the commons." to filename "notes/hello.txt" be write do
 be read ob wo tail atmost num 10 from filename ".activity.pya" do
-be sleep do
+be wait do

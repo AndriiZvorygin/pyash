@@ -29,6 +29,12 @@ import {
 } from "./channels/matrix_runtime.mjs";
 import { updateAgentPresence } from "./presence.mjs";
 import { writeRouterHealthState } from "./channel_core/state.mjs";
+import {
+  runAndroidOnce,
+  runAndroidPollOnce,
+  runAndroidInputOnce,
+  runAndroidProduceOnce
+} from "./android/index.mjs";
 
 const HEARTBEAT_OK_TOKEN = "HEARTBEAT_OK";
 const HEARTBEAT_PROMPT = `Read HEARTBEAT.md in your agent house.
@@ -135,6 +141,31 @@ function shortError(err) {
   return String(err?.message ?? err ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function parseAndroidJob(jobName) {
+  const text = String(jobName ?? "").trim().toLowerCase();
+  const match = text.match(/^android\s+(poll|probe|input|produce)$/);
+  if (!match) return null;
+  return { kind: match[1] };
+}
+
+async function runAndroidPollJob({ worldRoot, job }) {
+  const parsed = parseAndroidJob(job?.jobName);
+  if (!parsed) return null;
+  let result = null;
+  if (parsed.kind === "poll" || parsed.kind === "probe") {
+    result = await runAndroidPollOnce({ worldRoot });
+  } else if (parsed.kind === "input") {
+    result = await runAndroidInputOnce({ worldRoot, maxItems: 10 });
+  } else if (parsed.kind === "produce") {
+    result = await runAndroidProduceOnce({ worldRoot, maxItems: 10 });
+  } else {
+    result = await runAndroidOnce({ worldRoot, inputMaxItems: 10, produceMaxItems: 10 });
+  }
+  return {
+    status: `android:received=${Number(result?.received ?? 0)}:handled=${Number(result?.handled ?? 0)}:sent=${Number(result?.sent ?? 0)}:queue=${Number(result?.queueDepth ?? 0)}`
+  };
 }
 
 async function runChannelPollJob({ worldRoot, job }) {
@@ -382,6 +413,8 @@ async function runServiceDefinitionJob({ worldRoot, job }) {
 }
 
 export async function runScheduledJob({ worldRoot, job }) {
+  const androidResult = await runAndroidPollJob({ worldRoot, job });
+  if (androidResult) return androidResult;
   const channelResult = await runChannelPollJob({ worldRoot, job });
   if (channelResult) return channelResult;
   if (!job?.agentName) return { status: "skipped:missing_agent" };

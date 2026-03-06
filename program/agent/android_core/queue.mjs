@@ -96,6 +96,13 @@ function envelopeMatchesScope(envelope = {}, { deviceId = "", agentName = "" } =
   return true;
 }
 
+function laneMatches(envelope = {}, lane = "") {
+  const wantLane = sanitizeScopeSegment(lane);
+  if (!wantLane) return true;
+  const hasLane = sanitizeScopeSegment(envelope?.lane, "durable");
+  return hasLane === wantLane;
+}
+
 async function requeueClaim(paths, claim, phase = "input") {
   const requeueDir = phase === "produce" ? paths.produceDir : paths.inputDir;
   await failSpoolItem({
@@ -121,6 +128,7 @@ function envelopeToText(envelope = {}) {
     { key: "phase", type: "text", value: quotePyashText(String(envelope.phase ?? "").trim()) },
     { key: "queued at", type: "text", value: quotePyashText(String(envelope.queuedAt ?? "")) },
     { key: "retry count", type: "num", value: Math.max(0, Math.trunc(Number(envelope.retryCount) || 0)) },
+    { key: "lane", type: "text", value: quotePyashText(String(envelope.lane || "durable")) },
     { key: "device id", type: "text", value: quotePyashText(String(envelope.deviceId ?? "")) },
     { key: "identity", type: "text", value: quotePyashText(String(envelope.identity ?? "")) },
     { key: "agent name", type: "text", value: quotePyashText(String(envelope.agentName ?? "")) },
@@ -142,6 +150,7 @@ function envelopeFromText(text) {
     phase: "",
     queuedAt: "",
     retryCount: 0,
+    lane: "durable",
     deviceId: "",
     identity: "",
     agentName: "",
@@ -153,6 +162,7 @@ function envelopeFromText(text) {
     if (entry.key === "phase") out.phase = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "queued at") out.queuedAt = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "retry count") out.retryCount = Math.max(0, Math.trunc(Number(entry.valueRaw) || 0));
+    if (entry.key === "lane") out.lane = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim() || "durable";
     if (entry.key === "device id") out.deviceId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "identity") out.identity = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "agent name") out.agentName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
@@ -215,7 +225,7 @@ async function readEnvelopeFile(targetPath) {
 
 export async function claimOldestInputEnvelope(
   worldRoot,
-  { workerTag = "", deviceId = "", agentName = "" } = {}
+  { workerTag = "", deviceId = "", agentName = "", lane = "" } = {}
 ) {
   const paths = await ensureAndroidQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.inputDir);
@@ -229,7 +239,7 @@ export async function claimOldestInputEnvelope(
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
-    if (!envelopeMatchesScope(envelope, { deviceId, agentName })) {
+    if (!envelopeMatchesScope(envelope, { deviceId, agentName }) || !laneMatches(envelope, lane)) {
       await requeueClaim(paths, claim, "input");
       continue;
     }
@@ -240,7 +250,7 @@ export async function claimOldestInputEnvelope(
 
 export async function claimOldestProduceEnvelope(
   worldRoot,
-  { workerTag = "", deviceId = "", agentName = "" } = {}
+  { workerTag = "", deviceId = "", agentName = "", lane = "" } = {}
 ) {
   const paths = await ensureAndroidQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.produceDir);
@@ -254,7 +264,7 @@ export async function claimOldestProduceEnvelope(
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
-    if (!envelopeMatchesScope(envelope, { deviceId, agentName })) {
+    if (!envelopeMatchesScope(envelope, { deviceId, agentName }) || !laneMatches(envelope, lane)) {
       await requeueClaim(paths, claim, "produce");
       continue;
     }

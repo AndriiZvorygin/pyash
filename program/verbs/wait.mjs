@@ -1,16 +1,7 @@
 import { remember } from "../remember/index.mjs";
 import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorldPlace, resolveWorldPlaceDir } from "../library/world.mjs";
 
-export async function sleep(sentence, { remember: rememberFn = remember } = {}) {
-  // Sleep is a durable lifecycle phase request used for consolidation work
-  // (memory compaction, review, LoRA/training preparation), not a short pause.
-  rememberFn({
-    mood: "ya",
-    su: { name: "world sleep requested" },
-    at: { date: new Date().toISOString() },
-    be: "sleep"
-  });
-
+export async function wait(sentence, { remember: rememberFn = remember } = {}) {
   if (isWorldToolsActive({ rememberFn })) {
     const agent = resolveWorldAgent({ rememberFn }) ?? "agent";
     const place = resolveWorldPlace({ rememberFn }) ?? "commons";
@@ -22,16 +13,16 @@ export async function sleep(sentence, { remember: rememberFn = remember } = {}) 
           mood: "ya",
           su: { name: agent },
           at: { date: new Date().toISOString() },
-          be: "sleep"
+          be: "wait"
         }
       });
     }
   }
-  return { be: "sleep" };
+  return { be: "wait" };
 }
 
-export default sleep;
+export default wait;
 
 export const signatures = [
-  { signatureWords: ["be", "sleep"], handler: sleep }
+  { signatureWords: ["be", "wait"], handler: wait }
 ];

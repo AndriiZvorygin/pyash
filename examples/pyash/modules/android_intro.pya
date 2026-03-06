@@ -1,0 +1,7 @@
+su name android introductory home-page be ceremony def
+  ob text "KEYCODE_WAKEUP" vyah start future be android press do
+  ob ve num 540 2000 540 300 vyah start future be android glide do
+  su name android introductory home-page keyboard ob text "KEYCODE_HOME" vyah start future be android press do
+  accordingto text "android introductory home-page keyboard" during num 8000 vyah await be android do
+prah
+su name android introductory home-page be export ya
