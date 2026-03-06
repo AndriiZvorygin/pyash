@@ -47,7 +47,7 @@ test("adb adapter lowers verify to state inspection commands", async () => {
   ]);
 });
 
-test("adb adapter lowers tap glide scroll type begin send accept intents", async () => {
+test("adb adapter lowers tap glide scroll press type begin send accept intents", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-adapter-lower-"));
   const worldRoot = path.join(root, "world");
   const calls = [];
@@ -67,6 +67,11 @@ test("adb adapter lowers tap glide scroll type begin send accept intents", async
     intent: "scroll",
     deviceId: "emulator-5554",
     payloadSentence: { be: "android scroll", ob: { text: "down" } }
+  });
+  await adapter.execute({
+    intent: "press",
+    deviceId: "emulator-5554",
+    payloadSentence: { be: "android press", ob: { text: "KEYCODE_HOME" } }
   });
   await adapter.execute({
     intent: "type",
@@ -101,11 +106,12 @@ test("adb adapter lowers tap glide scroll type begin send accept intents", async
   assert.equal(args[3][0], "shell");
   assert.equal(args[3][1], "input");
   assert.equal(args[3][2], "swipe");
-  assert.deepEqual(args[4], ["shell", "input", "text", "hello%sworld"]);
-  assert.deepEqual(args[5], ["shell", "monkey", "-p", "com.example.app", "-c", "android.intent.category.LAUNCHER", "1"]);
-  assert.deepEqual(args[6], ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", "https://example.com"]);
-  assert.deepEqual(args[7], ["push", "/tmp/a.txt", "/sdcard/Download/a.txt"]);
-  assert.deepEqual(args[8], ["pull", "/sdcard/Download/a.txt", "/tmp/a-out.txt"]);
+  assert.deepEqual(args[4], ["shell", "input", "keyevent", "KEYCODE_HOME"]);
+  assert.deepEqual(args[5], ["shell", "input", "text", "hello%sworld"]);
+  assert.deepEqual(args[6], ["shell", "monkey", "-p", "com.example.app", "-c", "android.intent.category.LAUNCHER", "1"]);
+  assert.deepEqual(args[7], ["shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", "https://example.com"]);
+  assert.deepEqual(args[8], ["push", "/tmp/a.txt", "/sdcard/Download/a.txt"]);
+  assert.deepEqual(args[9], ["pull", "/sdcard/Download/a.txt", "/tmp/a-out.txt"]);
 });
 
 test("adb adapter observe writes artifact file under android lane artifacts", async () => {

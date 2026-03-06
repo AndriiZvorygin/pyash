@@ -211,6 +211,15 @@ async function beginIntent({ deviceId, payloadSentence, runAdb } = {}) {
   return { success: true, summary: `begin app ok ${target}` };
 }
 
+async function pressIntent({ deviceId, payloadSentence, runAdb } = {}) {
+  const keycode = expectText(payloadSentence?.ob, { intent: "press" }).toUpperCase();
+  if (!/^KEYCODE_[A-Z0-9_]+$/.test(keycode)) {
+    throw new Error("android command rejected: press keycode must look like KEYCODE_HOME");
+  }
+  await runAdb({ deviceId, args: ["shell", "input", "keyevent", keycode] });
+  return { success: true, summary: `press ok ${keycode}` };
+}
+
 async function sendIntent({ deviceId, payloadSentence, runAdb } = {}) {
   const local = String(payloadSentence?.from?.filename ?? "").trim();
   const remote = String(payloadSentence?.to?.text ?? "").trim();
@@ -267,6 +276,9 @@ export function createAdbAdapter({ worldRoot, runAdb = runAdbRaw } = {}) {
         }
         if (selectedIntent === "begin") {
           return beginIntent({ deviceId: selectedDeviceId, payloadSentence: command, runAdb });
+        }
+        if (selectedIntent === "press") {
+          return pressIntent({ deviceId: selectedDeviceId, payloadSentence: command, runAdb });
         }
         if (selectedIntent === "send") {
           return sendIntent({ deviceId: selectedDeviceId, payloadSentence: command, runAdb });
