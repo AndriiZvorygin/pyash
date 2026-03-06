@@ -18,9 +18,9 @@ export function parseAdbDevicesOutput(text = "") {
 export function upsertAndroidDeviceIdSentence(text = "", serial = "") {
   const selected = String(serial ?? "").trim();
   if (!selected) throw new Error("android default device defective: missing serial");
-  const nextLine = `su name android device id ob text ${JSON.stringify(selected)} ya`;
+  const nextLine = `exists su name android device id ob text ${JSON.stringify(selected)} be default ya`;
   const body = String(text ?? "");
-  const pattern = /^\s*su name android device id ob text .*? ya\s*$/m;
+  const pattern = /^\s*(?:exists\s+)?su name android device id ob text .*?(?:\s+be default)?\s+ya\s*$/m;
   if (pattern.test(body)) {
     const replaced = body.replace(pattern, nextLine);
     return replaced.endsWith("\n") ? replaced : `${replaced}\n`;
