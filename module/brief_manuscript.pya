@@ -21,6 +21,8 @@ Rules:
 - Dramatic, authoritative tone.
 - Historical claims must come only from the provided transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
+- Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
+- If a detail feels uncertain, omit it instead of guessing.
 - Plain prose only.
 - No labels, no bullets, no markdown, no quotes around the full output.
 .text.quoted be text ya
@@ -30,14 +32,20 @@ exists su name brief video script fact two prompt ob text quoted.text.You are wr
 Task:
 - Write 2-3 short spoken sentences.
 - Use a different shocking historical fact than the one already used.
+- Prefer another explicit crisis, fall, or reform example that is plainly stated in the transcript.
 - Tie it to a clear modern parallel.
 - Keep this segment between 20 and 44 words.
 
 Rules:
 - Do not repeat the same person/event/core claim from the prior segment.
+- Prefer a clearly different historical section than the prior segment.
+- Prefer details that can stay close to the transcript's own wording.
 - Dramatic, authoritative tone.
 - Historical claims must come only from the provided transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
+- Do not synthesize a new historical mechanism by combining distant parts of the transcript.
+- Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
+- If a detail feels uncertain, omit it instead of guessing.
 - Plain prose only.
 - No labels, no bullets, no markdown, no quotes around the full output.
 .text.quoted be text ya
@@ -169,10 +177,24 @@ Rules:
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
 exists su name manuscript fact one request template ob text quoted.text.TARGET_WORDS: 20-44
+SAFE_HISTORY_RULES:
+- Use only historical details stated in the transcript.
+- Prefer one explicit event, reform, or mechanism rather than a blended summary.
+- Stay close to the transcript's wording for the historical claim.
+- Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
+- If unsure, keep the historical wording broader rather than more specific.
+
 TRANSCRIPT:
 [[source]].text.quoted be text ya
 
 exists su name manuscript fact two request template ob text quoted.text.TARGET_WORDS: 20-44
+SAFE_HISTORY_RULES:
+- Use only historical details stated in the transcript.
+- Prefer one explicit event, reform, or mechanism rather than a blended summary.
+- Stay close to the transcript's wording for the historical claim.
+- Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
+- If unsure, keep the historical wording broader rather than more specific.
+
 PRIOR SEGMENT:
 [[prior]]
 
@@ -290,12 +312,12 @@ su name brief video script platform pass ob text packet to name text verdict be 
 prah
 
 su name brief video script fact one platform ob text request to name text output be ceremony def
-  su name brief video script fact one write platform ob text of ob of this for name brief video script fact one mind to name text output by num 0 atmost num 52 be write do
+  su name brief video script fact one write platform ob text of ob of this for name brief video script fact one mind to name text output by num 0 atmost num 72 be write do
   su name output ret
 prah
 
 su name brief video script fact two platform ob text request to name text output be ceremony def
-  su name brief video script fact two write platform ob text of ob of this for name brief video script fact two mind to name text output by num 0 atmost num 52 be write do
+  su name brief video script fact two write platform ob text of ob of this for name brief video script fact two mind to name text output by num 0 atmost num 72 be write do
   su name output ret
 prah
 
@@ -319,19 +341,39 @@ su name manuscript platform verify from text request for text platform according
   su name output ret
 prah
 
+su name manuscript fact one verify from text transcript to name text output be ceremony def
+  su name manuscript fact one platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text output be manuscript platform verify do
+  su name manuscript fact one source thrust platform from text of from of this with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
+  fromindex num 1 toindex num 3 be manuscript fact one retry do
+  ob name text manuscript fact one source thrust pass be equally from text false then
+  su name manuscript fact one guarantee platform ob bool lie fromtext text "manuscript fact one source thrust defective" be guarantee do
+  su name output ret
+prah
+
+su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text manuscript fact one source thrust pass be equally from text true then be depart do
+  su name manuscript fact one retry platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text output be manuscript platform verify do
+  su name manuscript fact one source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
+prah
+
 su name manuscript fact two verify to name text output be ceremony def
   su name manuscript fact two platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
   su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
-  fromindex num 1 toindex num 3 be manuscript fact two retry do
+  su name manuscript fact two source thrust platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
+  fromindex num 1 toindex num 5 be manuscript fact two retry do
   ob name text manuscript fact two distinct pass be equally from text false then
   su name manuscript fact two guarantee platform ob bool lie fromtext text "manuscript fact two constraints defective" be guarantee do
+  ob name text manuscript fact two source thrust pass be equally from text false then
+  su name manuscript fact two source thrust guarantee platform ob bool lie fromtext text "manuscript fact two source thrust defective" be guarantee do
   su name output ret
 prah
 
 su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text manuscript fact two distinct pass be equally from text true then be depart do
+  ob name text manuscript fact two distinct pass be equally from text true then
+  ob name text manuscript fact two source thrust pass be equally from text true then be depart do
   su name manuscript fact two retry platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
   su name manuscript fact two distinct retry platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
+  su name manuscript fact two source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
 prah
 
 su name manuscript source thrust verify to name text pass be ceremony def
@@ -359,7 +401,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   ob name text brief video script source to name text manuscript replacement source be text do
   su name manuscript fact one request platform ob name map manuscript request replacements in name text manuscript fact one request template to name text manuscript fact one request be instead do
-  su name manuscript fact one platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text manuscript fact one out be manuscript platform verify do
+  su name manuscript fact one platform from text of ob of brief video script source to name text manuscript fact one out be manuscript fact one verify do
 
   ob name text manuscript fact one out to name text manuscript replacement prior be text do
   ob name text brief video script source to name text manuscript replacement source be text do
