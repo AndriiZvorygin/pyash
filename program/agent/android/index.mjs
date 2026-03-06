@@ -7,6 +7,12 @@ import {
   queueDepth
 } from "../android_core/queue.mjs";
 import { createAdbAdapter } from "./adapter_adb.mjs";
+import { writeAndroidHandleState } from "./state.mjs";
+import {
+  acquireAndroidDeviceLease,
+  heartbeatAndroidDeviceLease,
+  releaseAndroidDeviceLease
+} from "./lease.mjs";
 
 function shortText(value, max = 220) {
   const text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -58,7 +64,8 @@ export async function runAndroidInputOnce({
   worldRoot,
   adapter,
   maxItems = 10,
-  maxRetries = 2
+  maxRetries = 2,
+  leaseTtlMs = 30000
 } = {}) {
   const runtimeAdapter = adapter || createAdbAdapter({ worldRoot });
   const max = Math.max(1, Math.trunc(Number(maxItems) || 10));
@@ -75,7 +82,36 @@ export async function runAndroidInputOnce({
     const envelope = claimed?.envelope ?? {};
     received += 1;
     const intent = resolveAndroidIntent(envelope.payloadSentence);
+    const commandId = String(envelope.commandId || envelope.payloadId || "").trim();
+    const leaseOwner = "android-input";
+    const lease = await acquireAndroidDeviceLease(worldRoot, {
+      deviceId: envelope.deviceId,
+      owner: leaseOwner,
+      commandId,
+      ttlMs: leaseTtlMs
+    });
+    if (!lease?.acquired) {
+      await ackRuntimeEnvelopeFail(worldRoot, {
+        runtimePath: claimed.path,
+        retryCount: retryCountFromEnvelope(envelope),
+        maxRetries: retryMax,
+        requeuePhase: "input"
+      });
+      continue;
+    }
     try {
+      if (commandId) {
+        await writeAndroidHandleState(worldRoot, commandId, {
+          status: "running",
+          startedAt: new Date().toISOString(),
+          summary: "running"
+        });
+      }
+      await heartbeatAndroidDeviceLease(worldRoot, {
+        deviceId: envelope.deviceId,
+        owner: leaseOwner,
+        commandId
+      });
       const result = await runtimeAdapter.execute({
         worldRoot,
         envelope,
@@ -86,6 +122,13 @@ export async function runAndroidInputOnce({
       });
       const success = result?.success !== false;
       const summary = result?.summary || (success ? "android ok" : "android fail");
+      if (commandId) {
+        await writeAndroidHandleState(worldRoot, commandId, {
+          status: success ? "success" : "fail",
+          finishedAt: new Date().toISOString(),
+          summary
+        });
+      }
       await enqueueProduceEnvelope(worldRoot, {
         queuedAt: new Date().toISOString(),
         deviceId: envelope.deviceId,
@@ -100,11 +143,24 @@ export async function runAndroidInputOnce({
       enqueued += 1;
       lastInputAt = new Date().toISOString();
     } catch (err) {
+      if (commandId) {
+        await writeAndroidHandleState(worldRoot, commandId, {
+          status: "fail",
+          finishedAt: new Date().toISOString(),
+          summary: shortText(String(err?.message ?? err), 220) || "runtime fail"
+        });
+      }
       await ackRuntimeEnvelopeFail(worldRoot, {
         runtimePath: claimed.path,
         retryCount: retryCountFromEnvelope(envelope),
         maxRetries: retryMax,
         requeuePhase: "input"
+      });
+    } finally {
+      await releaseAndroidDeviceLease(worldRoot, {
+        deviceId: envelope.deviceId,
+        owner: leaseOwner,
+        commandId
       });
     }
   }
