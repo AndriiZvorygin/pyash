@@ -357,3 +357,15 @@ su name android device id ob text "187a09d37d81" ya
 ```
 
 When set, `be android ... do` calls can omit `from text <device id>`.
+
+First-time helper:
+
+```bash
+node command/android_default_device.mjs
+```
+
+Behavior:
+1. runs `adb devices -l`,
+2. picks a ready (`device`) target (or prompts when multiple are attached),
+3. asks confirmation,
+4. writes/updates `su name android device id ob text "<serial>" ya` in `configure/secret.pya`.

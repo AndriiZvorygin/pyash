@@ -6,6 +6,7 @@
     "test": "node --test \"quiz/**/*.test.mjs\"",
     "quiz": "node --test \"quiz/**/*.test.mjs\"",
     "config:safety": "node command/check_local_config_safety.mjs",
+    "android:default": "node command/android_default_device.mjs",
     "repl": "node program/main.mjs",
     "run": "node command/run_pya_program.mjs",
     "trace": "node command/read_pya_trace.mjs",
