@@ -236,7 +236,11 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   let lastResult;
   let updatedTarget = null;
   let evoke = sentence;
+  const inheritedClause = prevEvokeRef?.from?.la ?? prevEvoke?.from?.la ?? null;
   const evokeSeed = { ...sentence };
+  if (inheritedClause && !(evokeSeed?.from?.la)) {
+    evokeSeed.from = { ...(evokeSeed.from ?? {}), la: inheritedClause };
+  }
   if (sentence.by?.register && !evokeSeed.by) evokeSeed.by = sentence.by;
   state.currentEvoke = evokeSeed;
   state.executingBody = true;

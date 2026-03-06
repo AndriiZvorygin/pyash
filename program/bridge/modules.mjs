@@ -241,16 +241,23 @@ function collectModuleInfo(sentences) {
   const exportNames = new Set();
   const importAliases = new Set();
   let inCeremony = 0;
+  let inRefinery = 0;
 
   for (const sentence of sentences) {
     if (sentence?.mood === "def" && sentence?.be === "ceremony") {
       if (sentence?.su?.name) localCeremonies.add(sentence.su.name);
       inCeremony += 1;
     }
+    if (sentence?.mood === "def" && sentence?.be === "refinery") {
+      inRefinery += 1;
+    }
     if (sentence?.mood === "prah" && inCeremony > 0) {
       inCeremony -= 1;
     }
-    if (inCeremony > 0) {
+    if (sentence?.mood === "prah" && inCeremony === 0 && inRefinery > 0) {
+      inRefinery -= 1;
+    }
+    if (inCeremony > 0 || inRefinery > 0) {
       continue;
     }
     const name = sentence?.su?.name;
@@ -275,16 +282,25 @@ async function parseModuleFile(modulePath) {
 
 function ensureNoTopLevelDo(sentences, { source }) {
   let inCeremony = 0;
+  let inRefinery = 0;
   for (const sentence of sentences) {
     if (sentence?.mood === "def" && sentence?.be === "ceremony") {
       inCeremony += 1;
+      continue;
+    }
+    if (sentence?.mood === "def" && sentence?.be === "refinery") {
+      inRefinery += 1;
       continue;
     }
     if (sentence?.mood === "prah" && inCeremony > 0) {
       inCeremony -= 1;
       continue;
     }
-    if (inCeremony > 0) continue;
+    if (sentence?.mood === "prah" && inCeremony === 0 && inRefinery > 0) {
+      inRefinery -= 1;
+      continue;
+    }
+    if (inCeremony > 0 || inRefinery > 0) continue;
     if (sentence?.mood === "do" && sentence?.be !== "import") {
       throwErrorSentence({
         name: "module import incomplete",

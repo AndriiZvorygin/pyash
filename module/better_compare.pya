@@ -8,21 +8,13 @@ su name better compare judge to name text decision be ceremony def
   ob name text better compare judge request for name mind to name text better compare judge raw be write do
   ob name text better compare judge raw atmost num 1 to name text better compare judge line be line tail do
   ob text "" to name text better compare decision be text do
-  ob name text better compare judge line from text "/^\\s*A\\b/i" be resemble then ob text "A" to name text better compare decision be text do
-  ob name text better compare judge line from text "/^\\s*B\\b/i" be resemble then ob text "B" to name text better compare decision be text do
+  ob name text better compare judge line from text "/^\s*A\b/i" be resemble then ob text "A" to name text better compare decision be text do
+  ob name text better compare judge line from text "/^\s*B\b/i" be resemble then ob text "B" to name text better compare decision be text do
   ob name text better compare decision be equally from text "" then ob bool lie fromtext text "better-compare-judge-defective" be guarantee do
   su name better compare decision ret
 prah
 
-su name better compare from la ob text "example" be text do ko ob text judge prompter to name text champion atmost num 0 be ceremony def
-  ob text of ob of this to name text better compare judge prompter be text do
-  ob num of atmost of this to name num better compare round be plus do
-  ob name num better compare round be tiny from num 1 then ob bool lie fromtext text "better-compare-atmost-defective" be guarantee do
-
-  ob text "" to name text better compare candidate a be text do
-  ob text "" to name text better compare candidate b be text do
-  ob text "" to name text better compare decision be text do
-
+su name better compare tournament to name text champion out be ceremony def
   to name text better compare candidate a be evoke do
   to name text better compare candidate b be evoke do
 
@@ -70,8 +62,21 @@ su name better compare from la ob text "example" be text do ko ob text judge pro
   ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name text better compare decision be equally from text "A" then ob num 1 to name num better compare line be plus do
   ob name num better compare available be equally from num 1 then ob name num better compare round be giant from num 5 then ob name num better compare line be giant from num 1 then ob num 0 to name num better compare available be plus do
 
-  ob name text better compare candidate a to name text better compare champion out be text do
-  su name better compare champion out ret
+  ob name text better compare candidate a to name text champion out be text do
+  su name champion out ret
+prah
+
+su name better compare internal be refinery def
+su name better compare tournament stage to name text better compare champion out be better compare tournament do
+prah
+
+su name better compare from la ob text "example" be text do ko ob text judge prompter to name text champion atmost num 0 be ceremony def
+  ob text of ob of this to name text better compare judge prompter be text do
+  ob num of atmost of this to name num better compare round be plus do
+  ob name num better compare round be tiny from num 1 then ob bool lie fromtext text "better-compare-atmost-defective" be guarantee do
+
+  ob text "compare" from name better compare internal to name text better compare champion out be refinery do
+  su name result ret
 prah
 
 exists su name better compare be export ya
