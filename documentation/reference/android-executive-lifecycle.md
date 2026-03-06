@@ -336,12 +336,14 @@ screenshot + uiautomator dump
 ## 12. Small Pyash Verb Surface (Reference Mapping)
 
 A compact verb mapping that keeps agent control small:
-1. `be android inspect do` -> `adb devices`, `getprop`, `wm size`, foreground activity checks.
+1. `be android verify do` -> `adb devices`, `getprop`, `wm size`, foreground activity checks.
 2. `be android observe do` -> screenshot capture/pull and optional `uiautomator dump`.
 3. `be android tap do` -> `adb shell input tap`.
-4. `be android swipe do` -> `adb shell input swipe`.
-5. `be android type do` -> `adb shell input text` and keyevents.
-6. `be android open do` -> app launch (`monkey`) or URL open (`am start`).
-7. `be android transfer do` -> `adb push` / `adb pull`.
+4. `be android glide do` -> `adb shell input swipe`.
+5. `be android scroll do` -> scroll gesture profile (lowered to `adb shell input swipe ...`).
+6. `be android type do` -> `adb shell input text` and keyevents.
+7. `be android begin do` -> app launch (`monkey`) or URL open (`am start`).
+8. `be android send do` -> `adb push`.
+9. `be android accept do` -> `adb pull`.
 
 Implementations may keep these as adapter-level intents and lower to raw ADB commands inside the Android executive.
