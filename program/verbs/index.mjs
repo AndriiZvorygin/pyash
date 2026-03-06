@@ -58,6 +58,7 @@ import orVerb, { signatures as orSignatures } from "./or.mjs";
 import rename, { signatures as renameSignatures } from "./rename.mjs";
 import search, { signatures as searchSignatures } from "./search.mjs";
 import sleep, { signatures as sleepSignatures } from "./sleep.mjs";
+import wait, { signatures as waitSignatures } from "./wait.mjs";
 import touch, { signatures as touchSignatures } from "./touch.mjs";
 import del, { signatures as deleteSignatures } from "./delete.mjs";
 import session, { signatures as sessionSignatures } from "./session.mjs";
@@ -131,6 +132,7 @@ export {
   health,
   go,
   copy,
+  wait,
   sleep,
   session,
   touch,
@@ -219,6 +221,7 @@ export const builtInSignatures = [
   ...orSignatures,
   ...renameSignatures,
   ...searchSignatures,
+  ...waitSignatures,
   ...sleepSignatures,
   ...sessionSignatures,
   ...touchSignatures,

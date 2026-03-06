@@ -9,7 +9,7 @@
 
 Define a deterministic, place-based agent world where:
 
-* agents act through **go, list, read, write, sleep**
+* agents act through **go, list, read, write, wait, sleep**
 * social awareness emerges from **shared directories and activity tails**
 * tools are practiced as **situated capabilities**
 * work is **episodic and bounded**
@@ -246,7 +246,8 @@ Agents MAY use only:
 * **list** — perceive place entries and presence
 * **read** — read artifacts or activity tails
 * **write** — speak or leave artifacts
-* **sleep** — enter bedroom rest state
+* **wait** — short synchronization pause during an active turn
+* **sleep** — enter consolidation lifecycle (bedroom review, memory consolidation, LoRA/training prep)
 
 All other facts are produced by the world as consequences.
 
@@ -298,6 +299,7 @@ Semantics:
 Presence is derived from activity facts produced by:
 
 * go
+* wait
 * sleep
 * write
 * duty completion
@@ -378,6 +380,7 @@ A turn consists of:
 * list (required)
 * optional read
 * optional write
+* optional wait
 * implicit yield
 * bounded by a time/context budget
 
@@ -455,7 +458,7 @@ Tools appear via place listing.
 
 ### 11.1 Sleep
 
-Sleep moves the agent to bedroom and suspends eligibility.
+Sleep moves the agent to bedroom, suspends eligibility, and opens the consolidation lifecycle.
 
 ### 11.2 Review
 
@@ -466,6 +469,7 @@ During sleep, the world requests:
 * lessons
 * next practice
 * training gold (high-signal facts, mistakes, and corrections)
+* LoRA/SFT preparation inputs derived from reviewed artifacts
 
 ### 11.3 Practice
 
@@ -496,7 +500,7 @@ Conduct is enforced by itinerary and review, not by syntax.
 Required:
 
 * directory roots with renamed subspaces
-* go / list / read / write / sleep
+* go / list / read / write / wait / sleep
 * presence via activity tail
 * one communal program
 * one tool per major place
