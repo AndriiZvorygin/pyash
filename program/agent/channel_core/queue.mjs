@@ -1,10 +1,8 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { parse } from "../../understand/index.mjs";
 import {
-  ensureSpoolDirs,
   makeSpoolFilename,
   writeSpoolItem,
   listSpoolItemsOldestFirst,
@@ -12,6 +10,7 @@ import {
   completeSpoolItem,
   failSpoolItem
 } from "../../library/spool.mjs";
+import { holdingLanePaths, ensureHoldingLaneDirs } from "../holding_lane/layout.mjs";
 
 function quotePyashText(value) {
   return JSON.stringify(String(value ?? ""));
@@ -111,52 +110,11 @@ async function requeueClaim(paths, claim, phase = "input") {
 }
 
 export function channelQueuePaths(worldRoot) {
-  const root = path.join(worldRoot, "holding", "channel");
-  const produceRoot = path.join(root, "produce");
-  return {
-    root,
-    inputDir: path.join(root, "input"),
-    runtimeDir: path.join(root, "runtime"),
-    produceDir: path.join(produceRoot, "waiting"),
-    produceSuccessDir: path.join(produceRoot, "success"),
-    produceFailDir: path.join(produceRoot, "fail"),
-    artifactsDir: path.join(root, "artifacts"),
-    tmpDir: path.join(root, "tmp")
-  };
-}
-
-async function migrateLegacyProduceWaiting(paths) {
-  const legacyDir = path.join(paths.root, "produce");
-  let entries = [];
-  try {
-    entries = await fs.readdir(legacyDir, { withFileTypes: true });
-  } catch (err) {
-    if (err?.code === "ENOENT") return;
-    throw err;
-  }
-  const moves = [];
-  for (const entry of entries) {
-    if (!entry?.isFile?.()) continue;
-    const fromPath = path.join(legacyDir, entry.name);
-    const toPath = path.join(paths.produceDir, entry.name);
-    moves.push(fs.rename(fromPath, toPath).catch(() => {}));
-  }
-  await Promise.all(moves);
+  return holdingLanePaths(worldRoot, { lane: "channel" });
 }
 
 export async function ensureChannelQueueDirs(worldRoot) {
-  const paths = channelQueuePaths(worldRoot);
-  await ensureSpoolDirs(paths.root, [
-    paths.inputDir,
-    paths.runtimeDir,
-    paths.produceDir,
-    paths.produceSuccessDir,
-    paths.produceFailDir,
-    paths.artifactsDir,
-    paths.tmpDir
-  ]);
-  await migrateLegacyProduceWaiting(paths);
-  return paths;
+  return ensureHoldingLaneDirs(worldRoot, { lane: "channel", migrateLegacyProduce: true });
 }
 
 function envelopeToText(envelope = {}) {

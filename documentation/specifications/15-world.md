@@ -222,9 +222,10 @@ Lane model:
 * lane layouts are lifecycle-oriented (for example `input/`, `runtime/`, `produce/success/`, `produce/fail/`)
 * lane contracts are specified by the owning subsystem spec
 
-Current reserved lane:
+Current reserved lanes:
 
 * `world/holding/channel/` is reserved for channel adapters/router runtime spool (`documentation/specifications/24-channel-contract.md`)
+* `world/holding/android/` is reserved for Android control-surface queue spool (lane scaffold; runtime contract to be defined)
 
 Isolation rules:
 
