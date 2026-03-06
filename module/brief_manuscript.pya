@@ -20,7 +20,10 @@ Task:
 Rules:
 - Dramatic, authoritative tone.
 - Historical claims must come only from the provided transcript.
+- Prefer wording that stays close to the transcript instead of polished historical paraphrase.
+- Do not turn a broad historical description into a stronger causal claim unless that causal wording appears in the transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
+- Do not add summary phrases like "because elites hoarded land" or "survived through reforms" unless the transcript says that directly.
 - Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
 - If a detail feels uncertain, omit it instead of guessing.
 - Plain prose only.
@@ -44,6 +47,8 @@ Rules:
 - Historical claims must come only from the provided transcript.
 - Do not introduce new people, places, events, or policies not present in the transcript.
 - Do not synthesize a new historical mechanism by combining distant parts of the transcript.
+- Do not turn a broad historical description into a stronger causal claim unless that causal wording appears in the transcript.
+- Do not add summary phrases like "because elites hoarded land" or "survived through reforms" unless the transcript says that directly.
 - Do not add exact years, dates, reigns, or named rulers unless that exact detail appears in the transcript.
 - If a detail feels uncertain, omit it instead of guessing.
 - Plain prose only.
@@ -181,6 +186,8 @@ SAFE_HISTORY_RULES:
 - Use only historical details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
 - Stay close to the transcript's wording for the historical claim.
+- Do not strengthen the transcript into a cleaner cause-and-effect claim unless that stronger wording is explicitly present.
+- Do not rewrite a specific reform into a shorter summary if the shorter summary changes the mechanism.
 - Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
 - If unsure, keep the historical wording broader rather than more specific.
 
@@ -192,6 +199,8 @@ SAFE_HISTORY_RULES:
 - Use only historical details stated in the transcript.
 - Prefer one explicit event, reform, or mechanism rather than a blended summary.
 - Stay close to the transcript's wording for the historical claim.
+- Do not strengthen the transcript into a cleaner cause-and-effect claim unless that stronger wording is explicitly present.
+- Do not rewrite a specific reform into a shorter summary if the shorter summary changes the mechanism.
 - Do not add exact years, dates, reigns, or named rulers unless the transcript states them.
 - If unsure, keep the historical wording broader rather than more specific.
 
