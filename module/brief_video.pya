@@ -326,10 +326,7 @@ su name teaching video section footnote mapper ob filename section video fromind
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
-  ob text of ob of footnote mode stage to name text section footnote mode chosen be text do
-  ob name text section footnote mode chosen be equally from text "karaoke" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage as wo karaoke by num of ob of subtitle margin ratio stage be footnote do
-  ob name text section footnote mode chosen be equally from text "plain" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage by num of ob of subtitle margin ratio stage be footnote do
-  ob name text section footnote mode chosen be equally from text "wordflow" then su name section clip output stage from filename of ob of section srt stage fromstate wo srt with filename of ob of section video input stage become wo video to filename of ob of section clip stage as wo wordflow by num of ob of subtitle margin ratio stage be footnote do
+  su name section clip output stage from filename of ob of section srt stage with filename of ob of section video input stage to filename of ob of section clip stage by num of ob of subtitle margin ratio stage with text of ob of footnote mode stage to name filename section clip output be footnote by mode do
   su name section clip output stage ret
 prah
 
