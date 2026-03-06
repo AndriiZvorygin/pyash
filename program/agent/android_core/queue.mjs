@@ -58,15 +58,13 @@ function parseMapEntries(body) {
   return entries;
 }
 
-function sanitizeRoomName(raw = "") {
+function sanitizeDeviceId(raw = "") {
   return String(raw ?? "")
     .trim()
-    .replace(/^!/, "")
-    .replace(/^#/, "")
     .replace(/[^a-z0-9._:-]+/gi, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .toLowerCase() || "room";
+    .toLowerCase() || "device";
 }
 
 function sanitizeScopeSegment(raw = "", fallback = "") {
@@ -78,22 +76,22 @@ function sanitizeScopeSegment(raw = "", fallback = "") {
     .replace(/^-+|-+$/g, "") || fallback;
 }
 
-function filenameMatchesScope(filename, { channelType = "", agentName = "" } = {}) {
+function filenameMatchesScope(filename, { deviceId = "", agentName = "" } = {}) {
   const name = String(filename ?? "").trim().toLowerCase();
   if (!name) return false;
-  const channel = sanitizeScopeSegment(channelType);
+  const device = sanitizeScopeSegment(deviceId);
   const agent = sanitizeScopeSegment(agentName);
-  if (channel && !name.includes(`-${channel}-`)) return false;
+  if (device && !name.includes(`-${device}-`)) return false;
   if (agent && !name.includes(`-${agent}-`)) return false;
   return true;
 }
 
-function envelopeMatchesScope(envelope = {}, { channelType = "", agentName = "" } = {}) {
-  const wantChannel = sanitizeScopeSegment(channelType);
+function envelopeMatchesScope(envelope = {}, { deviceId = "", agentName = "" } = {}) {
+  const wantDevice = sanitizeScopeSegment(deviceId);
   const wantAgent = sanitizeScopeSegment(agentName);
-  const hasChannel = sanitizeScopeSegment(envelope?.channelType);
+  const hasDevice = sanitizeScopeSegment(envelope?.deviceId);
   const hasAgent = sanitizeScopeSegment(envelope?.agentName);
-  if (wantChannel && hasChannel !== wantChannel) return false;
+  if (wantDevice && hasDevice !== wantDevice) return false;
   if (wantAgent && hasAgent !== wantAgent) return false;
   return true;
 }
@@ -109,12 +107,12 @@ async function requeueClaim(paths, claim, phase = "input") {
   });
 }
 
-export function channelQueuePaths(worldRoot) {
-  return holdingLanePaths(worldRoot, { lane: "channel" });
+export function androidQueuePaths(worldRoot) {
+  return holdingLanePaths(worldRoot, { lane: "android" });
 }
 
-export async function ensureChannelQueueDirs(worldRoot) {
-  return ensureHoldingLaneDirs(worldRoot, { lane: "channel", migrateLegacyProduce: true });
+export async function ensureAndroidQueueDirs(worldRoot) {
+  return ensureHoldingLaneDirs(worldRoot, { lane: "android", migrateLegacyProduce: true });
 }
 
 function envelopeToText(envelope = {}) {
@@ -123,46 +121,43 @@ function envelopeToText(envelope = {}) {
     { key: "phase", type: "text", value: quotePyashText(String(envelope.phase ?? "").trim()) },
     { key: "queued at", type: "text", value: quotePyashText(String(envelope.queuedAt ?? "")) },
     { key: "retry count", type: "num", value: Math.max(0, Math.trunc(Number(envelope.retryCount) || 0)) },
-    { key: "channel type", type: "text", value: quotePyashText(String(envelope.channelType ?? "")) },
+    { key: "device id", type: "text", value: quotePyashText(String(envelope.deviceId ?? "")) },
     { key: "identity", type: "text", value: quotePyashText(String(envelope.identity ?? "")) },
     { key: "agent name", type: "text", value: quotePyashText(String(envelope.agentName ?? "")) },
-    { key: "room name", type: "text", value: quotePyashText(String(envelope.roomName ?? "")) },
     { key: "payload", type: "text", value: quotePyashText(payloadSentenceText) }
   ];
   if (envelope.payloadId) {
     entries.push({ key: "payload id", type: "text", value: quotePyashText(String(envelope.payloadId)) });
   }
-  if (envelope.eventId) {
-    entries.push({ key: "event id", type: "text", value: quotePyashText(String(envelope.eventId)) });
+  if (envelope.commandId) {
+    entries.push({ key: "command id", type: "text", value: quotePyashText(String(envelope.commandId)) });
   }
-  return `${mapBlock("channel queue envelope", entries)}\n`;
+  return `${mapBlock("android queue envelope", entries)}\n`;
 }
 
 function envelopeFromText(text) {
   const blocks = parseMapBlocks(text);
-  const entries = parseMapEntries(blocks.get("channel queue envelope") ?? "");
+  const entries = parseMapEntries(blocks.get("android queue envelope") ?? "");
   const out = {
     phase: "",
     queuedAt: "",
     retryCount: 0,
-    channelType: "",
+    deviceId: "",
     identity: "",
     agentName: "",
-    roomName: "",
     payloadId: "",
-    eventId: "",
+    commandId: "",
     payloadSentence: null
   };
   for (const entry of entries) {
     if (entry.key === "phase") out.phase = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "queued at") out.queuedAt = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "retry count") out.retryCount = Math.max(0, Math.trunc(Number(entry.valueRaw) || 0));
-    if (entry.key === "channel type") out.channelType = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    if (entry.key === "device id") out.deviceId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "identity") out.identity = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "agent name") out.agentName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
-    if (entry.key === "room name") out.roomName = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "payload id") out.payloadId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
-    if (entry.key === "event id") out.eventId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
+    if (entry.key === "command id") out.commandId = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
     if (entry.key === "payload") {
       const payloadText = String(parsePyashQuotedText(entry.valueRaw) ?? "").trim();
       if (payloadText) {
@@ -178,21 +173,19 @@ function envelopeFromText(text) {
 }
 
 function buildFilename(envelope = {}) {
-  const hashSource = envelope.eventId
-    || envelope.payloadId
-    || sentenceToPyash(envelope.payloadSentence ?? {});
+  const hashSource = envelope.commandId || envelope.payloadId || sentenceToPyash(envelope.payloadSentence ?? {});
   return makeSpoolFilename({
     at: envelope.queuedAt || new Date(),
-    channelType: envelope.channelType || "channel",
+    channelType: "android",
     agentName: envelope.agentName || "agent",
-    roomName: sanitizeRoomName(envelope.roomName),
+    roomName: sanitizeDeviceId(envelope.deviceId),
     kind: envelope.phase === "produce" ? "produce" : "event",
     hashSource
   });
 }
 
 export async function enqueueInputEnvelope(worldRoot, envelope = {}) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const normalized = {
     ...envelope,
     phase: "input",
@@ -204,7 +197,7 @@ export async function enqueueInputEnvelope(worldRoot, envelope = {}) {
 }
 
 export async function enqueueProduceEnvelope(worldRoot, envelope = {}) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const normalized = {
     ...envelope,
     phase: "produce",
@@ -222,12 +215,12 @@ async function readEnvelopeFile(targetPath) {
 
 export async function claimOldestInputEnvelope(
   worldRoot,
-  { workerTag = "", channelType = "", agentName = "" } = {}
+  { workerTag = "", deviceId = "", agentName = "" } = {}
 ) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.inputDir);
   for (const filename of pending) {
-    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
+    if (!filenameMatchesScope(filename, { deviceId, agentName })) continue;
     const claim = await claimSpoolItem({
       fromDir: paths.inputDir,
       runtimeDir: paths.runtimeDir,
@@ -236,7 +229,7 @@ export async function claimOldestInputEnvelope(
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
-    if (!envelopeMatchesScope(envelope, { channelType, agentName })) {
+    if (!envelopeMatchesScope(envelope, { deviceId, agentName })) {
       await requeueClaim(paths, claim, "input");
       continue;
     }
@@ -247,12 +240,12 @@ export async function claimOldestInputEnvelope(
 
 export async function claimOldestProduceEnvelope(
   worldRoot,
-  { workerTag = "", channelType = "", agentName = "" } = {}
+  { workerTag = "", deviceId = "", agentName = "" } = {}
 ) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const pending = await listSpoolItemsOldestFirst(paths.produceDir);
   for (const filename of pending) {
-    if (!filenameMatchesScope(filename, { channelType, agentName })) continue;
+    if (!filenameMatchesScope(filename, { deviceId, agentName })) continue;
     const claim = await claimSpoolItem({
       fromDir: paths.produceDir,
       runtimeDir: paths.runtimeDir,
@@ -261,7 +254,7 @@ export async function claimOldestProduceEnvelope(
     });
     if (!claim) continue;
     const envelope = await readEnvelopeFile(claim.path);
-    if (!envelopeMatchesScope(envelope, { channelType, agentName })) {
+    if (!envelopeMatchesScope(envelope, { deviceId, agentName })) {
       await requeueClaim(paths, claim, "produce");
       continue;
     }
@@ -271,7 +264,7 @@ export async function claimOldestProduceEnvelope(
 }
 
 export async function ackRuntimeEnvelopeSuccess(worldRoot, { runtimePath } = {}) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   return completeSpoolItem({
     runtimePath,
     successDir: paths.produceSuccessDir
@@ -282,7 +275,7 @@ export async function ackRuntimeEnvelopeFail(
   worldRoot,
   { runtimePath, retryCount = 0, maxRetries = 0, requeuePhase = "input" } = {}
 ) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const requeueDir = requeuePhase === "produce" ? paths.produceDir : paths.inputDir;
   return failSpoolItem({
     runtimePath,
@@ -294,7 +287,7 @@ export async function ackRuntimeEnvelopeFail(
 }
 
 export async function queueDepth(worldRoot) {
-  const paths = await ensureChannelQueueDirs(worldRoot);
+  const paths = await ensureAndroidQueueDirs(worldRoot);
   const [input, produce] = await Promise.all([
     listSpoolItemsOldestFirst(paths.inputDir),
     listSpoolItemsOldestFirst(paths.produceDir)
