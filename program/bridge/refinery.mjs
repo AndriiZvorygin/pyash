@@ -1082,9 +1082,14 @@ export async function runRefinery({
       try {
         const depRefName = platform.deps.length ? platform.deps[platform.deps.length - 1] : null;
         const depRefFact = depRefName ? resolveDependencyFact(depRefName) : null;
+        const inheritedClause = prevEvokeRef?.from?.la ?? prevEvoke?.from?.la ?? null;
         if (depRefFact) {
-          state.currentEvoke = depRefFact;
-          state.currentEvokeRef = depRefFact;
+          const depCarrier = cloneValue(depRefFact);
+          if (inheritedClause && !(depCarrier?.from?.la)) {
+            depCarrier.from = { ...(depCarrier.from ?? {}), la: inheritedClause };
+          }
+          state.currentEvoke = depCarrier;
+          state.currentEvokeRef = depCarrier;
         }
         try {
           result = await interpret(runnableSentence);
