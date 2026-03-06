@@ -94,7 +94,7 @@ const lines = [
   "    environment:",
   `      - HOME=${quote(containerHome)}`,
   `      - NPM_CONFIG_PREFIX=${quote(`${containerHome}/.npm-global`)}`,
-  `      - PATH=${quote(`${containerHome}/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`)}`
+  `      - PATH=${quote(`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${containerHome}/.npm-global/bin`)}`
 ];
 const codexDir = process.env.PYASH_CODEX_DIR;
 const gitConfig = process.env.PYASH_GITCONFIG;

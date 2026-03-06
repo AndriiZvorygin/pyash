@@ -6,7 +6,7 @@ Container assets live under `container/` (Dockerfile, orchestrate file, VNC help
 ## Build the image
 
 ```bash
-docker build -t pyash-dev -f container/pyash/Dockerfile .
+docker build -t liberit/pyash:latest -f container/pyash/Dockerfile .
 ```
 
 ## Configure + start
@@ -24,7 +24,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 ## GPU support (NVIDIA)
@@ -41,7 +41,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 ## Audio passthrough (PulseAudio)
@@ -57,7 +57,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 Notes:
@@ -126,7 +126,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 Notes:
@@ -144,7 +144,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 Then ensure Pyash uses it via `configure/default.pya` or:
@@ -180,10 +180,12 @@ su name container image push latest ob bool truth ya
 ```
 
 Behavior:
+- When `container image repo` is set and you do not pass `--tag`, the runtime image is `repo:latest`.
 - When `container image repo` is set and you do not pass `--tag`, buildx tags as `repo:YYYYMMDD`.
 - If `container image push latest` is `truth`, it also tags `repo:latest`.
 - If `container image push` is `truth` and you do not pass `--push/--load`, it pushes by default.
-- If no repo is set, builds stay local and use `pyash-dev`.
+- Without `--new-codex`, `--codex-version`, or `--no-cache`, `./container/build.sh` first tries to pull today's `repo:YYYYMMDD` and retag it to the runtime image before rebuilding locally.
+- If no repo is set, builds stay local and use `liberit/pyash:latest`.
 
 CLI flags still win over config:
 - `--tag` replaces configured default tags (repeat `--tag` for multiple tags).
