@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
 import { claimOldestInputEnvelope } from "../program/agent/android_core/queue.mjs";
+import { queueDepth } from "../program/agent/android_core/queue.mjs";
 
 async function run(line) {
   return interpret(parse(line));
@@ -93,4 +94,19 @@ test("android verb requires device id when no default is configured", async () =
     () => run('be android verify do'),
     (err) => err?.sentence?.su?.name === "android command defective"
   );
+});
+
+test("android phase verbs run without shelling out", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-phase-verb-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  await run('from text "emulator-5554" be android verify do');
+  const inputResult = await run("be android input do");
+  const produceResult = await run("be android produce do");
+  assert.equal(inputResult?.as?.name, "input");
+  assert.equal(produceResult?.as?.name, "produce");
+  const depth = await queueDepth(worldRoot);
+  assert.equal(Number.isFinite(depth.total), true);
 });
