@@ -347,3 +347,13 @@ A compact verb mapping that keeps agent control small:
 9. `be android accept do` -> `adb pull`.
 
 Implementations may keep these as adapter-level intents and lower to raw ADB commands inside the Android executive.
+
+## 13. Default Device Configuration
+
+To avoid hard-coding serials in examples, set a default device in local `configure/secret.pya`:
+
+```pyash
+su name android device id ob text "187a09d37d81" ya
+```
+
+When set, `be android ... do` calls can omit `from text <device id>`.

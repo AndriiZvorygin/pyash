@@ -1,8 +1,8 @@
-su name android smoke verify from text serial be ceremony def
-  su name android smoke handle from text of from of this be android verify do
+su name android smoke verify be ceremony def
+  su name android smoke handle be android verify do
   be android input do
   be android produce do
   accordingto text "android smoke handle" during num 8000 be android await do
 prah
 
-from text "187a09d37d81" be android smoke verify do
+be android smoke verify do

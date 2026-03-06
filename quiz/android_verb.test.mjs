@@ -110,3 +110,21 @@ test("android phase verbs run without shelling out", async () => {
   const depth = await queueDepth(worldRoot);
   assert.equal(Number.isFinite(depth.total), true);
 });
+
+test("android verbs use configured default device id when from text is omitted", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-android-default-device-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+  doRemember({
+    mood: "ya",
+    su: { name: "android device id" },
+    ob: { text: "emulator-5554" },
+    be: "text"
+  });
+
+  await run('su name default verify be android verify do');
+  const claimed = await claimOldestInputEnvelope(worldRoot, { workerTag: "quiz" });
+  assert.equal(claimed?.envelope?.deviceId, "emulator-5554");
+  assert.equal(claimed?.envelope?.payloadSentence?.be, "android verify");
+});
