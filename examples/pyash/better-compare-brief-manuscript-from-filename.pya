@@ -1,0 +1,32 @@
+ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
+
+from filename "../../module/brief_manuscript.pya" ob name brief manuscript to name brief manuscript be import do
+from filename "../../module/better_compare.pya" ob name better compare to name better compare be import do
+
+exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise manuscript judge. Return only A or B." ya
+
+exists su name text better compare brief manuscript judge prompter ob text quoted.text.You are comparing two candidate short spoken teaching manuscripts generated from the same source document.
+
+Pick the better manuscript using these priorities:
+1. Stronger hook and payoff.
+2. Better factual grounding in the source document.
+3. Tighter spoken flow and momentum.
+4. More memorable phrasing without fluff.
+
+Prefer the manuscript that sounds most ready to read aloud as a finished short script.
+
+Return only A or B..text.quoted be text ya
+
+su name manuscript source stage from filename of ob of source become wo text to name text manuscript source be read do
+
+su name manuscript draft ob text source to name text manuscript out be ceremony def
+  su name manuscript draft run stage from text of ob of this to name text manuscript out be brief manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript final stage from la ob text of ob of manuscript source to name text manuscript scratch be manuscript draft do ko ob text of ob of better compare brief manuscript judge prompter to name text manuscript final atmost num 6 be better compare do
+
+su name manuscript final ob name text manuscript final be write do
+
+as wo ollama be discharge do
