@@ -134,6 +134,7 @@ export async function hear(
     const hasInputPath = Boolean(resolveHearInputPath(sentence, { rememberFn }));
     const hasTarget = Boolean(sentence?.to?.name || sentence?.to?.filename);
     const canForward =
+      hearBackend === "whisper" &&
       !wantsSrt &&
       !hasTarget &&
       ((aspectKey === "timebox" && Number.isFinite(Number(sentence?.during?.num ?? sentence?.during))) ||
@@ -524,8 +525,11 @@ export const signatures = [
   { signatureWords: ["be", "hear", "ob", "text", "from", "name", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "ob", "text"], handler: hear },
   { signatureWords: ["be", "hear", "to", "name", "text"], handler: hear },
+  { signatureWords: ["be", "hear", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "to", "name", "text"], handler: hear },
+  { signatureWords: ["be", "hear", "from", "filename", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "from", "name", "filename", "to", "name", "text"], handler: hear },
+  { signatureWords: ["be", "hear", "from", "name", "filename", "to", "filename"], handler: hear },
   { signatureWords: ["be", "hear", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "ob", "text", "vyah", "stream"], handler: hear },
   { signatureWords: ["be", "hear", "from", "filename", "vyah", "stream"], handler: hear },

@@ -45,6 +45,9 @@ exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya
 exists su name say workflow root ob filename "./say/" be default ya
 exists su name say workflow default ob text "andrii_teaching_voice_qwen3_TTS" be default ya
+exists su name music host ob text "http://localhost:8188" be default ya
+exists su name music workflow root ob filename "./music/" be default ya
+exists su name music workflow default ob text "audio_ace_step_1_5_checkpoint" be default ya
 exists su name qwen say tone default ob text "speak as a compassionate teacher" be default ya
 exists su name qwen say tone strategy ob text "heuristic" be default ya
 exists su name qwen say tone promptify system prompt ob text "You are a voice director for a text to speech teaching video. Return only one speaking direction line for Qwen3 instructions." be default ya

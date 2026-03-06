@@ -1,0 +1,16 @@
+ob filename text lyrics be input ya
+from filename of ob of lyrics become wo text to name text lyrics text be read do
+
+su name music options be map def
+  su name seed ob num 424242 ya
+  su name seconds ob num 12 ya
+  su name duration ob num 12 ya
+  su name bpm ob num 84 ya
+  su name timesignature ob text "4" ya
+  su name language ob text "en" ya
+  su name keyscale ob text "Bb major" ya
+  su name quality ob text "96k" ya
+prah
+
+su name song demo fromtext text "Ambient focus, soft pads, gentle pulse, modern electronic texture" ob name text lyrics text with name music options be music say do
+ob name song demo be write do
