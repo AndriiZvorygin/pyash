@@ -1,10 +1,7 @@
-su name android wakeup home be ceremony def
-  ob text "KEYCODE_WAKEUP" vyah start future be android press do
-  ob ve num 540 2000 540 300 vyah start future be android glide do
-  su name home key ob text "KEYCODE_HOME" vyah start future be android press do
-  be android input do
-  be android produce do
-  accordingto text "home key" during num 8000 vyah await be android do
+from filename "./modules/android_intro.pya" ob name android introductory home-page be import do
+
+su name android wakeup home-page be ceremony def
+  be android introductory home-page do
 prah
 
-be android wakeup home do
+be android wakeup home-page do
