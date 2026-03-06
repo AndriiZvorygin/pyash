@@ -10,6 +10,12 @@ import {
   writeAndroidHandleState,
   isTerminalHandleStatus
 } from "../agent/android/state.mjs";
+import {
+  runAndroidOnce,
+  runAndroidPollOnce,
+  runAndroidInputOnce,
+  runAndroidProduceOnce
+} from "../agent/android/index.mjs";
 
 function nowIso() {
   return new Date().toISOString();
@@ -101,6 +107,22 @@ function queuedSentence({ commandId, intent, deviceId }) {
   };
 }
 
+function phaseSentence({ phase = "all", result = {} } = {}) {
+  const received = Number(result?.received ?? 0);
+  const handled = Number(result?.handled ?? 0);
+  const sent = Number(result?.sent ?? 0);
+  const queue = Number(result?.queueDepth ?? 0);
+  return {
+    mood: "ya",
+    su: { name: "android runtime" },
+    be: "android command",
+    vyah: { name: "status" },
+    as: { name: phase },
+    ob: { text: `received=${received} handled=${handled} sent=${sent} queue=${queue}` },
+    to: { num: queue }
+  };
+}
+
 function statusSentence({ mode = "status", state = null, handleId = "" } = {}) {
   const current = state || {};
   const status = String(current.status || "missing").trim() || "missing";
@@ -174,11 +196,33 @@ async function handleAwait(call, { worldRoot } = {}) {
   return statusSentence({ mode: "await", state: current || { status: "timeout" }, handleId });
 }
 
+async function handlePhaseRun(intent, { worldRoot } = {}) {
+  if (intent === "poll" || intent === "probe") {
+    const result = await runAndroidPollOnce({ worldRoot });
+    return phaseSentence({ phase: intent, result });
+  }
+  if (intent === "input") {
+    const result = await runAndroidInputOnce({ worldRoot, maxItems: 20 });
+    return phaseSentence({ phase: intent, result });
+  }
+  if (intent === "produce") {
+    const result = await runAndroidProduceOnce({ worldRoot, maxItems: 20 });
+    return phaseSentence({ phase: intent, result });
+  }
+  if (intent === "all") {
+    const result = await runAndroidOnce({ worldRoot, inputMaxItems: 20, produceMaxItems: 20 });
+    return phaseSentence({ phase: intent, result });
+  }
+  return null;
+}
+
 export async function android(call, { remember: rememberFn = remember } = {}) {
   const intent = ensureIntent(normalizeIntent(call?.be), call);
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.resolve(process.cwd(), "world");
   if (intent === "status") return handleStatus(call, { worldRoot });
   if (intent === "await") return handleAwait(call, { worldRoot });
+  const phase = await handlePhaseRun(intent, { worldRoot });
+  if (phase) return phase;
   const commandId = resolveCommandId(call);
   const deviceId = ensureDeviceId(resolveDeviceId(call, { rememberFn }), call);
   const agentName = resolveAgentName(call, { rememberFn });
@@ -227,5 +271,10 @@ export const signatures = [
   { signatureWords: ["be", "android", "accept", "from", "text", "fromstate", "text", "to", "filename"], handler: android },
   { signatureWords: ["be", "android", "status", "accordingto", "text"], handler: android },
   { signatureWords: ["be", "android", "await", "accordingto", "text"], handler: android },
-  { signatureWords: ["be", "android", "await", "accordingto", "text", "during", "num"], handler: android }
+  { signatureWords: ["be", "android", "await", "accordingto", "text", "during", "num"], handler: android },
+  { signatureWords: ["be", "android", "poll"], handler: android },
+  { signatureWords: ["be", "android", "probe"], handler: android },
+  { signatureWords: ["be", "android", "input"], handler: android },
+  { signatureWords: ["be", "android", "produce"], handler: android },
+  { signatureWords: ["be", "android", "all"], handler: android }
 ];
