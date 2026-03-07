@@ -23,6 +23,7 @@ From inside `pyash`, set:
 Optional diarization token:
 
 - set `HF_TOKEN` in shell environment before starting compose.
+- when `diarize: true` (Pyash `as wo speaker`), SRT cue text is prefixed with `[SPEAKER_xx]`.
 
 ## Runtime Model
 

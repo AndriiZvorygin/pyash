@@ -72,8 +72,8 @@ export async function loadDefaultConfig({ cwd, interpretFn, entryPath }) {
   for (const root of roots) {
     const configPaths = [
       path.resolve(root, "configure", "default.pya"),
-      path.resolve(root, "configure", "container.pya"),
-      path.resolve(root, "configure", "secret.pya")
+      path.resolve(root, "configure", "secret.pya"),
+      path.resolve(root, "configure", "container.pya")
     ];
     pushModuleDir(root);
     try {
