@@ -79,6 +79,14 @@ function resolveHearWhisperxModel({ rememberFn } = {}) {
   return resolveConfigText("hear whisperx model", { rememberFn }) || "large-v3";
 }
 
+function resolveHearWhisperxDevice({ rememberFn } = {}) {
+  return resolveConfigText("hear whisperx device", { rememberFn }) || "cpu";
+}
+
+function resolveHearHfToken({ rememberFn } = {}) {
+  return resolveConfigText("hear hf token", { rememberFn }) || "";
+}
+
 function resolveHearQwenHost({ rememberFn } = {}) {
   return (
     resolveConfigText("hear qwen host", { rememberFn }) ||
@@ -139,6 +147,8 @@ export {
   resolveHearBackend,
   resolveHearHost,
   resolveHearWhisperxModel,
+  resolveHearWhisperxDevice,
+  resolveHearHfToken,
   resolveHearQwenHost,
   resolveHearWorkflowRoot,
   resolveHearWorkflowDefault,

@@ -10,7 +10,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
 import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
-import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault, resolveHearQwenChunkMaxSeconds, resolveHearQwenChunkOverlapSeconds } from "./hear/config.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearWhisperxDevice, resolveHearHfToken, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault, resolveHearQwenChunkMaxSeconds, resolveHearQwenChunkOverlapSeconds } from "./hear/config.mjs";
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
@@ -417,6 +417,8 @@ export async function hear(
       } else if (wantsSrt) {
         const host = resolveHearHost({ rememberFn });
         const whisperxModel = resolveHearWhisperxModel({ rememberFn });
+        const whisperxDevice = resolveHearWhisperxDevice({ rememberFn });
+        const hfToken = resolveHearHfToken({ rememberFn });
         const language = resolveHearLanguage({ rememberFn });
         backend = "whisperx";
         model = whisperxModel;
@@ -439,7 +441,9 @@ export async function hear(
             outputPath,
             language,
             model: whisperxModel,
+            device: whisperxDevice,
             diarize: wantsSpeakerDiarize,
+            hfToken,
             streamLogs: aspectKey === "stream" || hearWhisperxLogStreamingEnabled(rememberFn),
             onLog: (line) => {
               const text = String(line ?? "").trim();

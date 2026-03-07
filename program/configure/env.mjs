@@ -25,6 +25,8 @@ const ENV_BINDINGS = [
   { env: "PYA_HEAR_BACKEND", name: "hear backend default", type: "text" },
   { env: "PYA_HEAR_HOST", name: "hear host", type: "text" },
   { env: "PYA_HEAR_WHISPERX_MODEL", name: "hear whisperx model", type: "text" },
+  { env: "PYA_HEAR_WHISPERX_DEVICE", name: "hear whisperx device", type: "text" },
+  { env: "PYA_HEAR_HF_TOKEN", name: "hear hf token", type: "text" },
   { env: "PYA_HEAR_QWEN_CHUNK_MAX_SECONDS", name: "hear qwen chunk max seconds", type: "num" },
   { env: "PYA_HEAR_QWEN_CHUNK_OVERLAP_SECONDS", name: "hear qwen chunk overlap seconds", type: "num" },
   { env: "PYA_KEYBOARD_BIN", name: "keyboard bin", type: "text" },
