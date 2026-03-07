@@ -1,0 +1,3 @@
+ob filename text recording be input ya
+exists su name hear backend default ob text "whisperx" be default ya
+from filename of ob of recording as wo speaker become wo srt to filename "artifacts/hear/whisperx-hear-speaker-from-filename.srt" be hear do
