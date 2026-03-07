@@ -157,15 +157,19 @@ function collectInputDeclarations(entries = []) {
 }
 
 function parseBindingTailWords(bindingWords = []) {
-  const joined = bindingWords.join(" ").trim();
-  if (!joined) return { explicit: [], shorthand: null, shorthandValues: [] };
-  const tokens = tokenize(joined).map(normalizeToken).filter(Boolean);
-  if (tokens.length === 1 && tokens[0] !== "ob") {
-    return { explicit: [], shorthand: tokens[0], shorthandValues: [tokens[0]] };
+  const raw = Array.isArray(bindingWords)
+    ? bindingWords.map(word => normalizeToken(String(word)))
+    : [];
+  if (raw.length === 0) return { explicit: [], shorthand: null, shorthandValues: [] };
+  // Shorthand mode maps one CLI arg to one filename input; keep raw arg boundaries.
+  if (raw[0] !== "ob") {
+    return {
+      explicit: [],
+      shorthand: raw.length === 1 ? raw[0] : null,
+      shorthandValues: raw
+    };
   }
-  if (tokens.length > 1 && !tokens.includes("ob")) {
-    return { explicit: [], shorthand: null, shorthandValues: tokens };
-  }
+  const tokens = tokenize(raw.join(" ")).map(normalizeToken).filter(Boolean);
   const explicit = [];
   let index = 0;
   while (index < tokens.length) {
