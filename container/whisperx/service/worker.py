@@ -10,6 +10,7 @@ from typing import Any, Dict, Tuple
 
 _MODEL_CACHE: Dict[Tuple[str, str, str], Any] = {}
 _ALIGN_CACHE: Dict[Tuple[str, str], Tuple[Any, Any]] = {}
+_DIARIZE_CACHE: Dict[Tuple[str, str], Any] = {}
 
 
 def _emit(obj: Dict[str, Any]) -> None:
@@ -39,6 +40,9 @@ def _write_srt(path: str, segments: list) -> None:
       continue
     start = float(seg.get("start", 0.0))
     end = float(seg.get("end", 0.0))
+    speaker = str(seg.get("speaker", "")).strip()
+    if speaker:
+      text = f"[{speaker}] {text}"
     lines.append(str(idx))
     lines.append(f"{_fmt_srt_time(start)} --> {_fmt_srt_time(end)}")
     lines.append(text)
@@ -79,6 +83,27 @@ def _get_align(language: str, device: str, stream: bool):
   return value
 
 
+def _get_diarize_pipeline(device: str, use_auth_token: str, stream: bool):
+  key = (device, use_auth_token)
+  pipeline = _DIARIZE_CACHE.get(key)
+  if pipeline is None:
+    import whisperx  # type: ignore
+    diarize_cls = getattr(whisperx, "DiarizationPipeline", None)
+    if diarize_cls is None:
+      from whisperx.diarize import DiarizationPipeline as diarize_cls  # type: ignore
+    if stream:
+      _emit({"type": "log", "text": f"load_diarize_pipeline device={device}"})
+    t0 = time.time()
+    try:
+      pipeline = diarize_cls(use_auth_token=use_auth_token, device=device)
+    except TypeError:
+      pipeline = diarize_cls(token=use_auth_token, device=device)
+    _DIARIZE_CACHE[key] = pipeline
+    if stream:
+      _emit({"type": "log", "text": f"load_diarize_pipeline done {time.time() - t0:.2f}s"})
+  return pipeline
+
+
 def _torch_discharge() -> None:
   try:
     import torch  # type: ignore
@@ -105,6 +130,7 @@ def _transcribe_core(req: Dict[str, Any], stream: bool) -> Dict[str, Any]:
   language = str(req.get("language") or "en")
   compute_type = str(req.get("compute_type") or "int8")
   device = str(req.get("device") or "cuda").strip() or "cuda"
+  diarize = bool(req.get("diarize"))
 
   os.makedirs(output_dir, exist_ok=True)
   import whisperx  # type: ignore
@@ -133,6 +159,19 @@ def _transcribe_core(req: Dict[str, Any], stream: bool) -> Dict[str, Any]:
   result = whisperx.align(result["segments"], align_model, metadata, audio, device)
   if stream:
     _emit({"type": "log", "text": f"align done {time.time() - t0:.2f}s"})
+
+  if diarize:
+    hf_token = str(req.get("hf_token") or os.environ.get("HF_TOKEN") or "").strip()
+    if hf_token == "":
+      return {"ok": False, "code": 400, "error": "diarize requested but HF_TOKEN missing"}
+    pipeline = _get_diarize_pipeline(device, hf_token, stream=stream)
+    if stream:
+      _emit({"type": "log", "text": "diarize segments"})
+    t0 = time.time()
+    diarize_segments = pipeline(audio)
+    result = whisperx.assign_word_speakers(diarize_segments, result)
+    if stream:
+      _emit({"type": "log", "text": f"diarize done {time.time() - t0:.2f}s"})
 
   stem = os.path.splitext(os.path.basename(input_path))[0]
   generated_srt = os.path.join(output_dir, f"{stem}.srt")
@@ -164,7 +203,8 @@ def _transcribe_core(req: Dict[str, Any], stream: bool) -> Dict[str, Any]:
     "output_srt": final_srt,
     "output_json": generated_json if (generated_json and os.path.exists(generated_json)) else "",
     "model": model,
-    "language": language
+    "language": language,
+    "diarize": diarize
   }
 
 
@@ -193,6 +233,7 @@ def main() -> None:
       elif op == "discharge":
         _MODEL_CACHE.clear()
         _ALIGN_CACHE.clear()
+        _DIARIZE_CACHE.clear()
         _torch_discharge()
         _emit({"ok": True, "code": 200, "be": "discharge"})
       elif op == "ping":

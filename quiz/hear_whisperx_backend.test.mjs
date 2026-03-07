@@ -18,6 +18,8 @@ test("hear become wo srt uses whisperx backend and speaker diarize flag", async 
     if (name === "hear backend default") return { ob: { text: "whisperx" } };
     if (name === "hear host") return { ob: { text: "http://whisperx:8000" } };
     if (name === "hear whisperx model") return { ob: { text: "large-v3" } };
+    if (name === "hear whisperx device") return { ob: { text: "cuda" } };
+    if (name === "hear hf token") return { ob: { text: "hf_test_token" } };
     if (name === "hear language") return { ob: { text: "en" } };
     return null;
   };
@@ -47,6 +49,8 @@ test("hear become wo srt uses whisperx backend and speaker diarize flag", async 
     assert.equal(result?.be, "hear");
     assert.equal(result?.ob?.filename, outputPath);
     assert.equal(Boolean(diarizePayload?.diarize), true);
+    assert.equal(String(diarizePayload?.device ?? ""), "cuda");
+    assert.equal(String(diarizePayload?.hf_token ?? ""), "hf_test_token");
     assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear request whisperx"));
     assert.ok(exchange.some((s) => s?.be === "hear" && s?.su?.name === "hear result whisperx" && /whisperx ok/u.test(String(s?.totext?.text ?? ""))));
   } finally {
