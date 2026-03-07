@@ -56,10 +56,20 @@ Boundary note:
 
 For same input bytes + same model/profile, normalization should be reproducible within documented tolerance.
 
-## 5. Conformance
+## 5. Large-audio backend behavior
+
+For large audio inputs, backends may apply internal chunking without changing the `be hear do` sentence surface.
+
+Qwen hear implementations should:
+- prefer seam-safe splitting (silence/VAD when available),
+- include small chunk overlap to avoid cutting words at boundaries,
+- merge chunk outputs deterministically, offsetting timestamps to source time,
+- deduplicate overlap text/timestamps so final transcript/SRT is monotonic and non-overlapping.
+
+## 6. Conformance
 
 Implementation conforms when speech/hear surfaces are sentence-shaped, stream-safe, and artifact-linked for replay.
 
-## 6. Full draft reference
+## 7. Full draft reference
 
 `documentation/recipes/spec-archive/09-speech-and-hear.full.md`
