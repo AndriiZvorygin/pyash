@@ -10,13 +10,14 @@ import { throwErrorSentence } from "../error.mjs";
 import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { state } from "../bridge/state.mjs";
 import { canonicalJsonStringify, sha256 } from "./hear/hash.mjs";
-import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault } from "./hear/config.mjs";
+import { resolveWhisperBinary, resolveWhisperStreamBinary, resolveModelPath, resolveHearLanguage, resolveHearCapture, resolveHearPrompt, resolveHearInputPath, resolveHearBackend, resolveHearHost, resolveHearWhisperxModel, resolveHearQwenHost, resolveHearWorkflowRoot, resolveHearWorkflowDefault, resolveHearQwenChunkMaxSeconds, resolveHearQwenChunkOverlapSeconds } from "./hear/config.mjs";
 import { resolveOutputPath, metadataPathForOutput, readInputBytes } from "./hear/paths.mjs";
 import { isBlankAudioLine, buildStreamTranscript, sanitizeTranscript, makeStreamStdoutWriter, startFileTail } from "./hear/stream.mjs";
 import { handleHearStream } from "./hear/run_stream.mjs";
 import { resolveConfigBool, resolveConfigText } from "../configure/env.mjs";
 import { transcribeWithWhisperx } from "./hear/whisperx.mjs";
 import { transcribeWithQwenComfyui } from "./hear/qwen_comfyui.mjs";
+import { isQwenOutOfMemoryError, transcribeWithQwenComfyuiChunked } from "./hear/qwen_chunked.mjs";
 
 const hearStreamProcesses = new Map();
 
@@ -88,7 +89,8 @@ export async function hear(
   sentence,
   {
     remember: rememberFn = remember,
-    transcribeQwenFn = transcribeWithQwenComfyui
+    transcribeQwenFn = transcribeWithQwenComfyui,
+    transcribeQwenChunkedFn = transcribeWithQwenComfyuiChunked
   } = {}
 ) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
@@ -328,12 +330,89 @@ export async function hear(
             be: "hear"
           });
         } catch (err) {
-          throwErrorSentence({
-            name: "hear defective",
-            message: `hear defective: ${err?.message ?? "qwen hear failed"}`,
-            from: { name: "hear" },
-            raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
-          });
+          let recovered = false;
+          if (isQwenOutOfMemoryError(err)) {
+            const maxChunkSeconds = resolveHearQwenChunkMaxSeconds({ rememberFn });
+            const overlapSeconds = resolveHearQwenChunkOverlapSeconds({ rememberFn });
+            emitExchangeSentence({
+              mood: "ya",
+              su: { name: "hear qwen retry chunked" },
+              from: { filename: inputPath },
+              to: { filename: outputPath },
+              fromstate: { text: host },
+              as: { text: workflowName },
+              by: { num: maxChunkSeconds },
+              during: { num: overlapSeconds },
+              be: "hear"
+            });
+            try {
+              const chunkedPayload = await transcribeQwenChunkedFn({
+                inputPath,
+                host,
+                workflowRoot,
+                workflowName,
+                language,
+                context,
+                maxChunkSeconds,
+                overlapSeconds,
+                returnTimestamps: true,
+                useSegmentsForTranscript: wantsSrt,
+                transcribeFn: transcribeQwenFn,
+                onChunk: ({ index, total, startSeconds, endSeconds, segmentCount, transcript: chunkTranscript }) => {
+                  const preview = String(chunkTranscript ?? "").replace(/\s+/gu, " ").trim().slice(0, 180);
+                  emitExchangeSentence({
+                    mood: "ya",
+                    su: { name: "hear qwen chunk result" },
+                    from: { filename: inputPath },
+                    to: { filename: outputPath },
+                    fromstate: { text: host },
+                    as: { text: workflowName },
+                    by: { num: Number(index) + 1 },
+                    fromindex: { num: Number(index) + 1 },
+                    toindex: { num: Number(total) },
+                    during: { num: Math.max(0, Number(endSeconds) - Number(startSeconds)) },
+                    atindex: { num: Number(segmentCount) },
+                    fromtext: preview ? { text: preview } : undefined,
+                    be: "hear"
+                  });
+                }
+              });
+              transcript = wantsSrt ? String(chunkedPayload?.srt ?? "") : sanitizeTranscript(chunkedPayload?.transcript ?? "");
+              emitExchangeSentence({
+                mood: "ya",
+                su: { name: "hear result qwen chunked" },
+                from: { filename: inputPath },
+                ob: { filename: outputPath },
+                fromstate: { text: host },
+                as: { text: workflowName },
+                by: { num: Number(chunkedPayload?.chunkCount ?? 0) },
+                fromtext: chunkedPayload?.timestampsRaw ? { text: clipLogText(chunkedPayload.timestampsRaw, 1200) } : undefined,
+                be: "hear"
+              });
+              recovered = true;
+            } catch (chunkErr) {
+              throwErrorSentence({
+                name: "hear defective",
+                message: `hear defective: ${chunkErr?.message ?? err?.message ?? "qwen hear failed"}`,
+                from: { name: "hear" },
+                raw: {
+                  host,
+                  inputPath,
+                  outputPath,
+                  error: chunkErr?.message ?? String(chunkErr),
+                  priorError: err?.message ?? String(err)
+                }
+              });
+            }
+          }
+          if (!recovered) {
+            throwErrorSentence({
+              name: "hear defective",
+              message: `hear defective: ${err?.message ?? "qwen hear failed"}`,
+              from: { name: "hear" },
+              raw: { host, inputPath, outputPath, error: err?.message ?? String(err) }
+            });
+          }
         }
       } else if (wantsSrt) {
         const host = resolveHearHost({ rememberFn });
