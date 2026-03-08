@@ -53,9 +53,32 @@ function countWords(text) {
   return raw.split(/\s+/u).filter(Boolean).length;
 }
 
+function sanitizeTimingCuts(rawCuts) {
+  const source = Array.isArray(rawCuts) ? rawCuts : [];
+  const cuts = source
+    .map((cut) => ({
+      since: Number(cut?.since ?? 0),
+      until: Number(cut?.until ?? Number(cut?.since ?? 0)),
+      obText: String(cut?.obText ?? "")
+    }))
+    .filter((cut) => Number.isFinite(cut.since) && Number.isFinite(cut.until))
+    .sort((a, b) => a.since - b.since || a.until - b.until);
+  if (!cuts.length) return [];
+  const out = [];
+  let prevEnd = Math.max(0, cuts[0].since);
+  for (const cut of cuts) {
+    const since = Math.max(prevEnd, Math.max(0, cut.since));
+    const rawDur = Math.max(0.02, cut.until - cut.since);
+    const until = since + rawDur;
+    out.push({ since, until, obText: cut.obText });
+    prevEnd = until;
+  }
+  return out;
+}
+
 function buildTimingRows(lyricsCuts, timingCuts) {
   const lines = Array.isArray(lyricsCuts) ? lyricsCuts : [];
-  const cuts = Array.isArray(timingCuts) ? timingCuts : [];
+  const cuts = sanitizeTimingCuts(timingCuts);
   if (!lines.length) throw new Error("lyrics to srt defective: no lyric lines");
   if (!cuts.length) throw new Error("lyrics to srt defective: no timing cuts");
 
@@ -98,10 +121,15 @@ function buildTimingRows(lyricsCuts, timingCuts) {
     const until = Math.max(since + 0.06, wordToTime(endTimingWord));
     rows.push({ index: i + 1, since, until, text: line });
   }
-  let prevEnd = 0;
+  const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
+  const timelineEnd = Number(cueWordPositions[cueWordPositions.length - 1]?.until ?? timelineStart);
+  const timelineSpan = Math.max(0.01, timelineEnd - timelineStart);
+  const minLineSeconds = Math.max(0.18, Math.min(0.80, (timelineSpan / Math.max(1, lines.length)) * 0.18));
+
+  let prevEnd = timelineStart;
   for (const row of rows) {
     row.since = Math.max(prevEnd, Number(row.since ?? 0));
-    row.until = Math.max(row.since + 0.06, Number(row.until ?? row.since + 0.06));
+    row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
     prevEnd = row.until;
   }
   return rows;
