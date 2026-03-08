@@ -851,10 +851,14 @@ function metadataTextFromRemember(rememberFn, { videoFile = "", thumbnailFile = 
   const title = String(rememberFn("video title")?.ob?.text ?? "").trim();
   const heading = String(rememberFn("video heading")?.ob?.text ?? "").trim();
   const description = String(rememberFn("video description")?.ob?.text ?? "").trim();
+  const summary = String(rememberFn("video summary")?.ob?.text ?? description).trim();
+  const tags = String(rememberFn("video tags")?.ob?.text ?? "").trim();
   const video = String(videoFile ?? "").trim();
   const thumbnail = String(thumbnailFile ?? "").trim();
   if (title) lines.push(`su name title ob text ${JSON.stringify(title)} ya`);
   if (heading) lines.push(`su name heading ob text ${JSON.stringify(heading)} ya`);
+  if (summary) lines.push(`su name summary ob text ${JSON.stringify(summary)} ya`);
+  if (tags) lines.push(`su name tags ob text ${JSON.stringify(tags)} ya`);
   if (description) lines.push(`su name description ob text ${JSON.stringify(description)} ya`);
   if (video) lines.push(`su name video ob filename ${JSON.stringify(video)} ya`);
   if (thumbnail) lines.push(`su name thumbnail ob filename ${JSON.stringify(thumbnail)} ya`);
@@ -917,7 +921,10 @@ export async function cutFromFilenameToNameItinerary(sentence, { remember: remem
   const srtText = await fs.readFile(resolved, "utf8");
   const rawCuts = parseSrtToCuts(srtText);
   const window = Number.isFinite(duration) && duration > 0 ? duration : 6;
-  const cuts = windowCuts(rawCuts, window);
+  const looksSectionTagged = rawCuts.length > 1 && rawCuts.every((cut) => /^\s*\[[^\]]+\]\s+/u.test(String(cut?.obText ?? "")));
+  const cuts = (looksSectionTagged && window >= 120)
+    ? rawCuts
+    : windowCuts(rawCuts, window);
   const series = [];
   let outIndex = 1;
   for (let i = 0; i < cuts.length; i += 1) {

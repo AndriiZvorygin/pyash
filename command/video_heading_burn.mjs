@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 function usage() {
-  return "Usage: node command/video_heading_burn.mjs <input-video> <output-video> [--text <heading>] [--text-stdin] [--seconds <num>] [--y-ratio <num>] [--max-width-ratio <num>]";
+  return "Usage: node command/video_heading_burn.mjs <input-video> <output-video> [--text <heading>] [--text-stdin] [--seconds <num>] [--y-ratio <num>] [--max-width-ratio <num>] [--font-scale <num>]";
 }
 
 export function parseArgs(argv) {
@@ -20,6 +20,7 @@ export function parseArgs(argv) {
     seconds: 1,
     yRatio: 0.60,
     maxWidthRatio: 0.82,
+    fontScale: 1,
     fontFile: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
   };
   for (let i = 2; i < args.length; i += 1) {
@@ -29,6 +30,7 @@ export function parseArgs(argv) {
     else if (arg === "--seconds") out.seconds = Number(args[++i] ?? out.seconds);
     else if (arg === "--y-ratio") out.yRatio = Number(args[++i] ?? out.yRatio);
     else if (arg === "--max-width-ratio") out.maxWidthRatio = Number(args[++i] ?? out.maxWidthRatio);
+    else if (arg === "--font-scale") out.fontScale = Number(args[++i] ?? out.fontScale);
     else if (arg === "--font-file") out.fontFile = String(args[++i] ?? out.fontFile);
     else throw new Error(usage());
   }
@@ -40,6 +42,9 @@ export function parseArgs(argv) {
   }
   if (!Number.isFinite(out.maxWidthRatio) || out.maxWidthRatio < 0.60 || out.maxWidthRatio > 0.95) {
     throw new Error("max-width-ratio must be between 0.60 and 0.95");
+  }
+  if (!Number.isFinite(out.fontScale) || out.fontScale < 0.25 || out.fontScale > 2) {
+    throw new Error("font-scale must be between 0.25 and 2");
   }
   return out;
 }
@@ -155,6 +160,47 @@ function runFfmpeg(inputVideo, outputVideo, vf) {
   });
 }
 
+function formatAssTime(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const csTotal = Math.round(safe * 100);
+  const hh = Math.floor(csTotal / 360000);
+  const mm = Math.floor((csTotal % 360000) / 6000);
+  const ss = Math.floor((csTotal % 6000) / 100);
+  const cs = csTotal % 100;
+  return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+}
+
+function escapeAssText(text) {
+  return String(text ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\r?\n/g, "\\N");
+}
+
+function buildAssText({ width, height, fontSize, marginV, seconds, text }) {
+  const start = formatAssTime(0);
+  const end = formatAssTime(seconds);
+  const outline = Math.max(2, Math.round(fontSize * 0.11));
+  const shadow = Math.max(1, Math.round(fontSize * 0.03));
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${Math.max(2, Math.floor(width))}`,
+    `PlayResY: ${Math.max(2, Math.floor(height))}`,
+    "WrapStyle: 2",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    `Style: Default,DejaVu Sans,${Math.max(10, Math.floor(fontSize))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${outline},${shadow},8,40,40,${Math.max(8, Math.floor(marginV))},1`,
+    "",
+    "[Events]",
+    "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    `Dialogue: 0,${start},${end},Default,,0,0,0,,${escapeAssText(text)}`
+  ].join("\n");
+}
+
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   const inputVideo = path.resolve(opts.inputVideo);
@@ -168,16 +214,19 @@ export async function main(argv = process.argv) {
   const usableWidth = Math.floor(width * opts.maxWidthRatio);
   const baseSize = Math.floor(clamp(height * 0.058, height * 0.040, height * 0.075));
   const widthBound = Math.floor((usableWidth / Math.max(1, maxLineChars)) / 0.62);
-  const fontSize = Math.floor(clamp(Math.min(baseSize, widthBound), height * 0.032, height * 0.072));
+  const scaled = Math.min(baseSize, widthBound) * opts.fontScale;
+  const fontSize = Math.floor(clamp(scaled, height * 0.020, height * 0.072));
   const borderW = Math.max(2, Math.round(fontSize * 0.11));
   const shadow = Math.max(1, Math.round(fontSize * 0.03));
   // Treat y-ratio as the lower anchor of the heading block so 0.60 sits
   // meaningfully above subtitle lanes instead of centering through them.
   const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h)`;
   const enableExpr = `lt(t\\,${Number(opts.seconds).toFixed(3)})`;
+  const marginV = Math.max(8, Math.round(height * opts.yRatio));
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-heading-"));
   const textFile = path.join(tmpDir, "heading.txt");
+  const assFile = path.join(tmpDir, "heading.ass");
   const renderOutput = resolveRenderOutputPath(inputVideo, outputVideo);
   const replaceInPlace = renderOutput !== outputVideo;
   await fs.writeFile(textFile, `${headingForBurn}\n`, "utf8");
@@ -200,7 +249,23 @@ export async function main(argv = process.argv) {
 
   try {
     await fs.mkdir(path.dirname(outputVideo), { recursive: true });
-    await runFfmpeg(inputVideo, renderOutput, vf);
+    try {
+      await runFfmpeg(inputVideo, renderOutput, vf);
+    } catch (err) {
+      const message = String(err?.message ?? err ?? "");
+      if (!/No such filter: 'drawtext'/u.test(message)) throw err;
+      const assText = buildAssText({
+        width,
+        height,
+        fontSize,
+        marginV,
+        seconds: opts.seconds,
+        text: headingForBurn
+      });
+      await fs.writeFile(assFile, `${assText}\n`, "utf8");
+      const vfAss = `subtitles='${ffmpegEscapePathForFilter(path.resolve(assFile))}'`;
+      await runFfmpeg(inputVideo, renderOutput, vfAss);
+    }
     if (replaceInPlace) await fs.rename(renderOutput, outputVideo);
     process.stdout.write(`${outputVideo}\n`);
   } finally {

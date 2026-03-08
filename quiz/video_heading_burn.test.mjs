@@ -14,6 +14,7 @@ test("video heading burn parseArgs accepts defaults", () => {
   assert.equal(opts.outputVideo, "out.mp4");
   assert.equal(opts.seconds, 1);
   assert.equal(opts.yRatio, 0.60);
+  assert.equal(opts.fontScale, 1);
 });
 
 test("video heading burn parseArgs validates seconds and y-ratio bands", () => {
@@ -39,5 +40,17 @@ test("video heading burn parseArgs validates seconds and y-ratio bands", () => {
       "0.8"
     ]),
     /y-ratio must be between 0.45 and 0.75/u
+  );
+
+  assert.throws(
+    () => parseArgs([
+      "node",
+      "command/video_heading_burn.mjs",
+      "in.mp4",
+      "out.mp4",
+      "--font-scale",
+      "0.2"
+    ]),
+    /font-scale must be between 0.25 and 2/u
   );
 });
