@@ -53,6 +53,18 @@ function countWords(text) {
   return raw.split(/\s+/u).filter(Boolean).length;
 }
 
+function percentile(values, p) {
+  const list = Array.isArray(values) ? values.filter((n) => Number.isFinite(n)).slice() : [];
+  if (!list.length) return 0;
+  list.sort((a, b) => a - b);
+  const pos = Math.max(0, Math.min(1, Number(p ?? 0))) * (list.length - 1);
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return list[lo];
+  const t = pos - lo;
+  return list[lo] + ((list[hi] - list[lo]) * t);
+}
+
 function sanitizeTimingCuts(rawCuts) {
   const source = Array.isArray(rawCuts) ? rawCuts : [];
   const cuts = source
@@ -66,12 +78,18 @@ function sanitizeTimingCuts(rawCuts) {
   if (!cuts.length) return [];
   const out = [];
   let prevEnd = Math.max(0, cuts[0].since);
+  let prevRawEnd = Math.max(0, cuts[0].since);
   for (const cut of cuts) {
-    const since = Math.max(prevEnd, Math.max(0, cut.since));
-    const rawDur = Math.max(0.02, cut.until - cut.since);
+    const rawDur = Math.max(0.04, cut.until - cut.since);
+    const rawSince = Math.max(0, cut.since);
+    const rawGap = Math.max(0, rawSince - prevRawEnd);
+    // Keep natural pauses; only trim pathological ASR jumps.
+    const keepGap = rawGap > 20 ? 8 : rawGap;
+    const since = Math.max(prevEnd, prevEnd + keepGap);
     const until = since + rawDur;
     out.push({ since, until, obText: cut.obText });
     prevEnd = until;
+    prevRawEnd = Math.max(prevRawEnd, Math.max(rawSince, cut.until));
   }
   return out;
 }
@@ -123,8 +141,7 @@ function buildTimingRows(lyricsCuts, timingCuts) {
   }
   const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
   const timelineEnd = Number(cueWordPositions[cueWordPositions.length - 1]?.until ?? timelineStart);
-  const timelineSpan = Math.max(0.01, timelineEnd - timelineStart);
-  const minLineSeconds = Math.max(0.18, Math.min(0.80, (timelineSpan / Math.max(1, lines.length)) * 0.18));
+  const minLineSeconds = 0.10;
 
   let prevEnd = timelineStart;
   for (const row of rows) {
@@ -132,6 +149,21 @@ function buildTimingRows(lyricsCuts, timingCuts) {
     row.until = Math.max(row.since + minLineSeconds, Number(row.until ?? row.since + minLineSeconds));
     prevEnd = row.until;
   }
+  if (rows.length && prevEnd > timelineEnd) {
+    const currentSpan = Math.max(0.01, prevEnd - timelineStart);
+    const targetSpan = Math.max(0.01, timelineEnd - timelineStart);
+    const scale = targetSpan / currentSpan;
+    let cursor = timelineStart;
+    for (const row of rows) {
+      const scaledSince = timelineStart + ((row.since - timelineStart) * scale);
+      const scaledUntil = timelineStart + ((row.until - timelineStart) * scale);
+      row.since = Math.max(cursor, scaledSince);
+      row.until = Math.max(row.since + 0.04, scaledUntil);
+      cursor = row.until;
+    }
+    rows[rows.length - 1].until = timelineEnd;
+  }
+
   return rows;
 }
 

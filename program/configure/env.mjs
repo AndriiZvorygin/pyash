@@ -29,6 +29,7 @@ const ENV_BINDINGS = [
   { env: "PYA_HEAR_HF_TOKEN", name: "hear hf token", type: "text" },
   { env: "PYA_HEAR_QWEN_CHUNK_MAX_SECONDS", name: "hear qwen chunk max seconds", type: "num" },
   { env: "PYA_HEAR_QWEN_CHUNK_OVERLAP_SECONDS", name: "hear qwen chunk overlap seconds", type: "num" },
+  { env: "PYA_HEAR_QWEN_CHUNK_FORCE_SECONDS", name: "hear qwen chunk force seconds", type: "num" },
   { env: "PYA_KEYBOARD_BIN", name: "keyboard bin", type: "text" },
   { env: "PYA_CHECKPOINTS", name: "checkpoint seed", type: "text" },
   { env: "PYA_NO_CHECKPOINT", name: "checkpoint disabled", type: "bool" },

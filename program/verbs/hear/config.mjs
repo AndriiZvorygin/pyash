@@ -116,6 +116,12 @@ function resolveHearQwenChunkOverlapSeconds({ rememberFn } = {}) {
   return 1.5;
 }
 
+function resolveHearQwenChunkForceSeconds({ rememberFn } = {}) {
+  const configured = resolveConfigNum("hear qwen chunk force seconds", { rememberFn });
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return 0;
+}
+
 function resolveHearInputPath(sentence, { rememberFn } = {}) {
   if (typeof sentence?.from?.filename === "string") return sentence.from.filename;
   if (typeof sentence?.from?.text === "string") return sentence.from.text;
@@ -153,5 +159,6 @@ export {
   resolveHearWorkflowRoot,
   resolveHearWorkflowDefault,
   resolveHearQwenChunkMaxSeconds,
-  resolveHearQwenChunkOverlapSeconds
+  resolveHearQwenChunkOverlapSeconds,
+  resolveHearQwenChunkForceSeconds
 };
