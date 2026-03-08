@@ -10,6 +10,8 @@ Status: reference profile for module-level `be better compare do` behavior.
 
 - `better compare` is a Pyash module export (not a built-in verb).
 - programs should import it before invocation.
+- candidate generation is refinery-backed, so retries apply to candidate artifact generation.
+- judge decisions are not retried.
 
 ## 3. Canonical invocation
 
@@ -52,7 +54,8 @@ be better compare do
 ## 7. Judge contract
 
 - judge output must normalize to strict binary decision: `A` or `B`.
-- ambiguous judge output should map to deterministic failure behavior (or declared fallback policy).
+- tie policy: judge prompt should instruct ties to return `A`.
+- ambiguous non-binary judge output fails with deterministic error behavior.
 
 ## 8. Observability
 
