@@ -115,6 +115,7 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /exists su name manuscript uplift request template ob text quoted\.text\.TARGET_WORDS: 18-40/);
   assert.match(text, /exists su name manuscript hook request template ob text quoted\.text\.TARGET_WORDS: 6-9/);
   assert.match(text, /exists su name manuscript cta request template ob text quoted\.text\.TARGET_WORDS: 2-4/);
+  assert.match(text, /exists su name manuscript paragraph break ob text quoted\.text\.\n\n\.text\.quoted be text ya/);
   assert.match(text, /exists su name manuscript source thrust request template ob text quoted\.text\.TRANSCRIPT:/);
   assert.match(text, /su name manuscript request replacements be map def/);
   assert.match(text, /manuscript source thrust write platform .* by num 0 atmost num 280 be write do/);
@@ -128,6 +129,10 @@ test("brief manuscript module keeps staged word-count verifies including total b
   assert.match(text, /fromindex num 1 toindex num 5 be manuscript fact two retry do/);
   assert.match(text, /fromindex num 1 toindex num 3 be manuscript source thrust retry do/);
   assert.match(text, /manuscript source thrust guarantee platform ob bool lie fromtext text "manuscript source thrust defective" be guarantee do/);
+  assert.doesNotMatch(text, /manuscript body fact two join platform ob text "\\n\\n" to name manuscript body out be plus do/);
+  assert.doesNotMatch(text, /manuscript body uplift join platform ob text "\\n\\n" to name manuscript body out be plus do/);
+  assert.doesNotMatch(text, /manuscript out join platform ob text "\\n\\n" to name manuscript out be plus do/);
+  assert.doesNotMatch(text, /manuscript out cta join platform ob text "\\n\\n" to name manuscript out be plus do/);
   assert.match(text, /be depart do/);
 });
 
