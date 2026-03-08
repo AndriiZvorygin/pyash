@@ -111,6 +111,7 @@ su name mind discharge settle stage ob text "sleep 3" be command do
 su name draw out dir stage ob name text run root to name text draw out dir be text do
 ob text "/draw" to name draw out dir be plus do
 su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one illustration representing this lyric moment:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw out dir be draw do
+su name draw discharge after render stage as wo draw be discharge do
 
 su name video cuts audio filename ob name text audio wav path be text do
 su name video cuts images directory ob name text draw out dir be text do
@@ -124,7 +125,6 @@ su name footnote output path stage ob name text run root to name text footnote o
 ob text "/music-video-footnote.mp4" to name footnote output path be plus do
 su name footnote filename stage ob name text footnote output path to name filename footnote filename be filename do
 su name footnote stage from ve name result stage name captions stage name footnote filename stage from filename of ob of captions filename stage fromstate wo srt with filename of ob of result stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio override be footnote do
-su name draw final discharge stage as wo draw be discharge do
 su name hear final discharge stage as wo hear be discharge do
 su name mind final discharge stage as wo mind be discharge do
 su name ollama final discharge stage as wo ollama be discharge do
