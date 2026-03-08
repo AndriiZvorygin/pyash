@@ -216,8 +216,9 @@ function buildKaraokeDialogues(cuts = [], { maxLineChars = 24, maxRows = 2 } = {
       const end = i === pages.length - 1 ? until : cursor + slice;
       const totalCs = Math.max(1, Math.round((end - cursor) * 100));
       const text = karaokeTaggedRows(pageRows, totalCs);
-      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + SUBTITLE_MIN_SEGMENT_SECONDS, end))},Default,,0,0,0,,${text}`);
-      cursor = end;
+      const boundedEnd = Math.min(until, Math.max(cursor + 0.01, end));
+      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(boundedEnd)},Default,,0,0,0,,${text}`);
+      cursor = boundedEnd;
     }
   }
   return out;
@@ -255,8 +256,9 @@ function buildWordflowDialogues(cuts = [], { maxLineChars = 12 } = {}) {
       const slice = duration * ratio;
       const end = i === groups.length - 1 ? until : cursor + slice;
       const text = sanitizeAssText(lineWords.join(" "));
-      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(Math.max(cursor + SUBTITLE_MIN_SEGMENT_SECONDS, end))},Default,,0,0,0,,${text}`);
-      cursor = end;
+      const boundedEnd = Math.min(until, Math.max(cursor + 0.01, end));
+      out.push(`Dialogue: 0,${assTime(cursor)},${assTime(boundedEnd)},Default,,0,0,0,,${text}`);
+      cursor = boundedEnd;
     }
   }
   return out;

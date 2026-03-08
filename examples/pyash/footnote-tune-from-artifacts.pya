@@ -1,0 +1,65 @@
+ob filename text artifactsroot be input ya
+
+su name footnote tune from artifacts be refinery def
+ob name run root to name text workspace root be text do
+su name artifacts root filename stage ob name artifactsroot to name filename artifacts root filename be filename do
+ob name artifacts root filename to name text artifacts root path be text do
+
+ob name text artifacts root path to name text video path be text do
+ob text "/music-video.mp4" to name video path be plus do
+
+ob name text artifacts root path to name text captions path be text do
+ob text "/captions.srt" to name captions path be plus do
+
+ob text "node \"" to name text cmd karaoke 040 be text do
+ob name text workspace root to name cmd karaoke 040 be plus do
+ob text "/command/footnote_video.mjs\" \"" to name cmd karaoke 040 be plus do
+ob name text video path to name cmd karaoke 040 be plus do
+ob text "\" \"" to name cmd karaoke 040 be plus do
+ob name text captions path to name cmd karaoke 040 be plus do
+ob text "\" \"" to name cmd karaoke 040 be plus do
+ob name text artifacts root path to name cmd karaoke 040 be plus do
+ob text "/music-video-footnote-karaoke-040.mp4\" --mode karaoke --margin-ratio 0.40" to name cmd karaoke 040 be plus do
+su name footnote karaoke 040 stage ob name text cmd karaoke 040 be command do
+
+ob text "node \"" to name text cmd karaoke 055 be text do
+ob name text workspace root to name cmd karaoke 055 be plus do
+ob text "/command/footnote_video.mjs\" \"" to name cmd karaoke 055 be plus do
+ob name text video path to name cmd karaoke 055 be plus do
+ob text "\" \"" to name cmd karaoke 055 be plus do
+ob name text captions path to name cmd karaoke 055 be plus do
+ob text "\" \"" to name cmd karaoke 055 be plus do
+ob name text artifacts root path to name cmd karaoke 055 be plus do
+ob text "/music-video-footnote-karaoke-055.mp4\" --mode karaoke --margin-ratio 0.55" to name cmd karaoke 055 be plus do
+su name footnote karaoke 055 stage ob name text cmd karaoke 055 be command do
+
+ob text "node \"" to name text cmd wordflow 040 be text do
+ob name text workspace root to name cmd wordflow 040 be plus do
+ob text "/command/footnote_video.mjs\" \"" to name cmd wordflow 040 be plus do
+ob name text video path to name cmd wordflow 040 be plus do
+ob text "\" \"" to name cmd wordflow 040 be plus do
+ob name text captions path to name cmd wordflow 040 be plus do
+ob text "\" \"" to name cmd wordflow 040 be plus do
+ob name text artifacts root path to name cmd wordflow 040 be plus do
+ob text "/music-video-footnote-wordflow-040.mp4\" --mode wordflow --margin-ratio 0.40" to name cmd wordflow 040 be plus do
+su name footnote wordflow 040 stage ob name text cmd wordflow 040 be command do
+
+ob text "node \"" to name text cmd wordflow 055 be text do
+ob name text workspace root to name cmd wordflow 055 be plus do
+ob text "/command/footnote_video.mjs\" \"" to name cmd wordflow 055 be plus do
+ob name text video path to name cmd wordflow 055 be plus do
+ob text "\" \"" to name cmd wordflow 055 be plus do
+ob name text captions path to name cmd wordflow 055 be plus do
+ob text "\" \"" to name cmd wordflow 055 be plus do
+ob name text artifacts root path to name cmd wordflow 055 be plus do
+ob text "/music-video-footnote-wordflow-055.mp4\" --mode wordflow --margin-ratio 0.55" to name cmd wordflow 055 be plus do
+su name footnote wordflow 055 stage ob name text cmd wordflow 055 be command do
+
+ob name text artifacts root path be write do
+ob text "music-video-footnote-karaoke-040.mp4" be write do
+ob text "music-video-footnote-karaoke-055.mp4" be write do
+ob text "music-video-footnote-wordflow-040.mp4" be write do
+ob text "music-video-footnote-wordflow-055.mp4" be write do
+prah
+
+from name footnote tune from artifacts be refinery do
