@@ -7,8 +7,6 @@ su name negative prompt ob text "text, letters, words, typography, watermark, lo
 prah
 
 exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
-exists su name mind host ob text "http://host.docker.internal:11434" be default ya
-exists su name ollama host ob text "http://host.docker.internal:11434" be default ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
 exists su name lyric promptify packet ob text quoted.text.instruction: Turn current_cut into one concise image prompt for a music-lyric video.
@@ -24,6 +22,8 @@ exists su name refinery name ob text "music video lyrics audio" be text ya
 
 su name music video lyrics audio be refinery def
 ob name run root to name text workspace root be text do
+ob text "curl -sS -m 5 -X POST \"http://localhost:8000/discharge\" -H \"content-type: application/json\" -d '{}' >/dev/null 2>&1 || true" to name text whisperx preflight discharge cmd be text do
+su name whisperx preflight discharge stage ob name text whisperx preflight discharge cmd be command do
 su name mind preflight discharge stage as wo mind be discharge do
 su name draw preflight discharge stage as wo draw be discharge do
 su name hear preflight discharge stage as wo hear be discharge do
