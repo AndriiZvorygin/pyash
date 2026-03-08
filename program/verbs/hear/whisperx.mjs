@@ -20,7 +20,9 @@ async function transcribeWithWhisperxStream({
   outputPath,
   language = "en",
   model = "large-v3",
+  device = "cpu",
   diarize = false,
+  hfToken = "",
   onLog = null
 } = {}) {
   const endpoint = `${normalizeHost(host)}/transcribe_stream`;
@@ -33,7 +35,9 @@ async function transcribeWithWhisperxStream({
       output_srt: outputPath,
       language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
       model,
-      diarize
+      device,
+      diarize,
+      hf_token: hfToken || undefined
     })
   });
   if (!response.ok) {
@@ -66,11 +70,11 @@ async function transcribeWithWhisperxStream({
         if (event?.type === "log") {
           if (typeof onLog === "function") onLog(String(event.text ?? ""));
         } else if (event?.type === "error") {
-          const status = Number(event?.status);
-          const suffix = Number.isFinite(status) ? ` status=${status}` : "";
-          const stderr = String(event?.stderr ?? "").trim();
-          const detail = stderr ? ` stderr=${JSON.stringify(stderr.slice(-1200))}` : "";
-          throw new Error(`whisperx defective: ${event?.error || "whisperx failed"}${suffix}${detail}`);
+          const code = Number(event?.code);
+          const codeSuffix = Number.isFinite(code) ? ` code=${code}` : "";
+          const detailText = String(event?.detail ?? "").trim();
+          const detailSuffix = detailText ? ` detail=${JSON.stringify(detailText.slice(-1200))}` : "";
+          throw new Error(`whisperx defective: ${event?.error || "whisperx failed"}${codeSuffix}${detailSuffix}`);
         } else if (event?.type === "result") {
           result = event;
         }
@@ -90,7 +94,9 @@ export async function transcribeWithWhisperx({
   outputPath,
   language = "en",
   model = "large-v3",
+  device = "cpu",
   diarize = false,
+  hfToken = "",
   streamLogs = false,
   onLog = null
 } = {}) {
@@ -101,7 +107,9 @@ export async function transcribeWithWhisperx({
       outputPath,
       language,
       model,
+      device,
       diarize,
+      hfToken,
       onLog
     });
   }
@@ -115,16 +123,17 @@ export async function transcribeWithWhisperx({
       output_srt: outputPath,
       language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
       model,
-      diarize
+      device,
+      diarize,
+      hf_token: hfToken || undefined
     })
   });
 
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
-    const stderr = typeof payload?.stderr === "string" ? payload.stderr.trim() : "";
-    const status = payload?.status !== undefined ? ` status=${payload.status}` : "";
-    const detail = stderr ? ` stderr=${JSON.stringify(stderr.slice(-600))}` : "";
-    const message = `${payload?.error || `${response.status} ${response.statusText}`}${status}${detail}`;
+    const detailText = typeof payload?.detail === "string" ? payload.detail.trim() : "";
+    const detail = detailText ? ` detail=${JSON.stringify(detailText.slice(-600))}` : "";
+    const message = `${payload?.error || `${response.status} ${response.statusText}`}${detail}`;
     throw new Error(`whisperx defective: ${message}`);
   }
   return payload;

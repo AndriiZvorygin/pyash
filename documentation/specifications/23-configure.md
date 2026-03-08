@@ -75,6 +75,8 @@ exists su name draw workflow default ob la be draw fromstate wo text become wo p
 exists su name draw workflow default ob la be draw fromstate wo photograph become wo photograph ko as text "teaching-photograph-to-photograph" be default ya
 exists su name draw workflow default ob la be draw fromstate wo text become wo video ko as text "teaching-text-to-video" be default ya
 exists su name draw workflow default ob la be draw fromstate wo photograph become wo video ko as text "teaching-photograph-to-video" be default ya
+exists su name hear qwen chunk max seconds ob num 480 be default ya
+exists su name hear qwen chunk overlap seconds ob num 1.5 be default ya
 ```
 
 Semantics:

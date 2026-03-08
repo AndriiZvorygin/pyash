@@ -24,6 +24,13 @@ async function writeInputFixture() {
   return file;
 }
 
+async function writeInputFixtureWithSpaces() {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-run-fixture-space-"));
+  const file = path.join(dir, "fixture with spaces.txt");
+  await fs.writeFile(file, "fixture input text\n", "utf8");
+  return file;
+}
+
 test("run_pya_program binds shorthand filename when one filename input is declared", async () => {
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   const inputFile = await writeInputFixture();
@@ -72,4 +79,18 @@ test("run_pya_program accepts explicit ob...to name binding tail", async () => {
     { cwd: repoRoot, encoding: "utf8" }
   );
   assert.equal(out.status, 0, `expected explicit binding to satisfy runtime input\nstderr:\n${out.stderr || ""}`);
+});
+
+test("run_pya_program shorthand preserves spaced filename as one binding value", async () => {
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const inputFile = await writeInputFixtureWithSpaces();
+  const program = await writeProgram([
+    "ob filename text manuscript be input ya",
+    "from filename of ob of manuscript become wo text to name text out be read do"
+  ].join("\n"));
+  const out = spawnSync(process.execPath, [runPath, program, inputFile, "--verbose"], {
+    cwd: repoRoot,
+    encoding: "utf8"
+  });
+  assert.equal(out.status, 0, `expected shorthand binding with spaces to pass\nstderr:\n${out.stderr || ""}`);
 });

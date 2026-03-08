@@ -38,8 +38,8 @@ async function loadConfigFile({ configPath, interpretFn }) {
 async function loadDefaultConfig({ cwd, interpretFn }) {
   const configPaths = [
     path.resolve(cwd, "configure", "default.pya"),
-    path.resolve(cwd, "configure", "container.pya"),
-    path.resolve(cwd, "configure", "secret.pya")
+    path.resolve(cwd, "configure", "secret.pya"),
+    path.resolve(cwd, "configure", "container.pya")
   ];
   for (const configPath of configPaths) {
     if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;

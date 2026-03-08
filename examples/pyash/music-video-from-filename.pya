@@ -1,5 +1,6 @@
 ob filename text manuscript be input ya
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name hear backend default ob text "qwen" be default ya
 exists su name draw widescreen mode ob text "lie" be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
 

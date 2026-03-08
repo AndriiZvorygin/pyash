@@ -14,15 +14,31 @@ async function loadConfigText(configPath) {
 async function loadDefaultConfigProgram(cwd) {
   const configPaths = [
     path.resolve(cwd, "configure", "default.pya"),
-    path.resolve(cwd, "configure", "secret.pya")
+    path.resolve(cwd, "configure", "secret.pya"),
+    path.resolve(cwd, "configure", "container.pya")
   ];
   const chunks = [];
   for (const configPath of configPaths) {
+    if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
     const raw = await loadConfigText(configPath);
     if (raw) chunks.push(raw);
   }
   if (!chunks.length) return null;
   return buildProgram(chunks.join("\n"));
+}
+
+async function isContainerEnv() {
+  if (process.env?.PYA_CONTAINER || process.env?.CONTAINER || process.env?.container) return true;
+  const markers = ["/.dockerenv", "/run/.containerenv"];
+  for (const marker of markers) {
+    try {
+      await fs.access(marker);
+      return true;
+    } catch {
+      // ignore missing markers
+    }
+  }
+  return false;
 }
 
 function findDefaultSayMapping(sentences, { baseDir = process.cwd() } = {}) {
