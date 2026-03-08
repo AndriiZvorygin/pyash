@@ -230,6 +230,10 @@ exists su name manuscript cta request template ob text quoted.text.TARGET_WORDS:
 PASSAGE:
 [[body]].text.quoted be text ya
 
+exists su name manuscript paragraph break ob text quoted.text.
+
+.text.quoted be text ya
+
 exists su name manuscript source thrust request template ob text quoted.text.TRANSCRIPT:
 [[transcript]]
 
@@ -426,9 +430,9 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript uplift platform from text of ob of manuscript uplift request for text "brief video script uplift platform" accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
 
   su name manuscript body begin platform ob name text manuscript fact one out to name text manuscript body out be text do
-  su name manuscript body fact two join platform ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body fact two join platform ob name text manuscript paragraph break to name manuscript body out be plus do
   su name manuscript body fact two platform ob name text manuscript fact two out to name manuscript body out be plus do
-  su name manuscript body uplift join platform ob text "\n\n" to name manuscript body out be plus do
+  su name manuscript body uplift join platform ob name text manuscript paragraph break to name manuscript body out be plus do
   su name manuscript body uplift platform ob name text manuscript uplift out to name manuscript body out be plus do
 
   ob name text manuscript body out to name text manuscript replacement body be text do
@@ -440,9 +444,9 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   su name manuscript cta platform from text of ob of manuscript cta request for text "brief video script cta platform" accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
 
   su name manuscript out begin platform ob name text manuscript hook out to name text manuscript out be text do
-  su name manuscript out join platform ob text "\n\n" to name manuscript out be plus do
+  su name manuscript out join platform ob name text manuscript paragraph break to name manuscript out be plus do
   su name manuscript out body platform ob name text manuscript body out to name manuscript out be plus do
-  su name manuscript out cta join platform ob text "\n\n" to name manuscript out be plus do
+  su name manuscript out cta join platform ob name text manuscript paragraph break to name manuscript out be plus do
   su name manuscript out cta platform ob name text manuscript cta out to name manuscript out be plus do
 
   su name manuscript total verify platform be verify as wo word count atleast num 70 atmost num 140 from name text manuscript out to name map manuscript total verify do
