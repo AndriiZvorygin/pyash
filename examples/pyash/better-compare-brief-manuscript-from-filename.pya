@@ -8,15 +8,21 @@ exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict
 
 exists su name text better compare brief manuscript judge prompter ob text quoted.text.You are comparing two candidate short spoken teaching manuscripts generated from the same source document.
 
-Pick the better manuscript using these priorities:
-1. Stronger hook and payoff.
-2. Better factual grounding in the source document.
-3. Tighter spoken flow and momentum.
-4. More memorable phrasing without fluff.
+Your job is to pick the manuscript that is significantly more likely to go viral on short-form platforms (TikTok, Reels, YouTube Shorts) — the one people will actually watch to the end, feel compelled to share, and talk about.
 
-Prefer the manuscript that sounds most ready to read aloud as a finished short script.
+Rank them using these priorities in order:
 
-Return only A or B..text.quoted be text ya
+1. Highest viral arousal: strongest combination of high-arousal emotion (awe, surprise, excitement, amusement, curiosity, or even righteous anger) + novelty/twist that makes the brain say “wait… WHAT?!” in the first 3–5 seconds.
+2. Strongest hook + payoff: irresistible opening that forces a watch + emotionally satisfying close.
+3. Highest shareability / social currency: the version that makes the listener feel smart, helpful, funny, or “in the know” for sharing it (practical value, “this is so me,” or “my friends need this” energy).
+4. Best relatability + easy-to-retell storytelling: sounds like a real person talking, flows naturally when read aloud, and is memorable enough that someone can repeat the core idea in one sentence.
+5. Tightest spoken momentum and phrasing: zero fluff, punchy rhythm, natural pauses, zero filler words, feels finished and ready to record.
+6. Factual grounding in the source document (only used as tiebreaker).
+
+Prefer the manuscript that overall feels like the one people would actually save, send to friends, and comment “this changed how I think” under.
+If one version is clearly more share-worthy and emotionally contagious, pick it even if the other is slightly more “polished.”
+
+Reply with only A or B..text.quoted be text ya
 
 su name manuscript source stage from filename of ob of source become wo text to name text manuscript source be read do
 
