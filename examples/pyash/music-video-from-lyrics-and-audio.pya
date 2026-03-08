@@ -30,16 +30,16 @@ su name hear preflight discharge stage as wo hear be discharge do
 su name qwen say preflight discharge stage as wo "qwen say" be discharge do
 su name ollama preflight discharge stage as wo ollama be discharge do
 su name run id text stage ob name run id to name text run id text be text do
-ob text "artifacts/" to name text run root be text do
-ob name text run id text to name run root be plus do
+ob text "artifacts/" to name text artifacts root be text do
+ob name text run id text to name artifacts root be plus do
 ob text "mkdir -p \"" to name text run root ensure cmd be text do
-ob name text run root to name run root ensure cmd be plus do
+ob name text artifacts root to name run root ensure cmd be plus do
 ob text "\"" to name run root ensure cmd be plus do
 su name run root ensure stage ob name text run root ensure cmd be command do
 
 su name lyrics text stage from filename of ob of lyrics become wo text to name text lyrics text be read do
 
-su name audio wav path stage ob name text run root to name text audio wav path be text do
+su name audio wav path stage ob name text artifacts root to name text audio wav path be text do
 su name input audio filename stage ob name audio to name filename input audio filename be filename do
 su name input audio path stage ob name input audio filename to name text input audio path be text do
 ob text "/audio.wav" to name audio wav path be plus do
@@ -50,10 +50,10 @@ ob name text audio wav path to name audio wav cmd be plus do
 ob text "\"" to name audio wav cmd be plus do
 su name wav stage ob name text audio wav cmd be command do
 
-su name captions path stage ob name text run root to name text captions path be text do
-su name captions timing path stage ob name text run root to name text captions timing path be text do
-su name captions section path stage ob name text run root to name text captions section path be text do
-su name captions section cuts path stage ob name text run root to name text captions section cuts path be text do
+su name captions path stage ob name text artifacts root to name text captions path be text do
+su name captions timing path stage ob name text artifacts root to name text captions timing path be text do
+su name captions section path stage ob name text artifacts root to name text captions section path be text do
+su name captions section cuts path stage ob name text artifacts root to name text captions section cuts path be text do
 ob text "/captions.srt" to name captions path be plus do
 ob text "/captions-timing.srt" to name captions timing path be plus do
 ob text "/captions-sections.srt" to name captions section path be plus do
@@ -108,7 +108,7 @@ su name mind discharge stage as wo mind be discharge do
 su name ollama discharge stage as wo ollama be discharge do
 su name mind discharge settle stage ob text "sleep 3" be command do
 
-su name draw out dir stage ob name text run root to name text draw out dir be text do
+su name draw out dir stage ob name text artifacts root to name text draw out dir be text do
 ob text "/draw" to name draw out dir be plus do
 su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one illustration representing this lyric moment:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw out dir be draw do
 su name draw discharge after render stage as wo draw be discharge do
@@ -117,11 +117,11 @@ su name video cuts audio filename ob name text audio wav path be text do
 su name video cuts images directory ob name text draw out dir be text do
 su name video cuts prefix ob text "lyric-draw-stage" be text do
 
-su name video output path stage ob name text run root to name text video output path be text do
+su name video output path stage ob name text artifacts root to name text video output path be text do
 su name video output path finalize stage ob text "/music-video.mp4" to name video output path be plus do
 su name result stage from ve name itinerary lyric cuts name lyric draw stage name wav stage name video cuts audio filename name video cuts images directory name video cuts prefix name video output path stage name video output path finalize stage fromstate wo itinerary become wo video to filename of ob of video output path be concatenate do
 
-su name footnote output path stage ob name text run root to name text footnote output path be text do
+su name footnote output path stage ob name text artifacts root to name text footnote output path be text do
 ob text "/music-video-footnote.mp4" to name footnote output path be plus do
 su name footnote filename stage ob name text footnote output path to name filename footnote filename be filename do
 su name footnote stage from ve name result stage name captions stage name footnote filename stage from filename of ob of captions filename stage fromstate wo srt with filename of ob of result stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio override be footnote do
