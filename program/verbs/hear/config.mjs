@@ -79,6 +79,14 @@ function resolveHearWhisperxModel({ rememberFn } = {}) {
   return resolveConfigText("hear whisperx model", { rememberFn }) || "large-v3";
 }
 
+function resolveHearWhisperxDevice({ rememberFn } = {}) {
+  return resolveConfigText("hear whisperx device", { rememberFn }) || "cpu";
+}
+
+function resolveHearHfToken({ rememberFn } = {}) {
+  return resolveConfigText("hear hf token", { rememberFn }) || "";
+}
+
 function resolveHearQwenHost({ rememberFn } = {}) {
   return (
     resolveConfigText("hear qwen host", { rememberFn }) ||
@@ -94,6 +102,24 @@ function resolveHearWorkflowRoot({ rememberFn } = {}) {
 
 function resolveHearWorkflowDefault({ rememberFn } = {}) {
   return resolveConfigText("hear workflow default", { rememberFn }) || "qwen3-asr-timestamps-attn2";
+}
+
+function resolveHearQwenChunkMaxSeconds({ rememberFn } = {}) {
+  const configured = resolveConfigNum("hear qwen chunk max seconds", { rememberFn });
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return 55;
+}
+
+function resolveHearQwenChunkOverlapSeconds({ rememberFn } = {}) {
+  const configured = resolveConfigNum("hear qwen chunk overlap seconds", { rememberFn });
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return 1.5;
+}
+
+function resolveHearQwenChunkForceSeconds({ rememberFn } = {}) {
+  const configured = resolveConfigNum("hear qwen chunk force seconds", { rememberFn });
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return 0;
 }
 
 function resolveHearInputPath(sentence, { rememberFn } = {}) {
@@ -127,7 +153,12 @@ export {
   resolveHearBackend,
   resolveHearHost,
   resolveHearWhisperxModel,
+  resolveHearWhisperxDevice,
+  resolveHearHfToken,
   resolveHearQwenHost,
   resolveHearWorkflowRoot,
-  resolveHearWorkflowDefault
+  resolveHearWorkflowDefault,
+  resolveHearQwenChunkMaxSeconds,
+  resolveHearQwenChunkOverlapSeconds,
+  resolveHearQwenChunkForceSeconds
 };

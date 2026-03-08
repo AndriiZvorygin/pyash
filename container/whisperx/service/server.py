@@ -125,6 +125,14 @@ def _run_whisperx(payload: dict) -> Tuple[int, Dict[str, Any]]:
 
 
 def _build_worker_request(payload: dict, op: str, output_dir: str, output_srt: str) -> Dict[str, Any]:
+  diarize_raw = payload.get("diarize")
+  diarize = False
+  if isinstance(diarize_raw, bool):
+    diarize = diarize_raw
+  elif isinstance(diarize_raw, (int, float)):
+    diarize = bool(diarize_raw)
+  elif isinstance(diarize_raw, str):
+    diarize = diarize_raw.strip().lower() in {"1", "true", "truth", "yes", "on"}
   return {
     "op": op,
     "input": str(payload.get("input") or "").strip(),
@@ -133,7 +141,9 @@ def _build_worker_request(payload: dict, op: str, output_dir: str, output_srt: s
     "model": str(payload.get("model") or os.environ.get("WHISPERX_MODEL") or "large-v3"),
     "language": str(payload.get("language") or os.environ.get("WHISPERX_LANGUAGE") or "en"),
     "compute_type": str(payload.get("compute_type") or os.environ.get("WHISPERX_COMPUTE_TYPE") or "int8"),
-    "device": str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "cuda").strip() or "cuda"
+    "device": str(payload.get("device") or os.environ.get("WHISPERX_DEVICE") or "cuda").strip() or "cuda",
+    "diarize": diarize,
+    "hf_token": str(payload.get("hf_token") or "").strip()
   }
 
 

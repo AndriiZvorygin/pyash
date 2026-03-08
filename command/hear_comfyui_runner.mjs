@@ -217,6 +217,7 @@ function looksLikeTimestamps(text = "") {
   if (!value.trim()) return false;
   if (/-->/u.test(value)) return true;
   if (/\[\s*\d+(?:\.\d+)?\s*[,|-]\s*\d+(?:\.\d+)?/u.test(value)) return true;
+  if (/\b\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\s*:/u.test(value)) return true;
   if (/<\|\d+(?:\.\d+)?\|>/u.test(value)) return true;
   if (/"start"|"end"|"timestamp"/u.test(value)) return true;
   return false;
@@ -321,14 +322,14 @@ async function pollHistoryForTexts(host, promptId, timeoutMs = 240000) {
 }
 
 function resolveResultTexts(historyEntry, mapping = {}) {
-  const transcriptMapped = normalizeText(getAtPath(historyEntry, mapping.transcriptPath));
-  const timestampsMapped = normalizeText(getAtPath(historyEntry, mapping.timestampsPath));
+  const outputs = historyEntry?.outputs ?? {};
+  const transcriptMapped = normalizeText(getAtPath(outputs, mapping.transcriptPath) ?? getAtPath(historyEntry, mapping.transcriptPath));
+  const timestampsMapped = normalizeText(getAtPath(outputs, mapping.timestampsPath) ?? getAtPath(historyEntry, mapping.timestampsPath));
   if (transcriptMapped.trim() || timestampsMapped.trim()) {
     return { transcript: transcriptMapped.trim(), timestamps: timestampsMapped.trim() };
   }
 
-  const outputs = historyEntry?.outputs ?? historyEntry;
-  const strings = collectStrings(outputs, []);
+  const strings = collectStrings(outputs && typeof outputs === "object" ? outputs : historyEntry, []);
   let transcript = "";
   let timestamps = "";
   for (const candidate of strings) {

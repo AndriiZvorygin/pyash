@@ -17,6 +17,8 @@ function toSeconds(value) {
   return n;
 }
 
+const QWEN_MIN_SEGMENT_SECONDS = 0.04;
+
 function sanitizeSegmentText(value = "") {
   return String(value ?? "")
     .replace(/^[\s:：\-–—]+/u, "")
@@ -108,7 +110,7 @@ export function parseQwenTimestampSegments(timestampsRaw = "", transcript = "") 
     .map((segment) => {
       const start = Math.max(0, Number(segment?.start ?? 0));
       const endRaw = Number(segment?.end ?? start);
-      const end = endRaw > start ? endRaw : start + 1;
+      const end = endRaw > start ? endRaw : start + QWEN_MIN_SEGMENT_SECONDS;
       return {
         start,
         end,

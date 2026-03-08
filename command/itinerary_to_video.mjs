@@ -200,6 +200,7 @@ function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
     });
   }
   const out = [];
+  const firstStart = rows.length ? Math.max(0, Number(rows[0]?.since ?? 0)) : 0;
   for (let i = 0; i < rows.length; i += 1) {
     const cut = rows[i];
     const start = Number(cut?.since ?? 0);
@@ -210,7 +211,9 @@ function buildTimelineItems(cuts = [], audioDurationSeconds = null) {
       : (Number.isFinite(Number(audioDurationSeconds)) ? Number(audioDurationSeconds) : fallbackEnd);
     const rawDuration = desiredEnd - start;
     const fallbackDuration = Math.max(0.05, fallbackEnd - start);
-    const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : fallbackDuration;
+    let duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : fallbackDuration;
+    // Preserve leading silence by extending the first visual cut back to t=0.
+    if (i === 0 && firstStart > 0) duration += firstStart;
     out.push({ ...cut, duration });
   }
   return out;

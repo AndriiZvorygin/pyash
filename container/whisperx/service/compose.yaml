@@ -6,6 +6,8 @@ services:
     working_dir: /workplace
     entrypoint: ["python3", "/service/server.py"]
     command: ["--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
     volumes:
       - ${WHISPERX_WORKSPACE:-../../..}:/workplace
       - ${WHISPERX_WORKSPACE:-../../..}/container/whisperx/cache:/cache
@@ -15,7 +17,7 @@ services:
       - HF_TOKEN=${HF_TOKEN:-}
       - WHISPERX_MODEL=${WHISPERX_MODEL:-base}
       - WHISPERX_COMPUTE_TYPE=${WHISPERX_COMPUTE_TYPE:-int8}
-      - WHISPERX_DEVICE=${WHISPERX_DEVICE:-cuda}
+      - WHISPERX_DEVICE=${WHISPERX_DEVICE:-cpu}
       - TRANSFORMERS_CACHE=/cache/huggingface
       - HF_HOME=/cache/huggingface
       - TORCH_HOME=/cache/torch
