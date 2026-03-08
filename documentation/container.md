@@ -173,7 +173,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 Notes:
@@ -199,7 +199,7 @@ docker run --rm -it \
   -v "$PWD:/workplace" \
   -v "$PWD/minds:/minds" \
   -w /workplace \
-  pyash-dev
+  liberit/pyash:latest
 ```
 
 ## Docker compose (orchestrate)
