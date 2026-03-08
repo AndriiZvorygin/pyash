@@ -1,4 +1,5 @@
 ob ve filename text audio filename text lyrics be input ya
+from filename "../../module/video_common.pya" ob name video heading burn to name video heading burn be import do
 
 exists su name draw size shorts be map def
 su name width ob num 720 ya
@@ -9,6 +10,15 @@ prah
 exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
 exists su name hear backend default ob text "qwen" be default ya
 exists su name subtitle margin ratio override ob num 0.40 be num ya
+exists su name opening heading text ob text "" be default ya
+exists su name opening heading instruction ob text "Create one short opening heading for this music video. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, or punctuation." be default ya
+exists su name video title instruction ob text "Create a compelling video title (max 90 chars). Plain text only." be default ya
+exists su name video summary instruction ob text "Write one concise summary sentence for this song video in plain text (max 180 chars)." be default ya
+exists su name video tags instruction ob text "Write comma-separated tags for this song video. Plain text only, no hashtags." be default ya
+exists su name audio cue text ob text "Sound On 🎧" be default ya
+exists su name opening heading y ratio ob num 0.60 be default ya
+exists su name audio cue y ratio ob num 0.68 be default ya
+exists su name audio cue font scale ob num 0.42 be default ya
 exists su name lyric promptify packet ob text quoted.text.instruction: Turn current_cut into one concise image prompt for a music-lyric video.
 current_cut: [[current_cut]]
 previous_cut: [[previous_cut]]
@@ -38,6 +48,10 @@ ob text "\"" to name run root ensure cmd be plus do
 su name run root ensure stage ob name text run root ensure cmd be command do
 
 su name lyrics text stage from filename of ob of lyrics become wo text to name text lyrics text be read do
+su name opening heading text stage ob name text lyrics text fromtext name opening heading instruction for name mind to name text opening heading text be write do
+su name video title stage ob name text lyrics text fromtext name video title instruction for name mind to name text video title be write do
+su name video summary stage ob name text lyrics text fromtext name video summary instruction for name mind to name text video summary be write do
+su name video tags stage ob name text lyrics text fromtext name video tags instruction for name mind to name text video tags be write do
 
 su name audio wav path stage ob name text artifacts root to name text audio wav path be text do
 su name input audio filename stage ob name audio to name filename input audio filename be filename do
@@ -103,7 +117,7 @@ su name captions section cuts stage ob name text captions section cuts cmd be co
 su name cut stage from filename of ob of captions section cuts filename stage during num 999999 to name itinerary lyric cuts be cut do
 
 su name draw discharge pre mind stage as wo draw be discharge do
-su name prompt stage from name itinerary lyric cuts ob text "Turn current_cut into one concise image prompt for a music-lyric video." fromtext text "You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2. Focus on current_cut and output only one concise image-generation prompt line (about 18-45 words), no quotes, no markdown, no explanation, no visible text in scene." for name mind to name itinerary lyric draw prompts by num 0 be promptify do
+su name prompt stage from name itinerary lyric cuts ob text "Turn current_cut into one concise image prompt for a music-lyric video." fromtext text "You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2. Focus on current_cut and output only one concise image-generation prompt line (about 18-45 words), no quotes, no markdown, no explanation, no visible text in scene." for name mind to name itinerary lyric draw prompts be promptify do
 su name mind discharge stage as wo mind be discharge do
 su name ollama discharge stage as wo ollama be discharge do
 su name mind discharge settle stage ob text "sleep 3" be command do
@@ -125,9 +139,23 @@ su name footnote output path stage ob name text artifacts root to name text foot
 ob text "/music-video-footnote.mp4" to name footnote output path be plus do
 su name footnote filename stage ob name text footnote output path to name filename footnote filename be filename do
 su name footnote stage from ve name result stage name captions stage name footnote filename stage from filename of ob of captions filename stage fromstate wo srt with filename of ob of result stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio override be footnote do
+su name opening heading burn stage from filename of ob of footnote filename stage with name text opening heading text to filename of ob of footnote filename stage by num of ob of opening heading y ratio be video heading burn do
+ob text "printf '%s' '" to name text audio cue cmd be text do
+ob name text audio cue text to name audio cue cmd be plus do
+ob text "' | node \"" to name audio cue cmd be plus do
+ob name text workspace root to name audio cue cmd be plus do
+ob text "/command/video_heading_burn.mjs\" \"" to name audio cue cmd be plus do
+ob name text footnote output path to name audio cue cmd be plus do
+ob text "\" \"" to name audio cue cmd be plus do
+ob name text footnote output path to name audio cue cmd be plus do
+ob text "\" --text-stdin --seconds 1 --y-ratio " to name audio cue cmd be plus do
+ob num of ob of audio cue y ratio to name audio cue cmd be plus do
+ob text " --max-width-ratio 0.82 --font-scale " to name audio cue cmd be plus do
+ob num of ob of audio cue font scale to name audio cue cmd be plus do
+su name audio cue stage ob name text audio cue cmd be command do
 su name hear final discharge stage as wo hear be discharge do
 su name mind final discharge stage as wo mind be discharge do
 su name ollama final discharge stage as wo ollama be discharge do
 prah
 
-su name result out ob name footnote stage be write do
+su name result out ob name audio cue stage be write do

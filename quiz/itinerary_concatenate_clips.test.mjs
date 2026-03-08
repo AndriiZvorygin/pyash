@@ -67,6 +67,9 @@ test("concatenate can merge section clip itinerary rows", async (t) => {
       ]
     }
   });
+  doRemember({ mood: "ya", su: { name: "video title" }, be: "text", ob: { text: "Clip Title" } });
+  doRemember({ mood: "ya", su: { name: "video summary" }, be: "text", ob: { text: "Clip summary line." } });
+  doRemember({ mood: "ya", su: { name: "video tags" }, be: "text", ob: { text: "tag one, tag two" } });
 
   const res = await concatenateFromNameItinerary({
     mood: "do",
@@ -81,7 +84,12 @@ test("concatenate can merge section clip itinerary rows", async (t) => {
   assert.equal(res?.be, "concatenate");
   assert.equal(String(res?.ob?.filename ?? ""), out);
   await fs.access(out);
-  await fs.access(path.join(tmp, "final.metadata.pya"));
+  const metadataPath = path.join(tmp, "final.metadata.pya");
+  await fs.access(metadataPath);
+  const metadataText = await fs.readFile(metadataPath, "utf8");
+  assert.match(metadataText, /su name title ob text "Clip Title" ya/);
+  assert.match(metadataText, /su name summary ob text "Clip summary line\." ya/);
+  assert.match(metadataText, /su name tags ob text "tag one, tag two" ya/);
 });
 
 test("concatenate resolves from name series signature", async (t) => {
