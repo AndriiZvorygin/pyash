@@ -53,16 +53,48 @@ function countWords(text) {
   return raw.split(/\s+/u).filter(Boolean).length;
 }
 
-function percentile(values, p) {
-  const list = Array.isArray(values) ? values.filter((n) => Number.isFinite(n)).slice() : [];
-  if (!list.length) return 0;
-  list.sort((a, b) => a - b);
-  const pos = Math.max(0, Math.min(1, Number(p ?? 0))) * (list.length - 1);
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  if (lo === hi) return list[lo];
-  const t = pos - lo;
-  return list[lo] + ((list[hi] - list[lo]) * t);
+function normalizeWord(text) {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/[`'’]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "");
+}
+
+function splitNormalizedWords(text) {
+  return String(text ?? "")
+    .split(/\s+/u)
+    .map((word) => normalizeWord(word))
+    .filter(Boolean);
+}
+
+function wordsRoughlyMatch(aRaw, bRaw) {
+  const a = normalizeWord(aRaw);
+  const b = normalizeWord(bRaw);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 4 && b.length >= 4) {
+    if (a.endsWith("s") && a.slice(0, -1) === b) return true;
+    if (b.endsWith("s") && b.slice(0, -1) === a) return true;
+  }
+  return false;
+}
+
+function buildTimingTokens(cuts = []) {
+  const tokens = [];
+  for (const cut of cuts) {
+    const since = Number(cut?.since ?? 0);
+    const until = Number(cut?.until ?? since);
+    const words = String(cut?.obText ?? "").split(/\s+/u).filter(Boolean);
+    for (const word of words) {
+      tokens.push({
+        word,
+        normalized: normalizeWord(word),
+        since,
+        until
+      });
+    }
+  }
+  return tokens.filter((token) => token.normalized);
 }
 
 function sanitizeTimingCuts(rawCuts) {
@@ -126,6 +158,8 @@ function buildTimingRows(lyricsCuts, timingCuts) {
   }
 
   const rows = [];
+  const tokens = buildTimingTokens(cuts);
+  let tokenCursor = 0;
   let runningLyricWords = 0;
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -135,8 +169,42 @@ function buildTimingRows(lyricsCuts, timingCuts) {
     const endTimingWord = i === lines.length - 1
       ? totalTimingWords
       : (runningLyricWords / totalLyricWords) * totalTimingWords;
-    const since = wordToTime(startTimingWord);
-    const until = Math.max(since + 0.06, wordToTime(endTimingWord));
+    let since = wordToTime(startTimingWord);
+    let until = Math.max(since + 0.06, wordToTime(endTimingWord));
+    const expectedTokenIndex = Math.max(0, Math.min(tokens.length - 1, Math.floor(startTimingWord)));
+    const lineWords = splitNormalizedWords(line);
+    if (lineWords.length && tokens.length) {
+      let firstIdx = -1;
+      let lastIdx = -1;
+      let searchFrom = Math.max(tokenCursor, expectedTokenIndex - 80);
+      for (const lyricWord of lineWords) {
+        let found = -1;
+        const maxScan = Math.min(tokens.length, expectedTokenIndex + 140);
+        for (let j = searchFrom; j < maxScan; j += 1) {
+          if (wordsRoughlyMatch(lyricWord, tokens[j].normalized)) {
+            found = j;
+            break;
+          }
+        }
+        if (found >= 0) {
+          if (firstIdx < 0) firstIdx = found;
+          lastIdx = found;
+          searchFrom = found + 1;
+        }
+      }
+      if (firstIdx >= 0 && lastIdx >= firstIdx) {
+        const matchedSince = Number(tokens[firstIdx].since ?? since);
+        const matchedUntil = Math.max(matchedSince + 0.06, Number(tokens[lastIdx].until ?? until));
+        const matchedSpan = matchedUntil - matchedSince;
+        const fallbackSpan = Math.max(0.06, until - since);
+        const looksOutlier = matchedSpan > Math.max(12, fallbackSpan * 3.5);
+        if (!looksOutlier) {
+          since = matchedSince;
+          until = matchedUntil;
+          tokenCursor = Math.max(tokenCursor, firstIdx);
+        }
+      }
+    }
     rows.push({ index: i + 1, since, until, text: line });
   }
   const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
