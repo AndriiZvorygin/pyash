@@ -27,7 +27,13 @@ prah
 
 su name manuscript final stage from la ob text of ob of manuscript source to name text manuscript scratch be manuscript draft do ko ob text of ob of better compare brief manuscript judge prompter to name text manuscript final atmost num 6 be better compare do
 
-su name produce path stage ob filename of ob of run root to name text produce path be text do
+su name produce dir stage ob text "artifacts/" to name text produce dir be text do
+ob name run id to name produce dir be plus do
+ob text "mkdir -p \"" to name text produce dir ensure cmd be text do
+ob name text produce dir to name produce dir ensure cmd be plus do
+ob text "\"" to name produce dir ensure cmd be plus do
+su name produce dir ensure stage ob name text produce dir ensure cmd be command do
+su name produce path stage ob name text produce dir to name text produce path be text do
 ob text "/produce.txt" to name produce path be plus do
 su name produce filename stage ob name text produce path to name filename produce filename be filename do
 su name manuscript produce stage ob name text manuscript final to filename of ob of produce filename stage be write do
