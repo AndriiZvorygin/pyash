@@ -194,7 +194,7 @@ export async function transcribeWithQwenComfyuiChunked({
   }
   const durationSeconds = await probeDurationFn(inputPath);
   const windows = planChunkWindows(durationSeconds, { maxChunkSeconds, overlapSeconds });
-  if (windows.length <= 1) {
+  if (!windows.length) {
     throw new Error("hear qwen chunk defective: audio too short for chunking");
   }
 

@@ -38,7 +38,7 @@ test("qwen timestamp parser reads inline timestamp transcript lines", () => {
   assert.match(srt, /00:00:00,320 --> 00:00:00,560/u);
 });
 
-test("hear backend qwen writes srt output from qwen payload", async () => {
+test("hear backend qwen writes srt output from chunked payload", async () => {
   forget();
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "hear-qwen-"));
   const inputPath = path.join(dir, "input.wav");
@@ -62,10 +62,14 @@ test("hear backend qwen writes srt output from qwen payload", async () => {
     become: { wo: "srt" }
   }, {
     remember,
-    transcribeQwenFn: async () => ({
+    transcribeQwenFn: async () => {
+      throw new Error("direct qwen path should not run for srt");
+    },
+    transcribeQwenChunkedFn: async () => ({
       transcript: "hello world",
-      timestampsRaw: "[0.00,1.25] hello world",
-      srt: "1\n00:00:00,000 --> 00:00:01,250\nhello world\n"
+      timestampsRaw: '[{"start":0,"end":1.25,"text":"hello world"}]',
+      srt: "1\n00:00:00,000 --> 00:00:01,250\nhello world\n",
+      chunkCount: 1
     })
   });
 
@@ -108,7 +112,7 @@ test("qwen chunk segment merge removes overlap duplicates", () => {
   assert.ok(merged[2].start >= merged[1].end);
 });
 
-test("hear backend qwen retries chunked path on out-of-memory", async () => {
+test("hear backend qwen uses chunked path for srt output", async () => {
   forget();
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "hear-qwen-chunk-"));
   const inputPath = path.join(dir, "input.wav");
@@ -127,6 +131,7 @@ test("hear backend qwen retries chunked path on out-of-memory", async () => {
   };
 
   let chunkedCalled = false;
+  let directCalled = false;
   const result = await hear({
     mood: "do",
     be: "hear",
@@ -136,7 +141,8 @@ test("hear backend qwen retries chunked path on out-of-memory", async () => {
   }, {
     remember,
     transcribeQwenFn: async () => {
-      throw new Error("Qwen3ASRTranscribe: Allocation on device 0 would exceed allowed memory. (out of memory)");
+      directCalled = true;
+      throw new Error("direct qwen path should not run for srt");
     },
     transcribeQwenChunkedFn: async () => {
       chunkedCalled = true;
@@ -150,6 +156,7 @@ test("hear backend qwen retries chunked path on out-of-memory", async () => {
   });
 
   assert.equal(chunkedCalled, true);
+  assert.equal(directCalled, false);
   assert.equal(result?.be, "hear");
   assert.equal(result?.ob?.filename, outputPath);
   const srt = await fs.readFile(outputPath, "utf8");

@@ -369,7 +369,7 @@ export async function hear(
           });
         };
         let forceChunkApplied = false;
-        if (forceChunkSeconds > 0) {
+        if (!wantsSrt && forceChunkSeconds > 0) {
           try {
             const durationSeconds = await probeAudioDurationSeconds(inputPath);
             if (durationSeconds >= forceChunkSeconds) {
@@ -381,6 +381,10 @@ export async function hear(
           }
         }
         try {
+          if (wantsSrt && !forceChunkApplied) {
+            await runQwenChunked({ reason: "timing mode srt" });
+            forceChunkApplied = true;
+          }
           if (!forceChunkApplied) {
             const payload = await transcribeQwenFn({
               inputPath,
