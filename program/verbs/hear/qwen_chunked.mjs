@@ -46,10 +46,10 @@ export function isQwenOutOfMemoryError(err) {
   );
 }
 
-export function planChunkWindows(durationSeconds, { maxChunkSeconds = 480, overlapSeconds = 1.5 } = {}) {
+export function planChunkWindows(durationSeconds, { maxChunkSeconds = 55, overlapSeconds = 1.5 } = {}) {
   const duration = Number(durationSeconds);
   if (!Number.isFinite(duration) || duration <= 0) return [];
-  const maxSec = toFinitePositive(maxChunkSeconds, 480);
+  const maxSec = toFinitePositive(maxChunkSeconds, 55);
   const overlapSecRaw = toFinitePositive(overlapSeconds, 1.5);
   const overlapSec = Math.min(overlapSecRaw, Math.max(0, maxSec / 2));
   const step = Math.max(0.25, maxSec - overlapSec);
@@ -179,7 +179,7 @@ export async function transcribeWithQwenComfyuiChunked({
   workflowName,
   language = "",
   context = "",
-  maxChunkSeconds = 480,
+  maxChunkSeconds = 55,
   overlapSeconds = 1.5,
   returnTimestamps = true,
   useSegmentsForTranscript = true,

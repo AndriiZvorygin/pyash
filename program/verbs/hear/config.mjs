@@ -107,7 +107,7 @@ function resolveHearWorkflowDefault({ rememberFn } = {}) {
 function resolveHearQwenChunkMaxSeconds({ rememberFn } = {}) {
   const configured = resolveConfigNum("hear qwen chunk max seconds", { rememberFn });
   if (Number.isFinite(configured) && configured > 0) return configured;
-  return 480;
+  return 55;
 }
 
 function resolveHearQwenChunkOverlapSeconds({ rememberFn } = {}) {
