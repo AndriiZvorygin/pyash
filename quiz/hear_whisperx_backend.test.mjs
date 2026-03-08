@@ -227,3 +227,43 @@ test("hear vyah stream become wo srt uses whisperx transcribe_stream endpoint", 
     clearExchangeRecorder();
   }
 });
+
+test("hear whisperx replaces pre-existing non-writable srt output", async () => {
+  forget();
+  const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "hear-whisperx-"));
+  const inputPath = path.join(dir, "input.wav");
+  const outputPath = path.join(dir, "output.srt");
+  await fs.writeFile(inputPath, "fake-audio", "utf8");
+  await fs.writeFile(outputPath, "stale", "utf8");
+  await fs.chmod(outputPath, 0o444);
+
+  const remember = (name) => {
+    if (name === "hear backend default") return { ob: { text: "whisperx" } };
+    if (name === "hear host") return { ob: { text: "http://whisperx:8000" } };
+    if (name === "hear whisperx model") return { ob: { text: "large-v3" } };
+    if (name === "hear language") return { ob: { text: "en" } };
+    return null;
+  };
+
+  const priorFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({
+    ok: true,
+    json: async () => ({ output_srt: outputPath, model: "large-v3", diarize: false, stdout: "ok", stderr: "" })
+  });
+  try {
+    const result = await hear({
+      mood: "do",
+      be: "hear",
+      from: { filename: inputPath },
+      to: { filename: outputPath },
+      become: { wo: "srt" }
+    }, { remember });
+    assert.equal(result?.be, "hear");
+    assert.equal(result?.ob?.filename, outputPath);
+    const text = await fs.readFile(outputPath, "utf8");
+    assert.match(text, /-->/u);
+  } finally {
+    globalThis.fetch = priorFetch;
+    clearExchangeRecorder();
+  }
+});

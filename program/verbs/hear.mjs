@@ -59,6 +59,18 @@ function clipLogText(value, max = 1200) {
   return text.slice(-max);
 }
 
+async function writeTextFileReplacingIfNeeded(targetPath, text) {
+  try {
+    await fs.writeFile(targetPath, text, "utf8");
+    return;
+  } catch (err) {
+    const code = String(err?.code ?? "");
+    if (code !== "EACCES" && code !== "EPERM") throw err;
+  }
+  await fs.unlink(targetPath);
+  await fs.writeFile(targetPath, text, "utf8");
+}
+
 function hearWhisperxLogStreamingEnabled(rememberFn) {
   const configured = resolveConfigBool("stream stdout", { rememberFn });
   if (configured !== undefined) return configured;
@@ -574,7 +586,7 @@ export async function hear(
     transcript = String(transcript ?? "");
   }
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, transcript, "utf8");
+  await writeTextFileReplacingIfNeeded(outputPath, transcript);
 
   const transcriptBytes = Buffer.from(transcript, "utf8");
   const inputBytes = await readInputBytes(sentence);
