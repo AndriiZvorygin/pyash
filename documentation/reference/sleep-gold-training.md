@@ -55,6 +55,18 @@ Minimum outputs per sleep cycle SHOULD include:
 
 ## Memory governance contract (normative profile)
 
+### Knowledge base roots (library contract)
+
+Consolidated knowledge SHOULD be stored in library roots at two scopes:
+
+1. world/shared scope: `world/library/`
+2. per-agent scope: `world/house/<agent>/library/`
+
+Recommended split:
+
+1. `world/library/` for shared, adjudicated facts and common references
+2. `world/house/<agent>/library/` for agent-local semantic/autobiographical memory and private working knowledge
+
 ### Retention and forgetting
 
 Retention SHOULD be memory-type aware:
@@ -72,6 +84,10 @@ When new semantic facts conflict with existing facts:
 1. preserve both claims with provenance
 2. mark the older claim as superseded/contested (not silently deleted)
 3. promote one canonical fact only when confidence + provenance threshold is met
+
+Default confidence threshold for semantic promotion:
+
+1. `>= 0.80` confidence (sane default)
 
 ### Fact adjudication (tribunal/court profile)
 
@@ -125,6 +141,16 @@ Memory writes SHOULD include provenance pointers:
 
 Records without provenance SHOULD be excluded from semantic promotion.
 
+### Fact representation contract (gnomic + evidential)
+
+For memory facts intended as stable knowledge:
+
+1. represent fact claims in gnomic mood (fact-like form)
+2. attach evidential-case/source metadata for citations
+3. store at least one citation pointer per promoted semantic fact
+
+When evidence is weak or disputed, keep fact in held/contested stores until adjudication resolves.
+
 ### Retrieval policy
 
 Recall SHOULD use a deterministic ranking blend:
@@ -163,6 +189,12 @@ Dream-phase evaluation SHOULD include memory-quality metrics:
 5. identity-consistency score
 
 Promotion of memory/schema updates SHOULD be gated on acceptable thresholds for these metrics.
+
+Sane default gate:
+
+1. no critical regression categories
+2. overall memory quality score non-decreasing
+3. confidence-weighted factual retention precision `>= 0.80`
 
 ## Gold location contract
 
@@ -340,6 +372,12 @@ Promotion policy:
 1. require measurable improvement in target categories
 2. reject promotion on critical-category regressions (safety/policy/format-contract)
 3. record promote/reject decision with metric deltas and threshold references
+
+Sane default thresholds:
+
+1. promotion confidence threshold: `0.80`
+2. target-category improvement: at least `+0.02` absolute over baseline
+3. critical-category tolerance: `0.00` regression allowed
 
 Minimum benchmark report fields:
 
