@@ -17,11 +17,13 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
   ].join("\n"), "utf8");
 
   const calls = [];
+  const thinks = [];
   const priorFetch = globalThis.fetch;
   globalThis.fetch = async (_url, options = {}) => {
     const body = JSON.parse(String(options.body ?? "{}"));
     const userText = String(body?.messages?.[1]?.content ?? "");
     calls.push(userText);
+    thinks.push(body?.think);
     return {
       ok: true,
       json: async () => ({ message: { content: `visual prompt for ${userText}` } })
@@ -43,6 +45,7 @@ test("itinerary_promptify rewrites cut text via mind responses", async () => {
   }
 
   assert.equal(calls.length, 2);
+  assert.deepEqual(thinks, [false, false]);
   assert.match(calls[0], /instruction:\s*Turn this transcript cut into one concise visual image prompt for generation\./u);
   assert.match(calls[0], /previous_cut:\s*EMPTY/u);
   assert.match(calls[0], /current_cut:\s*first cut text/u);
@@ -99,11 +102,12 @@ test("itinerary_promptify neighbor context skips duplicate adjacent cuts", async
 
   assert.equal(calls.length, 3);
   assert.match(calls[0], /current_cut:\s*same text/u);
-  assert.match(calls[0], /next_cut:\s*same text/u);
+  assert.match(calls[0], /next_cut:\s*different text/u);
   assert.match(calls[0], /previous_cut:\s*EMPTY/u);
   assert.match(calls[1], /current_cut:\s*same text/u);
   assert.match(calls[1], /next_cut:\s*different text/u);
-  assert.match(calls[1], /previous_cut:\s*same text/u);
+  assert.match(calls[1], /previous_cut:\s*EMPTY/u);
+  assert.match(calls[0], /full_script:\s*same text different text/u);
   assert.match(calls[2], /previous_prompt_1:\s*ok prompt/u);
   assert.match(calls[2], /previous_prompt_2:\s*ok prompt/u);
 });

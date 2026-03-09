@@ -88,6 +88,37 @@ function cutTextAt(cuts, index) {
   return String(cuts[at]?.obText ?? "").trim();
 }
 
+function normalizeCutText(text) {
+  return String(text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function findDistinctNeighborCutText(cuts, index, step) {
+  if (!Array.isArray(cuts)) return "";
+  const current = cutTextAt(cuts, index);
+  const currentNorm = normalizeCutText(current);
+  let at = Number(index) + Number(step);
+  while (at >= 0 && at < cuts.length) {
+    const candidate = cutTextAt(cuts, at);
+    if (candidate && normalizeCutText(candidate) !== currentNorm) return candidate;
+    at += Number(step);
+  }
+  return "";
+}
+
+function buildDistinctFullScript(cuts = []) {
+  const out = [];
+  let lastNorm = "";
+  for (const cut of cuts) {
+    const text = String(cut?.obText ?? "").trim();
+    if (!text) continue;
+    const norm = normalizeCutText(text);
+    if (!norm || norm === lastNorm) continue;
+    out.push(text);
+    lastNorm = norm;
+  }
+  return out.join(" ");
+}
+
 function buildPromptifyPacket({
   cuts = [],
   index = 0,
@@ -97,8 +128,8 @@ function buildPromptifyPacket({
   packetTemplate = ""
 } = {}) {
   const currentText = cutTextAt(cuts, index);
-  const previousText = cutTextAt(cuts, Number(index) - 1);
-  const nextText = cutTextAt(cuts, Number(index) + 1);
+  const previousText = findDistinctNeighborCutText(cuts, index, -1);
+  const nextText = findDistinctNeighborCutText(cuts, index, 1);
   const priorPrompts = Array.isArray(previousPrompts)
     ? previousPrompts.map(value => String(value ?? "").trim()).filter(Boolean)
     : [];
@@ -129,6 +160,7 @@ async function callPromptMind({ host, model, systemPrompt, cutText }) {
     body: JSON.stringify({
       model,
       stream: false,
+      think: false,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: cutText }
@@ -150,14 +182,14 @@ async function callPromptMind({ host, model, systemPrompt, cutText }) {
   return prompt;
 }
 
-export { parseArgs, callPromptMind, cleanPrompt, buildPromptifyPacket };
+export { parseArgs, callPromptMind, cleanPrompt, buildPromptifyPacket, buildDistinctFullScript };
 
 export async function main(argv = process.argv) {
   const opts = parseArgs(argv);
   const inputText = await fs.readFile(opts.inputFile, "utf8");
   const itinerary = parseItineraryPya(inputText);
   const promptedCuts = [];
-  const fullScript = itinerary.cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
+  const fullScript = buildDistinctFullScript(itinerary.cuts);
   const promptHistory = [];
   for (let i = 0; i < itinerary.cuts.length; i += 1) {
     const packet = buildPromptifyPacket({

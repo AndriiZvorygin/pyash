@@ -19,7 +19,7 @@ import {
   runFfmpeg,
   runFfmpegConcatVideos
 } from "../../command/itinerary_to_video.mjs";
-import { callPromptMind, buildPromptifyPacket } from "../../command/itinerary_promptify.mjs";
+import { callPromptMind, buildPromptifyPacket, buildDistinctFullScript } from "../../command/itinerary_promptify.mjs";
 import { emitExchangeSentence, getExchangeRunId, lookupArtifactLocator, recordArtifact } from "../bridge/exchange.mjs";
 import { renderSayValue } from "./say.mjs";
 
@@ -1213,7 +1213,7 @@ export async function promptifyFromNameItinerary(sentence, { remember: rememberF
   const continuityWindow = Number.isFinite(continuityWindowRaw) && continuityWindowRaw >= 0
     ? Math.floor(continuityWindowRaw)
     : 1;
-  const fullScript = cuts.map(c => String(c?.obText ?? "").trim()).filter(Boolean).join(" ");
+  const fullScript = buildDistinctFullScript(cuts);
   const series = [];
   const promptHistory = [];
   for (let i = 0; i < cuts.length; i += 1) {
@@ -1669,12 +1669,24 @@ export const signatures = [
   { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "karaoke", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
   { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
-  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo }
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "by", "num", "from", "filename", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "filename"], handler: footnoteVideo },
+  { signatureWords: ["be", "footnote", "as", "wo", "wordflow", "become", "wo", "video", "by", "num", "from", "vec", "name", "fromstate", "wo", "srt", "to", "filename", "with", "text"], handler: footnoteVideo }
 ];

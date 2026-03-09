@@ -7,7 +7,7 @@ from filename "./video_common.pya" ob name current thumbnail heading y ratio to 
 from filename "./video_common.pya" ob name current video heading y ratio to name current video heading y ratio be import do
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
 from filename "./video_common.pya" ob name current footnote mode to name current footnote mode be import do
-from filename "./video_common.pya" ob name footnote by mode to name footnote by mode be import do
+from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
 exists su name draw system prompt ob text "Educational editorial illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, clean shapes, soft natural light, high detail." be default ya
 exists su name audio cue text ob text "Sound On 🎧" be default ya
@@ -146,7 +146,7 @@ su name music video from filename audio be ceremony def
   ob text "music-video-footnote.mp4" to name text footnote leaf be text do
   ob ve name "text music video run root" "text footnote leaf" to name text footnote path be concatenate become wo filename do
   su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
-  su name footnote output stage from filename of ob of captions output stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage with text of ob of footnote mode stage to name filename footnote output be footnote by mode do
+  su name footnote output stage from filename of ob of captions output stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
 
   su name opening heading stage from filename of ob of footnote output stage with name text video heading to filename of ob of footnote output stage by num of ob of video heading y ratio stage be video heading burn do
   ob text of ob of opening heading stage to name text opened video path be text do
