@@ -468,7 +468,7 @@ Expected outcomes:
    - retrieve memory by key/reference
 3. `que ...` interrogative-mood memory query
    - search memory via question-style lookup (including archive explanations)
-4. `be holding do` (vocab-safe for hold)
+4. `be impound do` (recommended over holding for contested-memory parking)
    - park contested claims pending more evidence
 5. `be decision do` (provisional vocab-safe for adjudicate)
    - run tribunal/court resolution for conflicts (proposer/defence/prosecution/judge)
@@ -490,7 +490,7 @@ Vocabulary note:
 1. `vocab_suggest` accepts: `forget`, `remember`, `reminder`, `archived`, `que`
 2. `que` interrogative mood is the recommended search-style memory query shape.
 3. `vocab_suggest` suggested replacements used here:
-   - hold -> `holding`
+   - hold -> `impound`
    - adjudicate -> `decision`
    - promote -> `expedite`
    - retrieve -> `restore`
