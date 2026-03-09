@@ -292,9 +292,47 @@ ensure_calendar_running() {
   return 0
 }
 
+ensure_android_worker_running() {
+  if [[ "${PYASH_ANDROID_WORKER_AUTOSTART:-truth}" != "truth" ]]; then
+    return 0
+  fi
+
+  local marker="command/android_host_worker.mjs"
+  if pgrep -f "$marker" >/dev/null 2>&1; then
+    echo "Android host worker already running."
+    return 0
+  fi
+
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "warning: npm not found on host; skipping android worker autostart." >&2
+    return 0
+  fi
+
+  local log_dir="$PROJECT_ROOT/artifacts/android"
+  local log_file="$log_dir/android-host-worker.log"
+  mkdir -p "$log_dir"
+
+  echo "Starting android host worker..."
+  (
+    cd "$PROJECT_ROOT"
+    nohup npm run android:worker -- --world "$PROJECT_ROOT/world" --interval-ms 400 >"$log_file" 2>&1 &
+    echo $! > "$log_dir/android-host-worker.pid"
+  )
+
+  sleep 0.2
+  if pgrep -f "$marker" >/dev/null 2>&1; then
+    echo "Android host worker running (log: $log_file)."
+    return 0
+  fi
+
+  echo "warning: android worker autostart did not confirm; start it manually with: npm run android:worker" >&2
+  return 0
+}
+
 ensure_node_modules
 ensure_pyash_link
 ensure_calendar_running
+ensure_android_worker_running
 
 echo "Container started. Entering..."
 exec docker exec -it pyash bash
