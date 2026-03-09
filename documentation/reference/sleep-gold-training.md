@@ -51,6 +51,27 @@ Runtime helper and emission logic:
 - Dataset export and automated LoRA/SFT training are roadmap work:
   - `documentation/roadmap.md` (`Session gold emission/export pipeline`, `Sleep-mode pipeline`)
 
+## Sleep-phase training assessment contract
+
+When LoRA/SFT training runs as part of sleep-mode workflows, treat evaluation as a required phase:
+
+1. **Non-REM phase (consolidation/training)**
+   - prepare deterministic dataset export from gold + reviewed artifacts
+   - run LoRA/SFT training job
+2. **Dream phase (assessment/benchmark)**
+   - evaluate post-training model on task-relevant criteria/benchmarks
+   - compare against pre-training baseline
+   - record category-level deltas (improved / neutral / regressed)
+3. **Wake outcome (promotion gate)**
+   - only promote trained adapter/profile when dream-phase metrics show meaningful improvement in target categories without unacceptable regressions
+
+Recommended persisted artifacts per sleep cycle:
+
+- baseline benchmark report (before training)
+- post-training benchmark report
+- comparison summary with per-category deltas
+- promotion decision record and rationale
+
 ## Practical guidance
 
 If you are building runtime flows:
