@@ -460,18 +460,28 @@ Expected outcomes:
 
 1. `be remember do`
    - persist memory candidates with provenance
-2. `be hold do`
+2. `be holding do` (vocab-safe for hold)
    - park contested claims pending more evidence
-3. `be adjudicate do`
+3. `be decision do` (provisional vocab-safe for adjudicate)
    - run tribunal/court resolution for conflicts (proposer/defence/prosecution/judge)
-4. `be promote do`
+4. `be expedite do` (provisional vocab-safe for promote)
    - promote adjudicated claims to canonical semantic memory
-5. `be archive do`
+5. `be archived do`
    - move non-active memory to reference library while preserving queryability
-6. `be retrieve do`
+6. `be restore do` (provisional vocab-safe for retrieve)
    - explicit archive retrieval for audit/explanation queries
-7. `be rehearse do`
+7. `be trying do` (provisional vocab-safe for rehearse)
    - run dream-phase benchmark/evaluation pass before promotion
+
+Vocabulary note:
+
+1. `vocab_suggest` accepts: `forget`, `remember`, `archived`
+2. `vocab_suggest` suggested replacements used here:
+   - hold -> `holding`
+   - adjudicate -> `decision`
+   - promote -> `expedite`
+   - retrieve -> `restore`
+   - rehearse -> `trying`
 
 Default behavior rule:
 
