@@ -245,9 +245,13 @@ When LoRA/SFT training runs as part of sleep-mode workflows, treat evaluation as
    - prepare deterministic dataset export from gold + reviewed artifacts
    - run LoRA/SFT training job
 2. **Dream phase (assessment/benchmark)**
-   - evaluate post-training model on task-relevant criteria/benchmarks
+   - evaluate post-training model on task-relevant criterion suites
    - compare against pre-training baseline
    - record category-level deltas (improved / neutral / regressed)
+   - include sub-modes:
+     - `be criterion do`: standard evaluation against expected quality bars
+     - `be nightmare do`: stress tests with excess/toughened replays of prior events to measure tolerance
+     - `be reverie do`: simulate goals/ambitions and evaluate alignment drift
 3. **Wake outcome (promotion gate)**
    - only promote trained adapter/profile when dream-phase metrics show meaningful improvement in target categories without unacceptable regressions
 
@@ -470,8 +474,12 @@ Expected outcomes:
    - move non-active memory to reference library while preserving queryability
 6. `be restore do` (provisional vocab-safe for retrieve)
    - explicit archive retrieval for audit/explanation queries
-7. `be trying do` (provisional vocab-safe for rehearse)
-   - run dream-phase benchmark/evaluation pass before promotion
+7. `be criterion do`
+   - run standard dream-phase evaluation pass before promotion
+8. `be nightmare do`
+   - run stress/tolerance evaluation with excess scenarios
+9. `be reverie do`
+   - run goal/ambition alignment simulation pass
 
 Vocabulary note:
 
@@ -481,7 +489,10 @@ Vocabulary note:
    - adjudicate -> `decision`
    - promote -> `expedite`
    - retrieve -> `restore`
-   - rehearse -> `trying`
+3. dream-phase verbs accepted by `vocab_suggest`:
+   - `criterion`
+   - `nightmare`
+   - `reverie`
 
 Default behavior rule:
 
