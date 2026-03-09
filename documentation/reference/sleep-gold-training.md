@@ -462,7 +462,7 @@ Expected outcomes:
 
 ### Complementary verbs (recommended)
 
-1. `be memory do` (proposed canonical set/write surface; requires vocab registration)
+1. `be reminder do` (canonical set/write surface)
    - persist memory candidates with provenance
 2. `be remember do` (canonical retrieval surface)
    - retrieve memory by key/reference
@@ -487,15 +487,14 @@ Expected outcomes:
 
 Vocabulary note:
 
-1. `vocab_suggest` accepts: `forget`, `remember`, `archived`, `que`
-2. `memory` is currently blocked by `vocab_suggest`; `be memory do` is defined here as intended spec surface pending vocabulary registration.
-3. `que` interrogative mood is the recommended search-style memory query shape.
-4. `vocab_suggest` suggested replacements used here:
+1. `vocab_suggest` accepts: `forget`, `remember`, `reminder`, `archived`, `que`
+2. `que` interrogative mood is the recommended search-style memory query shape.
+3. `vocab_suggest` suggested replacements used here:
    - hold -> `holding`
    - adjudicate -> `decision`
    - promote -> `expedite`
    - retrieve -> `restore`
-5. dream-phase verbs accepted by `vocab_suggest`:
+4. dream-phase verbs accepted by `vocab_suggest`:
    - `criterion`
    - `nightmare`
    - `reverie`
