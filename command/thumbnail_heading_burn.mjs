@@ -127,6 +127,45 @@ function runFfmpeg(inputImage, outputImage, vf) {
   });
 }
 
+function formatAssTime(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const csTotal = Math.round(safe * 100);
+  const hh = Math.floor(csTotal / 360000);
+  const mm = Math.floor((csTotal % 360000) / 6000);
+  const ss = Math.floor((csTotal % 6000) / 100);
+  const cs = csTotal % 100;
+  return `${hh}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}.${String(cs).padStart(2, "0")}`;
+}
+
+function escapeAssText(text) {
+  return String(text ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\r?\n/g, "\\N");
+}
+
+function buildAssText({ width, height, fontSize, marginV, text }) {
+  const outline = Math.max(2, Math.round(fontSize * 0.11));
+  const shadow = Math.max(1, Math.round(fontSize * 0.03));
+  return [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${Math.max(2, Math.floor(width))}`,
+    `PlayResY: ${Math.max(2, Math.floor(height))}`,
+    "WrapStyle: 2",
+    "ScaledBorderAndShadow: yes",
+    "",
+    "[V4+ Styles]",
+    "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    `Style: Default,DejaVu Sans,${Math.max(10, Math.floor(fontSize))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${outline},${shadow},8,40,40,${Math.max(8, Math.floor(marginV))},1`,
+    "",
+    "[Events]",
+    "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    `Dialogue: 0,${formatAssTime(0)},${formatAssTime(2)},Default,,0,0,0,,${escapeAssText(text)}`
+  ].join("\n");
+}
+
 function resolveRenderOutputPath(inputImage, outputImage) {
   const inputResolved = path.resolve(inputImage);
   const outputResolved = path.resolve(outputImage);
@@ -159,6 +198,7 @@ export async function main(argv = process.argv) {
   const fontSize = Math.floor(clamp(Math.min(baseSize, widthBound), height * 0.050, height * 0.160));
   const borderW = Math.max(2, Math.round(fontSize * 0.11));
   const shadow = Math.max(1, Math.round(fontSize * 0.03));
+  const marginV = Math.max(8, Math.round(height * opts.yRatio));
   const yExpr = `max(12\\,h*${opts.yRatio.toFixed(3)}-text_h/2)`;
   const panelLeft = Math.floor(width * (1 - opts.maxWidthRatio));
   const panelPad = Math.floor(width * 0.01);
@@ -166,6 +206,7 @@ export async function main(argv = process.argv) {
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-thumb-"));
   const textFile = path.join(tmpDir, "heading.txt");
+  const assFile = path.join(tmpDir, "heading.ass");
   const renderOutput = resolveRenderOutputPath(inputImage, outputImage);
   const replaceInPlace = renderOutput !== outputImage;
   await fs.writeFile(textFile, `${headingForBurn}\n`, "utf8");
@@ -187,7 +228,22 @@ export async function main(argv = process.argv) {
 
   try {
     await fs.mkdir(path.dirname(outputImage), { recursive: true });
-    await runFfmpeg(inputImage, renderOutput, vf);
+    try {
+      await runFfmpeg(inputImage, renderOutput, vf);
+    } catch (err) {
+      const message = String(err?.message ?? err ?? "");
+      if (!/No such filter: 'drawtext'/u.test(message)) throw err;
+      const assText = buildAssText({
+        width,
+        height,
+        fontSize,
+        marginV,
+        text: headingForBurn
+      });
+      await fs.writeFile(assFile, `${assText}\n`, "utf8");
+      const vfAss = `subtitles='${ffmpegEscapePathForFilter(path.resolve(assFile))}'`;
+      await runFfmpeg(inputImage, renderOutput, vfAss);
+    }
     if (replaceInPlace) await fs.rename(renderOutput, outputImage);
     process.stdout.write(`${outputImage}\n`);
   } finally {

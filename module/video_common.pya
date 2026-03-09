@@ -80,13 +80,12 @@ su name current footnote mode to name text footnote mode current be ceremony def
   su name footnote mode current ret
 prah
 
-su name footnote by mode from filename captions with filename video to filename output by num subtitle margin with text mode to name filename clip be ceremony def
-  ob text of with of this to name text footnote mode chosen be text do
+su name footnote mode from filename captions with filename video to filename output by num subtitle margin as text mode be ceremony def
+  ob text of as of this to name text footnote mode chosen be text do
   ob name text footnote mode chosen be equally from text "karaoke" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this as wo karaoke by num of by of this be footnote do
   ob name text footnote mode chosen be equally from text "plain" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this by num of by of this be footnote do
   ob name text footnote mode chosen be equally from text "wordflow" then su name footnote stage from filename of from of this fromstate wo srt with filename of with of this become wo video to filename of to of this as wo wordflow by num of by of this be footnote do
-  su name clip stage ob filename of ob of footnote stage to name filename clip be filename do
-  su name clip stage ret
+  su name footnote stage ret
 prah
 
 su name widescreen subtitle margin ratio to name num widescreen subtitle margin ratio be ceremony def
@@ -118,7 +117,7 @@ exists su name current thumbnail heading y ratio be export ya
 exists su name current video heading y ratio be export ya
 exists su name current subtitle margin ratio be export ya
 exists su name current footnote mode be export ya
-exists su name footnote by mode be export ya
+exists su name footnote mode be export ya
 exists su name widescreen subtitle margin ratio be export ya
 exists su name shorts subtitle margin ratio be export ya
 exists su name widescreen footnote mode be export ya

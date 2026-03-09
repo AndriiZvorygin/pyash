@@ -48,7 +48,8 @@ test("teaching video verbs accept vector dependency forms", async () => {
 
   const lines = [
     'su name demo from ve name itinerary teaching cuts name photographs photos fromstate wo itinerary become wo video to filename "artifacts/video/test.mp4" be concatenate do',
-    'su name demo from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform to filename "artifacts/video/test-footnote.mp4" as wo wordflow become wo video be footnote do'
+    'su name demo from ve name hear platform name concatenate platform fromstate wo srt with name concatenate platform to filename "artifacts/video/test-footnote.mp4" as wo wordflow become wo video be footnote do',
+    'su name demo from filename "artifacts/video/test.srt" fromstate wo srt with filename "artifacts/video/test.mp4" become wo video to filename "artifacts/video/test-footnote.mp4" as wo wordflow by num 0.4 be footnote do'
   ];
 
   for (const line of lines) {
@@ -117,7 +118,7 @@ test("footnote mode helper centralizes mode branch selection", async () => {
   const source = await fs.readFile("module/video_common.pya", "utf8");
   assert.match(
     source,
-    /su name footnote by mode from filename captions with filename video to filename output by num subtitle margin with text mode to name filename clip be ceremony def/u
+    /su name footnote mode from filename captions with filename video to filename output by num subtitle margin as text mode be ceremony def/u
   );
   assert.match(
     source,
@@ -193,7 +194,7 @@ test("section mappers normalize current item to filename before media verbs", as
   );
   assert.match(
     source,
-    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*be footnote by mode do/u
+    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*be footnote mode do/u
   );
   assert.match(
     source,
