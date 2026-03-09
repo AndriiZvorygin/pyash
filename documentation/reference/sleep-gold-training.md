@@ -85,3 +85,163 @@ If you are planning training jobs:
 1. Source accepted/rejected examples from `world/house/<agent>/gold/`.
 2. Keep export deterministic (dedup + stable ordering) before LoRA/SFT conversion.
 3. Run export/training as explicit background jobs (roadmap), not inline with active turn timing.
+
+## Gold selection policy (normative profile)
+
+This profile defines what should become gold when building sleep-phase datasets.
+
+### Inclusion signals
+
+Include candidate records when at least one signal is present:
+
+1. verification success/failure outcome
+2. tool-call success/failure outcome
+3. explicit user feedback (approve/reject/edit-correct)
+4. benchmark-labeled outcome from dream-phase assessment
+
+### Labels
+
+Use canonical labels:
+
+1. `gold_positive`
+2. `gold_negative`
+3. `gold_pairwise` (winner/loser comparison unit)
+
+### Priority order for label assignment
+
+1. explicit user feedback (highest authority)
+2. benchmark/regression outcome
+3. verification outcome
+4. tool/runtime outcome
+
+### Negative gold categories
+
+When `gold_negative`, include at least one category tag:
+
+1. `factual`
+2. `reasoning`
+3. `instruction_following`
+4. `format_contract`
+5. `tool_selection`
+6. `tool_execution`
+7. `safety_policy`
+8. `latency_or_budget`
+
+## Pairwise gold contract
+
+Pairwise records are first-class and SHOULD be preserved as winner/loser pairs.
+
+Required fields:
+
+1. task/context id
+2. winner output
+3. loser output
+4. ranking rationale
+5. source signal (`user`, `benchmark`, `verifier`, or mixed)
+
+Pairwise records SHOULD be exportable as:
+
+1. direct-preference pairs (DPO/IPO style)
+2. scalarized examples (winner positive + loser negative), with linkage retained
+
+## Tool-calling and use-feedback ingestion
+
+Tool episodes SHOULD be converted to training-relevant examples when they affect outcome quality.
+
+Minimum tool episode fields:
+
+1. requested intent
+2. selected tool name
+3. tool arguments (redacted where needed)
+4. tool result summary (success/fail)
+5. final answer quality outcome (pass/fail/user feedback)
+
+User feedback mapping:
+
+1. explicit acceptance -> `gold_positive`
+2. explicit rejection with correction -> `gold_negative` plus corrected positive candidate
+3. edit distance + correction note SHOULD be preserved for supervised correction sets
+
+## Data retention and balancing policy
+
+To avoid collapse from skewed labels, exports SHOULD enforce:
+
+1. stable dedup by content hash
+2. category-aware balancing across positive/negative
+3. per-generator caps to avoid single-source dominance
+4. time-windowed sampling for freshness
+
+Suggested default ratio (starting point):
+
+1. 50% positive
+2. 30% negative
+3. 20% pairwise (in addition to or intersecting with above, depending on trainer)
+
+## Export contract (normative shape)
+
+Each export row SHOULD contain:
+
+1. stable record id
+2. label
+3. task/prompt
+4. response text
+5. review/verdict text
+6. category tags
+7. provenance (agent, generator, run id, timestamp)
+8. pairwise linkage id (when applicable)
+
+Deterministic ordering key:
+
+1. label
+2. category
+3. timestamp day
+4. stable hash
+
+## Benchmark and promotion gate (normative thresholds)
+
+Dream-phase assessment MUST compare baseline and trained candidate on the same benchmark slice.
+
+Promotion policy:
+
+1. require measurable improvement in target categories
+2. reject promotion on critical-category regressions (safety/policy/format-contract)
+3. record promote/reject decision with metric deltas and threshold references
+
+Minimum benchmark report fields:
+
+1. benchmark suite id and version
+2. baseline model id
+3. trained adapter/model id
+4. per-category metrics
+5. aggregate metrics
+6. pass/fail promotion decision
+
+## Canonical `.pya` record sketches
+
+Positive/negative gold sketch:
+
+```text
+su name gold record be map def
+su name id ob text "<hash>" ya
+su name label ob text "gold_positive" ya
+su name category ob text "instruction_following" ya
+su name task ob text "<task>" ya
+su name response ob text "<response>" ya
+su name review ob text "<review>" ya
+su name provenance ob text "<agent>/<generator>/<run-id>" ya
+prah
+```
+
+Pairwise gold sketch:
+
+```text
+su name gold pair be map def
+su name id ob text "<pair-hash>" ya
+su name label ob text "gold_pairwise" ya
+su name task ob text "<task>" ya
+su name winner ob text "<winner-response>" ya
+su name loser ob text "<loser-response>" ya
+su name rationale ob text "<why winner>" ya
+su name source ob text "user" ya
+prah
+```
