@@ -29,6 +29,7 @@ Use this when the cheat sheet is not enough.
 - **Music module profile (reference)** → `documentation/reference/music-module.md`
 - **Instead replacement profile (reference)** → `documentation/reference/instead-replacement.md`
 - **External TUI session projection (Codex/others)** → `documentation/reference/agent-tui-session-projection.md`
+- **Sleep + gold + LoRA/SFT training contract** → `documentation/reference/sleep-gold-training.md`
 
 ## If you see errors about…
 
