@@ -73,6 +73,37 @@ When new semantic facts conflict with existing facts:
 2. mark the older claim as superseded/contested (not silently deleted)
 3. promote one canonical fact only when confidence + provenance threshold is met
 
+### Fact adjudication (tribunal/court profile)
+
+For contested facts, sleep SHOULD route conflicts through an adjudication phase before semantic promotion.
+
+Roles:
+
+1. proposer (candidate fact owner)
+2. defence (supporting case for retention/promotion)
+3. prosecution (case against truth/fit)
+4. judge (deterministic verdict authority)
+
+Case lifecycle:
+
+1. open
+2. argued
+3. decided
+4. disposed
+
+Judge outcomes:
+
+1. promote (retain in main semantic memory)
+2. hold (set aside pending additional evidence)
+3. reject (retain as rejected/contested with reason codes)
+4. request_more_evidence (remain unresolved until thresholds are met)
+
+Operational rule:
+
+1. facts under hold/reject MUST remain queryable as contested history
+2. only promoted outcomes become canonical semantic-memory truth for default retrieval
+3. held/rejected claims MAY be reopened when new independent evidence accumulates
+
 ### Confidence model
 
 Each memory record SHOULD carry confidence metadata:
