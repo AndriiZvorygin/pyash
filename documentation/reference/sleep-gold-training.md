@@ -53,6 +53,86 @@ Minimum outputs per sleep cycle SHOULD include:
 2. semantic fact update artifact
 3. autobiographical/identity delta artifact
 
+## Memory governance contract (normative profile)
+
+### Retention and forgetting
+
+Retention SHOULD be memory-type aware:
+
+1. episodic memory: short-to-medium horizon with compaction and expiry
+2. semantic memory: long-horizon with correction/revision, not blind expiry
+3. autobiographical memory: long-horizon and sparse, updated conservatively
+
+Implementations SHOULD define explicit TTL/decay windows per memory type.
+
+### Conflict resolution
+
+When new semantic facts conflict with existing facts:
+
+1. preserve both claims with provenance
+2. mark the older claim as superseded/contested (not silently deleted)
+3. promote one canonical fact only when confidence + provenance threshold is met
+
+### Confidence model
+
+Each memory record SHOULD carry confidence metadata:
+
+1. confidence score/band
+2. source class (`user`, `tool`, `benchmark`, `model-inferred`)
+3. last validated timestamp
+
+Confidence SHOULD be updatable by dream-phase benchmark evidence and user correction events.
+
+### Provenance requirements
+
+Memory writes SHOULD include provenance pointers:
+
+1. run id
+2. source artifact/newspaper reference
+3. agent and generator identity
+4. timestamp
+
+Records without provenance SHOULD be excluded from semantic promotion.
+
+### Retrieval policy
+
+Recall SHOULD use a deterministic ranking blend:
+
+1. relevance to active task
+2. confidence
+3. recency/freshness
+4. identity alignment (for autobiographical context)
+
+When context budget is tight, prefer high-confidence semantic items plus compact episodic summaries.
+
+### Safety and privacy boundaries
+
+Sleep pipelines MUST enforce redaction/denylists before memory persistence and dataset export.
+
+At minimum:
+
+1. do not persist secret tokens/credentials
+2. redact sensitive personal/private data unless explicitly allowed by policy
+3. keep policy-sensitive memory in restricted scopes where required
+
+### Identity drift guardrails
+
+Autobiographical updates SHOULD require repeated evidence across multiple episodes or explicit user confirmation.
+
+Single noisy events SHOULD NOT cause major identity/value rewrites.
+
+### Memory quality benchmarking
+
+Dream-phase evaluation SHOULD include memory-quality metrics:
+
+1. recall accuracy
+2. contradiction rate
+3. stale-fact usage rate
+4. hallucinated-memory rate
+5. identity-consistency score
+
+Promotion of memory/schema updates SHOULD be gated on acceptable thresholds for these metrics.
+
 ## Gold location contract
 
 Session gold is emitted per agent house, under:
