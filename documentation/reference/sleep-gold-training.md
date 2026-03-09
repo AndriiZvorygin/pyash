@@ -6,6 +6,34 @@ This document consolidates the current contract for:
 - training gold collection
 - LoRA/SFT dataset preparation intent and current implementation status
 
+## Abstract
+
+This reference defines a sleep-phase lifecycle for model improvement and memory governance:
+
+1. non-REM consolidation and training preparation
+2. dream-phase evaluation (`criterion`, `nightmare`, `reverie`)
+3. wake-phase promotion gating
+
+It specifies memory consolidation rules, fact adjudication, gold selection/export, and retrieval-index behavior for RAG/context safety.
+
+## Scope and status
+
+This is a normative engineering reference (policy/spec contract), not a claims paper.
+Implementation status is listed in the final section as an appendix profile.
+
+## Terminology map (canonical)
+
+This spec uses lifecycle nouns and verb surfaces together:
+
+1. retain pending contested claim -> `impound`
+2. adjudicate contested claim -> `decision`
+3. promote accepted claim -> `expedite`
+4. move inactive claim to archive -> `archived`
+5. retrieve archived claim -> `restore`
+
+Adjudication verdict nouns (`promote`, `hold`, `reject`) are semantic outcomes.
+Verb surfaces are operational commands used by runtime interfaces.
+
 ## Canonical intent
 
 `be sleep do` is not a short delay. It is the consolidation lifecycle entry.
@@ -120,6 +148,14 @@ Operational rule:
 2. only promoted outcomes become canonical semantic-memory truth for default retrieval
 3. held/rejected claims MAY be reopened when new independent evidence accumulates
 
+### Reopen thresholds (sane defaults)
+
+Reopening a previously held/rejected claim SHOULD require:
+
+1. at least two independent new evidence items
+2. aggregate confidence for reopened claim candidate `>= 0.80`
+3. no unresolved critical contradiction with a higher-confidence canonical fact
+
 ### Confidence model
 
 Each memory record SHOULD carry confidence metadata:
@@ -227,15 +263,6 @@ Runtime helper and emission logic:
 
 - `program/agent/gold.mjs`
 - `program/verbs/verify_loop.mjs`
-
-## Current implementation status (March 2026)
-
-- Sleep verb exists and is wired as consolidation signal:
-  - `program/verbs/sleep.mjs`
-- Gold emission exists and is deterministic in verify loop path:
-  - `quiz/review_loop.test.mjs`
-- Dataset export and automated LoRA/SFT training are roadmap work:
-  - `documentation/roadmap.md` (`Session gold emission/export pipeline`, `Sleep-mode pipeline`)
 
 ## Sleep-phase training assessment contract
 
@@ -412,7 +439,56 @@ Minimum benchmark report fields:
 5. aggregate metrics
 6. pass/fail promotion decision
 
+### Benchmark protocol defaults (for reproducibility)
+
+Unless overridden by project policy:
+
+1. fixed dataset split: train/validation/test = `80/10/10`
+2. fixed random seed set recorded in report metadata
+3. at least 3 evaluation runs for aggregate stability
+4. promotion decision uses mean metric deltas across runs
+5. ties/noise bands SHOULD default to non-promotion unless target-category delta clears threshold
+
 ## Canonical `.pya` record sketches
+
+Semantic fact sketch (gnomic + evidential):
+
+```text
+su name semantic fact be map def
+su name id ob text "<fact-hash>" ya
+su name claim ob text "<fact statement>" ya
+su name mood ob text "gnomic" ya
+su name confidence ob num 0.91 ya
+su name citation ob text "<source artifact/newspaper ref>" ya
+su name provenance ob text "<agent>/<run-id>/<timestamp>" ya
+prah
+```
+
+Impounded contested fact sketch:
+
+```text
+su name impounded fact be map def
+su name id ob text "<claim-hash>" ya
+su name status ob text "impound" ya
+su name reason ob text "<conflict reason code>" ya
+su name confidence ob num 0.63 ya
+su name case id ob text "<case-id>" ya
+su name provenance ob text "<agent>/<run-id>/<timestamp>" ya
+prah
+```
+
+Adjudication verdict sketch:
+
+```text
+su name decision verdict be map def
+su name case id ob text "<case-id>" ya
+su name outcome ob text "promote|hold|reject|request_more_evidence" ya
+su name score ob num 0.84 ya
+su name rationale ob text "<judge rationale>" ya
+su name citation ob text "<evidence refs>" ya
+su name provenance ob text "<judge>/<run-id>/<timestamp>" ya
+prah
+```
 
 Positive/negative gold sketch:
 
@@ -489,3 +565,12 @@ Default behavior rule:
 
 1. only promoted/high-confidence items are eligible for default RAG/context injection
 2. held/rejected/archived items require explicit retrieval intent
+
+## Appendix: current implementation status (March 2026)
+
+1. Sleep verb exists and is wired as consolidation signal:
+   - `program/verbs/sleep.mjs`
+2. Gold emission exists and is deterministic in verify loop path:
+   - `quiz/review_loop.test.mjs`
+3. Dataset export and automated LoRA/SFT training are roadmap work:
+   - `documentation/roadmap.md` (`Session gold emission/export pipeline`, `Sleep-mode pipeline`)
