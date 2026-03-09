@@ -1,0 +1,22 @@
+ob filename text source be input ya
+exists su name phone movies dir ob text "/sdcard/Movies/Pyash/" be default ya
+
+su name source filename stage ob name source to name filename source filename be filename do
+su name source path stage ob name source filename stage to name text source path be text do
+
+ob text "adb devices" to name text adb devices cmd be text do
+su name adb devices stage ob name text adb devices cmd be command do
+
+ob text "adb shell mkdir -p \"" to name text ensure dir cmd be text do
+ob name phone movies dir to name ensure dir cmd be plus do
+ob text "\"" to name ensure dir cmd be plus do
+su name ensure dir stage ob name text ensure dir cmd be command do
+
+ob text "adb push \"" to name text push cmd be text do
+ob name text source path to name push cmd be plus do
+ob text "\" \"" to name push cmd be plus do
+ob name phone movies dir to name push cmd be plus do
+ob text "\"" to name push cmd be plus do
+su name push stage ob name text push cmd be command do
+
+su name push stage ob name push stage be write do
