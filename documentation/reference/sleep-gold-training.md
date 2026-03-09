@@ -162,6 +162,26 @@ Recall SHOULD use a deterministic ranking blend:
 
 When context budget is tight, prefer high-confidence semantic items plus compact episodic summaries.
 
+### Active-context and RAG exclusion policy
+
+Memory tiers SHOULD be split into:
+
+1. active retrieval set (eligible for default RAG/context injection)
+2. reference archive set (queryable on explicit request, not injected by default)
+
+Default exclusion from active retrieval set:
+
+1. stale low-priority items past retention/refresh window
+2. contradicted claims marked superseded/contested
+3. rejected adjudication outcomes
+4. held claims below promotion confidence threshold
+
+Archive behavior:
+
+1. excluded items remain preserved with provenance and reason codes
+2. explicit user/query intent MAY retrieve archived items for audit/explanation
+3. archived contradictory/rejected facts SHOULD surface decision rationale (why false/irrelevant/held)
+
 ### Safety and privacy boundaries
 
 Sleep pipelines MUST enforce redaction/denylists before memory persistence and dataset export.
