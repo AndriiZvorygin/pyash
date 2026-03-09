@@ -141,6 +141,9 @@ Use `be wait do` for short synchronization pauses in active runtime flows.
 
 Use `be sleep do` for consolidation lifecycle entry (review/memory compaction and optional LoRA/SFT preparation), not for short action timing.
 
+Consolidated reference:
+`documentation/reference/sleep-gold-training.md`
+
 Canonical quick pause sentence:
 
 `be wait do`
