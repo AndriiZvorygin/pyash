@@ -462,34 +462,40 @@ Expected outcomes:
 
 ### Complementary verbs (recommended)
 
-1. `be remember do`
+1. `be memory do` (proposed canonical set/write surface; requires vocab registration)
    - persist memory candidates with provenance
-2. `be holding do` (vocab-safe for hold)
+2. `be remember do` (canonical retrieval surface)
+   - retrieve memory by key/reference
+3. `que ...` interrogative-mood memory query
+   - search memory via question-style lookup (including archive explanations)
+4. `be holding do` (vocab-safe for hold)
    - park contested claims pending more evidence
-3. `be decision do` (provisional vocab-safe for adjudicate)
+5. `be decision do` (provisional vocab-safe for adjudicate)
    - run tribunal/court resolution for conflicts (proposer/defence/prosecution/judge)
-4. `be expedite do` (provisional vocab-safe for promote)
+6. `be expedite do` (provisional vocab-safe for promote)
    - promote adjudicated claims to canonical semantic memory
-5. `be archived do`
+7. `be archived do`
    - move non-active memory to reference library while preserving queryability
-6. `be restore do` (provisional vocab-safe for retrieve)
+8. `be restore do` (provisional vocab-safe for retrieve)
    - explicit archive retrieval for audit/explanation queries
-7. `be criterion do`
+9. `be criterion do`
    - run standard dream-phase evaluation pass before promotion
-8. `be nightmare do`
+10. `be nightmare do`
    - run stress/tolerance evaluation with excess scenarios
-9. `be reverie do`
+11. `be reverie do`
    - run goal/ambition alignment simulation pass
 
 Vocabulary note:
 
-1. `vocab_suggest` accepts: `forget`, `remember`, `archived`
-2. `vocab_suggest` suggested replacements used here:
+1. `vocab_suggest` accepts: `forget`, `remember`, `archived`, `que`
+2. `memory` is currently blocked by `vocab_suggest`; `be memory do` is defined here as intended spec surface pending vocabulary registration.
+3. `que` interrogative mood is the recommended search-style memory query shape.
+4. `vocab_suggest` suggested replacements used here:
    - hold -> `holding`
    - adjudicate -> `decision`
    - promote -> `expedite`
    - retrieve -> `restore`
-3. dream-phase verbs accepted by `vocab_suggest`:
+5. dream-phase verbs accepted by `vocab_suggest`:
    - `criterion`
    - `nightmare`
    - `reverie`
