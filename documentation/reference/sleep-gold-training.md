@@ -30,6 +30,29 @@ During sleep/review, the world requests:
 - training gold (high-signal facts, mistakes, corrections)
 - LoRA/SFT preparation inputs derived from reviewed artifacts
 
+## Memory consolidation contract (normative profile)
+
+Sleep is also the canonical memory-consolidation phase and SHOULD perform three coordinated updates:
+
+1. **Episodic memory consolidation**
+   - summarize and compact recent run/turn episodes
+   - preserve links to source artifacts/newspaper for replay
+   - reduce prompt-context load while keeping recoverability
+2. **Semantic memory extraction**
+   - extract stable facts, rules, and reusable procedures from episodes
+   - store fact-like knowledge separately from narrative episode logs
+   - mark confidence/provenance where available
+3. **Autobiographical/identity update**
+   - update long-horizon self-model fields (preferences, strengths, recurring failure modes, values/constraints)
+   - retain continuity markers across sessions
+   - avoid unstable identity rewrites from single noisy episodes
+
+Minimum outputs per sleep cycle SHOULD include:
+
+1. episodic summary/compaction artifact
+2. semantic fact update artifact
+3. autobiographical/identity delta artifact
+
 ## Gold location contract
 
 Session gold is emitted per agent house, under:
