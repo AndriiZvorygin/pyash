@@ -164,6 +164,10 @@ test("teaching video writes footnote stage manifest and scrubs missing footnote 
     source,
     /ob name section clip series stage to filename of ob of section clip manifest filename stage be write do/u
   );
+  assert.match(
+    source,
+    /su name teaching video stage manifest filename[\s\S]*ob name text stage stem to name text stage manifest stem be text do[\s\S]*ob text "\.series\.pya" to name stage manifest stem be plus do/u
+  );
 });
 
 test("teaching video thumbnail comes from section draw output (no extra thumbnail mind prompt)", async () => {
