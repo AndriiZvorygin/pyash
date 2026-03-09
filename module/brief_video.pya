@@ -211,8 +211,8 @@ prah
 su name teaching video stage manifest filename from text stage stem to name filename stage manifest be ceremony def
   su name run root stage to name text teaching video run root be teaching video run root do
   ob text of from of this to name text stage stem be text do
-  ob text ".series.pya" to name text stage manifest stem be text do
-  ob name text stage stem to name stage manifest stem be plus do
+  ob name text stage stem to name text stage manifest stem be text do
+  ob text ".series.pya" to name stage manifest stem be plus do
   ob ve name "text teaching video run root" "text stage manifest stem" to name text stage manifest path be concatenate become wo filename do
   su name stage manifest stage ob name text stage manifest path to name filename stage manifest be filename do
   su name stage manifest stage ret
