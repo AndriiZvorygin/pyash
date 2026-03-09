@@ -437,3 +437,43 @@ su name rationale ob text "<why winner>" ya
 su name source ob text "user" ya
 prah
 ```
+
+## Memory operation verbs (spec proposal)
+
+This section defines useful memory lifecycle verbs at the specification level.
+It does not require immediate runtime implementation for all verbs.
+
+### Core verb: `be forget do`
+
+Purpose:
+
+1. invoke explicit forgetting workflow for stale/low-priority or superseded memory
+2. trigger compaction and retrieval-index refresh so excluded data is not injected into default RAG/context
+
+Expected outcomes:
+
+1. stale/low-priority/contradicted items move from active retrieval set to reference archive set
+2. archive retains provenance and decision rationale
+3. active retrieval index is rebuilt deterministically
+
+### Complementary verbs (recommended)
+
+1. `be remember do`
+   - persist memory candidates with provenance
+2. `be hold do`
+   - park contested claims pending more evidence
+3. `be adjudicate do`
+   - run tribunal/court resolution for conflicts (proposer/defence/prosecution/judge)
+4. `be promote do`
+   - promote adjudicated claims to canonical semantic memory
+5. `be archive do`
+   - move non-active memory to reference library while preserving queryability
+6. `be retrieve do`
+   - explicit archive retrieval for audit/explanation queries
+7. `be rehearse do`
+   - run dream-phase benchmark/evaluation pass before promotion
+
+Default behavior rule:
+
+1. only promoted/high-confidence items are eligible for default RAG/context injection
+2. held/rejected/archived items require explicit retrieval intent
