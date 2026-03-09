@@ -468,15 +468,15 @@ Expected outcomes:
    - retrieve memory by key/reference
 3. `que ...` interrogative-mood memory query
    - search memory via question-style lookup (including archive explanations)
-4. `be impound do` (recommended over holding for contested-memory parking)
+4. `be impound do`
    - park contested claims pending more evidence
-5. `be decision do` (provisional vocab-safe for adjudicate)
+5. `be decision do`
    - run tribunal/court resolution for conflicts (proposer/defence/prosecution/judge)
-6. `be expedite do` (provisional vocab-safe for promote)
+6. `be expedite do`
    - promote adjudicated claims to canonical semantic memory
 7. `be archived do`
    - move non-active memory to reference library while preserving queryability
-8. `be restore do` (provisional vocab-safe for retrieve)
+8. `be restore do`
    - explicit archive retrieval for audit/explanation queries
 9. `be criterion do`
    - run standard dream-phase evaluation pass before promotion
@@ -484,20 +484,6 @@ Expected outcomes:
    - run stress/tolerance evaluation with excess scenarios
 11. `be reverie do`
    - run goal/ambition alignment simulation pass
-
-Vocabulary note:
-
-1. `vocab_suggest` accepts: `forget`, `remember`, `reminder`, `archived`, `que`
-2. `que` interrogative mood is the recommended search-style memory query shape.
-3. `vocab_suggest` suggested replacements used here:
-   - hold -> `impound`
-   - adjudicate -> `decision`
-   - promote -> `expedite`
-   - retrieve -> `restore`
-4. dream-phase verbs accepted by `vocab_suggest`:
-   - `criterion`
-   - `nightmare`
-   - `reverie`
 
 Default behavior rule:
 
