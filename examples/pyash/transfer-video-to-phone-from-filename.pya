@@ -1,5 +1,5 @@
 ob filename text source be input ya
-exists su name phone movies dir ob text "/sdcard/Movies/Pyash/" be default ya
+exists su name phone movies dir ob text "/storage/emulated/0/Videos/Pyash/" be default ya
 
 su name source filename stage ob name source to name filename source filename be filename do
 su name source path stage ob name source filename stage to name text source path be text do
@@ -18,5 +18,12 @@ ob text "\" \"" to name push cmd be plus do
 ob name phone movies dir to name push cmd be plus do
 ob text "\"" to name push cmd be plus do
 su name push stage ob name text push cmd be command do
+
+ob text "adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://" to name text scan cmd be text do
+ob name phone movies dir to name scan cmd be plus do
+ob text "$(basename \"" to name scan cmd be plus do
+ob name text source path to name scan cmd be plus do
+ob text "\")" to name scan cmd be plus do
+su name scan stage ob name text scan cmd be command do
 
 su name push stage ob name push stage be write do

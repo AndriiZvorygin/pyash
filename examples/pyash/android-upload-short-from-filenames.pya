@@ -1,7 +1,7 @@
 ob ve filename text video filename text metadata be input ya
 from filename "./modules/android_intro.pya" ob name android introductory home-page be import do
 
-exists su name phone shorts dir ob text "/sdcard/Movies/Pyash/" be default ya
+exists su name phone shorts dir ob text "/storage/emulated/0/Videos/Pyash/" be default ya
 
 su name android upload short from filenames be ceremony def
   su name video source stage ob name video to name filename video source be filename do
@@ -30,7 +30,7 @@ su name android upload short from filenames be ceremony def
   accordingto text "selection observe handle" during num 12000 vyah await be android do
 
   su name note stage ob text quoted.text.Upload prep complete.
-Phone folder: /sdcard/Movies/Pyash/
+Phone folder: /storage/emulated/0/Videos/Pyash/
 From Short selection screen, choose the transferred video and paste title/description/tags from the transferred metadata text file..text.quoted be write do
 prah
 
