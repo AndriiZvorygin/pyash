@@ -335,7 +335,7 @@ su name chirp problem verify from text source to name text output be ceremony de
   su name chirp problem platform from text of ob of chirp problem request for text "chirp problem platform" accordingto name chirp atom checks to name text output be chirp platform verify do
   su name chirp problem source thrust stage from text of from of this with text of ob of output to name text chirp problem source thrust pass be chirp source thrust do
   ob name text chirp problem source thrust pass be equally from text false then
-  su name chirp problem source thrust guarantee platform ob bool lie fromtext text "chirp problem source thrust defective" be guarantee do
+  ob text "" to name text output be text do
   su name output ret
 prah
 
@@ -343,7 +343,7 @@ su name chirp cause verify from text source to name text output be ceremony def
   su name chirp cause platform from text of ob of chirp cause request for text "chirp cause platform" accordingto name chirp atom checks to name text output be chirp platform verify do
   su name chirp cause source thrust stage from text of from of this with text of ob of output to name text chirp cause source thrust pass be chirp source thrust do
   ob name text chirp cause source thrust pass be equally from text false then
-  su name chirp cause source thrust guarantee platform ob bool lie fromtext text "chirp cause source thrust defective" be guarantee do
+  ob text "" to name text output be text do
   su name output ret
 prah
 
@@ -351,7 +351,7 @@ su name chirp insight verify from text source to name text output be ceremony de
   su name chirp insight platform from text of ob of chirp insight request for text "chirp insight platform" accordingto name chirp atom checks to name text output be chirp platform verify do
   su name chirp insight source thrust stage from text of from of this with text of ob of output to name text chirp insight source thrust pass be chirp source thrust do
   ob name text chirp insight source thrust pass be equally from text false then
-  su name chirp insight source thrust guarantee platform ob bool lie fromtext text "chirp insight source thrust defective" be guarantee do
+  ob text "" to name text output be text do
   su name output ret
 prah
 
@@ -359,7 +359,7 @@ su name chirp proof verify from text source to name text output be ceremony def
   su name chirp proof platform from text of ob of chirp proof request for text "chirp proof platform" accordingto name chirp atom checks to name text output be chirp platform verify do
   su name chirp proof source thrust stage from text of from of this with text of ob of output to name text chirp proof source thrust pass be chirp source thrust do
   ob name text chirp proof source thrust pass be equally from text false then
-  su name chirp proof source thrust guarantee platform ob bool lie fromtext text "chirp proof source thrust defective" be guarantee do
+  ob text "" to name text output be text do
   su name output ret
 prah
 
@@ -367,7 +367,7 @@ su name chirp boundary verify from text source to name text output be ceremony d
   su name chirp boundary platform from text of ob of chirp boundary request for text "chirp boundary platform" accordingto name chirp atom checks to name text output be chirp platform verify do
   su name chirp boundary source thrust stage from text of from of this with text of ob of output to name text chirp boundary source thrust pass be chirp source thrust do
   ob name text chirp boundary source thrust pass be equally from text false then
-  su name chirp boundary source thrust guarantee platform ob bool lie fromtext text "chirp boundary source thrust defective" be guarantee do
+  ob text "" to name text output be text do
   su name output ret
 prah
 
