@@ -88,6 +88,17 @@ Rules:
 
 The signature is defined by the **ceremony** (see below). Sentences that match a ceremony’s cases and types share that ceremony’s signature.
 
+Important clarification:
+
+- Output typing is part of the signature contract.
+- `to name text out`, `to name map report`, `to name itinerary cuts`, and `to name vec text lines` are different typed targets, not interchangeable slot spellings.
+- Choose the output type that matches the produced value shape:
+  - `text` for one scalar text value,
+  - `map` for keyed structure,
+  - `series` for ordered **sentence** rows,
+  - `vec text` / `vec num` / `vec bool` for ordered primitive lists.
+- Do not use `series` when the produced items are plain strings or numbers. Use a typed `vec` instead.
+
 ---
 
 ## 3. Type words and C compatibility
@@ -98,8 +109,10 @@ Some core examples:
 
 * Scalar number value: `num`
 * Vector of numbers (value): `vec num`
+* Vector of text values (value): `vec text`
 * Name pointing to a number: `name num`
 * Name pointing to a vector of numbers: `name vec num`
+* Name pointing to a vector of text values: `name vec text`
 * Text string value: `text`
 
 These can be mapped naturally to C/C++:
@@ -109,7 +122,9 @@ These can be mapped naturally to C/C++:
 | `num`            | `double` (etc.)        | numeric value            |
 | `name num`       | `double *`             | pointer to numeric value |
 | `vec num`        | `double *` + length    | vector of values         |
+| `vec text`       | `const char **` + length | vector of text values  |
 | `name vec num`   | `double **` or similar | pointer to vector        |
+| `name vec text`  | `const char ***` or similar | pointer to text vector |
 | `text`           | `const char *`         | string value             |
 
 This document does not enforce a particular C type, only the **word shapes**.

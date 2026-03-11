@@ -262,3 +262,5 @@ Rules:
 - `by text <delimiter>` uses that literal delimiter,
 - `by wo newline` normalizes `\r\n` / `\r` to `\n` and then splits on line breaks,
 - output is a `vector` with `ve.type = "text"`.
+- the target should therefore be typed as `to name vec text <target>` for clarity and signature stability.
+- this primitive does **not** produce `series`, because the output items are primitive text values rather than sentence rows.
