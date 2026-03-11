@@ -23,7 +23,7 @@ import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex } from "./run_pya_helpers.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProducePath, allocateProducePath } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
@@ -314,7 +314,7 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
         raw: { bindingWords }
       });
     }
-    return;
+    return [];
   }
   const byHandle = new Map();
   for (const port of ports) {
@@ -400,6 +400,7 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
   for (const item of bound.values()) {
     materializeBindingFact(item);
   }
+  return [...bound.values()];
 }
 
 async function main() {
@@ -462,9 +463,10 @@ async function main() {
     doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: runRoot } });
   }
   const sentences = splitSentencesWithLines(text, { includeThen: true });
+  let runtimeBindingFacts = [];
   if (readFromFile) {
     const inputDeclarations = collectInputDeclarations(sentences);
-    bindRuntimeInputs({ declarations: inputDeclarations, bindingWords: runtimeBindingWords });
+    runtimeBindingFacts = bindRuntimeInputs({ declarations: inputDeclarations, bindingWords: runtimeBindingWords });
   }
   if (!disableJitFlag && process.env.PYA_NO_JIT_LOOPS !== "1" && readFromFile) {
     const parsed = sentences
@@ -846,6 +848,11 @@ async function main() {
     const abs = path.resolve(process.cwd(), "artifacts", String(runId));
     console.error(`artifacts folder: ${abs}`);
   };
+  const printProduceFileHint = () => {
+    if (produceFiles?.knowProduceFile) {
+      console.error(`produce file: ${produceFiles.knowProduceFile}`);
+    }
+  };
   const writeProduceTextArtifact = async () => {
     if (result?.ob?.text === undefined) return null;
     const dir = path.resolve(process.cwd(), "artifacts", String(runId));
@@ -857,13 +864,23 @@ async function main() {
     }
     const text = payload.endsWith("\n") ? payload : `${payload}\n`;
     await fs.writeFile(filePath, text, "utf8");
-    return filePath;
+    const knowProducePath = deriveKnowProducePath({
+      cwd: process.cwd(),
+      bindingFacts: runtimeBindingFacts,
+      result
+    });
+    let knowProduceFile = null;
+    if (knowProducePath) {
+      knowProduceFile = await allocateProducePath(knowProducePath);
+      await fs.writeFile(knowProduceFile, text, "utf8");
+    }
+    return { artifactFile: filePath, knowProduceFile };
   };
   if (runError) {
     printArtifactsFolderHint();
     throw runError;
   }
-  await writeProduceTextArtifact();
+  const produceFiles = await writeProduceTextArtifact();
 
   if (full) {
     console.log("\nResult:");
@@ -873,12 +890,14 @@ async function main() {
   const showResult = showResultFlag || showResultConfig === true;
 
   if (gross) {
+    printProduceFileHint();
     printArtifactsFolderHint();
     console.log(JSON.stringify({ outputs, result }, null, 2));
     return;
   }
 
   if (!showResult && !full) {
+    printProduceFileHint();
     printArtifactsFolderHint();
     return;
   }
@@ -893,6 +912,7 @@ async function main() {
     } catch {
       console.log(finalResult ? JSON.stringify(finalResult, null, 2) : "(no result)");
     }
+    printProduceFileHint();
     printArtifactsFolderHint();
     return;
   }
@@ -900,6 +920,7 @@ async function main() {
   // If the result is a compiled artifact with a text payload, stream it directly.
   if (result?.ob?.text && !full) {
     console.log(result.ob.text);
+    printProduceFileHint();
     printArtifactsFolderHint();
     return;
   }
@@ -907,6 +928,7 @@ async function main() {
   // Surface series payloads in block form so entry boundaries are visible.
   if (result?.be === "series" && Array.isArray(result?.ob?.series)) {
     console.log(renderSeriesSentence(result));
+    printProduceFileHint();
     printArtifactsFolderHint();
     return;
   }
@@ -922,6 +944,7 @@ async function main() {
   } catch {
     console.log(result ? JSON.stringify(result, null, 2) : "(no result)");
   }
+  printProduceFileHint();
   printArtifactsFolderHint();
 }
 

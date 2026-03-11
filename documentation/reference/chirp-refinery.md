@@ -67,6 +67,7 @@ Question stage:
 9. verify final total bounds.
 10. run one full-draft source-thrust verification against the assembled chirp.
 11. write the final result to `artifacts/<run id>/produce.txt`.
+12. when the source filename comes from `know/input/...`, runner also mirrors the final text to `know/produce/...` with the same stem.
 
 ## 6. Verification and retries
 
@@ -93,6 +94,7 @@ Retry scope:
   - no labels,
   - no surrounding quotes.
 - example runs also write `produce.txt` into the per-run artifact directory.
+- when invoked with a `know/input/...` source filename, runner additionally writes a mirrored text file under `know/produce/...` and adds `-02`, `-03`, ... on collisions.
 
 ## 8. Runtime surface note
 

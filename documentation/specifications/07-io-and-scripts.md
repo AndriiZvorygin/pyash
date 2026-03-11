@@ -116,6 +116,19 @@ Examples:
 
 Shorthand is valid only when exactly one required input port exists and it is `filename`.
 
+When a run finishes with a text result and one of its bound filename inputs resolves under `know/input/`, runner also mirrors that final text into `know/produce/` using the same relative stem and an appropriate extension for the produced text.
+
+Examples:
+```bash
+./run program.pya "know/input/topic.txt"
+# writes artifacts/<run id>/produce.txt
+# also writes know/produce/topic.txt
+
+./run program.pya "know/input/history/solon.md"
+# writes know/produce/history/solon.txt
+# if that file already exists, runner allocates solon-02.txt, solon-03.txt, ...
+```
+
 ### 7.4 Validation and failures
 
 Runner MUST fail fast when:
