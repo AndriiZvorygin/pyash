@@ -94,7 +94,8 @@ Retry scope:
   - no labels,
   - no surrounding quotes.
 - example runs also write `produce.txt` into the per-run artifact directory.
-- when invoked with a `know/input/...` source filename, runner additionally writes a mirrored output file under `know/produce/...` and adds `-02`, `-03`, ... on collisions.
+- when invoked with a `know/input/...` source filename, runner additionally writes the final result under `know/produce/...` and adds `-02`, `-03`, ... on collisions.
+- intermediate refinery artifacts remain in `artifacts/<run id>/`; runner does not mirror them into `know/produce/`.
 
 ## 8. Runtime surface note
 
