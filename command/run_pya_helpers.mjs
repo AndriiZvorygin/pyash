@@ -153,6 +153,60 @@ export function normalizeRunRoot(value) {
   return String(value ?? "").replace(/[\\]+/g, "/");
 }
 
+function isSubpath(relPath) {
+  if (!relPath || relPath === ".") return true;
+  return !relPath.startsWith("..") && !path.isAbsolute(relPath);
+}
+
+export function selectProduceExtension(result) {
+  if (result?.ob?.text !== undefined) return ".txt";
+  return null;
+}
+
+export function deriveKnowProducePath({ cwd, bindingFacts, result }) {
+  const ext = selectProduceExtension(result);
+  if (!ext) return null;
+  const root = path.resolve(cwd ?? process.cwd());
+  const knowInputRoot = path.resolve(root, "know", "input");
+  const entries = Array.isArray(bindingFacts) ? bindingFacts : [];
+  for (const entry of entries) {
+    if (String(entry?.transport ?? "") !== "filename") continue;
+    const rawValue = String(entry?.value ?? "").trim();
+    if (!rawValue) continue;
+    const absValue = path.resolve(root, rawValue);
+    const relWithinInput = path.relative(knowInputRoot, absValue);
+    if (!isSubpath(relWithinInput)) continue;
+    const parsed = path.parse(relWithinInput);
+    const nextRel = path.join(parsed.dir, `${parsed.name}${ext}`);
+    return path.resolve(root, "know", "produce", nextRel);
+  }
+  return null;
+}
+
+export async function allocateProducePath(targetPath) {
+  if (!targetPath) return null;
+  const absolute = path.resolve(targetPath);
+  const parsed = path.parse(absolute);
+  await fs.mkdir(parsed.dir, { recursive: true });
+  try {
+    await fs.access(absolute);
+  } catch (err) {
+    if (err?.code === "ENOENT") return absolute;
+    throw err;
+  }
+  for (let index = 2; index < 1000; index += 1) {
+    const suffix = `-${String(index).padStart(2, "0")}`;
+    const candidate = path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
+    try {
+      await fs.access(candidate);
+    } catch (err) {
+      if (err?.code === "ENOENT") return candidate;
+      throw err;
+    }
+  }
+  throw new Error(`produce path allocation defective: too many collisions for ${absolute}`);
+}
+
 function parseCheckpointPayload(text) {
   if (typeof text !== "string" || text.length === 0) return null;
   try {

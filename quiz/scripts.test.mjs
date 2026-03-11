@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { runScript } from "./helpers/run_script.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,5 +89,66 @@ test("run_pya_program.mjs writes produce.txt for text results", async () => {
     await fs.rm(programPath, { force: true });
     await fs.rm(tmpDir, { recursive: true, force: true });
     await fs.rm(outDir, { recursive: true, force: true });
+  }
+});
+
+test("run_pya_program.mjs mirrors know input text results into know/produce with matching stem", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-know-produce-"));
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const programPath = path.join(tmpDir, "program.pya");
+  const inputDir = path.join(tmpDir, "know", "input", "topic");
+  const inputPath = path.join(inputDir, "rome.txt");
+  const artifactDir = path.join(tmpDir, "artifacts", "know-produce-test");
+  const producePath = path.join(tmpDir, "know", "produce", "topic", "rome.txt");
+  try {
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.writeFile(inputPath, "rome fixture\n", "utf8");
+    await fs.writeFile(programPath, [
+      "ob filename text source be input ya",
+      "ob text \"mirror me\" to name text result be text do ya"
+    ].join("\n"), "utf8");
+    const out = spawnSync(process.execPath, [runPath, "--run-id", "know-produce-test", programPath, inputPath], {
+      cwd: tmpDir,
+      encoding: "utf8"
+    });
+    assert.equal(out.status, 0, `expected know/produce mirror run to pass\nstderr:\n${out.stderr || ""}`);
+    const artifactText = await fs.readFile(path.join(artifactDir, "produce.txt"), "utf8");
+    const mirroredText = await fs.readFile(producePath, "utf8");
+    assert.equal(artifactText.trim(), "mirror me");
+    assert.equal(mirroredText.trim(), "mirror me");
+    assert.match(out.stderr, /produce file: .*know\/produce\/topic\/rome\.txt/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("run_pya_program.mjs adds numeric suffix when know/produce target already exists", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-know-produce-dup-"));
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const programPath = path.join(tmpDir, "program.pya");
+  const inputDir = path.join(tmpDir, "know", "input");
+  const inputPath = path.join(inputDir, "solon.txt");
+  const produceDir = path.join(tmpDir, "know", "produce");
+  const firstProduce = path.join(produceDir, "solon.txt");
+  const secondProduce = path.join(produceDir, "solon-02.txt");
+  try {
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.mkdir(produceDir, { recursive: true });
+    await fs.writeFile(inputPath, "solon fixture\n", "utf8");
+    await fs.writeFile(firstProduce, "older output\n", "utf8");
+    await fs.writeFile(programPath, [
+      "ob filename text source be input ya",
+      "ob text \"fresh output\" to name text result be text do ya"
+    ].join("\n"), "utf8");
+    const out = spawnSync(process.execPath, [runPath, "--run-id", "know-produce-dup-test", programPath, inputPath], {
+      cwd: tmpDir,
+      encoding: "utf8"
+    });
+    assert.equal(out.status, 0, `expected know/produce duplicate mirror run to pass\nstderr:\n${out.stderr || ""}`);
+    assert.equal((await fs.readFile(firstProduce, "utf8")).trim(), "older output");
+    assert.equal((await fs.readFile(secondProduce, "utf8")).trim(), "fresh output");
+    assert.match(out.stderr, /produce file: .*know\/produce\/solon-02\.txt/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
   }
 });
