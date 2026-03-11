@@ -1,15 +1,20 @@
 # Chirp Refinery Profile
 
-Status: reference profile for chirp refinery/example behavior and future module-level `be chirp do` behavior.
+Status: redesign reference for the standalone `be chirp do` unit we want to stabilize next.
+
+This document supersedes the older hook/value/question concept as the target shape for future chirp work. The existing example may still reflect the older shape until implementation catches up.
 
 ## 1. Purpose
 
-`be chirp do` produces a short, source-grounded social post in three staged parts:
-- hook,
-- value,
-- question.
+`be chirp do` produces one short, source-grounded standalone social post.
 
-The profile is optimized for concise high-engagement posts with deterministic verification and retries.
+The core goal is:
+- compress one source into one useful idea,
+- make the reader feel smarter, clearer, or more capable,
+- preserve trust by avoiding unsupported claims,
+- stay reusable over time instead of chasing platform gimmicks.
+
+The target is not a reply pack, quote-post pack, or video summary. Those are downstream products for later, built from the same source atoms.
 
 ## 2. Canonical invocation
 
@@ -21,83 +26,179 @@ be chirp do
 ```
 
 Source input modes:
-- `ob text <source text>` (literal input),
-- `from name text <source text>` (remembered text),
-- `from filename <source text file>` (file text source).
+- `ob text <source text>`
+- `from name text <source text>`
+- `from filename <source text file>`
 
 Exactly one source mode should be present per run.
 
-## 3. Section targets
+## 3. Output target
 
-| Section | Word target | Character target (including spaces) | Goal |
-| --- | --- | --- | --- |
-| Hook (line 1) | 4-9 words | 18-55 chars | stop-scroll opening in <2 seconds |
-| Value (line 2) | 8-28 words | 45-150 chars | one punchy source-grounded insight |
-| Question (last line) | 5-16 words | 25-95 chars | force a reply |
-| Final total | 16-48 words | 100-280 chars | short-form engagement sweet spot |
+Final output:
+- one standalone post,
+- plain text only,
+- no labels,
+- no bullets,
+- no markdown,
+- no surrounding quotes.
 
-## 4. Stage prompts (starter wording)
+Length target:
+- 100-280 characters total, including spaces and line breaks.
 
-Hook stage:
-- write one bold opening line grounded in the source,
-- favor a twist, warning, or surprising framing,
-- output only hook line.
+The post does not need to end with a question.
+A question is optional, not mandatory.
 
-Value stage:
-- add one value line tied to `hook + source`,
-- include one punchy insight or compression from the source,
-- avoid unsupported concrete facts or downstream mechanisms,
-- output only value line.
+## 4. Core logic
 
-Question stage:
-- add one targeted open-ended question tied to the full draft,
-- keep the wording visibly anchored to the source theme or core stake,
-- output only question line.
+The canonical chirp skeleton is:
+- problem,
+- hidden cause,
+- insight.
 
-## 5. Normative flow
+This is the default cognitive arc because it:
+- creates an information gap quickly,
+- resolves that gap with a reframing or lever,
+- stays useful longer than novelty-only formats.
 
-1. resolve source text from selected source mode.
-2. generate hook line.
-3. verify hook bounds, then retry only hook stage if needed.
-4. generate value line from `hook + source`.
-5. verify value bounds, then retry only value stage if needed.
-6. generate question line from `hook + value + source`.
-7. verify question bounds, then retry only question stage if needed.
-8. assemble final output with hook/value/question line order.
-9. verify final total bounds.
-10. run one full-draft source-thrust verification against the assembled chirp.
-11. write the final result to `artifacts/<run id>/produce.txt`.
-12. when the source filename comes from `know/input/...`, runner also mirrors the final output to `know/produce/...` with the same stem.
+In practical terms:
+- line or clause 1 should name the visible pain, mistake, or false frame,
+- line or clause 2 should reveal the hidden driver, constraint, or tradeoff,
+- line or clause 3 should land the insight, rule, or action shift.
 
-## 6. Verification and retries
+The exact punctuation and number of lines may vary.
+The logical arc matters more than a rigid line count.
 
-Word-count checks:
-- use `be verify as wo word count ...`,
-- record result maps through `to name map ...`.
+## 5. Source atoms
 
-Character-count checks:
-- use `be verify as wo letter count ...`,
-- record result maps through `to name map ...`.
+Before drafting, chirp should distill the source into five reusable atoms:
+- `problem`
+- `hidden cause`
+- `insight`
+- `proof hook`
+- `boundary`
 
-Retry scope:
-- retries are stage-local (`hook`, `value`, `question`),
-- do not rerun full refinery for a single section failure,
-- full-draft source-thrust verification happens after section generation,
-- recommended cap: `atmost num 3` per section unless caller sets stricter cap.
+Definitions:
+- `problem`: the visible pain, confusion, failure, or wrong frame
+- `hidden cause`: the less obvious mechanism, constraint, or incentive
+- `insight`: the upgraded frame, rule, or lever
+- `proof hook`: one small supporting element such as a micro-example, tiny number, analogy, or vivid phrase
+- `boundary`: a caveat, scope note, or limit that prevents overclaiming
 
-## 7. Output contract
+For the standalone chirp unit, only the first three atoms are required in the final post.
+`proof hook` and `boundary` are mainly support atoms for choosing stronger drafts and for future downstream outputs.
 
-- `to name text <chirp out>` is required.
-- output is plain text only:
-  - no markdown,
-  - no bullets,
-  - no labels,
-  - no surrounding quotes.
-- example runs also write `produce.txt` into the per-run artifact directory.
-- when invoked with a `know/input/...` source filename, runner additionally writes the final result under `know/produce/...` and adds `-02`, `-03`, ... on collisions.
-- intermediate refinery artifacts remain in `artifacts/<run id>/`; runner does not mirror them into `know/produce/`.
+## 6. Template families
 
-## 8. Runtime surface note
+The default template set should stay small.
 
-- Runtime supports both `be verify as wo word count` and `be verify as wo letter count` for literal text, remembered text, and filename-backed text.
-- `letter count` includes spaces and line breaks (code-point count).
+Allowed evergreen families:
+1. `myth flip`
+2. `symptom swap`
+3. `definition pivot`
+4. `hidden cost reveal`
+
+Short definitions:
+- `myth flip`: people think `X`, but really `Y`, so do/see `Z`
+- `symptom swap`: the pain looks like `X`, but the constraint is `Y`, so pull lever `Z`
+- `definition pivot`: `X` is the wrong label; the better frame is `Y`; that changes what to do
+- `hidden cost reveal`: this looks beneficial, but the unseen cost is `Y`; use threshold/rule `Z`
+
+These four are the stable core because they:
+- age more slowly than hot takes,
+- support useful compression,
+- map well onto source-grounded verification,
+- reduce wear-out risk compared with gimmick formats.
+
+## 7. Template selection
+
+Template selection should happen explicitly before final drafting.
+
+Starter routing:
+- use `definition pivot` when the source mainly corrects a label or frame
+- use `symptom swap` when the source mainly explains a recurring pain through a hidden constraint
+- use `hidden cost reveal` when the source mainly exposes a tradeoff or threshold
+- use `myth flip` as the default fallback when the source mainly overturns a common belief
+
+The selector should prefer:
+- source fit,
+- clarity,
+- low overclaim risk,
+- low repetition of stale phrasing.
+
+## 8. Normative flow
+
+1. resolve source text from the selected source mode
+2. distill the source into `problem`, `hidden cause`, `insight`, `proof hook`, and `boundary`
+3. choose one of the four evergreen template families
+4. draft one standalone chirp from `problem + hidden cause + insight`
+5. optionally weave in `proof hook` when it improves clarity or memorability without bloating the post
+6. verify platform fit and total length
+7. verify source thrust and no-overclaim behavior
+8. retry only the failing drafting stage when needed
+9. emit one final chirp text result
+10. write the final result to `artifacts/<run id>/produce.txt`
+11. when the source filename comes from `know/input/...`, runner also mirrors the final result to `know/produce/...`
+
+## 9. Verification
+
+The verifier should optimize for usable, trustworthy compression.
+
+Pass when:
+- the chirp is clear,
+- the chirp fits the selected template well enough,
+- the chirp preserves the source’s core meaning,
+- the chirp sounds like something a person might actually post,
+- the chirp stays within length bounds.
+
+Fail when:
+- it introduces unsupported concrete facts, actors, dates, statistics, policies, or mechanisms
+- it bloats into a mini-thread
+- it becomes too abstract to understand quickly
+- it sounds templated, stale, or mechanically repetitive
+- it loses the `problem -> hidden cause -> insight` arc unless the chosen template clearly supports an equivalent structure
+
+Important verifier posture:
+- be practical, not fussy
+- allow rhetorical compression
+- allow slight surprise and emphasis
+- reject fabricated specificity
+
+## 10. Retry scope
+
+Retries should stay local.
+
+Preferred retry boundaries:
+- atom distillation stage
+- template selection stage
+- final chirp drafting stage
+
+Do not rerun the whole refinery because one later stage draft is weak.
+
+## 11. Anti-fatigue guidance
+
+The long-run rule is:
+- keep the skeleton,
+- rotate the skin.
+
+That means:
+- vary hook type
+- vary cause class
+- vary proof style
+- vary cadence and opener wording
+
+Do not keep reusing the same opener family or cadence just because one version once worked.
+
+## 12. Output contract
+
+- `to name text <chirp out>` is required
+- output is one final standalone post
+- output is plain text only
+- example runs also write `produce.txt` into the per-run artifact directory
+- when invoked with a `know/input/...` source filename, runner additionally writes the final result under `know/produce/...` and adds `-02`, `-03`, ... on collisions
+- intermediate refinery artifacts remain in `artifacts/<run id>/`; runner does not mirror them into `know/produce/`
+
+## 13. Implementation note
+
+The existing example [refinery-chirp-reply-run.pya](/workplace/examples/pyash/refinery-chirp-reply-run.pya) still follows the older hook/value/question structure.
+
+That example should be treated as an implementation waypoint, not the final target specification.
