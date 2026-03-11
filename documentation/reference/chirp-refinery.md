@@ -4,6 +4,9 @@ Status: redesign reference for the chirp manuscript unit we want to stabilize ne
 
 This document supersedes the older hook/value/question concept as the target shape for future chirp work. The existing example may still reflect the older shape until implementation catches up.
 
+Related research note:
+- [chirp-tweet-deep-research-report.md](/workplace/documentation/reference/chirp-tweet-deep-research-report.md)
+
 ## 1. Purpose
 
 `be chirp do` currently targets one short, source-grounded chirp manuscript.
