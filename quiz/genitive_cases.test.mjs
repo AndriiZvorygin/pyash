@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
+import { renderSayValue } from "../program/verbs/say.mjs";
 
 test("genitives attach to all cases with multiword nodes", () => {
   const sentence = parse("su name view from text of to of seed stdout to text of to of result stash be say do");
@@ -37,4 +38,11 @@ test("imperatives also store results under su name", async () => {
   const result = remember("result");
   assert.equal(sum?.ob?.num, 5);
   assert.equal(result?.ob?.num, 5);
+});
+
+test("genitive resolver avoids recursive loops", () => {
+  const loop = { chain: ["seed", "text"] };
+  const fact = { ob: { genitive: loop } };
+  const rememberFn = (name) => (name === "seed" ? fact : undefined);
+  assert.equal(renderSayValue({ genitive: loop }, { rememberFn }), "");
 });
