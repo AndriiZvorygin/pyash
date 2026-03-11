@@ -70,6 +70,7 @@ import verifyLoop, { signatures as verifyLoopSignatures } from "./verify_loop.mj
 import verifyPlatform, { signatures as verifyPlatformSignatures } from "./verify_platform.mjs";
 import rememberPersistent, { signatures as rememberSignatures } from "./remember.mjs";
 import lineTail, { signatures as lineTailSignatures } from "./line_tail.mjs";
+import distribute, { signatures as distributeSignatures } from "./distribute.mjs";
 import cast, { signatures as castSignatures } from "./cast.mjs";
 import evoke, { signatures as evokeSignatures } from "./evoke.mjs";
 import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
@@ -145,6 +146,7 @@ export {
   verifyPlatform,
   rememberPersistent,
   lineTail,
+  distribute,
   cast,
   evoke,
   guarantee,
@@ -234,6 +236,7 @@ export const builtInSignatures = [
   ...verifyPlatformSignatures,
   ...rememberSignatures,
   ...lineTailSignatures,
+  ...distributeSignatures,
   ...castSignatures,
   ...evokeSignatures,
   ...guaranteeSignatures,

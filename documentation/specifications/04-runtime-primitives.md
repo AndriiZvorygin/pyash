@@ -240,3 +240,25 @@ Otherwise runtime raises `be error do` with name `concatenate filename segment d
 ### 11.4 Conformance
 
 Conformance requires identical normalized output across interpreter/JS/C for equivalent segment vectors.
+
+## 10.7 Distribute text into a vector
+
+Use `distribute` to break one text value into a `vec text` by a delimiter.
+
+Examples:
+
+```pyash
+ob text quoted.text.alpha
+beta
+gamma.text.quoted by wo newline to name vec text lines be distribute do
+```
+
+```pyash
+ob name source by text "," to name vec text parts be distribute do
+```
+
+Rules:
+- `ob` must resolve to `text`,
+- `by text <delimiter>` uses that literal delimiter,
+- `by wo newline` normalizes `\r\n` / `\r` to `\n` and then splits on line breaks,
+- output is a `vector` with `ve.type = "text"`.
