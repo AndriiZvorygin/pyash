@@ -27,9 +27,11 @@ test("chirp manuscript module registers both chirp manuscript signatures and as-
 
 test("chirp manuscript module exports manuscript alias and manuscript prompts", async () => {
   const text = await fs.readFile("module/chirp_manuscript.pya", "utf8");
-  assert.match(text, /exists su name chirp problem prompt ob text quoted\.text\.You are writing the problem atom/);
-  assert.match(text, /exists su name chirp cause prompt ob text quoted\.text\.You are writing the hidden-cause atom/);
-  assert.match(text, /exists su name chirp insight prompt ob text quoted\.text\.You are writing the insight atom/);
+  assert.match(text, /exists su name chirp problem prompt ob text quoted\.text\.You are writing candidate problem atoms/);
+  assert.match(text, /exists su name chirp cause prompt ob text quoted\.text\.You are writing candidate hidden-cause atoms/);
+  assert.match(text, /exists su name chirp insight prompt ob text quoted\.text\.You are writing candidate insight atoms/);
+  assert.match(text, /be distribute do/);
+  assert.match(text, /be gather do/);
   assert.match(text, /exists su name chirp template prompt ob text quoted\.text\.You are choosing the best evergreen template family for a short chirp manuscript\./);
   assert.match(text, /exists su name chirp draft prompt ob text quoted\.text\.You are writing one chirp manuscript\./);
   assert.match(text, /su name chirp manuscript from text source to name text manuscript out be ceremony def/);

@@ -153,5 +153,18 @@ export const signatures = [
   { signatureWords: ["be", "vector", "map", "from", "name", "vec", "bool", "by", "name", "text", "to", "name", "vec"], handler: vectorMap },
   { signatureWords: ["be", "vector", "map", "from", "name", "vec", "bool", "by", "name", "text"], handler: vectorMap },
   { signatureWords: ["be", "vector", "map", "by", "name", "text", "from", "name", "vec", "bool", "to", "name", "vec"], handler: vectorMap },
-  { signatureWords: ["be", "vector", "map", "by", "name", "text", "from", "name", "vec", "bool"], handler: vectorMap }
+  { signatureWords: ["be", "vector", "map", "by", "name", "text", "from", "name", "vec", "bool"], handler: vectorMap },
+  // Derived mapper signatures may collapse `by name <mapper>` to `by text`.
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "text", "by", "text", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "text", "by", "text"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "text", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "text"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "num", "by", "text", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "num", "by", "text"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "num", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "num"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "bool", "by", "text", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "from", "name", "vec", "bool", "by", "text"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "bool", "to", "name", "vec"], handler: vectorMap },
+  { signatureWords: ["be", "vector", "map", "by", "text", "from", "name", "vec", "bool"], handler: vectorMap }
 ];
