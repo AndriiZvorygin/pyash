@@ -244,7 +244,6 @@ function shouldForceTextExternalization({ sentence, pathKey } = {}) {
   const key = String(pathKey ?? "");
   if (!key) return false;
   if (sentence?.be === "read" && key === "ob.text") return true;
-  if (sentence?.be === "command audit" && key === "totext.text") return true;
   return false;
 }
 
@@ -505,16 +504,21 @@ async function main() {
     if (!line) return;
     let nextLine = line;
     if ((useNewspaper || useAgain)) {
-      const parsed = parse(String(line).trim());
-      if (parsed?.mood) {
-        const rewritten = rewriteSentenceTextForNewspaper(parsed, {
-          runId,
-          nextTextArtifactIndex: () => {
-            newspaperTextArtifactCounter += 1;
-            return newspaperTextArtifactCounter;
-          }
-        });
-        nextLine = sentenceToPyash(rewritten);
+      try {
+        const parsed = parse(String(line).trim());
+        if (parsed?.mood) {
+          const rewritten = rewriteSentenceTextForNewspaper(parsed, {
+            runId,
+            nextTextArtifactIndex: () => {
+              newspaperTextArtifactCounter += 1;
+              return newspaperTextArtifactCounter;
+            }
+          });
+          nextLine = sentenceToPyash(rewritten);
+        }
+      } catch {
+        // Keep the run alive even if newspaper formatting/externalization overflows.
+        nextLine = String(line);
       }
       newspaperLines.push(nextLine);
     }
@@ -955,6 +959,9 @@ try {
     console.error(sentenceToPyash(surfaced));
   } else {
     console.error(err?.message ?? err);
+  }
+  if (String(process.env.PYA_ERROR_STACK ?? "").toLowerCase() === "truth" && err?.stack) {
+    console.error(err.stack);
   }
   process.exit(1);
 }

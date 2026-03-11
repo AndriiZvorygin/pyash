@@ -6,7 +6,12 @@ import { getEffectiveVyahAspect } from "../library/grammar/vyah.mjs";
 import { makeStream } from "../library/runtimePrimitives.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
-function resolveGenitive(genitive, { rememberFn } = {}) {
+function resolveGenitive(genitive, { rememberFn, seen = new WeakSet(), depth = 0 } = {}) {
+  if (depth > 128) return undefined;
+  if (genitive && typeof genitive === "object") {
+    if (seen.has(genitive)) return undefined;
+    seen.add(genitive);
+  }
   const chainArr = Array.isArray(genitive?.chain) ? genitive.chain : [];
   if (chainArr.length === 0) return undefined;
 
@@ -18,7 +23,7 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
 
   for (const part of rest) {
     if (curr && typeof curr === "object" && curr.genitive) {
-      const resolved = resolveGenitive(curr.genitive, { rememberFn });
+      const resolved = resolveGenitive(curr.genitive, { rememberFn, seen, depth: depth + 1 });
       if (resolved !== undefined && (part === "filename" || part === "text" || part === "name")) {
         curr = resolved;
         continue;
