@@ -26,7 +26,9 @@ function resolveDelimiter(sentence, { rememberFn = remember } = {}) {
 
 function distributeText(sourceText, delimiter) {
   if (delimiter === "\n") {
-    return String(sourceText ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    const values = String(sourceText ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    if (values.length > 0 && values.at(-1) === "") values.pop();
+    return values;
   }
   return String(sourceText ?? "").split(delimiter);
 }
@@ -74,14 +76,32 @@ export async function distribute(sentence, { remember: rememberFn = remember } =
 export default distribute;
 
 export const signatures = [
+  { signatureWords: ["be", "distribute", "ob", "text", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "ob", "text", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "ob", "name", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "ob", "name", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "ob", "name", "num", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "ob", "name", "num", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "text", "ob", "text", "to", "name", "vec"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "text", "ob", "text", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "num", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "num", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "text", "to", "name", "vec"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "text", "ob", "name", "text", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "text", "to", "name", "vec"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "text", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "num", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "num", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "text", "to", "name", "vec"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "name", "text", "ob", "name", "text", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "name", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "name", "to", "name", "vec", "text"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "name", "num", "to", "name", "vec"], handler: distribute },
+  { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "name", "num", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "text", "to", "name", "vec"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "text", "to", "name", "vec", "text"], handler: distribute },
   { signatureWords: ["be", "distribute", "by", "wo", "newline", "ob", "name", "text", "to", "name", "vec"], handler: distribute },
