@@ -203,6 +203,6 @@ Do not keep reusing the same opener family or cadence just because one version o
 
 ## 13. Implementation note
 
-The existing example [refinery-chirp-reply-run.pya](/workplace/examples/pyash/refinery-chirp-reply-run.pya) still follows the older hook/value/question structure.
+The current standalone target example is [refinery-chirp-standalone-run.pya](/workplace/examples/pyash/refinery-chirp-standalone-run.pya).
 
-That example should be treated as an implementation waypoint, not the final target specification.
+The older example [refinery-chirp-reply-run.pya](/workplace/examples/pyash/refinery-chirp-reply-run.pya) still follows the earlier hook/value/question structure and should be kept only as an implementation waypoint or historical reference.
