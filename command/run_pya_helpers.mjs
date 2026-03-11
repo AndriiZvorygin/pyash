@@ -158,14 +158,7 @@ function isSubpath(relPath) {
   return !relPath.startsWith("..") && !path.isAbsolute(relPath);
 }
 
-export function selectProduceExtension(result) {
-  if (result?.ob?.text !== undefined) return ".txt";
-  return null;
-}
-
-export function deriveKnowProducePath({ cwd, bindingFacts, result }) {
-  const ext = selectProduceExtension(result);
-  if (!ext) return null;
+function firstKnowInputBinding({ cwd, bindingFacts }) {
   const root = path.resolve(cwd ?? process.cwd());
   const knowInputRoot = path.resolve(root, "know", "input");
   const entries = Array.isArray(bindingFacts) ? bindingFacts : [];
@@ -176,35 +169,146 @@ export function deriveKnowProducePath({ cwd, bindingFacts, result }) {
     const absValue = path.resolve(root, rawValue);
     const relWithinInput = path.relative(knowInputRoot, absValue);
     if (!isSubpath(relWithinInput)) continue;
-    const parsed = path.parse(relWithinInput);
-    const nextRel = path.join(parsed.dir, `${parsed.name}${ext}`);
-    return path.resolve(root, "know", "produce", nextRel);
+    return {
+      root,
+      absValue,
+      relWithinInput,
+      parsed: path.parse(relWithinInput)
+    };
   }
   return null;
 }
 
-export async function allocateProducePath(targetPath) {
-  if (!targetPath) return null;
-  const absolute = path.resolve(targetPath);
+async function listSiblingProduceDescriptors(sourcePath) {
+  const absolute = path.resolve(sourcePath);
   const parsed = path.parse(absolute);
-  await fs.mkdir(parsed.dir, { recursive: true });
+  const entries = [{ sourcePath: absolute, middleSuffix: "", ext: parsed.ext || "" }];
+  let siblings = [];
   try {
-    await fs.access(absolute);
+    siblings = await fs.readdir(parsed.dir, { withFileTypes: true });
   } catch (err) {
-    if (err?.code === "ENOENT") return absolute;
+    if (err?.code === "ENOENT") return entries;
     throw err;
   }
-  for (let index = 2; index < 1000; index += 1) {
-    const suffix = `-${String(index).padStart(2, "0")}`;
-    const candidate = path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
-    try {
-      await fs.access(candidate);
-    } catch (err) {
-      if (err?.code === "ENOENT") return candidate;
-      throw err;
+  for (const sibling of siblings) {
+    if (!sibling?.isFile?.()) continue;
+    const siblingParsed = path.parse(String(sibling.name));
+    if (siblingParsed.base === parsed.base) continue;
+    if (!siblingParsed.name.startsWith(`${parsed.name}.`)) continue;
+    const middleSuffix = siblingParsed.name.slice(parsed.name.length);
+    entries.push({
+      sourcePath: path.join(parsed.dir, sibling.name),
+      middleSuffix,
+      ext: siblingParsed.ext || ""
+    });
+  }
+  return entries;
+}
+
+function withProduceStem({ dir, stem, bundleSuffix, middleSuffix, ext }) {
+  const finalStem = bundleSuffix ? `${stem}${bundleSuffix}` : stem;
+  return path.join(dir, `${finalStem}${middleSuffix}${ext}`);
+}
+
+async function pathExists(filename) {
+  try {
+    await fs.access(filename);
+    return true;
+  } catch (err) {
+    if (err?.code === "ENOENT") return false;
+    throw err;
+  }
+}
+
+export async function deriveKnowProduceBundle({ cwd, bindingFacts, result }) {
+  const binding = firstKnowInputBinding({ cwd, bindingFacts });
+  if (!binding) return [];
+  const produceDir = path.resolve(binding.root, "know", "produce", binding.parsed.dir);
+  const stem = binding.parsed.name;
+
+  if (result?.ob?.text !== undefined) {
+    return [{
+      kind: "text",
+      text: String(result.ob.text ?? ""),
+      targetDir: produceDir,
+      stem,
+      middleSuffix: "",
+      ext: ".txt"
+    }];
+  }
+
+  if (typeof result?.ob?.filename === "string" && result.ob.filename.trim()) {
+    const primarySource = path.resolve(binding.root, result.ob.filename);
+    if (!(await pathExists(primarySource))) return [];
+    const entries = await listSiblingProduceDescriptors(primarySource);
+    return entries.map((entry) => ({
+      kind: "copy",
+      sourcePath: entry.sourcePath,
+      targetDir: produceDir,
+      stem,
+      middleSuffix: entry.middleSuffix,
+      ext: entry.ext
+    }));
+  }
+
+  return [];
+}
+
+export async function allocateProduceBundle(bundle) {
+  const entries = Array.isArray(bundle) ? bundle : [];
+  if (entries.length === 0) return [];
+  const first = entries[0];
+  const targetDir = path.resolve(first.targetDir);
+  const stem = String(first.stem ?? "").trim();
+  if (!stem) return [];
+  await fs.mkdir(targetDir, { recursive: true });
+  for (let index = 1; index < 1000; index += 1) {
+    const bundleSuffix = index === 1 ? "" : `-${String(index).padStart(2, "0")}`;
+    const candidates = entries.map((entry) => withProduceStem({
+      dir: targetDir,
+      stem,
+      bundleSuffix,
+      middleSuffix: String(entry.middleSuffix ?? ""),
+      ext: String(entry.ext ?? "")
+    }));
+    let collision = false;
+    for (const candidate of candidates) {
+      if (await pathExists(candidate)) {
+        collision = true;
+        break;
+      }
+    }
+    if (!collision) {
+      return entries.map((entry, idx) => ({
+        ...entry,
+        targetPath: candidates[idx]
+      }));
     }
   }
-  throw new Error(`produce path allocation defective: too many collisions for ${absolute}`);
+  throw new Error(`produce path allocation defective: too many collisions for ${path.join(targetDir, stem)}`);
+}
+
+export async function materializeProduceBundle(bundle) {
+  const allocated = await allocateProduceBundle(bundle);
+  const written = [];
+  for (const entry of allocated) {
+    const targetPath = path.resolve(entry.targetPath);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    if (entry.kind === "text") {
+      let payload = String(entry.text ?? "");
+      if (!payload.includes("\n") && payload.includes("\\n")) {
+        payload = payload.replace(/\\n/g, "\n");
+      }
+      const text = payload.endsWith("\n") ? payload : `${payload}\n`;
+      await fs.writeFile(targetPath, text, "utf8");
+    } else if (entry.kind === "copy") {
+      await fs.copyFile(entry.sourcePath, targetPath);
+    } else {
+      throw new Error(`produce bundle defective: unsupported kind ${JSON.stringify(entry.kind)}`);
+    }
+    written.push(targetPath);
+  }
+  return written;
 }
 
 function parseCheckpointPayload(text) {

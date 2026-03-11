@@ -116,7 +116,13 @@ Examples:
 
 Shorthand is valid only when exactly one required input port exists and it is `filename`.
 
-When a run finishes with a text result and one of its bound filename inputs resolves under `know/input/`, runner also mirrors that final text into `know/produce/` using the same relative stem and an appropriate extension for the produced text.
+When a run finishes and one of its bound filename inputs resolves under `know/input/`, runner also mirrors the final produced output into `know/produce/` using the same relative stem and an appropriate extension for the output type.
+
+Current generic runner behavior:
+- final text result: mirror to `.txt`
+- final filename result: mirror the primary file with its own extension
+- final filename result with sidecars sharing the same basename (for example `final.metadata.txt`, `final.metadata.pya`, `final.srt`): mirror those companions too using the same produce stem
+- if a mirrored target already exists, runner allocates one shared bundle suffix such as `-02`, `-03`, ... across the whole mirrored output set
 
 Examples:
 ```bash
@@ -127,6 +133,11 @@ Examples:
 ./run program.pya "know/input/history/solon.md"
 # writes know/produce/history/solon.txt
 # if that file already exists, runner allocates solon-02.txt, solon-03.txt, ...
+
+./run video-program.pya "know/input/history/solon.txt"
+# final result is build/final.mp4 with build/final.metadata.txt
+# writes know/produce/history/solon.mp4
+# writes know/produce/history/solon.metadata.txt
 ```
 
 ### 7.4 Validation and failures
