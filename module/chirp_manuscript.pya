@@ -11,6 +11,8 @@ exists su name chirp proof sieve mind be mind fromtext name chirp proof sieve pr
 exists su name chirp boundary sieve mind be mind fromtext name chirp boundary sieve prompt ya
 exists su name chirp template mind be mind fromtext name chirp template prompt ya
 exists su name chirp draft mind be mind fromtext name chirp draft prompt ya
+exists su name chirp template fit verify mind be mind fromtext name chirp template fit verify prompt ya
+exists su name chirp template fit verdict mind be mind fromtext name chirp template fit verdict prompt ya
 exists su name chirp source thrust verify mind be mind fromtext name chirp source thrust verify prompt ya
 exists su name chirp source thrust verdict mind be mind fromtext name chirp source thrust verdict prompt ya
 
@@ -266,6 +268,45 @@ Drafting rules:
 - Do not write a mini-thread.
 - Do not add unsupported concrete facts, actors, dates, statistics, policies, or mechanisms..text.quoted be text ya
 
+exists su name chirp template fit verify prompt ob text quoted.text.Determine whether the TEXT clearly fits the selected TEMPLATE family.
+
+Goal:
+- Pass when the draft obviously realizes the chosen template family in a readable way.
+- Fail when the draft is a decent chirp but does not actually use the selected template shape.
+
+Allowed template families:
+- definition pivot
+- symptom to root cause
+- incentive lens
+- hidden cost reveal
+- diagnostic test
+
+Pass guidance:
+- `definition pivot`: clearly relabels or reframes the issue from one frame to a better one
+- `symptom to root cause`: clearly separates the visible pain from the underlying driver
+- `incentive lens`: clearly explains behavior through payoff, pressure, risk, status, or tradeoff
+- `hidden cost reveal`: clearly surfaces an unseen cost, tradeoff, or threshold
+- `diagnostic test`: clearly gives a check, tell, or test for distinguishing likely causes or deciding what to examine next
+
+Fail guidance:
+- The draft could fit a different template family better than the selected one.
+- The draft states a general point but does not visibly realize the selected template.
+- For `diagnostic test`, fail unless the reader can actually use the post as a check, tell, or test.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words) explaining the template-fit judgment.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name chirp template fit verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the draft does not fit the selected template family.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
 exists su name chirp source thrust verify prompt ob text quoted.text.Determine whether the TEXT stays grounded in the SOURCE.
 
 Goal:
@@ -373,6 +414,12 @@ GENERATOR_INTENT:
 TEXT:
 [[chirp]].text.quoted be text ya
 
+exists su name chirp template fit request template ob text quoted.text.TEMPLATE:
+[[template]]
+
+TEXT:
+[[chirp]].text.quoted be text ya
+
 exists su name chirp atom sieve request template ob text quoted.text.SOURCE:
 [[source]]
 
@@ -423,6 +470,36 @@ su name chirp source thrust verify to name text pass be ceremony def
   ob name text chirp source thrust verdict known be equally from text false then
   su name chirp source thrust verdict guarantee platform ob bool lie fromtext text "chirp source thrust verdict defective" be guarantee do
   su name chirp source thrust pass ret
+prah
+
+su name chirp template fit verify to name text pass be ceremony def
+  su name chirp template fit write platform ob name text chirp template fit request for name chirp template fit verify mind to name text chirp template fit review by num 0 atmost num 220 be write do
+  ob text "false" to name text chirp template fit pass be text do
+  ob name text chirp template fit review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text chirp template fit pass be text do
+  ob name text chirp template fit pass be equally from text false then
+  su name chirp template fit verdict request begin platform ob text "VERIFIER_ANALYSIS:\n" to name text chirp template fit verdict request be text do
+  ob name text chirp template fit review to name text chirp template fit verdict request be plus do
+  ob name text chirp template fit verdict request for name chirp template fit verdict mind to name text chirp template fit verdict raw by num 0 atmost num 8 be write do
+  ob name text chirp template fit verdict raw atmost num 1 to name text chirp template fit verdict line be line tail do
+  ob text "false" to name text chirp template fit verdict known be text do
+  ob name text chirp template fit verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text chirp template fit verdict known be text do
+  ob name text chirp template fit verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text chirp template fit pass be text do
+  ob name text chirp template fit verdict known be equally from text false then
+  su name chirp template fit verdict guarantee platform ob bool lie fromtext text "chirp template fit verdict defective" be guarantee do
+  su name chirp template fit pass ret
+prah
+
+su name chirp template fit from text template with text chirp to name text pass be ceremony def
+  su name chirp template fit template platform ob text of from of this to name text chirp template fit template be text do
+  su name chirp template fit chirp platform ob text of with of this to name text chirp template fit chirp be text do
+  ob name text chirp template fit template to name text chirp replacement template be text do
+  ob name text chirp template fit chirp to name text chirp replacement chirp be text do
+  su name chirp template fit request platform ob name map chirp request replacements in name text chirp template fit request template to name text chirp template fit request be instead do
+  su name pass platform to name text pass be chirp template fit verify do
+  su name pass ret
 prah
 
 su name chirp source thrust from text source with text chirp to name text pass be ceremony def
@@ -587,21 +664,43 @@ su name chirp draft retry fromindex num 1 toindex num 3 be ceremony def
   ob name text chirp draft pass be equally from text true then
   ob name text chirp draft source thrust pass be equally from text true then be depart do
   ob text "" to name text chirp replacement feedback be text do
+  ob text "" to name text chirp retry source thrust feedback be text do
+  ob text "" to name text chirp retry template feedback be text do
   ob name text chirp total letters retry pass be equally from text false then
-  ob text "Shorten hard. Keep the draft between 140 and 220 characters. Prefer 2 short sentences." to name text chirp replacement feedback be text do
+  ob text "Shorten hard. Use exactly 2 short sentences. Keep the draft between 140 and 220 characters. Cut extra proof, examples, and caveats. Keep only one vivid detail and one clear payoff." to name text chirp replacement feedback be text do
+  ob text "" to name text chirp replacement proof be text do
+  ob text "" to name text chirp replacement boundary be text do
   ob name text chirp draft source thrust pass be equally from text false then
   ob text "Stay closer to the source wording. Remove unsupported concrete claims, ideological labels, and sharpened generalizations." to name text chirp retry source thrust feedback be text do
+  ob name text chirp draft template fit pass be equally from text false then
+  ob name text chirp template out from text "/^definition pivot$/i" be resemble then
+  ob text "Make the reframe explicit. Clearly show that the issue is better understood as a different frame or label." to name text chirp retry template feedback be text do
+  ob name text chirp template out from text "/^symptom to root cause$/i" be resemble then
+  ob text "Make the visible symptom and the hidden driver clearly distinct in the wording." to name text chirp retry template feedback be text do
+  ob name text chirp template out from text "/^incentive lens$/i" be resemble then
+  ob text "Make the payoff, pressure, risk, or incentive explicit so the behavior clearly makes sense through that lens." to name text chirp retry template feedback be text do
+  ob name text chirp template out from text "/^hidden cost reveal$/i" be resemble then
+  ob text "Make the unseen cost, tradeoff, or threshold explicit so the reveal is clear." to name text chirp retry template feedback be text do
+  ob name text chirp template out from text "/^diagnostic test$/i" be resemble then
+  ob text "Make it clearly diagnostic: give the reader a tell, check, or test they can use before deciding what is going on." to name text chirp retry template feedback be text do
   ob name text chirp replacement feedback to name text chirp retry feedback base be text do
   ob name text chirp retry feedback base from text "/\\w/" be resemble then
   ob text " " to name text chirp replacement feedback be plus do
   ob name text chirp retry source thrust feedback to name text chirp replacement feedback be plus do
+  ob name text chirp retry template feedback from text "/\\w/" be resemble then
+  ob name text chirp replacement feedback from text "/\\w/" be resemble then
+  ob text " " to name text chirp replacement feedback be plus do
+  ob name text chirp retry template feedback to name text chirp replacement feedback be plus do
   su name chirp draft request refill stage ob name map chirp request replacements in name text chirp draft request template to name text chirp draft request be instead do
   su name chirp draft refill stage ob name text chirp draft request for name chirp draft mind to name text chirp out by num 0 atmost num 180 be write do
   su name chirp total letters retry stage be verify as wo letter count atleast num 100 atmost num 280 from name text chirp out to name map chirp total letters retry verify do
   ob text of pass of chirp total letters retry verify to name text chirp total letters retry pass be text do
+  su name chirp template fit retry stage from text of ob of chirp template out with text of ob of chirp out to name text chirp draft template fit pass be chirp template fit do
   su name chirp source thrust retry platform from text of ob of chirp source with text of ob of chirp out to name text chirp draft source thrust pass be chirp source thrust do
   ob text "true" to name text chirp draft pass be text do
   ob name text chirp total letters retry pass be equally from text false then
+  ob text "false" to name text chirp draft pass be text do
+  ob name text chirp draft template fit pass be equally from text false then
   ob text "false" to name text chirp draft pass be text do
   ob name text chirp draft source thrust pass be equally from text false then
   ob text "false" to name text chirp draft pass be text do
@@ -659,9 +758,12 @@ su name chirp draft verify from text source to name text chirp out be ceremony d
   su name chirp draft stage ob name text chirp draft request for name chirp draft mind to name text chirp out by num 0 atmost num 180 be write do
   su name chirp total letters verify stage be verify as wo letter count atleast num 100 atmost num 280 from name text chirp out to name map chirp total letters verify do
   ob text of pass of chirp total letters verify to name text chirp total letters pass be text do
+  su name chirp template fit stage from text of ob of chirp template out with text of ob of chirp out to name text chirp draft template fit pass be chirp template fit do
   su name chirp source thrust stage from text of ob of chirp source with text of ob of chirp out to name text chirp draft source thrust pass be chirp source thrust do
   ob text "true" to name text chirp draft pass be text do
   ob name text chirp total letters pass be equally from text false then
+  ob text "false" to name text chirp draft pass be text do
+  ob name text chirp draft template fit pass be equally from text false then
   ob text "false" to name text chirp draft pass be text do
   ob name text chirp draft source thrust pass be equally from text false then
   ob text "false" to name text chirp draft pass be text do
