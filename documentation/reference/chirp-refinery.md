@@ -92,18 +92,20 @@ For the standalone chirp unit, only the first three atoms are required in the fi
 The default template set should stay small.
 
 Allowed evergreen families:
-1. `myth flip`
-2. `symptom swap`
-3. `definition pivot`
+1. `definition pivot`
+2. `symptom to root cause`
+3. `incentive lens`
 4. `hidden cost reveal`
+5. `diagnostic test`
 
 Short definitions:
-- `myth flip`: people think `X`, but really `Y`, so do/see `Z`
-- `symptom swap`: the pain looks like `X`, but the constraint is `Y`, so pull lever `Z`
 - `definition pivot`: `X` is the wrong label; the better frame is `Y`; that changes what to do
+- `symptom to root cause`: the visible pain looks like `X`, but the actual driver is `Y`; act on `Z`
+- `incentive lens`: the behavior makes sense once you see the payoff, pressure, or tradeoff behind it
 - `hidden cost reveal`: this looks beneficial, but the unseen cost is `Y`; use threshold/rule `Z`
+- `diagnostic test`: if you see `X`, test a short set of likely causes before deciding what to do
 
-These four are the stable core because they:
+These five are the stable core because they:
 - age more slowly than hot takes,
 - support useful compression,
 - map well onto source-grounded verification,
@@ -115,9 +117,11 @@ Template selection should happen explicitly before final drafting.
 
 Starter routing:
 - use `definition pivot` when the source mainly corrects a label or frame
-- use `symptom swap` when the source mainly explains a recurring pain through a hidden constraint
+- use `symptom to root cause` when the source mainly explains a recurring pain through a hidden constraint or driver
+- use `incentive lens` when the source mainly explains behavior through payoffs, pressures, status, or risk
 - use `hidden cost reveal` when the source mainly exposes a tradeoff or threshold
-- use `myth flip` as the default fallback when the source mainly overturns a common belief
+- use `diagnostic test` when the source mainly helps a reader distinguish among likely causes or choose a next check
+- when multiple fit, prefer the one with the least unsupported assumption about what “most people think”
 
 The selector should prefer:
 - source fit,
@@ -129,7 +133,7 @@ The selector should prefer:
 
 1. resolve source text from the selected source mode
 2. distill the source into `problem`, `hidden cause`, `insight`, `proof hook`, and `boundary`
-3. choose one of the four evergreen template families
+3. choose one of the five evergreen template families
 4. draft one standalone chirp from `problem + hidden cause + insight`
 5. optionally weave in `proof hook` when it improves clarity or memorability without bloating the post
 6. verify platform fit and total length
