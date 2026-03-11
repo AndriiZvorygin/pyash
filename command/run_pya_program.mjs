@@ -23,7 +23,7 @@ import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProducePath, allocateProducePath } from "./run_pya_helpers.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
@@ -849,32 +849,31 @@ async function main() {
     console.error(`artifacts folder: ${abs}`);
   };
   const printProduceFileHint = () => {
-    if (produceFiles?.knowProduceFile) {
-      console.error(`produce file: ${produceFiles.knowProduceFile}`);
+    const files = Array.isArray(produceFiles?.knowProduceFiles) ? produceFiles.knowProduceFiles : [];
+    for (const file of files) {
+      console.error(`produce file: ${file}`);
     }
   };
   const writeProduceTextArtifact = async () => {
-    if (result?.ob?.text === undefined) return null;
-    const dir = path.resolve(process.cwd(), "artifacts", String(runId));
-    await fs.mkdir(dir, { recursive: true });
-    const filePath = path.join(dir, "produce.txt");
-    let payload = String(result.ob.text ?? "");
-    if (!payload.includes("\n") && payload.includes("\\n")) {
-      payload = payload.replace(/\\n/g, "\n");
+    let artifactFile = null;
+    if (result?.ob?.text !== undefined) {
+      const dir = path.resolve(process.cwd(), "artifacts", String(runId));
+      await fs.mkdir(dir, { recursive: true });
+      artifactFile = path.join(dir, "produce.txt");
+      let payload = String(result.ob.text ?? "");
+      if (!payload.includes("\n") && payload.includes("\\n")) {
+        payload = payload.replace(/\\n/g, "\n");
+      }
+      const text = payload.endsWith("\n") ? payload : `${payload}\n`;
+      await fs.writeFile(artifactFile, text, "utf8");
     }
-    const text = payload.endsWith("\n") ? payload : `${payload}\n`;
-    await fs.writeFile(filePath, text, "utf8");
-    const knowProducePath = deriveKnowProducePath({
+    const knowProduceBundle = await deriveKnowProduceBundle({
       cwd: process.cwd(),
       bindingFacts: runtimeBindingFacts,
       result
     });
-    let knowProduceFile = null;
-    if (knowProducePath) {
-      knowProduceFile = await allocateProducePath(knowProducePath);
-      await fs.writeFile(knowProduceFile, text, "utf8");
-    }
-    return { artifactFile: filePath, knowProduceFile };
+    const knowProduceFiles = await materializeProduceBundle(knowProduceBundle);
+    return { artifactFile, knowProduceFiles };
   };
   if (runError) {
     printArtifactsFolderHint();

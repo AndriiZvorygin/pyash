@@ -152,3 +152,81 @@ test("run_pya_program.mjs adds numeric suffix when know/produce target already e
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("run_pya_program.mjs mirrors filename results and companion metadata into know/produce", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-know-produce-file-"));
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const programPath = path.join(tmpDir, "program.pya");
+  const inputDir = path.join(tmpDir, "know", "input", "video");
+  const inputPath = path.join(inputDir, "rome.txt");
+  const buildDir = path.join(tmpDir, "build");
+  const outputPath = path.join(buildDir, "final.mp4");
+  const metadataPath = path.join(buildDir, "final.metadata.txt");
+  const mirroredVideo = path.join(tmpDir, "know", "produce", "video", "rome.mp4");
+  const mirroredMetadata = path.join(tmpDir, "know", "produce", "video", "rome.metadata.txt");
+  try {
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.mkdir(buildDir, { recursive: true });
+    await fs.writeFile(inputPath, "rome fixture\n", "utf8");
+    await fs.writeFile(outputPath, "video bytes\n", "utf8");
+    await fs.writeFile(metadataPath, "title: Rome\n", "utf8");
+    await fs.writeFile(programPath, [
+      "ob filename text source be input ya",
+      'ob filename "build/final.mp4" to name filename result be filename do ya'
+    ].join("\n"), "utf8");
+    const out = spawnSync(process.execPath, [runPath, "--run-id", "know-produce-file-test", programPath, inputPath], {
+      cwd: tmpDir,
+      encoding: "utf8"
+    });
+    assert.equal(out.status, 0, `expected know/produce filename mirror run to pass\nstderr:\n${out.stderr || ""}`);
+    assert.equal((await fs.readFile(mirroredVideo, "utf8")).trim(), "video bytes");
+    assert.equal((await fs.readFile(mirroredMetadata, "utf8")).trim(), "title: Rome");
+    assert.match(out.stderr, /produce file: .*know\/produce\/video\/rome\.mp4/);
+    assert.match(out.stderr, /produce file: .*know\/produce\/video\/rome\.metadata\.txt/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("run_pya_program.mjs keeps one shared suffix across mirrored filename bundles", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-know-produce-file-dup-"));
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const programPath = path.join(tmpDir, "program.pya");
+  const inputDir = path.join(tmpDir, "know", "input");
+  const inputPath = path.join(inputDir, "solon.txt");
+  const buildDir = path.join(tmpDir, "build");
+  const outputPath = path.join(buildDir, "final.mp4");
+  const metadataPath = path.join(buildDir, "final.metadata.txt");
+  const produceDir = path.join(tmpDir, "know", "produce");
+  const firstVideo = path.join(produceDir, "solon.mp4");
+  const firstMetadata = path.join(produceDir, "solon.metadata.txt");
+  const secondVideo = path.join(produceDir, "solon-02.mp4");
+  const secondMetadata = path.join(produceDir, "solon-02.metadata.txt");
+  try {
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.mkdir(buildDir, { recursive: true });
+    await fs.mkdir(produceDir, { recursive: true });
+    await fs.writeFile(inputPath, "solon fixture\n", "utf8");
+    await fs.writeFile(outputPath, "fresh video\n", "utf8");
+    await fs.writeFile(metadataPath, "fresh metadata\n", "utf8");
+    await fs.writeFile(firstVideo, "older video\n", "utf8");
+    await fs.writeFile(firstMetadata, "older metadata\n", "utf8");
+    await fs.writeFile(programPath, [
+      "ob filename text source be input ya",
+      'ob filename "build/final.mp4" to name filename result be filename do ya'
+    ].join("\n"), "utf8");
+    const out = spawnSync(process.execPath, [runPath, "--run-id", "know-produce-file-dup-test", programPath, inputPath], {
+      cwd: tmpDir,
+      encoding: "utf8"
+    });
+    assert.equal(out.status, 0, `expected know/produce filename duplicate mirror run to pass\nstderr:\n${out.stderr || ""}`);
+    assert.equal((await fs.readFile(firstVideo, "utf8")).trim(), "older video");
+    assert.equal((await fs.readFile(firstMetadata, "utf8")).trim(), "older metadata");
+    assert.equal((await fs.readFile(secondVideo, "utf8")).trim(), "fresh video");
+    assert.equal((await fs.readFile(secondMetadata, "utf8")).trim(), "fresh metadata");
+    assert.match(out.stderr, /produce file: .*know\/produce\/solon-02\.mp4/);
+    assert.match(out.stderr, /produce file: .*know\/produce\/solon-02\.metadata\.txt/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
