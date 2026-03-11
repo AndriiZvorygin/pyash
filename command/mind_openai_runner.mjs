@@ -22,13 +22,11 @@ function parseArgs(argv) {
 }
 
 function readStdin() {
-  return new Promise((resolve, reject) => {
-    let input = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", chunk => { input += chunk; });
-    process.stdin.on("end", () => resolve(input));
-    process.stdin.on("error", reject);
-  });
+  try {
+    return fs.readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 async function parsePayload() {
@@ -36,7 +34,7 @@ async function parsePayload() {
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
-  else raw = await readStdin();
+  else raw = readStdin();
   if (!raw.trim()) throw new Error("mind_openai_runner: missing request payload");
   let payload;
   try {
