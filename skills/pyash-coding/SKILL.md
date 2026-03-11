@@ -14,6 +14,8 @@ description: Write, read, and refactor Pyash code in the pyash repo. Use when ed
 - Use ESM, 2-space indent, double quotes, trailing semicolons in JS.
 - Keep Pyash sentences lowercase keywords; keep existing naming/casing for user-defined names.
 - Respect compositional cases and genitive rules (of/ti).
+- Treat output typing as part of the contract, not just the slot name. Use `to name text ...`, `to name map ...`, `to name itinerary ...`, `to name vec text ...`, etc. intentionally.
+- Use `series` for ordered sentence rows/manifests and `vec` for ordered primitive values. If a verb returns multiple plain strings, prefer `vec text` over `series`.
 
 3) Validate behavior
 - Prefer `node --test quiz/...` for targeted changes.
