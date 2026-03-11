@@ -1,202 +1,420 @@
-ob filename text tweet be input ya
+ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
 
-exists su name mind model ob text "qwen3.5:9b" be default ya
-su name mind configure be map def
-  su name think ob bool lie ya
-  su name max tokens ob num 64 ya
-prah
-exists su name chirp mind be mind as name "qwen3.5:9b" fromtext text "You write concise, high-engagement social replies." ya
-exists su name chirp clamp mind be mind as name "qwen3.5:9b" fromtext text "You rewrite one short question under hard constraints. Output only one plain-text question line." ya
+exists su name chirp mind be mind as name "qwen3.5:9b" fromtext text "You write concise, high-engagement social posts from source text." ya
+exists su name chirp hook mind be mind fromtext name chirp hook prompt ya
+exists su name chirp value mind be mind fromtext name chirp value prompt ya
+exists su name chirp question mind be mind fromtext name chirp question prompt ya
+exists su name chirp platform verify mind be mind fromtext name chirp platform verify prompt ya
+exists su name chirp source thrust verify mind be mind fromtext name chirp source thrust verify prompt ya
+exists su name chirp source thrust verdict mind be mind fromtext name chirp source thrust verdict prompt ya
 
-exists su name chirp hook prompt ob text quoted.text.Write a super short, bold first-line Hook (max 8 words) for a reply to this tweet.
+exists su name chirp source thrust intent ob text quoted.text.The generator is asked to write a short social chirp grounded in the source text. The chirp may heighten framing, compression, and emotional emphasis for shareability, but it must not add unsupported concrete claims, facts, actors, dates, statistics, or mechanisms beyond the source..text.quoted be text ya
 
-Rules:
-- Strong agreement, sharp contrarian twist, or direct question.
-- Plain text only.
-- Output ONLY the hook line..text.quoted be text ya
+exists su name chirp hook prompt ob text quoted.text.You are writing the opening line of a short social chirp.
 
-exists su name chirp value prompt ob text quoted.text.Add one punchy Value line (1-2 short sentences) for this hook + tweet context.
-
-Rules:
-- Deliver one fresh insight, data point, personal example, or missing angle.
-- Focus on a different aspect than the prior segment.
-- Do not repeat prior segment wording or same core claim.
-- Specific and useful, no fluff.
-- Keep the value between 60 and 110 characters.
-- Plain text only.
-- Output ONLY the value line(s)..text.quoted be text ya
-
-exists su name chirp question prompt ob text quoted.text.End with one specific engagement Question for this full draft context.
+Task:
+- Write one short hook line.
+- Make it feel sharp, scroll-stopping, and easy to say aloud.
+- Keep it between 4 and 9 words.
+- Keep it between 18 and 55 characters.
 
 Rules:
-- Open-ended but targeted.
-- Ask from a different angle than the prior segment.
-- Do not restate prior segment wording or same core claim.
+- Ground the hook in the source text.
+- You may heighten urgency or curiosity, but do not add unsupported concrete claims.
+- Prefer a strong emotional angle, twist, warning, or surprising framing.
+- Must end with "." or "?".
 - Plain text only.
-- Output ONLY the question line..text.quoted be text ya
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
-exists su name chirp question clamp prompt ob text quoted.text.Rewrite the user question draft so it satisfies all rules exactly.
+exists su name chirp value prompt ob text quoted.text.You are writing the middle line of the same short social chirp.
 
-Hard rules:
-- One line only, plain text only.
-- 5 to 16 words.
-- 25 to 80 characters total.
+Task:
+- Write 1-2 short sentences.
+- Add one punchy insight, compression, warning, or useful angle from the source.
+- Keep it between 8 and 28 words.
+- Keep it between 45 and 150 characters.
+
+Rules:
+- Stay grounded in the source text.
+- Do not repeat the hook wording.
+- Do not add unsupported concrete facts, actors, dates, or statistics.
+- Do not state definite collapse, breakdown, or downstream mechanisms unless the source says them directly.
+- Prefer source-near phrasing like stake, land, survival, or ordinary people over broader doom summaries.
+- Prefer clean, memorable spoken phrasing.
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name chirp question prompt ob text quoted.text.You are writing the closing engagement line of the same short social chirp.
+
+Task:
+- Write one targeted question line.
+- Keep it between 5 and 16 words.
+- Keep it between 25 and 95 characters.
+
+Rules:
+- The question must fit the source and prior draft.
+- Ask from a slightly different angle than the value line.
+- Keep the wording visibly anchored to the source theme or core stake.
+- Do not add unsupported concrete claims.
 - Must end with question mark.
-- Keep the same meaning as the draft.
-- If you cannot satisfy all rules, output exactly: What housing policy helps families most?
-- Output ONLY the rewritten question line..text.quoted be text ya
+- Plain text only.
+- No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name chirp platform verify prompt ob text quoted.text.You verify whether a candidate chirp segment fits its task instructions.
+
+Rules:
+- Be practical and not overly strict.
+- Prefer PASS when the candidate is usable and broadly satisfies the task.
+- Fail only on clear mismatch, clear unsupported concrete claims, or clear instruction break.
+- Use TASK and CANDIDATE exactly as provided.
+- If TASK includes TARGET_WORDS: X-Y, count words and fail when outside that inclusive range.
+- If TASK includes TARGET_CHARS: X-Y, count characters and fail when outside that inclusive range.
+- If TASK includes PRIOR LINE:, fail when CANDIDATE substantially repeats the prior line wording or same core claim.
+- If TASK requires a question mark or sentence ending, enforce that requirement.
+
+Output:
+- First output one short reasoning paragraph (2-4 sentences).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name chirp source thrust verify prompt ob text quoted.text.Determine whether the CHIRP stays grounded in the SOURCE.
+
+Goal:
+- Allow strong compression, rhetoric, emotional framing, and obvious implications.
+- Fail only when the CHIRP introduces unsupported concrete claims.
+
+PASS if:
+- The core idea is supported by the SOURCE.
+- The CHIRP is a faithful compression or rhetorical restatement.
+- The CHIRP adds commentary or emphasis without inventing new concrete facts.
+
+FAIL if:
+- The CHIRP adds a concrete fact, actor, date, statistic, policy, or mechanism not supported by the SOURCE.
+- The CHIRP materially changes what the SOURCE says.
+- The CHIRP turns a vague source into a stronger concrete claim without support.
+
+Tie-break policy:
+- If support is plausible and the wording is mainly rhetorical, choose PASS.
+- If the CHIRP states an obvious implication rather than a new concrete fact, choose PASS.
+- Fail only on clear unsupported additions or clear distortion.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words) explaining the grounding judgment.
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name chirp source thrust verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the chirp adds unsupported concrete claims or materially distorts the source.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name chirp hook request template ob text quoted.text.TARGET_WORDS: 4-9
+TARGET_CHARS: 18-55
+SOURCE:
+[[source]].text.quoted be text ya
+
+exists su name chirp value request template ob text quoted.text.TARGET_WORDS: 8-28
+TARGET_CHARS: 45-150
+PRIOR LINE:
+[[hook]]
+
+SOURCE:
+[[source]].text.quoted be text ya
+
+exists su name chirp question request template ob text quoted.text.TARGET_WORDS: 5-16
+TARGET_CHARS: 25-95
+DRAFT SO FAR:
+[[draft]]
+
+SOURCE:
+[[source]].text.quoted be text ya
+
+exists su name chirp source thrust request template ob text quoted.text.SOURCE:
+[[source]]
+
+GENERATOR_INTENT:
+[[intent]]
+
+CHIRP:
+[[chirp]].text.quoted be text ya
+
+exists su name chirp line break ob text quoted.text.
+.text.quoted be text ya
+
+exists su name chirp replacement source ob text "" be text ya
+exists su name chirp replacement hook ob text "" be text ya
+exists su name chirp replacement draft ob text "" be text ya
+exists su name chirp replacement chirp ob text "" be text ya
+exists su name chirp replacement intent ob text "" be text ya
+
+su name chirp request replacements be map def
+  su text "[[source]]" ob name text chirp replacement source ya
+  su text "[[hook]]" ob name text chirp replacement hook ya
+  su text "[[draft]]" ob name text chirp replacement draft ya
+  su text "[[chirp]]" ob name text chirp replacement chirp ya
+  su text "[[intent]]" ob name text chirp replacement intent ya
+prah
+
+su name chirp hook checks be series def
+  su name word_min ob num 4 ya
+  su name word_max ob num 9 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name chirp value checks be series def
+  su name word_min ob num 8 ya
+  su name word_max ob num 28 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name chirp question checks be series def
+  su name word_min ob num 5 ya
+  su name word_max ob num 16 ya
+  su name sentence_complete ob bool truth ya
+prah
+
+su name chirp line punctuation from text line to name text pass be ceremony def
+  su name chirp line punctuation line platform ob text of from of this to name text chirp line punctuation line be text do
+  ob text "false" to name text pass be text do
+  ob name text chirp line punctuation line from text "/[.?!]\\s*$/" be resemble then
+  ob text "true" to name text pass be text do
+  su name pass ret
+prah
+
+su name chirp question punctuation from text line to name text pass be ceremony def
+  su name chirp question punctuation line platform ob text of from of this to name text chirp question punctuation line be text do
+  ob text "false" to name text pass be text do
+  ob name text chirp question punctuation line from text "/\\?\\s*$/" be resemble then
+  ob text "true" to name text pass be text do
+  su name pass ret
+prah
+
+su name chirp platform pass ob text packet to name text verdict be ceremony def
+  ob text PASS to name text verdict be text do
+prah
+
+su name chirp hook platform ob text request to name text output be ceremony def
+  su name chirp hook write platform ob text of ob of this for name chirp hook mind to name text output by num 0 atmost num 32 be write do
+  su name output ret
+prah
+
+su name chirp value platform ob text request to name text output be ceremony def
+  su name chirp value write platform ob text of ob of this for name chirp value mind to name text output by num 0 atmost num 72 be write do
+  su name output ret
+prah
+
+su name chirp question platform ob text request to name text output be ceremony def
+  su name chirp question write platform ob text of ob of this for name chirp question mind to name text output by num 0 atmost num 40 be write do
+  su name output ret
+prah
+
+su name chirp platform verify from text request for text platform accordingto name checks series to name text output be ceremony def
+  su name chirp platform verify run platform ob text of from of this for text of for of this among name chirp platform pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
+  su name output ret
+prah
+
+su name chirp source thrust verify to name text pass be ceremony def
+  su name chirp source thrust write platform ob name text chirp source thrust request for name chirp source thrust verify mind to name text chirp source thrust review by num 0 atmost num 220 be write do
+  ob text "false" to name text chirp source thrust pass be text do
+  ob name text chirp source thrust review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text chirp source thrust pass be text do
+  ob name text chirp source thrust pass be equally from text false then
+  su name chirp source thrust verdict request begin platform ob text "VERIFIER_ANALYSIS:\n" to name text chirp source thrust verdict request be text do
+  ob name text chirp source thrust review to name text chirp source thrust verdict request be plus do
+  ob name text chirp source thrust verdict request for name chirp source thrust verdict mind to name text chirp source thrust verdict raw by num 0 atmost num 8 be write do
+  ob name text chirp source thrust verdict raw atmost num 1 to name text chirp source thrust verdict line be line tail do
+  ob text "false" to name text chirp source thrust verdict known be text do
+  ob name text chirp source thrust verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text chirp source thrust verdict known be text do
+  ob name text chirp source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text chirp source thrust pass be text do
+  ob name text chirp source thrust verdict known be equally from text false then
+  su name chirp source thrust verdict guarantee platform ob bool lie fromtext text "chirp source thrust verdict defective" be guarantee do
+  su name chirp source thrust pass ret
+prah
+
+su name chirp source thrust from text source with text chirp to name text pass be ceremony def
+  su name chirp source thrust source platform ob text of from of this to name text chirp source thrust source be text do
+  su name chirp source thrust chirp platform ob text of with of this to name text chirp source thrust chirp be text do
+  ob name text chirp source thrust source to name text chirp replacement source be text do
+  ob name text chirp source thrust intent to name text chirp replacement intent be text do
+  ob name text chirp source thrust chirp to name text chirp replacement chirp be text do
+  su name chirp source thrust request platform ob name map chirp request replacements in name text chirp source thrust request template to name text chirp source thrust request be instead do
+  su name pass platform to name text pass be chirp source thrust verify do
+  su name pass ret
+prah
 
 su name chirp hook retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text chirp hook pass be equally from text true then be depart do
-  su name chirp hook write retry stage ob name text hookreq fromtext name chirp hook prompt for name chirp mind to name text output by num 0 be write do
-  su name chirp hook words verify stage be verify as wo word count atleast num 4 atmost num 8 from name text output to name map chirp hook words verify do
-  su name chirp hook letters verify stage be verify as wo letter count atleast num 15 atmost num 45 from name text output to name map chirp hook letters verify do
-  ob text of pass of chirp hook words verify to name text chirp hook words pass be text do
+  ob name text chirp hook pass be equally from text true then
+  ob name text chirp hook source thrust pass be equally from text true then be depart do
+  su name chirp hook retry platform from text of ob of chirp hook request for text "chirp hook platform" accordingto name chirp hook checks to name text output be chirp platform verify do
+  su name chirp hook letters retry stage be verify as wo letter count atleast num 18 atmost num 55 from name text output to name map chirp hook letters verify do
   ob text of pass of chirp hook letters verify to name text chirp hook letters pass be text do
+  su name chirp hook punctuation retry platform from text of ob of output to name text chirp hook punctuation pass be chirp line punctuation do
+  su name chirp hook source thrust retry platform from text of ob of chirp source with text of ob of output to name text chirp hook source thrust pass be chirp source thrust do
   ob text "true" to name text chirp hook pass be text do
-  ob name text chirp hook words pass be equally from text false then
-  ob text "false" to name text chirp hook pass be text do
   ob name text chirp hook letters pass be equally from text false then
   ob text "false" to name text chirp hook pass be text do
-  ob name text chirp hook pass be equally from text true then be depart do
+  ob name text chirp hook punctuation pass be equally from text false then
+  ob text "false" to name text chirp hook pass be text do
 prah
 
-su name chirp hook checked to name text output be ceremony def
-  su name chirp hook write stage ob name text hookreq fromtext name chirp hook prompt for name chirp mind to name text output by num 0 be write do
-  su name chirp hook words verify stage be verify as wo word count atleast num 4 atmost num 8 from name text output to name map chirp hook words verify do
-  su name chirp hook letters verify stage be verify as wo letter count atleast num 15 atmost num 45 from name text output to name map chirp hook letters verify do
-  ob text of pass of chirp hook words verify to name text chirp hook words pass be text do
+su name chirp hook verify from text source to name text output be ceremony def
+  su name chirp hook platform from text of ob of chirp hook request for text "chirp hook platform" accordingto name chirp hook checks to name text output be chirp platform verify do
+  su name chirp hook letters verify stage be verify as wo letter count atleast num 18 atmost num 55 from name text output to name map chirp hook letters verify do
   ob text of pass of chirp hook letters verify to name text chirp hook letters pass be text do
+  su name chirp hook punctuation platform from text of ob of output to name text chirp hook punctuation pass be chirp line punctuation do
+  su name chirp hook source thrust platform from text of from of this with text of ob of output to name text chirp hook source thrust pass be chirp source thrust do
   ob text "true" to name text chirp hook pass be text do
-  ob name text chirp hook words pass be equally from text false then
-  ob text "false" to name text chirp hook pass be text do
   ob name text chirp hook letters pass be equally from text false then
+  ob text "false" to name text chirp hook pass be text do
+  ob name text chirp hook punctuation pass be equally from text false then
   ob text "false" to name text chirp hook pass be text do
   fromindex num 1 toindex num 3 be chirp hook retry do
   ob name text chirp hook pass be equally from text false then
-  su name chirp hook words guarantee stage ob bool lie fromtext text "chirp hook constraints defective" be guarantee do
-  su name chirp hook return stage ob name text output be text do
+  su name chirp hook guarantee platform ob bool lie fromtext text "chirp hook constraints defective" be guarantee do
+  ob name text chirp hook source thrust pass be equally from text false then
+  su name chirp hook source thrust guarantee platform ob bool lie fromtext text "chirp hook source thrust defective" be guarantee do
+  su name output ret
 prah
 
 su name chirp value retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text chirp value pass be equally from text true then be depart do
-  su name chirp value write retry stage ob name text valuereq fromtext name chirp value prompt for name chirp mind to name text output by num 0 be write do
-  su name chirp value words verify stage be verify as wo word count atleast num 12 atmost num 35 from name text output to name map chirp value words verify do
-  su name chirp value letters verify stage be verify as wo letter count atleast num 60 atmost num 110 from name text output to name map chirp value letters verify do
-  ob text of pass of chirp value words verify to name text chirp value words pass be text do
+  ob name text chirp value pass be equally from text true then
+  ob name text chirp value source thrust pass be equally from text true then be depart do
+  su name chirp value retry platform from text of ob of chirp value request for text "chirp value platform" accordingto name chirp value checks to name text output be chirp platform verify do
+  su name chirp value letters retry stage be verify as wo letter count atleast num 45 atmost num 150 from name text output to name map chirp value letters verify do
   ob text of pass of chirp value letters verify to name text chirp value letters pass be text do
+  su name chirp value source thrust retry platform from text of ob of chirp source with text of ob of output to name text chirp value source thrust pass be chirp source thrust do
   ob text "true" to name text chirp value pass be text do
-  ob name text chirp value words pass be equally from text false then
-  ob text "false" to name text chirp value pass be text do
   ob name text chirp value letters pass be equally from text false then
   ob text "false" to name text chirp value pass be text do
-  ob name text chirp value pass be equally from text true then be depart do
 prah
 
-su name chirp value checked from text prior to name text output be ceremony def
-  su name chirp value write stage ob name text valuereq fromtext name chirp value prompt for name chirp mind to name text output by num 0 be write do
-  su name chirp value words verify stage be verify as wo word count atleast num 12 atmost num 35 from name text output to name map chirp value words verify do
-  su name chirp value letters verify stage be verify as wo letter count atleast num 60 atmost num 110 from name text output to name map chirp value letters verify do
-  ob text of pass of chirp value words verify to name text chirp value words pass be text do
+su name chirp value verify to name text output be ceremony def
+  su name chirp value platform from text of ob of chirp value request for text "chirp value platform" accordingto name chirp value checks to name text output be chirp platform verify do
+  su name chirp value letters verify stage be verify as wo letter count atleast num 45 atmost num 150 from name text output to name map chirp value letters verify do
   ob text of pass of chirp value letters verify to name text chirp value letters pass be text do
+  su name chirp value source thrust platform from text of ob of chirp source with text of ob of output to name text chirp value source thrust pass be chirp source thrust do
   ob text "true" to name text chirp value pass be text do
-  ob name text chirp value words pass be equally from text false then
-  ob text "false" to name text chirp value pass be text do
   ob name text chirp value letters pass be equally from text false then
   ob text "false" to name text chirp value pass be text do
   fromindex num 1 toindex num 3 be chirp value retry do
   ob name text chirp value pass be equally from text false then
-  su name chirp value words guarantee stage ob bool lie fromtext text "chirp value constraints defective" be guarantee do
-  su name chirp value return stage ob name text output be text do
+  su name chirp value guarantee platform ob bool lie fromtext text "chirp value constraints defective" be guarantee do
+  ob name text chirp value source thrust pass be equally from text false then
+  su name chirp value source thrust guarantee platform ob bool lie fromtext text "chirp value source thrust defective" be guarantee do
+  su name output ret
 prah
 
 su name chirp question retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text chirp question pass be equally from text true then be depart do
-  su name chirp question write retry stage ob name text questionreq fromtext name chirp question prompt for name chirp mind to name text output by num 0 atmost num 24 be write do
-  su name chirp question clamp retry stage ob name text output fromtext name chirp question clamp prompt for name chirp clamp mind to name text output by num 0 atmost num 18 be write do
-  ob text "false" to name text chirp question punctuation pass be text do
-  ob name text output from text "/\\?\\s*$/" be resemble then
-  ob text "true" to name text chirp question punctuation pass be text do
-  ob name text chirp question punctuation pass be equally from text false then
-  ob text "?" to name output be plus do
-  su name chirp question words verify stage be verify as wo word count atleast num 5 atmost num 16 from name text output to name map chirp question words verify do
-  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 80 from name text output to name map chirp question letters verify do
-  ob text of pass of chirp question words verify to name text chirp question words pass be text do
+  ob name text chirp question pass be equally from text true then
+  ob name text chirp question punctuation pass be equally from text true then be depart do
+  su name chirp question retry platform from text of ob of chirp question request for text "chirp question platform" accordingto name chirp question checks to name text output be chirp platform verify do
+  su name chirp question letters retry stage be verify as wo letter count atleast num 25 atmost num 95 from name text output to name map chirp question letters verify do
   ob text of pass of chirp question letters verify to name text chirp question letters pass be text do
+  su name chirp question punctuation retry platform from text of ob of output to name text chirp question punctuation pass be chirp question punctuation do
   ob text "true" to name text chirp question pass be text do
-  ob name text chirp question words pass be equally from text false then
-  ob text "false" to name text chirp question pass be text do
   ob name text chirp question letters pass be equally from text false then
   ob text "false" to name text chirp question pass be text do
-  ob name text chirp question pass be equally from text true then be depart do
+  ob name text chirp question punctuation pass be equally from text false then
+  ob text "false" to name text chirp question pass be text do
 prah
 
-su name chirp question checked from text prior to name text output be ceremony def
-  su name chirp question write stage ob name text questionreq fromtext name chirp question prompt for name chirp mind to name text output by num 0 atmost num 24 be write do
-  su name chirp question clamp stage ob name text output fromtext name chirp question clamp prompt for name chirp clamp mind to name text output by num 0 atmost num 18 be write do
-  ob text "false" to name text chirp question punctuation pass be text do
-  ob name text output from text "/\\?\\s*$/" be resemble then
-  ob text "true" to name text chirp question punctuation pass be text do
-  ob name text chirp question punctuation pass be equally from text false then
-  ob text "?" to name output be plus do
-  su name chirp question words verify stage be verify as wo word count atleast num 5 atmost num 16 from name text output to name map chirp question words verify do
-  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 80 from name text output to name map chirp question letters verify do
-  ob text of pass of chirp question words verify to name text chirp question words pass be text do
+su name chirp question verify to name text output be ceremony def
+  su name chirp question platform from text of ob of chirp question request for text "chirp question platform" accordingto name chirp question checks to name text output be chirp platform verify do
+  su name chirp question letters verify stage be verify as wo letter count atleast num 25 atmost num 95 from name text output to name map chirp question letters verify do
   ob text of pass of chirp question letters verify to name text chirp question letters pass be text do
+  su name chirp question punctuation platform from text of ob of output to name text chirp question punctuation pass be chirp question punctuation do
   ob text "true" to name text chirp question pass be text do
-  ob name text chirp question words pass be equally from text false then
-  ob text "false" to name text chirp question pass be text do
   ob name text chirp question letters pass be equally from text false then
+  ob text "false" to name text chirp question pass be text do
+  ob name text chirp question punctuation pass be equally from text false then
   ob text "false" to name text chirp question pass be text do
   fromindex num 1 toindex num 3 be chirp question retry do
   ob name text chirp question pass be equally from text false then
-  su name chirp question words guarantee stage ob bool lie fromtext text "chirp question constraints defective" be guarantee do
-  su name chirp question return stage ob name text output be text do
+  su name chirp question guarantee platform ob bool lie fromtext text "chirp question constraints defective" be guarantee do
+  su name output ret
 prah
 
-su name chirp total checked to name text output be ceremony def
-  su name chirp total words verify stage be verify as wo word count atleast num 21 atmost num 55 from name text totalreq to name map chirptotalwordsreport do
-  su name chirp total letters verify stage be verify as wo letter count atleast num 100 atmost num 320 from name text totalreq to name map chirptotallettersreport do
-  ob text of pass of chirptotalwordsreport to name text chirp total words pass be text do
-  ob text of pass of chirptotallettersreport to name text chirp total letters pass be text do
+su name chirp total verify to name text output be ceremony def
+  su name chirp total words verify stage be verify as wo word count atleast num 16 atmost num 48 from name text chirp draft out to name map chirp total words verify do
+  su name chirp total letters verify stage be verify as wo letter count atleast num 100 atmost num 280 from name text chirp draft out to name map chirp total letters verify do
+  ob text of pass of chirp total words verify to name text chirp total words pass be text do
+  ob text of pass of chirp total letters verify to name text chirp total letters pass be text do
   ob name text chirp total words pass be equally from text false then
-  su name chirp total words guarantee stage ob bool lie fromtext text "chirp total word count defective" be guarantee do
+  su name chirp total words guarantee platform ob bool lie fromtext text "chirp total word count defective" be guarantee do
   ob name text chirp total letters pass be equally from text false then
-  su name chirp total letters guarantee stage ob bool lie fromtext text "chirp total letter count defective" be guarantee do
-  su name chirp total return stage ob name text totalreq be text do
+  su name chirp total letters guarantee platform ob bool lie fromtext text "chirp total letter count defective" be guarantee do
+  ob name text chirp draft out to name text output be text do
+  su name output ret
+prah
+
+su name chirp draft verify from text source to name text chirp out be ceremony def
+  su name chirp source platform ob text of from of this to name text chirp source be text do
+
+  ob name text chirp source to name text chirp replacement source be text do
+  su name chirp hook request platform ob name map chirp request replacements in name text chirp hook request template to name text chirp hook request be instead do
+  su name chirp hook platform from text of ob of chirp source to name text chirp hook out be chirp hook verify do
+
+  ob name text chirp source to name text chirp replacement source be text do
+  ob name text chirp hook out to name text chirp replacement hook be text do
+  su name chirp value request platform ob name map chirp request replacements in name text chirp value request template to name text chirp value request be instead do
+  su name chirp value platform to name text chirp value out be chirp value verify do
+
+  su name chirp draft body begin platform ob name text chirp hook out to name text chirp draft out be text do
+  su name chirp draft body join value stage ob name text chirp line break to name chirp draft out be plus do
+  su name chirp draft body value stage ob name text chirp value out to name chirp draft out be plus do
+
+  ob name text chirp source to name text chirp replacement source be text do
+  ob name text chirp draft out to name text chirp replacement draft be text do
+  su name chirp question request platform ob name map chirp request replacements in name text chirp question request template to name text chirp question request be instead do
+  su name chirp question platform to name text chirp question out be chirp question verify do
+
+  su name chirp out begin platform ob name text chirp hook out to name text chirp draft out be text do
+  su name chirp out join one stage ob name text chirp line break to name chirp draft out be plus do
+  su name chirp out value stage ob name text chirp value out to name chirp draft out be plus do
+  su name chirp out join two stage ob name text chirp line break to name chirp draft out be plus do
+  su name chirp out question stage ob name text chirp question out to name chirp draft out be plus do
+
+  su name chirp total stage to name text chirp draft out be chirp total verify do
+  ob name text chirp draft out to name text chirp out be text do
+  su name chirp out ret
+prah
+
+su name chirp source thrust retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text chirp source thrust pass be equally from text true then be depart do
+  su name chirp draft retry platform from text of ob of chirp source to name text chirp out be chirp draft verify do
+  su name chirp source thrust verify retry platform from text of ob of chirp source with text of ob of chirp out to name text chirp source thrust pass be chirp source thrust do
+  ob name text chirp source thrust pass be equally from text true then be depart do
+prah
+
+su name chirp produce path to name filename produce filename be ceremony def
+  su name produce dir stage ob text "artifacts/" to name text produce dir be text do
+  ob name run id to name produce dir be plus do
+  ob text "mkdir -p \"" to name text produce dir ensure cmd be text do
+  ob name text produce dir to name produce dir ensure cmd be plus do
+  ob text "\"" to name produce dir ensure cmd be plus do
+  su name produce dir ensure stage ob name text produce dir ensure cmd be command do
+  su name produce path stage ob name text produce dir to name text produce path be text do
+  ob text "/produce.txt" to name produce path be plus do
+  su name produce filename stage ob name text produce path to name filename produce filename be filename do
+  su name produce filename ret
 prah
 
 su name chirp reply run be refinery def
-  su name chirp source stage from filename of ob of tweet become wo text to name text chirpsource be read do
-
-  su name chirp hook request stage ob name text chirpsource to name text hookreq be text do
-  su name chirp hook stage to name text hookout be chirp hook checked do
-
-  su name chirp value request begin stage ob text "HOOK:\n" to name text valuereq be text do
-  su name chirp value request hook stage ob name text hookout to name valuereq be plus do
-  su name chirp value request source header stage ob text "\n\nORIGINAL TWEET:\n" to name valuereq be plus do
-  su name chirp value request source stage ob name text chirpsource to name valuereq be plus do
-  su name chirp value stage from text of ob of hookout to name text valueout be chirp value checked do
-
-  su name chirp question request begin stage ob text "HOOK:\n" to name text questionreq be text do
-  su name chirp question request hook stage ob name text hookout to name questionreq be plus do
-  su name chirp question request value header stage ob text "\n\nVALUE:\n" to name questionreq be plus do
-  su name chirp question request value stage ob name text valueout to name questionreq be plus do
-  su name chirp question request source header stage ob text "\n\nORIGINAL TWEET:\n" to name questionreq be plus do
-  su name chirp question request source stage ob name text chirpsource to name questionreq be plus do
-  su name chirp question stage from text of ob of valueout to name text questionout be chirp question checked do
-
-  su name chirp out begin stage ob name text hookout to name text chirpout be text do
-  su name chirp out join one stage ob text "\n" to name chirpout be plus do
-  su name chirp out value stage ob name text valueout to name chirpout be plus do
-  su name chirp out join two stage ob text "\n" to name chirpout be plus do
-  su name chirp out question stage ob name text questionout to name chirpout be plus do
-
-  su name chirp total request stage ob name text chirpout to name text totalreq be text do
-  su name chirp total stage to name text chirpout be chirp total checked do
-
-  su name chirp out stage ob name text chirpout be write do
-  su name chirp return stage ob name text chirpout be text do
+  su name chirp source stage from filename of ob of source become wo text to name text chirp source be read do
+  su name chirp draft stage from text of ob of chirp source to name text chirp out be chirp draft verify do
+  su name chirp source thrust verify stage from text of ob of chirp source with text of ob of chirp out to name text chirp source thrust pass be chirp source thrust do
+  su name produce filename stage to name filename produce filename be chirp produce path do
+  su name chirp produce stage ob name text chirp out to filename of ob of produce filename stage be write do
+  su name chirp out stage ob name text chirp out be write do
+  su name chirp return stage ob name text chirp out be text do
 prah
 
 from name chirp reply run be refinery do
