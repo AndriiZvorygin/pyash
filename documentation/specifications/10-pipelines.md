@@ -14,7 +14,7 @@ Purpose: define refinery declarations, stage execution semantics, and determinis
 | `be evoke do` (clause mode) | execute embedded clause template | deterministic per-call output override |
 | `be refinery do` | execute refinery | run declared pipeline |
 | `be better compare do` | pairwise comparison loop | module-driven candidate selection |
-| `be chirp do` | standalone chirp refinery | source-grounded problem/cause/insight compression |
+| `be chirp do` | chirp manuscript refinery | source-grounded problem/cause/insight compression |
 | `be reiterate ya` | retry marker | bounded retry reporting |
 | `be checkpoint ya` | checkpoint marker | deterministic reuse/trace |
 
@@ -70,7 +70,7 @@ For the pairwise profile (see reference), conformance additionally requires:
 
 For the chirp profile (see reference), conformance additionally requires:
 - exactly one valid source mode (`ob text`, `from name text`, or `from filename`),
-- staged generation order (`hook -> value -> question`) with dependency-correct prompts,
+- staged atom and draft order (`problem -> hidden cause -> insight`, plus optional `proof hook` and `boundary`) with dependency-correct prompts,
 - mandatory per-stage word-count + letter-count verification,
 - stage-local bounded retries (no full-refinery retry for single-stage failures),
 - final assembled output within total word/char target bounds or deterministic failure.
