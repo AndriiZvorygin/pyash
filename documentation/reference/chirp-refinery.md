@@ -1,12 +1,12 @@
 # Chirp Refinery Profile
 
-Status: redesign reference for the standalone `be chirp do` unit we want to stabilize next.
+Status: redesign reference for the chirp manuscript unit we want to stabilize next.
 
 This document supersedes the older hook/value/question concept as the target shape for future chirp work. The existing example may still reflect the older shape until implementation catches up.
 
 ## 1. Purpose
 
-`be chirp do` produces one short, source-grounded standalone social post.
+`be chirp do` currently targets one short, source-grounded chirp manuscript.
 
 The core goal is:
 - compress one source into one useful idea,
@@ -35,7 +35,7 @@ Exactly one source mode should be present per run.
 ## 3. Output target
 
 Final output:
-- one standalone post,
+- one chirp manuscript,
 - plain text only,
 - no labels,
 - no bullets,
@@ -84,7 +84,7 @@ Definitions:
 - `proof hook`: one small supporting element such as a micro-example, tiny number, analogy, or vivid phrase
 - `boundary`: a caveat, scope note, or limit that prevents overclaiming
 
-For the standalone chirp unit, only the first three atoms are required in the final post.
+For the chirp manuscript unit, only the first three atoms are required in the final post.
 `proof hook` and `boundary` are mainly support atoms for choosing stronger drafts and for future downstream outputs.
 
 ## 6. Template families
@@ -134,12 +134,12 @@ The selector should prefer:
 1. resolve source text from the selected source mode
 2. distill the source into `problem`, `hidden cause`, `insight`, `proof hook`, and `boundary`
 3. choose one of the five evergreen template families
-4. draft one standalone chirp from `problem + hidden cause + insight`
+4. draft one chirp manuscript from `problem + hidden cause + insight`
 5. optionally weave in `proof hook` when it improves clarity or memorability without bloating the post
 6. verify platform fit and total length
 7. verify source thrust and no-overclaim behavior
 8. retry only the failing drafting stage when needed
-9. emit one final chirp text result
+9. emit one final chirp manuscript text result
 10. write the final result to `artifacts/<run id>/produce.txt`
 11. when the source filename comes from `know/input/...`, runner also mirrors the final result to `know/produce/...`
 
@@ -195,7 +195,7 @@ Do not keep reusing the same opener family or cadence just because one version o
 ## 12. Output contract
 
 - `to name text <chirp out>` is required
-- output is one final standalone post
+- output is one final chirp manuscript
 - output is plain text only
 - example runs also write `produce.txt` into the per-run artifact directory
 - when invoked with a `know/input/...` source filename, runner additionally writes the final result under `know/produce/...` and adds `-02`, `-03`, ... on collisions
@@ -203,6 +203,6 @@ Do not keep reusing the same opener family or cadence just because one version o
 
 ## 13. Implementation note
 
-The current standalone target example is [refinery-chirp-standalone-run.pya](/workplace/examples/pyash/refinery-chirp-standalone-run.pya).
+The current chirp manuscript target example is [refinery-chirp-manuscript-run.pya](/workplace/examples/pyash/refinery-chirp-manuscript-run.pya).
 
 The older example [refinery-chirp-reply-run.pya](/workplace/examples/pyash/refinery-chirp-reply-run.pya) still follows the earlier hook/value/question structure and should be kept only as an implementation waypoint or historical reference.

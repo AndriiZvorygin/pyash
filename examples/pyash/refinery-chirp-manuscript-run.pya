@@ -92,7 +92,7 @@ Rules:
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
-exists su name chirp template prompt ob text quoted.text.You are choosing the best evergreen template family for a short standalone social post.
+exists su name chirp template prompt ob text quoted.text.You are choosing the best evergreen template family for a short chirp manuscript.
 
 Choose exactly one of these outputs:
 - definition pivot
@@ -110,7 +110,7 @@ No explanation.
 No punctuation.
 No extra words..text.quoted be text ya
 
-exists su name chirp draft prompt ob text quoted.text.You are writing one standalone evergreen social post.
+exists su name chirp draft prompt ob text quoted.text.You are writing one chirp manuscript.
 
 Goal:
 - Compress the source into one useful idea people feel smarter sharing.
@@ -118,7 +118,7 @@ Goal:
 - Preserve the core arc: problem, hidden cause, insight.
 
 Output rules:
-- Output one standalone post only.
+- Output one chirp manuscript only.
 - 100-280 characters total, including spaces and line breaks.
 - 1 to 3 short sentences.
 - Plain text only.
@@ -495,9 +495,9 @@ su name chirp draft verify from text source to name text chirp out be ceremony d
   su name chirp out ret
 prah
 
-su name chirp standalone run be refinery def
+su name chirp manuscript run be refinery def
   su name chirp source stage from filename of ob of source become wo text to name text chirp source be read do
   su name chirp draft stage from text of ob of chirp source to name text result be chirp draft verify do
 prah
 
-from name chirp standalone run to name text result be refinery do
+from name chirp manuscript run to name text result be refinery do
