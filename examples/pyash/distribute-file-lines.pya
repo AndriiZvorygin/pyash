@@ -1,0 +1,5 @@
+ob filename text source be input ya
+
+su name input platform from filename of ob of source become wo text to name text input_case be read do
+ob name text input_case by wo newline to name vec text lines be distribute do
+ob name vec text lines be write do

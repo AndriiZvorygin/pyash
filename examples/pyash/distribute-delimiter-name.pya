@@ -1,0 +1,5 @@
+exists su name palette ob text "red,green,blue" be text ya
+exists su name comma ob text "," be text ya
+
+ob name text palette by name text comma to name vec text colour list be distribute do
+ob name vec text colour list be write do
