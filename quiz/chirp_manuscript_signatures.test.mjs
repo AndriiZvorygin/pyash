@@ -34,6 +34,13 @@ test("chirp manuscript module exports manuscript alias and manuscript prompts", 
   assert.match(text, /be gather do/);
   assert.match(text, /exists su name chirp template prompt ob text quoted\.text\.You are choosing the best evergreen template family for a short chirp manuscript\./);
   assert.match(text, /exists su name chirp draft prompt ob text quoted\.text\.You are writing one chirp manuscript\./);
+  assert.match(text, /exists su name chirp template fit verify mind be mind fromtext name chirp template fit verify prompt ya/);
+  assert.match(text, /exists su name chirp template fit verdict mind be mind fromtext name chirp template fit verdict prompt ya/);
+  assert.match(text, /chirp template fit verify prompt ob text quoted\.text\.Determine whether the TEXT clearly fits the selected TEMPLATE family\./);
+  assert.match(text, /chirp template fit verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
+  assert.match(text, /REVISION_FEEDBACK:/);
+  assert.match(text, /Make it clearly diagnostic: give the reader a tell, check, or test they can use before deciding what is going on\./);
+  assert.match(text, /Shorten hard\. Use exactly 2 short sentences\./);
   assert.match(text, /su name chirp manuscript from text source to name text manuscript out be ceremony def/);
   assert.match(text, /su name chirp manuscript from filename source to name text manuscript out be ceremony def/);
   assert.match(text, /su name manuscript as wo chirp from text source to name text manuscript out be ceremony def/);
