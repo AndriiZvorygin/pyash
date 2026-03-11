@@ -14,7 +14,7 @@ Purpose: define refinery declarations, stage execution semantics, and determinis
 | `be evoke do` (clause mode) | execute embedded clause template | deterministic per-call output override |
 | `be refinery do` | execute refinery | run declared pipeline |
 | `be better compare do` | pairwise comparison loop | module-driven candidate selection |
-| `be chirp do` | short-reply refinery loop | hook/value/question tweet composition |
+| `be chirp do` | standalone chirp refinery | source-grounded problem/cause/insight compression |
 | `be reiterate ya` | retry marker | bounded retry reporting |
 | `be checkpoint ya` | checkpoint marker | deterministic reuse/trace |
 
