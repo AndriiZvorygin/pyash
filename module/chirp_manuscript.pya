@@ -61,6 +61,7 @@ Rules:
 - Ground every line in the source text.
 - Do not add unsupported concrete claims.
 - Make each line memorable but not grandiose.
+- Avoid identity labels or ideological framing unless the source clearly requires them.
 - End each line with ".".
 - Output one candidate per line.
 - No numbering, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -94,6 +95,7 @@ Rules:
 - Ground every line in the source text.
 - Do not add unsupported concrete claims.
 - Keep each line plain and useful.
+- Avoid identity labels or ideological framing unless the source clearly requires them.
 - End each line with ".".
 - Output one candidate per line.
 - No numbering, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -175,6 +177,7 @@ Keep only lines that pass all checks:
 - no numbering, bullets, or markdown
 - gives an upgraded frame, rule, or lever
 - memorable but not grandiose
+- avoids identity labels or ideological framing unless clearly required by the source
 - no unsupported concrete claims
 
 Output rules:
@@ -219,6 +222,7 @@ Keep only lines that pass all checks:
 - one complete short sentence
 - no numbering, bullets, or markdown
 - names a real caveat, limit, or scope boundary
+- avoids identity labels or ideological framing unless clearly required by the source
 - no unsupported concrete claims
 
 Output rules:
@@ -239,10 +243,14 @@ Input notes:
 - Candidate pools contain one candidate per line.
 - Ignore blank lines.
 - Use only surviving candidates from the pools.
+- If REVISION_FEEDBACK is present, obey it.
 
 Output rules:
 - Output one chirp manuscript only.
 - 100-280 characters total, including spaces and line breaks.
+- Aim for 140-220 characters when possible.
+- Prefer 2 short sentences over 3 unless a third line clearly helps.
+- If a draft would run long, compress harder instead of adding another clause.
 - 1 to 3 short sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes.
@@ -252,6 +260,7 @@ Drafting rules:
 - Slight surprise is good; unsupported novelty is not.
 - You may use the proof hook only if it sharpens clarity without bloating the post.
 - You may use the boundary only if it keeps the post honest without flattening it.
+- Prefer concrete source wording over abstract ideological labels.
 - Do not force a question.
 - Do not assume what vague groups believe.
 - Do not write a mini-thread.
@@ -323,7 +332,10 @@ PROOF_HOOK_CANDIDATES:
 [[proof]]
 
 BOUNDARY_CANDIDATES:
-[[boundary]].text.quoted be text ya
+[[boundary]]
+
+REVISION_FEEDBACK:
+[[feedback]].text.quoted be text ya
 
 exists su name chirp draft request template ob text quoted.text.TEMPLATE:
 [[template]]
@@ -347,7 +359,10 @@ PROOF_HOOK_CANDIDATES:
 [[proof]]
 
 BOUNDARY_CANDIDATES:
-[[boundary]].text.quoted be text ya
+[[boundary]]
+
+REVISION_FEEDBACK:
+[[feedback]].text.quoted be text ya
 
 exists su name chirp source thrust request template ob text quoted.text.SOURCE:
 [[source]]
@@ -374,6 +389,7 @@ exists su name chirp replacement template ob text "" be text ya
 exists su name chirp replacement chirp ob text "" be text ya
 exists su name chirp replacement intent ob text "" be text ya
 exists su name chirp replacement candidates ob text "" be text ya
+exists su name chirp replacement feedback ob text "" be text ya
 
 su name chirp request replacements be map def
   su text "[[source]]" ob name text chirp replacement source ya
@@ -386,6 +402,7 @@ su name chirp request replacements be map def
   su text "[[chirp]]" ob name text chirp replacement chirp ya
   su text "[[intent]]" ob name text chirp replacement intent ya
   su text "[[candidates]]" ob name text chirp replacement candidates ya
+  su text "[[feedback]]" ob name text chirp replacement feedback ya
 prah
 
 su name chirp source thrust verify to name text pass be ceremony def
@@ -569,6 +586,15 @@ prah
 su name chirp draft retry fromindex num 1 toindex num 3 be ceremony def
   ob name text chirp draft pass be equally from text true then
   ob name text chirp draft source thrust pass be equally from text true then be depart do
+  ob text "" to name text chirp replacement feedback be text do
+  ob name text chirp total letters retry pass be equally from text false then
+  ob text "Shorten hard. Keep the draft between 140 and 220 characters. Prefer 2 short sentences." to name text chirp replacement feedback be text do
+  ob name text chirp draft source thrust pass be equally from text false then
+  ob text "Stay closer to the source wording. Remove unsupported concrete claims, ideological labels, and sharpened generalizations." to name text chirp retry source thrust feedback be text do
+  ob name text chirp replacement feedback to name text chirp retry feedback base be text do
+  ob name text chirp retry feedback base from text "/\\w/" be resemble then
+  ob text " " to name text chirp replacement feedback be plus do
+  ob name text chirp retry source thrust feedback to name text chirp replacement feedback be plus do
   su name chirp draft request refill stage ob name map chirp request replacements in name text chirp draft request template to name text chirp draft request be instead do
   su name chirp draft refill stage ob name text chirp draft request for name chirp draft mind to name text chirp out by num 0 atmost num 180 be write do
   su name chirp total letters retry stage be verify as wo letter count atleast num 100 atmost num 280 from name text chirp out to name map chirp total letters retry verify do
@@ -615,6 +641,7 @@ su name chirp draft verify from text source to name text chirp out be ceremony d
   ob name text chirp insight out to name text chirp replacement insight be text do
   ob name text chirp proof out to name text chirp replacement proof be text do
   ob name text chirp boundary out to name text chirp replacement boundary be text do
+  ob text "" to name text chirp replacement feedback be text do
 
   ob name text chirp problem pool pass be equally from text false then
   su name chirp problem guarantee platform ob bool lie fromtext text "chirp problem pool defective" be guarantee do
