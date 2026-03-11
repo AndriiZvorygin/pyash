@@ -13,7 +13,12 @@ world/**/channeling_*.html
 world/**/buzzsprout_*.html
 world/**/channeling_*.txt
 world/**/buzzsprout_*.txt
-know/input/
+know/**
+!know/
+!know/input/
+!know/input/.gitkeep
+!know/produce/
+!know/produce/.gitkeep
 node_modules/
 world/
 !world/
