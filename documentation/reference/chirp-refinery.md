@@ -19,10 +19,12 @@ The target is not a reply pack, quote-post pack, or video summary. Those are dow
 ## 2. Canonical invocation
 
 ```pyash
+from filename "../../module/chirp_manuscript.pya" ob name manuscript as wo chirp to name manuscript as wo chirp be import do
+
 su name chirp stage
   ob text "original source text"
   to name text chirp out
-be chirp do
+be manuscript as wo chirp do
 ```
 
 Source input modes:
@@ -202,6 +204,8 @@ Do not keep reusing the same opener family or cadence just because one version o
 - intermediate refinery artifacts remain in `artifacts/<run id>/`; runner does not mirror them into `know/produce/`
 
 ## 13. Implementation note
+
+The reusable module surface now lives in [chirp_manuscript.pya](/workplace/module/chirp_manuscript.pya) and exports `manuscript as wo chirp`.
 
 The current chirp manuscript target example is [refinery-chirp-manuscript-run.pya](/workplace/examples/pyash/refinery-chirp-manuscript-run.pya).
 
