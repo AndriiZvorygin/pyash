@@ -1,12 +1,14 @@
 su name openai mind runner ob text payload be ceremony def
   exists su name cmd ob text "node command/mind_openai_runner.mjs" be text ya
-  su name run ob text of cmd fromtext text of ob of this be command do
+  ob text of ob of this to name text payload text local be text do
+  su name run ob text of cmd fromtext name payload text local be command do
   su name run ret
 prah
 
 su name openai mind runner ob text payload vyah stream be ceremony def
   exists su name cmd ob text "node command/mind_openai_runner.mjs --stream" be text ya
-  su name run ob text of cmd fromtext text of ob of this vyah stream be command do
+  ob text of ob of this to name text payload text local be text do
+  su name run ob text of cmd fromtext name payload text local vyah stream be command do
   su name run ret
 prah
 

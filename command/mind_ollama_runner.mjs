@@ -20,13 +20,11 @@ function parseArgs(argv) {
 }
 
 function readStdin() {
-  return new Promise((resolve, reject) => {
-    let input = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", chunk => { input += chunk; });
-    process.stdin.on("end", () => resolve(input));
-    process.stdin.on("error", reject);
-  });
+  try {
+    return fs.readFileSync(0, "utf8");
+  } catch {
+    return "";
+  }
 }
 
 function resolveHost(payload) {
@@ -352,7 +350,7 @@ async function normalizeChatMessages(rawMessages) {
 async function main() {
   dns.setDefaultResultOrder("ipv4first");
   const args = parseArgs(process.argv);
-  let stdin = await readStdin();
+  let stdin = readStdin();
   if ((!stdin || !stdin.trim()) && args.payloadFile) {
     stdin = fs.readFileSync(args.payloadFile, "utf8");
   }

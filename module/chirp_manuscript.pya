@@ -4,6 +4,11 @@ exists su name chirp cause mind be mind fromtext name chirp cause prompt ya
 exists su name chirp insight mind be mind fromtext name chirp insight prompt ya
 exists su name chirp proof mind be mind fromtext name chirp proof prompt ya
 exists su name chirp boundary mind be mind fromtext name chirp boundary prompt ya
+exists su name chirp problem sieve mind be mind fromtext name chirp problem sieve prompt ya
+exists su name chirp cause sieve mind be mind fromtext name chirp cause sieve prompt ya
+exists su name chirp insight sieve mind be mind fromtext name chirp insight sieve prompt ya
+exists su name chirp proof sieve mind be mind fromtext name chirp proof sieve prompt ya
+exists su name chirp boundary sieve mind be mind fromtext name chirp boundary sieve prompt ya
 exists su name chirp template mind be mind fromtext name chirp template prompt ya
 exists su name chirp draft mind be mind fromtext name chirp draft prompt ya
 exists su name chirp source thrust verify mind be mind fromtext name chirp source thrust verify prompt ya
@@ -14,7 +19,7 @@ exists su name chirp source thrust intent ob text quoted.text.The generator is a
 exists su name chirp problem prompt ob text quoted.text.You are writing candidate problem atoms for a short evergreen social post.
 
 Task:
-- Write 5 candidate lines.
+- Write up to 5 candidate lines.
 - Each line must be one short sentence naming the visible pain, confusion, or wrong frame.
 - Keep each line between 6 and 16 words.
 - Keep each line between 30 and 95 characters.
@@ -31,7 +36,7 @@ Rules:
 exists su name chirp cause prompt ob text quoted.text.You are writing candidate hidden-cause atoms for a short evergreen social post.
 
 Task:
-- Write 5 candidate lines.
+- Write up to 5 candidate lines.
 - Each line must be one short sentence naming the hidden driver, constraint, incentive, or tradeoff.
 - Keep each line between 6 and 18 words.
 - Keep each line between 35 and 110 characters.
@@ -47,7 +52,7 @@ Rules:
 exists su name chirp insight prompt ob text quoted.text.You are writing candidate insight atoms for a short evergreen social post.
 
 Task:
-- Write 5 candidate lines.
+- Write up to 5 candidate lines.
 - Each line must be one short sentence giving the upgraded frame, rule, or lever.
 - Keep each line between 6 and 18 words.
 - Keep each line between 30 and 110 characters.
@@ -63,7 +68,7 @@ Rules:
 exists su name chirp proof prompt ob text quoted.text.You are writing candidate proof-hook atoms for a short evergreen social post.
 
 Task:
-- Write 4 candidate lines.
+- Write up to 4 candidate lines.
 - Each line must be one short sentence containing a small supporting element from the source.
 - This can be a micro-example, vivid phrase, or tiny concrete support.
 - Keep each line between 4 and 16 words.
@@ -80,7 +85,7 @@ Rules:
 exists su name chirp boundary prompt ob text quoted.text.You are writing candidate boundary atoms for a short evergreen social post.
 
 Task:
-- Write 4 candidate lines.
+- Write up to 4 candidate lines.
 - Each line must be one short sentence naming a caveat, limit, or scope boundary that keeps the claim honest.
 - Keep each line between 4 and 16 words.
 - Keep each line between 20 and 90 characters.
@@ -111,6 +116,117 @@ Return exactly one template family from the allowed list.
 No explanation.
 No punctuation.
 No extra words..text.quoted be text ya
+
+exists su name chirp problem sieve prompt ob text quoted.text.You are filtering candidate problem atoms for a short evergreen social post.
+
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
+
+Keep only lines that pass all checks:
+- grounded in the source
+- 6 to 16 words
+- 30 to 95 characters
+- one complete short sentence
+- no numbering, bullets, or markdown
+- no vague "people think" or "everyone believes" assumptions
+- no unsupported concrete claims
+
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 5 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
+
+exists su name chirp cause sieve prompt ob text quoted.text.You are filtering candidate hidden-cause atoms for a short evergreen social post.
+
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
+
+Keep only lines that pass all checks:
+- grounded in the source
+- 6 to 18 words
+- 35 to 110 characters
+- one complete short sentence
+- no numbering, bullets, or markdown
+- names a hidden driver, constraint, incentive, or tradeoff
+- no unsupported concrete claims or mechanisms
+
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 5 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
+
+exists su name chirp insight sieve prompt ob text quoted.text.You are filtering candidate insight atoms for a short evergreen social post.
+
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
+
+Keep only lines that pass all checks:
+- grounded in the source
+- 6 to 18 words
+- 30 to 110 characters
+- one complete short sentence
+- no numbering, bullets, or markdown
+- gives an upgraded frame, rule, or lever
+- memorable but not grandiose
+- no unsupported concrete claims
+
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 5 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
+
+exists su name chirp proof sieve prompt ob text quoted.text.You are filtering candidate proof-hook atoms for a short evergreen social post.
+
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
+
+Keep only lines that pass all checks:
+- grounded in the source
+- 4 to 16 words
+- 20 to 90 characters
+- one complete short sentence
+- no numbering, bullets, or markdown
+- small supporting element only
+- no unsupported concrete claims
+
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 4 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
+
+exists su name chirp boundary sieve prompt ob text quoted.text.You are filtering candidate boundary atoms for a short evergreen social post.
+
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
+
+Keep only lines that pass all checks:
+- grounded in the source
+- 4 to 16 words
+- 20 to 90 characters
+- one complete short sentence
+- no numbering, bullets, or markdown
+- names a real caveat, limit, or scope boundary
+- no unsupported concrete claims
+
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 4 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
 
 exists su name chirp draft prompt ob text quoted.text.You are writing one chirp manuscript.
 
@@ -242,6 +358,12 @@ GENERATOR_INTENT:
 TEXT:
 [[chirp]].text.quoted be text ya
 
+exists su name chirp atom sieve request template ob text quoted.text.SOURCE:
+[[source]]
+
+CANDIDATES:
+[[candidates]].text.quoted be text ya
+
 exists su name chirp replacement source ob text "" be text ya
 exists su name chirp replacement problem ob text "" be text ya
 exists su name chirp replacement cause ob text "" be text ya
@@ -251,6 +373,7 @@ exists su name chirp replacement boundary ob text "" be text ya
 exists su name chirp replacement template ob text "" be text ya
 exists su name chirp replacement chirp ob text "" be text ya
 exists su name chirp replacement intent ob text "" be text ya
+exists su name chirp replacement candidates ob text "" be text ya
 
 su name chirp request replacements be map def
   su text "[[source]]" ob name text chirp replacement source ya
@@ -262,6 +385,7 @@ su name chirp request replacements be map def
   su text "[[template]]" ob name text chirp replacement template ya
   su text "[[chirp]]" ob name text chirp replacement chirp ya
   su text "[[intent]]" ob name text chirp replacement intent ya
+  su text "[[candidates]]" ob name text chirp replacement candidates ya
 prah
 
 su name chirp source thrust verify to name text pass be ceremony def
@@ -295,115 +419,53 @@ su name chirp source thrust from text source with text chirp to name text pass b
   su name pass ret
 prah
 
-su name chirp candidate bad style to name text pass be ceremony def
-  ob text "false" to name text pass be text do
-  ob name text chirp candidate local from text "/^\\s*(?:[-*]|\\d+[.)])\\s+/" be resemble then
-  ob text "true" to name text pass be text do
-  su name pass ret
-prah
-
-su name chirp problem line verify to name text output be ceremony def
-  su name chirp candidate stage ob text of ob of this to name text chirp candidate local be text do
-  ob text "" to name text output be text do
-  ob name text chirp candidate local be equally from text "" then su name output ret
-  su name chirp problem words verify be verify as wo word count atleast num 6 atmost num 16 from name text chirp candidate local to name map chirp problem words report do
-  su name chirp problem letters verify be verify as wo letter count atleast num 30 atmost num 95 from name text chirp candidate local to name map chirp problem letters report do
-  su name chirp problem sentence verify be verify as wo sentence complete from name text chirp candidate local to name map chirp problem sentence report do
-  ob text of pass of chirp problem words report to name text chirp problem words pass be text do
-  ob text of pass of chirp problem letters report to name text chirp problem letters pass be text do
-  ob text of pass of chirp problem sentence report to name text chirp problem sentence pass be text do
-  su name chirp problem bad style stage to name text chirp problem bad style pass be chirp candidate bad style do
-  ob name text chirp problem words pass be equally from text false then su name output ret
-  ob name text chirp problem letters pass be equally from text false then su name output ret
-  ob name text chirp problem sentence pass be equally from text false then su name output ret
-  ob name text chirp problem bad style pass be equally from text true then su name output ret
-  su name chirp problem source thrust stage from text of ob of chirp atom source local with text of ob of chirp candidate local to name text chirp problem source thrust pass be chirp source thrust do
-  ob name text chirp problem source thrust pass be equally from text false then su name output ret
-  ob name text chirp candidate local to name text output be text do
+su name chirp problem sieve from text source with text candidates to name text output be ceremony def
+  su name chirp sieve source stage ob text of from of this to name text chirp sieve source be text do
+  su name chirp sieve candidates stage ob text of with of this to name text chirp sieve candidates be text do
+  ob name text chirp sieve source to name text chirp replacement source be text do
+  ob name text chirp sieve candidates to name text chirp replacement candidates be text do
+  su name chirp problem sieve request stage ob name map chirp request replacements in name text chirp atom sieve request template to name text chirp problem sieve request be instead do
+  su name chirp problem sieve write stage ob name text chirp problem sieve request for name chirp problem sieve mind to name text output by num 0 atmost num 220 be write do
   su name output ret
 prah
 
-su name chirp cause line verify to name text output be ceremony def
-  su name chirp candidate stage ob text of ob of this to name text chirp candidate local be text do
-  ob text "" to name text output be text do
-  ob name text chirp candidate local be equally from text "" then su name output ret
-  su name chirp cause words verify be verify as wo word count atleast num 6 atmost num 18 from name text chirp candidate local to name map chirp cause words report do
-  su name chirp cause letters verify be verify as wo letter count atleast num 35 atmost num 110 from name text chirp candidate local to name map chirp cause letters report do
-  su name chirp cause sentence verify be verify as wo sentence complete from name text chirp candidate local to name map chirp cause sentence report do
-  ob text of pass of chirp cause words report to name text chirp cause words pass be text do
-  ob text of pass of chirp cause letters report to name text chirp cause letters pass be text do
-  ob text of pass of chirp cause sentence report to name text chirp cause sentence pass be text do
-  su name chirp cause bad style stage to name text chirp cause bad style pass be chirp candidate bad style do
-  ob name text chirp cause words pass be equally from text false then su name output ret
-  ob name text chirp cause letters pass be equally from text false then su name output ret
-  ob name text chirp cause sentence pass be equally from text false then su name output ret
-  ob name text chirp cause bad style pass be equally from text true then su name output ret
-  su name chirp cause source thrust stage from text of ob of chirp atom source local with text of ob of chirp candidate local to name text chirp cause source thrust pass be chirp source thrust do
-  ob name text chirp cause source thrust pass be equally from text false then su name output ret
-  ob name text chirp candidate local to name text output be text do
+su name chirp cause sieve from text source with text candidates to name text output be ceremony def
+  su name chirp sieve source stage ob text of from of this to name text chirp sieve source be text do
+  su name chirp sieve candidates stage ob text of with of this to name text chirp sieve candidates be text do
+  ob name text chirp sieve source to name text chirp replacement source be text do
+  ob name text chirp sieve candidates to name text chirp replacement candidates be text do
+  su name chirp cause sieve request stage ob name map chirp request replacements in name text chirp atom sieve request template to name text chirp cause sieve request be instead do
+  su name chirp cause sieve write stage ob name text chirp cause sieve request for name chirp cause sieve mind to name text output by num 0 atmost num 220 be write do
   su name output ret
 prah
 
-su name chirp insight line verify to name text output be ceremony def
-  su name chirp candidate stage ob text of ob of this to name text chirp candidate local be text do
-  ob text "" to name text output be text do
-  ob name text chirp candidate local be equally from text "" then su name output ret
-  su name chirp insight words verify be verify as wo word count atleast num 6 atmost num 18 from name text chirp candidate local to name map chirp insight words report do
-  su name chirp insight letters verify be verify as wo letter count atleast num 30 atmost num 110 from name text chirp candidate local to name map chirp insight letters report do
-  su name chirp insight sentence verify be verify as wo sentence complete from name text chirp candidate local to name map chirp insight sentence report do
-  ob text of pass of chirp insight words report to name text chirp insight words pass be text do
-  ob text of pass of chirp insight letters report to name text chirp insight letters pass be text do
-  ob text of pass of chirp insight sentence report to name text chirp insight sentence pass be text do
-  su name chirp insight bad style stage to name text chirp insight bad style pass be chirp candidate bad style do
-  ob name text chirp insight words pass be equally from text false then su name output ret
-  ob name text chirp insight letters pass be equally from text false then su name output ret
-  ob name text chirp insight sentence pass be equally from text false then su name output ret
-  ob name text chirp insight bad style pass be equally from text true then su name output ret
-  su name chirp insight source thrust stage from text of ob of chirp atom source local with text of ob of chirp candidate local to name text chirp insight source thrust pass be chirp source thrust do
-  ob name text chirp insight source thrust pass be equally from text false then su name output ret
-  ob name text chirp candidate local to name text output be text do
+su name chirp insight sieve from text source with text candidates to name text output be ceremony def
+  su name chirp sieve source stage ob text of from of this to name text chirp sieve source be text do
+  su name chirp sieve candidates stage ob text of with of this to name text chirp sieve candidates be text do
+  ob name text chirp sieve source to name text chirp replacement source be text do
+  ob name text chirp sieve candidates to name text chirp replacement candidates be text do
+  su name chirp insight sieve request stage ob name map chirp request replacements in name text chirp atom sieve request template to name text chirp insight sieve request be instead do
+  su name chirp insight sieve write stage ob name text chirp insight sieve request for name chirp insight sieve mind to name text output by num 0 atmost num 220 be write do
   su name output ret
 prah
 
-su name chirp proof line verify to name text output be ceremony def
-  su name chirp candidate stage ob text of ob of this to name text chirp candidate local be text do
-  ob text "" to name text output be text do
-  ob name text chirp candidate local be equally from text "" then su name output ret
-  su name chirp proof words verify be verify as wo word count atleast num 4 atmost num 16 from name text chirp candidate local to name map chirp proof words report do
-  su name chirp proof letters verify be verify as wo letter count atleast num 20 atmost num 90 from name text chirp candidate local to name map chirp proof letters report do
-  su name chirp proof sentence verify be verify as wo sentence complete from name text chirp candidate local to name map chirp proof sentence report do
-  ob text of pass of chirp proof words report to name text chirp proof words pass be text do
-  ob text of pass of chirp proof letters report to name text chirp proof letters pass be text do
-  ob text of pass of chirp proof sentence report to name text chirp proof sentence pass be text do
-  su name chirp proof bad style stage to name text chirp proof bad style pass be chirp candidate bad style do
-  ob name text chirp proof words pass be equally from text false then su name output ret
-  ob name text chirp proof letters pass be equally from text false then su name output ret
-  ob name text chirp proof sentence pass be equally from text false then su name output ret
-  ob name text chirp proof bad style pass be equally from text true then su name output ret
-  su name chirp proof source thrust stage from text of ob of chirp atom source local with text of ob of chirp candidate local to name text chirp proof source thrust pass be chirp source thrust do
-  ob name text chirp proof source thrust pass be equally from text false then su name output ret
-  ob name text chirp candidate local to name text output be text do
+su name chirp proof sieve from text source with text candidates to name text output be ceremony def
+  su name chirp sieve source stage ob text of from of this to name text chirp sieve source be text do
+  su name chirp sieve candidates stage ob text of with of this to name text chirp sieve candidates be text do
+  ob name text chirp sieve source to name text chirp replacement source be text do
+  ob name text chirp sieve candidates to name text chirp replacement candidates be text do
+  su name chirp proof sieve request stage ob name map chirp request replacements in name text chirp atom sieve request template to name text chirp proof sieve request be instead do
+  su name chirp proof sieve write stage ob name text chirp proof sieve request for name chirp proof sieve mind to name text output by num 0 atmost num 220 be write do
   su name output ret
 prah
 
-su name chirp boundary line verify to name text output be ceremony def
-  su name chirp candidate stage ob text of ob of this to name text chirp candidate local be text do
-  ob text "" to name text output be text do
-  ob name text chirp candidate local be equally from text "" then su name output ret
-  su name chirp boundary words verify be verify as wo word count atleast num 4 atmost num 16 from name text chirp candidate local to name map chirp boundary words report do
-  su name chirp boundary letters verify be verify as wo letter count atleast num 20 atmost num 90 from name text chirp candidate local to name map chirp boundary letters report do
-  su name chirp boundary sentence verify be verify as wo sentence complete from name text chirp candidate local to name map chirp boundary sentence report do
-  ob text of pass of chirp boundary words report to name text chirp boundary words pass be text do
-  ob text of pass of chirp boundary letters report to name text chirp boundary letters pass be text do
-  ob text of pass of chirp boundary sentence report to name text chirp boundary sentence pass be text do
-  su name chirp boundary bad style stage to name text chirp boundary bad style pass be chirp candidate bad style do
-  ob name text chirp boundary words pass be equally from text false then su name output ret
-  ob name text chirp boundary letters pass be equally from text false then su name output ret
-  ob name text chirp boundary sentence pass be equally from text false then su name output ret
-  ob name text chirp boundary bad style pass be equally from text true then su name output ret
-  su name chirp boundary source thrust stage from text of ob of chirp atom source local with text of ob of chirp candidate local to name text chirp boundary source thrust pass be chirp source thrust do
-  ob name text chirp boundary source thrust pass be equally from text false then su name output ret
-  ob name text chirp candidate local to name text output be text do
+su name chirp boundary sieve from text source with text candidates to name text output be ceremony def
+  su name chirp sieve source stage ob text of from of this to name text chirp sieve source be text do
+  su name chirp sieve candidates stage ob text of with of this to name text chirp sieve candidates be text do
+  ob name text chirp sieve source to name text chirp replacement source be text do
+  ob name text chirp sieve candidates to name text chirp replacement candidates be text do
+  su name chirp boundary sieve request stage ob name map chirp request replacements in name text chirp atom sieve request template to name text chirp boundary sieve request be instead do
+  su name chirp boundary sieve write stage ob name text chirp boundary sieve request for name chirp boundary sieve mind to name text output by num 0 atmost num 220 be write do
   su name output ret
 prah
 
@@ -412,9 +474,9 @@ su name chirp problem pool fill from text source to name text output be ceremony
   ob name text chirp atom source local to name text chirp replacement source be text do
   su name chirp problem request stage ob name map chirp request replacements in name text chirp problem request template to name text chirp problem request be instead do
   su name chirp problem batch stage ob name text chirp problem request for name chirp problem mind to name text chirp problem raw lines by num 0 atmost num 220 be write do
-  ob name text chirp problem raw lines by wo newline to name vec chirp problem candidates be distribute do
-  from name chirp problem candidates by name chirp problem line verify to name vec chirp problem passers be vector map do
-  ob name chirp problem passers by wo newline to name text output be gather do
+  su name chirp problem sieve stage from text of ob of chirp atom source local with text of ob of chirp problem raw lines to name text chirp problem passers be chirp problem sieve do
+  ob name text chirp problem passers by wo newline to name vec chirp problem passers vec be distribute do
+  ob name chirp problem passers vec by wo newline to name text output be gather do
   su name output ret
 prah
 
@@ -423,9 +485,9 @@ su name chirp cause pool fill from text source to name text output be ceremony d
   ob name text chirp atom source local to name text chirp replacement source be text do
   su name chirp cause request stage ob name map chirp request replacements in name text chirp cause request template to name text chirp cause request be instead do
   su name chirp cause batch stage ob name text chirp cause request for name chirp cause mind to name text chirp cause raw lines by num 0 atmost num 240 be write do
-  ob name text chirp cause raw lines by wo newline to name vec chirp cause candidates be distribute do
-  from name chirp cause candidates by name chirp cause line verify to name vec chirp cause passers be vector map do
-  ob name chirp cause passers by wo newline to name text output be gather do
+  su name chirp cause sieve stage from text of ob of chirp atom source local with text of ob of chirp cause raw lines to name text chirp cause passers be chirp cause sieve do
+  ob name text chirp cause passers by wo newline to name vec chirp cause passers vec be distribute do
+  ob name chirp cause passers vec by wo newline to name text output be gather do
   su name output ret
 prah
 
@@ -434,9 +496,9 @@ su name chirp insight pool fill from text source to name text output be ceremony
   ob name text chirp atom source local to name text chirp replacement source be text do
   su name chirp insight request stage ob name map chirp request replacements in name text chirp insight request template to name text chirp insight request be instead do
   su name chirp insight batch stage ob name text chirp insight request for name chirp insight mind to name text chirp insight raw lines by num 0 atmost num 240 be write do
-  ob name text chirp insight raw lines by wo newline to name vec chirp insight candidates be distribute do
-  from name chirp insight candidates by name chirp insight line verify to name vec chirp insight passers be vector map do
-  ob name chirp insight passers by wo newline to name text output be gather do
+  su name chirp insight sieve stage from text of ob of chirp atom source local with text of ob of chirp insight raw lines to name text chirp insight passers be chirp insight sieve do
+  ob name text chirp insight passers by wo newline to name vec chirp insight passers vec be distribute do
+  ob name chirp insight passers vec by wo newline to name text output be gather do
   su name output ret
 prah
 
@@ -445,9 +507,9 @@ su name chirp proof pool fill from text source to name text output be ceremony d
   ob name text chirp atom source local to name text chirp replacement source be text do
   su name chirp proof request stage ob name map chirp request replacements in name text chirp proof request template to name text chirp proof request be instead do
   su name chirp proof batch stage ob name text chirp proof request for name chirp proof mind to name text chirp proof raw lines by num 0 atmost num 200 be write do
-  ob name text chirp proof raw lines by wo newline to name vec chirp proof candidates be distribute do
-  from name chirp proof candidates by name chirp proof line verify to name vec chirp proof passers be vector map do
-  ob name chirp proof passers by wo newline to name text output be gather do
+  su name chirp proof sieve stage from text of ob of chirp atom source local with text of ob of chirp proof raw lines to name text chirp proof passers be chirp proof sieve do
+  ob name text chirp proof passers by wo newline to name vec chirp proof passers vec be distribute do
+  ob name chirp proof passers vec by wo newline to name text output be gather do
   su name output ret
 prah
 
@@ -456,9 +518,9 @@ su name chirp boundary pool fill from text source to name text output be ceremon
   ob name text chirp atom source local to name text chirp replacement source be text do
   su name chirp boundary request stage ob name map chirp request replacements in name text chirp boundary request template to name text chirp boundary request be instead do
   su name chirp boundary batch stage ob name text chirp boundary request for name chirp boundary mind to name text chirp boundary raw lines by num 0 atmost num 200 be write do
-  ob name text chirp boundary raw lines by wo newline to name vec chirp boundary candidates be distribute do
-  from name chirp boundary candidates by name chirp boundary line verify to name vec chirp boundary passers be vector map do
-  ob name chirp boundary passers by wo newline to name text output be gather do
+  su name chirp boundary sieve stage from text of ob of chirp atom source local with text of ob of chirp boundary raw lines to name text chirp boundary passers be chirp boundary sieve do
+  ob name text chirp boundary passers by wo newline to name vec chirp boundary passers vec be distribute do
+  ob name chirp boundary passers vec by wo newline to name text output be gather do
   su name output ret
 prah
 

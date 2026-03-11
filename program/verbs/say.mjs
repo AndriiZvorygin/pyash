@@ -73,24 +73,24 @@ function resolveGenitive(genitive, { rememberFn } = {}) {
 }
 
 export function renderSayValue(ob = {}, { rememberFn } = {}) {
-  if (typeof ob.text === "string") return ob.text;
-  if (typeof ob.num === "number") return ob.num;
-  if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
-  if (ob.hollow) return "null";
   if (ob.genitive) {
     const v = resolveGenitive(ob.genitive, { rememberFn });
     if (v !== undefined) return v;
   }
+  if (typeof ob.text === "string") return ob.text;
+  if (typeof ob.num === "number") return ob.num;
+  if (typeof ob.boolean === "boolean") return ob.boolean ? "truth" : "lie";
+  if (ob.hollow) return "null";
   if (ob.name && rememberFn) {
     const fact = rememberFn(ob.name);
-    if (fact?.ob?.text !== undefined) return fact.ob.text;
-    if (fact?.ob?.num !== undefined) return fact.ob.num;
-    if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
-    if (fact?.ob?.hollow) return "null";
     if (fact?.ob?.genitive) {
       const v = resolveGenitive(fact.ob.genitive, { rememberFn });
       if (v !== undefined) return v;
     }
+    if (fact?.ob?.text !== undefined) return fact.ob.text;
+    if (fact?.ob?.num !== undefined) return fact.ob.num;
+    if (fact?.ob?.boolean !== undefined) return fact.ob.boolean ? "truth" : "lie";
+    if (fact?.ob?.hollow) return "null";
   }
   if (ob.name) return ob.name;
   return "";

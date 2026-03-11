@@ -121,6 +121,27 @@ test("command prefers fromtext input when sentence has from la provenance", asyn
   assert.equal(String(result?.ob?.text ?? "").trim(), "hello from fromtext");
 });
 
+test("command fromtext resolves genitive before stray text tail", async () => {
+  const rememberFn = (name) => {
+    if (name === "payload") {
+      return { be: "text", ob: { text: "hello from payload" } };
+    }
+    return null;
+  };
+  const sentence = {
+    mood: "do",
+    be: "command",
+    ob: { text: "cat" },
+    fromtext: {
+      genitive: { chain: ["payload", "ob", "text"] },
+      text: "}"
+    }
+  };
+  const result = await command(sentence, { remember: rememberFn });
+  assertCommandSucceeded(result);
+  assert.equal(String(result?.ob?.text ?? "").trim(), "hello from payload");
+});
+
 test("command timeout surfaces as command defective instead of empty success", async () => {
   const rememberFn = (name) => {
     if (name !== "sandbox configure") return null;
