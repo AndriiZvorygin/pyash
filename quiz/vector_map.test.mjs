@@ -22,3 +22,17 @@ test("vector map applies mapper to each element", async () => {
   assert.deepEqual(vec.ob.ve.values, ["alpha", "beta"]);
   assert.equal(vec.ob.ve.type, "text");
 });
+
+test("vector map can overwrite an existing output binding", async () => {
+  forget();
+
+  await run("exists su name items ob ve text alpha beta be vector ya");
+  await run("exists su name output ob ve text stale be vector ya");
+  await run("from name items by name text to name vec output be vector map do");
+
+  const fact = remember("output");
+  assert.ok(fact);
+  assert.equal(fact.be, "vector");
+  assert.equal(fact.ob.ve.type, "text");
+  assert.deepEqual(fact.ob.ve.values, ["alpha", "beta"]);
+});

@@ -264,3 +264,23 @@ Rules:
 - output is a `vector` with `ve.type = "text"`.
 - the target should therefore be typed as `to name vec text <target>` for clarity and signature stability.
 - this primitive does **not** produce `series`, because the output items are primitive text values rather than sentence rows.
+
+## 10.8 Gather text from a vector
+
+Use `gather` to join one `vec text` into a single `text` value by a delimiter.
+
+Examples:
+
+```pyash
+ob name lines by wo newline to name text packet be gather do
+```
+
+```pyash
+ob name parts by text ", " to name text summary be gather do
+```
+
+Rules:
+- `ob` must resolve to `vec text`,
+- `by text <delimiter>` uses that literal delimiter,
+- `by wo newline` joins with `\n`,
+- output target should be typed as `to name text <target>`.

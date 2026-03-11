@@ -107,3 +107,17 @@ test("distribute rejects empty delimiter", async () => {
     /distribute defective: empty delimiter/
   );
 });
+
+test("distribute can write to an existing ceremony output binding", async () => {
+  forget();
+
+  await run("su name pool fill from text source to name vec text output be ceremony def");
+  await run("ob text quoted.text.alpha\nbeta.text.quoted by wo newline to name vec text output be distribute do");
+  await run("su name output ret");
+  await run("prah");
+  await run("su name stage from text \"seed\" to name vec text final be pool fill do");
+
+  const fact = remember("final");
+  assert.ok(fact);
+  assert.deepEqual(fact.ob.ve.values, ["alpha", "beta"]);
+});

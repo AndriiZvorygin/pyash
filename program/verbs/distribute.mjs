@@ -33,7 +33,7 @@ function distributeText(sourceText, delimiter) {
   return String(sourceText ?? "").split(delimiter);
 }
 
-export async function distribute(sentence, { remember: rememberFn = remember } = {}) {
+export async function distribute(sentence, { remember: rememberFn = remember, doRemember: doRememberFn = doRemember } = {}) {
   const sourceText = resolveTextValue(sentence.ob, { rememberFn });
   if (typeof sourceText !== "string") {
     throwErrorSentence({
@@ -69,7 +69,7 @@ export async function distribute(sentence, { remember: rememberFn = remember } =
     be: "vector",
     ob: { ve: { type: "text", values } }
   };
-  if (sentence?.to?.name) doRemember(out);
+  if (sentence?.to?.name) doRememberFn(out);
   return out;
 }
 
