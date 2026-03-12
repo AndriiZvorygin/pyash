@@ -18,7 +18,7 @@ function normalizeLines(text) {
     .filter(line => line.length > 0);
 }
 
-test("--again forces newspaper and records again marker", async () => {
+test("--again forces newspaper recording without extra marker noise", async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-again-"));
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"alpha\" to filename \"out.txt\" be write do\n", "utf8");
@@ -36,8 +36,8 @@ test("--again forces newspaper and records again marker", async () => {
   const newspaper = await fs.readFile(newspaperPath, "utf8");
   const lines = normalizeLines(newspaper);
 
-  assert.ok(lines.some(line => line === "exists su name run-again as name again be run ya"));
   assert.ok(lines.some(line => line.includes("be run ya") && line.includes("exists su name run-again")), "expected run start record");
   assert.ok(lines.some(line => line.includes("be run root ya")), "expected run root record");
   assert.ok(lines.some(line => line.includes("be artifact") && line.includes("out.txt")));
+  assert.ok(!lines.some(line => line === "exists su name run-again as name again be run ya"));
 });

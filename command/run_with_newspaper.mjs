@@ -115,9 +115,6 @@ async function run() {
 
   pushLine(`exists su name ${runId} from time ${runTime} be run ya`);
   pushLine(`ob filename "${runRoot}" be run root ya`);
-  if (againFlag) {
-    pushLine(`exists su name ${runId} as name again be run ya`);
-  }
   let evokeCounter = -1;
   for (const raw of sentences) {
     const line = raw.trim();
