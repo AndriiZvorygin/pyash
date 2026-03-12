@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import abridge from "../program/verbs/abridge.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
@@ -136,4 +137,26 @@ test("abridge does not dedupe similar lines when numeric claims differ", async (
   const out = readTextOutput(result);
   assert.ok(out.includes("120 ms."));
   assert.ok(out.includes("180 ms."));
+});
+
+test("abridge prefers descriptive agenda lines over bare agenda codes", async () => {
+  forget();
+
+  const source = [
+    "5:30 P.m.",
+    "City Hall - 808 2nd Avenue East - Council Chambers.",
+    "Deputation from CJ Palumbi, Operations Manager, Van Dolder Developments Re: Zoning By-law Update - Modern Residential Height Permissions - City Wide 42 Metre Standard.",
+    "Motion for Which Notice was Previously Given by Mayor Boddy at the February 23, 2026 Regular Council Meeting Re: Code of Conduct for Members of Council, Local Boards and Committees Policy No. CrS-C42.",
+    "THAT City Council directs staff to bring forward a by-law to amend the Code of Conduct for Members of Council, Local Boards and Committees Policy No. CrS-C42 as follows.",
+    "By-law No. 2026-021.",
+    "A By-law to authorize the Mayor and Clerk to execute a Funding Agreement with The Corporation of the County of Grey and The Corporation of the County of Wellington respecting the Guelph Owen Sound Transit (GOST).",
+    "By-law No. 2026-023.",
+    "A By-law to authorize the Mayor and Clerk to execute a Second Amending Agreement with the Township of Centre Wellington and a Third Amending Agreement with the Township of Chatsworth, Township of Wellington North, Northern Credit Union, and 6 & 10 Mini Mart, respecting bus stops for the Guelph Owen Sound Transportation (GOST) bus service."
+  ].join("\n");
+
+  const result = await abridge({ from: { text: source }, atmost: { byte: 1000 } });
+  const out = String(result?.ob?.text ?? "");
+
+  assert.ok(out.includes("Zoning By-law Update"), "should keep the deputation topic");
+  assert.ok(out.includes("Funding Agreement"), "should keep the descriptive by-law text");
 });
