@@ -13,7 +13,7 @@ test("chapter heading checks fail clipped and speaker-labeled titles", () => {
     title: "SPEAKER 07 Critical Minerals And",
     previousTitle: "",
     nextTitle: "",
-    maxWords: 8
+    maxWords: 4
   });
   assert.equal(result.pass, false);
   assert.match(result.issues.join(" "), /speaker|stopword/i);
@@ -24,7 +24,7 @@ test("chapter heading checks fail near-duplicate neighboring titles", () => {
     title: "Diesel Prices And Middle East Oil Supply",
     previousTitle: "Diesel Price Surge And Middle East Oil Supply",
     nextTitle: "",
-    maxWords: 8
+    maxWords: 4
   });
   assert.equal(result.pass, false);
   assert.match(result.issues.join(" "), /previous heading/i);
@@ -40,12 +40,12 @@ test("normalize chips merges tiny trailing signoff chip", () => {
 });
 
 test("sanitize model title preserves coherent short titles", () => {
-  const title = sanitizeModelTitle("Why Solar Payback Is One Hundred Times Slower Than Oil", 8);
-  assert.equal(title, "Why Solar Payback Is One Hundred Times Slower Than Oil");
+  const title = sanitizeModelTitle("Why Solar Payback Is One Hundred Times Slower Than Oil", 4);
+  assert.equal(title, "Why Solar Payback Is");
 });
 
 test("fallback topic title removes speaker tags and filler", () => {
-  const title = fallbackTopicTitle("[SPEAKER_07] okay um critical minerals are harder to find and lower grade", 8);
+  const title = fallbackTopicTitle("[SPEAKER_07] okay um critical minerals are harder to find and lower grade", 4);
   assert.doesNotMatch(title, /SPEAKER|Okay|Um/u);
   assert.match(title, /Critical Minerals/u);
 });

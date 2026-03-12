@@ -14,7 +14,7 @@ function parseArgs(argv) {
   const out = {
     inputPath: argv[0],
     outputPath: argv[1],
-    maxWords: 8,
+    maxWords: 4,
     model: process.env.PYA_MIND_MODEL || "qwen3.5:9b",
     host: process.env.OLLAMA_HOST || "http://localhost:11434"
   };
@@ -37,7 +37,7 @@ function parseArgs(argv) {
     }
     throw new Error(`unknown argument: ${arg}`);
   }
-  if (!Number.isFinite(out.maxWords) || out.maxWords < 2) throw new Error("max-words must be >= 2");
+  if (!Number.isFinite(out.maxWords) || out.maxWords < 3) throw new Error("max-words must be >= 3");
   return out;
 }
 
@@ -176,7 +176,7 @@ function deterministicChapterChecks({ title, previousTitle, nextTitle, maxWords 
   if (!trimmed) issues.push("Heading is empty.");
   if (/\bSPEAKER(?:_| )/iu.test(trimmed)) issues.push("Remove speaker labels.");
   if (words.length < 3) issues.push("Use at least 3 words.");
-  if (words.length > Math.max(maxWords + 2, 10)) issues.push("Shorten the heading.");
+  if (words.length > maxWords) issues.push("Shorten the heading to 4 words or fewer.");
   const lastWord = words[words.length - 1]?.toLowerCase() ?? "";
   if (CHAPTER_STOPWORDS.has(lastWord)) issues.push("Do not end on a dangling stopword.");
   if (/\b(?:okay|yeah|um|uh|livestream|love and peace)\b/iu.test(trimmed)) issues.push("Remove filler or housekeeping wording.");
@@ -199,22 +199,20 @@ function sanitizeModelTitle(text, maxWords) {
     .trim();
   if (!cleaned) return "";
   const words = cleaned.split(" ").filter(Boolean);
-  const limit = words.length > maxWords + 2 ? maxWords : words.length;
+  const limit = Math.min(words.length, maxWords);
   return toTitle(words.slice(0, limit).join(" "), limit);
 }
 
 function buildChapterPrompt({ chip, previousChip, nextChip }) {
   const current = dedupeClauses(chip?.text ?? "");
-  const previous = dedupeClauses(previousChip?.text ?? "");
-  const next = dedupeClauses(nextChip?.text ?? "");
   return [
     "Create one concise YouTube chapter heading for this transcript section.",
     "Return only the heading text.",
-    "Requirements: 3 to 7 words, title case, specific topic, no quotes, no speaker names, no filler, no sentence fragments.",
+    "Requirements: 3 to 4 words, title case, specific topic, no quotes, no speaker names, no filler, no sentence fragments.",
+    "Use only the CURRENT_SECTION to choose the heading topic.",
+    "Do not describe the previous section or the next section.",
     "Prefer the main subject under discussion, not livestream housekeeping.",
-    `Current section: ${current || "EMPTY"}`,
-    `Previous section: ${previous || "EMPTY"}`,
-    `Next section: ${next || "EMPTY"}`
+    `CURRENT_SECTION: ${current || "EMPTY"}`
   ].join("\n");
 }
 
@@ -230,7 +228,7 @@ function buildBatchChapterPrompt({ chips }) {
   const lines = [
     "Create concise YouTube chapter headings for each transcript section.",
     "Return exactly one line per section in this format: NNN | Heading",
-    "Rules: 3 to 8 words, title case, specific topic, no speaker names, no filler, no quotes, no extra commentary."
+    "Rules: 3 to 4 words, title case, specific topic, no speaker names, no filler, no quotes, no extra commentary."
   ];
   for (let i = 0; i < chips.length; i += 1) {
     const chip = chips[i];
