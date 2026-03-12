@@ -11,7 +11,30 @@ const execFileAsync = promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.join(path.dirname(__filename), "..");
 
-test("replay rejects hash mismatch", async () => {
+test("newspaper replay succeeds when hashes match", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-replay-ok-"));
+  const programPath = path.join(tmpDir, "program.pya");
+  await fs.writeFile(programPath, "ob text \"alpha\" to filename \"out.txt\" be write do\n", "utf8");
+
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  await execFileAsync("node", [
+    runPath,
+    "--newspaper",
+    "--run-id", "run-replay-ok",
+    "--run-time", "2025-01-01T00:00:00Z",
+    programPath
+  ], { cwd: tmpDir, timeout: 120000 });
+
+  const replayPath = path.join(repoRoot, "command", "replay_newspaper.mjs");
+  await execFileAsync("node", [
+    replayPath,
+    "--run-id", "run-replay-ok",
+    "--run-root", tmpDir
+  ], { cwd: tmpDir, timeout: 120000 });
+  assert.ok(true);
+});
+
+test("newspaper replay rejects hash mismatch", async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-replay-"));
   const programPath = path.join(tmpDir, "program.pya");
   await fs.writeFile(programPath, "ob text \"alpha\" to filename \"out.txt\" be write do\n", "utf8");
@@ -19,7 +42,7 @@ test("replay rejects hash mismatch", async () => {
   const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
   await execFileAsync("node", [
     runPath,
-    "--again",
+    "--newspaper",
     "--run-id", "run-replay",
     "--run-time", "2025-01-01T00:00:00Z",
     programPath
@@ -46,7 +69,7 @@ test("replay rejects hash mismatch", async () => {
       "--run-id", "run-replay",
       "--run-root", tmpDir
     ], { cwd: tmpDir, timeout: 120000 });
-  } catch (err) {
+  } catch {
     failed = true;
   }
   assert.ok(failed);
