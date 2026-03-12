@@ -1,4 +1,5 @@
 ob filename text source be input ya
+from filename "../../module/wise_chips.pya" to name wise chip module be import do
 
 ob filename of ob of source to name filename source filename be filename do
 ob text of ob of source filename to name text source path be text do
@@ -14,23 +15,26 @@ ob name workspace root to name text run artifacts dir path be plus do
 ob text "/artifacts/" to name run artifacts dir path be plus do
 ob name run id to name run artifacts dir path be plus do
 
+ob name run artifacts dir path to name text stage dir path be plus do
+ob text "/transcript-stage-2" to name stage dir path be plus do
+
 ob text "mkdir -p \"" to name text artifacts mkdir cmd be text do
-ob name run artifacts dir path to name artifacts mkdir cmd be plus do
-ob text "/hear\"" to name artifacts mkdir cmd be plus do
+ob name stage dir path to name artifacts mkdir cmd be plus do
+ob text "\"" to name artifacts mkdir cmd be plus do
 su name artifacts mkdir stage ob name text artifacts mkdir cmd be command do
 
-ob name run artifacts dir path to name text wise path be plus do
-ob text "/hear/" to name wise path be plus do
+ob name stage dir path to name text wise path be plus do
+ob text "/" to name wise path be plus do
 ob name stem stage to name wise path be plus do
 ob text "_wise_chips.series.pya" to name wise path be plus do
 
-ob text "node command/srt_to_wise_chip_series.mjs \"" to name text wise cmd be text do
-ob name source path to name wise cmd be plus do
-ob text "\" \"" to name wise cmd be plus do
-ob name wise path to name wise cmd be plus do
-ob text "\"" to name wise cmd be plus do
+ob name run artifacts dir path to name text wise final path be plus do
+ob text "/" to name wise final path be plus do
+ob name stem stage to name wise final path be plus do
+ob text "_wise_chips.series.pya" to name wise final path be plus do
 
-su name wise stage ob name text wise cmd be command do
+from filename of ob of source atleast minute 2 atmost minute 10 to name text transcript wise chips be wise chips do
+su name wise write stage ob name transcript wise chips to filename of ob of wise path be write do
 
 ob name workspace root to name text produce dir path be plus do
 ob text "/know/produce" to name produce dir path be plus do
@@ -44,11 +48,18 @@ ob text "/" to name wise produce path be plus do
 ob name stem stage to name wise produce path be plus do
 ob text "_wise_chips.series.pya" to name wise produce path be plus do
 
+ob text "cp \"" to name text wise promote cmd be text do
+ob name wise path to name wise promote cmd be plus do
+ob text "\" \"" to name wise promote cmd be plus do
+ob name wise final path to name wise promote cmd be plus do
+ob text "\"" to name wise promote cmd be plus do
+su name wise promote stage ob name text wise promote cmd be command do
+
 ob text "cp \"" to name text wise copy cmd be text do
-ob name wise path to name wise copy cmd be plus do
+ob name wise final path to name wise copy cmd be plus do
 ob text "\" \"" to name wise copy cmd be plus do
 ob name wise produce path to name wise copy cmd be plus do
 ob text "\"" to name wise copy cmd be plus do
 su name wise copy stage ob name text wise copy cmd be command do
 
-su name output stage ob name wise produce path be write do
+su name output stage ob name wise final path be write do

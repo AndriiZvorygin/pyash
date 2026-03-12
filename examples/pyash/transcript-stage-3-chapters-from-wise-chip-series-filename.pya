@@ -14,15 +14,23 @@ ob name workspace root to name text run artifacts dir path be plus do
 ob text "/artifacts/" to name run artifacts dir path be plus do
 ob name run id to name run artifacts dir path be plus do
 
+ob name run artifacts dir path to name text stage dir path be plus do
+ob text "/transcript-stage-3" to name stage dir path be plus do
+
 ob text "mkdir -p \"" to name text artifacts mkdir cmd be text do
-ob name run artifacts dir path to name artifacts mkdir cmd be plus do
-ob text "/hear\"" to name artifacts mkdir cmd be plus do
+ob name stage dir path to name artifacts mkdir cmd be plus do
+ob text "\"" to name artifacts mkdir cmd be plus do
 su name artifacts mkdir stage ob name text artifacts mkdir cmd be command do
 
-ob name run artifacts dir path to name text chapter path be plus do
-ob text "/hear/" to name chapter path be plus do
+ob name stage dir path to name text chapter path be plus do
+ob text "/" to name chapter path be plus do
 ob name stem stage to name chapter path be plus do
 ob text "_chapters.txt" to name chapter path be plus do
+
+ob name run artifacts dir path to name text chapter final path be plus do
+ob text "/" to name chapter final path be plus do
+ob name stem stage to name chapter final path be plus do
+ob text "_chapters.txt" to name chapter final path be plus do
 
 ob text "node command/wise_chip_series_to_chapters.mjs \"" to name text chapter cmd be text do
 ob name source path to name chapter cmd be plus do
@@ -44,11 +52,18 @@ ob text "/" to name chapter produce path be plus do
 ob name stem stage to name chapter produce path be plus do
 ob text "_chapters.txt" to name chapter produce path be plus do
 
+ob text "cp \"" to name text chapter promote cmd be text do
+ob name chapter path to name chapter promote cmd be plus do
+ob text "\" \"" to name chapter promote cmd be plus do
+ob name chapter final path to name chapter promote cmd be plus do
+ob text "\"" to name chapter promote cmd be plus do
+su name chapter promote stage ob name text chapter promote cmd be command do
+
 ob text "cp \"" to name text chapter copy cmd be text do
-ob name chapter path to name chapter copy cmd be plus do
+ob name chapter final path to name chapter copy cmd be plus do
 ob text "\" \"" to name chapter copy cmd be plus do
 ob name chapter produce path to name chapter copy cmd be plus do
 ob text "\"" to name chapter copy cmd be plus do
 su name chapter copy stage ob name text chapter copy cmd be command do
 
-su name output stage ob name chapter produce path be write do
+su name output stage ob name chapter final path be write do

@@ -3,7 +3,6 @@ exists su name hear backend default ob text "whisperx" be default ya
 
 ob filename of ob of source to name filename source filename be filename do
 ob text of ob of source filename to name text source path be text do
-ob name run root to name text workspace root be text do
 ob name run id to name text run id be text do
 
 ob text "basename \"" to name text stem cmd be text do
@@ -11,23 +10,29 @@ ob name source path to name stem cmd be plus do
 ob text "\" | sed 's/\\.[^.]*$//' | sed 's/[^[:alnum:]_-]/_/g' | tr -s '_' | sed 's/^_//;s/_$//' | tr -d '\\n'" to name stem cmd be plus do
 su name stem safe stage ob name text stem cmd be command do
 
-ob name workspace root to name text run artifacts dir path be plus do
-ob text "/artifacts/" to name run artifacts dir path be plus do
+ob text "artifacts/" to name text run artifacts dir path be text do
 ob name run id to name run artifacts dir path be plus do
 
+ob name run artifacts dir path to name text stage dir path be plus do
+ob text "/transcript-stage-1" to name stage dir path be plus do
+
 ob text "mkdir -p \"" to name text artifacts mkdir cmd be text do
-ob name run artifacts dir path to name artifacts mkdir cmd be plus do
-ob text "/hear\"" to name artifacts mkdir cmd be plus do
+ob name stage dir path to name artifacts mkdir cmd be plus do
+ob text "\"" to name artifacts mkdir cmd be plus do
 su name artifacts mkdir stage ob name text artifacts mkdir cmd be command do
 
-ob name run artifacts dir path to name text local srt path be plus do
-ob text "/hear/" to name local srt path be plus do
+ob name stage dir path to name text local srt path be plus do
+ob text "/" to name local srt path be plus do
 ob name stem safe stage to name local srt path be plus do
 ob text "-speaker.srt" to name local srt path be plus do
 su name local srt filename stage ob name text local srt path to name filename local srt filename be filename do
 
-ob name workspace root to name text produce dir path be plus do
-ob text "/know/produce" to name produce dir path be plus do
+ob name run artifacts dir path to name text final srt path be plus do
+ob text "/" to name final srt path be plus do
+ob name stem safe stage to name final srt path be plus do
+ob text ".srt" to name final srt path be plus do
+
+ob text "know/produce" to name text produce dir path be text do
 
 ob text "mkdir -p \"" to name text produce mkdir cmd be text do
 ob name produce dir path to name produce mkdir cmd be plus do
@@ -40,12 +45,19 @@ ob name stem safe stage to name produce srt path be plus do
 ob text ".srt" to name produce srt path be plus do
 
 su name hear stage from filename of ob of source as wo speaker become wo srt to filename of ob of local srt filename stage be hear do
+ob text "cp \"" to name text promote cmd be text do
+ob name local srt path to name promote cmd be plus do
+ob text "\" \"" to name promote cmd be plus do
+ob name final srt path to name promote cmd be plus do
+ob text "\"" to name promote cmd be plus do
+su name promote stage ob name text promote cmd be command do
+
 ob text "cp \"" to name text copy cmd be text do
-ob name local srt path to name copy cmd be plus do
+ob name final srt path to name copy cmd be plus do
 ob text "\" \"" to name copy cmd be plus do
 ob name produce srt path to name copy cmd be plus do
 ob text "\"" to name copy cmd be plus do
 su name copy stage ob name text copy cmd be command do
 be discharge as wo hear do
 
-su name output stage ob name produce srt path be write do
+su name output stage ob name final srt path be write do

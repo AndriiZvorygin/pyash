@@ -17,6 +17,8 @@ Build a full transcript refinery with checkpointed stages, using Pyash-first flo
 ## Checkpoint Structure
 - Keep each stage as its own platform sentence in a `be refinery` block.
 - Use deterministic filenames under one run folder so `--again` can reuse outputs safely.
+- Artifact subfolders are for stage-local intermediates only.
+- Final user-facing outputs for the run belong in the root of `artifacts/<run-id>/`.
 - Keep expensive stages isolated:
   - transcription
   - wise-chip generation
@@ -26,13 +28,28 @@ Build a full transcript refinery with checkpointed stages, using Pyash-first flo
   - remote upload
 
 ## Output Contract
-For an input media file with filestem `<stem>`:
-- `<root>/<stem>/<stem>.srt`
-- `<root>/<stem>/<stem>_wise_chips.series.pya`
-- `<root>/<stem>/<stem>_chapters.txt`
-- `<root>/<stem>/<stem>_summary.txt`
-- `<root>/<stem>/<stem>_title.txt`
-- `<root>/<stem>/<stem>.html`
+For an input media file with filestem `<stem>`, let `<run-root>` be `artifacts/<run-id>/`.
+
+Intermediates live under stage-local subfolders:
+- `<run-root>/transcript-stage-1/`
+- `<run-root>/transcript-stage-2/`
+- `<run-root>/transcript-stage-3/`
+- additional stage folders only as needed for later summary/html/publish work
+
+Final run outputs are promoted to the run root:
+- `<run-root>/<stem>.srt`
+- `<run-root>/<stem>_wise_chips.series.pya`
+- `<run-root>/<stem>_chapters.txt`
+- `<run-root>/<stem>_summary.txt`
+- `<run-root>/<stem>_title.txt`
+- `<run-root>/<stem>.html`
+
+`know/produce/` is not a scratch area. Copy only the requested durable deliverables there after the relevant stage succeeds.
+
+## Promotion Rule
+- Each stage may write whatever local working files it needs in its own stage folder.
+- A stage is not considered complete until its canonical output is also written to the run root.
+- Later stages should read prior canonical outputs from the run root, not from buried stage-local scratch paths.
 
 ## Hardening Work Remaining
 - Add richer wise-chip boundary selection using LLM classifier prompt stage.

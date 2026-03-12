@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parse } from "../program/understand/index.mjs";
 
 function usage() {
   return "Usage: node command/wise_chip_series_to_chapters.mjs <input.series.pya> <output_chapters.txt> [--max-words <num>]";
@@ -28,24 +29,25 @@ function parseArgs(argv) {
 
 function parseSeries(text) {
   const rows = [];
-  const pattern = /^su name\s+(.+?)\s+since num\s+([+-]?\d+(?:\.\d+)?)\s+until num\s+([+-]?\d+(?:\.\d+)?)\s+ob text\s+("(?:\\.|[^"\\])*")\s+ya\s*$/u;
   const lines = String(text ?? "").split(/\r?\n/u);
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const m = pattern.exec(line);
-    if (!m) continue;
-    let chipText = "";
+    let sentence = null;
     try {
-      chipText = JSON.parse(m[4]);
+      sentence = parse(line);
     } catch {
-      chipText = "";
+      sentence = null;
     }
+    if (!sentence?.su?.name) continue;
+    if (typeof sentence?.ob?.text !== "string") continue;
+    const since = Number(sentence?.since?.num ?? 0);
+    const until = Number(sentence?.until?.num ?? since);
     rows.push({
-      name: String(m[1] ?? "").trim(),
-      since: Number(m[2] ?? "0"),
-      until: Number(m[3] ?? "0"),
-      text: String(chipText ?? "").replace(/\s+/gu, " ").trim()
+      name: String(sentence.su.name ?? "").trim(),
+      since,
+      until,
+      text: String(sentence.ob.text ?? "").replace(/\s+/gu, " ").trim()
     });
   }
   return rows;
