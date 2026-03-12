@@ -22,6 +22,34 @@ function resolveBoundarySeries(sentence, { rememberFn = remember } = {}) {
   return fact.ob.series;
 }
 
+function normalizeTimedEntry(entry, index) {
+  const since = Number(entry?.since?.num ?? entry?.since ?? 0);
+  const until = Number(entry?.until?.num ?? entry?.until ?? since);
+  const text = String(entry?.ob?.text ?? entry?.obText ?? "").replace(/\s+/gu, " ").trim();
+  return {
+    index,
+    since: Number.isFinite(since) ? since : 0,
+    until: Number.isFinite(until) ? until : (Number.isFinite(since) ? since : 0),
+    obText: text
+  };
+}
+
+function resolveTimedSeries(sentence, { rememberFn = remember } = {}) {
+  const name = sentence?.from?.name;
+  if (!name) return null;
+  const fact = rememberFn(name);
+  const entries = Array.isArray(fact?.ob?.series) ? fact.ob.series : null;
+  if (!entries) return null;
+  if (fact?.be !== "itinerary" && fact?.be !== "series") return null;
+  const rows = entries
+    .map((entry, idx) => normalizeTimedEntry(entry, idx + 1))
+    .filter((entry) => entry.obText && Number.isFinite(entry.since) && Number.isFinite(entry.until))
+    .sort((a, b) => a.since - b.since);
+  if (!rows.length) return null;
+  const timed = rows.some((entry) => entry.until > entry.since || entry.since > 0);
+  return timed ? rows : null;
+}
+
 function extractMarkers(entry) {
   const normalizeMarker = (value) => {
     if (typeof value !== "string") return null;
@@ -99,6 +127,134 @@ function resolveSizeLimits(sentence) {
   return { atleastBytes, atmostBytes };
 }
 
+function resolveDurationSeconds(slot = {}) {
+  const second = Number(slot?.second);
+  if (Number.isFinite(second) && second > 0) return second;
+  const minute = Number(slot?.minute);
+  if (Number.isFinite(minute) && minute > 0) return minute * 60;
+  return null;
+}
+
+function resolveTimeLimits(sentence) {
+  const atleastSeconds = resolveDurationSeconds(sentence?.atleast ?? {});
+  const atmostSeconds = resolveDurationSeconds(sentence?.atmost ?? {});
+  if (atleastSeconds && atmostSeconds && atleastSeconds > atmostSeconds) {
+    throwErrorSentence({
+      name: "wise chip defective",
+      message: "wise chip defective: atleast time must be <= atmost time",
+      from: { name: "wise chip" },
+      raw: sentence
+    });
+  }
+  return { atleastSeconds, atmostSeconds };
+}
+
+function chipFromTimedRows(rows, idx) {
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  return {
+    index: idx,
+    since: Number(first?.since ?? 0),
+    until: Number(last?.until ?? Number(first?.since ?? 0)),
+    text: rows.map((row) => row.obText).join(" ").replace(/\s+/gu, " ").trim()
+  };
+}
+
+function durationOfRows(rows) {
+  if (!rows.length) return 0;
+  return Math.max(0, Number(rows[rows.length - 1]?.until ?? 0) - Number(rows[0]?.since ?? 0));
+}
+
+function gapBeforeRow(rows, splitIndex) {
+  if (splitIndex <= 0 || splitIndex >= rows.length) return 0;
+  return Math.max(0, Number(rows[splitIndex]?.since ?? 0) - Number(rows[splitIndex - 1]?.until ?? 0));
+}
+
+function chooseForcedSplitIndex(rows, { atleastSeconds, atmostSeconds }) {
+  if (rows.length <= 1) return 1;
+  let best = null;
+  for (let i = 1; i < rows.length; i += 1) {
+    const left = rows.slice(0, i);
+    const leftDuration = durationOfRows(left);
+    const gap = gapBeforeRow(rows, i);
+    const withinLower = atleastSeconds == null || leftDuration >= atleastSeconds;
+    const withinUpper = atmostSeconds == null || leftDuration <= atmostSeconds;
+    const penalty = atleastSeconds == null ? 0 : Math.abs(leftDuration - atleastSeconds);
+    const candidate = {
+      index: i,
+      valid: withinLower && withinUpper,
+      gap,
+      penalty
+    };
+    if (!best) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.valid && !best.valid) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.valid === best.valid) {
+      if (candidate.gap > best.gap + 1e-6) {
+        best = candidate;
+        continue;
+      }
+      if (Math.abs(candidate.gap - best.gap) <= 1e-6 && candidate.penalty < best.penalty - 1e-6) {
+        best = candidate;
+      }
+    }
+  }
+  return best?.index ?? Math.max(1, rows.length - 1);
+}
+
+function buildTimedChips(rows, { atleastSeconds, atmostSeconds }) {
+  const minSeconds = Number.isFinite(atleastSeconds) ? atleastSeconds : 0;
+  const maxSeconds = Number.isFinite(atmostSeconds) ? atmostSeconds : Number.POSITIVE_INFINITY;
+  const pauseSplitSeconds = 2;
+  const chips = [];
+  let current = [];
+
+  const flush = () => {
+    if (!current.length) return;
+    chips.push(chipFromTimedRows(current, chips.length + 1));
+    current = [];
+  };
+
+  for (const row of rows) {
+    if (current.length > 0) {
+      const prev = current[current.length - 1];
+      const currentDuration = durationOfRows(current);
+      const gap = Math.max(0, Number(row.since) - Number(prev?.until ?? row.since));
+      if (currentDuration >= minSeconds && gap >= pauseSplitSeconds) {
+        flush();
+      }
+    }
+    current.push(row);
+    while (current.length > 1 && durationOfRows(current) > maxSeconds) {
+      const splitIndex = chooseForcedSplitIndex(current, { atleastSeconds: minSeconds, atmostSeconds: maxSeconds });
+      chips.push(chipFromTimedRows(current.slice(0, splitIndex), chips.length + 1));
+      current = current.slice(splitIndex);
+    }
+  }
+
+  flush();
+  if (chips.length > 1 && minSeconds > 0) {
+    const last = chips[chips.length - 1];
+    const lastDuration = Math.max(0, Number(last.until) - Number(last.since));
+    if (lastDuration < minSeconds) {
+      const prev = chips[chips.length - 2];
+      const mergedDuration = Math.max(0, Number(last.until) - Number(prev.since));
+      const boundaryGap = Math.max(0, Number(last.since) - Number(prev.until));
+      if ((!Number.isFinite(maxSeconds) || mergedDuration <= maxSeconds * 1.2) && boundaryGap < pauseSplitSeconds) {
+        prev.until = last.until;
+        prev.text = `${prev.text} ${last.text}`.replace(/\s+/gu, " ").trim();
+        chips.pop();
+      }
+    }
+  }
+  return chips.map((chip, idx) => ({ ...chip, index: idx + 1 }));
+}
+
 function findSplitEnd(buffer, start, maxBytes, minBytes) {
   const length = buffer.length;
   const hardEnd = Math.min(start + maxBytes, length);
@@ -171,6 +327,28 @@ function mergeByMinBytes(slices, atleastBytes) {
 }
 
 export async function wiseChip(sentence, { remember: rememberFn = remember } = {}) {
+  const { atleastSeconds, atmostSeconds } = resolveTimeLimits(sentence);
+  const timedRows = resolveTimedSeries(sentence, { rememberFn });
+  if (timedRows && (atleastSeconds != null || atmostSeconds != null) && !sentence?.by) {
+    const chips = buildTimedChips(timedRows, { atleastSeconds, atmostSeconds });
+    const outputName = sentence?.to?.name ?? "wise chips";
+    const seriesEntries = chips.map((chip) => ({
+      mood: "ya",
+      su: { name: `wise chip ${String(chip.index).padStart(3, "0")}` },
+      since: { num: chip.since },
+      until: { num: chip.until },
+      ob: { text: chip.text }
+    }));
+    const seriesSentence = {
+      mood: "ya",
+      su: { name: outputName },
+      be: "series",
+      ob: { series: seriesEntries }
+    };
+    doRemember(seriesSentence);
+    return seriesSentence;
+  }
+
   const sourceText = resolveSourceText(sentence, { rememberFn });
   if (typeof sourceText !== "string") {
     throwErrorSentence({
@@ -256,5 +434,13 @@ export const signatures = [
   { signatureWords: ["be", "wise", "chip", "atleast", "byte", "atmost", "byte", "by", "name", "text", "from", "name", "text", "to", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "atleast", "byte", "atmost", "byte", "by", "name", "text", "from", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "atleast", "byte", "atmost", "byte", "by", "name", "text", "from", "text", "to", "name", "text"], handler: wiseChip },
-  { signatureWords: ["be", "wise", "chip", "atleast", "byte", "atmost", "byte", "by", "name", "text", "from", "text"], handler: wiseChip }
+  { signatureWords: ["be", "wise", "chip", "atleast", "byte", "atmost", "byte", "by", "name", "text", "from", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "second", "atmost", "second", "from", "name", "itinerary", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "second", "atmost", "minute", "from", "name", "itinerary", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "minute", "atmost", "second", "from", "name", "itinerary", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "minute", "atmost", "minute", "from", "name", "itinerary", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "second", "atmost", "second", "from", "name", "series", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "second", "atmost", "minute", "from", "name", "series", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "minute", "atmost", "second", "from", "name", "series", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "atleast", "minute", "atmost", "minute", "from", "name", "series", "to", "name", "text"], handler: wiseChip }
 ];

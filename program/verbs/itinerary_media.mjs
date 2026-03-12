@@ -900,7 +900,8 @@ export async function cutFromFilenameToNameItinerary(sentence, { remember: remem
     return byFact;
   })();
   const targetName = String(sentence?.to?.name ?? "").trim();
-  const duration = Number(sentence?.during?.num ?? 6);
+  const hasDuration = Number.isFinite(Number(sentence?.during?.num));
+  const duration = hasDuration ? Number(sentence?.during?.num) : null;
   if (!source || !targetName) {
     throwErrorSentence({
       name: "itinerary defective",
@@ -920,9 +921,11 @@ export async function cutFromFilenameToNameItinerary(sentence, { remember: remem
   }
   const srtText = await fs.readFile(resolved, "utf8");
   const rawCuts = parseSrtToCuts(srtText);
-  const window = Number.isFinite(duration) && duration > 0 ? duration : 6;
+  const window = Number.isFinite(duration) && duration > 0 ? duration : null;
   const looksSectionTagged = rawCuts.length > 1 && rawCuts.every((cut) => /^\s*\[[^\]]+\]\s+/u.test(String(cut?.obText ?? "")));
-  const cuts = (looksSectionTagged && window >= 120)
+  const cuts = (!window)
+    ? rawCuts
+    : (looksSectionTagged && window >= 120)
     ? rawCuts
     : windowCuts(rawCuts, window);
   const series = [];
@@ -933,25 +936,9 @@ export async function cutFromFilenameToNameItinerary(sentence, { remember: remem
     const baseUntil = Number(base.until ?? baseSince + window);
     const text = String(base.obText ?? "");
     if (!(Number.isFinite(baseSince) && Number.isFinite(baseUntil))) continue;
-    if (window > 0 && baseUntil - baseSince > window + 1e-6) {
-      let cursor = baseSince;
-      while (cursor < baseUntil - 1e-6) {
-        const until = Math.min(baseUntil, cursor + window);
-        series.push({
-          mood: "ya",
-          su: { name: `cut ${String(outIndex).padStart(3, "0")}` },
-          since: { num: cursor },
-          until: { num: until },
-          ob: { text },
-          be: "cut"
-        });
-        outIndex += 1;
-        cursor = until;
-      }
-      continue;
-    }
     const since = baseSince;
-    const until = Math.max(since, window > 0 ? Math.min(baseUntil, since + window) : baseUntil);
+    const fitsWindow = !window || (baseUntil - baseSince) <= window + 1e-6;
+    const until = Math.max(since, fitsWindow && window ? Math.min(baseUntil, since + window) : baseUntil);
     series.push({
       mood: "ya",
       su: { name: `cut ${String(outIndex).padStart(3, "0")}` },
