@@ -1,0 +1,41 @@
+ob filename text source be input ya
+exists su name hear backend default ob text "whisperx" be default ya
+
+ob filename of ob of source to name filename source filename be filename do
+ob text of ob of source filename to name text source path be text do
+
+ob text "basename \"" to name text stem cmd be text do
+ob name source path to name stem cmd be plus do
+ob text "\" | sed 's/\\.[^.]*$//' | sed 's/[^[:alnum:]_-]/_/g' | tr -s '_' | sed 's/^_//;s/_$//' | tr -d '\\n'" to name stem cmd be plus do
+su name stem safe stage ob name text stem cmd be command do
+
+ob text "/home/htaf/transcripts" to name text transcript root be text do
+ob name transcript root to name text transcript dir be plus do
+ob text "/" to name transcript dir be plus do
+ob name stem safe stage to name transcript dir be plus do
+
+ob text "mkdir -p \"" to name text mkdir cmd be text do
+ob name transcript dir to name mkdir cmd be plus do
+ob text "\"" to name mkdir cmd be plus do
+su name mkdir stage ob name text mkdir cmd be command do
+
+ob text "artifacts/hear/" to name text local srt path be text do
+ob name stem safe stage to name local srt path be plus do
+ob text "-speaker.srt" to name local srt path be plus do
+su name local srt filename stage ob name text local srt path to name filename local srt filename be filename do
+
+ob name transcript dir to name text srt path be plus do
+ob text "/" to name srt path be plus do
+ob name stem safe stage to name srt path be plus do
+ob text ".srt" to name srt path be plus do
+
+su name hear stage from filename of ob of source as wo speaker become wo srt to filename of ob of local srt filename stage be hear do
+ob text "cp \"" to name text copy cmd be text do
+ob name local srt path to name copy cmd be plus do
+ob text "\" \"" to name copy cmd be plus do
+ob name srt path to name copy cmd be plus do
+ob text "\"" to name copy cmd be plus do
+su name copy stage ob name text copy cmd be command do
+be discharge as wo hear do
+
+su name output stage ob name srt path be write do

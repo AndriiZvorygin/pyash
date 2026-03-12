@@ -1,0 +1,28 @@
+ob filename text source be input ya
+
+ob filename of ob of source to name filename source filename be filename do
+ob text of ob of source filename to name text source path be text do
+
+ob text "dirname \"" to name text dir cmd be text do
+ob name source path to name dir cmd be plus do
+ob text "\" | tr -d '\\n'" to name dir cmd be plus do
+su name dir stage ob name text dir cmd be command do
+
+ob text "basename \"" to name text stem cmd be text do
+ob name source path to name stem cmd be plus do
+ob text "\" | sed 's/\\.[^.]*$//' | tr -d '\\n'" to name stem cmd be plus do
+su name stem stage ob name text stem cmd be command do
+
+ob name dir stage to name text wise path be plus do
+ob text "/" to name wise path be plus do
+ob name stem stage to name wise path be plus do
+ob text "_wise_chips.series.pya" to name wise path be plus do
+
+ob text "node command/srt_to_wise_chip_series.mjs \"" to name text wise cmd be text do
+ob name source path to name wise cmd be plus do
+ob text "\" \"" to name wise cmd be plus do
+ob name wise path to name wise cmd be plus do
+ob text "\"" to name wise cmd be plus do
+
+su name wise stage ob name text wise cmd be command do
+su name output stage ob name wise path be write do
