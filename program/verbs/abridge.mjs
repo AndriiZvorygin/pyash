@@ -8,6 +8,8 @@ const KEEP_PREFIX_RE = /\b(action|decision|todo|next|follow-up)\s*:/i;
 const SCHEDULE_LINE_RE = /^\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*,?\s*\d{1,2}:\d{2}\s*(to|-)\s*\d{1,2}:\d{2}/i;
 const COST_HEADER_RE = /^estimated costs per person:/i;
 const NUMERIC_TOKEN_RE = /\b\d[\d,.:/-]*\b/g;
+const CODE_LIKE_RE = /^(?:[A-Z]{2,}[-.]?\d+[A-Z0-9.-]*|\d{4}(?:-\d+)+|[A-Z]{1,6}\d{1,4}|[A-Z]{2,}\d{1,4})\.?$/;
+const LABEL_ONLY_RE = /^(?:by-law no\. \d[\d-]*|item \d[\d.a-z-]*|section \d[\d.a-z-]*)\.?$/i;
 
 const STOPWORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "have", "in", "is",
@@ -72,7 +74,7 @@ function isStructuredLine(text) {
 
 function splitProseLine(line, absoluteStart) {
   const spans = [];
-  const abbreviations = new Set(["e.g.", "i.e.", "mr.", "mrs.", "dr.", "vs.", "etc.", "md."]);
+  const abbreviations = new Set(["e.g.", "i.e.", "mr.", "mrs.", "dr.", "vs.", "etc.", "md.", "no.", "p.m.", "a.m."]);
   let partStart = 0;
   const length = line.length;
 
@@ -201,6 +203,21 @@ function scoreCandidate(candidate, { index, totalCount, tfidf }) {
   if (index === 0) score += 0.1;
   if (index === totalCount - 1) score += 0.05;
   if (candidate.isSectionFirst) score += 0.2;
+
+  const lowercaseWords = (candidate.text.match(/\b[a-z][a-z]+\b/g) ?? []).length;
+  const uppercaseWords = (candidate.text.match(/\b[A-Z]{2,}\b/g) ?? []).length;
+  const numericCount = candidate.numericTokens.size;
+  const alphaTokenCount = candidate.tokens.filter(token => /[a-z]/.test(token)).length;
+  const trimmed = candidate.text.trim();
+
+  if (CODE_LIKE_RE.test(trimmed)) score -= 1.6;
+  if (LABEL_ONLY_RE.test(trimmed)) score -= 0.9;
+  if (numericCount > 0 && alphaTokenCount <= 1) score -= 1.1;
+  if (lowercaseWords === 0 && uppercaseWords <= 1 && numericCount > 0) score -= 0.9;
+  if (trimmed.endsWith(":") && tokenCount <= 6) score -= 0.5;
+  if (candidate.text.includes("Re:")) score += 0.25;
+  if (/^"A By-law\b/i.test(trimmed) || /^“THAT\b/.test(trimmed)) score += 0.4;
+  if (lowercaseWords >= 4) score += 0.2;
 
   return score / Math.sqrt(tokenCount);
 }

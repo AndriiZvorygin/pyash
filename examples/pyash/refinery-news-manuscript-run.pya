@@ -7,6 +7,7 @@ exists su name changed mind be mind fromtext name changed prompt ya
 exists su name matters mind be mind fromtext name matters prompt ya
 exists su name next mind be mind fromtext name next prompt ya
 exists su name facts mind be mind fromtext name facts prompt ya
+exists su name source highlights mind be mind fromtext name source highlights prompt ya
 exists su name frame mind be mind fromtext name frame prompt ya
 exists su name headline mind be mind fromtext name headline prompt ya
 exists su name lede mind be mind fromtext name lede prompt ya
@@ -52,6 +53,7 @@ Rules:
 - Use only facts supported by the source.
 - If the source is a report, memo, strategy note, or explainer, describe the document's proposed changes or recommendations with attribution instead of implying they were adopted.
 - If the source is an agenda, meeting notice, or preview package, use this slot for the most important concrete thing residents should know before the meeting, such as how to watch, how to comment, or which proposed item is especially notable. Keep all outcome language conditional.
+- If the source contains both agenda substance and boilerplate access instructions, prefer the most notable substantive agenda item first and use access details only as support.
 - Do not infer dates, approvals, or implementation timing from nearby references unless the source states them directly in the meeting header or opening session lines.
 - For agenda-style sources, keep verbs in present or future tense rather than describing the meeting as already completed.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
@@ -72,6 +74,7 @@ Rules:
 - Use only facts and obvious implications supported by the source.
 - If the source is a report or explainer, explain why the document matters rather than pretending an outside event already happened.
 - If the source is an agenda, meeting notice, or preview package, explain why residents may want to watch one or two specifically named agenda items or access details from the source. Do not invent broader policy or budget effects unless they are explicitly stated.
+- For agenda-style sources, prefer named agenda items over generic access boilerplate when choosing what matters most.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name next prompt ob text quoted.text.You are writing the next-steps line for a straight-news local civic article.
@@ -95,7 +98,7 @@ Rules:
 exists su name facts prompt ob text quoted.text.You are writing 3 summary bullet facts for a straight-news local civic article.
 
 Task:
-- Write exactly 3 lines.
+- Write exactly 5 lines.
 - Each line should be one short factual bullet-style sentence.
 - Each line should capture a different key fact from the source.
 - Keep each line between 8 and 20 words.
@@ -109,7 +112,7 @@ Rules:
 - No speculation.
 - Use only facts supported by the source.
 - If the source is a report or memo, write each line as a factual point from the document, not as an outside event claim.
-- If the source is an agenda or meeting notice, each line should be a concrete agenda highlight, meeting access fact, or public participation detail.
+- If the source is an agenda or meeting notice, most lines should be concrete agenda highlights, with access or public participation details used only as supporting facts.
 - For agenda-style sources, avoid inferred dates and avoid wording that implies approval..text.quoted be text ya
 
 exists su name frame prompt ob text quoted.text.You are choosing the best reporting frame for a straight-news civic article.
@@ -256,6 +259,31 @@ Rules:
 
 exists su name atom request template ob text quoted.text.SOURCE:
 [[source]].text.quoted be text ya
+
+exists su name source highlights prompt ob text quoted.text.You are preparing a clean reporting brief from SOURCE for a straight-news local civic article.
+
+Task:
+- Write 4 to 6 short factual lines.
+- Put the most notable substantive items first.
+- If the source is an agenda or meeting notice, prioritize named agenda items, tenders, contracts, studies, by-laws, reports, dollar amounts, and public decisions council is set to consider.
+- Use access or public-comment details only as the last line if they are clearly stated.
+
+Rules:
+- Plain language only.
+- No opinion.
+- No speculation.
+- One fact per line.
+- Keep each line between 7 and 18 words.
+- Do not repeat generic boilerplate.
+- Do not output bare item numbers, section numbers, or code fragments as facts by themselves.
+- Do not reduce dollar amounts like 1,577,823.85 to 85 or 83.
+- Prefer titled agenda items over procedural filler.
+- For agenda-style sources, deprioritize routine minutes, housekeeping, generic verbal reports, and already-issued approvals unless few substantive items exist.
+- Prefer concrete items involving land use, transit, contracts, housing, grants, infrastructure, conduct rules, or named policy changes.
+- If the source contains titled items and recommendation paragraphs, summarize the titled items rather than the recommendation wording.
+- Never turn street numbers, decimal endings, or address fragments into standalone dollar amounts.
+- If a line names a contract or recommendation, keep it framed as upcoming consideration for agenda-style sources.
+- No bullets, no numbering, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name frame request template ob text quoted.text.SOURCE:
 [[source]]
@@ -454,7 +482,14 @@ prah
 
 su name news manuscript run be refinery def
   su name source stage from filename of ob of source become wo text to name text source text be read do
-  ob name text source text to name text replacement source be text do
+  exists su name source focus cmd ob text "cat -- \"" be text ya
+  ob filename of source to name text source focus input be text do
+  ob name source focus input to name source focus cmd be plus do
+  ob text "\" | awk 'NR <= 4 { print; next } /Deputation from|Delegations|Transit Study|Correspondence from|Report [A-Z]{2}-|Motion for Which Notice was Previously Given|Code of Conduct|A By-law|Hazardous and Special Product|Funding Agreement|Third Amending Agreement|bus stops|Zoning By-law Update|Municipal Road Transfers|Audit Service Plan|Rural Ontario Development Program Grant|People who cannot attend the meeting in person|The public can attend meetings in person|Award of Tender|Award of Ceylon Operations Depot|Response Time Performance Plan|Build Canada Homes|Regional Transit Study|Committee of the Whole/ { print }' | sed 's/[[:space:]]\\+$//'" to name source focus cmd be plus do
+  su name source focus stage ob text of source focus cmd to name text source focused be command do
+  su name source abridge stage from name text source focused atmost byte 2200 to name text source abridged be abridge do
+  ob name text source abridged for name source highlights mind to name text source highlights by num 0 atmost num 180 be write do
+  ob name text source highlights to name text replacement source be text do
 
   su name happened request stage ob name map replacements in name text atom request template to name text happened request be instead do
   su name happened stage ob name text happened request for name happened mind to name text happened by num 0 atmost num 80 be write do
