@@ -1,0 +1,54 @@
+ob filename text source be input ya
+
+exists su name news manuscript replacement lane ob text "" be text ya
+
+exists su name news manuscript stage list template ob text quoted.text.news manuscript scaffold
+
+lane:
+[[lane]]
+
+stages:
+1. source stage
+2. lane stage
+3. what happened pool stage
+4. what happened sieve stage
+5. who decided pool stage
+6. who decided sieve stage
+7. what changed pool stage
+8. what changed sieve stage
+9. why it matters pool stage
+10. why it matters sieve stage
+11. what happens next pool stage
+12. what happens next sieve stage
+13. numbers and dates pool stage
+14. numbers and dates sieve stage
+15. news frame stage
+16. headline draft stage
+17. headline verify stage
+18. lede draft stage
+19. lede verify stage
+20. summary bullets draft stage
+21. summary bullets verify stage
+22. body draft stage
+23. body verify stage
+24. next steps draft stage
+25. next steps verify stage
+26. assembly stage
+27. news fit verify stage
+28. fact and fairness verify stage
+29. retry draft stage
+30. result stage
+.text.quoted be text ya
+
+su name news manuscript stage replacements be map def
+  su text "[[lane]]" ob name text news manuscript replacement lane ya
+prah
+
+su name news manuscript run be refinery def
+  su name source stage from filename of ob of source become wo text to name text news source be read do
+  su name lane stage ob text "straight news" to name text news manuscript replacement lane be text do
+  su name stage list stage ob name map news manuscript stage replacements in name text news manuscript stage list template to name text result be instead do
+  su name result stage ob name text result be write do
+prah
+
+from name news manuscript run to name text result be refinery do
