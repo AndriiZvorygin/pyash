@@ -15,7 +15,7 @@ exists su name news fit verify mind be mind fromtext name news fit verify prompt
 exists su name news fairness verify mind be mind fromtext name news fairness verify prompt ya
 exists su name news verdict mind be mind fromtext name news verdict prompt ya
 
-exists su name news intent ob text quoted.text.The generator is asked to write a straight-news local civic article with headline, lede, bullet summary, body, and next steps. It should be plain, front-loaded, useful, and fact-first. It must not add unsupported concrete facts or blur analysis into straight reporting. If the source is a report, strategy note, research memo, or explainer rather than a meeting record, the article should explicitly attribute claims to the document instead of implying that a public body adopted them..text.quoted be text ya
+exists su name news intent ob text quoted.text.The generator is asked to write a straight-news local civic article with headline, lede, bullet summary, body, and next steps. It should be plain, front-loaded, useful, and fact-first. It must not add unsupported concrete facts or blur analysis into straight reporting. If the source is a report, strategy note, research memo, or explainer rather than a meeting record, the article should explicitly attribute claims to the document instead of implying that a public body adopted them. If the source is an agenda, meeting notice, or preview package, the article should become a what-to-watch preview that says what council is set to consider, what residents may want to watch, and how the public can follow or comment, without implying any item was approved..text.quoted be text ya
 
 exists su name happened prompt ob text quoted.text.You are writing the main outcome for a straight-news local civic article.
 
@@ -32,6 +32,9 @@ Rules:
 - No speculation.
 - Use only facts supported by the source.
 - If the source is a report, memo, strategy note, or explainer, say what the document says using attribution like "A report says" or "The report argues".
+- If the source is an agenda, meeting notice, or preview package, say what council is scheduled to consider or what appears on the agenda, not what council approved.
+- If the source is an agenda, meeting notice, or preview package, do not infer a meeting date from surrounding agenda items or by-law titles. Use a specific date only if it appears plainly in the meeting header or opening session lines.
+- For agenda-style sources, use present or future preview language such as "is set to consider", "would authorize", or "the agenda includes". Do not use past-tense event language.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name changed prompt ob text quoted.text.You are writing the practical change summary for a straight-news local civic article.
@@ -48,6 +51,9 @@ Rules:
 - No speculation.
 - Use only facts supported by the source.
 - If the source is a report, memo, strategy note, or explainer, describe the document's proposed changes or recommendations with attribution instead of implying they were adopted.
+- If the source is an agenda, meeting notice, or preview package, use this slot for the most important concrete thing residents should know before the meeting, such as how to watch, how to comment, or which proposed item is especially notable. Keep all outcome language conditional.
+- Do not infer dates, approvals, or implementation timing from nearby references unless the source states them directly in the meeting header or opening session lines.
+- For agenda-style sources, keep verbs in present or future tense rather than describing the meeting as already completed.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name matters prompt ob text quoted.text.You are writing the why-it-matters line for a straight-news local civic article.
@@ -65,6 +71,7 @@ Rules:
 - No speculation.
 - Use only facts and obvious implications supported by the source.
 - If the source is a report or explainer, explain why the document matters rather than pretending an outside event already happened.
+- If the source is an agenda, meeting notice, or preview package, explain why residents may want to watch one or two specifically named agenda items or access details from the source. Do not invent broader policy or budget effects unless they are explicitly stated.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name next prompt ob text quoted.text.You are writing the next-steps line for a straight-news local civic article.
@@ -81,6 +88,8 @@ Rules:
 - If the source gives no clear next step, write one sentence saying what remains unclear.
 - Use only facts supported by the source.
 - If the source is a report or strategy note, next steps may describe follow-up questions, publication, or missing implementation details, but must stay attributed.
+- If the source is an agenda or meeting notice, next steps should focus on the meeting time, watching options, comment deadlines, or what residents should monitor during the session.
+- If the source does not plainly state the meeting date in the header or opening session lines, refer to the upcoming meeting or the listed session instead of inventing one.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name facts prompt ob text quoted.text.You are writing 3 summary bullet facts for a straight-news local civic article.
@@ -99,11 +108,14 @@ Rules:
 - No opinion.
 - No speculation.
 - Use only facts supported by the source.
-- If the source is a report or memo, write each line as a factual point from the document, not as an outside event claim..text.quoted be text ya
+- If the source is a report or memo, write each line as a factual point from the document, not as an outside event claim.
+- If the source is an agenda or meeting notice, each line should be a concrete agenda highlight, meeting access fact, or public participation detail.
+- For agenda-style sources, avoid inferred dates and avoid wording that implies approval..text.quoted be text ya
 
 exists su name frame prompt ob text quoted.text.You are choosing the best reporting frame for a straight-news civic article.
 
 Choose exactly one:
+- agenda preview
 - decision update
 - meeting outcome
 - policy change
@@ -129,6 +141,9 @@ Rules:
 - No rhetorical question.
 - No unsupported implication.
 - If the source is a report or memo, the headline should clearly signal that it is about the document or report.
+- If the source is an agenda or meeting notice, the headline should clearly signal that the article previews what council will consider.
+- If the frame is agenda preview, prefer words like "agenda", "set to consider", "upcoming meeting", or "what to watch" rather than outcome words.
+- For agenda-style sources, avoid inferred dates unless the date is plainly stated in the meeting header or opening session lines.
 - No surrounding quotes..text.quoted be text ya
 
 exists su name lede prompt ob text quoted.text.You are writing the lede for a straight-news local civic article.
@@ -145,6 +160,10 @@ Rules:
 - No speculation.
 - Use only facts supported by the source.
 - If the source is a report, memo, strategy note, or explainer, the lede should explicitly attribute key claims to the document.
+- If the source is an agenda or meeting notice, the lede should clearly say the meeting is upcoming and highlight the biggest items residents may want to watch.
+- If the frame is agenda preview, the lede should sound like a preview article, not a meeting recap.
+- For agenda-style sources, avoid inferred dates unless the date is plainly stated in the meeting header or opening session lines.
+- For agenda-style sources, keep the lede in present or future tense and avoid words like "met", "reviewed", "passed", or "approved".
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name body prompt ob text quoted.text.You are writing a short straight-news local civic article body.
@@ -163,6 +182,11 @@ Rules:
 - No rhetorical flourish.
 - Use only facts supported by the source.
 - If the source is a report, memo, strategy note, or explainer, attribute the main claims to the document instead of implying outside adoption or implementation.
+- If the source is an agenda or meeting notice, attribute the substance to the agenda and keep all outcome language conditional or preview-oriented.
+- If the frame is agenda preview, Paragraph 1 should name the most notable agenda highlights and Paragraph 2 should tell residents how to watch, comment, or follow the session. Do not narrate the meeting as already completed.
+- For agenda-style sources, avoid inferred dates and avoid saying a by-law or agreement was approved. If the date is not plainly stated in the header or opening session lines, prefer "upcoming meeting" over any calendar date.
+- For agenda-style sources, keep body verbs in present or future tense. Do not describe agenda items as already reviewed, adopted, passed, or confirmed.
+- For agenda-style sources, do not convert "By-law to confirm the proceedings..." titles into a claim that the meeting itself already happened. Those titles are agenda items, not proof for the article's event framing.
 - Keep sentences short and readable.
 - If REVISION_FEEDBACK is present, obey it.
 - No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
@@ -175,12 +199,18 @@ PASS if:
 - The headline and lede stand on their own.
 - The article is useful even if a reader only sees the front matter.
 - If the source is a report or memo, the article clearly presents it as a report-based story with attribution.
+- If the source is an agenda or meeting notice, the article clearly reads as a preview of what council will consider and why residents may want to watch.
+- If the source is an agenda or meeting notice, the article highlights the most notable listed items and tells readers how to follow or comment.
 
 FAIL if:
 - The article sounds like analysis, advocacy, or opinion.
 - The article buries the outcome.
 - The article is confusing, bloated, or not usefully packaged.
 - The article treats a report or recommendation as if it were an adopted policy or completed event.
+- The article treats an agenda item or proposed motion as if council already approved it.
+- The article uses an inferred date or scheduling detail that the source does not clearly state.
+- The article uses past-tense event language for an agenda preview.
+- The article reads like a recap instead of a preview for an agenda source.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
@@ -196,6 +226,8 @@ PASS if:
 - The article does not blur analysis into factual reporting.
 - The article does not invent actors, dates, votes, costs, motives, or mechanisms.
 - If the source is a report or memo, the article keeps recommendations and proposals clearly attributed to the document.
+- If the source is an agenda or meeting notice, the article keeps proposed items, upcoming by-laws, and possible outcomes clearly framed as upcoming rather than decided.
+- If the source is an agenda or meeting notice, the article uses only schedule details that appear plainly in the meeting header, opening session lines, or public attendance instructions.
 
 FAIL if:
 - The article adds unsupported concrete facts.
@@ -203,6 +235,10 @@ FAIL if:
 - The article presents opinion or advocacy as if it were straight reporting.
 - The article is materially unfair to the source record.
 - The article states that a report's recommendations were adopted, implemented, or scheduled when the source does not say that.
+- The article states that an agenda item passed, was approved, or is already in force when the source only lists it for consideration.
+- The article invents a meeting date, deadline, or schedule detail that is not plainly stated in the meeting header, opening session lines, or public attendance instructions.
+- The article uses past-tense event language that makes an upcoming agenda sound like a completed meeting.
+- The article turns by-law titles or confirmation items into proof that the meeting already happened.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
@@ -364,6 +400,8 @@ su name frame checked to name text output be ceremony def
   ob text "" to name text output be text do
   ob name text frame raw from text "/^\\s*decision update\\s*$/i" be resemble then
   ob text "decision update" to name text output be text do
+  ob name text frame raw from text "/^\\s*agenda preview\\s*$/i" be resemble then
+  ob text "agenda preview" to name text output be text do
   ob name text frame raw from text "/^\\s*meeting outcome\\s*$/i" be resemble then
   ob text "meeting outcome" to name text output be text do
   ob name text frame raw from text "/^\\s*policy change\\s*$/i" be resemble then
@@ -382,6 +420,8 @@ prah
 su name story retry fromindex num 1 toindex num 3 be ceremony def
   ob name text story pass be equally from text true then be depart do
   ob text "Shorten and simplify. Use exactly 2 short body paragraphs. Keep only the most important verified facts. Remove repeated explanation and any opinion-like phrasing." to name text replacement feedback be text do
+  ob name text frame be equally from text "agenda preview" then
+  ob text "Rewrite this strictly as an upcoming agenda preview. Use only present or future preview wording. Do not say the meeting already happened. Do not infer any calendar date unless it appears plainly in the meeting header or opening lines. Focus on the biggest agenda highlights plus how residents can watch or comment." to name text replacement feedback be text do
   ob text "" to name text replacement facts be text do
   su name body request retry stage ob name map replacements in name text body request template to name text body request be instead do
   su name body retry stage ob name text body request for name body mind to name text body by num 0 atmost num 180 be write do
