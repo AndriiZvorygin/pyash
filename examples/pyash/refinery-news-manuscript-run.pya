@@ -1,54 +1,488 @@
 ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
 
-exists su name news manuscript replacement lane ob text "" be text ya
+exists su name news mind be mind as name "qwen3.5:9b" fromtext text "You write clear, trustworthy local civic news in plain English." ya
+exists su name happened mind be mind fromtext name happened prompt ya
+exists su name changed mind be mind fromtext name changed prompt ya
+exists su name matters mind be mind fromtext name matters prompt ya
+exists su name next mind be mind fromtext name next prompt ya
+exists su name facts mind be mind fromtext name facts prompt ya
+exists su name frame mind be mind fromtext name frame prompt ya
+exists su name headline mind be mind fromtext name headline prompt ya
+exists su name lede mind be mind fromtext name lede prompt ya
+exists su name body mind be mind fromtext name body prompt ya
+exists su name news fit verify mind be mind fromtext name news fit verify prompt ya
+exists su name news fairness verify mind be mind fromtext name news fairness verify prompt ya
+exists su name news verdict mind be mind fromtext name news verdict prompt ya
 
-exists su name news manuscript stage list template ob text quoted.text.news manuscript scaffold
+exists su name news intent ob text quoted.text.The generator is asked to write a straight-news local civic article with headline, lede, bullet summary, body, and next steps. It should be plain, front-loaded, useful, and fact-first. It must not add unsupported concrete facts or blur analysis into straight reporting. If the source is a report, strategy note, research memo, or explainer rather than a meeting record, the article should explicitly attribute claims to the document instead of implying that a public body adopted them..text.quoted be text ya
 
-lane:
-[[lane]]
+exists su name happened prompt ob text quoted.text.You are writing the main outcome for a straight-news local civic article.
 
-stages:
-1. source stage
-2. lane stage
-3. what happened pool stage
-4. what happened sieve stage
-5. who decided pool stage
-6. who decided sieve stage
-7. what changed pool stage
-8. what changed sieve stage
-9. why it matters pool stage
-10. why it matters sieve stage
-11. what happens next pool stage
-12. what happens next sieve stage
-13. numbers and dates pool stage
-14. numbers and dates sieve stage
-15. news frame stage
-16. headline draft stage
-17. headline verify stage
-18. lede draft stage
-19. lede verify stage
-20. summary bullets draft stage
-21. summary bullets verify stage
-22. body draft stage
-23. body verify stage
-24. next steps draft stage
-25. next steps verify stage
-26. assembly stage
-27. news fit verify stage
-28. fact and fairness verify stage
-29. retry draft stage
-30. result stage
+Task:
+- Write 1 to 2 short sentences.
+- State what happened as clearly as possible.
+- Focus on the main decision, event, or development.
+- Keep it between 18 and 55 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No opinion.
+- No speculation.
+- Use only facts supported by the source.
+- If the source is a report, memo, strategy note, or explainer, say what the document says using attribution like "A report says" or "The report argues".
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name changed prompt ob text quoted.text.You are writing the practical change summary for a straight-news local civic article.
+
+Task:
+- Write 1 to 2 short sentences.
+- State what changed or what concrete effect follows.
+- Keep it between 18 and 55 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No opinion.
+- No speculation.
+- Use only facts supported by the source.
+- If the source is a report, memo, strategy note, or explainer, describe the document's proposed changes or recommendations with attribution instead of implying they were adopted.
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name matters prompt ob text quoted.text.You are writing the why-it-matters line for a straight-news local civic article.
+
+Task:
+- Write 1 short sentence.
+- Explain why the event matters for residents, services, money, timelines, access, accountability, or participation.
+- Keep it between 12 and 32 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No advocacy.
+- No opinion voice.
+- No speculation.
+- Use only facts and obvious implications supported by the source.
+- If the source is a report or explainer, explain why the document matters rather than pretending an outside event already happened.
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name next prompt ob text quoted.text.You are writing the next-steps line for a straight-news local civic article.
+
+Task:
+- Write 1 to 2 short sentences.
+- State the next date, follow-up, implementation step, public action, or unresolved question if supported by the source.
+- Keep it between 12 and 40 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No speculation.
+- If the source gives no clear next step, write one sentence saying what remains unclear.
+- Use only facts supported by the source.
+- If the source is a report or strategy note, next steps may describe follow-up questions, publication, or missing implementation details, but must stay attributed.
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name facts prompt ob text quoted.text.You are writing 3 summary bullet facts for a straight-news local civic article.
+
+Task:
+- Write exactly 3 lines.
+- Each line should be one short factual bullet-style sentence.
+- Each line should capture a different key fact from the source.
+- Keep each line between 8 and 20 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No numbering, no bullet symbols, no markdown.
+- One fact per line.
+- No opinion.
+- No speculation.
+- Use only facts supported by the source.
+- If the source is a report or memo, write each line as a factual point from the document, not as an outside event claim..text.quoted be text ya
+
+exists su name frame prompt ob text quoted.text.You are choosing the best reporting frame for a straight-news civic article.
+
+Choose exactly one:
+- decision update
+- meeting outcome
+- policy change
+- service impact
+- accountability issue
+- report brief
+
+Pick the frame that best matches the source without exaggeration.
+Return exactly one allowed frame.
+No explanation.
+No punctuation..text.quoted be text ya
+
+exists su name headline prompt ob text quoted.text.You are writing one headline for a straight-news local civic article.
+
+Task:
+- Write one clear factual headline.
+- Keep it between 6 and 16 words.
+- Keep it specific and readable.
+
+Rules:
+- Straight-news tone only.
+- No clickbait.
+- No rhetorical question.
+- No unsupported implication.
+- If the source is a report or memo, the headline should clearly signal that it is about the document or report.
+- No surrounding quotes..text.quoted be text ya
+
+exists su name lede prompt ob text quoted.text.You are writing the lede for a straight-news local civic article.
+
+Task:
+- Write 2 short sentences.
+- Front-load the main outcome and the main practical stake.
+- Keep it between 28 and 70 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No opinion.
+- No speculation.
+- Use only facts supported by the source.
+- If the source is a report, memo, strategy note, or explainer, the lede should explicitly attribute key claims to the document.
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name body prompt ob text quoted.text.You are writing a short straight-news local civic article body.
+
+Task:
+- Write 2 short paragraphs.
+- Paragraph 1 should explain what happened and what changed.
+- Paragraph 2 should explain why it matters and what happens next.
+- Keep the whole body between 70 and 180 words.
+
+Rules:
+- Straight-news tone only.
+- Plain language.
+- No opinion.
+- No speculation.
+- No rhetorical flourish.
+- Use only facts supported by the source.
+- If the source is a report, memo, strategy note, or explainer, attribute the main claims to the document instead of implying outside adoption or implementation.
+- Keep sentences short and readable.
+- If REVISION_FEEDBACK is present, obey it.
+- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name news fit verify prompt ob text quoted.text.Determine whether ARTICLE fits straight-news local civic reporting.
+
+PASS if:
+- The article is clear, front-loaded, and skimmable.
+- The article reads like straight news, not opinion.
+- The headline and lede stand on their own.
+- The article is useful even if a reader only sees the front matter.
+- If the source is a report or memo, the article clearly presents it as a report-based story with attribution.
+
+FAIL if:
+- The article sounds like analysis, advocacy, or opinion.
+- The article buries the outcome.
+- The article is confusing, bloated, or not usefully packaged.
+- The article treats a report or recommendation as if it were an adopted policy or completed event.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name news fairness verify prompt ob text quoted.text.Determine whether ARTICLE stays grounded in SOURCE and remains fair as straight-news reporting.
+
+PASS if:
+- The article's factual claims are supported by the source.
+- The article preserves uncertainty where the source is uncertain.
+- The article does not blur analysis into factual reporting.
+- The article does not invent actors, dates, votes, costs, motives, or mechanisms.
+- If the source is a report or memo, the article keeps recommendations and proposals clearly attributed to the document.
+
+FAIL if:
+- The article adds unsupported concrete facts.
+- The article turns unclear source material into definite claims.
+- The article presents opinion or advocacy as if it were straight reporting.
+- The article is materially unfair to the source record.
+- The article states that a report's recommendations were adopted, implemented, or scheduled when the source does not say that.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name news verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the article fails the stated check.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name atom request template ob text quoted.text.SOURCE:
+[[source]].text.quoted be text ya
+
+exists su name frame request template ob text quoted.text.SOURCE:
+[[source]]
+
+WHAT HAPPENED:
+[[happened]]
+
+WHAT CHANGED:
+[[changed]]
+
+WHY IT MATTERS:
+[[matters]]
+
+NEXT STEPS:
+[[next]].text.quoted be text ya
+
+exists su name headline request template ob text quoted.text.FRAME:
+[[frame]]
+
+WHAT HAPPENED:
+[[happened]]
+
+WHAT CHANGED:
+[[changed]]
+
+WHY IT MATTERS:
+[[matters]]
+
+NEXT STEPS:
+[[next]].text.quoted be text ya
+
+exists su name lede request template ob text quoted.text.FRAME:
+[[frame]]
+
+WHAT HAPPENED:
+[[happened]]
+
+WHAT CHANGED:
+[[changed]]
+
+WHY IT MATTERS:
+[[matters]].text.quoted be text ya
+
+exists su name body request template ob text quoted.text.FRAME:
+[[frame]]
+
+WHAT HAPPENED:
+[[happened]]
+
+WHAT CHANGED:
+[[changed]]
+
+WHY IT MATTERS:
+[[matters]]
+
+NEXT STEPS:
+[[next]]
+
+KEY FACTS:
+[[facts]]
+
+REVISION_FEEDBACK:
+[[feedback]].text.quoted be text ya
+
+exists su name fit request template ob text quoted.text.ARTICLE:
+[[storyarticle]].text.quoted be text ya
+
+exists su name fairness request template ob text quoted.text.SOURCE:
+[[source]]
+
+GENERATOR_INTENT:
+[[intent]]
+
+ARTICLE:
+[[storyarticle]].text.quoted be text ya
+
+exists su name paragraph break ob text quoted.text.
+
 .text.quoted be text ya
 
-su name news manuscript stage replacements be map def
-  su text "[[lane]]" ob name text news manuscript replacement lane ya
+exists su name replacement source ob text "" be text ya
+exists su name replacement intent ob text "" be text ya
+exists su name replacement storyarticle ob text "" be text ya
+exists su name replacement frame ob text "" be text ya
+exists su name replacement happened ob text "" be text ya
+exists su name replacement changed ob text "" be text ya
+exists su name replacement matters ob text "" be text ya
+exists su name replacement next ob text "" be text ya
+exists su name replacement facts ob text "" be text ya
+exists su name replacement feedback ob text "" be text ya
+
+su name replacements be map def
+  su text "[[source]]" ob name text replacement source ya
+  su text "[[intent]]" ob name text replacement intent ya
+  su text "[[storyarticle]]" ob name text replacement storyarticle ya
+  su text "[[frame]]" ob name text replacement frame ya
+  su text "[[happened]]" ob name text replacement happened ya
+  su text "[[changed]]" ob name text replacement changed ya
+  su text "[[matters]]" ob name text replacement matters ya
+  su text "[[next]]" ob name text replacement next ya
+  su text "[[facts]]" ob name text replacement facts ya
+  su text "[[feedback]]" ob name text replacement feedback ya
+prah
+
+su name verdict from text review to name text pass be ceremony def
+  su name review stage ob text of from of this to name text review be text do
+  ob text "false" to name text pass be text do
+  ob name text review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text pass be text do
+  ob name text pass be equally from text false then
+  su name verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text verdict request be text do
+  ob name text review to name text verdict request be plus do
+  ob name text verdict request for name news verdict mind to name text verdict raw by num 0 atmost num 8 be write do
+  ob name text verdict raw atmost num 1 to name text verdict line be line tail do
+  ob name text verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text pass be text do
+  ob name text verdict line from text "/^\\s*FAIL\\b/i" be resemble then
+  ob text "false" to name text pass be text do
+  su name pass ret
+prah
+
+su name fit to name text pass be ceremony def
+  ob name text storytext to name text replacement storyarticle be text do
+  su name request stage ob name map replacements in name text fit request template to name text request be instead do
+  su name review stage ob name text request for name news fit verify mind to name text review by num 0 atmost num 220 be write do
+  su name verdict stage from text of ob of review to name text pass be verdict do
+  su name pass ret
+prah
+
+su name fairness to name text pass be ceremony def
+  ob name text source text to name text replacement source be text do
+  ob name text news intent to name text replacement intent be text do
+  ob name text storytext to name text replacement storyarticle be text do
+  su name request stage ob name map replacements in name text fairness request template to name text request be instead do
+  su name review stage ob name text request for name news fairness verify mind to name text review by num 0 atmost num 220 be write do
+  su name verdict stage from text of ob of review to name text pass be verdict do
+  su name pass ret
+prah
+
+su name frame checked to name text output be ceremony def
+  ob name text request for name frame mind to name text frame raw by num 0 atmost num 12 be write do
+  ob text "" to name text output be text do
+  ob name text frame raw from text "/^\\s*decision update\\s*$/i" be resemble then
+  ob text "decision update" to name text output be text do
+  ob name text frame raw from text "/^\\s*meeting outcome\\s*$/i" be resemble then
+  ob text "meeting outcome" to name text output be text do
+  ob name text frame raw from text "/^\\s*policy change\\s*$/i" be resemble then
+  ob text "policy change" to name text output be text do
+  ob name text frame raw from text "/^\\s*service impact\\s*$/i" be resemble then
+  ob text "service impact" to name text output be text do
+  ob name text frame raw from text "/^\\s*accountability issue\\s*$/i" be resemble then
+  ob text "accountability issue" to name text output be text do
+  ob name text frame raw from text "/^\\s*report brief\\s*$/i" be resemble then
+  ob text "report brief" to name text output be text do
+  ob name text output be equally from text "" then
+  su name frame guarantee stage ob bool lie fromtext text "news frame defective" be guarantee do
+  su name output ret
+prah
+
+su name story retry fromindex num 1 toindex num 3 be ceremony def
+  ob name text story pass be equally from text true then be depart do
+  ob text "Shorten and simplify. Use exactly 2 short body paragraphs. Keep only the most important verified facts. Remove repeated explanation and any opinion-like phrasing." to name text replacement feedback be text do
+  ob text "" to name text replacement facts be text do
+  su name body request retry stage ob name map replacements in name text body request template to name text body request be instead do
+  su name body retry stage ob name text body request for name body mind to name text body by num 0 atmost num 180 be write do
+  ob name text headline to name text storytext be text do
+  ob name text paragraph break to name text storytext be plus do
+  ob name text lede to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob text quoted.text.Key facts:
+.text.quoted to name text storytext be plus do
+  ob name text facts to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob name text body to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob text quoted.text.Next steps:
+.text.quoted to name text storytext be plus do
+  ob name text next to name text storytext be plus do
+  ob name text storytext to name text story length source be text do
+  su name letters retry stage be verify as wo letter count atleast num 280 atmost num 2400 from name text story length source to name map letters verify do
+  ob text of pass of letters verify to name text letters pass be text do
+  su name fit retry stage to name text fit pass be fit do
+  su name fairness retry stage to name text fairness pass be fairness do
+  ob text "true" to name text story pass be text do
+  ob name text letters pass be equally from text false then
+  ob text "false" to name text story pass be text do
+  ob name text fit pass be equally from text false then
+  ob text "false" to name text story pass be text do
+  ob name text fairness pass be equally from text false then
+  ob text "false" to name text story pass be text do
 prah
 
 su name news manuscript run be refinery def
-  su name source stage from filename of ob of source become wo text to name text news source be read do
-  su name lane stage ob text "straight news" to name text news manuscript replacement lane be text do
-  su name stage list stage ob name map news manuscript stage replacements in name text news manuscript stage list template to name text result be instead do
-  su name result stage ob name text result be write do
+  su name source stage from filename of ob of source become wo text to name text source text be read do
+  ob name text source text to name text replacement source be text do
+
+  su name happened request stage ob name map replacements in name text atom request template to name text happened request be instead do
+  su name happened stage ob name text happened request for name happened mind to name text happened by num 0 atmost num 80 be write do
+
+  su name changed request stage ob name map replacements in name text atom request template to name text changed request be instead do
+  su name changed stage ob name text changed request for name changed mind to name text changed by num 0 atmost num 80 be write do
+
+  su name matters request stage ob name map replacements in name text atom request template to name text matters request be instead do
+  su name matters stage ob name text matters request for name matters mind to name text matters by num 0 atmost num 60 be write do
+
+  su name next request stage ob name map replacements in name text atom request template to name text next request be instead do
+  su name next stage ob name text next request for name next mind to name text next by num 0 atmost num 60 be write do
+
+  su name facts request stage ob name map replacements in name text atom request template to name text facts request be instead do
+  su name facts stage ob name text facts request for name facts mind to name text facts by num 0 atmost num 140 be write do
+
+  ob name text happened to name text replacement happened be text do
+  ob name text changed to name text replacement changed be text do
+  ob name text matters to name text replacement matters be text do
+  ob name text next to name text replacement next be text do
+  ob name text facts to name text replacement facts be text do
+
+  su name frame request stage ob name map replacements in name text frame request template to name text request be instead do
+  su name frame stage to name text frame be frame checked do
+  ob name text frame to name text replacement frame be text do
+
+  su name headline request stage ob name map replacements in name text headline request template to name text request be instead do
+  su name headline stage ob name text request for name headline mind to name text headline by num 0 atmost num 24 be write do
+
+  su name lede request stage ob name map replacements in name text lede request template to name text request be instead do
+  su name lede stage ob name text request for name lede mind to name text lede by num 0 atmost num 120 be write do
+
+  ob text "" to name text replacement feedback be text do
+  su name body request stage ob name map replacements in name text body request template to name text body request be instead do
+  su name body stage ob name text body request for name body mind to name text body by num 0 atmost num 220 be write do
+
+  ob name text headline to name text storytext be text do
+  ob name text paragraph break to name text storytext be plus do
+  ob name text lede to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob text quoted.text.Key facts:
+.text.quoted to name text storytext be plus do
+  ob name text facts to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob name text body to name text storytext be plus do
+  ob name text paragraph break to name text storytext be plus do
+  ob text quoted.text.Next steps:
+.text.quoted to name text storytext be plus do
+  ob name text next to name text storytext be plus do
+
+  ob name text storytext to name text story length source be text do
+  su name letters stage be verify as wo letter count atleast num 280 atmost num 2400 from name text story length source to name map letters verify do
+  ob text of pass of letters verify to name text letters pass be text do
+  su name fit stage to name text fit pass be fit do
+  su name fairness stage to name text fairness pass be fairness do
+  ob text "true" to name text story pass be text do
+  ob name text letters pass be equally from text false then
+  ob text "false" to name text story pass be text do
+  ob name text fit pass be equally from text false then
+  ob text "false" to name text story pass be text do
+  ob name text fairness pass be equally from text false then
+  ob text "false" to name text story pass be text do
+  ob name text story pass be equally from text false then
+  fromindex num 1 toindex num 3 be story retry do
+  ob name text story pass be equally from text false then
+  su name article guarantee stage ob bool lie fromtext text "news article defective" be guarantee do
+  ob name text storytext be write do
 prah
 
 from name news manuscript run to name text result be refinery do
+ob name result be write do
