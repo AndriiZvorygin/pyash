@@ -8,7 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { tokenize } from "../program/understand/tokenize.mjs";
 import { QUOTED_TEXT_PREFIX } from "../program/understand/constants.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember, doRemember } from "../program/remember/index.mjs";
+import { forget, remember, doRemember, allRemember } from "../program/remember/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { signatures as compileSignatures } from "../program/verbs/exchange/compile.mjs";
 import { registerSignatureHandler, clearSignatureHandlers } from "../program/bridge/signature.mjs";
@@ -874,7 +874,10 @@ async function main() {
     const knowProduceBundle = await deriveKnowProduceBundle({
       cwd: process.cwd(),
       bindingFacts: runtimeBindingFacts,
-      result
+      result,
+      runId,
+      memoryFacts: allRemember(),
+      newspaperLines
     });
     const knowProduceFiles = await materializeProduceBundle(knowProduceBundle);
     return { artifactFile, knowProduceFiles };
