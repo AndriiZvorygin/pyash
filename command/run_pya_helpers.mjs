@@ -220,22 +220,54 @@ async function pathExists(filename) {
   }
 }
 
-export async function deriveKnowProduceBundle({ cwd, bindingFacts, result }) {
+function isObject(value) {
+  return Boolean(value && typeof value === "object");
+}
+
+async function latestVideoArtifactSource({ cwd, runId, memoryFacts }) {
+  const root = path.resolve(cwd ?? process.cwd());
+  const runToken = runId ? `artifacts/${sanitizeRunId(runId)}/` : "artifacts/";
+  const entries = Array.isArray(memoryFacts) ? memoryFacts : [];
+  for (let idx = entries.length - 1; idx >= 0; idx -= 1) {
+    const fact = entries[idx];
+    if (!isObject(fact) || fact.be !== "artifact") continue;
+    if (String(fact?.as?.name ?? "") !== "video") continue;
+    const locator = String(fact?.to?.filename ?? "").trim();
+    if (!locator || !locator.includes(runToken)) continue;
+    const sourcePath = path.resolve(root, locator);
+    if (!(await pathExists(sourcePath))) continue;
+    return sourcePath;
+  }
+  return null;
+}
+
+function latestVideoArtifactFromNewspaper({ cwd, runId, newspaperLines }) {
+  const root = path.resolve(cwd ?? process.cwd());
+  const runToken = runId ? `artifacts/${sanitizeRunId(runId)}/` : "artifacts/";
+  const lines = Array.isArray(newspaperLines) ? newspaperLines : [];
+  for (let idx = lines.length - 1; idx >= 0; idx -= 1) {
+    const line = String(lines[idx] ?? "").trim();
+    if (!line) continue;
+    let sentence;
+    try {
+      sentence = parse(line);
+    } catch {
+      continue;
+    }
+    if (!isObject(sentence) || sentence.be !== "artifact") continue;
+    if (String(sentence?.as?.name ?? "") !== "video") continue;
+    const locator = String(sentence?.to?.filename ?? "").trim();
+    if (!locator || !locator.includes(runToken)) continue;
+    return path.resolve(root, locator);
+  }
+  return null;
+}
+
+export async function deriveKnowProduceBundle({ cwd, bindingFacts, result, runId, memoryFacts, newspaperLines }) {
   const binding = firstKnowInputBinding({ cwd, bindingFacts });
   if (!binding) return [];
   const produceDir = path.resolve(binding.root, "know", "produce", binding.parsed.dir);
   const stem = binding.parsed.name;
-
-  if (result?.ob?.text !== undefined) {
-    return [{
-      kind: "text",
-      text: String(result.ob.text ?? ""),
-      targetDir: produceDir,
-      stem,
-      middleSuffix: "",
-      ext: ".txt"
-    }];
-  }
 
   if (typeof result?.ob?.filename === "string" && result.ob.filename.trim()) {
     const primarySource = path.resolve(binding.root, result.ob.filename);
@@ -249,6 +281,31 @@ export async function deriveKnowProduceBundle({ cwd, bindingFacts, result }) {
       middleSuffix: entry.middleSuffix,
       ext: entry.ext
     }));
+  }
+
+  const videoSource = (await latestVideoArtifactSource({ cwd, runId, memoryFacts }))
+    ?? latestVideoArtifactFromNewspaper({ cwd, runId, newspaperLines });
+  if (videoSource) {
+    const entries = await listSiblingProduceDescriptors(videoSource);
+    return entries.map((entry) => ({
+      kind: "copy",
+      sourcePath: entry.sourcePath,
+      targetDir: produceDir,
+      stem,
+      middleSuffix: entry.middleSuffix,
+      ext: entry.ext
+    }));
+  }
+
+  if (result?.ob?.text !== undefined) {
+    return [{
+      kind: "text",
+      text: String(result.ob.text ?? ""),
+      targetDir: produceDir,
+      stem,
+      middleSuffix: "",
+      ext: ".txt"
+    }];
   }
 
   return [];
