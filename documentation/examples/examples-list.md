@@ -28,7 +28,7 @@ These are the canonical, runnable examples. When updating specs or docs, prefer 
 | Mind | `examples/pyash/mind-tool-call.pya`, `examples/pyash/mind-interpret-tool.pya`, `examples/pyash/mind-parity.pya`, `examples/pyash/mind-session.pya` |
 | Download | `examples/pyash/download-ytdlp.pya` |
 | Android control | `examples/pyash/android-smoke-verify.pya`, `examples/pyash/android-wakeup-home.pya`, `examples/pyash/android-open-youtube.pya`, `examples/pyash/android-upload-short-step-1.pya` |
-| Tool envelope / again | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |
+| Tool envelope / newspaper replay | `examples/pyash/again-demo.pya`, `examples/pyash/again-newspaper.pya` |
 | Refinery | `examples/pyash/refinery-basic.pya`, `examples/pyash/refinery-mind-say-hear.pya`, `examples/pyash/refinery-mind-say-hear-fixture.pya` |
 | Subordinate clauses | `examples/pyash/subordinate-clause-golden.pya` |
 | Command / say | `examples/pyash/command-espeak.pya`, `examples/pyash/say-espeak.pya`, `examples/pyash/say-piper.pya` |

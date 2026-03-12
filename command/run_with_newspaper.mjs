@@ -87,10 +87,12 @@ async function run() {
   const args = process.argv.slice(2);
   const runIdFlag = readFlagValue(args, "--run-id");
   const runTimeFlag = readFlagValue(args, "--run-time");
-  const againFlag = args.includes("--again");
   const noCheckpoint = args.includes("--no-checkpoint");
   const sourcePathFlag = readFlagValue(args, "--source");
   const cmdIndex = args.indexOf("--");
+  if (args.includes("--again")) {
+    console.warn("warning: --again is deprecated and currently acts as a no-op.");
+  }
   if (!sourcePathFlag || cmdIndex === -1) {
     console.error("Usage: node command/run_with_newspaper.mjs --source <file.pya> [--run-id <id>] [--run-time <iso>] [--no-checkpoint] -- <command...>");
     process.exit(1);

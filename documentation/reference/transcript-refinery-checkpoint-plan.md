@@ -16,7 +16,7 @@ Build a full transcript refinery with checkpointed stages, using Pyash-first flo
 
 ## Checkpoint Structure
 - Keep each stage as its own platform sentence in a `be refinery` block.
-- Use deterministic filenames under one run folder so `--again` can reuse outputs safely.
+- Use deterministic filenames under one run folder so replay and checkpoint reuse stay safe.
 - Artifact subfolders are for stage-local intermediates only.
 - Final user-facing outputs for the run belong in the root of `artifacts/<run-id>/`.
 - Keep expensive stages isolated:

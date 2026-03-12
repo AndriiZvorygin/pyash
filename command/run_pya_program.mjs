@@ -432,7 +432,7 @@ async function main() {
   const runtimeBindingWords = positional.slice(1);
 
   if (!filePath) {
-    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--no-jit] [--verbose] [--again] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya> [runtime input binding words]");
+    console.error("Usage: node command/run_pya_program.mjs [--gross] [--full] [--result] [--newspaper] [--no-newspaper] [--no-jit] [--verbose] [--no-checkpoint] [--run-id <id>] [--run-time <iso>] [--refinery <name>] <path/to/file.pya> [runtime input binding words]");
     process.exit(1);
   }
 
@@ -452,6 +452,9 @@ async function main() {
   forget();
   clearExchangeRecorder();
   setExchangeStrict(false);
+  if (useAgain) {
+    console.warn("warning: --again is deprecated and currently acts as a no-op.");
+  }
   clearSignatureHandlers();
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
