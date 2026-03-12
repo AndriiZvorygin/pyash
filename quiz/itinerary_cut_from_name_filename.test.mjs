@@ -35,7 +35,7 @@ test("cut accepts from name filename to name itinerary", async () => {
   assert.ok(itinerary.ob.series.length >= 1);
 });
 
-test("cut splits long single srt segment into multiple windows", async () => {
+test("cut keeps long single srt segment intact instead of duplicating text across windows", async () => {
   forget();
   const dir = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "cut-window-"));
   const srtPath = path.join(dir, "long.srt");
@@ -56,11 +56,10 @@ test("cut splits long single srt segment into multiple windows", async () => {
   const itinerary = remember("teaching cuts");
   assert.equal(itinerary?.be, "itinerary");
   const series = Array.isArray(itinerary?.ob?.series) ? itinerary.ob.series : [];
-  assert.equal(series.length, 5);
+  assert.equal(series.length, 1);
   assert.equal(series[0]?.since?.num, 0);
-  assert.equal(series[0]?.until?.num, 6);
-  assert.equal(series[4]?.since?.num, 24);
-  assert.equal(series[4]?.until?.num, 25);
+  assert.equal(series[0]?.until?.num, 25);
+  assert.equal(String(series[0]?.ob?.text ?? ""), "Love is daily action.");
 });
 
 test("cut from text sentence mode keeps scripture refs within sentence", async () => {

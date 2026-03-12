@@ -187,7 +187,7 @@ function renderWriteValue(ob = {}, { rememberFn, format = "pyash" } = {}) {
   }
   if (ob.name && rememberFn) {
     const fact = rememberFn(ob.name);
-    if (fact?.be === "series" && Array.isArray(fact?.ob?.series)) {
+    if (Array.isArray(fact?.ob?.series)) {
       return seriesSentenceToPyash(fact);
     }
     if (fact?.be === "json map" || fact?.be === "map" || fact?.be === "csv map") {

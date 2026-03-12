@@ -42,6 +42,12 @@ Outputs:
 - Newspaper: `newspaper/<run-id>.pya`
 - Artifacts: `artifacts/sha256/<first2>/<next2>/<hex><ext>`
 
+## Artifact Layout
+- `artifacts/<run-id>/` is the run root and should hold the final user-facing outputs for that run.
+- `artifacts/<run-id>/<stage-name>/...` is for intermediate or stage-local working files only.
+- When a refinery is checkpointed, later stages should consume canonical outputs from the run root rather than from another stage's scratch folder.
+- `know/produce/` is for durable promoted outputs, not for intermediates or scratch files.
+
 ## Global `pyash` CLI
 
 Install globally from the repo root:

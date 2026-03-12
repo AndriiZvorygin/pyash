@@ -155,3 +155,47 @@ test("wise chip honors atleast byte by merging small slices", async () => {
     assert.ok(Buffer.byteLength(texts[i], "utf8") >= 6);
   }
 });
+
+test("wise chip groups timed series by atleast minute and atmost minute", async () => {
+  forget();
+
+  await run("su name transcript cuts be series def");
+  await run('su name cut 001 since num 0 until num 40 ob text "intro section" ya');
+  await run('su name cut 002 since num 41 until num 85 ob text "first argument" ya');
+  await run('su name cut 003 since num 90 until num 130 ob text "second argument" ya');
+  await run('su name cut 004 since num 260 until num 320 ob text "late section after big pause" ya');
+  await run("prah");
+
+  await run("from name series transcript cuts atleast minute 2 atmost minute 10 to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const entries = series.ob?.series ?? [];
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0]?.since?.num, 0);
+  assert.equal(entries[0]?.until?.num, 130);
+  assert.match(entries[0]?.ob?.text ?? "", /intro section first argument second argument/u);
+  assert.equal(entries[1]?.since?.num, 260);
+  assert.equal(entries[1]?.until?.num, 320);
+});
+
+test("wise chip forces timed split by atmost minute when no pause appears", async () => {
+  forget();
+
+  await run("su name transcript cuts be series def");
+  await run('su name cut 001 since num 0 until num 100 ob text "part one" ya');
+  await run('su name cut 002 since num 101 until num 220 ob text "part two" ya');
+  await run('su name cut 003 since num 221 until num 360 ob text "part three" ya');
+  await run("prah");
+
+  await run("from name series transcript cuts atleast second 90 atmost minute 3 to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const entries = series.ob?.series ?? [];
+  assert.equal(entries.length, 3);
+  for (const entry of entries) {
+    const duration = Number(entry?.until?.num ?? 0) - Number(entry?.since?.num ?? 0);
+    assert.ok(duration <= 180.0001);
+  }
+});
