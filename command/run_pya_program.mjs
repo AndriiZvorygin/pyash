@@ -451,7 +451,7 @@ async function main() {
 
   forget();
   clearExchangeRecorder();
-  if (useAgain) setExchangeStrict(false);
+  setExchangeStrict(false);
   clearSignatureHandlers();
   for (const sig of [...builtInSignatures, ...compileSignatures]) {
     registerSignatureHandler(sig);
@@ -479,14 +479,14 @@ async function main() {
       return;
     }
   }
-  let useNewspaper = useNewspaperFlag;
+  let useNewspaper = useNewspaperFlag || useAgain;
   const autoNewspaperMind = resolveConfigBool("newspaper mind auto", { rememberFn: remember });
-  if (!useNewspaper && !useAgain && autoNewspaperMind) {
+  if (!useNewspaper && autoNewspaperMind) {
     if (shouldAutoEnableNewspaper({ entries: sentences, rememberFn: remember })) {
       useNewspaper = true;
     }
   }
-  if (!useNewspaper && !useAgain) {
+  if (!useNewspaper) {
     if (shouldAutoEnableNewspaperForRefinery({ entries: sentences })) {
       useNewspaper = true;
     }
@@ -558,16 +558,13 @@ async function main() {
   const runStart = `exists su name ${runId} from time ${runTime} be run ya`;
   pushNewspaper(runStart);
   pushNewspaper(`ob filename "${runRoot}" be run root ya`);
-  if (useAgain) {
-    pushNewspaper(`exists su name ${runId} as name again be run ya`);
-  }
-  if (useNewspaper || useAgain) {
+  if (useNewspaper) {
     setExchangeRecorder({
       runRoot,
       record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
     });
     setExchangeRunId(runId);
-    if (useAgain) setExchangeStrict(true);
+    setExchangeStrict(true);
   }
   let runError = null;
   let refineryResult = null;
@@ -684,7 +681,7 @@ async function main() {
     const embedded = sentenceToPyash(sentence);
     evokeCounter += 1;
     const sentenceId = `evoke-${evokeCounter}`;
-    if (useNewspaper || useAgain) {
+    if (useNewspaper) {
       setExchangeSentenceId(sentenceId);
     }
     const isToolCall = isToolSentence(sentence);
@@ -837,7 +834,7 @@ async function main() {
   state.currentSourceFilename = null;
   state.currentSourceLine = null;
   state.currentSourceSentence = null;
-  if (useNewspaper || useAgain) {
+  if (useNewspaper) {
     const newspaperDir = path.resolve(process.cwd(), "newspaper");
     await fs.mkdir(newspaperDir, { recursive: true });
     const newspaperPath = path.join(newspaperDir, `${sanitizeRunId(runId)}.pya`);
