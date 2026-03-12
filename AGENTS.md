@@ -54,6 +54,8 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
 - When the user points to a proven example/refinery as the source of truth, port that flow directly first and only apply explicit deltas; do not re-implement from scratch unless the user asks for redesign.
 - Prefer lean modular designs over compatibility layers: remove obsolete paths instead of stacking legacy flags, aliases, or fallback branches unless the user explicitly asks for backward compatibility.
+- Do not treat new CLI `--flags` as an acceptable design destination in this repo. If behavior needs to be configurable, prefer Pyash-native defaults, configuration sentences, or example-level `.pya` wiring rather than solving it with more command-line switches.
+- If a flag is temporarily useful for debugging an existing tool, do not present that as the intended product solution; translate the final behavior back into the Pyash configuration/spec flow before considering the task complete.
 - Keep defaults scoped by stability: put universal, environment-level defaults in `configure/default.pya`; keep example/run-specific filenames, prefixes, and paths in the example `.pya` files.
 - If intent, spec mapping, or expected behavior is unclear, stop and ask a targeted clarification question before coding; do not assume and proceed on uncertain interpretations.
 - When a refinery fails, first isolate the failing component with a focused example or targeted test, fix that component, then reintegrate and re-run the full refinery end-to-end before considering the task complete.

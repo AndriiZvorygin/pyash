@@ -119,13 +119,37 @@ function resolveIoGenitives(sentence, { state, memory } = {}) {
 function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
   const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "alternative"]);
+  const copyResolvedCaseObject = (target, resolved) => {
+    if (!resolved || typeof resolved !== "object" || Array.isArray(resolved)) return false;
+    let copied = false;
+    for (const key of ["num", "text", "filename", "date", "boolean", "month", "second", "minute", "hour", "day", "week"]) {
+      if (resolved[key] !== undefined) {
+        target[key] = resolved[key];
+        copied = true;
+      }
+    }
+    if (resolved.name !== undefined) {
+      target.name = resolved.name;
+      if (Array.isArray(resolved.nameTypeWords) && resolved.nameTypeWords.length) {
+        target.nameTypeWords = resolved.nameTypeWords.map((word) => String(word));
+      }
+      copied = true;
+    }
+    return copied;
+  };
   for (const [key, value] of Object.entries(sentence)) {
     if (skipKeys.has(key)) continue;
     if (!value?.genitive) continue;
     if (typeof value !== "object") continue;
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
     const tail = String(chainArr.at(-1) ?? "").toLowerCase();
-    if (!GENITIVE_TYPE_TAILS.has(tail)) continue;
+    if (!GENITIVE_TYPE_TAILS.has(tail)) {
+      const resolvedCase = resolveGenitiveLiteral(value.genitive, { state, memory });
+      if (copyResolvedCaseObject(value, resolvedCase)) {
+        delete value.genitive;
+      }
+      continue;
+    }
     let resolved = resolveGenitiveLiteral(value.genitive, { state, memory });
     // Chains ending in a type token (e.g. "of pass of report bool") can
     // fail direct resolution after reaching a primitive; fallback to the
@@ -145,6 +169,7 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
             : null;
           if (typeWords && typeWords.length) {
             value.nameTypeWords = typeWords;
+            delete value.genitive;
             continue;
           }
         }
@@ -154,9 +179,12 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
       if (be === "mind") value.nameTypeWords = ["mind"];
       else if (be === "refinery") value.nameTypeWords = ["refinery"];
       else if (be === "map") value.nameTypeWords = ["map"];
+      delete value.genitive;
       continue;
     }
-    applyResolvedTypedValue(value, tail, resolved);
+    if (applyResolvedTypedValue(value, tail, resolved)) {
+      delete value.genitive;
+    }
   }
 }
 
