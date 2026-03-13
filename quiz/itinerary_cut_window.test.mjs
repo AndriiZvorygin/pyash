@@ -50,6 +50,35 @@ test("cut groups rapid subtitle rows into target window cuts", async () => {
   assert.equal(series[1]?.until?.num, 7.9);
 });
 
+test("cut keeps a single long subtitle row as one cut instead of duplicating the same text across windows", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const source = path.join(dir, "single-long-subtitle.srt");
+  await fs.writeFile(
+    source,
+    [
+      "1",
+      "00:00:00,031 --> 00:00:07,881",
+      "Solon ended debt, slavery, and redistributed power so ordinary families could own land and rebuild civic stability."
+    ].join("\n"),
+    "utf8"
+  );
+
+  const out = await cutFromFilenameToNameItinerary({
+    mood: "do",
+    be: "cut",
+    from: { filename: source },
+    during: { num: 6 },
+    to: { name: "single long teaching cuts", nameTypeWords: ["itinerary"] }
+  });
+
+  const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
+  assert.equal(series.length, 1);
+  assert.equal(series[0]?.since?.num, 0.031);
+  assert.equal(series[0]?.until?.num, 7.881);
+  assert.match(String(series[0]?.ob?.text ?? ""), /ordinary families could own land/u);
+});
+
 test("cut from text splits manuscript paragraphs into itinerary rows", async () => {
   const out = await cutFromTextToNameItinerary({
     mood: "do",
