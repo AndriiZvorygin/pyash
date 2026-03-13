@@ -106,7 +106,8 @@ async function run() {
   const resolved = path.resolve(sourcePathFlag);
   const text = await fs.readFile(resolved, "utf8");
   const sentences = splitSentences(text, { includeThen: true });
-  const runTime = runTimeFlag || new Date().toISOString();
+  const runStartDate = new Date();
+  const runTime = runTimeFlag || runStartDate.toISOString();
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
   const newspaperLines = [];
@@ -282,6 +283,12 @@ async function run() {
     pushLine(sentenceToPyash(surfaceErrorSentence(errSentence)));
   }
 
+  const runEndDate = new Date();
+  const runEndTime = runEndDate.toISOString();
+  const runDurationMs = Math.max(0, runEndDate.getTime() - runStartDate.getTime());
+  pushLine(`su name run start time ob text ${JSON.stringify(String(runTime))} be text ya`);
+  pushLine(`su name run end time ob text ${JSON.stringify(String(runEndTime))} be text ya`);
+  pushLine(`su name run duration ms ob num ${runDurationMs} be number ya`);
   pushLine(`exists su name ${runId} be end ya`);
   const newspaperDir = path.resolve(process.cwd(), "newspaper");
   await fs.mkdir(newspaperDir, { recursive: true });

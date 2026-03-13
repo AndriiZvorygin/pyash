@@ -37,5 +37,8 @@ test("runjs can emit a newspaper when requested", async () => {
 
   assert.equal(lines[0], "exists su name run-js from time 2025-01-01T00:00:00Z be run ya");
   assert.ok(lines.some(line => line.includes("be evoke ya")));
+  assert.equal(lines.at(-4), "su name run start time ob text \"2025-01-01T00:00:00Z\" be text ya");
+  assert.match(lines.at(-3), /^su name run end time ob text \".+\" be text ya$/);
+  assert.match(lines.at(-2), /^su name run duration ms ob num \d+ be number ya$/);
   assert.equal(lines.at(-1), "exists su name run-js be end ya");
 });

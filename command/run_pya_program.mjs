@@ -28,6 +28,12 @@ import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
 
+function formatRunDurationMs(durationMs) {
+  const ms = Math.max(0, Math.round(Number(durationMs) || 0));
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(3)}s`;
+}
+
 function renderSeriesSentence(sentence) {
   const name = sentence?.su?.name ?? "result";
   const entries = Array.isArray(sentence?.ob?.series) ? sentence.ob.series : [];
@@ -496,7 +502,8 @@ async function main() {
   }
   const outputs = [];
   const timeZone = resolveTimeZone(remember);
-  const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(new Date(), timeZone) : new Date().toISOString());
+  const runStartDate = new Date();
+  const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(runStartDate, timeZone) : runStartDate.toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   doRemember({ mood: "ya", su: { name: "run id" }, ob: { text: String(runId) }, be: "text" });
   const newspaperLines = [];
@@ -833,6 +840,12 @@ async function main() {
   }
 
   const result = refineryResult ?? remember("result");
+  const runEndDate = new Date();
+  const runEndTime = timeZone ? formatIsoWithOffset(runEndDate, timeZone) : runEndDate.toISOString();
+  const runDurationMs = Math.max(0, runEndDate.getTime() - runStartDate.getTime());
+  pushNewspaper(`su name run start time ob text ${JSON.stringify(String(runTime))} be text ya`);
+  pushNewspaper(`su name run end time ob text ${JSON.stringify(String(runEndTime))} be text ya`);
+  pushNewspaper(`su name run duration ms ob num ${runDurationMs} be number ya`);
   pushNewspaper(`exists su name ${runId} be end ya`);
   state.currentSourceFilename = null;
   state.currentSourceLine = null;
@@ -851,6 +864,11 @@ async function main() {
   const printArtifactsFolderHint = () => {
     const abs = path.resolve(process.cwd(), "artifacts", String(runId));
     console.error(`artifacts folder: ${abs}`);
+  };
+  const printRunTimingHint = () => {
+    console.error(`run start: ${runTime}`);
+    console.error(`run end: ${runEndTime}`);
+    console.error(`run duration: ${formatRunDurationMs(runDurationMs)}`);
   };
   const printProduceFileHint = () => {
     const files = Array.isArray(produceFiles?.knowProduceFiles) ? produceFiles.knowProduceFiles : [];
@@ -883,6 +901,7 @@ async function main() {
     return { artifactFile, knowProduceFiles };
   };
   if (runError) {
+    printRunTimingHint();
     printArtifactsFolderHint();
     throw runError;
   }
@@ -897,6 +916,7 @@ async function main() {
 
   if (gross) {
     printProduceFileHint();
+    printRunTimingHint();
     printArtifactsFolderHint();
     console.log(JSON.stringify({ outputs, result }, null, 2));
     return;
@@ -904,6 +924,7 @@ async function main() {
 
   if (!showResult && !full) {
     printProduceFileHint();
+    printRunTimingHint();
     printArtifactsFolderHint();
     return;
   }
@@ -919,6 +940,7 @@ async function main() {
       console.log(finalResult ? JSON.stringify(finalResult, null, 2) : "(no result)");
     }
     printProduceFileHint();
+    printRunTimingHint();
     printArtifactsFolderHint();
     return;
   }
@@ -927,6 +949,7 @@ async function main() {
   if (result?.ob?.text && !full) {
     console.log(result.ob.text);
     printProduceFileHint();
+    printRunTimingHint();
     printArtifactsFolderHint();
     return;
   }
@@ -935,6 +958,7 @@ async function main() {
   if (result?.be === "series" && Array.isArray(result?.ob?.series)) {
     console.log(renderSeriesSentence(result));
     printProduceFileHint();
+    printRunTimingHint();
     printArtifactsFolderHint();
     return;
   }
@@ -951,6 +975,7 @@ async function main() {
     console.log(result ? JSON.stringify(result, null, 2) : "(no result)");
   }
   printProduceFileHint();
+  printRunTimingHint();
   printArtifactsFolderHint();
 }
 
