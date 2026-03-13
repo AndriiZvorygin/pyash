@@ -1,0 +1,107 @@
+exists su name chip classifier prompt ob text quoted.text.You read CHIP_STYLE_PROMPT and FIRST_GROSS_CHIP.
+
+Your job is to produce one prompt for a small model that will inspect one gross chip and return a single exact boundary marker quote for the beginning of the next final wise chip.
+
+Rules for the prompt you write:
+- Tailor the guidance to the requested chip style.
+- Prefer exact boundary markers that are stable in the source text.
+- Avoid seam duplicates: do not return a marker that is identical to the immediately previous chip marker when possible.
+- Prefer the first new boundary after the first 80 characters of the chip when available.
+- If the source looks repetitive or fuzzy, instruct the model to return the best exact marker for the start of the next requested final chip.
+- Output only the prompt text, no markdown, no bullets, no surrounding quotes..text.quoted be text ya
+
+exists su name chip classifier be mind via state "qwen3.5:9b" fromtext name chip classifier prompt ya
+
+su name chip from name text source ob text style to name text output be ceremony def
+  from name of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+
+  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
+  ob text of ob of this to name chip classify request be plus do
+  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
+  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
+
+  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
+  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
+  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
+  from name of from of this by name text chip boundary proposals to name text output be wise chip do
+  su name output ret
+prah
+
+su name chip from name text source ob name text style to name text output be ceremony def
+  from name of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+
+  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
+  ob text of ob of this to name chip classify request be plus do
+  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
+  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
+
+  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
+  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
+  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
+  from name of from of this by name text chip boundary proposals to name text output be wise chip do
+  su name output ret
+prah
+
+su name chip from text source ob text style to name text output be ceremony def
+  from text of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+
+  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
+  ob text of ob of this to name chip classify request be plus do
+  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
+  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
+
+  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
+  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
+  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
+  from text of from of this by name text chip boundary proposals to name text output be wise chip do
+  su name output ret
+prah
+
+su name chip from text source ob name text style to name text output be ceremony def
+  from text of from of this ob text of ob of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from name text source ob text style be ceremony def
+  from name of from of this ob text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+su name chip from name text source ob name text style be ceremony def
+  from name of from of this ob name text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+su name chip from text source ob text style be ceremony def
+  from text of from of this ob text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+su name chip from text source ob name text style be ceremony def
+  from text of from of this ob text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+su name chip from filename source ob text style to name text output be ceremony def
+  from filename of from of this become wo text to name text chip source be read do
+  from name text chip source ob text of ob of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from filename source ob name text style to name text output be ceremony def
+  from filename of from of this become wo text to name text chip source be read do
+  from name text chip source ob name text of ob of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from filename source ob text style be ceremony def
+  from filename of from of this ob text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+su name chip from filename source ob name text style be ceremony def
+  from filename of from of this ob name text of ob of this to name text chip out be chip do
+  su name chip out ret
+prah
+
+exists su name chip be export ya
