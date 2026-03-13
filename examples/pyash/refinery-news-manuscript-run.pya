@@ -2,227 +2,167 @@ ob filename text source be input ya
 su name provider auto discharge ob bool lie ya
 
 exists su name news mind be mind as name "qwen3.5:9b" fromtext text "You write clear, trustworthy local civic news in plain English." ya
-exists su name happened mind be mind fromtext name happened prompt ya
-exists su name changed mind be mind fromtext name changed prompt ya
-exists su name matters mind be mind fromtext name matters prompt ya
-exists su name next mind be mind fromtext name next prompt ya
-exists su name facts mind be mind fromtext name facts prompt ya
-exists su name source highlights mind be mind fromtext name source highlights prompt ya
-exists su name frame mind be mind fromtext name frame prompt ya
-exists su name headline mind be mind fromtext name headline prompt ya
-exists su name lede mind be mind fromtext name lede prompt ya
-exists su name body mind be mind fromtext name body prompt ya
+exists su name news points mind be mind fromtext name news points prompt ya
+exists su name news points sieve mind be mind fromtext name news points sieve prompt ya
+exists su name news access mind be mind fromtext name news access prompt ya
+exists su name news format mind be mind fromtext name news format prompt ya
+exists su name news draft mind be mind fromtext name news draft prompt ya
 exists su name news fit verify mind be mind fromtext name news fit verify prompt ya
 exists su name news fairness verify mind be mind fromtext name news fairness verify prompt ya
 exists su name news verdict mind be mind fromtext name news verdict prompt ya
 
-exists su name news intent ob text quoted.text.The generator is asked to write a straight-news local civic article with headline, lede, bullet summary, body, and next steps. It should be plain, front-loaded, useful, and fact-first. It must not add unsupported concrete facts or blur analysis into straight reporting. If the source is a report, strategy note, research memo, or explainer rather than a meeting record, the article should explicitly attribute claims to the document instead of implying that a public body adopted them. If the source is an agenda, meeting notice, or preview package, the article should become a what-to-watch preview that says what council is set to consider, what residents may want to watch, and how the public can follow or comment, without implying any item was approved..text.quoted be text ya
+exists su name news intent ob text quoted.text.The generator is asked to write a straight-news civic output from source text. It may produce a chirp manuscript, a brief manuscript, or a fuller news article depending on how many verified points remain and how substantial they are. It must stay factual, plain, useful, and front-loaded. It must not add unsupported concrete facts, invented outcomes, or imply that agenda items were approved when the source only says they will be considered..text.quoted be text ya
 
-exists su name happened prompt ob text quoted.text.You are writing the main outcome for a straight-news local civic article.
+exists su name news points prompt ob text quoted.text.You are extracting potentially newsworthy points from SOURCE.
 
 Task:
-- Write 1 to 2 short sentences.
-- State what happened as clearly as possible.
-- Focus on the main decision, event, or development.
-- Keep it between 18 and 55 words.
+- Write up to 8 candidate lines.
+- Each line must be one concrete, notable point a local resident may care about.
+- Put the most important points first.
+- Keep each line between 8 and 24 words.
+
+Priorities:
+- Prefer substantive agenda items, decisions, contracts, tenders, policy changes, studies, housing, transit, service impacts, land-use items, money, deadlines, or accountability issues.
+- Prefer named items over generic meeting boilerplate.
+- Deprioritize declarations of interest, minute confirmations, generic correspondence, and routine business-licence housekeeping when stronger items exist.
+- If the source is an agenda or meeting notice, frame lines as upcoming consideration rather than completed action.
+- If the source is a report or memo, keep claims attributed to the document.
 
 Rules:
-- Straight-news tone only.
-- Plain language.
-- No opinion.
-- No speculation.
 - Use only facts supported by the source.
-- If the source is a report, memo, strategy note, or explainer, say what the document says using attribution like "A report says" or "The report argues".
-- If the source is an agenda, meeting notice, or preview package, say what council is scheduled to consider or what appears on the agenda, not what council approved.
-- If the source is an agenda, meeting notice, or preview package, do not infer a meeting date from surrounding agenda items or by-law titles. Use a specific date only if it appears plainly in the meeting header or opening session lines.
-- For agenda-style sources, use present or future preview language such as "is set to consider", "would authorize", or "the agenda includes". Do not use past-tense event language.
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+- Do not include generic attendance boilerplate unless little else is present.
+- Do not repeat the same item with synonyms.
+- Do not output bare item numbers, code fragments, or decimal scraps.
+- No bullets, no numbering, no markdown, no surrounding quotes.
+- Output one candidate per line only..text.quoted be text ya
 
-exists su name changed prompt ob text quoted.text.You are writing the practical change summary for a straight-news local civic article.
+exists su name news points sieve prompt ob text quoted.text.You are filtering candidate newsworthy points.
 
-Task:
-- Write 1 to 2 short sentences.
-- State what changed or what concrete effect follows.
-- Keep it between 18 and 55 words.
+You will receive:
+- SOURCE
+- CANDIDATES with one candidate per line
 
-Rules:
-- Straight-news tone only.
-- Plain language.
-- No opinion.
-- No speculation.
-- Use only facts supported by the source.
-- If the source is a report, memo, strategy note, or explainer, describe the document's proposed changes or recommendations with attribution instead of implying they were adopted.
-- If the source is an agenda, meeting notice, or preview package, use this slot for the most important concrete thing residents should know before the meeting, such as how to watch, how to comment, or which proposed item is especially notable. Keep all outcome language conditional.
-- If the source contains both agenda substance and boilerplate access instructions, prefer the most notable substantive agenda item first and use access details only as support.
-- Do not infer dates, approvals, or implementation timing from nearby references unless the source states them directly in the meeting header or opening session lines.
-- For agenda-style sources, keep verbs in present or future tense rather than describing the meeting as already completed.
-- Do not simply restate WHAT HAPPENED with synonyms. Add a distinct practical angle, secondary item, or public-impact detail.
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+Keep only lines that pass all checks:
+- grounded in the source
+- actually notable or useful to a local reader
+- concrete enough to support a civic summary
+- not just procedural boilerplate unless the source has little else
+- not just declarations, minute approvals, generic correspondence intake, or routine housekeeping when stronger substantive items are present
+- distinct from the other kept lines
+- phrased as upcoming consideration if the source is an agenda or meeting notice
+- does not imply approval, adoption, or implementation unless the source clearly says that
 
-exists su name matters prompt ob text quoted.text.You are writing the why-it-matters line for a straight-news local civic article.
+Output rules:
+- Return only the passing lines, exactly as written, one per line.
+- Preserve original wording for kept lines.
+- Drop failing lines entirely.
+- You may return fewer than 8 lines, or none.
+- No explanations, no labels, no extra text..text.quoted be text ya
 
-Task:
-- Write 1 short sentence.
-- Explain why the event matters for residents, services, money, timelines, access, accountability, or participation.
-- Keep it between 12 and 32 words.
-
-Rules:
-- Straight-news tone only.
-- Plain language.
-- No advocacy.
-- No opinion voice.
-- No speculation.
-- Use only facts and obvious implications supported by the source.
-- If the source is a report or explainer, explain why the document matters rather than pretending an outside event already happened.
-- If the source is an agenda, meeting notice, or preview package, explain why residents may want to watch one or two specifically named agenda items or access details from the source. Do not invent broader policy or budget effects unless they are explicitly stated.
-- For agenda-style sources, prefer named agenda items over generic access boilerplate when choosing what matters most.
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
-
-exists su name next prompt ob text quoted.text.You are writing the next-steps line for a straight-news local civic article.
+exists su name news access prompt ob text quoted.text.You are extracting follow, watch, or comment details from SOURCE.
 
 Task:
-- Write 1 to 2 short sentences.
-- State the next date, follow-up, implementation step, public action, or unresolved question if supported by the source.
-- Keep it between 12 and 40 words.
+- Write up to 3 short lines.
+- Keep only details that help a reader know how to watch, attend, comment, or track the meeting or document.
+- Keep each line between 6 and 22 words.
 
 Rules:
-- Straight-news tone only.
-- Plain language.
-- No speculation.
-- If the source gives no clear next step, write one sentence saying what remains unclear.
-- Use only facts supported by the source.
-- If the source is a report or strategy note, next steps may describe follow-up questions, publication, or missing implementation details, but must stay attributed.
-- If the source is an agenda or meeting notice, next steps should focus on the meeting time, watching options, comment deadlines, or what residents should monitor during the session.
-- If the source does not plainly state the meeting date in the header or opening session lines, refer to the upcoming meeting or the listed session instead of inventing one.
-- Do not repeat the headline, lede, or top agenda summary unless needed to identify what residents should watch or comment on.
-- Prefer attendance, livestream, comment timing, or unresolved follow-up details over repeating the same policy items.
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
+- Use only details plainly stated in the source.
+- Prefer meeting time, livestream, public comment timing, attendance, or follow-up timing.
+- Do not repeat the same detail with different wording.
+- If no useful access details exist, return nothing.
+- No bullets, no numbering, no markdown, no surrounding quotes.
+- Output one line per detail..text.quoted be text ya
 
-exists su name facts prompt ob text quoted.text.You are writing 3 summary bullet facts for a straight-news local civic article.
+exists su name news format prompt ob text quoted.text.You are choosing the best output format for a civic news summary.
 
-Task:
-- Write exactly 5 lines.
-- Each line should be one short factual bullet-style sentence.
-- Each line should capture a different key fact from the source.
-- Keep each line between 8 and 20 words.
+Available outputs:
+- chirp manuscript
+- brief manuscript
+- news article
 
-Rules:
-- Straight-news tone only.
-- Plain language.
-- No numbering, no bullet symbols, no markdown.
-- One fact per line.
-- No opinion.
-- No speculation.
-- Use only facts supported by the source.
-- If the source is a report or memo, write each line as a factual point from the document, not as an outside event claim.
-- If the source is an agenda or meeting notice, most lines should be concrete agenda highlights, with access or public participation details used only as supporting facts.
-- For agenda-style sources, avoid inferred dates and avoid wording that implies approval.
-- Each line must add a new fact. Do not repeat the same lead item across multiple lines.
-- Prefer one line per distinct agenda item or public-following detail..text.quoted be text ya
+Use VERIFIED_POINTS and ACCESS_DETAILS.
 
-exists su name frame prompt ob text quoted.text.You are choosing the best reporting frame for a straight-news civic article.
+Choose:
+- chirp manuscript when there is only one clear point or one dominant point and very little supporting detail.
+- brief manuscript when there are 2 to 4 solid points and the output should stay compact.
+- news article when there are 5 or more solid points, or when multiple items deserve a fuller summary.
 
-Choose exactly one:
-- agenda preview
-- decision update
-- meeting outcome
-- policy change
-- service impact
-- accountability issue
-- report brief
-
-Pick the frame that best matches the source without exaggeration.
-Return exactly one allowed frame.
+Return exactly one allowed output.
 No explanation.
 No punctuation..text.quoted be text ya
 
-exists su name headline prompt ob text quoted.text.You are writing one headline for a straight-news local civic article.
+exists su name news draft prompt ob text quoted.text.You are writing a civic news summary from verified points.
 
-Task:
-- Write one clear factual headline.
-- Keep it between 6 and 16 words.
-- Keep it specific and readable.
+FORMAT:
+[[format]]
 
-Rules:
-- Straight-news tone only.
-- No clickbait.
-- No rhetorical question.
-- No unsupported implication.
-- If the source is a report or memo, the headline should clearly signal that it is about the document or report.
-- If the source is an agenda or meeting notice, the headline should clearly signal that the article previews what council will consider.
-- If the frame is agenda preview, prefer words like "agenda", "set to consider", "upcoming meeting", or "what to watch" rather than outcome words.
-- For agenda-style sources, avoid inferred dates unless the date is plainly stated in the meeting header or opening session lines.
-- No surrounding quotes..text.quoted be text ya
+VERIFIED_POINTS:
+[[points]]
 
-exists su name lede prompt ob text quoted.text.You are writing the lede for a straight-news local civic article.
+ACCESS_DETAILS:
+[[access]]
 
-Task:
-- Write 2 short sentences.
-- Front-load the main outcome and the main practical stake.
-- Keep it between 28 and 70 words.
+REVISION_FEEDBACK:
+[[feedback]]
 
-Rules:
-- Straight-news tone only.
-- Plain language.
-- No opinion.
+General rules:
+- Use only the verified points and access details.
+- Plain English.
 - No speculation.
-- Use only facts supported by the source.
-- If the source is a report, memo, strategy note, or explainer, the lede should explicitly attribute key claims to the document.
-- If the source is an agenda or meeting notice, the lede should clearly say the meeting is upcoming and highlight the biggest items residents may want to watch.
-- If the frame is agenda preview, the lede should sound like a preview article, not a meeting recap.
-- For agenda-style sources, avoid inferred dates unless the date is plainly stated in the meeting header or opening session lines.
-- For agenda-style sources, keep the lede in present or future tense and avoid words like "met", "reviewed", "passed", or "approved".
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
-
-exists su name body prompt ob text quoted.text.You are writing a short straight-news local civic article body.
-
-Task:
-- Write 2 short paragraphs.
-- Paragraph 1 should explain what happened and what changed.
-- Paragraph 2 should explain why it matters and what happens next.
-- Keep the whole body between 70 and 180 words.
-
-Rules:
-- Straight-news tone only.
-- Plain language.
-- No opinion.
-- No speculation.
-- No rhetorical flourish.
-- Use only facts supported by the source.
-- If the source is a report, memo, strategy note, or explainer, attribute the main claims to the document instead of implying outside adoption or implementation.
-- If the source is an agenda or meeting notice, attribute the substance to the agenda and keep all outcome language conditional or preview-oriented.
-- If the frame is agenda preview, Paragraph 1 should name the most notable agenda highlights and Paragraph 2 should tell residents how to watch, comment, or follow the session. Do not narrate the meeting as already completed.
-- For agenda-style sources, avoid inferred dates and avoid saying a by-law or agreement was approved. If the date is not plainly stated in the header or opening session lines, prefer "upcoming meeting" over any calendar date.
-- For agenda-style sources, keep body verbs in present or future tense. Do not describe agenda items as already reviewed, adopted, passed, or confirmed.
-- For agenda-style sources, do not convert "By-law to confirm the proceedings..." titles into a claim that the meeting itself already happened. Those titles are agenda items, not proof for the article's event framing.
-- Do not repeat the headline or lede wording.
-- Paragraph 1 should expand with one or two additional concrete details not already fully stated in the lede.
-- Paragraph 2 should shift to access, participation, timeline, or what residents should monitor, rather than repeating Paragraph 1.
-- Keep sentences short and readable.
+- No unsupported facts.
+- If the source is an agenda, keep all outcome language upcoming, proposed, or under consideration.
+- If the source is a report or memo, keep claims attributed to the document.
+- Order the most important points first.
+- Avoid repeating the same item in different wording.
 - If REVISION_FEEDBACK is present, obey it.
-- No bullets, no labels, no markdown, no surrounding quotes..text.quoted be text ya
 
-exists su name news fit verify prompt ob text quoted.text.Determine whether ARTICLE fits straight-news local civic reporting.
+If FORMAT is chirp manuscript:
+- Write one compact civic chirp manuscript.
+- 100 to 280 characters total.
+- 2 or 3 short sentences.
+- Mention the single most important point first.
+- Add one practical reason a resident may care or tune in.
+- No headline.
+
+If FORMAT is brief manuscript:
+- Write one short civic brief manuscript.
+- 90 to 180 words total.
+- 3 short paragraphs.
+- Paragraph 1: the top point or two.
+- Paragraph 2: the next notable points.
+- Paragraph 3: how residents can follow, comment, or why it matters.
+- No headline.
+
+If FORMAT is news article:
+- Write one short civic news article.
+- 180 to 360 words total.
+- Start with a clear headline line.
+- Then 3 short paragraphs.
+- Paragraph 1 should front-load the biggest items.
+- Paragraph 2 should add the next most important verified points.
+- Paragraph 3 should explain how residents can watch, comment, or what to monitor next.
+- Do not use section labels like Key facts or Next steps.
+
+Output only the finished text.
+No bullets, no numbering, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name news fit verify prompt ob text quoted.text.Determine whether DRAFT is well packaged for the chosen civic news FORMAT.
 
 PASS if:
-- The article is clear, front-loaded, and skimmable.
-- The article reads like straight news, not opinion.
-- The headline and lede stand on their own.
-- The article is useful even if a reader only sees the front matter.
-- If the source is a report or memo, the article clearly presents it as a report-based story with attribution.
-- If the source is an agenda or meeting notice, the article clearly reads as a preview of what council will consider and why residents may want to watch.
-- If the source is an agenda or meeting notice, the article highlights the most notable listed items and tells readers how to follow or comment.
+- The draft is clear, useful, and front-loaded.
+- The most important point appears first.
+- The draft fits the chosen format well.
+- The draft avoids obvious repetition.
+- The draft gives a reader a practical reason to care, watch, or follow.
+- For agenda sources, the draft reads like a preview rather than a recap.
 
 FAIL if:
-- The article sounds like analysis, advocacy, or opinion.
-- The article buries the outcome.
-- The article is confusing, bloated, or not usefully packaged.
-- The article repeats the same agenda items or phrasing across lede, key facts, body, and next steps without adding new information.
-- The article treats a report or recommendation as if it were an adopted policy or completed event.
-- The article treats an agenda item or proposed motion as if council already approved it.
-- The article uses an inferred date or scheduling detail that the source does not clearly state.
-- The article uses past-tense event language for an agenda preview.
-- The article reads like a recap instead of a preview for an agenda source.
+- The draft is bloated, repetitive, or confusing.
+- The same point is repeated in multiple sentences without adding new value.
+- The chosen format is not actually realized.
+- The draft buries the main point.
+- The agenda draft sounds like the meeting already happened.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
@@ -230,27 +170,21 @@ Output rules:
 - No bullets, no labels, no markdown.
 - No text after the final verdict line..text.quoted be text ya
 
-exists su name news fairness verify prompt ob text quoted.text.Determine whether ARTICLE stays grounded in SOURCE and remains fair as straight-news reporting.
+exists su name news fairness verify prompt ob text quoted.text.Determine whether DRAFT stays grounded in SOURCE and remains fair as straight-news reporting.
 
 PASS if:
-- The article's factual claims are supported by the source.
-- The article preserves uncertainty where the source is uncertain.
-- The article does not blur analysis into factual reporting.
-- The article does not invent actors, dates, votes, costs, motives, or mechanisms.
-- If the source is a report or memo, the article keeps recommendations and proposals clearly attributed to the document.
-- If the source is an agenda or meeting notice, the article keeps proposed items, upcoming by-laws, and possible outcomes clearly framed as upcoming rather than decided.
-- If the source is an agenda or meeting notice, the article uses only schedule details that appear plainly in the meeting header, opening session lines, or public attendance instructions.
+- Every factual claim in the draft is supported by the source.
+- The draft does not invent approvals, outcomes, dates, costs, actors, or implementation details.
+- The draft keeps agenda items framed as upcoming when the source is an agenda.
+- The draft keeps report claims attributed when the source is a report or memo.
+- The draft does not materially distort the source.
 
 FAIL if:
-- The article adds unsupported concrete facts.
-- The article turns unclear source material into definite claims.
-- The article presents opinion or advocacy as if it were straight reporting.
-- The article is materially unfair to the source record.
-- The article states that a report's recommendations were adopted, implemented, or scheduled when the source does not say that.
-- The article states that an agenda item passed, was approved, or is already in force when the source only lists it for consideration.
-- The article invents a meeting date, deadline, or schedule detail that is not plainly stated in the meeting header, opening session lines, or public attendance instructions.
-- The article uses past-tense event language that makes an upcoming agenda sound like a completed meeting.
-- The article turns by-law titles or confirmation items into proof that the meeting already happened.
+- The draft adds unsupported concrete facts.
+- The draft turns proposals or agenda items into completed actions.
+- The draft invents dates or deadlines not plainly stated.
+- The draft overstates what the source says.
+- The draft presents opinion or advocacy as factual reporting.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
@@ -261,140 +195,75 @@ Output rules:
 exists su name news verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says the article fails the stated check.
+- Return FAIL only when the analysis clearly says the draft fails the stated check.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
-exists su name atom request template ob text quoted.text.SOURCE:
+exists su name points request template ob text quoted.text.SOURCE:
 [[source]].text.quoted be text ya
 
-exists su name source highlights prompt ob text quoted.text.You are preparing a clean reporting brief from SOURCE for a straight-news local civic article.
-
-Task:
-- Write 4 to 6 short factual lines.
-- Put the most notable substantive items first.
-- If the source is an agenda or meeting notice, prioritize named agenda items, tenders, contracts, studies, by-laws, reports, dollar amounts, and public decisions council is set to consider.
-- Use access or public-comment details only as the last line if they are clearly stated.
-
-Rules:
-- Plain language only.
-- No opinion.
-- No speculation.
-- One fact per line.
-- Keep each line between 7 and 18 words.
-- Do not repeat generic boilerplate.
-- Do not output bare item numbers, section numbers, or code fragments as facts by themselves.
-- Do not reduce dollar amounts like 1,577,823.85 to 85 or 83.
-- Prefer titled agenda items over procedural filler.
-- For agenda-style sources, deprioritize routine minutes, housekeeping, generic verbal reports, and already-issued approvals unless few substantive items exist.
-- Prefer concrete items involving land use, transit, contracts, housing, grants, infrastructure, conduct rules, or named policy changes.
-- If the source contains titled items and recommendation paragraphs, summarize the titled items rather than the recommendation wording.
-- Never turn street numbers, decimal endings, or address fragments into standalone dollar amounts.
-- If a line names a contract or recommendation, keep it framed as upcoming consideration for agenda-style sources.
-- No bullets, no numbering, no markdown, no surrounding quotes..text.quoted be text ya
-
-exists su name frame request template ob text quoted.text.SOURCE:
+exists su name points sieve request template ob text quoted.text.SOURCE:
 [[source]]
 
-WHAT HAPPENED:
-[[happened]]
+CANDIDATES:
+[[points]].text.quoted be text ya
 
-WHAT CHANGED:
-[[changed]]
+exists su name format request template ob text quoted.text.VERIFIED_POINTS:
+[[points]]
 
-WHY IT MATTERS:
-[[matters]]
+ACCESS_DETAILS:
+[[access]].text.quoted be text ya
 
-NEXT STEPS:
-[[next]].text.quoted be text ya
-
-exists su name headline request template ob text quoted.text.FRAME:
-[[frame]]
-
-WHAT HAPPENED:
-[[happened]]
-
-WHAT CHANGED:
-[[changed]]
-
-WHY IT MATTERS:
-[[matters]]
-
-NEXT STEPS:
-[[next]].text.quoted be text ya
-
-exists su name lede request template ob text quoted.text.FRAME:
-[[frame]]
-
-WHAT HAPPENED:
-[[happened]]
-
-WHAT CHANGED:
-[[changed]]
-
-WHY IT MATTERS:
-[[matters]].text.quoted be text ya
-
-exists su name body request template ob text quoted.text.FRAME:
-[[frame]]
-
-WHAT HAPPENED:
-[[happened]]
-
-WHAT CHANGED:
-[[changed]]
-
-WHY IT MATTERS:
-[[matters]]
-
-NEXT STEPS:
-[[next]]
-
-KEY FACTS:
-[[facts]]
-
-REVISION_FEEDBACK:
-[[feedback]].text.quoted be text ya
-
-exists su name fit request template ob text quoted.text.ARTICLE:
-[[storyarticle]].text.quoted be text ya
-
-exists su name fairness request template ob text quoted.text.SOURCE:
+exists su name draft request template ob text quoted.text.SOURCE:
 [[source]]
 
 GENERATOR_INTENT:
 [[intent]]
 
-ARTICLE:
-[[storyarticle]].text.quoted be text ya
+FORMAT:
+[[format]]
 
-exists su name paragraph break ob text quoted.text.
+VERIFIED_POINTS:
+[[points]]
 
-.text.quoted be text ya
+ACCESS_DETAILS:
+[[access]]
+
+REVISION_FEEDBACK:
+[[feedback]].text.quoted be text ya
+
+exists su name fit request template ob text quoted.text.FORMAT:
+[[format]]
+
+DRAFT:
+[[draft]].text.quoted be text ya
+
+exists su name fairness request template ob text quoted.text.SOURCE:
+[[source]]
+
+FORMAT:
+[[format]]
+
+DRAFT:
+[[draft]].text.quoted be text ya
 
 exists su name replacement source ob text "" be text ya
 exists su name replacement intent ob text "" be text ya
-exists su name replacement storyarticle ob text "" be text ya
-exists su name replacement frame ob text "" be text ya
-exists su name replacement happened ob text "" be text ya
-exists su name replacement changed ob text "" be text ya
-exists su name replacement matters ob text "" be text ya
-exists su name replacement next ob text "" be text ya
-exists su name replacement facts ob text "" be text ya
+exists su name replacement points ob text "" be text ya
+exists su name replacement access ob text "" be text ya
+exists su name replacement format ob text "" be text ya
 exists su name replacement feedback ob text "" be text ya
+exists su name replacement draft ob text "" be text ya
 
 su name replacements be map def
   su text "[[source]]" ob name text replacement source ya
   su text "[[intent]]" ob name text replacement intent ya
-  su text "[[storyarticle]]" ob name text replacement storyarticle ya
-  su text "[[frame]]" ob name text replacement frame ya
-  su text "[[happened]]" ob name text replacement happened ya
-  su text "[[changed]]" ob name text replacement changed ya
-  su text "[[matters]]" ob name text replacement matters ya
-  su text "[[next]]" ob name text replacement next ya
-  su text "[[facts]]" ob name text replacement facts ya
+  su text "[[points]]" ob name text replacement points ya
+  su text "[[access]]" ob name text replacement access ya
+  su text "[[format]]" ob name text replacement format ya
   su text "[[feedback]]" ob name text replacement feedback ya
+  su text "[[draft]]" ob name text replacement draft ya
 prah
 
 su name verdict from text review to name text pass be ceremony def
@@ -414,8 +283,22 @@ su name verdict from text review to name text pass be ceremony def
   su name pass ret
 prah
 
+su name format checked to name text output be ceremony def
+  ob name text request for name news format mind to name text format raw by num 0 atmost num 8 be write do
+  ob text "" to name text output be text do
+  ob name text format raw from text "/^\\s*chirp manuscript\\s*$/i" be resemble then
+  ob text "chirp manuscript" to name text output be text do
+  ob name text format raw from text "/^\\s*brief manuscript\\s*$/i" be resemble then
+  ob text "brief manuscript" to name text output be text do
+  ob name text format raw from text "/^\\s*news article\\s*$/i" be resemble then
+  ob text "news article" to name text output be text do
+  ob name text output be equally from text "" then
+  su name format guarantee stage ob bool lie fromtext text "news format defective" be guarantee do
+  su name output ret
+prah
+
 su name fit to name text pass be ceremony def
-  ob name text storytext to name text replacement storyarticle be text do
+  ob name text drafttext to name text replacement draft be text do
   su name request stage ob name map replacements in name text fit request template to name text request be instead do
   su name review stage ob name text request for name news fit verify mind to name text review by num 0 atmost num 220 be write do
   su name verdict stage from text of ob of review to name text pass be verdict do
@@ -424,59 +307,25 @@ prah
 
 su name fairness to name text pass be ceremony def
   ob name text source text to name text replacement source be text do
-  ob name text news intent to name text replacement intent be text do
-  ob name text storytext to name text replacement storyarticle be text do
+  ob name text drafttext to name text replacement draft be text do
   su name request stage ob name map replacements in name text fairness request template to name text request be instead do
   su name review stage ob name text request for name news fairness verify mind to name text review by num 0 atmost num 220 be write do
   su name verdict stage from text of ob of review to name text pass be verdict do
   su name pass ret
 prah
 
-su name frame checked to name text output be ceremony def
-  ob name text request for name frame mind to name text frame raw by num 0 atmost num 12 be write do
-  ob text "" to name text output be text do
-  ob name text frame raw from text "/^\\s*decision update\\s*$/i" be resemble then
-  ob text "decision update" to name text output be text do
-  ob name text frame raw from text "/^\\s*agenda preview\\s*$/i" be resemble then
-  ob text "agenda preview" to name text output be text do
-  ob name text frame raw from text "/^\\s*meeting outcome\\s*$/i" be resemble then
-  ob text "meeting outcome" to name text output be text do
-  ob name text frame raw from text "/^\\s*policy change\\s*$/i" be resemble then
-  ob text "policy change" to name text output be text do
-  ob name text frame raw from text "/^\\s*service impact\\s*$/i" be resemble then
-  ob text "service impact" to name text output be text do
-  ob name text frame raw from text "/^\\s*accountability issue\\s*$/i" be resemble then
-  ob text "accountability issue" to name text output be text do
-  ob name text frame raw from text "/^\\s*report brief\\s*$/i" be resemble then
-  ob text "report brief" to name text output be text do
-  ob name text output be equally from text "" then
-  su name frame guarantee stage ob bool lie fromtext text "news frame defective" be guarantee do
-  su name output ret
-prah
-
 su name story retry fromindex num 1 toindex num 3 be ceremony def
   ob name text story pass be equally from text true then be depart do
-  ob text "Shorten and simplify. Use exactly 2 short body paragraphs. Keep only the most important verified facts. Remove repeated explanation and any opinion-like phrasing." to name text replacement feedback be text do
-  ob name text frame be equally from text "agenda preview" then
-  ob text "Rewrite this strictly as an upcoming agenda preview. Use only present or future preview wording. Do not say the meeting already happened. Do not infer any calendar date unless it appears plainly in the meeting header or opening lines. Focus on the biggest agenda highlights plus how residents can watch or comment." to name text replacement feedback be text do
-  ob text "" to name text replacement facts be text do
-  su name body request retry stage ob name map replacements in name text body request template to name text body request be instead do
-  su name body retry stage ob name text body request for name body mind to name text body by num 0 atmost num 180 be write do
-  ob name text headline to name text storytext be text do
-  ob name text paragraph break to name text storytext be plus do
-  ob name text lede to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob text quoted.text.Key facts:
-.text.quoted to name text storytext be plus do
-  ob name text facts to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob name text body to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob text quoted.text.Next steps:
-.text.quoted to name text storytext be plus do
-  ob name text next to name text storytext be plus do
-  ob name text storytext to name text story length source be text do
-  su name letters retry stage be verify as wo letter count atleast num 280 atmost num 2400 from name text story length source to name map letters verify do
+  ob text quoted.text.Shorten and simplify. Put the most important verified point first. Remove repeated wording. Keep only facts directly supported by the source. If this is an agenda, make the preview language clearly upcoming, not completed..text.quoted to name text replacement feedback be text do
+  ob name text format be equally from text "chirp manuscript" then
+  ob text quoted.text.Rewrite as one compact civic chirp manuscript between 100 and 220 characters. Keep only one dominant point plus one practical reason to care..text.quoted to name text replacement feedback be text do
+  ob name text format be equally from text "brief manuscript" then
+  ob text quoted.text.Rewrite as three short paragraphs totaling 90 to 160 words. Keep the top two to four distinct points only, then end with why it matters or how to follow..text.quoted to name text replacement feedback be text do
+  ob name text format be equally from text "news article" then
+  ob text quoted.text.Rewrite as a short local news article with one headline line and three short paragraphs. Keep 180 to 320 words. Use the strongest verified items first and avoid repeating them later..text.quoted to name text replacement feedback be text do
+  su name draft request retry stage ob name map replacements in name text draft request template to name text draft request be instead do
+  su name draft retry stage ob name text draft request for name news draft mind to name text drafttext by num 0 atmost num 320 be write do
+  su name letters retry stage be verify as wo letter count atleast num 100 atmost num 2400 from name text drafttext to name map letters verify do
   ob text of pass of letters verify to name text letters pass be text do
   su name fit retry stage to name text fit pass be fit do
   su name fairness retry stage to name text fairness pass be fairness do
@@ -491,72 +340,41 @@ prah
 
 su name news manuscript run be refinery def
   su name source stage from filename of ob of source become wo text to name text source text be read do
-  exists su name source focus cmd ob text "cat -- \"" be text ya
-  exists su name access focus cmd ob text "cat -- \"" be text ya
+  exists su name source clean cmd ob text "cat -- \"" be text ya
   ob filename of source to name text source focus input be text do
-  ob name source focus input to name source focus cmd be plus do
-  ob name source focus input to name access focus cmd be plus do
-  ob text "\" | awk 'NR <= 4 { print; next } /Deputation from|Delegations|Transit Study|Correspondence from|Report [A-Z]{2}-|Motion for Which Notice was Previously Given|Code of Conduct|A By-law|Hazardous and Special Product|Funding Agreement|Third Amending Agreement|bus stops|Zoning By-law Update|Municipal Road Transfers|Audit Service Plan|Rural Ontario Development Program Grant|People who cannot attend the meeting in person|The public can attend meetings in person|Award of Tender|Award of Ceylon Operations Depot|Response Time Performance Plan|Build Canada Homes|Regional Transit Study|Committee of the Whole/ { print }' | sed 's/[[:space:]]\\+$//'" to name source focus cmd be plus do
-  ob text "\" | awk 'NR <= 4 { print; next } /The public can attend meetings in person|livestream|Rogers Cable TV|Rogers TV Website|People who cannot attend the meeting in person|one business day before the meeting|comments will be shared with members|Public Forum/ { print }' | sed 's/[[:space:]]\\+$//'" to name access focus cmd be plus do
-  su name source focus stage ob text of source focus cmd to name text source focused be command do
-  su name access focus stage ob text of access focus cmd to name text access focused be command do
-  su name source abridge stage from name text source focused atmost byte 2200 to name text source abridged be abridge do
-  ob name text source abridged for name source highlights mind to name text source highlights by num 0 atmost num 180 be write do
-  ob name text source highlights to name text replacement source be text do
+  ob name source focus input to name source clean cmd be plus do
+  ob text "\" | awk 'BEGIN{IGNORECASE=1} { line=$0; if (index(line, \"This item has\") == 1) next; if (match(line, \"^[[:space:]]*[0-9]+[a-z]?\\\\.?[[:space:]]*$\")) next; if (match(line, \"^[[:space:]]*$\")) next; sub(\"^[[:space:]]+\", \"\", line); sub(\"[[:space:]]+$\", \"\", line); if (NR <= 5) { print line; next } if (index(line, \"livestream\") > 0 || index(line, \"Rogers\") > 0 || index(line, \"one business day\") > 0 || index(line, \"comments\") > 0 || index(line, \"Council Chambers\") > 0 || index(line, \"Public Forum\") > 0 || index(line, \"Re: \") > 0 || index(line, \"By-law\") > 0 || index(line, \"Notice of Motion\") > 0 || index(line, \"Award\") > 0 || index(line, \"Tender\") > 0 || index(line, \"Transit\") > 0 || index(line, \"Funding Agreement\") > 0 || index(line, \"Design-Build\") > 0 || index(line, \"Build Canada Homes\") > 0 || index(line, \"Response Time\") > 0 || index(line, \"Grant\") > 0 || index(line, \"Business Licences\") > 0 || index(line, \"Municipal Road Transfers\") > 0 || index(line, \"Zoning By-law Update\") > 0 || index(line, \"Hazardous and Special Product\") > 0 || index(line, \"$\") > 0 || (index(line, \"That \") == 1 && (index(line, \"report\") > 0 || index(line, \"award\") > 0 || index(line, \"prepare\") > 0 || index(line, \"proceed\") > 0 || index(line, \"fund\") > 0 || index(line, \"submitted\") > 0 || index(line, \"support\") > 0 || index(line, \"received\") > 0))) print line }'" to name source clean cmd be plus do
+  su name source clean stage ob text of source clean cmd to name text source cleaned be command do
+  ob name text news intent to name text replacement intent be text do
 
-  su name happened request stage ob name map replacements in name text atom request template to name text happened request be instead do
-  su name happened stage ob name text happened request for name happened mind to name text happened by num 0 atmost num 80 be write do
+  su name source abridge stage from name text source cleaned atmost byte 8000 to name text source abridged be abridge do
+  ob name text source abridged to name text replacement source be text do
 
-  su name changed request stage ob name map replacements in name text atom request template to name text changed request be instead do
-  su name changed stage ob name text changed request for name changed mind to name text changed by num 0 atmost num 80 be write do
+  su name points request stage ob name map replacements in name text points request template to name text points request be instead do
+  su name points draft stage ob name text points request for name news points mind to name text points raw by num 0 atmost num 220 be write do
+  ob name text points raw to name text replacement points be text do
 
-  su name matters request stage ob name map replacements in name text atom request template to name text matters request be instead do
-  su name matters stage ob name text matters request for name matters mind to name text matters by num 0 atmost num 60 be write do
+  su name points sieve request stage ob name map replacements in name text points sieve request template to name text points sieve request be instead do
+  su name points sieve stage ob name text points sieve request for name news points sieve mind to name text points kept by num 0 atmost num 220 be write do
+  ob name text points kept to name text replacement points be text do
 
-  ob name text access focused to name text replacement source be text do
-  su name next request stage ob name map replacements in name text atom request template to name text next request be instead do
-  su name next stage ob name text next request for name next mind to name text next by num 0 atmost num 60 be write do
+  su name points guarantee stage be verify as wo letter count atleast num 20 atmost num 900 from name text points kept to name map points letters verify do
+  ob text of pass of points letters verify to name text points pass be text do
+  ob name text points pass be equally from text false then
+  su name points abort stage ob bool lie fromtext text "news points defective" be guarantee do
 
-  ob name text source highlights to name text replacement source be text do
-  su name facts request stage ob name map replacements in name text atom request template to name text facts request be instead do
-  su name facts stage ob name text facts request for name facts mind to name text facts by num 0 atmost num 140 be write do
+  su name access request stage ob name map replacements in name text points request template to name text access request be instead do
+  su name access stage ob name text access request for name news access mind to name text access kept by num 0 atmost num 120 be write do
+  ob name text access kept to name text replacement access be text do
 
-  ob name text happened to name text replacement happened be text do
-  ob name text changed to name text replacement changed be text do
-  ob name text matters to name text replacement matters be text do
-  ob name text next to name text replacement next be text do
-  ob name text facts to name text replacement facts be text do
+  su name format request stage ob name map replacements in name text format request template to name text request be instead do
+  su name format stage to name text format be format checked do
+  ob name text format to name text replacement format be text do
 
-  su name frame request stage ob name map replacements in name text frame request template to name text request be instead do
-  su name frame stage to name text frame be frame checked do
-  ob name text frame to name text replacement frame be text do
+  su name draft request stage ob name map replacements in name text draft request template to name text draft request be instead do
+  su name draft stage ob name text draft request for name news draft mind to name text drafttext by num 0 atmost num 320 be write do
 
-  su name headline request stage ob name map replacements in name text headline request template to name text request be instead do
-  su name headline stage ob name text request for name headline mind to name text headline by num 0 atmost num 24 be write do
-
-  su name lede request stage ob name map replacements in name text lede request template to name text request be instead do
-  su name lede stage ob name text request for name lede mind to name text lede by num 0 atmost num 120 be write do
-
-  ob text "" to name text replacement feedback be text do
-  su name body request stage ob name map replacements in name text body request template to name text body request be instead do
-  su name body stage ob name text body request for name body mind to name text body by num 0 atmost num 220 be write do
-
-  ob name text headline to name text storytext be text do
-  ob name text paragraph break to name text storytext be plus do
-  ob name text lede to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob text quoted.text.Key facts:
-.text.quoted to name text storytext be plus do
-  ob name text facts to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob name text body to name text storytext be plus do
-  ob name text paragraph break to name text storytext be plus do
-  ob text quoted.text.Next steps:
-.text.quoted to name text storytext be plus do
-  ob name text next to name text storytext be plus do
-
-  ob name text storytext to name text story length source be text do
-  su name letters stage be verify as wo letter count atleast num 280 atmost num 2400 from name text story length source to name map letters verify do
+  su name letters stage be verify as wo letter count atleast num 100 atmost num 2400 from name text drafttext to name map letters verify do
   ob text of pass of letters verify to name text letters pass be text do
   su name fit stage to name text fit pass be fit do
   su name fairness stage to name text fairness pass be fairness do
@@ -571,7 +389,7 @@ su name news manuscript run be refinery def
   fromindex num 1 toindex num 3 be story retry do
   ob name text story pass be equally from text false then
   su name article guarantee stage ob bool lie fromtext text "news article defective" be guarantee do
-  ob name text storytext be write do
+  ob name text drafttext be write do
 prah
 
 from name news manuscript run to name text result be refinery do
