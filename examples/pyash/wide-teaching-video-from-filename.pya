@@ -1,10 +1,7 @@
 ob filename text manuscript be input ya
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
+exists su name draw widescreen mode ob text "truth" be default ya
 
-su name wide teaching demo be refinery def
-  su name teaching demo from filename of ob of manuscript be teaching video wide do
+su name teaching demo from filename of ob of manuscript be teaching video do
 
-  su name result out ob name teaching demo be write do
-prah
-
-from name wide teaching demo be refinery do
+su name result out ob name teaching demo be write do
