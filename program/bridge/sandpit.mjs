@@ -63,6 +63,17 @@ function rememberNonControl(memory, name) {
   return null;
 }
 
+function inferObjectBe(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Array.isArray(value.series)) return "series";
+  if (value.map && typeof value.map === "object" && !Array.isArray(value.map)) return "map";
+  if (value.text !== undefined) return "text";
+  if (value.filename !== undefined) return "filename";
+  if (value.num !== undefined) return "num";
+  if (value.boolean !== undefined) return "bool";
+  return null;
+}
+
 function registerValue(reg, { state, memory } = {}) {
   if (reg == null) return null;
   if (typeof reg === "number") return reg;
@@ -284,9 +295,10 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     ? (updatedTarget?.ob ?? mainTarget?.ob ?? preferredVal ?? evoke.ob)
     : (preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob);
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
+  const inferredBe = inferObjectBe(effectiveObj);
   const mergedBe = targetLooksMap
     ? (updatedTarget?.be ?? mainTarget?.be ?? evoke.be ?? "result")
-    : (evoke.be || updatedTarget?.be || "result");
+    : (updatedTarget?.be ?? mainTarget?.be ?? inferredBe ?? evoke.be ?? "result");
 
   if (mergedObj === undefined && preferredVal === undefined && numericSignature) {
     throw new Error(`ceremony ${sentence.be} returned no value for numeric signature`);
