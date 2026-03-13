@@ -318,15 +318,15 @@ prah
 su name teaching video section footnote mapper ob filename section video fromindex num 0 be ceremony def
   su name section index stage ob num of fromindex of this to name num section index be plus do
   ob num 1 to name section index be plus do
-  su name section video input stage ob filename of ob of this to name filename section video input be filename do
 
-  su name section srt stage from num of ob of section index stage with text "captions.srt" to name filename section srt be teaching video section leaf do
-  su name section clip stage from num of ob of section index stage with text "section-footnote.mp4" to name filename section clip be teaching video section leaf do
+  su name section footnote srt stage from num of ob of section index stage with text "captions.srt" to name filename section footnote srt be teaching video section leaf do
+  su name section footnote video input stage from num of ob of section index stage with text "section.mp4" to name filename section footnote video input be teaching video section leaf do
+  su name section footnote clip stage from num of ob of section index stage with text "section-footnote.mp4" to name filename section footnote clip be teaching video section leaf do
 
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
   su name footnote mode stage to name text footnote mode current be current footnote mode do
 
-  su name section clip output stage from filename of ob of section srt stage with filename of ob of section video input stage to filename of ob of section clip stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
+  su name section clip output stage from filename of ob of section footnote srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
   su name section clip output stage ret
 prah
 

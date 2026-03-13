@@ -103,6 +103,58 @@ function windowCuts(rows = [], targetSeconds = 6) {
   return out;
 }
 
+function splitOversizedCut(cut = {}, targetSeconds = 6) {
+  const target = Number.isFinite(targetSeconds) && targetSeconds > 0 ? targetSeconds : 6;
+  const since = Number(cut?.since ?? 0);
+  const until = Number(cut?.until ?? since);
+  const span = until - since;
+  const text = String(cut?.obText ?? "").replace(/\s+/g, " ").trim();
+  if (!(Number.isFinite(span) && span > target + 1e-6) || !text) return [cut];
+
+  const sentenceSections = splitTextSentences(text).filter(Boolean);
+  const sections = sentenceSections.length > 1 ? sentenceSections : text.split(/\s+/u).filter(Boolean);
+  if (sections.length < 2) return [cut];
+
+  const partCount = Math.min(sections.length, Math.max(2, Math.ceil(span / target)));
+  if (partCount < 2) return [cut];
+
+  const grouped = Array.from({ length: partCount }, () => []);
+  for (let i = 0; i < sections.length; i += 1) {
+    const bucket = Math.min(partCount - 1, Math.floor(i * partCount / sections.length));
+    grouped[bucket].push(sections[i]);
+  }
+  const chunks = grouped
+    .map((parts) => parts.join(" ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  if (chunks.length < 2) return [cut];
+
+  const totalWords = chunks.reduce((sum, chunk) => sum + sectionWordTokens(chunk).length, 0);
+  if (totalWords <= 0) return [cut];
+
+  const out = [];
+  let cursor = since;
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i];
+    const words = Math.max(1, sectionWordTokens(chunk).length);
+    const remaining = until - cursor;
+    const duration = i === chunks.length - 1
+      ? remaining
+      : Math.max(0.05, span * (words / totalWords));
+    const nextUntil = i === chunks.length - 1 ? until : Math.min(until, cursor + duration);
+    out.push({
+      ...cut,
+      since: cursor,
+      until: nextUntil,
+      obText: chunk
+    });
+    cursor = nextUntil;
+  }
+  if (out.length) {
+    out[out.length - 1].until = until;
+  }
+  return out;
+}
+
 function splitTextParagraphs(text = "") {
   const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
   if (!source) return [];
@@ -767,8 +819,6 @@ export function resolveFilenameFromCase(value, rememberFn) {
   const resolveByName = (name) => {
     const normalizedName = sanitizeFilenameText(name);
     if (!normalizedName) return "";
-    const byArtifact = sanitizeFilenameText(lookupArtifactLocator(normalizedName));
-    if (byArtifact) return byArtifact;
     const fact = rememberFn?.(normalizedName);
     const byObFilename = normalizeResolved(fact?.ob?.filename);
     if (byObFilename) return byObFilename;
@@ -781,6 +831,8 @@ export function resolveFilenameFromCase(value, rememberFn) {
     }
     const byObText = normalizeResolved(fact?.ob?.text);
     if (byObText) return byObText;
+    const byArtifact = sanitizeFilenameText(lookupArtifactLocator(normalizedName));
+    if (byArtifact) return byArtifact;
     return "";
   };
 
@@ -923,11 +975,14 @@ export async function cutFromFilenameToNameItinerary(sentence, { remember: remem
   const rawCuts = parseSrtToCuts(srtText);
   const window = Number.isFinite(duration) && duration > 0 ? duration : null;
   const looksSectionTagged = rawCuts.length > 1 && rawCuts.every((cut) => /^\s*\[[^\]]+\]\s+/u.test(String(cut?.obText ?? "")));
-  const cuts = (!window)
+  const windowedCuts = (!window)
     ? rawCuts
     : (looksSectionTagged && window >= 120)
     ? rawCuts
     : windowCuts(rawCuts, window);
+  const cuts = (!window)
+    ? windowedCuts
+    : windowedCuts.flatMap((cut) => splitOversizedCut(cut, window));
   const series = [];
   let outIndex = 1;
   for (let i = 0; i < cuts.length; i += 1) {

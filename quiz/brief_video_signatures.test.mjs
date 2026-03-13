@@ -198,7 +198,7 @@ test("section mappers normalize current item to filename before media verbs", as
   );
   assert.match(
     source,
-    /teaching video section footnote mapper[\s\S]*ob filename of ob of this to name filename section video input be filename do[\s\S]*be footnote mode do/u
+    /teaching video section footnote mapper[\s\S]*with text "section\.mp4" to name filename section footnote video input be teaching video section leaf do[\s\S]*from filename of ob of section footnote srt stage with filename of ob of section footnote video input stage to filename of ob of section footnote clip stage[\s\S]*be footnote mode do/u
   );
   assert.match(
     source,

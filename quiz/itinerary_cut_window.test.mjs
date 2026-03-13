@@ -50,7 +50,7 @@ test("cut groups rapid subtitle rows into target window cuts", async () => {
   assert.equal(series[1]?.until?.num, 7.9);
 });
 
-test("cut keeps a single long subtitle row as one cut instead of duplicating the same text across windows", async () => {
+test("cut splits a single long subtitle row into non-duplicated subcuts across windows", async () => {
   const dir = path.resolve("quiz/sandpit");
   await fs.mkdir(dir, { recursive: true });
   const source = path.join(dir, "single-long-subtitle.srt");
@@ -73,10 +73,12 @@ test("cut keeps a single long subtitle row as one cut instead of duplicating the
   });
 
   const series = Array.isArray(out?.ob?.series) ? out.ob.series : [];
-  assert.equal(series.length, 1);
+  assert.equal(series.length, 2);
   assert.equal(series[0]?.since?.num, 0.031);
-  assert.equal(series[0]?.until?.num, 7.881);
-  assert.match(String(series[0]?.ob?.text ?? ""), /ordinary families could own land/u);
+  assert.equal(series[1]?.until?.num, 7.881);
+  assert.notEqual(String(series[0]?.ob?.text ?? ""), String(series[1]?.ob?.text ?? ""));
+  assert.match(String(series[0]?.ob?.text ?? ""), /Solon ended debt/u);
+  assert.match(String(series[1]?.ob?.text ?? ""), /families could own land/u);
 });
 
 test("cut from text splits manuscript paragraphs into itinerary rows", async () => {
