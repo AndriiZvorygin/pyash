@@ -72,6 +72,11 @@ Examples:
 
 In this mode, the refinery should avoid unnecessary LLM passes.
 
+Current implementation note:
+
+- the first programmatic helper targets explicit Q/A and heading-style boundaries,
+- deterministic boundary proposals are derived from structural markers already present in the source text.
+
 ### 2. Boundary proposal
 
 Use this when the source structure is real but not trivial to extract deterministically.
@@ -94,6 +99,11 @@ Examples:
 
 - explicit headings exist, but final chips should merge heading blocks into larger semantic units,
 - a source exposes likely Q/A markers, but answer spans need limited interpretation.
+
+Current implementation note:
+
+- mixed mode first tries the deterministic boundary helper,
+- gross chips that still yield no explicit structural marker fall back to the small-model boundary proposer.
 
 ## Channeling Q/A example
 

@@ -10,55 +10,123 @@ Rules for the prompt you write:
 - If the source looks repetitive or fuzzy, instruct the model to return the best exact marker for the start of the next requested final chip.
 - Output only the prompt text, no markdown, no bullets, no surrounding quotes..text.quoted be text ya
 
+exists su name chip strategy analyzer prompt ob text quoted.text.You read CHIP_STYLE_PROMPT and FIRST_GROSS_CHIP.
+
+Choose the best chip strategy for producing the requested final wise chips.
+
+Return exactly one line and nothing else:
+- programmatic
+- boundary proposal
+- mixed
+
+Choose programmatic only when the source exposes explicit repeated structure that can be extracted deterministically.
+Choose boundary proposal when chip boundaries require semantic judgment across the gross chips.
+Choose mixed when explicit structure exists but limited model help is still useful..text.quoted be text ya
+
 exists su name chip classifier be mind via state "qwen3.5:9b" fromtext name chip classifier prompt ya
+exists su name chip strategy analyzer be mind via state "qwen3.5:9b" fromtext name chip strategy analyzer prompt ya
 
-su name chip from name text source ob text style to name text output be ceremony def
-  from name of from of this atmost byte 2400 to name text chip gross chips be gross chip do
-
-  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
-  ob text of ob of this to name chip classify request be plus do
-  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
-  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
-
-  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
-  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
-  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
-  from name of from of this by name text chip boundary proposals to name text output be wise chip do
+su name chip helper filename from text leaf to name filename output be ceremony def
+  ob ve text "artifacts/chip-refinery" "text of from of this" to name filename output be concatenate become wo filename do
   su name output ret
 prah
 
-su name chip from name text source ob name text style to name text output be ceremony def
-  from name of from of this atmost byte 2400 to name text chip gross chips be gross chip do
-
-  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
-  ob text of ob of this to name chip classify request be plus do
-  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
-  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
-
-  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
-  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
-  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
-  from name of from of this by name text chip boundary proposals to name text output be wise chip do
-  su name output ret
-prah
-
-su name chip from text source ob text style to name text output be ceremony def
+su name chip classify request from text source with text style to name text output be ceremony def
   from text of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+  ob text "CHIP_STYLE_PROMPT:\n" to name text output be text do
+  ob text of with of this to name text output be plus do
+  ob text "\n\nFIRST_GROSS_CHIP:\n" to name text output be plus do
+  ob text of ob of 0 of series of ob of chip gross chips to name text output be plus do
+  su name output ret
+prah
 
-  ob text "CHIP_STYLE_PROMPT:\n" to name text chip classify request be text do
-  ob text of ob of this to name chip classify request be plus do
-  ob text "\n\nFIRST_GROSS_CHIP:\n" to name chip classify request be plus do
-  ob text of ob of 0 of series of ob of chip gross chips to name chip classify request be plus do
+su name chip llm boundary from text gross chip to name text output be ceremony def
+  ob text of from of this for name chip boundary proposer to name text output be write do
+  su name output ret
+prah
 
+su name chip programmatic boundary from text gross chip to name text output be ceremony def
+  ob text "/gross-chip.txt" to name text chip gross chip leaf be text do
+  su name chip input filename stage from text of ob of chip gross chip leaf to name filename chip input filename be chip helper filename do
+  ob text "/chip-style.txt" to name text chip style leaf be text do
+  su name chip style filename stage from text of ob of chip style leaf to name filename chip style filename be chip helper filename do
+
+  su name chip helper directory ensure stage ob text "artifacts/chip-refinery" be directory do
+  su name chip input write stage ob text of from of this to filename of ob of chip input filename stage be write do
+  su name chip style write stage ob name text chip programmatic style current to filename of ob of chip style filename stage be write do
+
+  ob filename of ob of chip input filename stage to name text chip input path be text do
+  ob filename of ob of chip style filename stage to name text chip style path be text do
+  ob ve text "node command/chip_programmatic_boundary.mjs \"" name chip input path text "\" \"" name chip style path text "\"" to name text chip programmatic command be concatenate do
+  su name chip programmatic stage ob name text chip programmatic command to name text output be command do
+  su name output ret
+prah
+
+su name chip mixed boundary from text gross chip to name text output be ceremony def
+  su name chip mixed programmatic stage from text of from of this to name text output be chip programmatic boundary do
+  ob name text output be equally from text "" then su name chip mixed llm stage from text of from of this to name text output be chip llm boundary do
+  su name output ret
+prah
+
+su name chip from text source with text style to name text output be ceremony def
+  su name chip helper directory ensure stage ob text "artifacts/chip-refinery" be directory do
+  from text of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+  ob text of with of this to name text chip programmatic style current be text do
+
+  su name chip classify request stage from text of from of this with text of with of this to name text chip classify request be chip classify request do
   ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
   exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
-  from name chip gross chips by name chip boundary proposer to name text chip boundary proposals be series map do
+
+  ob name text chip classify request for name chip strategy analyzer to name text chip strategy raw be write do
+  ob name text chip strategy raw atmost num 1 to name text chip strategy be line tail do
+  ob name text chip strategy be equally from text "programmatic" then from name chip gross chips by name chip programmatic boundary to name text chip boundary proposals be series map do
+  ob name text chip strategy be equally from text "mixed" then from name chip gross chips by name chip mixed boundary to name text chip boundary proposals be series map do
+  ob name text chip strategy be equally from text "boundary proposal" then from name chip gross chips by name chip llm boundary to name text chip boundary proposals be series map do
+  ob name text chip strategy be equally from text "programmatic" then from text of from of this by name text chip boundary proposals to name text output be wise chip do
+  ob name text chip strategy be equally from text "mixed" then from text of from of this by name text chip boundary proposals to name text output be wise chip do
+  ob name text chip strategy be equally from text "boundary proposal" then from text of from of this by name text chip boundary proposals to name text output be wise chip do
+  ob name text chip strategy be equally from text "programmatic" then be depart do
+  ob name text chip strategy be equally from text "mixed" then be depart do
+  ob name text chip strategy be equally from text "boundary proposal" then be depart do
+
+  ob text "boundary proposal" to name text chip strategy be text do
+  from name chip gross chips by name chip llm boundary to name text chip boundary proposals be series map do
   from text of from of this by name text chip boundary proposals to name text output be wise chip do
   su name output ret
 prah
 
+su name chip from name text source with text style to name text output be ceremony def
+  from name of from of this with text of with of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from text source with name text style to name text output be ceremony def
+  from text of from of this with name text of with of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from name text source with name text style to name text output be ceremony def
+  from name of from of this with name text of with of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from text source ob text style to name text output be ceremony def
+  from text of from of this with text of ob of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from name text source ob text style to name text output be ceremony def
+  from name of from of this with text of ob of this to name text output be chip do
+  su name output ret
+prah
+
 su name chip from text source ob name text style to name text output be ceremony def
-  from text of from of this ob text of ob of this to name text output be chip do
+  from text of from of this with name text of ob of this to name text output be chip do
+  su name output ret
+prah
+
+su name chip from name text source ob name text style to name text output be ceremony def
+  from name of from of this with name text of ob of this to name text output be chip do
   su name output ret
 prah
 
@@ -78,7 +146,7 @@ su name chip from text source ob text style be ceremony def
 prah
 
 su name chip from text source ob name text style be ceremony def
-  from text of from of this ob text of ob of this to name text chip out be chip do
+  from text of from of this ob name text of ob of this to name text chip out be chip do
   su name chip out ret
 prah
 
