@@ -91,8 +91,8 @@ function resolveGenitiveLiteral(genitive, { state, memory, depth = 0, seen = new
   return curr ?? null;
 }
 
-function resolveIoGenitives(sentence, { state, memory } = {}) {
-  for (const key of ["from", "to"]) {
+export function resolveIoGenitives(sentence, { state, memory } = {}) {
+  for (const key of ["from", "to", "with"]) {
     const value = sentence?.[key];
     if (!value?.genitive) continue;
     const chainArr = Array.isArray(value.genitive.chain) ? value.genitive.chain : [];
