@@ -3,86 +3,67 @@ ob filename text source be input ya
 from filename "../../module/read_html_markdown.pya" ob name read to name read be import do
 from filename "../../module/chip_refinery.pya" ob name chip to name chip be import do
 
-ob name run root to name text workspace root be text do
-ob name run id to name text run id be text do
-ob filename of ob of source to name text source url be text do
+exists su name confederation session chip style prompt ob text quoted.text.Create wise chips where each chip contains one full question and its full corresponding answer from this channeling session. Preserve complete question and answer units. Do not split a question away from its answer. Prefer chip boundaries at the beginning of each new question..text.quoted be text ya
 
-ob text "printf '%s' " to name text stem cmd be text do
-ob name text source url to name stem cmd be plus do
-ob text " | sed 's#^[A-Za-z][A-Za-z0-9+.-]*://##' | tr '/:?&=#[]()% ' '_' | tr -s '_' | sed 's/^_//' | sed 's/_$//' | cut -c1-96 | tr -d '\\n'" to name stem cmd be plus do
-su name stem stage ob name text stem cmd be command do
+exists su name text confederation artifacts segment ob text "artifacts" be text ya
+exists su name text confederation stage segment ob text "/chip-stage-1" be text ya
+exists su name text confederation produce segment ob text "know/produce" be text ya
 
-ob name workspace root to name text run artifacts dir path be plus do
-ob text "/artifacts/" to name run artifacts dir path be plus do
-ob name run id to name run artifacts dir path be plus do
+su name confederation run root to name text confederation run root be ceremony def
+  ob name run id to name text confederation run id be text do
+  ob ve name "text confederation artifacts segment" "text confederation run id" to name text confederation run root be concatenate become wo filename do
+  su name confederation run root ret
+prah
 
-ob name run artifacts dir path to name text stage dir path be plus do
-ob text "/chip-stage-1" to name stage dir path be plus do
+su name confederation stage filename from text leaf to name filename output be ceremony def
+  su name run root stage to name text confederation run root be confederation run root do
+  ob ve name "text confederation run root" "text confederation stage segment" "text of from of this" to name filename output be concatenate become wo filename do
+  su name output ret
+prah
 
-ob text "mkdir -p \"" to name text stage mkdir cmd be text do
-ob name stage dir path to name stage mkdir cmd be plus do
-ob text "\"" to name stage mkdir cmd be plus do
-su name stage mkdir ob name text stage mkdir cmd be command do
+su name confederation final filename from text leaf to name filename output be ceremony def
+  su name run root stage to name text confederation run root be confederation run root do
+  ob ve name "text confederation run root" "text of from of this" to name filename output be concatenate become wo filename do
+  su name output ret
+prah
 
-ob name stage dir path to name text html path be plus do
-ob text "/" to name html path be plus do
-ob name stem stage to name html path be plus do
-ob text ".html" to name html path be plus do
+su name confederation produce filename from text leaf to name filename output be ceremony def
+  ob ve name "text confederation produce segment" "text of from of this" to name filename output be concatenate become wo filename do
+  su name output ret
+prah
 
-ob name stage dir path to name text markdown path be plus do
-ob text "/" to name markdown path be plus do
-ob name stem stage to name markdown path be plus do
-ob text ".md" to name markdown path be plus do
-ob name markdown path to name filename markdown filename be filename do
+su name confederation qa wise chips be refinery def
+  su name stage dir stage from text "" to name filename stage dir be confederation stage filename do
+  su name stage directory ensure stage ob filename of ob of stage dir stage be directory do
+  su name produce directory ensure stage ob name text confederation produce segment be directory do
 
-ob name stage dir path to name text session markdown path be plus do
-ob text "/" to name session markdown path be plus do
-ob name stem stage to name session markdown path be plus do
-ob text "_session.md" to name session markdown path be plus do
-ob name session markdown path to name filename session markdown filename be filename do
+  ob text "/source.html" to name text html leaf be text do
+  su name html filename stage from text of ob of html leaf to name filename html filename be confederation stage filename do
 
-ob name stage dir path to name text local wise path be plus do
-ob text "/" to name local wise path be plus do
-ob name stem stage to name local wise path be plus do
-ob text "_wise_chips.series.pya" to name local wise path be plus do
-ob name local wise path to name filename local wise filename be filename do
+  ob text "/source.md" to name text markdown leaf be text do
+  su name markdown filename stage from text of ob of markdown leaf to name filename markdown filename be confederation stage filename do
 
-ob name run artifacts dir path to name text final wise path be plus do
-ob text "/" to name final wise path be plus do
-ob name stem stage to name final wise path be plus do
-ob text "_wise_chips.series.pya" to name final wise path be plus do
-ob name final wise path to name filename final wise filename be filename do
+  ob text "/session.md" to name text session leaf be text do
+  su name session filename stage from text of ob of session leaf to name filename session filename be confederation stage filename do
 
-su name download stage from filename of ob of source as wo web fromstate name https to filename of ob of html path be download do
-from filename of ob of html path fromstate wo html become wo markdown to name text markdown source be read do
-su name markdown write stage ob name markdown source to filename of ob of markdown filename be write do
+  ob text "/wise_chips.series.pya" to name text wise leaf be text do
+  su name stage wise filename stage from text of ob of wise leaf to name filename stage wise filename be confederation stage filename do
+  su name final wise filename stage from text "/wise_chips.series.pya" to name filename final wise filename be confederation final filename do
+  su name produce wise filename stage from text "/confederation-qa-wise_chips.series.pya" to name filename produce wise filename be confederation produce filename do
 
-ob text "node -e \"const fs=require('fs'); const source=fs.readFileSync(process.argv[1],'utf8'); const match=source.match(/^# [A-Za-z]+ [0-9]{1,2}, [0-9]{4}[\\s\\S]*$/m); if(!match){process.exit(2);} fs.writeFileSync(process.argv[2], match[0]);\" \"" to name text session trim cmd be text do
-ob name markdown path to name session trim cmd be plus do
-ob text "\" \"" to name session trim cmd be plus do
-ob name session markdown path to name session trim cmd be plus do
-ob text "\"" to name session trim cmd be plus do
-su name session trim stage ob text of session trim cmd be command do
-from filename of ob of session markdown filename become wo text to name text session markdown source be read do
+  su name download stage from filename of ob of source as wo web fromstate name https to filename of ob of html filename stage be download do
+  from filename of ob of html filename stage fromstate wo html become wo markdown to name text markdown source be read do
+  su name markdown write stage ob name markdown source to filename of ob of markdown filename stage be write do
 
-exists su name chip style prompt ob text quoted.text.Create wise chips where each chip contains one full question and its full corresponding answer from this channeling session. Preserve complete question and answer units. Do not split a question away from its answer. Prefer chip boundaries at the beginning of each new question..text.quoted be text ya
+  from name markdown source since text "# " to name text session markdown source be extract do
+  su name session write stage ob name session markdown source to filename of ob of session filename stage be write do
 
-from name text session markdown source ob name text chip style prompt to name text confederation wise chips be chip do
-su name local wise write stage ob name confederation wise chips to filename of ob of local wise filename be write do
-su name final wise copy stage ob filename of ob of local wise filename to filename of ob of final wise filename be copy do
+  from name text session markdown source ob name text confederation session chip style prompt to name text confederation wise chips be chip do
+  su name stage wise write stage ob name confederation wise chips to filename of ob of stage wise filename stage be write do
+  su name final wise copy stage ob filename of ob of stage wise filename stage to filename of ob of final wise filename stage be copy do
+  su name produce wise copy stage ob filename of ob of final wise filename stage to filename of ob of produce wise filename stage be copy do
 
-ob name workspace root to name text produce dir path be plus do
-ob text "/know/produce" to name produce dir path be plus do
-ob text "mkdir -p \"" to name text produce mkdir cmd be text do
-ob name produce dir path to name produce mkdir cmd be plus do
-ob text "\"" to name produce mkdir cmd be plus do
-su name produce mkdir stage ob name text produce mkdir cmd be command do
+  su name result out ob filename of ob of final wise filename stage be write do
+prah
 
-ob name produce dir path to name text produce wise path be plus do
-ob text "/" to name produce wise path be plus do
-ob name stem stage to name produce wise path be plus do
-ob text "_wise_chips.series.pya" to name produce wise path be plus do
-ob name produce wise path to name filename produce wise filename be filename do
-
-su name produce wise copy stage ob filename of ob of final wise filename to filename of ob of produce wise filename be copy do
-su name output stage ob name final wise path be write do
+from name confederation qa wise chips be refinery do

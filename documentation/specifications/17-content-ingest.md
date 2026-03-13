@@ -21,6 +21,12 @@ The ingest stack has three distinct chip layers:
 - `wise chip`: resolved semantic units suitable for downstream use.
 - `chip`: a higher-level adaptive refinery entrypoint that chooses how to produce the final wise chips.
 
+Supporting preparation may also use:
+
+- `be extract`: marker-based text slicing before chipping
+  - `since ...`
+  - `until ...`
+
 `be chip` is the general-purpose contract. It receives a source and a requested chip shape, then decides whether the source should be chipped:
 
 - programmatically,
@@ -64,6 +70,7 @@ Examples:
 - channeling transcript markdown with clear `Questioner` / `Q` and answer structure may use programmatic extraction,
 - long prose essays may use gross chips plus boundary proposals,
 - meeting minutes may mix explicit headings with model-guided agenda-item grouping.
+- downloaded markdown may use `be extract` to keep only the relevant session body before chipping.
 
 ## 5. Gross chip and wise chip roles
 

@@ -86,6 +86,7 @@ import concatenateFilename, { signatures as concatenateFilenameSignatures } from
 import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 import android, { signatures as androidSignatures } from "./android.mjs";
+import extract, { signatures as extractSignatures } from "./extract.mjs";
 
 export {
   plus,
@@ -162,7 +163,8 @@ export {
   concatenateFilename,
   itineraryMedia,
   drawTextImage,
-  android
+  android,
+  extract
 };
 
 export const builtInSignatures = [
@@ -254,4 +256,5 @@ export const builtInSignatures = [
   ...itineraryMediaSignatures,
   ...drawTextImageSignatures,
   ...androidSignatures,
+  ...extractSignatures,
 ];
