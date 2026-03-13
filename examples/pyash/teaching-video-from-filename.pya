@@ -1,3 +1,5 @@
+from filename "../../module/brief_video.pya" ob name teaching video to name teaching video be import do
+
 ob filename text manuscript be input ya
 exists su name mind model ob text "qwen3-vl:8b-instruct" be default ya
 exists su name draw widescreen mode ob text "lie" be default ya
