@@ -33,11 +33,16 @@ export function resolveSayBackend({ rememberFn } = {}) {
 }
 
 async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    throw new Error(`say admin failed: fetch ${url} (${err?.message ?? err})`);
+  }
   if (!res.ok) {
     throw new Error(`say admin failed: ${res.status} ${res.statusText ?? ""} (${url})`.trim());
   }
@@ -45,7 +50,12 @@ async function postJson(url, body) {
 }
 
 async function postEmpty(url) {
-  const res = await fetch(url, { method: "POST" });
+  let res;
+  try {
+    res = await fetch(url, { method: "POST" });
+  } catch (err) {
+    throw new Error(`say admin failed: fetch ${url} (${err?.message ?? err})`);
+  }
   if (!res.ok) {
     throw new Error(`say admin failed: ${res.status} ${res.statusText ?? ""} (${url})`.trim());
   }

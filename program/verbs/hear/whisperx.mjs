@@ -27,19 +27,24 @@ async function transcribeWithWhisperxStream({
 } = {}) {
   const endpoint = `${normalizeHost(host)}/transcribe_stream`;
   const normalizedLanguage = String(language ?? "").trim().toLowerCase();
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      input: inputPath,
-      output_srt: outputPath,
-      language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
-      model,
-      device,
-      diarize,
-      hf_token: hfToken || undefined
-    })
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: inputPath,
+        output_srt: outputPath,
+        language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
+        model,
+        device,
+        diarize,
+        hf_token: hfToken || undefined
+      })
+    });
+  } catch (err) {
+    throw new Error(`whisperx defective: fetch ${endpoint} (${err?.message ?? err})`);
+  }
   if (!response.ok) {
     const payload = await parseJsonResponse(response);
     const message = payload?.error || `${response.status} ${response.statusText}`;
@@ -115,19 +120,24 @@ export async function transcribeWithWhisperx({
   }
   const endpoint = `${normalizeHost(host)}/transcribe`;
   const normalizedLanguage = String(language ?? "").trim().toLowerCase();
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      input: inputPath,
-      output_srt: outputPath,
-      language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
-      model,
-      device,
-      diarize,
-      hf_token: hfToken || undefined
-    })
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        input: inputPath,
+        output_srt: outputPath,
+        language: !normalizedLanguage || normalizedLanguage === "auto" ? undefined : language,
+        model,
+        device,
+        diarize,
+        hf_token: hfToken || undefined
+      })
+    });
+  } catch (err) {
+    throw new Error(`whisperx defective: fetch ${endpoint} (${err?.message ?? err})`);
+  }
 
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
@@ -141,11 +151,16 @@ export async function transcribeWithWhisperx({
 
 export async function dischargeWhisperx({ host } = {}) {
   const endpoint = `${normalizeHost(host)}/discharge`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: "{}"
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}"
+    });
+  } catch (err) {
+    throw new Error(`whisperx discharge defective: fetch ${endpoint} (${err?.message ?? err})`);
+  }
   let payload = {};
   try {
     payload = await response.json();
