@@ -504,12 +504,14 @@ su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook positive pass be equally from text true then be depart do
   su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook positive pass ret
 prah
 
 su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
   ob name text verse one imagery pass be equally from text true then be depart do
   su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
   su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do
+  su name verse one imagery pass ret
 prah
 
 su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def
@@ -517,18 +519,21 @@ su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def
   su name chorus stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus out be hymn section verify do
   su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
   ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
+  su name hymn chorus hook pass ret
 prah
 
 su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def
   ob name text verse two imagery pass be equally from text true then be depart do
   su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
   su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
+  su name verse two imagery pass ret
 prah
 
 su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn chorus stability pass be equally from text true then be depart do
   ob name text chorus out to name text final chorus out be text do
   su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
+  su name hymn chorus stability pass ret
 prah
 
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def

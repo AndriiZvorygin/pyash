@@ -117,10 +117,15 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /fromindex num 1 toindex num 3 be hymn hook positive retry do/);
   assert.match(text, /su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do/);
   assert.match(text, /su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn hook positive pass ret/);
   assert.match(text, /su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name verse one imagery pass ret/);
   assert.match(text, /su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn chorus hook pass ret/);
   assert.match(text, /su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name verse two imagery pass ret/);
   assert.match(text, /su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn chorus stability pass ret/);
   assert.match(text, /su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);
   assert.match(text, /su name hymn communal voice retry stage from text of ob of manuscript out to name text hymn communal voice pass be hymn communal voice do/);
