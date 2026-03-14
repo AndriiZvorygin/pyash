@@ -413,16 +413,9 @@ su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony d
   su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
 prah
 
-su name hymn final chorus hook retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn final chorus hook pass be equally from text true then be depart do
-  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
-  su name hymn final chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do
-  ob text of pass of hymn final chorus hook verify to name text hymn final chorus hook pass be text do
-prah
-
 su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn chorus stability pass be equally from text true then be depart do
-  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  ob name text chorus out to name text final chorus out be text do
   su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
 prah
 
@@ -489,20 +482,9 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name bridge request source stage ob name text hymn source to name bridge request be plus do
   su name bridge stage from text of ob of bridge request for name hymn bridge mind accordingto name hymn bridge checks to name text bridge out be hymn section verify do
 
-  su name final chorus prior stage ob name text chorus out to name text final chorus prior be text do
-  su name final chorus request begin stage ob text "TARGET_WORDS: 14-24\nSECTION_ROLE: FINAL_CHORUS_REINFORCEMENT\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\nHOOK_PHRASE:\n" to name text final chorus request be text do
-  su name final chorus request hook stage ob name text hook out to name final chorus request be plus do
-  su name final chorus request prior header stage ob text "\n\nPRIOR SEGMENT:\n" to name final chorus request be plus do
-  su name final chorus request prior stage ob name text final chorus prior to name final chorus request be plus do
-  su name final chorus request bridge header stage ob text "\n\nBRIDGE:\n" to name final chorus request be plus do
-  su name final chorus request bridge stage ob name text bridge out to name final chorus request be plus do
-  su name final chorus request source header stage ob text "\n\nSOURCE TEXT:\n" to name final chorus request be plus do
-  su name final chorus request source stage ob name text hymn source to name final chorus request be plus do
-  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  su name final chorus stage ob name text chorus out to name text final chorus out be text do
   su name hymn final chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do
   ob text of pass of hymn final chorus hook verify to name text hymn final chorus hook pass be text do
-  ob name text hymn final chorus hook pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn final chorus hook retry do
   ob name text hymn final chorus hook pass be equally from text false then
   su name hymn final chorus hook guarantee stage ob bool lie fromtext text "hymn final chorus hook defective" be guarantee do
   su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
