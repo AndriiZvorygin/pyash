@@ -88,6 +88,7 @@ Rules:
 - Memorable and repeatable refrain.
 - Must include the exact HOOK_PHRASE unchanged.
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
+- Prefer using the exact HOOK_PHRASE as a full line when possible.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
 - Prefer present-tense realis declarative lines.

@@ -55,6 +55,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Prefer we, our, us, or shared witness over direct commands\./);
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
   assert.match(text, /Repeat the hook as a statement of what is true now, not as an instruction\./);
+  assert.match(text, /Prefer using the exact HOOK_PHRASE as a full line when possible\./);
   assert.match(text, /Prefer present-tense realis declarative lines with experiential imagery\./);
   assert.match(text, /Allow imperative phrasing sparingly only if it adds movement or emphasis\./);
   assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\./);
