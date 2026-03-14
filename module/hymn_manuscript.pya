@@ -25,8 +25,7 @@ exists su name hymn hook prompt ob text quoted.text.You are writing the fixed ho
 Rules:
 - 2 to 5 words only.
 - This exact phrase must be memorable, singable, and easy to repeat.
-- It should name the core message or refrain anchor directly.
-- Prefer concrete, vivid, emotionally direct wording.
+- Draw wording from the source text rather than generic devotional filler.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -35,15 +34,14 @@ exists su name hymn intro prompt ob text quoted.text.You are writing the Intro o
 
 Teaching role:
 - Announce the topic.
-- Create curiosity.
-- Preview what will be learned.
+- Establish the song's focus.
 
 Rules:
 - 1 short line.
 - 6 to 10 words total.
 - Clear, simple vocabulary.
 - May include the exact HOOK_PHRASE.
-- Prefer positive goal-state language.
+- Draw key wording from the source text.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -57,8 +55,7 @@ Rules:
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
-- Emotional, singable language.
-- Prefer healing, peace, courage, joy, service, and other goal-state language.
+- Keep wording singable and source-grounded.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -74,7 +71,7 @@ Rules:
 - Memorable and repeatable refrain.
 - Must include the exact HOOK_PHRASE unchanged.
 - Keep the core theme tied to the source and Verse 1.
-- Prefer positive goal-state language that names the desired state directly.
+- Prefer source-derived wording over generic uplift language.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -94,7 +91,7 @@ Rules:
 - Keep the same core message as the prior chorus.
 - Must include the exact HOOK_PHRASE unchanged.
 - Keep wording close to the prior chorus rather than rewriting it from scratch.
-- Prefer positive goal-state language that names the desired state directly.
+- Prefer source-derived wording over generic uplift language.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -112,7 +109,7 @@ Rules:
 - Do not repeat Verse 1 wording.
 - Each couplet must include at least one physical image, object, or scene.
 - Keep abstract nouns grounded in visible action, setting, or sensory detail.
-- Prefer healing, peace, courage, joy, service, and other goal-state language.
+- Draw concrete wording from the source text rather than generic uplift language.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -127,7 +124,7 @@ Rules:
 - 12 to 20 words total.
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
-- Land in the healed or illuminated goal state rather than in fear or warning.
+- Draw its turn or resolution from the source text rather than generic uplift phrasing.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -137,7 +134,7 @@ exists su name hymn outro prompt ob text quoted.text.You are writing the Outro o
 
 Teaching role:
 - Close the lesson with a final reinforcement.
-- Leave one memorable encouragement or call to action.
+- Leave one memorable closing line.
 
 Rules:
 - 2 short lines.
@@ -145,7 +142,7 @@ Rules:
 - 6 to 10 words total.
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
-- End in the desired spiritual state, promise, or encouragement.
+- Draw its closing language from the source text where possible.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya

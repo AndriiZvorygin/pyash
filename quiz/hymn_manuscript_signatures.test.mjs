@@ -46,10 +46,10 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source thrust verify mind be mind fromtext name hymn source thrust verify prompt ya/);
   assert.match(text, /exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya/);
   assert.match(text, /exists su name hymn source thrust intent ob text quoted\.text\./);
-  assert.match(text, /Prefer positive goal-state language\./);
+  assert.match(text, /Draw wording from the source text rather than generic devotional filler\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no more, cannot, won't, don't/);
-  assert.match(text, /Land in the healed or illuminated goal state rather than in fear or warning\./);
-  assert.match(text, /End in the desired spiritual state, promise, or encouragement\./);
+  assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
+  assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT\./);
   assert.match(text, /hymn source thrust verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
   assert.match(text, /su name hymn hook checks be series def/);
