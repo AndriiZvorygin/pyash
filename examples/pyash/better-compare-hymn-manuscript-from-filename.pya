@@ -1,0 +1,43 @@
+ob filename text source be input ya
+su name provider auto discharge ob bool lie ya
+
+from filename "../../module/hymn_manuscript.pya" ob name hymn manuscript to name hymn manuscript be import do
+from filename "../../module/better_compare.pya" ob name better compare to name better compare be import do
+
+exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise hymn judge. Return only A or B." ya
+
+exists su name text better compare hymn manuscript judge prompter ob text quoted.text.You are comparing two candidate educational hymn manuscripts generated from the same source document.
+
+Pick the better hymn using these priorities:
+1. Stronger singable hook and chorus memory.
+2. Better faithfulness to the source document.
+3. Clearer educational progression from intro through ending.
+4. Better rhyme, rhythm, and line-to-line lyric flow.
+5. More emotionally resonant phrasing without losing clarity.
+
+Prefer the hymn that feels most ready to sing aloud as a finished teaching song.
+
+Reply with only A or B..text.quoted be text ya
+
+su name hymn source stage from filename of ob of source become wo text to name text hymn source be read do
+
+su name hymn draft ob text source to name text manuscript out be ceremony def
+  su name hymn draft run stage from text of ob of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
+su name hymn final stage from la ob text of ob of hymn source to name text hymn scratch be hymn draft do ko ob text of ob of better compare hymn manuscript judge prompter to name text hymn final atmost num 6 be better compare do
+
+su name produce dir stage ob text "artifacts/" to name text produce dir be text do
+ob name run id to name produce dir be plus do
+ob text "mkdir -p \"" to name text produce dir ensure cmd be text do
+ob name text produce dir to name produce dir ensure cmd be plus do
+ob text "\"" to name produce dir ensure cmd be plus do
+su name produce dir ensure stage ob name text produce dir ensure cmd be command do
+su name produce path stage ob name text produce dir to name text produce path be text do
+ob text "/produce.txt" to name produce path be plus do
+su name produce filename stage ob name text produce path to name filename produce filename be filename do
+su name hymn produce stage ob name text hymn final to filename of ob of produce filename stage be write do
+su name hymn final ob name text hymn final be write do
+
+as wo ollama be discharge do
