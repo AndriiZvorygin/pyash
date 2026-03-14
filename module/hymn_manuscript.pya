@@ -6,6 +6,8 @@ prah
 
 exists su name hymn verse one mind be mind fromtext name hymn verse one prompt ya
 exists su name hymn hook mind be mind fromtext name hymn hook prompt ya
+exists su name hymn hook pool mind be mind fromtext name hymn hook pool prompt ya
+exists su name hymn hook chooser mind be mind fromtext name hymn hook chooser prompt ya
 exists su name hymn chorus mind be mind fromtext name hymn chorus prompt ya
 exists su name hymn final chorus mind be mind fromtext name hymn final chorus prompt ya
 exists su name hymn verse two mind be mind fromtext name hymn verse two prompt ya
@@ -36,6 +38,40 @@ Rules:
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name hymn hook pool prompt ob text quoted.text.You are generating a pool of hook candidates for an educational spiritual song.
+
+Rules:
+- Output 8 to 12 candidate hooks.
+- One candidate per line.
+- Each hook must be 4 to 8 words.
+- Each hook must be memorable, singable, and easy to repeat.
+- Draw wording from the source text rather than generic devotional filler.
+- Prefer present-tense realis declarative phrasing.
+- Describe something happening now rather than telling the listener what to do.
+- Prefer shared experience over instruction.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
+- Vary the wording across lines; do not repeat the same hook.
+- Plain text only.
+- No numbering, no labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+
+exists su name hymn hook chooser prompt ob text quoted.text.Choose the single best hook candidate for the song.
+
+Selection priorities:
+- Must stay faithful to the source teaching.
+- Must be singable, memorable, and easy to repeat.
+- Must fit a chorus refrain well.
+- Prefer hooks that use source wording cleanly.
+- Reject hooks that invent unsupported teaching details or awkward mechanics.
+- Reject hooks that sound like commands, slogans, or filler.
+
+Output rules:
+- Reply with exactly one candidate copied exactly from CANDIDATES.
+- Do not rewrite the candidate.
+- Do not explain the choice.
+- If none are acceptable, reply exactly NONE..text.quoted be text ya
 
 exists su name hymn intro prompt ob text quoted.text.You are writing the Intro of an educational song.
 
@@ -336,14 +372,14 @@ Rules:
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
 su name hymn hook checks be series def
-  su name word_min ob num 2 ya
-  su name word_max ob num 5 ya
+  su name word_min ob num 4 ya
+  su name word_max ob num 8 ya
   su name line_count_min ob num 1 ya
   su name line_count_max ob num 1 ya
 prah
 
 su name hymn intro checks be series def
-  su name word_min ob num 8 ya
+  su name word_min ob num 4 ya
   su name word_max ob num 14 ya
   su name line_count_min ob num 1 ya
   su name line_count_max ob num 2 ya
@@ -523,12 +559,39 @@ su name hymn communal voice from text lyric to name text pass be ceremony def
   su name pass ret
 prah
 
-su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def
+su name hymn hook pool fill from text source to name text output be ceremony def
+  su name hymn hook pool request begin stage ob text "SECTION_ROLE: FIXED_HOOK_POOL\nTARGET_HOOKS: 8-12\nSOURCE TEXT:\n" to name text hymn hook pool request be text do
+  ob text of from of this to name text hymn hook pool request be plus do
+  su name hymn hook pool raw stage ob name text hymn hook pool request for name hymn hook pool mind to name text hymn hook pool raw by num 0 atmost num 260 be write do
+  ob name text hymn hook pool raw by wo newline to name vec text hymn hook pool vec be distribute do
+  ob name hymn hook pool vec by wo newline to name text output be gather do
+  su name output ret
+prah
+
+su name hymn hook choose from text source with text candidates to name text output be ceremony def
+  su name hymn hook choose request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook choose request be text do
+  ob text of from of this to name text hymn hook choose request be plus do
+  ob text "\n\nCANDIDATES:\n" to name text hymn hook choose request be plus do
+  ob text of with of this to name text hymn hook choose request be plus do
+  ob name text hymn hook choose request for name hymn hook chooser mind to name text hymn hook chosen raw by num 0 atmost num 40 be write do
+  ob name text hymn hook chosen raw atmost num 1 to name text output be line tail do
+  su name output ret
+prah
+
+su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook positive pass be equally from text true then
   ob name text hymn hook source thrust pass be equally from text true then be depart do
-  su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
-  su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
-  su name hymn hook source thrust verify stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
+  su name hymn hook pool refill stage from text of ob of hymn source to name text hymn hook candidates out be hymn hook pool fill do
+  su name hymn hook choose retry stage from text of ob of hymn source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
+  ob name text hook out be equally from text "NONE" then
+  ob text "false" to name text hymn hook positive pass be text do
+  ob text "false" to name text hymn hook source thrust pass be text do
+  ob name text hook out be equally from text "NONE" then be depart do
+  su name hymn hook positive retry stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook communal retry stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
+  su name hymn hook source thrust retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
+  ob name text hymn hook communal pass be equally from text false then
+  ob text "false" to name text hymn hook positive pass be text do
   su name hymn hook positive pass ret
   su name hymn hook source thrust pass ret
 prah
@@ -565,25 +628,35 @@ prah
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text hymn source be text do
 
-  su name hook request begin stage ob text "SECTION_ROLE: FIXED_HOOK_PHRASE\nTARGET_WORDS: 2-5\nSOURCE TEXT:\n" to name text hook request be text do
-  su name hook request source stage ob name text hymn source to name hook request be plus do
-  su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
+  su name hymn hook pool stage from text of ob of hymn source to name text hymn hook candidates out be hymn hook pool fill do
+  su name hymn hook choose stage from text of ob of hymn source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
+  ob name text hook out be equally from text "NONE" then
+  ob text "false" to name text hymn hook positive pass be text do
+  ob text "false" to name text hymn hook source thrust pass be text do
+  ob name text hook out be equally from text "NONE" then
+  fromindex num 1 toindex num 4 be hymn hook pool retry do
+  ob name text hook out be equally from text "NONE" then
+  su name hymn hook choose guarantee stage ob bool lie fromtext text "hymn hook chooser defective" be guarantee do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook communal stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
   su name hymn hook source thrust verify stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
+  ob name text hymn hook communal pass be equally from text false then
+  ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn hook positive retry do
+  fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hymn hook source thrust pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn hook positive retry do
+  fromindex num 1 toindex num 4 be hymn hook pool retry do
+  su name hymn hook positive final stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook communal final stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
+  su name hymn hook source thrust final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
+  ob name text hymn hook communal pass be equally from text false then
+  ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
   su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
   ob name text hymn hook source thrust pass be equally from text false then
   su name hymn hook source thrust guarantee stage ob bool lie fromtext text "hymn hook source thrust defective" be guarantee do
 
-  su name intro request begin stage ob text "TARGET_WORDS: 6-10\nSECTION_ROLE: INTRO_TOPIC_HOOK\nHOOK_PHRASE:\n" to name text intro request be text do
-  su name intro request hook stage ob name text hook out to name intro request be plus do
-  su name intro request source header stage ob text "\n\nSOURCE TEXT:\n" to name intro request be plus do
-  su name intro request source stage ob name text hymn source to name intro request be plus do
-  su name intro stage from text of ob of intro request for name hymn intro mind accordingto name hymn intro checks to name text intro out be hymn section verify do
+  ob name text hook out to name text intro out be text do
   su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do
   ob text of pass of hymn intro hook verify to name text hymn intro hook pass be text do
   ob name text hymn intro hook pass be equally from text false then
