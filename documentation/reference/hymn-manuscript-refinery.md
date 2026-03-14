@@ -55,9 +55,10 @@ Current target stage sequence:
 11. generate short outro that repeats the hook phrase or directly reinforces it,
 12. assemble final hymn,
 13. deterministically verify total hook recurrence in the final hymn,
-14. verify source-thrust against source text,
-15. verify positive-language / negation constraint,
-16. return final manuscript text.
+14. verify communal experiential voice,
+15. verify source-thrust against source text,
+16. verify positive-language / negation constraint,
+17. return final manuscript text.
 
 ## 4. Prompt contract
 
@@ -82,6 +83,8 @@ Prompt requirements:
 - no markdown/bullets/labels,
 - strong singability bias,
 - source-derived wording preferred over canned devotional vocabulary,
+- communal experiential voice preferred over command voice,
+- prefer we / our / us or shared witness over direct listener instruction,
 - negative phrasing (`not`, `never`, `cannot`, `don't`, `won't`, etc.) discouraged unless source absolutely requires it,
 - chorus and final chorus must include the exact fixed hook phrase.
 
@@ -95,6 +98,7 @@ The stable target contract is:
 - short memorable lines,
 - verses should not merely restate each other,
 - verses should include at least one concrete image or action,
+- the lyric should sound like shared experience rather than directives,
 - intro/outro stay short and refrain-like,
 - at least one excerptable 15–30 second clip candidate should exist.
 
@@ -130,6 +134,7 @@ Deterministic and verifier checks should enforce:
 - no unsupported concrete source-teaching claims,
 - concrete imagery in verses,
 - final-chorus stability against the main chorus,
+- communal experiential voice across the finished hymn,
 - positive-language / negation guard on final output,
 - later strengthening may include:
   - syllable caps,
