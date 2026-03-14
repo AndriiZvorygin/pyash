@@ -282,6 +282,88 @@ test("wise chip can assemble pair chips from config patterns without boundary pr
   ]);
 });
 
+test("wise chip pair mode can require question-like first blocks and drop courtesy first blocks", async () => {
+  forget();
+
+  const source = [
+    "#### D",
+    "I think that answers my question. Thank you.",
+    "",
+    "#### Q'uo",
+    "We thank you, my brother.",
+    "",
+    "#### L",
+    "How can we balance wisdom and compassion?",
+    "",
+    "#### Q’uo",
+    "Let compassion open the way and wisdom refine the action.",
+    "",
+    "#### M",
+    "Could you say more about patience?",
+    "",
+    "#### Q'uo",
+    "Patience grows when trust deepens."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "#### D" "#### L" "#### M" be boundary ya');
+  await run("prah");
+
+  await run("su name chip config be map def");
+  await run('su name kind ob text "pair" ya');
+  await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
+  await run('su name first require patterns ob ve text "/\\\\?/u" "/^####\\\\s+[A-Z][^\\\\n]*\\\\n(?:How|What|Why|When|Where|Who|Could|Would|Can|Do|Does|Is|Are)\\\\b/imu" ya');
+  await run('su name first drop patterns ob ve text "/thank you/iu" "/answers? my question/iu" ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals with name map chip config to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "#### L\nHow can we balance wisdom and compassion?\n\n#### Q’uo\nLet compassion open the way and wisdom refine the action.",
+    "#### M\nCould you say more about patience?\n\n#### Q'uo\nPatience grows when trust deepens."
+  ]);
+});
+
+test("wise chip pair mode can drop short courtesy pairs with minimum chars", async () => {
+  forget();
+
+  const source = [
+    "#### D",
+    "Thank you. That answers my question.",
+    "",
+    "#### Q'uo",
+    "We thank you.",
+    "",
+    "#### L",
+    "How can we balance wisdom and compassion in daily life?",
+    "",
+    "#### Q’uo",
+    "Begin with compassion, then invite wisdom to refine the action without closing the heart."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "#### D" "#### L" be boundary ya');
+  await run("prah");
+
+  await run("su name chip config be map def");
+  await run('su name kind ob text "pair" ya');
+  await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
+  await run("su name minimum chars ob num 120 ya");
+  await run("prah");
+
+  await run("from name text source by name boundary proposals with name map chip config to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "#### L\nHow can we balance wisdom and compassion in daily life?\n\n#### Q’uo\nBegin with compassion, then invite wisdom to refine the action without closing the heart."
+  ]);
+});
+
 test("wise chip groups timed series by atleast minute and atmost minute", async () => {
   forget();
 
