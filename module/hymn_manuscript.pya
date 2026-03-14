@@ -9,6 +9,7 @@ exists su name hymn hook mind be mind fromtext name hymn hook prompt ya
 exists su name hymn hook pool mind be mind fromtext name hymn hook pool prompt ya
 exists su name hymn hook sieve mind be mind fromtext name hymn hook sieve prompt ya
 exists su name hymn hook source focus mind be mind fromtext name hymn hook source focus prompt ya
+exists su name hymn source analysis mind be mind fromtext name hymn source analysis prompt ya
 exists su name hymn hook choose mind be mind fromtext name hymn hook choose prompt ya
 exists su name hymn chorus mind be mind fromtext name hymn chorus prompt ya
 exists su name hymn final chorus mind be mind fromtext name hymn final chorus prompt ya
@@ -36,8 +37,7 @@ Rules:
 - Draw wording from the source text rather than generic devotional filler.
 - Prefer present-tense realis declarative phrasing.
 - Describe something happening now rather than telling the listener what to do.
-- Prefer shared experience over instruction.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Prefer lived witness over instruction.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid second-person wording such as you or your.
@@ -55,8 +55,7 @@ Rules:
 - Draw wording from the source text rather than generic devotional filler.
 - Prefer present-tense realis declarative phrasing.
 - Describe something happening now rather than telling the listener what to do.
-- Prefer shared experience over instruction.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Prefer lived witness over instruction.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid second-person wording such as you or your.
@@ -71,14 +70,31 @@ Rules:
 - Return 4 to 12 short source-grounded lines.
 - One line per line.
 - Each line should be 3 to 10 words when possible.
-- Keep wording close to the source text.
+- Copy wording exactly from the source when possible.
+- Only trim for brevity; do not paraphrase the teaching into new claims.
 - Prefer lines naming a vivid image, transformation, practice, or memorable truth.
+- Prefer declarative lines describing what is true now.
+- Avoid bare imperative openings and direct second-person address when better declarative lines exist.
 - Exclude speaker labels, greetings, file names, timestamps, shell text, footnotes, html remnants, query wording, and conversational setup.
 - Exclude lines that are mostly metadata or source noise.
 - Exclude lines that only say things like "it is indeed" unless they clearly carry the main teaching.
 - Plain text only.
 - No numbering, no labels, no bullets, no markdown, no surrounding quotes.
 - If the source is noisy, clean it and keep only the strongest usable lines..text.quoted be text ya
+
+exists su name hymn source analysis prompt ob text quoted.text.Extract a compact writing brief for one source-faithful educational spiritual song.
+
+Rules:
+- Return 4 to 8 short source-grounded lines.
+- One line per line.
+- Each line should be 4 to 12 words when possible.
+- Keep only the main teachings, repeated practices, and central images.
+- Prefer what is most structurally central to the source over side examples or decorative details.
+- Exclude metadata, speaker labels, greetings, shell text, quoted report fragments, and secondary tangents.
+- Exclude rare or flashy imagery unless it is clearly central to the source.
+- Keep wording close to the source where possible.
+- Plain text only.
+- No numbering, no labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
 exists su name hymn hook sieve prompt ob text quoted.text.Filter the hook candidates down to only valid refrain lines for the song.
 
@@ -139,9 +155,8 @@ Rules:
 - Draw key wording from the source text.
 - Prefer present-tense realis declarative phrasing.
 - State what is happening now rather than giving instructions.
-- Use communal experiential voice.
-- Prefer we, our, or shared witness over direct commands.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid telling the listener what to do.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -156,12 +171,13 @@ Rules:
 - Use clear rhyme scheme `AABB`.
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
+- Do not reuse the exact HOOK_PHRASE in this verse.
+- Do not restate the intro line.
 - Ground imagery and facts in the provided source text.
 - Keep wording singable and source-grounded.
 - Prefer present-tense realis declarative lines with experiential imagery.
-- Use communal experiential voice.
-- Prefer we, our, us, or shared witness over direct commands.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
@@ -172,16 +188,17 @@ Rules:
 exists su name hymn chorus prompt ob text quoted.text.You are writing the Chorus of a lyrical song.
 
 Rules:
-- Write exactly 2 short echo lines.
-- Each line must be 2 to 4 words.
-- These lines will sit between repeated hook lines, so they must sound like short refrain echoes rather than full narrative lines.
-- Keep both lines tightly tied to the same source-grounded lesson.
+- Write exactly 1 short echo line.
+- The line must be 2 to 4 words.
+- This line will sit between repeated hook lines, so it must sound like a short refrain echo rather than a full narrative line.
+- Keep it tightly tied to the same source-grounded lesson.
 - Prefer present-tense realis declarative phrasing.
-- Use communal experiential voice.
+- Use experiential declarative voice.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
+- If you output more than 1 line, the result fails.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -208,9 +225,8 @@ Rules:
 - Prefer source-derived wording over generic uplift language.
 - Prefer present-tense realis declarative lines.
 - Repeat the hook as a statement of what is true now, not as an instruction.
-- Use communal experiential voice.
-- Prefer we, our, us, or shared witness over direct commands.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -227,13 +243,14 @@ Rules:
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
 - Focus on a different supported aspect than Verse 1.
+- Do not reuse the exact HOOK_PHRASE in this verse.
 - Do not repeat Verse 1 wording.
 - Each couplet must include at least one physical image, object, or scene.
 - Keep abstract nouns grounded in visible action, setting, or sensory detail.
 - Draw concrete wording from the source text rather than generic uplift language.
 - Prefer present-tense realis declarative lines with experiential imagery.
-- Use communal experiential voice.
-- Prefer we, our, us, or shared witness over direct commands.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
@@ -244,17 +261,16 @@ Rules:
 exists su name hymn bridge prompt ob text quoted.text.You are writing the Bridge of the same lyrical song.
 
 Rules:
-- Write 2 to 4 short lines.
+- Write exactly 2 short lines.
 - Rhyme mode can be free verse or `ABAB`.
-- Keep each line short and lyrical (roughly 5-8 words).
-- 12 to 20 words total.
+- Keep each line short and lyrical (roughly 4-6 words).
+- 8 to 14 words total.
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
 - Draw its turn or resolution from the source text rather than generic uplift phrasing.
 - Prefer present-tense realis declarative lines.
-- Use communal experiential voice.
-- Prefer we, our, us, or shared witness over direct commands.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid direct second-person instruction.
 - Allow imperative phrasing sparingly only if it adds movement or emphasis.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
@@ -280,9 +296,8 @@ Rules:
 - Draw its closing language from the source text where possible.
 - Prefer present-tense realis declarative phrasing.
 - Restate the hook as what is true now.
-- Use communal experiential voice.
-- Prefer we, our, or shared witness over direct commands.
-- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
+- Use experiential declarative voice.
+- Prefer lived witness over direct commands.
 - Avoid telling the listener what to do.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -292,9 +307,10 @@ Rules:
 exists su name hymn imagery verify prompt ob text quoted.text.Verify whether VERSE contains at least one concrete image, action, or scene rather than only abstract spiritual nouns.
 
 PASS if:
-- the verse includes at least one vivid concrete element such as light, wall, road, hand, dawn, storm, seed, flame, shield, banner, chink, steed, river, mountain, door, path, or another clear physical image or action,
+- the verse includes at least one clear concrete element such as light, hand, mirror, armor, path, dawn, steed, room, shadow, chink, or another physical image or action,
 - the verse still reads like lyric language,
 - it is not dominated only by abstractions like peace, truth, love, spirit, joy, being, healing.
+- do not fail merely because the imagery is simple, repeated, or not highly ornate.
 
 FAIL if:
 - the verse is mostly abstract spiritual language,
@@ -321,12 +337,14 @@ PASS if:
 - the hook feels memorable, singable, and distinctive,
 - it sounds like a refrain rather than a prose fragment,
 - it captures a meaningful source-grounded teaching, image, or claim,
-- it avoids bland placeholder wording.
+- it avoids bland placeholder wording,
+- it reads mainly as a declarative refrain rather than a command.
 
 FAIL if:
 - the hook is generic filler,
 - the hook is a vague evaluative statement that could fit almost any song,
 - the hook relies on empty scaffolds such as "it is ..." or "there are ...",
+- the hook is mainly an instruction, directive, or imperative command,
 - the hook sounds like metadata, speaker chatter, or a source fragment,
 - the hook is too weak to carry a chorus.
 
@@ -409,6 +427,7 @@ Evaluate only source-grounded teaching content:
 - specific action, mechanism, image, or framing presented as part of the teaching.
 
 Ignore pure emotional language and poetic uplift unless they add unsupported source claims.
+Do not fail merely because the lyric adds fresh sensory imagery, scene-setting detail, or poetic connective tissue if the underlying teaching remains faithful.
 
 PASS if:
 - the lyric stays faithful to the source teaching in TRANSCRIPT,
@@ -417,7 +436,7 @@ PASS if:
 
 FAIL if:
 - concrete teaching or source claims lack support,
-- unsupported source details are added,
+- unsupported doctrinal or source-specific details are added,
 - the teaching meaning is materially altered.
 
 Output rules:
@@ -449,38 +468,38 @@ su name hymn intro checks be series def
 prah
 
 su name hymn verse one checks be series def
-  su name word_min ob num 24 ya
+  su name word_min ob num 20 ya
   su name word_max ob num 50 ya
   su name line_count_min ob num 4 ya
   su name line_count_max ob num 4 ya
 prah
 
 su name hymn chorus checks be series def
-  su name word_min ob num 4 ya
-  su name word_max ob num 12 ya
-  su name line_count_min ob num 2 ya
-  su name line_count_max ob num 2 ya
+  su name word_min ob num 2 ya
+  su name word_max ob num 4 ya
+  su name line_count_min ob num 1 ya
+  su name line_count_max ob num 1 ya
 prah
 
 su name hymn final chorus checks be series def
-  su name word_min ob num 8 ya
-  su name word_max ob num 22 ya
-  su name line_count_min ob num 4 ya
-  su name line_count_max ob num 4 ya
+  su name word_min ob num 6 ya
+  su name word_max ob num 16 ya
+  su name line_count_min ob num 3 ya
+  su name line_count_max ob num 3 ya
 prah
 
 su name hymn verse two checks be series def
-  su name word_min ob num 24 ya
+  su name word_min ob num 20 ya
   su name word_max ob num 50 ya
   su name line_count_min ob num 4 ya
   su name line_count_max ob num 4 ya
 prah
 
 su name hymn bridge checks be series def
-  su name word_min ob num 10 ya
-  su name word_max ob num 32 ya
+  su name word_min ob num 8 ya
+  su name word_max ob num 16 ya
   su name line_count_min ob num 2 ya
-  su name line_count_max ob num 4 ya
+  su name line_count_max ob num 2 ya
 prah
 
 su name hymn outro checks be series def
@@ -496,6 +515,7 @@ prah
 
 su name hymn section verify from text request for name platform mind accordingto name checks series to name text output be ceremony def
   su name hymn section verify run platform ob text of from of this for name of for of this among name hymn stage pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 8 to name text output be verify platform do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name output to name text output be command do
   su name output ret
 prah
 
@@ -504,11 +524,11 @@ su name hymn source thrust checked to name text pass be ceremony def
   su name hymn source thrust verdict tail stage ob name text hymn source thrust review atmost num 1 to name text hymn source thrust verdict line be line tail do
   ob text "" to name text hymn source thrust verdict be text do
   ob text "false" to name text hymn source thrust pass be text do
-  ob name text hymn source thrust review from text "/\\bPASS\\s*$/i" be resemble then
+  ob name text hymn source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
   ob text "PASS" to name text hymn source thrust verdict be text do
-  ob name text hymn source thrust review from text "/\\bPASS\\s*$/i" be resemble then
+  ob name text hymn source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
   ob text "true" to name text hymn source thrust pass be text do
-  ob name text hymn source thrust review from text "/\\bFAIL\\s*$/i" be resemble then
+  ob name text hymn source thrust verdict line from text "/^\\s*FAIL\\b/i" be resemble then
   ob text "FAIL" to name text hymn source thrust verdict be text do
   ob name text hymn source thrust verdict be equally from text "" then
   su name hymn source thrust verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn source thrust verdict request be text do
@@ -535,8 +555,9 @@ prah
 
 su name hymn imagery verify to name text pass be ceremony def
   su name hymn imagery write stage ob name text hymn imagery request for name hymn imagery verify mind to name text hymn imagery review by num 0 atmost num 180 be write do
+  ob name text hymn imagery review atmost num 1 to name text hymn imagery verdict line be line tail do
   ob text "false" to name text hymn imagery pass be text do
-  ob name text hymn imagery review from text "/\\bPASS\\s*$/i" be resemble then
+  ob name text hymn imagery verdict line from text "/^\\s*PASS\\b/i" be resemble then
   ob text "true" to name text hymn imagery pass be text do
   ob name text hymn imagery pass be equally from text false then
   su name hymn imagery verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn imagery verdict request be text do
@@ -562,8 +583,9 @@ prah
 
 su name hymn hook quality verify to name text pass be ceremony def
   su name hymn hook quality write stage ob name text hymn hook quality request for name hymn hook quality verify mind to name text hymn hook quality review by num 0 atmost num 180 be write do
+  ob name text hymn hook quality review atmost num 1 to name text hymn hook quality verdict line be line tail do
   ob text "false" to name text hymn hook quality pass be text do
-  ob name text hymn hook quality review from text "/\\bPASS\\s*$/i" be resemble then
+  ob name text hymn hook quality verdict line from text "/^\\s*PASS\\b/i" be resemble then
   ob text "true" to name text hymn hook quality pass be text do
   ob name text hymn hook quality pass be equally from text false then
   su name hymn hook quality verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn hook quality verdict request be text do
@@ -589,8 +611,9 @@ prah
 
 su name hymn chorus stability verify to name text pass be ceremony def
   su name hymn chorus stability write stage ob name text hymn chorus stability request for name hymn chorus stability verify mind to name text hymn chorus stability review by num 0 atmost num 180 be write do
+  ob name text hymn chorus stability review atmost num 1 to name text hymn chorus stability verdict line be line tail do
   ob text "false" to name text hymn chorus stability pass be text do
-  ob name text hymn chorus stability review from text "/\\bPASS\\s*$/i" be resemble then
+  ob name text hymn chorus stability verdict line from text "/^\\s*PASS\\b/i" be resemble then
   ob text "true" to name text hymn chorus stability pass be text do
   ob name text hymn chorus stability pass be equally from text false then
   su name hymn chorus stability verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn chorus stability verdict request be text do
@@ -650,12 +673,18 @@ su name hymn communal voice from text lyric to name text pass be ceremony def
 prah
 
 su name hymn hook source focus from text source to name text output be ceremony def
-  su name hymn hook source abridge stage from text of from of this atmost byte 5200 to name text hymn hook source abridged be abridge do
-  su name hymn hook source focus request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook source focus request be text do
-  ob name text hymn hook source abridged to name text hymn hook source focus request be plus do
-  su name hymn hook source focus raw stage ob name text hymn hook source focus request for name hymn hook source focus mind to name text hymn hook source focused raw by num 0 atmost num 220 be write do
+  ob text "node command/extract_sentences.mjs" fromtext text of from of this to name text hymn hook source focused raw be command do
   ob name text hymn hook source focused raw by wo newline to name vec text hymn hook source focused vec be distribute do
   ob name hymn hook source focused vec by wo newline to name text output be gather do
+  su name output ret
+prah
+
+su name hymn source analysis from text source to name text output be ceremony def
+  su name hymn source analysis request begin stage ob text "SOURCE TEXT:\n" to name text hymn source analysis request be text do
+  ob text of from of this to name text hymn source analysis request be plus do
+  su name hymn source analysis raw stage ob name text hymn source analysis request for name hymn source analysis mind to name text hymn source analysis raw by num 0 atmost num 260 be write do
+  ob name text hymn source analysis raw by wo newline to name vec text hymn source analysis vec be distribute do
+  ob name hymn source analysis vec by wo newline to name text output be gather do
   su name output ret
 prah
 
@@ -696,21 +725,27 @@ su name hymn hook choose from text source with text candidates to name text outp
   su name output ret
 prah
 
+su name hymn hook source fit from text source with text hook to name text pass be ceremony def
+  su name hook source fit stage from text of from of this with text of with of this to name text pass be hymn source thrust do
+  su name pass ret
+prah
+
 su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook positive pass be equally from text true then
-  ob name text hymn hook communal pass be equally from text true then be depart do
-  su name hymn hook pool refill stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
+  ob name text hymn hook copied pass be equally from text true then be depart do
+  ob name text hymn hook source to name text hymn hook candidates raw out be text do
   su name hymn hook choose retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
   ob text "false" to name text hymn hook positive pass be text do
-  ob text "false" to name text hymn hook communal pass be text do
+  ob text "false" to name text hymn hook copied pass be text do
   ob name text hook out be equally from text "NONE" then be depart do
+  be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates raw out with name text hook out to name map hymn hook copied verify do
+  ob text of pass of hymn hook copied verify to name text hymn hook copied pass be text do
   su name hymn hook positive retry stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
-  su name hymn hook communal retry stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  ob name text hymn hook communal pass be equally from text false then
+  ob name text hymn hook copied pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   su name hymn hook positive pass ret
-  su name hymn hook communal pass ret
+  su name hymn hook copied pass ret
 prah
 
 su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
@@ -723,17 +758,16 @@ prah
 su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn chorus hook pass be equally from text true then be depart do
   su name chorus echo stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus echo out be hymn section verify do
-  ob name text chorus echo out by wo newline to name vec text chorus echo vec be distribute do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name chorus echo out to name text chorus echo clean be command do
+  ob name text chorus echo clean by wo newline to name vec text chorus echo vec be distribute do
   su name chorus echo first stage ob name chorus echo vec at num 0 be read to name text chorus echo one out do
-  su name chorus echo second stage ob name chorus echo vec at num 1 be read to name text chorus echo two out do
   su name chorus begin stage ob text of ob of hook out to name text chorus out be text do
   su name chorus echo one join stage ob text "\n" to name text chorus out be plus do
   su name chorus echo one stage ob name text chorus echo one out to name text chorus out be plus do
   su name chorus hook repeat join stage ob text "\n" to name text chorus out be plus do
   su name chorus hook repeat stage ob name text hook out to name text chorus out be plus do
-  su name chorus echo two join stage ob text "\n" to name text chorus out be plus do
-  su name chorus echo two stage ob name text chorus echo two out to name text chorus out be plus do
-  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 2 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name chorus out to name text chorus out be command do
+  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text chorus out with name text hook out to name map hymn chorus hook verify do
   ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
   su name hymn chorus hook pass ret
 prah
@@ -754,12 +788,13 @@ prah
 
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text hymn source be text do
+  su name hymn source brief stage from text of ob of hymn source to name text hymn source brief be hymn source analysis do
   su name hymn hook source stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do
-  su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
+  ob name text hymn hook source to name text hymn hook candidates raw out be text do
   su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
   ob text "false" to name text hymn hook positive pass be text do
-  ob text "false" to name text hymn hook communal pass be text do
+  ob text "false" to name text hymn hook copied pass be text do
   ob name text hook out be equally from text "NONE" then
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hook out be equally from text "NONE" then
@@ -786,23 +821,19 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hymn hook shape pass be equally from text false then
   fromindex num 1 toindex num 4 be hymn hook pool retry do
-  su name hymn hook quality stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do
-  ob name text hymn hook quality pass be equally from text false then
-  fromindex num 1 toindex num 4 be hymn hook pool retry do
+  ob text "true" to name text hymn hook quality pass be text do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
-  su name hymn hook communal stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  ob name text hymn hook communal pass be equally from text false then
+  ob name text hymn hook copied pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   su name hymn hook positive final stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
-  su name hymn hook communal final stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  ob name text hymn hook communal pass be equally from text false then
+  ob name text hymn hook copied pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
   su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
-  ob name text hymn hook communal pass be equally from text false then
-  su name hymn hook communal guarantee stage ob bool lie fromtext text "hymn hook communal defective" be guarantee do
+  ob name text hymn hook copied pass be equally from text false then
+  su name hymn hook source guarantee stage ob bool lie fromtext text "hymn hook source defective" be guarantee do
 
   ob name text hook out to name text intro out be text do
   su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do
@@ -810,40 +841,39 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   ob name text hymn intro hook pass be equally from text false then
   su name hymn intro hook guarantee stage ob bool lie fromtext text "hymn intro hook defective" be guarantee do
 
-  su name verse one request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: CONCEPT_INTRO\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nSOURCE TEXT:\n" to name text verse one request be text do
-  su name verse one request source stage ob name text hymn source to name verse one request be plus do
+  su name verse one request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: CONCEPT_INTRO\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nSOURCE BRIEF:\n" to name text verse one request be text do
+  su name verse one request source stage ob name text hymn source brief to name verse one request be plus do
   su name verse one request intro header stage ob text "\n\nINTRO:\n" to name verse one request be plus do
   su name verse one request intro stage ob name text intro out to name verse one request be plus do
   su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
   su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do
   ob name text verse one imagery pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn verse one imagery retry do
+  fromindex num 1 toindex num 3 to name text verse one imagery pass be hymn verse one imagery retry do
   ob name text verse one imagery pass be equally from text false then
   su name verse one imagery guarantee stage ob bool lie fromtext text "hymn verse one imagery defective" be guarantee do
 
   su name chorus request begin stage ob text "TARGET_WORDS: 14-24\nSECTION_ROLE: MEMORY_ANCHOR\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\nHOOK_PHRASE:\n" to name text chorus request be text do
   su name chorus request hook stage ob name text hook out to name chorus request be plus do
-  su name chorus request source header stage ob text "\n\nSOURCE TEXT:\n" to name chorus request be plus do
-  su name chorus request source stage ob name text hymn source to name chorus request be plus do
+  su name chorus request source header stage ob text "\n\nSOURCE BRIEF:\n" to name chorus request be plus do
+  su name chorus request source stage ob name text hymn source brief to name chorus request be plus do
   su name chorus request intro header stage ob text "\n\nINTRO:\n" to name chorus request be plus do
   su name chorus request intro stage ob name text intro out to name chorus request be plus do
   su name chorus request verse one header stage ob text "\n\nVERSE 1:\n" to name chorus request be plus do
   su name chorus request verse one stage ob name text verse one out to name chorus request be plus do
   su name chorus echo stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus echo out be hymn section verify do
-  ob name text chorus echo out by wo newline to name vec text chorus echo vec be distribute do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name chorus echo out to name text chorus echo clean be command do
+  ob name text chorus echo clean by wo newline to name vec text chorus echo vec be distribute do
   su name chorus echo first stage ob name chorus echo vec at num 0 be read to name text chorus echo one out do
-  su name chorus echo second stage ob name chorus echo vec at num 1 be read to name text chorus echo two out do
   su name chorus begin stage ob text of ob of hook out to name text chorus out be text do
   su name chorus echo one join stage ob text "\n" to name text chorus out be plus do
   su name chorus echo one stage ob name text chorus echo one out to name text chorus out be plus do
   su name chorus hook repeat join stage ob text "\n" to name text chorus out be plus do
   su name chorus hook repeat stage ob name text hook out to name text chorus out be plus do
-  su name chorus echo two join stage ob text "\n" to name text chorus out be plus do
-  su name chorus echo two stage ob name text chorus echo two out to name text chorus out be plus do
-  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 2 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name chorus out to name text chorus out be command do
+  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text chorus out with name text hook out to name map hymn chorus hook verify do
   ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
   ob name text hymn chorus hook pass be equally from text false then
-  fromindex num 1 toindex num 5 be hymn chorus hook retry do
+  fromindex num 1 toindex num 5 to name text hymn chorus hook pass be hymn chorus hook retry do
   ob name text hymn chorus hook pass be equally from text false then
   su name hymn chorus hook guarantee stage ob bool lie fromtext text "hymn chorus hook defective" be guarantee do
 
@@ -851,12 +881,12 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name verse two request verse one stage ob name text verse one out to name verse two request be plus do
   su name verse two request chorus header stage ob text "\n\nCHORUS:\n" to name verse two request be plus do
   su name verse two request chorus stage ob name text chorus out to name verse two request be plus do
-  su name verse two request source header stage ob text "\n\nSOURCE TEXT:\n" to name verse two request be plus do
-  su name verse two request source stage ob name text hymn source to name verse two request be plus do
+  su name verse two request source header stage ob text "\n\nSOURCE BRIEF:\n" to name verse two request be plus do
+  su name verse two request source stage ob name text hymn source brief to name verse two request be plus do
   su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
   su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
   ob name text verse two imagery pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn verse two imagery retry do
+  fromindex num 1 toindex num 3 to name text verse two imagery pass be hymn verse two imagery retry do
   ob name text verse two imagery pass be equally from text false then
   su name verse two imagery guarantee stage ob bool lie fromtext text "hymn verse two imagery defective" be guarantee do
 
@@ -866,8 +896,8 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name bridge request chorus stage ob name text chorus out to name bridge request be plus do
   su name bridge request verse two header stage ob text "\n\nVERSE 2:\n" to name bridge request be plus do
   su name bridge request verse two stage ob name text verse two out to name bridge request be plus do
-  su name bridge request source header stage ob text "\n\nSOURCE TEXT:\n" to name bridge request be plus do
-  su name bridge request source stage ob name text hymn source to name bridge request be plus do
+  su name bridge request source header stage ob text "\n\nSOURCE BRIEF:\n" to name bridge request be plus do
+  su name bridge request source stage ob name text hymn source brief to name bridge request be plus do
   su name bridge stage from text of ob of bridge request for name hymn bridge mind accordingto name hymn bridge checks to name text bridge out be hymn section verify do
 
   su name final chorus stage ob name text chorus out to name text final chorus out be text do
@@ -877,7 +907,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hymn final chorus hook guarantee stage ob bool lie fromtext text "hymn final chorus hook defective" be guarantee do
   su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
   ob name text hymn chorus stability pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn chorus stability retry do
+  fromindex num 1 toindex num 3 to name text hymn chorus stability pass be hymn chorus stability retry do
   ob name text hymn chorus stability pass be equally from text false then
   su name hymn chorus stability guarantee stage ob bool lie fromtext text "hymn chorus stability defective" be guarantee do
 
@@ -887,8 +917,8 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name outro request chorus stage ob name text final chorus out to name outro request be plus do
   su name outro request bridge header stage ob text "\n\nBRIDGE:\n" to name outro request be plus do
   su name outro request bridge stage ob name text bridge out to name outro request be plus do
-  su name outro request source header stage ob text "\n\nSOURCE TEXT:\n" to name outro request be plus do
-  su name outro request source stage ob name text hymn source to name outro request be plus do
+  su name outro request source header stage ob text "\n\nSOURCE BRIEF:\n" to name outro request be plus do
+  su name outro request source stage ob name text hymn source brief to name outro request be plus do
   su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do
 
   su name hymn out begin stage ob text quoted.text.[intro]
@@ -929,6 +959,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
 [outro]
 .text.quoted to name hymn out be plus do
   su name hymn out outro stage ob name text outro out to name hymn out be plus do
+  ob text "node command/normalize_escaped_newlines.mjs" fromtext name hymn out to name text hymn out be command do
   su name hymn total hook verify stage be verify as wo phrase count atleast num 3 atmost num 12 from name text hymn out with name text hook out to name map hymn total hook verify do
   ob text of pass of hymn total hook verify to name text hymn total hook pass be text do
   ob name text hymn total hook pass be equally from text false then
@@ -950,11 +981,9 @@ prah
 
 su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn source thrust pass be equally from text true then
-  ob name text hymn goal state pass be equally from text true then
-  ob name text hymn communal voice pass be equally from text true then be depart do
+  ob name text hymn goal state pass be equally from text true then be depart do
   su name hymn draft retry stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
-  su name hymn communal voice retry stage from text of ob of manuscript out to name text hymn communal voice pass be hymn communal voice do
   su name hymn source thrust verify retry stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
 prah
 
@@ -963,13 +992,10 @@ su name hymn manuscript from text source to name text manuscript out be ceremony
 
   su name hymn draft stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
-  su name hymn communal voice verify stage from text of ob of manuscript out to name text hymn communal voice pass be hymn communal voice do
   su name hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
   fromindex num 1 toindex num 3 be hymn source thrust retry do
   ob name text hymn goal state pass be equally from text false then
   su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do
-  ob name text hymn communal voice pass be equally from text false then
-  su name hymn communal voice guarantee stage ob bool lie fromtext text "hymn communal voice defective" be guarantee do
   ob name text hymn source thrust pass be equally from text false then
   su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do
 
