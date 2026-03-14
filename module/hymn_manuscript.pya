@@ -31,6 +31,7 @@ Rules:
 - Prefer present-tense realis declarative phrasing.
 - Describe something happening now rather than telling the listener what to do.
 - Prefer shared experience over instruction.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
@@ -46,12 +47,14 @@ Rules:
 - 1 short line.
 - 6 to 10 words total.
 - Clear, simple vocabulary.
-- May include the exact HOOK_PHRASE.
+- Must include the exact HOOK_PHRASE unchanged.
+- The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Draw key wording from the source text.
 - Prefer present-tense realis declarative phrasing.
 - State what is happening now rather than giving instructions.
 - Use communal experiential voice.
 - Prefer we, our, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid telling the listener what to do.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -71,6 +74,7 @@ Rules:
 - Prefer present-tense realis declarative lines with experiential imagery.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
@@ -83,18 +87,27 @@ exists su name hymn chorus prompt ob text quoted.text.You are writing the Chorus
 Rules:
 - Write 2 rhyming couplets (4 short lines).
 - Use rhyme scheme `AAAA` or `AABB`.
-- Keep each line short and lyrical (roughly 4-5 words).
-- 14 to 24 words total.
+- Line 1 should be exactly the HOOK_PHRASE if it fits.
+- Line 2 should be a very short echo or extension (2 to 4 words).
+- Line 3 may repeat the HOOK_PHRASE or a very close refrain line.
+- Line 4 should be a very short echo or extension (2 to 4 words).
+- Keep each line short and lyrical.
+- 8 to 18 words total.
 - Memorable and repeatable refrain.
 - Must include the exact HOOK_PHRASE unchanged.
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
-- Prefer using the exact HOOK_PHRASE as a full line when possible.
+- Use the exact HOOK_PHRASE as its own full line if it fits.
+- Build the chorus around one short refrain rather than four separate full ideas.
+- Do not restate Verse 1 as long prose-like lines.
+- Keep each line punchy and compact; if a line starts getting long, rewrite it shorter.
+- Make lines 2-4 brief echoes or extensions of the same refrain, not new subtopics.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
 - Prefer present-tense realis declarative lines.
 - Repeat the hook as a statement of what is true now, not as an instruction.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -111,17 +124,23 @@ Teaching role:
 Rules:
 - Write 2 rhyming couplets (4 short lines).
 - Use rhyme scheme `AAAA` or `AABB`.
-- Keep each line short and lyrical (roughly 4-5 words).
-- 14 to 24 words total.
+- Line 1 should be exactly the HOOK_PHRASE if it fits.
+- Line 2 should be a very short echo or extension (2 to 4 words).
+- Line 3 may repeat the HOOK_PHRASE or a very close refrain line.
+- Line 4 should be a very short echo or extension (2 to 4 words).
+- Keep each line short and lyrical.
+- 8 to 18 words total.
 - Keep the same core message as the prior chorus.
 - Must include the exact HOOK_PHRASE unchanged.
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep wording close to the prior chorus rather than rewriting it from scratch.
+- Use the exact HOOK_PHRASE as its own full line if it fits.
 - Prefer source-derived wording over generic uplift language.
 - Prefer present-tense realis declarative lines.
 - Repeat the hook as a statement of what is true now, not as an instruction.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid direct second-person instruction and bare imperative openings.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -165,6 +184,7 @@ Rules:
 - Prefer present-tense realis declarative lines.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid direct second-person instruction.
 - Allow imperative phrasing sparingly only if it adds movement or emphasis.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
@@ -182,14 +202,17 @@ Teaching role:
 Rules:
 - 2 short lines.
 - Use rhyme scheme `AA`.
-- 6 to 16 words total.
+- 6 to 12 words total.
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
+- Prefer line 1 to be exactly the HOOK_PHRASE.
+- Keep line 2 to a very short closing image or truth.
 - Draw its closing language from the source text where possible.
 - Prefer present-tense realis declarative phrasing.
 - Restate the hook as what is true now.
 - Use communal experiential voice.
 - Prefer we, our, or shared witness over direct commands.
+- Do not invent group action, togetherness, or collective claims unless the source clearly supports them.
 - Avoid telling the listener what to do.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
@@ -334,15 +357,15 @@ su name hymn verse one checks be series def
 prah
 
 su name hymn chorus checks be series def
-  su name word_min ob num 10 ya
-  su name word_max ob num 36 ya
+  su name word_min ob num 8 ya
+  su name word_max ob num 22 ya
   su name line_count_min ob num 4 ya
   su name line_count_max ob num 4 ya
 prah
 
 su name hymn final chorus checks be series def
-  su name word_min ob num 10 ya
-  su name word_max ob num 36 ya
+  su name word_min ob num 8 ya
+  su name word_max ob num 22 ya
   su name line_count_min ob num 4 ya
   su name line_count_max ob num 4 ya
 prah
@@ -363,7 +386,7 @@ prah
 
 su name hymn outro checks be series def
   su name word_min ob num 6 ya
-  su name word_max ob num 16 ya
+  su name word_max ob num 12 ya
   su name line_count_min ob num 2 ya
   su name line_count_max ob num 2 ya
 prah
@@ -501,10 +524,13 @@ su name hymn communal voice from text lyric to name text pass be ceremony def
 prah
 
 su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn hook positive pass be equally from text true then be depart do
+  ob name text hymn hook positive pass be equally from text true then
+  ob name text hymn hook source thrust pass be equally from text true then be depart do
   su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook source thrust verify stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
   su name hymn hook positive pass ret
+  su name hymn hook source thrust pass ret
 prah
 
 su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
@@ -543,16 +569,25 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hook request source stage ob name text hymn source to name hook request be plus do
   su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  su name hymn hook source thrust verify stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
   ob name text hymn hook positive pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn hook positive retry do
+  ob name text hymn hook source thrust pass be equally from text false then
   fromindex num 1 toindex num 3 be hymn hook positive retry do
   ob name text hymn hook positive pass be equally from text false then
   su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
+  ob name text hymn hook source thrust pass be equally from text false then
+  su name hymn hook source thrust guarantee stage ob bool lie fromtext text "hymn hook source thrust defective" be guarantee do
 
   su name intro request begin stage ob text "TARGET_WORDS: 6-10\nSECTION_ROLE: INTRO_TOPIC_HOOK\nHOOK_PHRASE:\n" to name text intro request be text do
   su name intro request hook stage ob name text hook out to name intro request be plus do
   su name intro request source header stage ob text "\n\nSOURCE TEXT:\n" to name intro request be plus do
   su name intro request source stage ob name text hymn source to name intro request be plus do
   su name intro stage from text of ob of intro request for name hymn intro mind accordingto name hymn intro checks to name text intro out be hymn section verify do
+  su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do
+  ob text of pass of hymn intro hook verify to name text hymn intro hook pass be text do
+  ob name text hymn intro hook pass be equally from text false then
+  su name hymn intro hook guarantee stage ob bool lie fromtext text "hymn intro hook defective" be guarantee do
 
   su name verse one request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: CONCEPT_INTRO\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nSOURCE TEXT:\n" to name text verse one request be text do
   su name verse one request source stage ob name text hymn source to name verse one request be plus do
@@ -577,7 +612,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
   ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
   ob name text hymn chorus hook pass be equally from text false then
-  fromindex num 1 toindex num 3 be hymn chorus hook retry do
+  fromindex num 1 toindex num 5 be hymn chorus hook retry do
   ob name text hymn chorus hook pass be equally from text false then
   su name hymn chorus hook guarantee stage ob bool lie fromtext text "hymn chorus hook defective" be guarantee do
 
