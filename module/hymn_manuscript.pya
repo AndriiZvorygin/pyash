@@ -16,6 +16,8 @@ exists su name hymn imagery verify mind be mind fromtext name hymn imagery verif
 exists su name hymn imagery verdict mind be mind fromtext name hymn imagery verdict prompt ya
 exists su name hymn chorus stability verify mind be mind fromtext name hymn chorus stability verify prompt ya
 exists su name hymn chorus stability verdict mind be mind fromtext name hymn chorus stability verdict prompt ya
+exists su name hymn communal voice verify mind be mind fromtext name hymn communal voice verify prompt ya
+exists su name hymn communal voice verdict mind be mind fromtext name hymn communal voice verdict prompt ya
 exists su name hymn source thrust verify mind be mind fromtext name hymn source thrust verify prompt ya
 exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya
 exists su name hymn source thrust intent ob text quoted.text.The generator is asked to write singable lyrics from the source text. Treat poetic language as style, but fail when concrete teachings, practices, claims, or source-grounded details are unsupported or materially altered..text.quoted be text ya
@@ -26,6 +28,7 @@ Rules:
 - 2 to 5 words only.
 - This exact phrase must be memorable, singable, and easy to repeat.
 - Draw wording from the source text rather than generic devotional filler.
+- Prefer shared experience over instruction.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -42,6 +45,9 @@ Rules:
 - Clear, simple vocabulary.
 - May include the exact HOOK_PHRASE.
 - Draw key wording from the source text.
+- Use communal experiential voice.
+- Prefer we, our, or shared witness over direct commands.
+- Avoid telling the listener what to do.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -56,6 +62,9 @@ Rules:
 - 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
 - Keep wording singable and source-grounded.
+- Use communal experiential voice.
+- Prefer we, our, us, or shared witness over direct commands.
+- Avoid direct second-person instruction and bare imperative openings.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -73,6 +82,9 @@ Rules:
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
+- Use communal experiential voice.
+- Prefer we, our, us, or shared witness over direct commands.
+- Avoid direct second-person instruction and bare imperative openings.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -112,6 +124,9 @@ Rules:
 - Each couplet must include at least one physical image, object, or scene.
 - Keep abstract nouns grounded in visible action, setting, or sensory detail.
 - Draw concrete wording from the source text rather than generic uplift language.
+- Use communal experiential voice.
+- Prefer we, our, us, or shared witness over direct commands.
+- Avoid direct second-person instruction and bare imperative openings.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -127,6 +142,9 @@ Rules:
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
 - Draw its turn or resolution from the source text rather than generic uplift phrasing.
+- Use communal experiential voice.
+- Prefer we, our, us, or shared witness over direct commands.
+- Avoid direct second-person instruction and bare imperative openings.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -145,6 +163,9 @@ Rules:
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
 - Draw its closing language from the source text where possible.
+- Use communal experiential voice.
+- Prefer we, our, or shared witness over direct commands.
+- Avoid telling the listener what to do.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -197,6 +218,32 @@ exists su name hymn chorus stability verdict prompt ob text quoted.text.Read the
 
 Rules:
 - Return FAIL only when the analysis clearly says the final chorus drifts too far from the main chorus.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name hymn communal voice verify prompt ob text quoted.text.Verify whether LYRIC uses communal experiential voice rather than command-heavy instructional voice.
+
+PASS if:
+- the lyric mainly sounds like shared lived experience, shared witness, or communal participation,
+- first-person plural or other collective perspective is present or strongly implied,
+- the lyric avoids repeatedly telling the listener what to do.
+
+FAIL if:
+- the lyric mostly sounds like commands, orders, or instructions,
+- repeated imperative openings dominate lines,
+- second-person directive language such as you or your is central to the lyric voice.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name hymn communal voice verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the lyric is command-heavy or insufficiently communal/experiential.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -394,6 +441,39 @@ su name hymn chorus stability from text chorus with text final chorus to name te
   su name pass ret
 prah
 
+su name hymn communal voice checked to name text pass be ceremony def
+  su name hymn communal voice write stage ob name text hymn communal voice request for name hymn communal voice verify mind to name text hymn communal voice review by num 0 atmost num 180 be write do
+  ob text "false" to name text hymn communal voice pass be text do
+  ob name text hymn communal voice review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text hymn communal voice pass be text do
+  ob name text hymn communal voice pass be equally from text false then
+  su name hymn communal voice verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn communal voice verdict request be text do
+  ob name text hymn communal voice review to name text hymn communal voice verdict request be plus do
+  ob name text hymn communal voice verdict request for name hymn communal voice verdict mind to name text hymn communal voice verdict raw by num 0 atmost num 8 be write do
+  ob name text hymn communal voice verdict raw atmost num 1 to name text hymn communal voice verdict line be line tail do
+  ob text "false" to name text hymn communal voice verdict known be text do
+  ob name text hymn communal voice verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text hymn communal voice verdict known be text do
+  ob name text hymn communal voice verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text hymn communal voice pass be text do
+  ob name text hymn communal voice verdict known be equally from text false then
+  su name hymn communal voice verdict guarantee stage ob bool lie fromtext text "hymn communal voice verdict defective" be guarantee do
+  su name hymn communal voice pass ret
+prah
+
+su name hymn communal voice from text lyric to name text pass be ceremony def
+  su name hymn communal voice request begin stage ob text "LYRIC:\n" to name text hymn communal voice request be text do
+  ob text of from of this to name text hymn communal voice request be plus do
+  su name pass stage to name text pass be hymn communal voice checked do
+  ob name text pass be equally from text true then
+  ob text of from of this from text "/\\b(?:you|your|yours)\\b/i" be resemble then
+  ob text "false" to name text pass be text do
+  ob name text pass be equally from text true then
+  ob text of from of this from text "/(?:^|\\n)\\s*(?:polish|stand|send|remove|offer|cast|bend|go|shine|hold|let|face|ride|return|walk|lift|build|wear|open|surround|follow|serve)\\b/i" be resemble then
+  ob text "false" to name text pass be text do
+  su name pass ret
+prah
+
 su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook positive pass be equally from text true then be depart do
   su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
@@ -573,9 +653,11 @@ prah
 
 su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn source thrust pass be equally from text true then
-  ob name text hymn goal state pass be equally from text true then be depart do
+  ob name text hymn goal state pass be equally from text true then
+  ob name text hymn communal voice pass be equally from text true then be depart do
   su name hymn draft retry stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
+  su name hymn communal voice retry stage from text of ob of manuscript out to name text hymn communal voice pass be hymn communal voice do
   su name hymn source thrust verify retry stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
 prah
 
@@ -584,10 +666,13 @@ su name hymn manuscript from text source to name text manuscript out be ceremony
 
   su name hymn draft stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
+  su name hymn communal voice verify stage from text of ob of manuscript out to name text hymn communal voice pass be hymn communal voice do
   su name hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
   fromindex num 1 toindex num 3 be hymn source thrust retry do
   ob name text hymn goal state pass be equally from text false then
   su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do
+  ob name text hymn communal voice pass be equally from text false then
+  su name hymn communal voice guarantee stage ob bool lie fromtext text "hymn communal voice defective" be guarantee do
   ob name text hymn source thrust pass be equally from text false then
   su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do
 
