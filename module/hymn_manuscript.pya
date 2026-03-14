@@ -12,9 +12,13 @@ exists su name hymn verse two mind be mind fromtext name hymn verse two prompt y
 exists su name hymn bridge mind be mind fromtext name hymn bridge prompt ya
 exists su name hymn intro mind be mind fromtext name hymn intro prompt ya
 exists su name hymn outro mind be mind fromtext name hymn outro prompt ya
+exists su name hymn imagery verify mind be mind fromtext name hymn imagery verify prompt ya
+exists su name hymn imagery verdict mind be mind fromtext name hymn imagery verdict prompt ya
+exists su name hymn chorus stability verify mind be mind fromtext name hymn chorus stability verify prompt ya
+exists su name hymn chorus stability verdict mind be mind fromtext name hymn chorus stability verdict prompt ya
 exists su name hymn source thrust verify mind be mind fromtext name hymn source thrust verify prompt ya
 exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya
-exists su name hymn source thrust intent ob text quoted.text.The generator is asked to write singable lyrics from the source text. Treat poetic language as style, but fail when concrete historical facts are unsupported or materially altered..text.quoted be text ya
+exists su name hymn source thrust intent ob text quoted.text.The generator is asked to write singable lyrics from the source text. Treat poetic language as style, but fail when concrete teachings, practices, claims, or source-grounded details are unsupported or materially altered..text.quoted be text ya
 
 exists su name hymn hook prompt ob text quoted.text.You are writing the fixed hook phrase for an educational spiritual song.
 
@@ -144,29 +148,81 @@ Rules:
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
-exists su name hymn source thrust verify prompt ob text quoted.text.Verify whether the historical content in LYRIC is grounded in TRANSCRIPT.
-
-GENERATOR INTENT:
-- Lyrics are poetic, but concrete historical claims must be source-grounded.
-- Metaphor and emotional framing are allowed.
-
-Evaluate only historical claims:
-- named historical person
-- historical event
-- law, reform, policy
-- specific historical action or mechanism
-
-Ignore pure emotional language and modern moral framing unless they add concrete historical facts.
+exists su name hymn imagery verify prompt ob text quoted.text.Verify whether VERSE contains at least one concrete image, action, or scene rather than only abstract spiritual nouns.
 
 PASS if:
-- historical claims are clearly supported by TRANSCRIPT,
-- no new concrete historical facts are introduced,
+- the verse includes at least one vivid concrete element such as light, wall, road, hand, dawn, storm, seed, flame, shield, banner, chink, steed, river, mountain, door, path, or another clear physical image or action,
+- the verse still reads like lyric language,
+- it is not dominated only by abstractions like peace, truth, love, spirit, joy, being, healing.
+
+FAIL if:
+- the verse is mostly abstract spiritual language,
+- no clear image, action, or scene appears,
+- the wording is too generic to picture.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 60 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name hymn imagery verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the verse lacks concrete imagery or action.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name hymn chorus stability verify prompt ob text quoted.text.Verify whether FINAL_CHORUS stays close enough to CHORUS for memorability and refrain stability.
+
+PASS if:
+- FINAL_CHORUS keeps the same core refrain and remains recognizably the same chorus,
+- wording changes are limited and do not rewrite the chorus from scratch,
+- the repeated section would still feel like the same song hook to a listener.
+
+FAIL if:
+- FINAL_CHORUS changes too much from CHORUS,
+- the refrain feels rewritten instead of repeated,
+- memorability would drop because the chorus identity is unstable.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 60 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name hymn chorus stability verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the final chorus drifts too far from the main chorus.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name hymn source thrust verify prompt ob text quoted.text.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT.
+
+GENERATOR INTENT:
+- Lyrics are poetic, but concrete teachings, practices, claims, and source-grounded details must remain faithful to TRANSCRIPT.
+- Metaphor and emotional framing are allowed.
+
+Evaluate only source-grounded teaching content:
+- named person or group when used as part of the teaching,
+- specific practice, instruction, or discipline,
+- concrete claim about what the source says or recommends,
+- specific action, mechanism, image, or framing presented as part of the teaching.
+
+Ignore pure emotional language and poetic uplift unless they add unsupported source claims.
+
+PASS if:
+- the lyric stays faithful to the source teaching in TRANSCRIPT,
+- no unsupported concrete teaching claims are introduced,
 - no material meaning drift occurs.
 
 FAIL if:
-- historical claims lack support,
-- concrete historical facts are added,
-- historical meaning is materially altered.
+- concrete teaching or source claims lack support,
+- unsupported source details are added,
+- the teaching meaning is materially altered.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 70 words).
@@ -177,7 +233,7 @@ Output rules:
 exists su name hymn source thrust verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says historical claims are unsupported, added, or materially distorted.
+- Return FAIL only when the analysis clearly says source-grounded teaching content is unsupported, added, or materially distorted.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -281,6 +337,80 @@ su name hymn positive language from text lyric to name text pass be ceremony def
   su name pass ret
 prah
 
+su name hymn imagery verify to name text pass be ceremony def
+  su name hymn imagery write stage ob name text hymn imagery request for name hymn imagery verify mind to name text hymn imagery review by num 0 atmost num 180 be write do
+  ob text "false" to name text hymn imagery pass be text do
+  ob name text hymn imagery review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text hymn imagery pass be text do
+  ob name text hymn imagery pass be equally from text false then
+  su name hymn imagery verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn imagery verdict request be text do
+  ob name text hymn imagery review to name text hymn imagery verdict request be plus do
+  ob name text hymn imagery verdict request for name hymn imagery verdict mind to name text hymn imagery verdict raw by num 0 atmost num 8 be write do
+  ob name text hymn imagery verdict raw atmost num 1 to name text hymn imagery verdict line be line tail do
+  ob text "false" to name text hymn imagery verdict known be text do
+  ob name text hymn imagery verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text hymn imagery verdict known be text do
+  ob name text hymn imagery verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text hymn imagery pass be text do
+  ob name text hymn imagery verdict known be equally from text false then
+  su name hymn imagery verdict guarantee stage ob bool lie fromtext text "hymn imagery verdict defective" be guarantee do
+  su name hymn imagery pass ret
+prah
+
+su name hymn imagery from text verse to name text pass be ceremony def
+  su name hymn imagery request begin stage ob text "VERSE:\n" to name text hymn imagery request be text do
+  ob text of from of this to name text hymn imagery request be plus do
+  su name pass stage to name text pass be hymn imagery verify do
+  su name pass ret
+prah
+
+su name hymn chorus stability verify to name text pass be ceremony def
+  su name hymn chorus stability write stage ob name text hymn chorus stability request for name hymn chorus stability verify mind to name text hymn chorus stability review by num 0 atmost num 180 be write do
+  ob text "false" to name text hymn chorus stability pass be text do
+  ob name text hymn chorus stability review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text hymn chorus stability pass be text do
+  ob name text hymn chorus stability pass be equally from text false then
+  su name hymn chorus stability verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn chorus stability verdict request be text do
+  ob name text hymn chorus stability review to name text hymn chorus stability verdict request be plus do
+  ob name text hymn chorus stability verdict request for name hymn chorus stability verdict mind to name text hymn chorus stability verdict raw by num 0 atmost num 8 be write do
+  ob name text hymn chorus stability verdict raw atmost num 1 to name text hymn chorus stability verdict line be line tail do
+  ob text "false" to name text hymn chorus stability verdict known be text do
+  ob name text hymn chorus stability verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
+  ob text "true" to name text hymn chorus stability verdict known be text do
+  ob name text hymn chorus stability verdict line from text "/^\\s*PASS\\b/i" be resemble then
+  ob text "true" to name text hymn chorus stability pass be text do
+  ob name text hymn chorus stability verdict known be equally from text false then
+  su name hymn chorus stability verdict guarantee stage ob bool lie fromtext text "hymn chorus stability verdict defective" be guarantee do
+  su name hymn chorus stability pass ret
+prah
+
+su name hymn chorus stability from text chorus with text final chorus to name text pass be ceremony def
+  su name hymn chorus stability request begin stage ob text "CHORUS:\n" to name text hymn chorus stability request be text do
+  ob text of from of this to name text hymn chorus stability request be plus do
+  ob text "\n\nFINAL_CHORUS:\n" to name text hymn chorus stability request be plus do
+  ob text of with of this to name text hymn chorus stability request be plus do
+  su name pass stage to name text pass be hymn chorus stability verify do
+  su name pass ret
+prah
+
+su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text verse one imagery pass be equally from text true then be depart do
+  su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
+  su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do
+prah
+
+su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text verse two imagery pass be equally from text true then be depart do
+  su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
+  su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
+prah
+
+su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn chorus stability pass be equally from text true then be depart do
+  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
+prah
+
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text hymn source be text do
 
@@ -299,6 +429,11 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name verse one request intro header stage ob text "\n\nINTRO:\n" to name verse one request be plus do
   su name verse one request intro stage ob name text intro out to name verse one request be plus do
   su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
+  su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do
+  ob name text verse one imagery pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn verse one imagery retry do
+  ob name text verse one imagery pass be equally from text false then
+  su name verse one imagery guarantee stage ob bool lie fromtext text "hymn verse one imagery defective" be guarantee do
 
   su name chorus request begin stage ob text "TARGET_WORDS: 14-24\nSECTION_ROLE: MEMORY_ANCHOR\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AAAA_OR_AABB\nHOOK_PHRASE:\n" to name text chorus request be text do
   su name chorus request hook stage ob name text hook out to name chorus request be plus do
@@ -317,6 +452,11 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name verse two request source header stage ob text "\n\nSOURCE TEXT:\n" to name verse two request be plus do
   su name verse two request source stage ob name text hymn source to name verse two request be plus do
   su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
+  su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
+  ob name text verse two imagery pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn verse two imagery retry do
+  ob name text verse two imagery pass be equally from text false then
+  su name verse two imagery guarantee stage ob bool lie fromtext text "hymn verse two imagery defective" be guarantee do
 
   su name bridge request begin stage ob text "TARGET_WORDS: 12-20\nSECTION_ROLE: REFLECTION_SHIFT\nRHYME_MODE: FREE_OR_ABAB\nVERSE 1:\n" to name text bridge request be text do
   su name bridge request verse one stage ob name text verse one out to name bridge request be plus do
@@ -338,6 +478,11 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name final chorus request source header stage ob text "\n\nSOURCE TEXT:\n" to name final chorus request be plus do
   su name final chorus request source stage ob name text hymn source to name final chorus request be plus do
   su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
+  ob name text hymn chorus stability pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn chorus stability retry do
+  ob name text hymn chorus stability pass be equally from text false then
+  su name hymn chorus stability guarantee stage ob bool lie fromtext text "hymn chorus stability defective" be guarantee do
 
   su name outro request begin stage ob text "TARGET_WORDS: 6-10\nSECTION_ROLE: OUTRO_CLOSURE\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AA\nHOOK_PHRASE:\n" to name text outro request be text do
   su name outro request hook stage ob name text hook out to name outro request be plus do
@@ -408,8 +553,6 @@ su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def
   su name hymn draft retry stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
   su name hymn source thrust verify retry stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
-  ob name text hymn source thrust pass be equally from text true then
-  ob name text hymn goal state pass be equally from text true then be depart do
 prah
 
 su name hymn manuscript from text source to name text manuscript out be ceremony def
