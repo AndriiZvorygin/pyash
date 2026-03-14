@@ -63,6 +63,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Prefer present-tense realis declarative phrasing\./);
   assert.match(text, /Describe something happening now rather than telling the listener what to do\./);
   assert.match(text, /Avoid conditional, future-tense, hypothetical, or wishful constructions\./);
+  assert.match(text, /Prefer a declarative statement over an imperative command whenever possible\./);
   assert.match(text, /Use experiential declarative voice\./);
   assert.match(text, /Prefer lived witness over direct commands\./);
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
@@ -87,6 +88,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Let the verse deepen or turn the song rather than restate the chorus\./);
   assert.match(text, /Do not reuse the exact HOOK_PHRASE in this verse\./);
   assert.match(text, /Do not restate the intro line\./);
+  assert.match(text, /Each line should express only one image or one action\./);
+  assert.match(text, /Avoid stacking multiple concepts in the same line\./);
   assert.match(text, /generic spiritual filler/);
   assert.match(text, /Allow imperative phrasing sparingly only if it adds movement or emphasis\./);
   assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\./);
@@ -97,6 +100,15 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
   assert.match(text, /Keep line 2 to a very short closing image or truth\./);
+  assert.match(text, /be declarative rather than directive unless no source-grounded declarative option works/);
+  assert.match(text, /avoid second-person wording such as you or your unless no source-grounded neutral or collective option works/);
+  assert.match(text, /Prefer neutral or collective phrasing over second-person lines when both are source-grounded\./);
+  assert.match(text, /Exclude bare imperative openings when a declarative source line exists\./);
+  assert.match(text, /Exclude direct second-person address when a neutral or collective source line exists\./);
+  assert.match(text, /is declarative rather than directive unless no other usable candidate works/);
+  assert.match(text, /avoids second-person wording unless no similarly strong neutral or collective candidate exists\./);
+  assert.match(text, /imperative command lines when declarative alternatives exist/);
+  assert.match(text, /second-person refrain lines when neutral or collective alternatives exist/);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT\./);
   assert.match(text, /hymn source thrust verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
   assert.match(text, /su name hymn hook checks be series def/);

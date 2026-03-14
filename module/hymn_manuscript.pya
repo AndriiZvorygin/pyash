@@ -38,6 +38,7 @@ Rules:
 - Prefer present-tense realis declarative phrasing.
 - Describe something happening now rather than telling the listener what to do.
 - Prefer lived witness over instruction.
+- Prefer a declarative statement over an imperative command whenever possible.
 - Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid second-person wording such as you or your.
@@ -62,6 +63,8 @@ Each hook must:
 - be grounded in the imagery, symbols, or claims of the source text
 - avoid generic inspirational filler language
 - read like a complete phrase that sounds natural aloud
+- be declarative rather than directive unless no source-grounded declarative option works
+- avoid second-person wording such as you or your unless no source-grounded neutral or collective option works
 
 Prefer hooks that:
 - use concrete imagery, objects, or symbolic elements from the source
@@ -75,6 +78,7 @@ Avoid hooks that:
 - contain conditional or hypothetical language
 - contain future promises
 - contain negations such as not, never, no, without unless strongly supported by the source
+- use negative framing when a source-faithful positive phrasing is available
 - contain multiple clauses or long phrases
 - repeat the intro line verbatim if provided
 - use source-prose fragments, speaker labels, query wording, or quoted report language
@@ -96,7 +100,9 @@ Rules:
 - Only trim for brevity; do not paraphrase the teaching into new claims.
 - Prefer lines naming a vivid image, transformation, practice, or memorable truth.
 - Prefer declarative lines describing what is true now.
-- Avoid bare imperative openings and direct second-person address when better declarative lines exist.
+- Prefer neutral or collective phrasing over second-person lines when both are source-grounded.
+- Exclude bare imperative openings when a declarative source line exists.
+- Exclude direct second-person address when a neutral or collective source line exists.
 - Exclude speaker labels, greetings, file names, timestamps, shell text, footnotes, html remnants, query wording, and conversational setup.
 - Exclude lines that are mostly metadata or source noise.
 - Exclude lines that only say things like "it is indeed" unless they clearly carry the main teaching.
@@ -124,10 +130,7 @@ Keep a candidate only if all of these are true:
 - It is 4 to 8 words.
 - It reads like a singable refrain line rather than prose.
 - It stays faithful to the source wording and teaching.
-- It is present-tense realis and declarative.
-- It is not a command.
-- It does not use second-person wording such as you or your.
-- It does not use negations such as not, never, no, without, cannot, won't, don't.
+- It can work as a repeated chorus anchor even if it is simple.
 - It does not sound like a speaker label, question, quote, or source note.
 - It is not a bland filler affirmation, vague placeholder line, or empty evaluative statement.
 
@@ -148,13 +151,17 @@ Prefer a candidate that:
 - carries a real teaching, practice, image, or transformation,
 - sounds like a refrain line instead of prose,
 - stays faithful to the source,
-- can support repetition without sounding awkward.
+- can support repetition without sounding awkward,
+- is declarative rather than directive unless no other usable candidate works,
+- avoids second-person wording unless no similarly strong neutral or collective candidate exists.
 
 Reject candidates that are mainly:
 - speaker self-identification,
 - conversational setup,
 - query or dialogue framing,
 - metadata or source fragments,
+- imperative command lines when declarative alternatives exist,
+- second-person refrain lines when neutral or collective alternatives exist,
 - bland filler, vague evaluation, or empty statements.
 
 Output rules:
@@ -199,6 +206,8 @@ Rules:
 - 30 to 38 words total.
 - Do not reuse the exact HOOK_PHRASE in this verse.
 - Do not restate the intro line.
+- Each line should express only one image or one action.
+- Avoid stacking multiple concepts in the same line.
 - Draw nouns, images, actions, or tensions from the source text.
 - Prefer present-tense realis declarative lines.
 - Prefer shared witness and communal voice when it fits the source.
@@ -283,6 +292,8 @@ Rules:
 - Focus on a different supported aspect than Verse 1.
 - Do not reuse the exact HOOK_PHRASE in this verse.
 - Do not repeat Verse 1 wording.
+- Each line should express only one image or one action.
+- Avoid stacking multiple concepts in the same line.
 - Each couplet must include at least one physical image, object, or scene.
 - Ground abstract meaning in visible action, setting, sensory detail, or symbolic object.
 - Draw concrete wording from the source text rather than generic uplift language.
@@ -379,13 +390,16 @@ Rules:
 
 exists su name hymn hook quality verify prompt ob text quoted.text.Verify whether HOOK works as a strong refrain line for the song.
 
+Deterministic checks already handle broken format.
+Do not judge word count, empty/malformed structure, or basic formatting here.
+
 Judge only these concerns:
 - naturalness aloud,
 - repeatability in a chorus,
 - specificity to the source rather than generic filler,
 - overall acceptability as a usable hook.
 
-PASS if HOOK is usable as a repeated hook line even if it is not perfect.
+PASS if HOOK is usable as a repeated hook line even if it is plain, directive, second-person, or aesthetically mediocre.
 
 FAIL only if:
 - the hook sounds broken aloud,
