@@ -113,6 +113,13 @@ function resolveConfigPrimitive(map = {}, keys = [], { rememberFn = remember } =
   return undefined;
 }
 
+function resolveConfigPositiveInt(map = {}, keys = [], { rememberFn = remember } = {}) {
+  const value = resolveConfigPrimitive(map, keys, { rememberFn });
+  const num = Number(value);
+  if (Number.isFinite(num) && num > 0) return Math.trunc(num);
+  return null;
+}
+
 function parsePatternSpec(spec) {
   const text = String(spec ?? "").trim();
   if (!text) return null;
@@ -148,6 +155,22 @@ function collectConfiguredMatches(source, specs, type) {
   return matches;
 }
 
+function textMatchesConfiguredPatterns(text, specs = []) {
+  const normalized = normalizeRichText(text).trim();
+  if (!normalized) return false;
+  for (const spec of specs) {
+    const parsed = parsePatternSpec(spec);
+    if (!parsed) continue;
+    if (parsed.kind === "regex") {
+      const regex = new RegExp(parsed.regex.source, parsed.regex.flags.replace(/g/gu, ""));
+      if (regex.test(normalized)) return true;
+      continue;
+    }
+    if (normalized.startsWith(parsed.text)) return true;
+  }
+  return false;
+}
+
 function dedupeTypedMatches(matches = []) {
   const out = [];
   let lastKey = null;
@@ -163,7 +186,17 @@ function dedupeTypedMatches(matches = []) {
   return out;
 }
 
-function buildPairWiseSlices(source, matches, { joiner = "\n\n" } = {}) {
+function buildPairWiseSlices(
+  source,
+  matches,
+  {
+    joiner = "\n\n",
+    firstRequirePatterns = [],
+    firstDropPatterns = [],
+    minChars = null,
+    minBytes = null
+  } = {}
+) {
   const blocks = [];
   for (let i = 0; i < matches.length; i += 1) {
     const start = matches[i].start;
@@ -179,7 +212,10 @@ function buildPairWiseSlices(source, matches, { joiner = "\n\n" } = {}) {
   const flush = () => {
     const lhs = String(first ?? "").trim();
     const rhs = secondParts.map(part => String(part ?? "").trim()).filter(Boolean).join(joiner);
-    if (lhs && rhs) chips.push(`${lhs}${joiner}${rhs}`);
+    const chipText = lhs && rhs ? `${lhs}${joiner}${rhs}` : "";
+    const longEnoughChars = minChars == null || chipText.length >= minChars;
+    const longEnoughBytes = minBytes == null || Buffer.byteLength(chipText, "utf8") >= minBytes;
+    if (chipText && longEnoughChars && longEnoughBytes) chips.push(chipText);
     first = "";
     secondParts = [];
   };
@@ -191,6 +227,16 @@ function buildPairWiseSlices(source, matches, { joiner = "\n\n" } = {}) {
     if (block.type === "drop") continue;
     if (block.type === "first") {
       flush();
+      if (firstDropPatterns.length && textMatchesConfiguredPatterns(block.text, firstDropPatterns)) {
+        first = "";
+        secondParts = [];
+        continue;
+      }
+      if (firstRequirePatterns.length && !textMatchesConfiguredPatterns(block.text, firstRequirePatterns)) {
+        first = "";
+        secondParts = [];
+        continue;
+      }
       first = block.text;
       continue;
     }
@@ -310,6 +356,27 @@ function resolvePairWiseSlices(source, sentence, { rememberFn = remember } = {})
   const secondPatterns = resolveConfigTextList(config, ["second patterns", "answer patterns", "right patterns"], { rememberFn });
   const dropPatterns = resolveConfigTextList(config, ["drop patterns", "ignore patterns"], { rememberFn });
   const stopPatterns = resolveConfigTextList(config, ["stop patterns"], { rememberFn });
+  const firstRequirePatterns = resolveConfigTextList(
+    config,
+    ["first require patterns", "question require patterns", "left require patterns"],
+    { rememberFn }
+  );
+  const firstDropPatterns = resolveConfigTextList(
+    config,
+    ["first drop patterns", "question drop patterns", "left drop patterns"],
+    { rememberFn }
+  );
+  const { atleastBytes } = resolveSizeLimits(sentence);
+  const minChars = resolveConfigPositiveInt(
+    config,
+    ["minimum chars", "min chars", "atleast char", "pair minimum chars", "pair min chars"],
+    { rememberFn }
+  );
+  const minBytes = resolveConfigPositiveInt(
+    config,
+    ["minimum bytes", "min bytes", "atleast byte", "pair minimum bytes", "pair min bytes"],
+    { rememberFn }
+  ) ?? atleastBytes;
 
   const firstMatches = firstPatterns.length
     ? collectConfiguredMatches(source, firstPatterns, "first")
@@ -333,7 +400,7 @@ function resolvePairWiseSlices(source, sentence, { rememberFn = remember } = {})
     ...secondMatches,
     ...dropMatches,
     ...stopMatches
-  ]), { joiner });
+  ]), { joiner, firstRequirePatterns, firstDropPatterns, minChars, minBytes });
 }
 
 function resolveSizeLimits(sentence) {

@@ -8,6 +8,9 @@ exists su name confederation session chip style prompt ob text quoted.text.Creat
 
 exists su name confederation session chip config be map def
   su name kind ob text "pair" ya
+  su name minimum chars ob num 350 ya
+  su name first require patterns ob ve text "/\\?/u" "/\\bmy question is\\b/iu" "/\\bi was wondering\\b/iu" "/\\bcould you\\b/iu" "/\\bwould you\\b/iu" "/\\bcan you\\b/iu" ya
+  su name first drop patterns ob ve text "/answers? my question/iu" "/^####\\s+\\w+\\s*\\n(?:No|Yes),?\\s+thank you/imu" "/^####\\s+\\w+\\s*\\nI think that that answers my question/imu" ya
   su name second patterns ob ve text "#### Q’uo" "#### Q'uo" "#### Ra" "#### Latwii" "#### Hatonn" ya
   su name drop patterns ob ve text "/^####\\s+(?:Jim|Gary|Steve|Don|Carla|Laitos|Unknown).*$/gmu" "/^\\[\\s*Pause\\s*\\]$/gmu" ya
   su name stop patterns ob ve text "/^Is there another query at this time\\?.*$/gmu" "/^I am Q[’']uo, and we thank each of you.*$/gmu" "/^We thank you for your beingness.*$/gmu" ya
