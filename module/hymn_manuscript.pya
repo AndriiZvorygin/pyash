@@ -26,6 +26,8 @@ Rules:
 - 1 short line.
 - 8 to 12 words total.
 - Clear, simple vocabulary.
+- Prefer positive goal-state language.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -39,6 +41,8 @@ Rules:
 - 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
 - Emotional, singable language.
+- Prefer healing, peace, courage, joy, service, and other goal-state language.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -52,6 +56,8 @@ Rules:
 - 18 to 22 words total.
 - Memorable and repeatable refrain.
 - Keep the core theme tied to the source and Verse 1.
+- Prefer positive goal-state language that names the desired state directly.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -69,6 +75,8 @@ Rules:
 - 18 to 22 words total.
 - Keep the same core message as the prior chorus.
 - Use fresh wording; do not copy the prior chorus line-for-line.
+- Prefer positive goal-state language that names the desired state directly.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -83,6 +91,8 @@ Rules:
 - 30 to 38 words total.
 - Focus on a different supported aspect than Verse 1.
 - Do not repeat Verse 1 wording.
+- Prefer healing, peace, courage, joy, service, and other goal-state language.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -96,6 +106,8 @@ Rules:
 - 12 to 20 words total.
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
+- Land in the healed or illuminated goal state rather than in fear or warning.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -111,6 +123,8 @@ Rules:
 - Use rhyme scheme `AA`.
 - 8 to 15 words total.
 - Clear, simple vocabulary.
+- End in the desired spiritual state, promise, or encouragement.
+- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -237,6 +251,13 @@ su name hymn source thrust checked to name text pass be ceremony def
   su name hymn source thrust pass ret
 prah
 
+su name hymn positive language from text lyric to name text pass be ceremony def
+  ob text "true" to name text pass be text do
+  ob text of from of this from text "/\\b(?:not|never|cannot|can't|won't|don't|didn't|isn't|aren't|without|no more)\\b/i" be resemble then
+  ob text "false" to name text pass be text do
+  su name pass ret
+prah
+
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text hymn source be text do
 
@@ -347,18 +368,24 @@ su name hymn source thrust from text transcript with text lyric to name text pas
 prah
 
 su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn source thrust pass be equally from text true then be depart do
+  ob name text hymn source thrust pass be equally from text true then
+  ob name text hymn goal state pass be equally from text true then be depart do
   su name hymn draft retry stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
+  su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
   su name hymn source thrust verify retry stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
-  ob name text hymn source thrust pass be equally from text true then be depart do
+  ob name text hymn source thrust pass be equally from text true then
+  ob name text hymn goal state pass be equally from text true then be depart do
 prah
 
 su name hymn manuscript from text source to name text manuscript out be ceremony def
   su name script source stage ob text of from of this to name text hymn script source be text do
 
   su name hymn draft stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
+  su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
   su name hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
   fromindex num 1 toindex num 3 be hymn source thrust retry do
+  ob name text hymn goal state pass be equally from text false then
+  su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do
   ob name text hymn source thrust pass be equally from text false then
   su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do
 

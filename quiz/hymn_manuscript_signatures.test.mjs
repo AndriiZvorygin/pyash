@@ -40,6 +40,10 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source thrust verify mind be mind fromtext name hymn source thrust verify prompt ya/);
   assert.match(text, /exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya/);
   assert.match(text, /exists su name hymn source thrust intent ob text quoted\.text\./);
+  assert.match(text, /Prefer positive goal-state language\./);
+  assert.match(text, /Avoid negations and fear framing such as not, never, no more, cannot, won't, don't/);
+  assert.match(text, /Land in the healed or illuminated goal state rather than in fear or warning\./);
+  assert.match(text, /End in the desired spiritual state, promise, or encouragement\./);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether the historical content in LYRIC is grounded in TRANSCRIPT\./);
   assert.match(text, /hymn source thrust verdict prompt ob text quoted\.text\.Read the verifier analysis and output exactly one word: PASS or FAIL\./);
   assert.match(text, /su name hymn intro checks be series def/);
@@ -67,7 +71,12 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do/);
   assert.doesNotMatch(text, /be verify loop do/);
   assert.match(text, /su name hymn source thrust checked to name text pass be ceremony def/);
+  assert.match(text, /su name hymn positive language from text lyric to name text pass be ceremony def/);
+  assert.match(text, /not\|never\|cannot\|can't\|won't\|don't\|didn't\|isn't\|aren't\|without\|no more/);
   assert.match(text, /su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);
+  assert.match(text, /su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);
+  assert.match(text, /su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do/);
   assert.match(text, /hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do/);
   assert.match(text, /fromindex num 1 toindex num 3 be hymn source thrust retry do/);
   assert.match(text, /su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do/);
