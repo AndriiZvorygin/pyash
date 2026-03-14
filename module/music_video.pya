@@ -6,7 +6,6 @@ from filename "./video_common.pya" ob name video heading burn to name video head
 from filename "./video_common.pya" ob name current thumbnail heading y ratio to name current thumbnail heading y ratio be import do
 from filename "./video_common.pya" ob name current video heading y ratio to name current video heading y ratio be import do
 from filename "./video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
-from filename "./video_common.pya" ob name current footnote mode to name current footnote mode be import do
 from filename "./video_common.pya" ob name footnote mode to name footnote mode be import do
 
 exists su name draw system prompt ob text "Educational editorial illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, clean shapes, soft natural light, high detail." be default ya
@@ -91,7 +90,7 @@ su name music video from filename audio be ceremony def
   su name thumbnail heading y ratio stage to name num thumbnail heading y ratio be current thumbnail heading y ratio do
   su name video heading y ratio stage to name num video heading y ratio be current video heading y ratio do
   su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
-  su name footnote mode stage to name text footnote mode current be current footnote mode do
+  ob text "karaoke" to name text footnote mode current be text do
 
   su name run root stage to name text music video run root be music video run root do
 

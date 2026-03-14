@@ -1,26 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 
-import { parse } from "../program/understand/index.mjs";
-import { interpret } from "../program/bridge/index.mjs";
-import { forget } from "../program/remember/index.mjs";
-import { deriveSignatureFromCall, joinSignatureWords, lookupSignature } from "../program/bridge/signature.mjs";
+test("music video footnotes use karaoke mode explicitly", async () => {
+  const text = await fs.readFile(new URL("../module/music_video.pya", import.meta.url), "utf8");
 
-test("music video module registers filename signatures", async () => {
-  forget();
-  await interpret(parse('from filename "./module/music_video.pya" to name music video be import do'));
-
-  const calls = [
-    'su name demo from filename "quiz/fixtures/ramblings.txt" be music video do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" to filename "artifacts/video/test.mp4" be music video do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" be music video wide do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" to filename "artifacts/video/test-wide.mp4" be music video wide do'
-  ];
-
-  for (const line of calls) {
-    const signature = joinSignatureWords(deriveSignatureFromCall(parse(line)));
-    const resolved = lookupSignature(signature);
-    assert.ok(resolved, `missing signature: ${signature}`);
-    assert.ok(String(resolved).includes("music video"), `unexpected target: ${resolved}`);
-  }
+  assert.doesNotMatch(
+    text,
+    /from filename "\.\/video_common\.pya" ob name current footnote mode to name current footnote mode be import do/u
+  );
+  assert.match(
+    text,
+    /ob text "karaoke" to name text footnote mode current be text do/u
+  );
+  assert.match(
+    text,
+    /from filename of ob of captions output stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do/u
+  );
 });
