@@ -98,7 +98,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   const cloneSentence = (step) => {
     if (!step || typeof step !== "object") return step;
     const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence", "alternative"];
+    const fields = ["su", "ob", "from", "to", "for", "among", "with", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "ret", "consequence", "alternative"];
     for (const field of fields) {
       if (step[field] && typeof step[field] === "object") {
         const next = { ...step[field] };
@@ -230,7 +230,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const cloneSentence = (step) => {
     if (!step || typeof step !== "object") return step;
     const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "consequence", "alternative"];
+    const fields = ["su", "ob", "from", "to", "for", "among", "with", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "ret", "consequence", "alternative"];
     for (const field of fields) {
       if (step[field] && typeof step[field] === "object") {
         const next = { ...step[field] };
