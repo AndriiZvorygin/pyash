@@ -96,6 +96,56 @@ su name chip from text source with text style to name series output be ceremony 
   su name output ret
 prah
 
+su name chip from text source ob text style with name map config to name series output be ceremony def
+  su name chip helper directory ensure stage ob text "artifacts/chip-refinery" be directory do
+  from text of from of this atmost byte 2400 to name text chip gross chips be gross chip do
+  ob text of ob of this to name text chip programmatic style current be text do
+
+  su name chip classify request stage from text of from of this with text of ob of this to name text chip classify request be chip classify request do
+  ob name text chip classify request for name chip classifier to name text chip boundary prompt be write do
+  exists su name chip boundary proposer be mind via state "qwen3.5:9b" fromtext name chip boundary prompt ya
+
+  su name chip programmatic preview stage ob text of ob of 0 of series of ob of chip gross chips to name text chip programmatic preview be chip programmatic boundary do
+  ob text "programmatic" to name text chip strategy be text do
+
+  ob name text chip programmatic preview be equally from text "" then ob name text chip classify request for name chip strategy analyzer to name text chip strategy raw be write do
+  ob name text chip programmatic preview be equally from text "" then ob name text chip strategy raw atmost num 1 to name text chip strategy be line tail do
+  ob name text chip strategy be equally from text "programmatic" then from text of from of this with text of ob of this to name text chip boundary proposals be chip programmatic boundaries do
+  ob name text chip strategy be equally from text "mixed" then from name chip gross chips by name chip mixed boundary to name text chip boundary proposals be series map do
+  ob name text chip strategy be equally from text "boundary proposal" then from name chip gross chips by name chip llm boundary to name text chip boundary proposals be series map do
+  ob name text chip strategy be equally from text "programmatic" then from text of from of this by name text chip boundary proposals with name of with of this to name text output be wise chip do
+  ob name text chip strategy be equally from text "mixed" then from text of from of this by name text chip boundary proposals with name of with of this to name text output be wise chip do
+  ob name text chip strategy be equally from text "boundary proposal" then from text of from of this by name text chip boundary proposals with name of with of this to name text output be wise chip do
+  su name output ret
+prah
+
+su name chip from text source ob name text style with name map config to name series output be ceremony def
+  from text of from of this ob text of ob of this with name of with of this to name series output be chip do
+  su name output ret
+prah
+
+su name chip from name text source ob text style with name map config to name series output be ceremony def
+  from text of from of this ob text of ob of this with name of with of this to name series output be chip do
+  su name output ret
+prah
+
+su name chip from name text source ob name text style with name map config to name series output be ceremony def
+  from text of from of this ob text of ob of this with name of with of this to name series output be chip do
+  su name output ret
+prah
+
+su name chip from filename source ob text style with name map config to name series output be ceremony def
+  from filename of from of this become wo text to name text chip source be read do
+  from name text chip source ob text of ob of this with name of with of this to name series output be chip do
+  su name output ret
+prah
+
+su name chip from filename source ob name text style with name map config to name series output be ceremony def
+  from filename of from of this become wo text to name text chip source be read do
+  from name text chip source ob text of ob of this with name of with of this to name series output be chip do
+  su name output ret
+prah
+
 su name chip from name text source with text style to name series output be ceremony def
   from text of from of this with text of with of this to name series output be chip do
   su name output ret

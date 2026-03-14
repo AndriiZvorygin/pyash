@@ -13,7 +13,8 @@ test("chip refinery module registers text and filename chip signatures", async (
 
   const calls = [
     'su name demo from text "Questioner: Hello. Answer: Peace." ob text "Create wise chips where each chip contains one full question and its full corresponding answer." to name series chips be chip do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" ob text "Create wise chips where each chip captures one coherent section." to name series chips be chip do'
+    'su name demo from filename "quiz/fixtures/ramblings.txt" ob text "Create wise chips where each chip captures one coherent section." to name series chips be chip do',
+    'su name demo from text "Questioner: Hello. Q\'uo: Peace." ob text "Create wise chips where each chip contains one full question and its full corresponding answer." with name map chip config to name series chips be chip do'
   ];
 
   for (const line of calls) {
@@ -34,6 +35,8 @@ test("chip refinery module keeps adaptive staged flow", async () => {
   assert.match(text, /ob name text chip classify request for name chip strategy analyzer to name text chip strategy raw be write do/);
   assert.match(text, /ob name text chip strategy raw atmost num 1 to name text chip strategy be line tail do/);
   assert.match(text, /from text of from of this with text of with of this to name text chip boundary proposals be chip programmatic boundaries do/);
+  assert.match(text, /from text of from of this ob text of ob of this with name of with of this to name series output be chip do/);
+  assert.match(text, /from text of from of this by name text chip boundary proposals with name of with of this to name text output be wise chip do/);
   assert.match(text, /from name chip gross chips by name chip mixed boundary to name text chip boundary proposals be series map do/);
   assert.match(text, /from name chip gross chips by name chip llm boundary to name text chip boundary proposals be series map do/);
   assert.match(text, /node command\/chip_programmatic_boundary\.mjs/);
