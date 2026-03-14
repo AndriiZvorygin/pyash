@@ -217,3 +217,14 @@ test("qwen tone promptify instruction enforces single-line style with example ou
     /Example output \(single line\):[\s\S]*Warm friendly teacher, moderate pace, crisp articulation, brief pauses after key terms, gentle emphasis\./u
   );
 });
+
+test("draw promptify instruction anchors literal named subjects, especially humans", async () => {
+  const briefSource = await fs.readFile("module/brief_video.pya", "utf8");
+  const musicSource = await fs.readFile("module/music_video.pya", "utf8");
+  for (const source of [briefSource, musicSource]) {
+    assert.match(
+      source,
+      /If current_cut names a specific person, people, species, animal, object, place, or era, depict that literal subject\./u
+    );
+  }
+});
