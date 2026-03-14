@@ -47,22 +47,44 @@ Rules:
 
 exists su name hymn hook pool prompt ob text quoted.text.You are generating a pool of hook candidates for an educational spiritual song.
 
-Rules:
-- Output 8 to 12 candidate hooks.
-- One candidate per line.
-- Each hook must be 4 to 8 words.
-- Each hook must be memorable, singable, and easy to repeat.
-- Draw wording from the source text rather than generic devotional filler.
-- Prefer present-tense realis declarative phrasing.
-- Describe something happening now rather than telling the listener what to do.
-- Prefer lived witness over instruction.
-- Avoid conditional, future-tense, hypothetical, or wishful constructions.
-- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
-- Avoid second-person wording such as you or your.
-- Avoid source-prose fragments, speaker labels, query wording, and quoted report language.
-- Vary the wording across lines; do not repeat the same hook.
-- Plain text only.
-- No numbering, no labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
+Goal:
+- Produce short, memorable, chant-like hook phrases that are clearly grounded in the source text and suitable for repetition in a chorus.
+
+Instructions:
+- Generate 10 candidate hook lines.
+
+Each hook must:
+- be 4 to 8 words long
+- be a single short lyrical line
+- be present-tense realis declarative whenever possible
+- feel natural to repeat in a chorus
+- be grammatically clean and easy to sing
+- be grounded in the imagery, symbols, or claims of the source text
+- avoid generic inspirational filler language
+- read like a complete phrase that sounds natural aloud
+
+Prefer hooks that:
+- use concrete imagery, objects, or symbolic elements from the source
+- feel like a statement of something happening now
+- could be chanted or repeated by a group
+- use simple rhythm and clear wording
+
+Avoid hooks that:
+- sound like vague motivational slogans
+- rely on generic words such as love, peace, joy, light, truth unless clearly grounded in the source
+- contain conditional or hypothetical language
+- contain future promises
+- contain negations such as not, never, no, without unless strongly supported by the source
+- contain multiple clauses or long phrases
+- repeat the intro line verbatim if provided
+- use source-prose fragments, speaker labels, query wording, or quoted report language
+
+Hooks should read like strong lyrical anchors that could appear repeatedly in the chorus.
+
+Output format:
+- Return only the hook lines.
+- One hook per line.
+- No numbering, no explanations, no punctuation decoration..text.quoted be text ya
 
 exists su name hymn hook source focus prompt ob text quoted.text.Extract the most hook-worthy source lines for an educational spiritual song.
 
@@ -165,23 +187,32 @@ Rules:
 
 exists su name hymn verse one prompt ob text quoted.text.You are writing Verse 1 of a lyrical song based on source text.
 
+Verse 1 job:
+- Open the song with a source-grounded lived moment, scene, or image.
+- Make the verse feel sung rather than explained.
+
 Rules:
-- Write 2 rhyming couplets (4 short lines).
-- In each couplet, line 1 and line 2 should rhyme at the end.
-- Use clear rhyme scheme `AABB`.
+- Write exactly 4 short lyrical lines.
+- Use 2 rhyming couplets with clear end rhyme or light slant rhyme.
+- Prefer rhyme scheme `AABB`, but keep phrasing natural and singable.
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
 - Do not reuse the exact HOOK_PHRASE in this verse.
 - Do not restate the intro line.
-- Ground imagery and facts in the provided source text.
-- Keep wording singable and source-grounded.
-- Prefer present-tense realis declarative lines with experiential imagery.
-- Use experiential declarative voice.
-- Prefer lived witness over direct commands.
-- Avoid direct second-person instruction and bare imperative openings.
-- Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
-- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
-- Avoid paragraph-like prose sentences.
+- Draw nouns, images, actions, or tensions from the source text.
+- Prefer present-tense realis declarative lines.
+- Ground abstract meaning in scene, gesture, object, place, or bodily action.
+- Let the verse witness or reveal rather than preach or instruct.
+
+Avoid:
+- direct second-person instruction
+- bare imperative openings
+- conditional or hypothetical framing
+- future-tense promise language unless clearly source-supported
+- negation-heavy phrasing unless clearly source-required
+- generic spiritual filler
+- paragraph-like prose
+
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -236,25 +267,34 @@ Rules:
 
 exists su name hymn verse two prompt ob text quoted.text.You are writing Verse 2 of the same lyrical song.
 
+Verse 2 job:
+- Deepen the song by showing a different supported image, action, scene, or tension than Verse 1.
+- Add development rather than restatement.
+
 Rules:
-- Write 2 rhyming couplets (4 short lines).
-- In each couplet, line 1 and line 2 should rhyme at the end.
-- Use clear rhyme scheme `AABB`.
+- Write exactly 4 short lyrical lines.
+- Use 2 rhyming couplets with clear end rhyme or light slant rhyme.
+- Prefer rhyme scheme `AABB`, but keep phrasing natural and singable.
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
 - Focus on a different supported aspect than Verse 1.
 - Do not reuse the exact HOOK_PHRASE in this verse.
 - Do not repeat Verse 1 wording.
 - Each couplet must include at least one physical image, object, or scene.
-- Keep abstract nouns grounded in visible action, setting, or sensory detail.
+- Ground abstract meaning in visible action, setting, sensory detail, or symbolic object.
 - Draw concrete wording from the source text rather than generic uplift language.
-- Prefer present-tense realis declarative lines with experiential imagery.
-- Use experiential declarative voice.
-- Prefer lived witness over direct commands.
-- Avoid direct second-person instruction and bare imperative openings.
-- Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
-- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
-- Avoid paragraph-like prose sentences.
+- Prefer present-tense realis declarative lines.
+- Let the verse deepen or turn the song rather than restate the chorus.
+
+Avoid:
+- direct instruction
+- bare imperatives
+- hypothetical or wishful framing
+- future-tense promise language unless clearly source-supported
+- negation-heavy phrasing unless clearly source-required
+- generic spiritual filler
+- paragraph-like prose
+
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -333,20 +373,20 @@ Rules:
 
 exists su name hymn hook quality verify prompt ob text quoted.text.Verify whether HOOK works as a strong refrain line for the song.
 
-PASS if:
-- the hook feels memorable, singable, and distinctive,
-- it sounds like a refrain rather than a prose fragment,
-- it captures a meaningful source-grounded teaching, image, or claim,
-- it avoids bland placeholder wording,
-- it reads mainly as a declarative refrain rather than a command.
+Judge only these concerns:
+- naturalness aloud,
+- repeatability in a chorus,
+- specificity to the source rather than generic filler,
+- overall acceptability as a usable hook.
 
-FAIL if:
+PASS if HOOK is usable as a repeated hook line even if it is not perfect.
+
+FAIL only if:
+- the hook sounds broken aloud,
 - the hook is generic filler,
-- the hook is a vague evaluative statement that could fit almost any song,
-- the hook relies on empty scaffolds such as "it is ..." or "there are ...",
-- the hook is mainly an instruction, directive, or imperative command,
-- the hook sounds like metadata, speaker chatter, or a source fragment,
-- the hook is too weak to carry a chorus.
+- the hook is awkward to repeat,
+- the hook is poorly matched to the source,
+- the hook sounds like metadata, speaker chatter, or junk.
 
 Output rules:
 - First output one short paragraph (1-2 sentences, max 60 words).
@@ -357,7 +397,7 @@ Output rules:
 exists su name hymn hook quality verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
 
 Rules:
-- Return FAIL only when the analysis clearly says the hook is weak, vague, generic, or unusable as a refrain.
+- Return FAIL only when the analysis clearly says the hook is broken, generic, awkward to repeat, poorly matched to the source, or unusable as a refrain.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -703,24 +743,31 @@ su name hymn hook sieve from text source with text candidates to name text outpu
   ob text "\n\nCANDIDATES:\n" to name text hymn hook sieve request be plus do
   ob text of with of this to name text hymn hook sieve request be plus do
   ob name text hymn hook sieve request for name hymn hook sieve mind to name text hymn hook kept raw by num 0 atmost num 220 be write do
-  ob name text hymn hook kept raw atmost num 1 to name text hymn hook kept first be line tail do
-  ob name text hymn hook kept first be equally from text "NONE" then
+  ob name text hymn hook kept raw from text "/^\\s*NONE\\s*$/i" be resemble then
   ob text "NONE" to name text output be text do
-  ob name text hymn hook kept first be equally from text "NONE" then
+  ob name text hymn hook kept raw from text "/^\\s*NONE\\s*$/i" be resemble then
   su name output ret
-  ob name text hymn hook kept raw by wo newline to name vec text hymn hook kept vec be distribute do
+  ob text "node command/filter_hymn_hook_candidates.mjs" fromtext name hymn hook kept raw to name text hymn hook kept filtered be command do
+  ob name text hymn hook kept filtered from text "/^\\s*NONE\\s*$/i" be resemble then
+  ob text "NONE" to name text output be text do
+  ob name text hymn hook kept filtered from text "/^\\s*NONE\\s*$/i" be resemble then
+  su name output ret
+  ob name text hymn hook kept filtered by wo newline to name vec text hymn hook kept vec be distribute do
   ob name hymn hook kept vec by wo newline to name text output be gather do
   su name output ret
 prah
 
 su name hymn hook choose from text source with text candidates to name text output be ceremony def
-  ob text of with of this atmost num 1 to name text hymn hook first line be line tail do
-  ob name text hymn hook first line be equally from text "NONE" then
+  ob text of with of this from text "/^\\s*NONE\\s*$/i" be resemble then
   ob text "NONE" to name text output be text do
-  ob name text hymn hook first line be equally from text "NONE" then
+  ob text of with of this from text "/^\\s*NONE\\s*$/i" be resemble then
   su name output ret
-  su name hymn hook choose cmd stage ob text "node command/select_hymn_hook_candidate.mjs" to name text hymn hook choose cmd be text do
-  ob text of hymn hook choose cmd fromtext text of with of this to name text hymn hook chosen first be command do
+  su name hymn hook choose request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook choose request be text do
+  ob text of from of this to name text hymn hook choose request be plus do
+  ob text "\n\nCANDIDATES:\n" to name text hymn hook choose request be plus do
+  ob text of with of this to name text hymn hook choose request be plus do
+  ob name text hymn hook choose request for name hymn hook choose mind to name text hymn hook chosen raw by num 0 atmost num 40 be write do
+  ob name text hymn hook chosen raw atmost num 1 to name text hymn hook chosen first be line tail do
   ob text of hymn hook chosen first to name text output be text do
   su name output ret
 prah
@@ -731,20 +778,42 @@ su name hymn hook source fit from text source with text hook to name text pass b
 prah
 
 su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn hook positive pass be equally from text true then
-  ob name text hymn hook copied pass be equally from text true then be depart do
-  ob name text hymn hook source to name text hymn hook candidates raw out be text do
-  su name hymn hook choose retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
+  ob name text hymn hook quality pass be equally from text true then
+  ob name text hymn hook copied pass be equally from text true then
+  ob name text hymn hook shape pass be equally from text true then
+  ob name text hymn hook source fit pass be equally from text true then be depart do
+  ob name text hymn hook quality pass be equally from text true then
+  ob name text hymn hook copied pass be equally from text true then
+  ob name text hymn hook shape pass be equally from text true then
+  ob name text hymn hook source fit pass be equally from text true then be depart do
+  su name hymn hook source retry stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do
+  su name hymn hook pool retry stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
+  su name hymn hook sieve retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do
+  su name hymn hook choose retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
-  ob text "false" to name text hymn hook positive pass be text do
+  ob text "false" to name text hymn hook quality pass be text do
   ob text "false" to name text hymn hook copied pass be text do
+  ob text "false" to name text hymn hook shape pass be text do
+  ob text "false" to name text hymn hook source fit pass be text do
   ob name text hook out be equally from text "NONE" then be depart do
-  be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates raw out with name text hook out to name map hymn hook copied verify do
+  be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates out with name text hook out to name map hymn hook copied verify do
   ob text of pass of hymn hook copied verify to name text hymn hook copied pass be text do
-  su name hymn hook positive retry stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  ob text "false" to name text hymn hook shape pass be text do
+  ob name text hook out from text "/^\\s*(?:\\S+\\s+){3,7}\\S+\\s*$/u" be resemble then
+  ob text "true" to name text hymn hook shape pass be text do
+  ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
+  ob text "false" to name text hymn hook shape pass be text do
+  su name hymn hook quality retry stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do
   ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook positive pass be text do
-  su name hymn hook positive pass ret
+  ob text "false" to name text hymn hook quality pass be text do
+  ob name text hymn hook shape pass be equally from text false then
+  ob text "false" to name text hymn hook quality pass be text do
+  su name hymn hook source fit retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
+  ob name text hymn hook copied pass be equally from text false then
+  ob text "false" to name text hymn hook source fit pass be text do
+  ob name text hymn hook shape pass be equally from text false then
+  ob text "false" to name text hymn hook source fit pass be text do
+  su name hymn hook quality pass ret
   su name hymn hook copied pass ret
 prah
 
@@ -790,49 +859,38 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name source stage ob text of from of this to name text hymn source be text do
   su name hymn source brief stage from text of ob of hymn source to name text hymn source brief be hymn source analysis do
   su name hymn hook source stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do
-  ob name text hymn hook source to name text hymn hook candidates raw out be text do
-  su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
-  ob name text hook out be equally from text "NONE" then
-  ob text "false" to name text hymn hook positive pass be text do
+  su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
+  su name hymn hook sieve stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do
+  su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
+  ob text "false" to name text hymn hook quality pass be text do
   ob text "false" to name text hymn hook copied pass be text do
-  ob name text hook out be equally from text "NONE" then
+  ob text "false" to name text hymn hook shape pass be text do
+  ob text "false" to name text hymn hook source fit pass be text do
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hook out be equally from text "NONE" then
   su name hymn hook choose guarantee stage ob bool lie fromtext text "hymn hook chooser defective" be guarantee do
-  ob text "false" to name text hymn hook copied pass be text do
-  be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates raw out with name text hook out to name map hymn hook copied verify do
+  be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates out with name text hook out to name map hymn hook copied verify do
   ob text of pass of hymn hook copied verify to name text hymn hook copied pass be text do
   ob text "false" to name text hymn hook shape pass be text do
   ob name text hook out from text "/^\\s*(?:\\S+\\s+){3,7}\\S+\\s*$/u" be resemble then
   ob text "true" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/^\\s*(?:it\\s+is|there\\s+(?:is|are|was|were)|this\\s+is|that\\s+is)\\b/i" be resemble then
+  ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
   ob text "false" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/^\\s*we\\s+are\\s+those\\s+of\\b/i" be resemble then
-  ob text "false" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/\\baware\\s+of\\s+your\\s+query\\b/i" be resemble then
-  ob text "false" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/\\bworthwhile\\b/i" be resemble then
-  ob text "false" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/^\\s*there\\s+are\\s+such\\b/i" be resemble then
-  ob text "false" to name text hymn hook shape pass be text do
-  ob name text hook out from text "/^\\s*it\\s+is\\s+indeed\\b/i" be resemble then
-  ob text "false" to name text hymn hook shape pass be text do
+  su name hymn hook quality final stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do
   ob name text hymn hook copied pass be equally from text false then
-  fromindex num 1 toindex num 4 be hymn hook pool retry do
+  ob text "false" to name text hymn hook quality pass be text do
   ob name text hymn hook shape pass be equally from text false then
-  fromindex num 1 toindex num 4 be hymn hook pool retry do
-  ob text "true" to name text hymn hook quality pass be text do
-  su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  ob text "false" to name text hymn hook quality pass be text do
+  su name hymn hook source final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
   ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook positive pass be text do
-  ob name text hymn hook positive pass be equally from text false then
-  fromindex num 1 toindex num 4 be hymn hook pool retry do
-  su name hymn hook positive final stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
-  ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook positive pass be text do
-  ob name text hymn hook positive pass be equally from text false then
-  su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
-  ob name text hymn hook copied pass be equally from text false then
+  ob text "false" to name text hymn hook source fit pass be text do
+  ob name text hymn hook shape pass be equally from text false then
+  ob text "false" to name text hymn hook source fit pass be text do
+  ob name text hymn hook quality pass be equally from text false then
+  su name hymn hook quality guarantee stage ob bool lie fromtext text "hymn hook quality defective" be guarantee do
+  ob name text hymn hook shape pass be equally from text false then
+  su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do
+  ob name text hymn hook source fit pass be equally from text false then
   su name hymn hook source guarantee stage ob bool lie fromtext text "hymn hook source defective" be guarantee do
 
   ob name text hook out to name text intro out be text do
