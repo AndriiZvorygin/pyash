@@ -15,6 +15,10 @@ function normalizeRichText(value) {
     .replace(/\\r/gu, "\n");
 }
 
+function escapeRegex(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
 function resolveSourceText(sentence, { rememberFn = remember } = {}) {
   if (typeof sentence?.from?.text === "string") return sentence.from.text;
   if (typeof sentence?.from?.name === "string") {
@@ -41,6 +45,162 @@ function resolveBoundarySeries(sentence, { rememberFn = remember } = {}) {
       .map(text => ({ ob: { text }, be: "text", mood: "ya" }));
   }
   return null;
+}
+
+function resolveMapPrimitive(entry, { rememberFn = remember } = {}) {
+  if (!entry || typeof entry !== "object") return undefined;
+  if (typeof entry.text === "string") return entry.text;
+  if (typeof entry.num === "number") return entry.num;
+  if (typeof entry.boolean === "boolean") return entry.boolean;
+  if (typeof entry.ob?.text === "string") return entry.ob.text;
+  if (typeof entry.ob?.num === "number") return entry.ob.num;
+  if (typeof entry.ob?.boolean === "boolean") return entry.ob.boolean;
+  if (typeof entry.name === "string") {
+    const fact = rememberFn(entry.name);
+    return resolveMapPrimitive(fact?.ob ?? fact ?? {}, { rememberFn });
+  }
+  if (typeof entry.ob?.name === "string") {
+    const fact = rememberFn(entry.ob.name);
+    return resolveMapPrimitive(fact?.ob ?? fact ?? {}, { rememberFn });
+  }
+  return undefined;
+}
+
+function resolveTextVector(entry = {}, { rememberFn = remember } = {}) {
+  const vec = entry?.ve ?? entry?.ob?.ve ?? null;
+  if (vec?.type === "text" && Array.isArray(vec?.values)) {
+    return vec.values.map(value => String(value ?? ""));
+  }
+  const primitive = resolveMapPrimitive(entry, { rememberFn });
+  if (typeof primitive === "string") {
+    return normalizeRichText(primitive).split(/\n/gu).map(line => line.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function resolveWiseChipConfig(sentence, { rememberFn = remember } = {}) {
+  const withName = String(sentence?.with?.name ?? "").trim();
+  if (!withName) return null;
+  const fact = rememberFn(withName);
+  const map = fact?.ob?.map;
+  if (!map || typeof map !== "object") {
+    throwErrorSentence({
+      name: "wise chip defective",
+      message: "wise chip defective: with name map missing",
+      from: { name: "wise chip" },
+      raw: { withName }
+    });
+  }
+  return map;
+}
+
+function resolveConfigTextList(map = {}, keys = [], { rememberFn = remember } = {}) {
+  for (const key of keys) {
+    if (!Object.hasOwn(map, key)) continue;
+    const values = resolveTextVector(map[key], { rememberFn });
+    if (values.length) return values;
+  }
+  return [];
+}
+
+function resolveConfigPrimitive(map = {}, keys = [], { rememberFn = remember } = {}) {
+  if (!map || typeof map !== "object") return undefined;
+  for (const key of keys) {
+    if (!Object.hasOwn(map, key)) continue;
+    const value = resolveMapPrimitive(map[key], { rememberFn });
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function parsePatternSpec(spec) {
+  const text = String(spec ?? "").trim();
+  if (!text) return null;
+  const regexMatch = text.match(/^\/([\s\S]*)\/([dgimsuvy]*)$/u);
+  if (regexMatch) {
+    const [, body, flagsRaw] = regexMatch;
+    const flags = Array.from(new Set(`g${flagsRaw}`.split(""))).join("");
+    return { kind: "regex", regex: new RegExp(body, flags) };
+  }
+  return { kind: "prefix", text };
+}
+
+function collectConfiguredMatches(source, specs, type) {
+  const matches = [];
+  for (const spec of specs) {
+    const parsed = parsePatternSpec(spec);
+    if (!parsed) continue;
+    if (parsed.kind === "regex") {
+      for (const match of source.matchAll(parsed.regex)) {
+        const marker = String(match?.[0] ?? "").trim();
+        if (!marker) continue;
+        matches.push({ start: Number(match.index ?? 0), marker, type });
+      }
+      continue;
+    }
+    const pattern = new RegExp(`^${escapeRegex(parsed.text)}.*$`, "gmu");
+    for (const match of source.matchAll(pattern)) {
+      const marker = String(match?.[0] ?? "").trim();
+      if (!marker) continue;
+      matches.push({ start: Number(match.index ?? 0), marker, type });
+    }
+  }
+  return matches;
+}
+
+function dedupeTypedMatches(matches = []) {
+  const out = [];
+  let lastKey = null;
+  for (const match of matches.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return String(a.type).localeCompare(String(b.type));
+  })) {
+    const key = `${match.start}:${match.type}:${match.marker}`;
+    if (key === lastKey) continue;
+    out.push(match);
+    lastKey = key;
+  }
+  return out;
+}
+
+function buildPairWiseSlices(source, matches, { joiner = "\n\n" } = {}) {
+  const blocks = [];
+  for (let i = 0; i < matches.length; i += 1) {
+    const start = matches[i].start;
+    const end = matches[i + 1]?.start ?? source.length;
+    if (start < 0 || end <= start) continue;
+    const text = source.slice(start, end).trim();
+    if (!text) continue;
+    blocks.push({ type: matches[i].type, text });
+  }
+  const chips = [];
+  let first = "";
+  let secondParts = [];
+  const flush = () => {
+    const lhs = String(first ?? "").trim();
+    const rhs = secondParts.map(part => String(part ?? "").trim()).filter(Boolean).join(joiner);
+    if (lhs && rhs) chips.push(`${lhs}${joiner}${rhs}`);
+    first = "";
+    secondParts = [];
+  };
+  for (const block of blocks) {
+    if (block.type === "stop") {
+      flush();
+      break;
+    }
+    if (block.type === "drop") continue;
+    if (block.type === "first") {
+      flush();
+      first = block.text;
+      continue;
+    }
+    if (block.type === "second") {
+      if (!first) continue;
+      secondParts.push(block.text);
+    }
+  }
+  flush();
+  return chips;
 }
 
 function normalizeTimedEntry(entry, index) {
@@ -137,6 +297,43 @@ function resolveWiseSlices(source, positions) {
     }
   }
   return slices;
+}
+
+function resolvePairWiseSlices(source, sentence, { rememberFn = remember } = {}) {
+  const config = resolveWiseChipConfig(sentence, { rememberFn });
+  if (!config) return null;
+  const kind = String(resolveConfigPrimitive(config, ["kind", "mode"], { rememberFn }) ?? "").trim().toLowerCase();
+  if (kind !== "pair") return null;
+
+  const joiner = String(resolveConfigPrimitive(config, ["joiner", "pair joiner"], { rememberFn }) ?? "\n\n");
+  const firstPatterns = resolveConfigTextList(config, ["first patterns", "question patterns", "left patterns"], { rememberFn });
+  const secondPatterns = resolveConfigTextList(config, ["second patterns", "answer patterns", "right patterns"], { rememberFn });
+  const dropPatterns = resolveConfigTextList(config, ["drop patterns", "ignore patterns"], { rememberFn });
+  const stopPatterns = resolveConfigTextList(config, ["stop patterns"], { rememberFn });
+
+  const firstMatches = firstPatterns.length
+    ? collectConfiguredMatches(source, firstPatterns, "first")
+    : dedupePositions(resolveMarkerPositions(source, resolveBoundarySeries(sentence, { rememberFn })?.flatMap(entry => extractMarkers(entry)) ?? []))
+      .map(match => ({ ...match, type: "first" }));
+  const secondMatches = collectConfiguredMatches(source, secondPatterns, "second");
+  const dropMatches = collectConfiguredMatches(source, dropPatterns, "drop");
+  const stopMatches = collectConfiguredMatches(source, stopPatterns, "stop");
+
+  if (!firstMatches.length || !secondMatches.length) {
+    throwErrorSentence({
+      name: "wise chip defective",
+      message: "wise chip defective: pair config requires first and second role markers",
+      from: { name: "wise chip" },
+      raw: sentence
+    });
+  }
+
+  return buildPairWiseSlices(source, dedupeTypedMatches([
+    ...firstMatches,
+    ...secondMatches,
+    ...dropMatches,
+    ...stopMatches
+  ]), { joiner });
 }
 
 function resolveSizeLimits(sentence) {
@@ -388,6 +585,24 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
   }
   const normalizedSourceText = normalizeRichText(sourceText);
 
+  const pairSlices = resolvePairWiseSlices(normalizedSourceText, sentence, { rememberFn });
+  if (pairSlices) {
+    const seriesEntries = pairSlices.map(text => ({
+      mood: "ya",
+      ob: { text },
+      be: "text"
+    }));
+    const outputName = sentence?.to?.name ?? "wise chips";
+    const seriesSentence = {
+      mood: "ya",
+      su: { name: outputName },
+      be: "series",
+      ob: { series: seriesEntries }
+    };
+    doRemember(seriesSentence);
+    return seriesSentence;
+  }
+
   const entries = resolveBoundarySeries(sentence, { rememberFn });
   if (!entries) {
     throwErrorSentence({
@@ -424,6 +639,24 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
 export default wiseChip;
 
 export const signatures = [
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "series", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "series", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "series", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "series", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "text", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "text", "with", "name", "map", "to", "name", "text"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "name", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "from", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "name", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "series", "from", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "name", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
+  { signatureWords: ["be", "wise", "chip", "by", "name", "text", "from", "text", "to", "name", "text", "with", "name", "map"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "series", "to", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "from", "text", "by", "name", "series", "to", "name", "text"], handler: wiseChip },
   { signatureWords: ["be", "wise", "chip", "from", "name", "text", "by", "name", "series"], handler: wiseChip },

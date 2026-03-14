@@ -6,6 +6,13 @@ from filename "../../module/chip_refinery.pya" ob name chip to name chip be impo
 
 exists su name confederation session chip style prompt ob text quoted.text.Create wise chips where each chip contains one full question and its full corresponding answer from this channeling session. Preserve complete question and answer units. Do not split a question away from its answer. Prefer chip boundaries at the beginning of each new question..text.quoted be text ya
 
+exists su name confederation session chip config be map def
+  su name kind ob text "pair" ya
+  su name second patterns ob ve text "#### Q’uo" "#### Q'uo" "#### Ra" "#### Latwii" "#### Hatonn" ya
+  su name drop patterns ob ve text "/^####\\s+(?:Jim|Gary|Steve|Don|Carla|Laitos|Unknown).*$/gmu" "/^\\[\\s*Pause\\s*\\]$/gmu" ya
+  su name stop patterns ob ve text "/^Is there another query at this time\\?.*$/gmu" "/^I am Q[’']uo, and we thank each of you.*$/gmu" "/^We thank you for your beingness.*$/gmu" ya
+prah
+
 exists su name text confederation artifacts segment ob text "artifacts" be text ya
 exists su name text confederation stage segment ob text "chip-stage-1" be text ya
 exists su name text confederation produce segment ob text "know/produce" be text ya
@@ -72,7 +79,7 @@ su name confederation qa wise chips be refinery def
   from name text markdown source since text "Topics:" until text "------------------------------------------------------------------------" to name text session markdown source be extract do
   su name session markdown write stage ob name text session markdown source to filename of ob of session markdown filename stage be write do
 
-  from name text session markdown source with name text confederation session chip style prompt to name series confederation wise chips be chip do
+  from name text session markdown source ob name text confederation session chip style prompt with name map confederation session chip config to name series confederation wise chips be chip do
   su name stage wise write stage ob name confederation wise chips to filename of ob of stage wise filename stage be write do
   ob filename of ob of stage wise filename stage to name text stage wise path be text do
   ob filename of ob of stage wise trimmed filename stage to name text stage wise trimmed path be text do

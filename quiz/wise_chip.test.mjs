@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
+import { deriveSignatureFromCall, joinSignatureWords, lookupSignature } from "../program/bridge/signature.mjs";
 
 async function run(line) {
   const sentence = parse(line);
@@ -209,6 +210,78 @@ test("wise chip accepts newline text boundary proposals", async () => {
   ]);
 });
 
+test("wise chip can assemble pair chips from boundary proposals and config map", async () => {
+  forget();
+
+  const source = [
+    "Opening invocation.",
+    "",
+    "#### M",
+    "How can we serve with more love?",
+    "",
+    "#### Q'uo",
+    "Serve where the need is already in front of you.",
+    "",
+    "#### N",
+    "How can we balance wisdom and compassion?",
+    "",
+    "#### Q’uo",
+    "Let compassion open the way and wisdom refine the action.",
+    "",
+    "Is there another query at this time?",
+    "",
+    "#### Q'uo",
+    "We thank you."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "#### M" "#### N" be boundary ya');
+  await run("prah");
+
+  await run("su name chip config be map def");
+  await run('su name kind ob text "pair" ya');
+  await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
+  await run('su name stop patterns ob ve text "/^Is there another query at this time\\\\?.*$/gmu" ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals with name map chip config to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "#### M\nHow can we serve with more love?\n\n#### Q'uo\nServe where the need is already in front of you.",
+    "#### N\nHow can we balance wisdom and compassion?\n\n#### Q’uo\nLet compassion open the way and wisdom refine the action."
+  ]);
+});
+
+test("wise chip can assemble pair chips from config patterns without boundary proposals", async () => {
+  forget();
+
+  const source = [
+    "Questioner: What is patience?",
+    "Q'uo: Patience is trust in time.",
+    "Questioner: What is courage?",
+    "Q'uo: Courage is love moving despite uncertainty."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name chip config be map def");
+  await run('su name mode ob text "pair" ya');
+  await run('su name first patterns ob ve text "Questioner:" ya');
+  await run('su name second patterns ob ve text "Q\'uo:" ya');
+  await run("prah");
+
+  await run("from name text source with name map chip config to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "Questioner: What is patience?\n\nQ'uo: Patience is trust in time.",
+    "Questioner: What is courage?\n\nQ'uo: Courage is love moving despite uncertainty."
+  ]);
+});
+
 test("wise chip groups timed series by atleast minute and atmost minute", async () => {
   forget();
 
@@ -250,5 +323,20 @@ test("wise chip forces timed split by atmost minute when no pause appears", asyn
   for (const entry of entries) {
     const duration = Number(entry?.until?.num ?? 0) - Number(entry?.since?.num ?? 0);
     assert.ok(duration <= 180.0001);
+  }
+});
+
+test("wise chip module exports config-map wrappers", async () => {
+  forget();
+  await interpret(parse('from filename "./module/wise_chip.pya" ob name wise chip to name wise chip be import do'));
+
+  const calls = [
+    'from name text source by name text boundaries with name map chip config to name text wise chips be wise chip do',
+    'from name text source with name map chip config to name text wise chips be wise chip do'
+  ];
+
+  for (const line of calls) {
+    const signature = joinSignatureWords(deriveSignatureFromCall(parse(line)));
+    assert.ok(lookupSignature(signature), `missing signature: ${signature}`);
   }
 });

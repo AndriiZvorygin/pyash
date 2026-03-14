@@ -31,13 +31,13 @@ test("programmatic boundary finds markdown speaker heading for qa style", () => 
     "We would suggest patience."
   ].join("\n");
   const style = "Create wise chips where each chip contains one full question and its full corresponding answer.";
-  assert.equal(findProgrammaticBoundary(source, style), "#### M");
+  assert.equal(findProgrammaticBoundary(source, style), "#### M\nHow can we consciously balance love and wisdom?");
 });
 
 test("programmatic boundary handles escaped newlines in qa style chips", () => {
   const source = "Topics\\n\\n#### Q'uo\\n\\nOpening words.\\n\\n#### M\\n\\nHow can we serve?\\n\\n#### Q'uo\\n\\nServe with love.";
   const style = "Create wise chips where each chip contains one full question and its full corresponding answer.";
-  assert.equal(findProgrammaticBoundary(source, style), "#### M");
+  assert.equal(findProgrammaticBoundary(source, style), "#### M\n\nHow can we serve?");
 });
 
 test("programmatic boundary finds markdown heading for heading style", () => {
@@ -78,5 +78,5 @@ test("programmatic boundary command accepts raw stdin split payload", () => {
     encoding: "utf8"
   });
   assert.equal(proc.status, 0, proc.stderr);
-  assert.equal(proc.stdout.trim(), "#### M");
+  assert.equal(proc.stdout.trim(), "#### M\nHow can we serve?");
 });
