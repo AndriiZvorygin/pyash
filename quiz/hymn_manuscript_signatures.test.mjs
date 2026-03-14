@@ -48,10 +48,17 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya/);
   assert.match(text, /exists su name hymn source thrust intent ob text quoted\.text\./);
   assert.match(text, /Draw wording from the source text rather than generic devotional filler\./);
+  assert.match(text, /Prefer present-tense realis declarative phrasing\./);
+  assert.match(text, /Describe something happening now rather than telling the listener what to do\./);
+  assert.match(text, /Avoid conditional, future-tense, hypothetical, or wishful constructions\./);
   assert.match(text, /Use communal experiential voice\./);
   assert.match(text, /Prefer we, our, us, or shared witness over direct commands\./);
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
-  assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\.\n- Prefer source-derived wording over generic uplift language\.\n- Use communal experiential voice\./);
+  assert.match(text, /Repeat the hook as a statement of what is true now, not as an instruction\./);
+  assert.match(text, /Prefer present-tense realis declarative lines with experiential imagery\./);
+  assert.match(text, /Allow imperative phrasing sparingly only if it adds movement or emphasis\./);
+  assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\./);
+  assert.match(text, /Prefer source-derived wording over generic uplift language\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
@@ -71,6 +78,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name line_count_max ob num 4 ya/);
   assert.match(text, /su name line_count_min ob num 2 ya/);
   assert.match(text, /su name line_count_max ob num 4 ya/);
+  assert.match(text, /su name word_max ob num 16 ya/);
   assert.match(text, /su name hymn stage pass ob text packet to name text verdict be ceremony def/);
   assert.match(text, /su name hymn section verify from text request for name platform mind accordingto name checks series to name text output be ceremony def/);
   assert.match(text, /hymn section verify run platform ob text of from of this for name of for of this among name hymn stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 8 to name text output be verify platform do/);

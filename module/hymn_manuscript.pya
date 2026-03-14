@@ -28,7 +28,10 @@ Rules:
 - 2 to 5 words only.
 - This exact phrase must be memorable, singable, and easy to repeat.
 - Draw wording from the source text rather than generic devotional filler.
+- Prefer present-tense realis declarative phrasing.
+- Describe something happening now rather than telling the listener what to do.
 - Prefer shared experience over instruction.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -45,9 +48,12 @@ Rules:
 - Clear, simple vocabulary.
 - May include the exact HOOK_PHRASE.
 - Draw key wording from the source text.
+- Prefer present-tense realis declarative phrasing.
+- State what is happening now rather than giving instructions.
 - Use communal experiential voice.
 - Prefer we, our, or shared witness over direct commands.
 - Avoid telling the listener what to do.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -62,9 +68,11 @@ Rules:
 - 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
 - Keep wording singable and source-grounded.
+- Prefer present-tense realis declarative lines with experiential imagery.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -82,9 +90,12 @@ Rules:
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
+- Prefer present-tense realis declarative lines.
+- Repeat the hook as a statement of what is true now, not as an instruction.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -106,9 +117,12 @@ Rules:
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep wording close to the prior chorus rather than rewriting it from scratch.
 - Prefer source-derived wording over generic uplift language.
+- Prefer present-tense realis declarative lines.
+- Repeat the hook as a statement of what is true now, not as an instruction.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -127,9 +141,11 @@ Rules:
 - Each couplet must include at least one physical image, object, or scene.
 - Keep abstract nouns grounded in visible action, setting, or sensory detail.
 - Draw concrete wording from the source text rather than generic uplift language.
+- Prefer present-tense realis declarative lines with experiential imagery.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
 - Avoid direct second-person instruction and bare imperative openings.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions unless the source clearly needs them.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -145,9 +161,12 @@ Rules:
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
 - Draw its turn or resolution from the source text rather than generic uplift phrasing.
+- Prefer present-tense realis declarative lines.
 - Use communal experiential voice.
 - Prefer we, our, us, or shared witness over direct commands.
-- Avoid direct second-person instruction and bare imperative openings.
+- Avoid direct second-person instruction.
+- Allow imperative phrasing sparingly only if it adds movement or emphasis.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
@@ -162,13 +181,16 @@ Teaching role:
 Rules:
 - 2 short lines.
 - Use rhyme scheme `AA`.
-- 6 to 10 words total.
+- 6 to 16 words total.
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
 - Draw its closing language from the source text where possible.
+- Prefer present-tense realis declarative phrasing.
+- Restate the hook as what is true now.
 - Use communal experiential voice.
 - Prefer we, our, or shared witness over direct commands.
 - Avoid telling the listener what to do.
+- Avoid conditional, future-tense, hypothetical, or wishful constructions.
 - Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -340,7 +362,7 @@ prah
 
 su name hymn outro checks be series def
   su name word_min ob num 6 ya
-  su name word_max ob num 12 ya
+  su name word_max ob num 16 ya
   su name line_count_min ob num 2 ya
   su name line_count_max ob num 2 ya
 prah
