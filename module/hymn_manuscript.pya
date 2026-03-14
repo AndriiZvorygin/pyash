@@ -70,6 +70,7 @@ Rules:
 - 14 to 24 words total.
 - Memorable and repeatable refrain.
 - Must include the exact HOOK_PHRASE unchanged.
+- The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
@@ -90,6 +91,7 @@ Rules:
 - 14 to 24 words total.
 - Keep the same core message as the prior chorus.
 - Must include the exact HOOK_PHRASE unchanged.
+- The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep wording close to the prior chorus rather than rewriting it from scratch.
 - Prefer source-derived wording over generic uplift language.
 - Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
@@ -398,10 +400,24 @@ su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony d
   su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do
 prah
 
+su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn chorus hook pass be equally from text true then be depart do
+  su name chorus stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus out be hymn section verify do
+  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
+  ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
+prah
+
 su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def
   ob name text verse two imagery pass be equally from text true then be depart do
   su name verse two stage from text of ob of verse two request for name hymn verse two mind accordingto name hymn verse two checks to name text verse two out be hymn section verify do
   su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do
+prah
+
+su name hymn final chorus hook retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn final chorus hook pass be equally from text true then be depart do
+  su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  su name hymn final chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do
+  ob text of pass of hymn final chorus hook verify to name text hymn final chorus hook pass be text do
 prah
 
 su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def
@@ -443,6 +459,12 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name chorus request verse one header stage ob text "\n\nVERSE 1:\n" to name chorus request be plus do
   su name chorus request verse one stage ob name text verse one out to name chorus request be plus do
   su name chorus stage from text of ob of chorus request for name hymn chorus mind accordingto name hymn chorus checks to name text chorus out be hymn section verify do
+  su name hymn chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do
+  ob text of pass of hymn chorus hook verify to name text hymn chorus hook pass be text do
+  ob name text hymn chorus hook pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn chorus hook retry do
+  ob name text hymn chorus hook pass be equally from text false then
+  su name hymn chorus hook guarantee stage ob bool lie fromtext text "hymn chorus hook defective" be guarantee do
 
   su name verse two request begin stage ob text "TARGET_WORDS: 35-45\nSECTION_ROLE: EXPLANATION_EXAMPLES\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AABB\nPRIOR SEGMENT:\n" to name text verse two request be text do
   su name verse two request verse one stage ob name text verse one out to name verse two request be plus do
@@ -477,6 +499,12 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name final chorus request source header stage ob text "\n\nSOURCE TEXT:\n" to name final chorus request be plus do
   su name final chorus request source stage ob name text hymn source to name final chorus request be plus do
   su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do
+  su name hymn final chorus hook verify stage be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do
+  ob text of pass of hymn final chorus hook verify to name text hymn final chorus hook pass be text do
+  ob name text hymn final chorus hook pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn final chorus hook retry do
+  ob name text hymn final chorus hook pass be equally from text false then
+  su name hymn final chorus hook guarantee stage ob bool lie fromtext text "hymn final chorus hook defective" be guarantee do
   su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do
   ob name text hymn chorus stability pass be equally from text false then
   fromindex num 1 toindex num 3 be hymn chorus stability retry do
@@ -531,6 +559,10 @@ su name hymn manuscript draft checked from text source to name text manuscript o
 [outro]
 .text.quoted to name hymn out be plus do
   su name hymn out outro stage ob name text outro out to name hymn out be plus do
+  su name hymn total hook verify stage be verify as wo phrase count atleast num 3 atmost num 12 from name text hymn out with name text hook out to name map hymn total hook verify do
+  ob text of pass of hymn total hook verify to name text hymn total hook pass be text do
+  ob name text hymn total hook pass be equally from text false then
+  su name hymn total hook guarantee stage ob bool lie fromtext text "hymn hook repetition defective" be guarantee do
 
   su name hymn out ret
 prah
