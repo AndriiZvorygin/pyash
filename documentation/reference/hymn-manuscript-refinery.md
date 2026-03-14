@@ -50,7 +50,7 @@ Current target stage sequence:
 6. deterministically verify chorus contains the exact hook phrase,
 7. generate verse two with a distinct supported aspect and concrete imagery,
 8. generate bridge with a source-grounded turn or resolution,
-9. generate final chorus that keeps the exact hook phrase and remains close to the main chorus,
+9. reuse the main chorus as the final chorus for a stable refrain,
 10. deterministically verify final chorus contains the exact hook phrase,
 11. generate short outro that repeats the hook phrase or directly reinforces it,
 12. assemble final hymn,
@@ -117,8 +117,8 @@ First-pass implementation priorities:
   - `[bridge]`
   - `[chorus]`
   - `[outro]`
-- second chorus currently repeats the original chorus exactly,
-- final chorus may expand or refresh wording, but must preserve the exact hook phrase.
+- second chorus repeats the original chorus exactly,
+- final chorus currently also repeats the original chorus exactly for maximum refrain stability.
 
 ## 7. Verification contract
 
