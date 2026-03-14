@@ -51,6 +51,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Use communal experiential voice\./);
   assert.match(text, /Prefer we, our, us, or shared witness over direct commands\./);
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
+  assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\.\n- Prefer source-derived wording over generic uplift language\.\n- Use communal experiential voice\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
