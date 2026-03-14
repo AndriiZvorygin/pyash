@@ -1,8 +1,18 @@
 import { remember, doRemember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 
+const BOUNDARY_SPLIT_MARKER = "\n<<<PYA_BOUNDARY>>>\n";
+
 function isContinuationByte(byte) {
   return (byte & 0xc0) === 0x80;
+}
+
+function normalizeRichText(value) {
+  return String(value ?? "")
+    .replace(/\r\n?/gu, "\n")
+    .replace(/\\r\\n/gu, "\n")
+    .replace(/\\n/gu, "\n")
+    .replace(/\\r/gu, "\n");
 }
 
 function resolveSourceText(sentence, { rememberFn = remember } = {}) {
@@ -18,8 +28,19 @@ function resolveBoundarySeries(sentence, { rememberFn = remember } = {}) {
   const name = sentence?.by?.name ?? sentence?.by?.text ?? sentence?.by?.wo;
   if (!name) return null;
   const fact = rememberFn(name);
-  if (!fact || fact.be !== "series" || !Array.isArray(fact.ob?.series)) return null;
-  return fact.ob.series;
+  if (!fact) return null;
+  if (fact.be === "series" && Array.isArray(fact.ob?.series)) return fact.ob.series;
+  if (typeof fact.ob?.text === "string") {
+    const normalized = normalizeRichText(fact.ob.text);
+    const parts = normalized.includes(BOUNDARY_SPLIT_MARKER)
+      ? normalized.split(BOUNDARY_SPLIT_MARKER)
+      : normalized.split(/\r?\n/gu);
+    return parts
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(text => ({ ob: { text }, be: "text", mood: "ya" }));
+  }
+  return null;
 }
 
 function normalizeTimedEntry(entry, index) {
@@ -96,9 +117,16 @@ function dedupePositions(positions) {
   return deduped;
 }
 
+function looksLikeQuestionBoundaryMarker(marker) {
+  const text = String(marker ?? "").trim();
+  if (!text) return false;
+  if (/^(?:Questioner|Question|Q)\s*:/u.test(text)) return true;
+  return /^####\s+(?!Q[’']?uo\b).+/iu.test(text);
+}
+
 function resolveWiseSlices(source, positions) {
   const slices = [];
-  if (positions.length > 0 && positions[0].start > 0) {
+  if (positions.length > 0 && positions[0].start > 0 && !looksLikeQuestionBoundaryMarker(positions[0].marker)) {
     slices.push(source.slice(0, positions[0].start));
   }
   for (let i = 0; i < positions.length; i += 1) {
@@ -358,6 +386,7 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
       raw: sentence
     });
   }
+  const normalizedSourceText = normalizeRichText(sourceText);
 
   const entries = resolveBoundarySeries(sentence, { rememberFn });
   if (!entries) {
@@ -370,8 +399,8 @@ export async function wiseChip(sentence, { remember: rememberFn = remember } = {
   }
 
   const markers = entries.flatMap(entry => extractMarkers(entry));
-  const positions = dedupePositions(resolveMarkerPositions(sourceText, markers));
-  const baseSlices = resolveWiseSlices(sourceText, positions);
+  const positions = dedupePositions(resolveMarkerPositions(normalizedSourceText, markers));
+  const baseSlices = resolveWiseSlices(normalizedSourceText, positions);
   const { atleastBytes, atmostBytes } = resolveSizeLimits(sentence);
   const splitSlices = baseSlices.flatMap(slice => splitByMaxBytes(slice, { atmostBytes, atleastBytes }));
   const slices = mergeByMinBytes(splitSlices, atleastBytes);

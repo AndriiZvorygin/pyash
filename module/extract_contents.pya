@@ -1,0 +1,34 @@
+su name extract from filename input fromstate wo html become wo html as wo contents to filename output be ceremony def
+  exists su name cmd ob text "node command/extract_readability.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text input path be text do
+  ob name input path to name cmd be plus do
+  ob text "\" \"" to name cmd be plus do
+  ob filename of to of this to name text output path be text do
+  ob name output path to name cmd be plus do
+  ob text "\" --kind html" to name cmd be plus do
+  ob text of cmd be command do
+  su name result ret
+prah
+
+su name extract from filename input fromstate wo html become wo html as wo contents to name text output be ceremony def
+  exists su name cmd ob text "node command/extract_readability.mjs" be text ya
+  ob text " \"" to name cmd be plus do
+  ob filename of from of this to name text input path be text do
+  ob name input path to name cmd be plus do
+  ob text "\" --kind html" to name cmd be plus do
+  ob text of cmd to name text output be command do
+  su name output ret
+prah
+
+su name extract from filename input fromstate wo html as wo contents to filename output be ceremony def
+  su name result from filename of from of this fromstate wo html become wo html as wo contents to filename of to of this be extract do
+  su name result ret
+prah
+
+su name extract from filename input fromstate wo html as wo contents to name text output be ceremony def
+  su name result from filename of from of this fromstate wo html become wo html as wo contents to name text of to of this be extract do
+  su name result ret
+prah
+
+exists su name extract be export ya

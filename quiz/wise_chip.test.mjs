@@ -47,7 +47,42 @@ test("wise chip includes source prefix before first boundary marker", async () =
   const series = remember("wise chips");
   assert.ok(series);
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
-  assert.deepEqual(texts, ["Lead in text. ", "## Section A\\nBody A\\n", "## Section B\\nBody B\\n"]);
+  assert.deepEqual(texts, ["Lead in text. ", "## Section A\nBody A\n", "## Section B\nBody B\n"]);
+});
+
+test("wise chip drops preface before first question boundary marker", async () => {
+  forget();
+
+  const source = [
+    "Opening invocation.",
+    "",
+    "#### M",
+    "How can we serve?",
+    "",
+    "#### Q'uo",
+    "Serve with love.",
+    "",
+    "#### P",
+    "How can we balance wisdom?",
+    "",
+    "#### Q'uo",
+    "Balance heart and light."
+  ].join("\\n");
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+
+  await run("su name boundary proposals be series def");
+  await run('su name proposal 1 from num 1 ob ve text "#### M" "#### P" be boundary ya');
+  await run("prah");
+
+  await run("from name text source by name boundary proposals to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "#### M\nHow can we serve?\n\n#### Q'uo\nServe with love.\n\n",
+    "#### P\nHow can we balance wisdom?\n\n#### Q'uo\nBalance heart and light."
+  ]);
 });
 
 test("wise chip output is reversible by stitching chips in order", async () => {
@@ -75,7 +110,7 @@ test("wise chip output is reversible by stitching chips in order", async () => {
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
   assert.ok(texts.length > 3);
   const stitched = texts.join("");
-  assert.equal(stitched, source);
+  assert.equal(stitched, source.replace(/\\n/gu, "\n"));
 });
 
 test("wise chip skips duplicate boundary markers that resolve to the same offset", async () => {
@@ -93,7 +128,7 @@ test("wise chip skips duplicate boundary markers that resolve to the same offset
   const series = remember("wise chips");
   assert.ok(series);
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
-  assert.deepEqual(texts, ["## One\\nA\\n", "## Two\\nB\\n"]);
+  assert.deepEqual(texts, ["## One\nA\n", "## Two\nB\n"]);
 });
 
 test("wise chip normalizes wrapper quotes around boundary markers", async () => {
@@ -111,7 +146,7 @@ test("wise chip normalizes wrapper quotes around boundary markers", async () => 
   const series = remember("wise chips");
   assert.ok(series);
   const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
-  assert.deepEqual(texts, ["## Start\\nA\\n## End\\nB\\n"]);
+  assert.deepEqual(texts, ["## Start\nA\n## End\nB\n"]);
 });
 
 test("wise chip honors atmost byte by splitting large slices", async () => {
@@ -154,6 +189,24 @@ test("wise chip honors atleast byte by merging small slices", async () => {
   for (let i = 0; i < texts.length - 1; i += 1) {
     assert.ok(Buffer.byteLength(texts[i], "utf8") >= 6);
   }
+});
+
+test("wise chip accepts newline text boundary proposals", async () => {
+  forget();
+
+  const source = "#### J\n\nquestion\n\n#### Q’uo\n\nanswer\n\n#### N\n\nnext question\n\n#### Q’uo\n\nnext answer";
+  await run(`exists su name source ob text ${JSON.stringify(source)} be text ya`);
+  await run(`exists su name boundary proposals ob text ${JSON.stringify("#### J\n#### N")} be text ya`);
+
+  await run("from name text source by name text boundary proposals to name text wise chips be wise chip do");
+
+  const series = remember("wise chips");
+  assert.ok(series);
+  const texts = (series.ob?.series ?? []).map(entry => entry?.ob?.text ?? "");
+  assert.deepEqual(texts, [
+    "#### J\n\nquestion\n\n#### Q’uo\n\nanswer\n\n",
+    "#### N\n\nnext question\n\n#### Q’uo\n\nnext answer"
+  ]);
 });
 
 test("wise chip groups timed series by atleast minute and atmost minute", async () => {
