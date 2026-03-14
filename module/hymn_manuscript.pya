@@ -698,20 +698,19 @@ prah
 
 su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook positive pass be equally from text true then
-  ob name text hymn hook source thrust pass be equally from text true then be depart do
+  ob name text hymn hook communal pass be equally from text true then be depart do
   su name hymn hook pool refill stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
   su name hymn hook choose retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
   ob text "false" to name text hymn hook positive pass be text do
-  ob text "false" to name text hymn hook source thrust pass be text do
+  ob text "false" to name text hymn hook communal pass be text do
   ob name text hook out be equally from text "NONE" then be depart do
   su name hymn hook positive retry stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
   su name hymn hook communal retry stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  su name hymn hook source thrust retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
   ob name text hymn hook communal pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   su name hymn hook positive pass ret
-  su name hymn hook source thrust pass ret
+  su name hymn hook communal pass ret
 prah
 
 su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
@@ -760,7 +759,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
   ob text "false" to name text hymn hook positive pass be text do
-  ob text "false" to name text hymn hook source thrust pass be text do
+  ob text "false" to name text hymn hook communal pass be text do
   ob name text hook out be equally from text "NONE" then
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hook out be equally from text "NONE" then
@@ -792,22 +791,18 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
   su name hymn hook communal stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  su name hymn hook source thrust verify stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
   ob name text hymn hook communal pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
   fromindex num 1 toindex num 4 be hymn hook pool retry do
-  ob name text hymn hook source thrust pass be equally from text false then
-  fromindex num 1 toindex num 4 be hymn hook pool retry do
   su name hymn hook positive final stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
   su name hymn hook communal final stage from text of ob of hook out to name text hymn hook communal pass be hymn communal voice do
-  su name hymn hook source thrust final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source thrust pass be hymn source thrust do
   ob name text hymn hook communal pass be equally from text false then
   ob text "false" to name text hymn hook positive pass be text do
   ob name text hymn hook positive pass be equally from text false then
   su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
-  ob name text hymn hook source thrust pass be equally from text false then
-  su name hymn hook source thrust guarantee stage ob bool lie fromtext text "hymn hook source thrust defective" be guarantee do
+  ob name text hymn hook communal pass be equally from text false then
+  su name hymn hook communal guarantee stage ob bool lie fromtext text "hymn hook communal defective" be guarantee do
 
   ob name text hook out to name text intro out be text do
   su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do
