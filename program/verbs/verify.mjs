@@ -19,6 +19,7 @@ function resolveVerifyMode(sentence) {
   if (!mode || mode === "pyash") return "pyash";
   if (mode === "word count") return "word count";
   if (mode === "letter count") return "letter count";
+  if (mode === "phrase count") return "phrase count";
   if (mode === "sentence complete") return "sentence complete";
   throwVerifyError(`verify defective: unsupported mode ${mode}`, { sentence });
 }
@@ -66,6 +67,27 @@ function countWords(text) {
 
 function countLetters(text) {
   return Array.from(String(text ?? "")).length;
+}
+
+function resolvePhraseText(sentence, { rememberFn = remember } = {}) {
+  if (typeof sentence?.with?.text === "string") {
+    return sentence.with.text;
+  }
+  if (typeof sentence?.with?.name === "string") {
+    const fact = rememberFn(sentence.with.name);
+    const text = fact?.ob?.text;
+    if (typeof text === "string") return text;
+  }
+  throwVerifyError("verify defective: expected with text or with name text phrase", { sentence });
+}
+
+function countPhraseOccurrences(text, phrase) {
+  const haystack = String(text ?? "");
+  const needle = String(phrase ?? "");
+  if (!needle) return 0;
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = haystack.match(new RegExp(escaped, "gi"));
+  return matches ? matches.length : 0;
 }
 
 const sentenceEndingConnector = /\b(?:and|or|but|so|because|if|when|while|than|that|which|who|whom|whose|a|an|the)\s*[.!?]*\s*$/i;
@@ -142,6 +164,30 @@ async function verifyCount(sentence, { mode, rememberFn = remember } = {}) {
   };
 }
 
+async function verifyPhraseCount(sentence, { rememberFn = remember } = {}) {
+  const { text, source } = await resolveCountSourceText(sentence, { rememberFn });
+  const phrase = resolvePhraseText(sentence, { rememberFn });
+  const { atleast, atmost } = resolveCountBounds(sentence);
+  const occurrences = countPhraseOccurrences(text, phrase);
+  const pass =
+    (atleast === null || occurrences >= atleast)
+    && (atmost === null || occurrences <= atmost);
+  return {
+    ob: {
+      map: {
+        pass,
+        occurrences,
+        phrase,
+        atleast,
+        atmost,
+        source,
+        mode: "phrase count"
+      }
+    },
+    be: "map"
+  };
+}
+
 async function verifySentenceComplete(sentence, { rememberFn = remember } = {}) {
   const { text, source } = await resolveCountSourceText(sentence, { rememberFn });
   const report = verifySentenceCompleteText(text);
@@ -167,6 +213,9 @@ export async function verify(sentence, { remember: rememberFn = remember } = {})
   const mode = resolveVerifyMode(sentence);
   if (mode === "word count" || mode === "letter count") {
     return verifyCount(sentence, { mode, rememberFn });
+  }
+  if (mode === "phrase count") {
+    return verifyPhraseCount(sentence, { rememberFn });
   }
   if (mode === "sentence complete") {
     return verifySentenceComplete(sentence, { rememberFn });
@@ -259,6 +308,16 @@ export const signatures = [
   { signatureWords: ["be", "verify", "as", "wo", "pyash", "ob", "text", "to", "name", "series", "do"], handler: verify },
   ...buildCountModeSignatures("word count"),
   ...buildCountModeSignatures("letter count"),
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map", "with", "name", "text"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map", "with", "name", "text", "do"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map", "with", "text"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map", "with", "text", "do"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "from", "name", "text", "to", "name", "map", "do"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map", "with", "text"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map", "with", "text", "do"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map"], handler: verify },
+  { signatureWords: ["be", "verify", "as", "wo", "phrase count", "atleast", "num", "atmost", "num", "ob", "text", "to", "name", "map", "do"], handler: verify },
   ...buildSentenceModeSignatures("sentence complete")
 ];
 

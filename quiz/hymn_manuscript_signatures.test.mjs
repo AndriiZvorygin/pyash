@@ -82,6 +82,11 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name final chorus stage from text of ob of final chorus request for name hymn final chorus mind accordingto name hymn final chorus checks to name text final chorus out be hymn section verify do/);
   assert.match(text, /su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do/);
   assert.match(text, /fromindex num 1 toindex num 3 be hymn chorus stability retry do/);
+  assert.match(text, /be verify as wo phrase count atleast num 1 atmost num 4 from name text chorus out with name text hook out to name map hymn chorus hook verify do/);
+  assert.match(text, /be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do/);
+  assert.match(text, /be verify as wo phrase count atleast num 3 atmost num 12 from name text hymn out with name text hook out to name map hymn total hook verify do/);
+  assert.match(text, /fromindex num 1 toindex num 3 be hymn chorus hook retry do/);
+  assert.match(text, /fromindex num 1 toindex num 3 be hymn final chorus hook retry do/);
   assert.match(text, /su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do/);
   assert.doesNotMatch(text, /be verify loop do/);
   assert.match(text, /su name hymn source thrust checked to name text pass be ceremony def/);
@@ -92,7 +97,9 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn chorus stability from text chorus with text final chorus to name text pass be ceremony def/);
   assert.match(text, /not\|never\|cannot\|can't\|won't\|don't\|didn't\|isn't\|aren't\|without\|no more/);
   assert.match(text, /su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn final chorus hook retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);

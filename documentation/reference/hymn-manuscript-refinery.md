@@ -45,16 +45,19 @@ Current target stage sequence:
 1. resolve source text,
 2. generate one fixed hook phrase (`2..5` words),
 3. generate intro using the hook phrase,
-4. generate verse one with concrete imagery and an opening struggle/setup role,
+4. generate verse one with concrete imagery and a distinct opening role,
 5. generate chorus using the exact hook phrase,
-6. generate verse two with a transformation / awakening role distinct from verse one,
-7. generate bridge that lands in the healed or illuminated state,
-8. generate final chorus that keeps the exact hook phrase and remains close to the main chorus,
-9. generate short outro that repeats the hook phrase or directly reinforces it,
-10. assemble final hymn,
-11. verify source-thrust against source text,
-12. verify positive-language / goal-state constraint,
-13. return final manuscript text.
+6. deterministically verify chorus contains the exact hook phrase,
+7. generate verse two with a distinct supported aspect and concrete imagery,
+8. generate bridge with a source-grounded turn or resolution,
+9. generate final chorus that keeps the exact hook phrase and remains close to the main chorus,
+10. deterministically verify final chorus contains the exact hook phrase,
+11. generate short outro that repeats the hook phrase or directly reinforces it,
+12. assemble final hymn,
+13. deterministically verify total hook recurrence in the final hymn,
+14. verify source-thrust against source text,
+15. verify positive-language / negation constraint,
+16. return final manuscript text.
 
 ## 4. Prompt contract
 
@@ -67,6 +70,10 @@ The module maintains separate prompt facts for:
 - bridge,
 - final chorus,
 - outro,
+- imagery verifier,
+- imagery verdict parser,
+- chorus-stability verifier,
+- chorus-stability verdict parser,
 - source-thrust verifier,
 - source-thrust verdict parser.
 
@@ -74,7 +81,7 @@ Prompt requirements:
 - plain text only,
 - no markdown/bullets/labels,
 - strong singability bias,
-- positive goal-state language preferred,
+- source-derived wording preferred over canned devotional vocabulary,
 - negative phrasing (`not`, `never`, `cannot`, `don't`, `won't`, etc.) discouraged unless source absolutely requires it,
 - chorus and final chorus must include the exact fixed hook phrase.
 
@@ -83,6 +90,7 @@ Prompt requirements:
 The stable target contract is:
 - one clear core message,
 - one fixed hook phrase,
+- hook phrase repeated at least three times in the finished hymn,
 - chorus repetition by design,
 - short memorable lines,
 - verses should not merely restate each other,
@@ -93,9 +101,9 @@ The stable target contract is:
 First-pass implementation priorities:
 1. fixed hook phrase consistency,
 2. chorus stability,
-3. positive goal-state language,
+3. hook recurrence,
 4. shorter line bias,
-5. stronger verse progression.
+5. stronger verse progression and imagery.
 
 ## 6. Output contract
 
@@ -118,13 +126,16 @@ Deterministic and verifier checks should enforce:
 - bounded word count per section,
 - bounded line count per section,
 - hook phrase present where required,
-- no unsupported concrete historical claims,
-- positive-language guard on final output,
+- total hook recurrence in the final hymn,
+- no unsupported concrete source-teaching claims,
+- concrete imagery in verses,
+- final-chorus stability against the main chorus,
+- positive-language / negation guard on final output,
 - later strengthening may include:
   - syllable caps,
   - verse similarity rejection,
+  - hook timing checks,
   - chorus token-delta threshold,
-  - imagery heuristics,
   - clip-candidate scoring.
 
 ## 8. Integration note
