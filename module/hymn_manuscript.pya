@@ -26,7 +26,7 @@ Rules:
 - 2 to 5 words only.
 - This exact phrase must be memorable, singable, and easy to repeat.
 - Draw wording from the source text rather than generic devotional filler.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -42,7 +42,7 @@ Rules:
 - Clear, simple vocabulary.
 - May include the exact HOOK_PHRASE.
 - Draw key wording from the source text.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -56,7 +56,7 @@ Rules:
 - 30 to 38 words total.
 - Ground imagery and facts in the provided source text.
 - Keep wording singable and source-grounded.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -73,7 +73,7 @@ Rules:
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep the core theme tied to the source and Verse 1.
 - Prefer source-derived wording over generic uplift language.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -94,7 +94,7 @@ Rules:
 - The exact HOOK_PHRASE must appear as written, letter for letter, as one contiguous phrase.
 - Keep wording close to the prior chorus rather than rewriting it from scratch.
 - Prefer source-derived wording over generic uplift language.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -112,7 +112,7 @@ Rules:
 - Each couplet must include at least one physical image, object, or scene.
 - Keep abstract nouns grounded in visible action, setting, or sensory detail.
 - Draw concrete wording from the source text rather than generic uplift language.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't unless the source absolutely requires them.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't unless the source absolutely requires them.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -127,7 +127,7 @@ Rules:
 - Create an emotional turn or resolution.
 - Keep continuity with prior sections.
 - Draw its turn or resolution from the source text rather than generic uplift phrasing.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Avoid paragraph-like prose sentences.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
@@ -145,7 +145,7 @@ Rules:
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
 - Draw its closing language from the source text where possible.
-- Avoid negations and fear framing such as not, never, no more, cannot, won't, don't.
+- Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't.
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
@@ -333,7 +333,7 @@ prah
 
 su name hymn positive language from text lyric to name text pass be ceremony def
   ob text "true" to name text pass be text do
-  ob text of from of this from text "/\\b(?:not|never|cannot|can't|won't|don't|didn't|isn't|aren't|without|no more)\\b/i" be resemble then
+  ob text of from of this from text "/\\b(?:not|never|no|cannot|can't|won't|don't|didn't|isn't|aren't|without|no more|nothing|nobody|nowhere|neither|nor)\\b/i" be resemble then
   ob text "false" to name text pass be text do
   su name pass ret
 prah
@@ -394,6 +394,12 @@ su name hymn chorus stability from text chorus with text final chorus to name te
   su name pass ret
 prah
 
+su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def
+  ob name text hymn hook positive pass be equally from text true then be depart do
+  su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
+  su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+prah
+
 su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def
   ob name text verse one imagery pass be equally from text true then be depart do
   su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do
@@ -425,6 +431,11 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hook request begin stage ob text "SECTION_ROLE: FIXED_HOOK_PHRASE\nTARGET_WORDS: 2-5\nSOURCE TEXT:\n" to name text hook request be text do
   su name hook request source stage ob name text hymn source to name hook request be plus do
   su name hook stage from text of ob of hook request for name hymn hook mind accordingto name hymn hook checks to name text hook out be hymn section verify do
+  su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do
+  ob name text hymn hook positive pass be equally from text false then
+  fromindex num 1 toindex num 3 be hymn hook positive retry do
+  ob name text hymn hook positive pass be equally from text false then
+  su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do
 
   su name intro request begin stage ob text "TARGET_WORDS: 6-10\nSECTION_ROLE: INTRO_TOPIC_HOOK\nHOOK_PHRASE:\n" to name text intro request be text do
   su name intro request hook stage ob name text hook out to name intro request be plus do

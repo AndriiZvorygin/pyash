@@ -46,7 +46,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source thrust verdict mind be mind fromtext name hymn source thrust verdict prompt ya/);
   assert.match(text, /exists su name hymn source thrust intent ob text quoted\.text\./);
   assert.match(text, /Draw wording from the source text rather than generic devotional filler\./);
-  assert.match(text, /Avoid negations and fear framing such as not, never, no more, cannot, won't, don't/);
+  assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT\./);
@@ -93,7 +93,11 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn imagery from text verse to name text pass be ceremony def/);
   assert.match(text, /su name hymn chorus stability verify to name text pass be ceremony def/);
   assert.match(text, /su name hymn chorus stability from text chorus with text final chorus to name text pass be ceremony def/);
-  assert.match(text, /not\|never\|cannot\|can't\|won't\|don't\|didn't\|isn't\|aren't\|without\|no more/);
+  assert.match(text, /not\|never\|no\|cannot\|can't\|won't\|don't\|didn't\|isn't\|aren't\|without\|no more/);
+  assert.match(text, /su name hymn hook positive stage from text of ob of hook out to name text hymn hook positive pass be hymn positive language do/);
+  assert.match(text, /fromindex num 1 toindex num 3 be hymn hook positive retry do/);
+  assert.match(text, /su name hymn hook positive guarantee stage ob bool lie fromtext text "hymn hook positive defective" be guarantee do/);
+  assert.match(text, /su name hymn hook positive retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn chorus hook retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn verse two imagery retry fromindex num 0 toindex num 0 be ceremony def/);
