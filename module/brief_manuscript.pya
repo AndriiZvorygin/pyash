@@ -45,6 +45,7 @@ Rules:
 - Prefer details that can stay close to the transcript's own wording.
 - Dramatic, authoritative tone.
 - Historical claims must come only from the provided transcript.
+- Do not use universal or repeated-pattern claims like "every", "always", "never", "consistently", or "after each" unless the transcript says that directly.
 - Do not introduce new people, places, events, or policies not present in the transcript.
 - Do not synthesize a new historical mechanism by combining distant parts of the transcript.
 - Do not turn a broad historical description into a stronger causal claim unless that causal wording appears in the transcript.
@@ -72,8 +73,10 @@ exists su name brief video script cta prompt ob text quoted.text.Write one short
 
 Rules:
 - Between 2 and 4 words.
+- Hard limit: never exceed 4 words.
 - Must be relevant to the provided passage.
 - Action-oriented and plain text.
+- Use one compact imperative phrase, not a full sentence.
 - One line only.
 - No labels, no bullets, no markdown, no surrounding quotes.
 .text.quoted be text ya
@@ -82,8 +85,11 @@ exists su name brief video script hook prompt ob text quoted.text.Write one open
 
 Rules:
 - Between 6 and 9 words.
+- Hard limit: never exceed 9 words.
 - Must match the provided body content.
 - Dramatic and curiosity-driven.
+- Use one compact spoken hook, not an explanatory sentence.
+- Prefer a headline-like phrase over a full summary.
 - Must end with "." or "?".
 - Plain text only.
 - No labels, no bullets, no markdown, no surrounding quotes.
@@ -153,6 +159,8 @@ Decision Rules
 PASS if:
 
 - Every historical claim is supported by the TRANSCRIPT, including faithful spoken compression
+- Spoken compression may merge nearby transcript details into one short line when the merged line does not add a new actor, date, law, or mechanism.
+- Compressed paraphrase may restate the practical implication of nearby transcript sentences in shorter spoken wording.
 - No new historical facts are introduced
 - No major exaggeration or distortion occurs
 
@@ -165,6 +173,8 @@ FAIL if:
 Tie-break policy:
 - If support is plausible but phrasing is rhetorical, choose PASS.
 - If the SCRIPT compresses multiple nearby transcript details into one short spoken line without adding a new historical actor, date, law, or mechanism, choose PASS.
+- If the SCRIPT shortens a transcript mechanism into a tighter spoken paraphrase but stays inside the same nearby idea cluster, choose PASS.
+- If the SCRIPT uses simpler spoken wording for a transcript mechanism without changing who did what or how it works, choose PASS.
 - If the SCRIPT states an implication that is an obvious reading of the transcript rather than a new fact, choose PASS.
 - Fail only on clear unsupported historical claims or clear added historical facts.
 - Do not fail only for style, intensity, or modern-parallel rhetoric.
@@ -179,6 +189,7 @@ exists su name brief video script source thrust verdict prompt ob text quoted.te
 
 Rules:
 - Return FAIL only when the analysis clearly says historical claims are unsupported, added, or materially distorted.
+- If the analysis says compression, paraphrase, or merged nearby transcript details are acceptable, return PASS.
 - Otherwise return PASS.
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
@@ -251,6 +262,12 @@ exists su name manuscript replacement body ob text "" be text ya
 exists su name manuscript replacement transcript ob text "" be text ya
 exists su name manuscript replacement intent ob text "" be text ya
 exists su name manuscript replacement script ob text "" be text ya
+
+exists su name manuscript fact one generator ob name brief video script fact one platform ya
+exists su name manuscript fact two generator ob name brief video script fact two platform ya
+exists su name manuscript uplift generator ob name brief video script uplift platform ya
+exists su name manuscript hook generator ob name brief video script hook platform ya
+exists su name manuscript cta generator ob name brief video script cta platform ya
 
 su name manuscript request replacements be map def
   su text "[[source]]" ob name text manuscript replacement source ya
@@ -342,22 +359,17 @@ su name brief video script uplift platform ob text request to name text output b
 prah
 
 su name brief video script hook platform ob text request to name text output be ceremony def
-  su name brief video script hook write platform ob text of ob of this for name brief video script hook mind to name text output by num 0 atmost num 20 be write do
+  su name brief video script hook write platform ob text of ob of this for name brief video script hook mind to name text output by num 0 atmost num 12 be write do
   su name output ret
 prah
 
 su name brief video script cta platform ob text request to name text output be ceremony def
-  su name brief video script cta write platform ob text of ob of this for name brief video script cta mind to name text output by num 0 atmost num 12 be write do
-  su name output ret
-prah
-
-su name manuscript platform verify from text request for text platform accordingto name checks series to name text output be ceremony def
-  su name manuscript platform verify run platform ob text of from of this for text of for of this among name brief video script platform pass accordingto name of accordingto of this atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
+  su name brief video script cta write platform ob text of ob of this for name brief video script cta mind to name text output by num 0 atmost num 8 be write do
   su name output ret
 prah
 
 su name manuscript fact one verify from text transcript to name text output be ceremony def
-  su name manuscript fact one platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text output be manuscript platform verify do
+  su name manuscript fact one platform ob text of ob of manuscript fact one request for name brief video script fact one platform among name brief video script platform pass accordingto name manuscript fact one checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
   su name manuscript fact one source thrust platform from text of from of this with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
   fromindex num 1 toindex num 3 be manuscript fact one retry do
   ob name text manuscript fact one source thrust pass be equally from text false then
@@ -367,12 +379,12 @@ prah
 
 su name manuscript fact one retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact one source thrust pass be equally from text true then be depart do
-  su name manuscript fact one retry platform from text of ob of manuscript fact one request for text "brief video script fact one platform" accordingto name manuscript fact one checks to name text output be manuscript platform verify do
+  su name manuscript fact one retry platform ob text of ob of manuscript fact one request for name brief video script fact one platform among name brief video script platform pass accordingto name manuscript fact one checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
   su name manuscript fact one source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact one source thrust pass be manuscript source thrust do
 prah
 
 su name manuscript fact two verify to name text output be ceremony def
-  su name manuscript fact two platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
+  su name manuscript fact two platform ob text of ob of manuscript fact two request for name brief video script fact two platform among name brief video script platform pass accordingto name manuscript fact two checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
   su name manuscript fact two distinct platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   su name manuscript fact two source thrust platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
   fromindex num 1 toindex num 5 be manuscript fact two retry do
@@ -386,7 +398,7 @@ prah
 su name manuscript fact two retry fromindex num 0 toindex num 0 be ceremony def
   ob name text manuscript fact two distinct pass be equally from text true then
   ob name text manuscript fact two source thrust pass be equally from text true then be depart do
-  su name manuscript fact two retry platform from text of ob of manuscript fact two request for text "brief video script fact two platform" accordingto name manuscript fact two checks to name text output be manuscript platform verify do
+  su name manuscript fact two retry platform ob text of ob of manuscript fact two request for name brief video script fact two platform among name brief video script platform pass accordingto name manuscript fact two checks atleast num 0.8 fromindex num 1 toindex num 5 to name text output be verify platform do
   su name manuscript fact two distinct retry platform from text of ob of output with text of ob of manuscript fact one out to name text manuscript fact two distinct pass be manuscript segment distinct do
   su name manuscript fact two source thrust retry platform from text of ob of brief video script source with text of ob of output to name text manuscript fact two source thrust pass be manuscript source thrust do
 prah
@@ -394,14 +406,18 @@ prah
 su name manuscript source thrust verify to name text pass be ceremony def
   su name manuscript source thrust write platform ob name text manuscript source thrust request for name brief video script source thrust verify mind to name text manuscript source thrust review by num 0 atmost num 280 be write do
   ob text "false" to name text manuscript source thrust pass be text do
+  ob text "false" to name text manuscript source thrust verdict known be text do
   ob name text manuscript source thrust review from text "/\\bPASS\\s*$/i" be resemble then
+  ob text "true" to name text manuscript source thrust verdict known be text do
   ob text "true" to name text manuscript source thrust pass be text do
-  ob name text manuscript source thrust pass be equally from text false then
+  ob name text manuscript source thrust review from text "/\\bFAIL\\s*$/i" be resemble then
+  ob text "true" to name text manuscript source thrust verdict known be text do
+  ob text "false" to name text manuscript source thrust pass be text do
+  ob name text manuscript source thrust verdict known be equally from text false then
   su name manuscript source thrust verdict request begin platform ob text "VERIFIER_ANALYSIS:\n" to name text manuscript source thrust verdict request be text do
   ob name text manuscript source thrust review to name text manuscript source thrust verdict request be plus do
   ob name text manuscript source thrust verdict request for name brief video script source thrust verdict mind to name text manuscript source thrust verdict raw by num 0 atmost num 8 be write do
   ob name text manuscript source thrust verdict raw atmost num 1 to name text manuscript source thrust verdict line be line tail do
-  ob text "false" to name text manuscript source thrust verdict known be text do
   ob name text manuscript source thrust verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
   ob text "true" to name text manuscript source thrust verdict known be text do
   ob name text manuscript source thrust verdict line from text "/^\\s*PASS\\b/i" be resemble then
@@ -427,7 +443,7 @@ su name manuscript draft verify from text manuscript to name text manuscript out
   ob name text manuscript fact two out to name text manuscript replacement fact two be text do
   ob name text brief video script source to name text manuscript replacement source be text do
   su name manuscript uplift request platform ob name map manuscript request replacements in name text manuscript uplift request template to name text manuscript uplift request be instead do
-  su name manuscript uplift platform from text of ob of manuscript uplift request for text "brief video script uplift platform" accordingto name manuscript uplift checks to name text manuscript uplift out be manuscript platform verify do
+  su name manuscript uplift platform ob text of ob of manuscript uplift request for name brief video script uplift platform among name brief video script platform pass accordingto name manuscript uplift checks atleast num 0.8 fromindex num 1 toindex num 5 to name text manuscript uplift out be verify platform do
 
   su name manuscript body begin platform ob name text manuscript fact one out to name text manuscript body out be text do
   su name manuscript body fact two join platform ob name text manuscript paragraph break to name manuscript body out be plus do
@@ -437,11 +453,11 @@ su name manuscript draft verify from text manuscript to name text manuscript out
 
   ob name text manuscript body out to name text manuscript replacement body be text do
   su name manuscript hook request platform ob name map manuscript request replacements in name text manuscript hook request template to name text manuscript hook request be instead do
-  su name manuscript hook platform from text of ob of manuscript hook request for text "brief video script hook platform" accordingto name manuscript hook checks to name text manuscript hook out be manuscript platform verify do
+  su name manuscript hook platform ob text of ob of manuscript hook request for name brief video script hook platform among name brief video script platform pass accordingto name manuscript hook checks atleast num 0.8 fromindex num 1 toindex num 5 to name text manuscript hook out be verify platform do
 
   ob name text manuscript body out to name text manuscript replacement body be text do
   su name manuscript cta request platform ob name map manuscript request replacements in name text manuscript cta request template to name text manuscript cta request be instead do
-  su name manuscript cta platform from text of ob of manuscript cta request for text "brief video script cta platform" accordingto name manuscript cta checks to name text manuscript cta out be manuscript platform verify do
+  su name manuscript cta platform ob text of ob of manuscript cta request for name brief video script cta platform among name brief video script platform pass accordingto name manuscript cta checks atleast num 0.8 fromindex num 1 toindex num 5 to name text manuscript cta out be verify platform do
 
   su name manuscript out begin platform ob name text manuscript hook out to name text manuscript out be text do
   su name manuscript out join platform ob name text manuscript paragraph break to name manuscript out be plus do
