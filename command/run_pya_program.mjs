@@ -23,16 +23,10 @@ import { setRunNewspaperLines } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
-import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
+import { loadConfigFile, loadDefaultConfig, formatIsoWithOffset, resolveTimeZone, formatRunDurationMs, readFlagValue, sanitizeRunId, normalizeRunRoot, shouldAutoEnableNewspaper, shouldAutoEnableNewspaperForRefinery, buildRunId, loadCheckpointIndex, deriveKnowProduceBundle, materializeProduceBundle } from "./run_pya_helpers.mjs";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const NEWSPAPER_TEXT_ARTIFACT_THRESHOLD = 2048;
-
-function formatRunDurationMs(durationMs) {
-  const ms = Math.max(0, Math.round(Number(durationMs) || 0));
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(3)}s`;
-}
 
 function renderSeriesSentence(sentence) {
   const name = sentence?.su?.name ?? "result";

@@ -26,6 +26,6 @@ test("run prints timing summary with artifacts folder at the end", async () => {
 
   assert.match(stderr, /run start: 2025-01-01T00:00:00Z/);
   assert.match(stderr, /run end: .+/);
-  assert.match(stderr, /run duration: .+/);
+  assert.match(stderr, /run duration: \d{2}:\d{2}\.\d{3}(?:\r?\n|$)/);
   assert.match(stderr, /artifacts folder: .+artifacts[\\/]+run-duration/);
 });

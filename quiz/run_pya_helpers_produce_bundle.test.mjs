@@ -4,7 +4,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { deriveKnowProduceBundle } from "../command/run_pya_helpers.mjs";
+import { deriveKnowProduceBundle, formatRunDurationMs } from "../command/run_pya_helpers.mjs";
+
+test("formatRunDurationMs prints clock style durations", () => {
+  assert.equal(formatRunDurationMs(0), "00:00.000");
+  assert.equal(formatRunDurationMs(12153), "00:12.153");
+  assert.equal(formatRunDurationMs(125678), "02:05.678");
+  assert.equal(formatRunDurationMs(3723004), "01:02:03.004");
+});
 
 test("deriveKnowProduceBundle prefers run video artifacts when result is text", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-produce-bundle-"));
