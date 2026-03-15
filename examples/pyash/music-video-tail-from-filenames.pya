@@ -1,0 +1,48 @@
+ob ve filename text video filename text captions be input ya
+
+from filename "../../module/video_common.pya" ob name video heading burn to name video heading burn be import do
+from filename "../../module/video_common.pya" ob name footnote mode to name footnote mode be import do
+from filename "../../module/video_common.pya" ob name current subtitle margin ratio to name current subtitle margin ratio be import do
+
+exists su name video heading text ob text "Tail Smoke" be default ya
+exists su name audio cue text ob text "Sound On" be default ya
+exists su name audio cue y ratio ob num 0.68 be default ya
+exists su name audio cue font scale ob num 0.42 be default ya
+exists su name subtitle margin ratio override ob num 0.10 be num ya
+exists su name draw widescreen mode ob text "lie" be default ya
+
+su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
+ob text "karaoke" to name text footnote mode current be text do
+su name footnote mode text stage ob name text footnote mode current to name text footnote mode text be text do
+
+ob name run root to name text workspace root be text do
+ob name text workspace root to name text tail run root be text do
+ob text "/artifacts/music-video-tail-smoke" to name tail run root be plus do
+ob text "mkdir -p \"" to name text ensure cmd be text do
+ob name text tail run root to name ensure cmd be plus do
+ob text "\"" to name ensure cmd be plus do
+su name ensure stage ob name text ensure cmd be command do
+
+ob name text tail run root to name text footnote path be text do
+ob text "/footnote.mp4" to name footnote path be plus do
+su name video filename stage ob name video to name filename video filename be filename do
+su name captions filename stage ob name captions to name filename captions filename be filename do
+su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
+su name footnote output stage from filename of ob of captions filename stage with filename of ob of video filename stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode text stage be footnote mode do
+
+su name heading stage from filename of ob of footnote filename stage with name text video heading text to filename of ob of footnote filename stage be video heading burn do
+ob text of ob of footnote filename stage to name text opened video path be text do
+
+ob text "printf '%s' '" to name text audio cue cmd be text do
+ob name text audio cue text to name audio cue cmd be plus do
+ob text "' | node command/video_heading_burn.mjs \"" to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
+ob text "\" \"" to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
+ob text "\" --text-stdin --seconds 1 --y-ratio " to name audio cue cmd be plus do
+ob num of ob of audio cue y ratio to name audio cue cmd be plus do
+ob text " --max-width-ratio 0.82 --font-scale " to name audio cue cmd be plus do
+ob num of ob of audio cue font scale to name audio cue cmd be plus do
+su name audio cue stage ob name text audio cue cmd be command do
+
+su name result out stage ob filename of ob of footnote filename stage to name filename result out be filename do
