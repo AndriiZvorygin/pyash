@@ -925,7 +925,7 @@ async function main() {
     return;
   }
 
-  if (!showResult && !full) {
+  if (!showResult && !full && !verbose) {
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
