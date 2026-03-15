@@ -27,7 +27,6 @@ Follow these rules:
 9. Minimize garbage: no random symbols, no abstract filler metaphors, no unrelated props, no camera jargon lists, no style spam.
 10. No visible text in the image.
 11. Keep the final prompt concise and concrete (about 18-45 words).
-12. If current_cut is a transition or instrumental bridge, use previous_cut and next_cut to create an in-between visual inspired by the lyric section that just ended or is about to begin.
 
 Return only one image-generation prompt line. No markdown, no quotes, no explanation..text.quoted be default ya
 
@@ -168,125 +167,6 @@ su name music video from filename audio be ceremony def
   su name result ret
 prah
 
-su name music video from filename audio with filename lyrics be ceremony def
-  su name mind preflight discharge stage as wo mind be discharge do
-  su name draw preflight discharge stage as wo draw be discharge do
-  su name hear preflight discharge stage as wo hear be discharge do
-  su name qwen say preflight discharge stage as wo "qwen say" be discharge do
-
-  su name thumbnail heading y ratio stage to name num thumbnail heading y ratio be current thumbnail heading y ratio do
-  su name video heading y ratio stage to name num video heading y ratio be current video heading y ratio do
-  su name subtitle margin ratio stage to name num subtitle margin ratio be current subtitle margin ratio do
-  ob text "karaoke" to name text footnote mode current be text do
-
-  su name run root stage to name text music video run root be music video run root do
-
-  ob text "captions.srt" to name text captions leaf be text do
-  ob text "captions-timing.srt" to name text captions timing leaf be text do
-  ob text "captions-sections.srt" to name text captions section leaf be text do
-  ob text "captions-draw.srt" to name text captions draw leaf be text do
-  ob ve name "text music video run root" "text captions leaf" to name text captions path be concatenate become wo filename do
-  ob ve name "text music video run root" "text captions timing leaf" to name text captions timing path be concatenate become wo filename do
-  ob ve name "text music video run root" "text captions section leaf" to name text captions section path be concatenate become wo filename do
-  ob ve name "text music video run root" "text captions draw leaf" to name text captions draw path be concatenate become wo filename do
-  su name captions filename stage ob name text captions path to name filename captions filename be filename do
-  su name captions timing filename stage ob name text captions timing path to name filename captions timing filename be filename do
-  su name captions section filename stage ob name text captions section path to name filename captions section filename be filename do
-  su name captions draw filename stage ob name text captions draw path to name filename captions draw filename be filename do
-
-  su name lyrics text stage from filename of with of this become wo text to name text manuscript out be read do
-  su name hear stage from filename of from of this become wo srt to filename of ob of captions timing filename stage be hear do
-  su name captions timing output stage ob filename of ob of hear stage be filename do
-
-  ob text "node command/lyrics_to_srt_from_timing.mjs \"" to name text captions cmd be text do
-  ob text of filename of with of this to name captions cmd be plus do
-  ob text "\" \"" to name captions cmd be plus do
-  ob text of filename of ob of captions timing output stage to name captions cmd be plus do
-  ob text "\" \"" to name captions cmd be plus do
-  ob text of filename of ob of captions filename stage to name captions cmd be plus do
-  ob text "\"" to name captions cmd be plus do
-  su name captions stage ob name text captions cmd be command do
-
-  ob text "node command/lyrics_to_srt_from_timing.mjs \"" to name text captions section cmd be text do
-  ob text of filename of with of this to name captions section cmd be plus do
-  ob text "\" \"" to name captions section cmd be plus do
-  ob text of filename of ob of captions timing output stage to name captions section cmd be plus do
-  ob text "\" \"" to name captions section cmd be plus do
-  ob text of filename of ob of captions section filename stage to name captions section cmd be plus do
-  ob text "\" --include-sections" to name captions section cmd be plus do
-  su name captions section stage ob name text captions section cmd be command do
-
-  ob text "node command/srt_to_music_video_itinerary.mjs \"" to name text captions draw cmd be text do
-  ob text of filename of ob of captions section filename stage to name captions draw cmd be plus do
-  ob text "\" \"" to name captions draw cmd be plus do
-  ob text of filename of ob of captions draw filename stage to name captions draw cmd be plus do
-  ob text "\" --gap-seconds 6" to name captions draw cmd be plus do
-  su name captions draw stage ob name text captions draw cmd be command do
-
-  su name cut stage from filename of ob of captions draw filename stage during num 120 to name itinerary teaching cuts by num 0 be cut do
-
-  su name prompt stage from name itinerary teaching cuts ob text of ob of draw promptify packet template fromtext name draw promptify instruction for name mind to name itinerary teaching draw prompts by num 0 be promptify do
-  su name title stage ob name text manuscript out fromtext text "Create a compelling YouTube title (max 90 chars). Plain text only." for name mind to name text video title be write do
-  su name heading stage ob name text manuscript out fromtext text "Create one hook heading for a thumbnail. Must be 3-7 words only. Plain text only. One line. No quotes, hashtags, emojis, or punctuation." for name mind to name text video heading be write do
-  su name summary stage ob name text manuscript out fromtext text "Write one concise summary sentence for this music video in plain text (max 180 chars)." for name mind to name text video summary be write do
-  su name tags stage ob name text manuscript out fromtext text "Write comma-separated tags for this music video. Plain text only, no hashtags." for name mind to name text video tags be write do
-  su name description stage ob name text manuscript out fromtext text "Write a YouTube description based on the script. Output exactly two concise prose paragraphs (1-3 sentences each) that summarize key claims and why they matter. Then output one final line in this exact format: tags: tag one, tag two, tag three (comma-separated, no # symbols)." for name mind to name text video description be write do
-  su name thumbnail context stage ob name map thumbnail context replacements in name text thumbnail context template to name text thumbnail context be instead do
-  exists su name shorts thumbnail mind be mind fromtext name thumbnail system prompt ya
-  su name thumbnail prompt stage ob name thumbnail context for name shorts thumbnail mind to name text thumbnail prompt be write do
-
-  su name mind draw discharge stage as wo mind be discharge do
-
-  ob text "draw" to name text draw directory leaf be text do
-  ob ve name "text music video run root" "text draw directory leaf" to name text draw directory path be concatenate become wo filename do
-  su name draw directory stage ob name text draw directory path to name filename draw directory be filename do
-  ob name text draw widescreen mode be equally from text "truth" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw directory stage be draw do
-  ob name text draw widescreen mode be equally from text "lie" then su name draw stage from name itinerary teaching draw prompts fromtext name draw system prompt ob text "Create one illustration representing this:" fromstate wo text become wo photograph with name draw size shorts to filename of ob of draw directory stage be draw do
-
-  su name thumbnail directory path stage to name text thumbnail directory path be music video run root do
-  ob text "thumbnail" to name text thumbnail directory leaf be text do
-  ob ve name "text thumbnail directory path" "text thumbnail directory leaf" to name text thumbnail directory path be concatenate become wo filename do
-  su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
-  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
-  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
-  su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
-  su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
-
-  su name draw discharge before concatenate stage as wo draw be discharge do
-
-  su name video cuts audio filename ob text of filename of from of this be text do
-  su name video cuts images directory ob name text draw directory path be text do
-  exists su name video cuts prefix ob text "draw-stage" be text ya
-
-  ob text "music-video.mp4" to name text video leaf be text do
-  ob ve name "text music video run root" "text video leaf" to name text video path be concatenate become wo filename do
-  su name video filename stage ob name text video path to name filename video filename be filename do
-  su name concatenate stage from name itinerary teaching cuts fromstate wo itinerary become wo video to filename of ob of video filename stage be concatenate do
-
-  ob text "music-video-footnote.mp4" to name text footnote leaf be text do
-  ob ve name "text music video run root" "text footnote leaf" to name text footnote path be concatenate become wo filename do
-  su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
-  su name footnote output stage from filename of ob of captions filename stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
-
-  su name opening heading stage from filename of ob of footnote output stage with name text video heading to filename of ob of footnote output stage by num of ob of video heading y ratio stage be video heading burn do
-  ob text of ob of opening heading stage to name text opened video path be text do
-  ob text "printf '%s' '" to name text audio cue cmd be text do
-  ob name text audio cue text to name audio cue cmd be plus do
-  ob text "' | node command/video_heading_burn.mjs \"" to name audio cue cmd be plus do
-  ob name text opened video path to name audio cue cmd be plus do
-  ob text "\" \"" to name audio cue cmd be plus do
-  ob name text opened video path to name audio cue cmd be plus do
-  ob text "\" --text-stdin --seconds 1 --y-ratio " to name audio cue cmd be plus do
-  ob num of ob of audio cue y ratio to name audio cue cmd be plus do
-  ob text " --max-width-ratio 0.82 --font-scale " to name audio cue cmd be plus do
-  ob num of ob of audio cue font scale to name audio cue cmd be plus do
-  su name audio cue stage ob name text audio cue cmd be command do
-  su name draw discharge stage as wo draw be discharge do
-
-  su name result ob filename of ob of audio cue stage be music video ya
-  su name result ret
-prah
-
 su name music video from filename audio to filename video short be ceremony def
   su name result stage from filename of from of this be music video do
   su name output path stage ob filename of to of this to name filename output path be filename do
@@ -301,31 +181,6 @@ prah
 su name music video wide from filename audio be ceremony def
   su name draw widescreen mode ob text "truth" ya
   su name result from filename of from of this be music video do
-  su name draw widescreen mode ob text "lie" ya
-  su name result ret
-prah
-
-su name music video from filename audio with filename lyrics to filename video short be ceremony def
-  su name result stage from filename of from of this with filename of with of this be music video do
-  su name output path stage ob filename of to of this to name filename output path be filename do
-  su name output path text stage ob text of ob of filename output path to name text output path text be text do
-  ob name text output path text be equally from text "[object Object]" then ob filename of ob of result stage to name filename output path be filename do
-  ob name text output path text be equally from text "" then ob filename of ob of result stage to name filename output path be filename do
-  su name copy stage from filename of ob of result stage to filename of ob of filename output path be copy do
-  su name result out stage ob filename of ob of filename output path be music video ya
-  su name result out stage ret
-prah
-
-su name music video wide from filename audio with filename lyrics be ceremony def
-  su name draw widescreen mode ob text "truth" ya
-  su name result from filename of from of this with filename of with of this be music video do
-  su name draw widescreen mode ob text "lie" ya
-  su name result ret
-prah
-
-su name music video wide from filename audio with filename lyrics to filename video short be ceremony def
-  su name draw widescreen mode ob text "truth" ya
-  su name result from filename of from of this with filename of with of this to filename of to of this be music video do
   su name draw widescreen mode ob text "lie" ya
   su name result ret
 prah
