@@ -51,25 +51,60 @@ B
 
 If tied, return A..text.quoted be text ya
 
+exists su name hymn draft count ob num 0 be number ya
+
+ob filename of ob of source to name filename hymn source filename be filename do
+ob text of ob of hymn source filename to name text hymn source path be text do
+ob text "basename \"" to name text hymn stem cmd be text do
+ob name text hymn source path to name hymn stem cmd be plus do
+ob text "\" | sed 's/\\.[^.]*$//' | sed 's/[^[:alnum:]_-]/_/g' | tr -s '_' | sed 's/^_//;s/_$//' | tr -d '\\n'" to name hymn stem cmd be plus do
+su name hymn stem safe stage ob name text hymn stem cmd be command do
+
+su name hymn compare run id stage ob name run id to name text hymn compare run id be text do
+ob name text hymn compare run id be equally from text "" then ob text "manual" to name text hymn compare run id be text do
+
+ob text "artifacts/" to name text hymn artifacts dir be text do
+ob name text hymn compare run id to name hymn artifacts dir be plus do
+ob name text hymn artifacts dir to name text hymn candidates dir be text do
+ob text "/candidates" to name hymn candidates dir be plus do
+ob text "know/produce" to name text hymn produce dir be text do
+
+ob text "mkdir -p \"" to name text hymn artifacts mkdir cmd be text do
+ob name text hymn artifacts dir to name hymn artifacts mkdir cmd be plus do
+ob text "\" \"" to name hymn artifacts mkdir cmd be plus do
+ob name text hymn candidates dir to name hymn artifacts mkdir cmd be plus do
+ob text "\" \"" to name hymn artifacts mkdir cmd be plus do
+ob name text hymn produce dir to name hymn artifacts mkdir cmd be plus do
+ob text "\"" to name hymn artifacts mkdir cmd be plus do
+su name hymn artifacts mkdir stage ob name text hymn artifacts mkdir cmd be command do
+
 su name hymn source stage from filename of ob of source become wo text to name text hymn source be read do
 
 su name hymn draft ob text source to name text manuscript out be ceremony def
+  ob num 1 to name hymn draft count be plus do
   su name hymn draft run stage from text of ob of this to name text manuscript out be hymn manuscript do
+  ob name text hymn candidates dir to name text hymn draft path be text do
+  ob text "/hymn-draft-" to name hymn draft path be plus do
+  ob text of ob of hymn draft count to name text hymn draft count text be text do
+  ob name text hymn draft count text to name hymn draft path be plus do
+  ob text ".txt" to name hymn draft path be plus do
+  su name hymn draft filename stage ob name text hymn draft path to name filename hymn draft filename be filename do
+  su name hymn draft artifact stage ob name text manuscript out to filename of ob of hymn draft filename stage be write do
   su name manuscript out ret
 prah
 
 su name hymn final stage from la ob text of ob of hymn source to name text hymn scratch be hymn draft do ko ob text of ob of better compare hymn manuscript judge prompter to name text hymn final atmost num 6 be better compare do
 
-su name produce dir stage ob text "artifacts/" to name text produce dir be text do
-ob name run id to name produce dir be plus do
-ob text "mkdir -p \"" to name text produce dir ensure cmd be text do
-ob name text produce dir to name produce dir ensure cmd be plus do
-ob text "\"" to name produce dir ensure cmd be plus do
-su name produce dir ensure stage ob name text produce dir ensure cmd be command do
-su name produce path stage ob name text produce dir to name text produce path be text do
+su name produce path stage ob name text hymn artifacts dir to name text produce path be text do
 ob text "/produce.txt" to name produce path be plus do
 su name produce filename stage ob name text produce path to name filename produce filename be filename do
 su name hymn produce stage ob name text hymn final to filename of ob of produce filename stage be write do
+su name hymn produce copy path stage ob name text hymn produce dir to name text hymn produce copy path be text do
+ob text "/" to name hymn produce copy path be plus do
+ob name hymn stem safe stage to name hymn produce copy path be plus do
+ob text ".txt" to name hymn produce copy path be plus do
+su name hymn produce copy filename stage ob name text hymn produce copy path to name filename hymn produce copy filename be filename do
+su name hymn produce copy stage ob name text hymn final to filename of ob of hymn produce copy filename stage be write do
 su name hymn final ob name text hymn final be write do
 
 as wo ollama be discharge do
