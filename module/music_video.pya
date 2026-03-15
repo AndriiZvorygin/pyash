@@ -127,8 +127,11 @@ su name music video from filename audio be ceremony def
   ob text "thumbnail" to name text thumbnail directory leaf be text do
   ob ve name "text thumbnail directory path" "text thumbnail directory leaf" to name text thumbnail directory path be concatenate become wo filename do
   su name thumbnail directory stage ob name text thumbnail directory path to name filename thumbnail directory be filename do
-  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail directory stage be draw do
-  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail directory stage be draw do
+  ob text "thumbnail.png" to name text thumbnail image leaf be text do
+  ob ve name "text thumbnail directory path" "text thumbnail image leaf" to name text thumbnail image path be concatenate become wo filename do
+  su name thumbnail image filename stage ob name text thumbnail image path to name filename thumbnail image filename be filename do
+  ob name text draw widescreen mode be equally from text "truth" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size widescreen to filename of ob of thumbnail image filename stage be draw do
+  ob name text draw widescreen mode be equally from text "lie" then su name thumbnail platform ob name text thumbnail prompt fromstate wo text become wo photograph with name draw size shorts to filename of ob of thumbnail image filename stage be draw do
   su name thumbnail heading stage from filename of ob of thumbnail platform with name text video heading to filename of ob of thumbnail platform by num of ob of thumbnail heading y ratio stage be thumbnail heading burn do
   su name thumbnail stage ob filename of ob of thumbnail platform to name filename thumbnail be filename do
 
@@ -146,10 +149,11 @@ su name music video from filename audio be ceremony def
   ob text "music-video-footnote.mp4" to name text footnote leaf be text do
   ob ve name "text music video run root" "text footnote leaf" to name text footnote path be concatenate become wo filename do
   su name footnote filename stage ob name text footnote path to name filename footnote filename be filename do
-  su name footnote output stage from filename of ob of captions output stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode stage be footnote mode do
+  su name footnote mode text stage ob name text footnote mode current to name text footnote mode text be text do
+  su name footnote output stage from filename of ob of captions output stage with filename of ob of concatenate stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio stage as text of ob of footnote mode text stage be footnote mode do
 
-  su name opening heading stage from filename of ob of footnote output stage with name text video heading to filename of ob of footnote output stage by num of ob of video heading y ratio stage be video heading burn do
-  ob text of ob of opening heading stage to name text opened video path be text do
+  su name opening heading stage from filename of ob of footnote filename stage with name text video heading to filename of ob of footnote filename stage by num of ob of video heading y ratio stage be video heading burn do
+  ob text of ob of footnote filename stage to name text opened video path be text do
   ob text "printf '%s' '" to name text audio cue cmd be text do
   ob name text audio cue text to name audio cue cmd be plus do
   ob text "' | node command/video_heading_burn.mjs \"" to name audio cue cmd be plus do
@@ -163,7 +167,7 @@ su name music video from filename audio be ceremony def
   su name audio cue stage ob name text audio cue cmd be command do
   su name draw discharge stage as wo draw be discharge do
 
-  su name result ob filename of ob of audio cue stage be music video ya
+  su name result ob filename of ob of footnote filename stage be music video ya
   su name result ret
 prah
 
