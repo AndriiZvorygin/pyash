@@ -1,4 +1,4 @@
-ob filename text source be input ya
+ob ve filename text source text text hook_hint be input ya
 su name provider auto discharge ob bool lie ya
 
 from filename "../../module/hymn_manuscript.pya" ob name hymn manuscript to name hymn manuscript be import do
@@ -82,7 +82,10 @@ su name hymn source stage from filename of ob of source become wo text to name t
 
 su name hymn draft ob text source to name text manuscript out be ceremony def
   ob num 1 to name hymn draft count be plus do
+  ob name text hook_hint be equally from text "" then
   su name hymn draft run stage from text of ob of this to name text manuscript out be hymn manuscript do
+  ob name text hook_hint be equally from text "" then be depart do
+  su name hymn draft run stage from text of ob of this with text of ob of hook_hint to name text manuscript out be hymn manuscript do
   ob name text hymn candidates dir to name text hymn draft path be text do
   ob text "/hymn-draft-" to name hymn draft path be plus do
   ob text of ob of hymn draft count to name text hymn draft count text be text do
