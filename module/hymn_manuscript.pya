@@ -205,6 +205,7 @@ Rules:
 - Keep each line short and lyrical (roughly 6-10 words).
 - 30 to 38 words total.
 - Do not reuse the exact HOOK_PHRASE in this verse.
+- Verse 1 does not need the hook and should develop the song without repeating it.
 - Do not restate the intro line.
 - Each line should express only one image or one action.
 - Avoid stacking multiple concepts in the same line.
@@ -307,7 +308,9 @@ Rules:
 - 30 to 38 words total.
 - Focus on a different supported aspect than Verse 1.
 - Do not reuse the exact HOOK_PHRASE in this verse.
+- Verse 2 does not need the hook and should develop the song without repeating it.
 - Do not repeat Verse 1 wording.
+- Verse 2 must introduce at least two new nouns or images not used in Verse 1.
 - Each line should express only one image or one action.
 - Avoid stacking multiple concepts in the same line.
 - Each couplet must include at least one physical image, object, or scene.
