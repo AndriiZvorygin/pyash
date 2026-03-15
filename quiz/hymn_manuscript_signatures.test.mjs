@@ -103,9 +103,12 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Verse 2 must introduce at least two new nouns or images not used in Verse 1\./);
   assert.match(text, /Each line should express only one image or one action\./);
   assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
+  assert.match(text, /The main lesson of the verse should be understandable by a 12 year old\./);
   assert.match(text, /Verse structure rule:/);
   assert.match(text, /Line 1 must clearly state the spiritual practice, action, or discipline being taught\./);
-  assert.match(text, /Lines 2-4 may illustrate, support, or show the result of that practice using imagery or scenes\./);
+  assert.match(text, /Line 2 should show an image or scene\./);
+  assert.match(text, /Line 3 should show the heart-response to the practice\./);
+  assert.match(text, /Line 4 should show the outcome or result\./);
   assert.match(text, /Avoid stacking multiple concepts in the same line\./);
   assert.match(text, /avoid wording such as nothing, no, not, never, or without when an affirmative source-faithful phrasing can carry the teaching instead/);
   assert.match(text, /generic spiritual filler/);
