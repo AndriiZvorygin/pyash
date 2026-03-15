@@ -93,7 +93,10 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Ground abstract meaning in visible action, setting, sensory detail, or symbolic object\./);
   assert.match(text, /Let the verse deepen or turn the song rather than restate the chorus\./);
   assert.match(text, /Do not reuse the exact HOOK_PHRASE in this verse\./);
+  assert.match(text, /Verse 1 does not need the hook and should develop the song without repeating it\./);
+  assert.match(text, /Verse 2 does not need the hook and should develop the song without repeating it\./);
   assert.match(text, /Do not restate the intro line\./);
+  assert.match(text, /Verse 2 must introduce at least two new nouns or images not used in Verse 1\./);
   assert.match(text, /Each line should express only one image or one action\./);
   assert.match(text, /Avoid stacking multiple concepts in the same line\./);
   assert.match(text, /generic spiritual filler/);
