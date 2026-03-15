@@ -19,8 +19,6 @@ exists su name hymn intro mind be mind fromtext name hymn intro prompt ya
 exists su name hymn outro mind be mind fromtext name hymn outro prompt ya
 exists su name hymn imagery verify mind be mind fromtext name hymn imagery verify prompt ya
 exists su name hymn imagery verdict mind be mind fromtext name hymn imagery verdict prompt ya
-exists su name hymn hook quality verify mind be mind fromtext name hymn hook quality verify prompt ya
-exists su name hymn hook quality verdict mind be mind fromtext name hymn hook quality verdict prompt ya
 exists su name hymn chorus stability verify mind be mind fromtext name hymn chorus stability verify prompt ya
 exists su name hymn chorus stability verdict mind be mind fromtext name hymn chorus stability verdict prompt ya
 exists su name hymn communal voice verify mind be mind fromtext name hymn communal voice verify prompt ya
@@ -142,9 +140,11 @@ Output rules:
 - If none pass, reply exactly NONE.
 - No numbering, no labels, no bullets, no markdown, no surrounding quotes..text.quoted be text ya
 
-exists su name hymn hook choose prompt ob text quoted.text.Select the single best hook candidate for an educational spiritual song.
+exists su name hymn hook choose prompt ob text quoted.text.Select the single best usable hook candidate for an educational spiritual song.
 
-Choose the candidate most likely to work as a repeated chorus refrain.
+This stage is the final hook winner stage.
+Choose one candidate only if it is already usable as a repeated chorus refrain.
+If none are truly usable, reply exactly NONE.
 
 Prefer a candidate that:
 - is memorable and singable,
@@ -162,7 +162,7 @@ Reject candidates that are mainly:
 - metadata or source fragments,
 - imperative command lines when declarative alternatives exist,
 - second-person refrain lines when neutral or collective alternatives exist,
-- bland filler, vague evaluation, or empty statements.
+- bland filler, vague evaluation, empty statements, or broken chorus anchors.
 
 Output rules:
 - Reply with exactly one candidate copied exactly as written.
@@ -404,40 +404,6 @@ Rules:
 - One word only.
 - No labels, no explanation, no punctuation..text.quoted be text ya
 
-exists su name hymn hook quality verify prompt ob text quoted.text.Verify whether HOOK works as a strong refrain line for the song.
-
-Deterministic checks already handle broken format.
-Do not judge word count, empty/malformed structure, or basic formatting here.
-
-Judge only these concerns:
-- naturalness aloud,
-- repeatability in a chorus,
-- specificity to the source rather than generic filler,
-- overall acceptability as a usable hook.
-
-PASS if HOOK is usable as a repeated hook line even if it is plain, directive, second-person, or aesthetically mediocre.
-
-FAIL only if:
-- the hook sounds broken aloud,
-- the hook is generic filler,
-- the hook is awkward to repeat,
-- the hook is poorly matched to the source,
-- the hook sounds like metadata, speaker chatter, or junk.
-
-Output rules:
-- First output one short paragraph (1-2 sentences, max 60 words).
-- Final line must be exactly PASS or FAIL.
-- No bullets, no labels, no markdown.
-- No text after the final verdict line..text.quoted be text ya
-
-exists su name hymn hook quality verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
-
-Rules:
-- Return FAIL only when the analysis clearly says the hook is broken, generic, awkward to repeat, poorly matched to the source, or unusable as a refrain.
-- Otherwise return PASS.
-- One word only.
-- No labels, no explanation, no punctuation..text.quoted be text ya
-
 exists su name hymn chorus stability verify prompt ob text quoted.text.Verify whether FINAL_CHORUS stays close enough to CHORUS for memorability and refrain stability.
 
 PASS if:
@@ -657,34 +623,6 @@ su name hymn imagery from text verse to name text pass be ceremony def
   su name pass ret
 prah
 
-su name hymn hook quality verify to name text pass be ceremony def
-  su name hymn hook quality write stage ob name text hymn hook quality request for name hymn hook quality verify mind to name text hymn hook quality review by num 0 atmost num 180 be write do
-  ob name text hymn hook quality review atmost num 1 to name text hymn hook quality verdict line be line tail do
-  ob text "false" to name text hymn hook quality pass be text do
-  ob name text hymn hook quality verdict line from text "/^\\s*PASS\\b/i" be resemble then
-  ob text "true" to name text hymn hook quality pass be text do
-  ob name text hymn hook quality pass be equally from text false then
-  su name hymn hook quality verdict request begin stage ob text "VERIFIER_ANALYSIS:\n" to name text hymn hook quality verdict request be text do
-  ob name text hymn hook quality review to name text hymn hook quality verdict request be plus do
-  ob name text hymn hook quality verdict request for name hymn hook quality verdict mind to name text hymn hook quality verdict raw by num 0 atmost num 8 be write do
-  ob name text hymn hook quality verdict raw atmost num 1 to name text hymn hook quality verdict line be line tail do
-  ob text "false" to name text hymn hook quality verdict known be text do
-  ob name text hymn hook quality verdict line from text "/^\\s*(PASS|FAIL)\\b/i" be resemble then
-  ob text "true" to name text hymn hook quality verdict known be text do
-  ob name text hymn hook quality verdict line from text "/^\\s*PASS\\b/i" be resemble then
-  ob text "true" to name text hymn hook quality pass be text do
-  ob name text hymn hook quality verdict known be equally from text false then
-  su name hymn hook quality verdict guarantee stage ob bool lie fromtext text "hymn hook quality verdict defective" be guarantee do
-  su name hymn hook quality pass ret
-prah
-
-su name hymn hook quality from text hook to name text pass be ceremony def
-  su name hymn hook quality request begin stage ob text "HOOK:\n" to name text hymn hook quality request be text do
-  ob text of from of this to name text hymn hook quality request be plus do
-  su name pass stage to name text pass be hymn hook quality verify do
-  su name pass ret
-prah
-
 su name hymn chorus stability verify to name text pass be ceremony def
   su name hymn chorus stability write stage ob name text hymn chorus stability request for name hymn chorus stability verify mind to name text hymn chorus stability review by num 0 atmost num 180 be write do
   ob name text hymn chorus stability review atmost num 1 to name text hymn chorus stability verdict line be line tail do
@@ -814,11 +752,6 @@ su name hymn hook source fit from text source with text hook to name text pass b
 prah
 
 su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
-  ob name text hymn hook quality pass be equally from text true then
-  ob name text hymn hook copied pass be equally from text true then
-  ob name text hymn hook shape pass be equally from text true then
-  ob name text hymn hook source fit pass be equally from text true then be depart do
-  ob name text hymn hook quality pass be equally from text true then
   ob name text hymn hook copied pass be equally from text true then
   ob name text hymn hook shape pass be equally from text true then
   ob name text hymn hook source fit pass be equally from text true then be depart do
@@ -827,7 +760,6 @@ su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   su name hymn hook sieve retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do
   su name hymn hook choose retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
   ob name text hook out be equally from text "NONE" then
-  ob text "false" to name text hymn hook quality pass be text do
   ob text "false" to name text hymn hook copied pass be text do
   ob text "false" to name text hymn hook shape pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
@@ -839,17 +771,11 @@ su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob text "true" to name text hymn hook shape pass be text do
   ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
   ob text "false" to name text hymn hook shape pass be text do
-  su name hymn hook quality retry stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do
-  ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook quality pass be text do
-  ob name text hymn hook shape pass be equally from text false then
-  ob text "false" to name text hymn hook quality pass be text do
   su name hymn hook source fit retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
   ob name text hymn hook copied pass be equally from text false then
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
   ob text "false" to name text hymn hook source fit pass be text do
-  su name hymn hook quality pass ret
   su name hymn hook copied pass ret
 prah
 
@@ -898,7 +824,6 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
   su name hymn hook sieve stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do
   su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
-  ob text "false" to name text hymn hook quality pass be text do
   ob text "false" to name text hymn hook copied pass be text do
   ob text "false" to name text hymn hook shape pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
@@ -912,18 +837,11 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   ob text "true" to name text hymn hook shape pass be text do
   ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
   ob text "false" to name text hymn hook shape pass be text do
-  su name hymn hook quality final stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do
-  ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook quality pass be text do
-  ob name text hymn hook shape pass be equally from text false then
-  ob text "false" to name text hymn hook quality pass be text do
   su name hymn hook source final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
   ob name text hymn hook copied pass be equally from text false then
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
   ob text "false" to name text hymn hook source fit pass be text do
-  ob name text hymn hook quality pass be equally from text false then
-  su name hymn hook quality guarantee stage ob bool lie fromtext text "hymn hook quality defective" be guarantee do
   ob name text hymn hook shape pass be equally from text false then
   su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do
   ob name text hymn hook source fit pass be equally from text false then

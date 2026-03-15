@@ -32,7 +32,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn hook source focus prompt ob text quoted\.text\.Extract the most hook-worthy source lines/);
   assert.match(text, /exists su name hymn source analysis prompt ob text quoted\.text\.Extract a compact writing brief/);
   assert.match(text, /exists su name hymn hook sieve prompt ob text quoted\.text\.Filter the hook candidates down to only valid refrain lines/);
-  assert.match(text, /exists su name hymn hook choose prompt ob text quoted\.text\.Select the single best hook candidate/);
+  assert.match(text, /exists su name hymn hook choose prompt ob text quoted\.text\.Select the single best usable hook candidate/);
   assert.match(text, /exists su name hymn intro prompt ob text quoted\.text\.You are writing the Intro/);
   assert.match(text, /exists su name hymn verse one prompt ob text quoted\.text\.You are writing Verse 1/);
   assert.match(text, /exists su name hymn chorus prompt ob text quoted\.text\.You are writing the echo line of a chorus\./);
@@ -50,8 +50,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn outro mind be mind fromtext name hymn outro prompt ya/);
   assert.match(text, /exists su name hymn imagery verify mind be mind fromtext name hymn imagery verify prompt ya/);
   assert.match(text, /exists su name hymn imagery verdict mind be mind fromtext name hymn imagery verdict prompt ya/);
-  assert.match(text, /exists su name hymn hook quality verify mind be mind fromtext name hymn hook quality verify prompt ya/);
-  assert.match(text, /exists su name hymn hook quality verdict mind be mind fromtext name hymn hook quality verdict prompt ya/);
   assert.match(text, /exists su name hymn chorus stability verify mind be mind fromtext name hymn chorus stability verify prompt ya/);
   assert.match(text, /exists su name hymn chorus stability verdict mind be mind fromtext name hymn chorus stability verdict prompt ya/);
   assert.match(text, /exists su name hymn communal voice verify mind be mind fromtext name hymn communal voice verify prompt ya/);
@@ -115,6 +113,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Exclude direct second-person address when a neutral or collective source line exists\./);
   assert.match(text, /is declarative rather than directive unless no other usable candidate works/);
   assert.match(text, /avoids second-person wording unless no similarly strong neutral or collective candidate exists\./);
+  assert.match(text, /This stage is the final hook winner stage\./);
+  assert.match(text, /If none are truly usable, reply exactly NONE\./);
   assert.match(text, /imperative command lines when declarative alternatives exist/);
   assert.match(text, /second-person refrain lines when neutral or collective alternatives exist/);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT\./);
@@ -163,7 +163,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /SOURCE BRIEF:\\n/);
   assert.match(text, /su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do/);
   assert.match(text, /su name hymn hook sieve stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do/);
-  assert.match(text, /su name hymn hook quality final stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do/);
   assert.match(text, /ob name text hook out to name text intro out be text do/);
   assert.match(text, /su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do/);
   assert.match(text, /su name hymn intro hook guarantee stage ob bool lie fromtext text "hymn intro hook defective" be guarantee do/);
@@ -194,8 +193,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn positive language from text lyric to name text pass be ceremony def/);
   assert.match(text, /su name hymn imagery verify to name text pass be ceremony def/);
   assert.match(text, /su name hymn imagery from text verse to name text pass be ceremony def/);
-  assert.match(text, /su name hymn hook quality verify to name text pass be ceremony def/);
-  assert.match(text, /su name hymn hook quality from text hook to name text pass be ceremony def/);
   assert.match(text, /su name hymn hook source fit from text source with text hook to name text pass be ceremony def/);
   assert.match(text, /su name hymn chorus stability verify to name text pass be ceremony def/);
   assert.match(text, /su name hymn chorus stability from text chorus with text final chorus to name text pass be ceremony def/);
@@ -204,17 +201,13 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /not\|never\|no\|cannot\|can't\|won't\|don't\|didn't\|isn't\|aren't\|without\|no more/);
   assert.match(text, /you\|your\|yours/);
   assert.match(text, /polish\|stand\|send\|remove\|offer\|cast\|bend\|go\|shine\|hold\|let\|face\|ride\|return\|walk\|lift\|build\|wear\|open\|surround\|follow\|serve/);
-  assert.match(text, /su name hymn hook quality final stage from text of ob of hook out to name text hymn hook quality pass be hymn hook quality do/);
-  assert.match(text, /ob text "true" to name text hymn hook quality pass be text do/);
   assert.match(text, /fromindex num 1 toindex num 4 be hymn hook pool retry do/);
-  assert.match(text, /su name hymn hook quality guarantee stage ob bool lie fromtext text "hymn hook quality defective" be guarantee do/);
   assert.match(text, /su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do/);
   assert.match(text, /su name hymn hook source guarantee stage ob bool lie fromtext text "hymn hook source defective" be guarantee do/);
   assert.match(text, /su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn hook source retry stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do/);
   assert.match(text, /su name hymn hook pool retry stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do/);
   assert.match(text, /su name hymn hook sieve retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do/);
-  assert.match(text, /su name hymn hook quality pass ret/);
   assert.match(text, /su name hymn hook copied pass ret/);
   assert.match(text, /su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name verse one imagery pass ret/);
