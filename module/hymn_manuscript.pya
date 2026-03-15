@@ -77,6 +77,8 @@ Avoid hooks that:
 - contain future promises
 - contain negations such as not, never, no, without unless strongly supported by the source
 - use negative framing when a source-faithful positive phrasing is available
+- do not use negative hook wording such as nothing, no, not, never, or without when an affirmative source-faithful hook can be written instead
+- if the source includes a negative formulation, recast it into a positive declarative refrain whenever the teaching stays faithful
 - contain multiple clauses or long phrases
 - repeat the intro line verbatim if provided
 - use source-prose fragments, speaker labels, query wording, or quoted report language
