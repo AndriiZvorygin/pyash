@@ -195,7 +195,7 @@ Rules:
 exists su name hymn verse one prompt ob text quoted.text.You are writing Verse 1 of a lyrical song based on source text.
 
 Verse 1 job:
-- Open the song with a source-grounded lived moment, scene, or image.
+- Teach the discipline or practice behind the song's message.
 - Make the verse feel sung rather than explained.
 
 Rules:
@@ -297,7 +297,7 @@ Rules:
 exists su name hymn verse two prompt ob text quoted.text.You are writing Verse 2 of the same lyrical song.
 
 Verse 2 job:
-- Deepen the song by showing a different supported image, action, scene, or tension than Verse 1.
+- Show where the teaching is tested in real life.
 - Add development rather than restatement.
 
 Rules:
@@ -341,7 +341,7 @@ Rules:
 - Rhyme mode can be free verse or `ABAB`.
 - Keep each line short and lyrical (roughly 4-6 words).
 - 8 to 14 words total.
-- Create an emotional turn or resolution.
+- Reveal the transformation that happens when the teaching is lived.
 - Keep continuity with prior sections.
 - Draw its turn or resolution from the source text rather than generic uplift phrasing.
 - Prefer present-tense realis declarative lines.

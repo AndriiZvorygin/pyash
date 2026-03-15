@@ -79,7 +79,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Output exactly one line\./);
   assert.match(text, /No punctuation decoration\./);
   assert.match(text, /Verse 1 job:/);
-  assert.match(text, /Open the song with a source-grounded lived moment, scene, or image\./);
+  assert.match(text, /Teach the discipline or practice behind the song's message\./);
   assert.match(text, /Make the verse feel sung rather than explained\./);
   assert.match(text, /Write exactly 4 short lyrical lines\./);
   assert.match(text, /Use 2 rhyming couplets with clear end rhyme or light slant rhyme\./);
@@ -88,7 +88,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Ground abstract meaning in scene, gesture, object, place, or bodily action\./);
   assert.match(text, /Let the verse witness or reveal rather than preach or instruct\./);
   assert.match(text, /Verse 2 job:/);
-  assert.match(text, /Deepen the song by showing a different supported image, action, scene, or tension than Verse 1\./);
+  assert.match(text, /Show where the teaching is tested in real life\./);
   assert.match(text, /Add development rather than restatement\./);
   assert.match(text, /Ground abstract meaning in visible action, setting, sensory detail, or symbolic object\./);
   assert.match(text, /Let the verse deepen or turn the song rather than restate the chorus\./);
@@ -105,6 +105,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Use the exact HOOK_PHRASE as its own full line if it fits\./);
   assert.match(text, /Prefer source-derived wording over generic uplift language\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
+  assert.match(text, /Reveal the transformation that happens when the teaching is lived\./);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
