@@ -102,7 +102,13 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Do not restate the intro line\./);
   assert.match(text, /Verse 2 must introduce at least two new nouns or images not used in Verse 1\./);
   assert.match(text, /Each line should express only one image or one action\./);
-  assert.match(text, /At least one line must include a physical object, place, or visible action\./);
+  assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
+  assert.match(text, /Other lines may support the teaching using imagery or scenes\./);
+  assert.match(text, /A good educational verse typically looks like:/);
+  assert.match(text, /Line 1 - teaching/);
+  assert.match(text, /Line 2 - imagery/);
+  assert.match(text, /Line 3 - teaching/);
+  assert.match(text, /Line 4 - image or consequence/);
   assert.match(text, /Avoid stacking multiple concepts in the same line\./);
   assert.match(text, /avoid wording such as nothing, no, not, never, or without when an affirmative source-faithful phrasing can carry the teaching instead/);
   assert.match(text, /generic spiritual filler/);
@@ -114,7 +120,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Reveal the transformation that happens when the teaching is lived\./);
   assert.match(text, /Do not reuse the main symbolic action from the verses\./);
   assert.match(text, /Show the result of the action instead\./);
-  assert.match(text, /At least one line must include a physical object, place, or visible action\./);
+  assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
