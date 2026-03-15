@@ -133,6 +133,20 @@ export function resolveTimeZone(rememberFn) {
   return null;
 }
 
+export function formatRunDurationMs(durationMs) {
+  const ms = Math.max(0, Math.round(Number(durationMs) || 0));
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const millis = ms % 1000;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}
+
 export function readFlagValue(args, name) {
   const prefix = `${name}=`;
   const idx = args.findIndex(arg => arg === name || arg.startsWith(prefix));
