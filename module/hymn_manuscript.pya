@@ -796,6 +796,7 @@ prah
 su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn hook copied pass be equally from text true then
   ob name text hymn hook shape pass be equally from text true then
+  ob name text hymn hook affirmative pass be equally from text true then
   ob name text hymn hook source fit pass be equally from text true then be depart do
   su name hymn hook source retry stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do
   su name hymn hook pool retry stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
@@ -804,6 +805,7 @@ su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hook out be equally from text "NONE" then
   ob text "false" to name text hymn hook copied pass be text do
   ob text "false" to name text hymn hook shape pass be text do
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hook out be equally from text "NONE" then be depart do
   be verify as wo phrase count atleast num 1 atmost num 12 from name text hymn hook candidates out with name text hook out to name map hymn hook copied verify do
@@ -813,10 +815,13 @@ su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob text "true" to name text hymn hook shape pass be text do
   ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
   ob text "false" to name text hymn hook shape pass be text do
+  su name hymn hook affirmative retry stage from text of ob of hook out to name text hymn hook affirmative pass be hymn positive language do
   su name hymn hook source fit retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
   ob name text hymn hook copied pass be equally from text false then
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   su name hymn hook copied pass ret
 prah
@@ -876,6 +881,7 @@ su name hymn manuscript draft checked from text source with text hook hint to na
   su name hymn hook choose stage from text of ob of hymn hook source with text of ob of hymn hook candidates out to name text hook out be hymn hook choose do
   ob text "false" to name text hymn hook copied pass be text do
   ob text "false" to name text hymn hook shape pass be text do
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   fromindex num 1 toindex num 4 be hymn hook pool retry do
   ob name text hook out be equally from text "NONE" then
@@ -887,13 +893,18 @@ su name hymn manuscript draft checked from text source with text hook hint to na
   ob text "true" to name text hymn hook shape pass be text do
   ob name text hook out from text "/[\\r\\n`{}<>|]/" be resemble then
   ob text "false" to name text hymn hook shape pass be text do
+  su name hymn hook affirmative final stage from text of ob of hook out to name text hymn hook affirmative pass be hymn positive language do
   su name hymn hook source final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
   ob name text hymn hook copied pass be equally from text false then
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
+  ob text "false" to name text hymn hook affirmative pass be text do
   ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
   su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do
+  ob name text hymn hook affirmative pass be equally from text false then
+  su name hymn hook affirmative guarantee stage ob bool lie fromtext text "hymn hook wording defective" be guarantee do
   ob name text hymn hook source fit pass be equally from text false then
   su name hymn hook source guarantee stage ob bool lie fromtext text "hymn hook source defective" be guarantee do
 

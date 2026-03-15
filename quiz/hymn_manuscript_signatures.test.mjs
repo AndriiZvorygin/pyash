@@ -226,6 +226,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn imagery verify to name text pass be ceremony def/);
   assert.match(text, /su name hymn imagery from text verse to name text pass be ceremony def/);
   assert.match(text, /su name hymn hook source fit from text source with text hook to name text pass be ceremony def/);
+  assert.match(text, /su name hymn hook affirmative final stage from text of ob of hook out to name text hymn hook affirmative pass be hymn positive language do/);
   assert.match(text, /su name hymn chorus stability verify to name text pass be ceremony def/);
   assert.match(text, /su name hymn chorus stability from text chorus with text final chorus to name text pass be ceremony def/);
   assert.match(text, /su name hymn communal voice checked to name text pass be ceremony def/);
@@ -235,11 +236,13 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /polish\|stand\|send\|remove\|offer\|cast\|bend\|go\|shine\|hold\|let\|face\|ride\|return\|walk\|lift\|build\|wear\|open\|surround\|follow\|serve/);
   assert.match(text, /fromindex num 1 toindex num 4 be hymn hook pool retry do/);
   assert.match(text, /su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do/);
+  assert.match(text, /su name hymn hook affirmative guarantee stage ob bool lie fromtext text "hymn hook wording defective" be guarantee do/);
   assert.match(text, /su name hymn hook source guarantee stage ob bool lie fromtext text "hymn hook source defective" be guarantee do/);
   assert.match(text, /su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn hook source retry stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do/);
   assert.match(text, /su name hymn hook pool retry stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do/);
   assert.match(text, /su name hymn hook sieve retry stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do/);
+  assert.match(text, /ob name text hymn hook affirmative pass be equally from text true then/);
   assert.match(text, /su name hymn hook copied pass ret/);
   assert.match(text, /su name hymn verse one imagery retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name verse one imagery pass ret/);
