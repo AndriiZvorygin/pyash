@@ -106,6 +106,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Prefer source-derived wording over generic uplift language\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
   assert.match(text, /Reveal the transformation that happens when the teaching is lived\./);
+  assert.match(text, /Do not reuse the main symbolic action from the verses\./);
+  assert.match(text, /Show the result of the action instead\./);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
