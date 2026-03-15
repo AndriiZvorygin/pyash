@@ -100,6 +100,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Each line should express only one image or one action\./);
   assert.match(text, /At least one line must include a physical object, place, or visible action\./);
   assert.match(text, /Avoid stacking multiple concepts in the same line\./);
+  assert.match(text, /avoid wording such as nothing, no, not, never, or without when an affirmative source-faithful phrasing can carry the teaching instead/);
   assert.match(text, /generic spiritual filler/);
   assert.match(text, /Allow imperative phrasing sparingly only if it adds movement or emphasis\./);
   assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\./);
