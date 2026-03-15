@@ -120,6 +120,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Reveal the transformation that happens when the teaching is lived\./);
   assert.match(text, /Do not reuse the main symbolic action from the verses\./);
   assert.match(text, /Show the result of the action instead\./);
+  assert.match(text, /The bridge must show the result of the practice, not repeat the struggle or repair\./);
   assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
