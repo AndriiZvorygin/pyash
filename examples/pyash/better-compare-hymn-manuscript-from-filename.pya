@@ -6,44 +6,52 @@ from filename "../../module/better_compare.pya" ob name better compare to name b
 
 exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise hymn judge. Return only A or B." ya
 
-exists su name text better compare hymn manuscript judge prompter ob text quoted.text.You are judging educational spiritual song lyrics.
+exists su name text better compare hymn manuscript judge prompter ob text quoted.text.You are judging educational song lyrics.
 
-Your goal is to choose the song most likely to be memorable, singable, and shareable.
+Your goal is to choose the song that best communicates the source teaching
+in a clear, memorable, and singable way.
 
-Evaluate each song using four signals:
+Focus primarily on educational value and teaching fidelity.
 
-1. Hook strength
-- Is there a clear memorable hook?
-- Does it appear early?
-- Is it easy to repeat?
+Evaluate each song using these signals:
 
-2. Singability and clarity
-- Do the lines flow naturally when spoken or sung?
-- Are the words easy to understand on first hearing?
+1. Source teaching adherence
+- Does the song accurately reflect the ideas, practices, or lessons found in the source text?
+- Does it avoid adding unrelated or invented claims?
 
-3. Imagery and memorability
-- Does the song use concrete images or actions?
-- Are there lines people would remember?
+2. Pedagogical clarity
+- After hearing the song once, could a listener explain the main lesson?
+- Does the song communicate a clear principle, practice, or takeaway?
 
-4. One clear teaching
-- Does the song communicate one main spiritual lesson?
-- Could a listener easily restate that lesson?
+3. Practice or takeaway visibility
+- Does the song show what the listener should do, notice, remember, or understand?
+- Is the lesson actionable, observable, or easy to restate?
+
+4. Memorability of the lesson
+- Is the teaching reinforced by the hook or chorus?
+- Would the listener remember the core lesson after the song ends?
+
+5. Singability and clarity
+- Are the lines natural to sing?
+- Are the words understandable on first hearing?
 
 Important judging rules:
 
-- Prefer songs with a clear repeating hook.
-- Prefer concrete imagery over abstract explanation.
-- Prefer songs that feel natural to sing aloud.
-- Prefer one clear message over many ideas.
-- If two songs are otherwise similar, prefer the one with the stronger and more coherent image system.
-- Prefer songs where multiple lines belong to the same symbolic world and reinforce one another.
+- Prefer songs that clearly express one main lesson, practice, or principle.
+- Prefer songs whose chorus reinforces the main teaching.
+- Prefer songs where the verses develop, illustrate, or apply the lesson.
+- Prefer songs that balance clarity with memorable language.
 
 Penalize songs that:
-- repeat ideas without adding imagery
-- sound preachy or overly abstract
-- lack a strong repeating hook
+- are mostly imagery without clear teaching
+- drift away from the source material
+- use vague inspirational language without a clear lesson
+- repeat ideas without improving understanding
 
-After evaluating both songs, select the one with the stronger hook and clearer teaching.
+If two songs are otherwise similar, prefer the one that teaches the lesson
+more clearly and more faithfully reflects the source.
+
+After evaluating both songs, choose the better one.
 
 Reply with only:
 
@@ -51,7 +59,7 @@ A
 or
 B
 
-If tied, return A..text.quoted be text ya
+If both are equal, return A..text.quoted be text ya
 
 exists su name hymn draft count ob num 0 be number ya
 
