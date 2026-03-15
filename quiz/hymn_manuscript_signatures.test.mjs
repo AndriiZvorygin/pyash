@@ -35,7 +35,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn hook choose prompt ob text quoted\.text\.Select the single best hook candidate/);
   assert.match(text, /exists su name hymn intro prompt ob text quoted\.text\.You are writing the Intro/);
   assert.match(text, /exists su name hymn verse one prompt ob text quoted\.text\.You are writing Verse 1/);
-  assert.match(text, /exists su name hymn chorus prompt ob text quoted\.text\.You are writing the Chorus/);
+  assert.match(text, /exists su name hymn chorus prompt ob text quoted\.text\.You are writing the echo line of a chorus\./);
   assert.match(text, /exists su name hymn final chorus prompt ob text quoted\.text\.You are writing the Final Chorus/);
   assert.match(text, /exists su name hymn verse two prompt ob text quoted\.text\.You are writing Verse 2/);
   assert.match(text, /exists su name hymn bridge prompt ob text quoted\.text\.You are writing the Bridge/);
@@ -69,9 +69,17 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
   assert.match(text, /Repeat the hook as a statement of what is true now, not as an instruction\./);
   assert.match(text, /Use the exact HOOK_PHRASE as its own full line if it fits\./);
-  assert.match(text, /Write exactly 1 short echo line\./);
-  assert.match(text, /The line must be 2 to 4 words\./);
-  assert.match(text, /This line will sit between repeated hook lines, so it must sound like a short refrain echo rather than a full narrative line\./);
+  assert.match(text, /The chorus structure is:/);
+  assert.match(text, /Your job is to write the ECHO line\./);
+  assert.match(text, /Write exactly one short lyrical line\./);
+  assert.match(text, /The line should be 4 to 8 words\./);
+  assert.match(text, /It should feel natural when sung between repeated hook lines\./);
+  assert.match(text, /The line should amplify, reveal, or show the effect of the hook\./);
+  assert.match(text, /Keep the line aligned with the source-grounded teaching so it supports source-thrust\./);
+  assert.match(text, /Introduce a related image, action, or outcome rather than repeating the hook wording\./);
+  assert.match(text, /The line should feel like a brief echo, revelation, or consequence of the hook\./);
+  assert.match(text, /Output exactly one line\./);
+  assert.match(text, /No punctuation decoration\./);
   assert.match(text, /Verse 1 job:/);
   assert.match(text, /Open the song with a source-grounded lived moment, scene, or image\./);
   assert.match(text, /Make the verse feel sung rather than explained\./);
@@ -133,7 +141,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn verse two checks be series def[\s\S]*?su name word_min ob num 20 ya/);
   assert.match(text, /su name line_count_min ob num 2 ya/);
   assert.match(text, /su name line_count_max ob num 2 ya/);
-  assert.match(text, /su name hymn chorus checks be series def[\s\S]*?su name word_min ob num 2 ya[\s\S]*?su name word_max ob num 4 ya[\s\S]*?su name line_count_min ob num 1 ya[\s\S]*?su name line_count_max ob num 1 ya/);
+  assert.match(text, /su name hymn chorus checks be series def[\s\S]*?su name word_min ob num 4 ya[\s\S]*?su name word_max ob num 8 ya[\s\S]*?su name line_count_min ob num 1 ya[\s\S]*?su name line_count_max ob num 1 ya/);
   assert.match(text, /su name hymn final chorus checks be series def[\s\S]*?su name word_min ob num 6 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 3 ya[\s\S]*?su name line_count_max ob num 3 ya/);
   assert.match(text, /su name hymn bridge checks be series def[\s\S]*?su name word_min ob num 8 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 2 ya[\s\S]*?su name line_count_max ob num 2 ya/);
   assert.match(text, /su name hymn stage pass ob text packet to name text verdict be ceremony def/);
