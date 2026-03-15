@@ -1,5 +1,6 @@
 ob ve filename text audio filename text lyrics be input ya
 from filename "../../module/video_common.pya" ob name video heading burn to name video heading burn be import do
+from filename "../../module/video_common.pya" ob name footnote mode to name footnote mode be import do
 
 exists su name draw size shorts be map def
 su name width ob num 720 ya
@@ -138,16 +139,17 @@ su name result stage from ve name itinerary lyric cuts name lyric draw stage nam
 su name footnote output path stage ob name text artifacts root to name text footnote output path be text do
 ob text "/music-video-footnote.mp4" to name footnote output path be plus do
 su name footnote filename stage ob name text footnote output path to name filename footnote filename be filename do
-su name footnote stage from ve name result stage name captions stage name footnote filename stage from filename of ob of captions filename stage fromstate wo srt with filename of ob of result stage become wo video to filename of ob of footnote filename stage as wo karaoke by num of ob of subtitle margin ratio override be footnote do
+su name footnote stage from filename of ob of captions filename stage with filename of ob of result stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio override as text "karaoke" be footnote mode do
 su name opening heading burn stage from filename of ob of footnote filename stage with name text opening heading text to filename of ob of footnote filename stage by num of ob of opening heading y ratio be video heading burn do
+ob text of ob of footnote filename stage to name text opened video path be text do
 ob text "printf '%s' '" to name text audio cue cmd be text do
 ob name text audio cue text to name audio cue cmd be plus do
 ob text "' | node \"" to name audio cue cmd be plus do
 ob name text workspace root to name audio cue cmd be plus do
 ob text "/command/video_heading_burn.mjs\" \"" to name audio cue cmd be plus do
-ob name text footnote output path to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
 ob text "\" \"" to name audio cue cmd be plus do
-ob name text footnote output path to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
 ob text "\" --text-stdin --seconds 1 --y-ratio " to name audio cue cmd be plus do
 ob num of ob of audio cue y ratio to name audio cue cmd be plus do
 ob text " --max-width-ratio 0.82 --font-scale " to name audio cue cmd be plus do
@@ -156,6 +158,7 @@ su name audio cue stage ob name text audio cue cmd be command do
 su name hear final discharge stage as wo hear be discharge do
 su name mind final discharge stage as wo mind be discharge do
 su name ollama final discharge stage as wo ollama be discharge do
+su name result out stage ob filename of ob of footnote filename stage to name filename result out be filename do
 prah
 
-su name result out ob name audio cue stage be write do
+su name result out ob name result out stage be write do
