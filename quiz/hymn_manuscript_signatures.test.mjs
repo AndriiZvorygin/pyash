@@ -106,6 +106,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Draw its closing language from the source text where possible\./);
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
   assert.match(text, /Keep line 2 to a very short closing image or truth\./);
+  assert.match(text, /8 to 16 words total\./);
   assert.match(text, /be declarative rather than directive unless no source-grounded declarative option works/);
   assert.match(text, /avoid second-person wording such as you or your unless no source-grounded neutral or collective option works/);
   assert.match(text, /Prefer neutral or collective phrasing over second-person lines when both are source-grounded\./);
@@ -144,6 +145,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn chorus checks be series def[\s\S]*?su name word_min ob num 4 ya[\s\S]*?su name word_max ob num 8 ya[\s\S]*?su name line_count_min ob num 1 ya[\s\S]*?su name line_count_max ob num 1 ya/);
   assert.match(text, /su name hymn final chorus checks be series def[\s\S]*?su name word_min ob num 6 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 3 ya[\s\S]*?su name line_count_max ob num 3 ya/);
   assert.match(text, /su name hymn bridge checks be series def[\s\S]*?su name word_min ob num 8 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 2 ya[\s\S]*?su name line_count_max ob num 2 ya/);
+  assert.match(text, /su name hymn outro checks be series def[\s\S]*?su name word_min ob num 6 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 2 ya[\s\S]*?su name line_count_max ob num 2 ya/);
   assert.match(text, /su name hymn stage pass ob text packet to name text verdict be ceremony def/);
   assert.match(text, /su name hymn section verify from text request for name platform mind accordingto name checks series to name text output be ceremony def/);
   assert.match(text, /hymn section verify run platform ob text of from of this for name of for of this among name hymn stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 8 to name text output be verify platform do/);
@@ -227,6 +229,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn manuscript be export ya/);
   assert.match(text, /exists su name manuscript as wo hymn be export ya/);
   assert.match(text, /su name chorus request begin stage ob text "TARGET_WORDS: 14-24\\nSECTION_ROLE: MEMORY_ANCHOR\\nFORMAT: RHYMING_COUPLETS\\nRHYME_SCHEME: AAAA_OR_AABB\\nHOOK_PHRASE:\\n"/);
+  assert.match(text, /su name outro request begin stage ob text "TARGET_WORDS: 8-16\\nSECTION_ROLE: OUTRO_CLOSURE\\nFORMAT: RHYMING_COUPLETS\\nRHYME_SCHEME: AA\\nHOOK_PHRASE:\\n"/);
   assert.match(text, /HOOK_PHRASE:\\n/);
   assert.match(text, /hymn out begin stage ob text quoted\.text\.\[intro\]/);
   assert.match(text, /hymn out chorus one header stage ob text quoted\.text\./);

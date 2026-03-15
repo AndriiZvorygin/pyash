@@ -361,7 +361,7 @@ Teaching role:
 Rules:
 - 2 short lines.
 - Use rhyme scheme `AA`.
-- 6 to 12 words total.
+- 8 to 16 words total.
 - Clear, simple vocabulary.
 - Include the exact HOOK_PHRASE.
 - Prefer line 1 to be exactly the HOOK_PHRASE.
@@ -546,7 +546,7 @@ prah
 
 su name hymn outro checks be series def
   su name word_min ob num 6 ya
-  su name word_max ob num 12 ya
+  su name word_max ob num 16 ya
   su name line_count_min ob num 2 ya
   su name line_count_max ob num 2 ya
 prah
@@ -923,7 +923,7 @@ su name hymn manuscript draft checked from text source to name text manuscript o
   ob name text hymn chorus stability pass be equally from text false then
   su name hymn chorus stability guarantee stage ob bool lie fromtext text "hymn chorus stability defective" be guarantee do
 
-  su name outro request begin stage ob text "TARGET_WORDS: 6-10\nSECTION_ROLE: OUTRO_CLOSURE\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AA\nHOOK_PHRASE:\n" to name text outro request be text do
+  su name outro request begin stage ob text "TARGET_WORDS: 8-16\nSECTION_ROLE: OUTRO_CLOSURE\nFORMAT: RHYMING_COUPLETS\nRHYME_SCHEME: AA\nHOOK_PHRASE:\n" to name text outro request be text do
   su name outro request hook stage ob name text hook out to name outro request be plus do
   su name outro request core lesson header stage ob text "\n\nCORE LESSON:\n" to name outro request be plus do
   su name outro request chorus stage ob name text final chorus out to name outro request be plus do
