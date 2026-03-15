@@ -13,9 +13,13 @@ test("hymn manuscript module registers both hymn signatures and as-wo alias", as
 
   const calls = [
     'su name demo from text "Solon source" to name text song be hymn manuscript do',
+    'su name demo from text "Solon source" with text "armor of light" to name text song be hymn manuscript do',
     'su name demo from filename "quiz/fixtures/ramblings.txt" to name text song be hymn manuscript do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" with text "armor of light" to name text song be hymn manuscript do',
     'su name demo from text "Solon source" to name text song be manuscript as wo hymn do',
-    'su name demo from filename "quiz/fixtures/ramblings.txt" to name text song be manuscript as wo hymn do'
+    'su name demo from text "Solon source" with text "armor of light" to name text song be manuscript as wo hymn do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" to name text song be manuscript as wo hymn do',
+    'su name demo from filename "quiz/fixtures/ramblings.txt" with text "armor of light" to name text song be manuscript as wo hymn do'
   ];
 
   for (const line of calls) {
@@ -118,11 +122,15 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /8 to 16 words total\./);
   assert.match(text, /be declarative rather than directive unless no source-grounded declarative option works/);
   assert.match(text, /avoid second-person wording such as you or your unless no source-grounded neutral or collective option works/);
+  assert.match(text, /if HOOK_HINT is present, use it directly, include it unchanged, or let it clearly inspire the hook wording/);
+  assert.match(text, /align closely to HOOK_HINT when that still stays source-faithful/);
   assert.match(text, /Prefer neutral or collective phrasing over second-person lines when both are source-grounded\./);
   assert.match(text, /Exclude bare imperative openings when a declarative source line exists\./);
   assert.match(text, /Exclude direct second-person address when a neutral or collective source line exists\./);
+  assert.match(text, /If HOOK_HINT is present, prefer lines that use it directly, contain it, or clearly support and inspire it\./);
   assert.match(text, /is declarative rather than directive unless no other usable candidate works/);
   assert.match(text, /avoids second-person wording unless no similarly strong neutral or collective candidate exists\./);
+  assert.match(text, /uses HOOK_HINT directly, includes it unchanged, or is clearly inspired by it when that still works as a refrain/);
   assert.match(text, /This stage is the final hook winner stage\./);
   assert.match(text, /If none are truly usable, reply exactly NONE\./);
   assert.match(text, /do not use negative hook wording such as nothing, no, not, never, or without when an affirmative source-faithful hook can be written instead/);
@@ -161,16 +169,19 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn section verify from text request for name platform mind accordingto name checks series to name text output be ceremony def/);
   assert.match(text, /hymn section verify run platform ob text of from of this for name of for of this among name hymn stage pass accordingto name of accordingto of this atleast num 0\.8 fromindex num 1 toindex num 8 to name text output be verify platform do/);
   assert.match(text, /su name hymn hook source focus from text source to name text output be ceremony def/);
+  assert.match(text, /ob text "\\n\\nHOOK_HINT:\\n" to name text hymn hook source focus request be plus do/);
   assert.match(text, /su name hymn source analysis from text source to name text output be ceremony def/);
-  assert.match(text, /ob text "node command\/extract_sentences\.mjs" fromtext text of from of this to name text hymn hook source focused raw be command do/);
+  assert.match(text, /ob text "node command\/extract_sentences\.mjs" fromtext name hymn hook source focus request to name text hymn hook source focused raw be command do/);
   assert.match(text, /su name hymn source brief stage from text of ob of hymn source to name text hymn source brief be hymn source analysis do/);
   assert.match(text, /su name hymn hook pool fill from text source to name text output be ceremony def/);
+  assert.match(text, /ob text "\\n\\nHOOK_HINT:\\n" to name text hymn hook pool request be plus do/);
   assert.match(text, /su name hymn hook sieve from text source with text candidates to name text output be ceremony def/);
   assert.match(text, /ob text "node command\/filter_hymn_hook_candidates\.mjs" fromtext name hymn hook kept raw to name text hymn hook kept filtered be command do/);
   assert.match(text, /be distribute do/);
   assert.match(text, /be gather do/);
   assert.match(text, /su name hymn hook choose from text source with text candidates to name text output be ceremony def/);
   assert.match(text, /su name hymn hook choose request begin stage ob text "SOURCE TEXT:\\n" to name text hymn hook choose request be text do/);
+  assert.match(text, /ob text "\\n\\nHOOK_HINT:\\n" to name text hymn hook choose request be plus do/);
   assert.match(text, /ob name text hymn hook choose request for name hymn hook choose mind to name text hymn hook chosen raw by num 0 atmost num 40 be write do/);
   assert.match(text, /su name hymn hook source stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do/);
   assert.match(text, /SOURCE BRIEF:\\n/);
@@ -231,12 +242,19 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name hymn chorus stability retry fromindex num 0 toindex num 0 be ceremony def/);
   assert.match(text, /su name hymn chorus stability pass ret/);
   assert.match(text, /su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def/);
+  assert.match(text, /su name hymn draft retry stage from text of ob of hymn script source with text of ob of hymn script hook hint to name text manuscript out be hymn manuscript draft checked do/);
   assert.match(text, /su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);
   assert.match(text, /su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do/);
   assert.match(text, /su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do/);
   assert.match(text, /hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do/);
   assert.match(text, /fromindex num 1 toindex num 3 be hymn source thrust retry do/);
   assert.match(text, /su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do/);
+  assert.match(text, /su name hymn manuscript draft checked from text source with text hook hint to name text manuscript out be ceremony def/);
+  assert.match(text, /su name hook hint stage ob text of with of this to name text hymn hook hint be text do/);
+  assert.match(text, /su name hymn manuscript from text source with text hook hint to name text manuscript out be ceremony def/);
+  assert.match(text, /su name hymn manuscript from filename source with text hook hint to name text manuscript out be ceremony def/);
+  assert.match(text, /su name manuscript as wo hymn from text source with text hook hint to name text manuscript out be ceremony def/);
+  assert.match(text, /su name manuscript as wo hymn from filename source with text hook hint to name text manuscript out be ceremony def/);
   assert.match(text, /exists su name hymn manuscript be export ya/);
   assert.match(text, /exists su name manuscript as wo hymn be export ya/);
   assert.match(text, /su name chorus request begin stage ob text "TARGET_WORDS: 14-24\\nSECTION_ROLE: MEMORY_ANCHOR\\nFORMAT: RHYMING_COUPLETS\\nRHYME_SCHEME: AAAA_OR_AABB\\nHOOK_PHRASE:\\n"/);

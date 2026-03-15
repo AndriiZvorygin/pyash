@@ -338,11 +338,20 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
   const { explicit, shorthand, shorthandValues } = parseBindingTailWords(bindingWords);
   const bound = new Map();
   if (shorthand !== null || (Array.isArray(shorthandValues) && shorthandValues.length > 0)) {
-    const filenameInputs = inputs.filter(port => String(port?.transport ?? "") === "filename");
     const values = Array.isArray(shorthandValues) && shorthandValues.length > 0
       ? shorthandValues.map(v => String(v))
       : [String(shorthand)];
-    if (values.length === 1 && filenameInputs.length === 1) {
+    const filenameInputs = inputs.filter(port => String(port?.transport ?? "") === "filename");
+    if (values.length === inputs.length) {
+      for (let i = 0; i < inputs.length; i += 1) {
+        const port = inputs[i];
+        bound.set(String(port.handle), {
+          handle: String(port.handle),
+          transport: String(port.transport),
+          value: String(values[i])
+        });
+      }
+    } else if (values.length === 1 && filenameInputs.length === 1) {
       const port = filenameInputs[0];
       bound.set(String(port.handle), { handle: String(port.handle), transport: "filename", value: String(values[0]) });
     } else if (values.length === filenameInputs.length) {
@@ -353,7 +362,7 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
     } else {
       throwErrorSentence({
         name: "input binding defective",
-        message: "input binding defective: shorthand positional args must match filename input count",
+        message: "input binding defective: shorthand positional args must match declared input count or filename input count",
         from: { name: "run" },
         raw: { declarations, shorthand, shorthandValues: values }
       });
