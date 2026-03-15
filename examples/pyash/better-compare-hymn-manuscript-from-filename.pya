@@ -6,63 +6,50 @@ from filename "../../module/better_compare.pya" ob name better compare to name b
 
 exists su name mind be mind as name "qwen3.5:9b" fromtext text "You are a strict pairwise hymn judge. Return only A or B." ya
 
-exists su name text better compare hymn manuscript judge prompter ob text quoted.text.You are judging song lyrics for likely virality, catchiness, clarity, and engagement potential, especially for educational spiritual songs.
+exists su name text better compare hymn manuscript judge prompter ob text quoted.text.You are judging educational spiritual song lyrics.
 
-Score each song from 0 to 100 using these weighted criteria:
+Your goal is to choose the song most likely to be memorable, singable, and shareable.
 
-1. Hook strength and timing (20)
-- Is there a strong memorable hook?
-- Does it appear in the first 1 to 4 lines?
-- Is it short enough to remember and repeat?
+Evaluate each song using four signals:
 
-2. Repetition design (12)
-- Does the chorus or core phrase return enough times?
-- Is repetition helpful rather than excessive or annoying?
+1. Hook strength
+- Is there a clear memorable hook?
+- Does it appear early?
+- Is it easy to repeat?
 
-3. Clarity and singability (15)
-- Are the words easy to understand on first listen?
-- Are the lines easy to sing aloud?
-- Avoid overly abstract, academic, or tongue-twisting phrasing.
+2. Singability and clarity
+- Do the lines flow naturally when spoken or sung?
+- Are the words easy to understand on first hearing?
 
-4. Educational payload (15)
-- Does the song clearly teach one main spiritual truth, practice, or lesson?
-- Is the lesson easy to restate after hearing the song once or twice?
+3. Imagery and memorability
+- Does the song use concrete images or actions?
+- Are there lines people would remember?
 
-5. Emotional resonance (10)
-- Does it feel sincere, moving, comforting, healing, encouraging, or inspiring?
-- Does it create a real feeling arc?
-
-6. Imagery and concreteness (8)
-- Does it use vivid images, actions, or scenes rather than only abstractions?
-
-7. Quotability and short-form excerptability (10)
-- Are there 1 to 3 lines that would work well as a short clip, caption, or chorus excerpt?
-- Could people imagine using this in Shorts, Reels, or TikTok?
-
-8. Spiritual authenticity and reverence (5)
-- Does it feel spiritually real, respectful, and grounded?
-
-9. Novelty with familiarity (5)
-- Does it feel fresh while still being easy to grasp immediately?
-
-Output format:
-- Total score out of 100
-- Subscores for each category
-- 3 strengths
-- 3 weaknesses
-- Best hook line
-- Best 15 to 30 second excerpt
-- Final verdict: High potential, Medium potential, or Low potential
+4. One clear teaching
+- Does the song communicate one main spiritual lesson?
+- Could a listener easily restate that lesson?
 
 Important judging rules:
-- Prefer songs with one clear core message over songs trying to teach many ideas at once.
-- Prefer concrete and emotionally direct language over abstract doctrinal phrasing.
-- Prefer early memorable hooks.
-- Penalize songs that are vague, wordy, awkward to sing, or lack a reusable refrain.
-- Penalize songs that sound preachy without being emotionally engaging.
-- Reward songs that feel like listeners would want to repeat, quote, share, or sing along with.
 
-You are comparing two candidate songs generated from the same source document. Use the rubric above to evaluate both songs internally, then choose the stronger overall song. Reply with only A or B..text.quoted be text ya
+- Prefer songs with a clear repeating hook.
+- Prefer concrete imagery over abstract explanation.
+- Prefer songs that feel natural to sing aloud.
+- Prefer one clear message over many ideas.
+
+Penalize songs that:
+- repeat ideas without adding imagery
+- sound preachy or overly abstract
+- lack a strong repeating hook
+
+After evaluating both songs, select the one with the stronger hook and clearer teaching.
+
+Reply with only:
+
+A
+or
+B
+
+If tied, return A..text.quoted be text ya
 
 su name hymn source stage from filename of ob of source become wo text to name text hymn source be read do
 
