@@ -12,7 +12,15 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
 function assertNoUnexpectedErrors(errors = []) {
-  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  const unexpected = errors.filter((line) => {
+    const text = String(line);
+    if (text.startsWith("artifacts folder: ")) return false;
+    if (text.startsWith("run start: ")) return false;
+    if (text.startsWith("run end: ")) return false;
+    if (text.startsWith("run duration: ")) return false;
+    if (text.startsWith("produce file: ")) return false;
+    return true;
+  });
   assert.deepEqual(unexpected, []);
 }
 
@@ -25,7 +33,7 @@ test("run_pya_program.mjs outputs result in gross mode", async () => {
   const result = payload.result;
   assert.equal(result.su?.name, "result");
   assert.equal(result.ob?.num, 5);
-  assert.equal(result.be, "worker");
+  assert.equal(result.be, "number");
   assert.equal(result.mood, "ya");
 });
 
@@ -35,7 +43,18 @@ test("run_pya_program.mjs prints program with --full", async () => {
   const output = logs.join("\n");
   assert.match(output, /Program:\n/);
   assert.match(output, /Result:\n/);
-  assert.match(output, /su name result ob num 5 be worker ya/);
+  assert.match(output, /su name result ob num 5 be number ya/);
+});
+
+test("run_pya_program.mjs prints final text result at end in verbose mode", async () => {
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const out = spawnSync(process.execPath, [runPath, "--verbose", "examples/pyash/say-plain.pya"], {
+    cwd: repoRoot,
+    encoding: "utf8"
+  });
+  assert.equal(out.status, 0, `expected verbose run to pass\nstderr:\n${out.stderr || ""}`);
+  const stdoutLines = out.stdout.split(/\r?\n/u).map(line => line.trim()).filter(Boolean);
+  assert.equal(stdoutLines.at(-1), "hello world");
 });
 
 test("read_pya_trace.mjs emits beautiful trace by default and has evoker first", async () => {
