@@ -126,6 +126,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
   assert.match(text, /Keep line 2 to a very short closing image or truth\./);
   assert.match(text, /8 to 16 words total\./);
+  assert.match(text, /The echo line must explain the effect or purpose of the hook practice\./);
   assert.match(text, /be declarative rather than directive unless no source-grounded declarative option works/);
   assert.match(text, /avoid second-person wording such as you or your unless no source-grounded neutral or collective option works/);
   assert.match(text, /if HOOK_HINT is present, use it directly, include it unchanged, or let it clearly inspire the hook wording/);
