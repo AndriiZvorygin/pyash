@@ -361,6 +361,13 @@ function bindRuntimeInputs({ declarations, bindingWords }) {
         raw: { declarations, shorthand, shorthandValues: values }
       });
     }
+    for (const port of inputs) {
+      const handle = String(port?.handle ?? "").trim();
+      const transport = String(port?.transport ?? "").trim();
+      if (!handle || bound.has(handle)) continue;
+      if (transport !== "text") continue;
+      bound.set(handle, { handle, transport: "text", value: "" });
+    }
   }
   for (const row of explicit) {
     const handle = String(row?.handle ?? "").trim();

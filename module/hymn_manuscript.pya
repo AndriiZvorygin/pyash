@@ -720,7 +720,6 @@ prah
 su name hymn hook source focus from text source to name text output be ceremony def
   su name hymn hook source focus request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook source focus request be text do
   ob text of from of this to name text hymn hook source focus request be plus do
-  ob text of ob of hymn hook hint from text "" be equally then be depart do
   ob text "\n\nHOOK_HINT:\n" to name text hymn hook source focus request be plus do
   ob text of ob of hymn hook hint to name text hymn hook source focus request be plus do
   ob text "node command/extract_sentences.mjs" fromtext name hymn hook source focus request to name text hymn hook source focused raw be command do
@@ -741,7 +740,6 @@ prah
 su name hymn hook pool fill from text source to name text output be ceremony def
   su name hymn hook pool request begin stage ob text "SECTION_ROLE: FIXED_HOOK_POOL\nTARGET_HOOKS: 8-12\nSOURCE TEXT:\n" to name text hymn hook pool request be text do
   ob text of from of this to name text hymn hook pool request be plus do
-  ob text of ob of hymn hook hint from text "" be equally then be depart do
   ob text "\n\nHOOK_HINT:\n" to name text hymn hook pool request be plus do
   ob text of ob of hymn hook hint to name text hymn hook pool request be plus do
   su name hymn hook pool raw stage ob name text hymn hook pool request for name hymn hook pool mind to name text hymn hook pool raw by num 0 atmost num 260 be write do
@@ -777,7 +775,6 @@ su name hymn hook choose from text source with text candidates to name text outp
   su name output ret
   su name hymn hook choose request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook choose request be text do
   ob text of from of this to name text hymn hook choose request be plus do
-  ob text of ob of hymn hook hint from text "" be equally then be depart do
   ob text "\n\nHOOK_HINT:\n" to name text hymn hook choose request be plus do
   ob text of ob of hymn hook hint to name text hymn hook choose request be plus do
   ob text "\n\nCANDIDATES:\n" to name text hymn hook choose request be plus do

@@ -36,3 +36,30 @@ test("run_pya_program.mjs binds mixed shorthand positional inputs in declaration
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("run_pya_program.mjs fills omitted trailing text shorthand input with empty text", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mixed-inputs-empty-"));
+  const runPath = path.join(repoRoot, "command", "run_pya_program.mjs");
+  const programPath = path.join(tmpDir, "program.pya");
+  const inputDir = path.join(tmpDir, "know", "input");
+  const inputPath = path.join(inputDir, "topic.txt");
+  const artifactDir = path.join(tmpDir, "artifacts", "mixed-inputs-empty-test");
+  try {
+    await fs.mkdir(inputDir, { recursive: true });
+    await fs.writeFile(inputPath, "topic fixture\n", "utf8");
+    await fs.writeFile(programPath, [
+      "ob ve filename text source text text hook_hint be input ya",
+      'ob text "hook=" to name text result be text do ya',
+      "ob name text hook_hint to name result be plus do ya"
+    ].join("\n"), "utf8");
+    const out = spawnSync(process.execPath, [runPath, "--run-id", "mixed-inputs-empty-test", programPath, inputPath], {
+      cwd: tmpDir,
+      encoding: "utf8"
+    });
+    assert.equal(out.status, 0, `expected omitted trailing text input run to pass\nstderr:\n${out.stderr || ""}`);
+    const artifactText = await fs.readFile(path.join(artifactDir, "produce.txt"), "utf8");
+    assert.equal(artifactText.trim(), "hook=");
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
