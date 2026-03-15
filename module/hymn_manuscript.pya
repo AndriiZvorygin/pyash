@@ -63,12 +63,14 @@ Each hook must:
 - read like a complete phrase that sounds natural aloud
 - be declarative rather than directive unless no source-grounded declarative option works
 - avoid second-person wording such as you or your unless no source-grounded neutral or collective option works
+- if HOOK_HINT is present, use it directly, include it unchanged, or let it clearly inspire the hook wording
 
 Prefer hooks that:
 - use concrete imagery, objects, or symbolic elements from the source
 - feel like a statement of something happening now
 - could be chanted or repeated by a group
 - use simple rhythm and clear wording
+- align closely to HOOK_HINT when that still stays source-faithful
 
 Avoid hooks that:
 - sound like vague motivational slogans
@@ -106,6 +108,7 @@ Rules:
 - Exclude speaker labels, greetings, file names, timestamps, shell text, footnotes, html remnants, query wording, and conversational setup.
 - Exclude lines that are mostly metadata or source noise.
 - Exclude lines that only say things like "it is indeed" unless they clearly carry the main teaching.
+- If HOOK_HINT is present, prefer lines that use it directly, contain it, or clearly support and inspire it.
 - Plain text only.
 - No numbering, no labels, no bullets, no markdown, no surrounding quotes.
 - If the source is noisy, clean it and keep only the strongest usable lines..text.quoted be text ya
@@ -153,6 +156,7 @@ Prefer a candidate that:
 - carries a real teaching, practice, image, or transformation,
 - sounds like a refrain line instead of prose,
 - stays faithful to the source,
+- uses HOOK_HINT directly, includes it unchanged, or is clearly inspired by it when that still works as a refrain,
 - can support repetition without sounding awkward,
 - is declarative rather than directive unless no other usable candidate works,
 - avoids second-person wording unless no similarly strong neutral or collective candidate exists.
@@ -699,7 +703,12 @@ su name hymn communal voice from text lyric to name text pass be ceremony def
 prah
 
 su name hymn hook source focus from text source to name text output be ceremony def
-  ob text "node command/extract_sentences.mjs" fromtext text of from of this to name text hymn hook source focused raw be command do
+  su name hymn hook source focus request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook source focus request be text do
+  ob text of from of this to name text hymn hook source focus request be plus do
+  ob text of ob of hymn hook hint from text "" be equally then be depart do
+  ob text "\n\nHOOK_HINT:\n" to name text hymn hook source focus request be plus do
+  ob text of ob of hymn hook hint to name text hymn hook source focus request be plus do
+  ob text "node command/extract_sentences.mjs" fromtext name hymn hook source focus request to name text hymn hook source focused raw be command do
   ob name text hymn hook source focused raw by wo newline to name vec text hymn hook source focused vec be distribute do
   ob name hymn hook source focused vec by wo newline to name text output be gather do
   su name output ret
@@ -717,6 +726,9 @@ prah
 su name hymn hook pool fill from text source to name text output be ceremony def
   su name hymn hook pool request begin stage ob text "SECTION_ROLE: FIXED_HOOK_POOL\nTARGET_HOOKS: 8-12\nSOURCE TEXT:\n" to name text hymn hook pool request be text do
   ob text of from of this to name text hymn hook pool request be plus do
+  ob text of ob of hymn hook hint from text "" be equally then be depart do
+  ob text "\n\nHOOK_HINT:\n" to name text hymn hook pool request be plus do
+  ob text of ob of hymn hook hint to name text hymn hook pool request be plus do
   su name hymn hook pool raw stage ob name text hymn hook pool request for name hymn hook pool mind to name text hymn hook pool raw by num 0 atmost num 260 be write do
   ob name text hymn hook pool raw by wo newline to name vec text hymn hook pool vec be distribute do
   ob name hymn hook pool vec by wo newline to name text output be gather do
@@ -750,6 +762,9 @@ su name hymn hook choose from text source with text candidates to name text outp
   su name output ret
   su name hymn hook choose request begin stage ob text "SOURCE TEXT:\n" to name text hymn hook choose request be text do
   ob text of from of this to name text hymn hook choose request be plus do
+  ob text of ob of hymn hook hint from text "" be equally then be depart do
+  ob text "\n\nHOOK_HINT:\n" to name text hymn hook choose request be plus do
+  ob text of ob of hymn hook hint to name text hymn hook choose request be plus do
   ob text "\n\nCANDIDATES:\n" to name text hymn hook choose request be plus do
   ob text of with of this to name text hymn hook choose request be plus do
   ob name text hymn hook choose request for name hymn hook choose mind to name text hymn hook chosen raw by num 0 atmost num 40 be write do
@@ -831,6 +846,14 @@ prah
 
 su name hymn manuscript draft checked from text source to name text manuscript out be ceremony def
   su name source stage ob text of from of this to name text hymn source be text do
+  ob text "" to name text hymn hook hint be text do
+  su name hymn draft hinted stage from text of ob of hymn source with text of ob of hymn hook hint to name text manuscript out be hymn manuscript draft checked do
+  su name manuscript out ret
+prah
+
+su name hymn manuscript draft checked from text source with text hook hint to name text manuscript out be ceremony def
+  su name source stage ob text of from of this to name text hymn source be text do
+  su name hook hint stage ob text of with of this to name text hymn hook hint be text do
   su name hymn source brief stage from text of ob of hymn source to name text hymn source brief be hymn source analysis do
   su name hymn hook source stage from text of ob of hymn source to name text hymn hook source be hymn hook source focus do
   su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do
@@ -1006,15 +1029,31 @@ prah
 su name hymn source thrust retry fromindex num 0 toindex num 0 be ceremony def
   ob name text hymn source thrust pass be equally from text true then
   ob name text hymn goal state pass be equally from text true then be depart do
-  su name hymn draft retry stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
+  su name hymn draft retry stage from text of ob of hymn script source with text of ob of hymn script hook hint to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state retry stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
   su name hymn source thrust verify retry stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
 prah
 
 su name hymn manuscript from text source to name text manuscript out be ceremony def
   su name script source stage ob text of from of this to name text hymn script source be text do
+  ob text "" to name text hymn script hook hint be text do
+  su name hymn draft stage from text of ob of hymn script source with text of ob of hymn script hook hint to name text manuscript out be hymn manuscript draft checked do
+  su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
+  su name hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
+  fromindex num 1 toindex num 3 be hymn source thrust retry do
+  ob name text hymn goal state pass be equally from text false then
+  su name hymn goal state guarantee stage ob bool lie fromtext text "hymn goal state defective" be guarantee do
+  ob name text hymn source thrust pass be equally from text false then
+  su name hymn source thrust guarantee stage ob bool lie fromtext text "hymn source thrust defective" be guarantee do
 
-  su name hymn draft stage from text of ob of hymn script source to name text manuscript out be hymn manuscript draft checked do
+  su name manuscript out ret
+prah
+
+su name hymn manuscript from text source with text hook hint to name text manuscript out be ceremony def
+  su name script source stage ob text of from of this to name text hymn script source be text do
+  su name script hook hint stage ob text of with of this to name text hymn script hook hint be text do
+
+  su name hymn draft stage from text of ob of hymn script source with text of ob of hymn script hook hint to name text manuscript out be hymn manuscript draft checked do
   su name hymn goal state verify stage from text of ob of manuscript out to name text hymn goal state pass be hymn positive language do
   su name hymn source thrust verify stage from text of ob of hymn script source with text of ob of manuscript out to name text hymn source thrust pass be hymn source thrust do
   fromindex num 1 toindex num 3 be hymn source thrust retry do
@@ -1032,6 +1071,12 @@ su name hymn manuscript from filename source to name text manuscript out be cere
   su name manuscript out ret
 prah
 
+su name hymn manuscript from filename source with text hook hint to name text manuscript out be ceremony def
+  su name source stage from filename of from of this become wo text to name text hymn source be read do
+  su name manuscript stage from text of ob of hymn source with text of with of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
 su name manuscript as wo hymn from text source to name text manuscript out be ceremony def
   su name draft stage from text of from of this to name text manuscript out be hymn manuscript do
   su name manuscript out ret
@@ -1039,6 +1084,16 @@ prah
 
 su name manuscript as wo hymn from filename source to name text manuscript out be ceremony def
   su name draft stage from filename of from of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo hymn from text source with text hook hint to name text manuscript out be ceremony def
+  su name draft stage from text of from of this with text of with of this to name text manuscript out be hymn manuscript do
+  su name manuscript out ret
+prah
+
+su name manuscript as wo hymn from filename source with text hook hint to name text manuscript out be ceremony def
+  su name draft stage from filename of from of this with text of with of this to name text manuscript out be hymn manuscript do
   su name manuscript out ret
 prah
 
