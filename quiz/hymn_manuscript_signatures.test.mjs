@@ -122,6 +122,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /avoids second-person wording unless no similarly strong neutral or collective candidate exists\./);
   assert.match(text, /This stage is the final hook winner stage\./);
   assert.match(text, /If none are truly usable, reply exactly NONE\./);
+  assert.match(text, /do not use negative hook wording such as nothing, no, not, never, or without when an affirmative source-faithful hook can be written instead/);
+  assert.match(text, /if the source includes a negative formulation, recast it into a positive declarative refrain whenever the teaching stays faithful/);
   assert.match(text, /imperative command lines when declarative alternatives exist/);
   assert.match(text, /second-person refrain lines when neutral or collective alternatives exist/);
   assert.match(text, /hymn source thrust verify prompt ob text quoted\.text\.Verify whether LYRIC stays faithful to the source teaching in TRANSCRIPT\./);
