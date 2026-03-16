@@ -568,8 +568,10 @@ async function main() {
   const full = fullFlag;
   const verbose = verboseFlag;
   const priorRunVerbose = process.env.PYA_RUN_VERBOSE;
+  const priorRunId = process.env.PYA_RUN_ID;
   if (verbose) process.env.PYA_RUN_VERBOSE = "1";
   else delete process.env.PYA_RUN_VERBOSE;
+  process.env.PYA_RUN_ID = String(runId);
   if (full) {
     console.log("Program:");
     if (gross) {
@@ -916,6 +918,8 @@ async function main() {
   if (runError) {
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printRunTimingHint();
     printArtifactsFolderHint();
     throw runError;
@@ -932,6 +936,8 @@ async function main() {
   if (gross) {
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -942,6 +948,8 @@ async function main() {
   if (!showResult && !full && !verbose) {
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -960,6 +968,8 @@ async function main() {
     }
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -971,6 +981,8 @@ async function main() {
     console.log(result.ob.text);
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -982,6 +994,8 @@ async function main() {
     console.log(renderSeriesSentence(result));
     if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
     else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+    if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+    else process.env.PYA_RUN_ID = priorRunId;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -1001,6 +1015,8 @@ async function main() {
   }
   if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
   else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
+  if (priorRunId === undefined) delete process.env.PYA_RUN_ID;
+  else process.env.PYA_RUN_ID = priorRunId;
   printProduceFileHint();
   printRunTimingHint();
   printArtifactsFolderHint();
