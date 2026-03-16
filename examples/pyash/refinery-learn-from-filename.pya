@@ -39,6 +39,67 @@ Formatting rules:
 - No markdown beyond those simple heading lines and dash list items.
 - No extra headings, no commentary before or after the block..text.quoted be text ya
 
+exists su name learning source support verify prompt ob text quoted.text.Verify whether TEACHING stays faithful to the source material in SOURCE.
+
+GENERATOR INTENT:
+- The output is a distilled teaching artifact, not a free summary.
+- Concrete teachings, practices, consequences, and central images must remain supported by SOURCE.
+- Clear wording and light paraphrase are allowed, but unsupported claims are not.
+- Concise synthesis is allowed when it combines ideas that are already clearly present in SOURCE.
+
+Evaluate only source-grounded teaching content:
+- seed concept claims,
+- training sentence claims,
+- listed features,
+- listed activities or practices,
+- listed cause and consequence claims,
+- listed central scenes or idioms when presented as source-central,
+- memory phrases when they restate teaching.
+
+Ignore harmless phrasing cleanup or plain-language compression if the teaching stays faithful.
+Do not fail merely because the distillation:
+- compresses several supported ideas into one sentence,
+- uses plainer teaching wording than the source,
+- restates a supported relation more directly,
+- turns source-supported imagery into short memory phrases.
+
+PASS if:
+- the teaching block remains faithful to SOURCE,
+- concrete teaching statements are supported,
+- no clear major meaning drift occurs.
+
+FAIL if:
+- important teaching claims, practices, or consequences clearly lack support,
+- unsupported central images or doctrines are clearly added,
+- the requested focus clearly causes material distortion of the source.
+
+Output rules:
+- First output one short paragraph (1-2 sentences, max 70 words).
+- Final line must be exactly PASS or FAIL.
+- No bullets, no labels, no markdown.
+- No text after the final verdict line..text.quoted be text ya
+
+exists su name learning source support verdict prompt ob text quoted.text.Read the verifier analysis and output exactly one word: PASS or FAIL.
+
+Rules:
+- Return FAIL only when the analysis clearly says the teaching block adds important unsupported claims, important unsupported practices, important unsupported consequences, or clear material meaning drift.
+- Otherwise return PASS.
+- One word only.
+- No labels, no explanation, no punctuation..text.quoted be text ya
+
+exists su name learning source support verify mind be mind fromtext name learning source support verify prompt ya
+exists su name learning source support verdict mind be mind fromtext name learning source support verdict prompt ya
+
+su name learning source support from text source with text teaching to name text pass be ceremony def
+  su name learning source support request begin stage ob text "SOURCE:\n" to name text learning source support request be text do
+  ob text of from of this to name learning source support request be plus do
+  ob text "\n\nTEACHING:\n" to name learning source support request be plus do
+  ob text of with of this to name learning source support request be plus do
+  su name learning source support write stage ob name text learning source support request for name learning source support verify mind to name text learning source support review by num 0 atmost num 280 be write do
+  su name learning source support verdict stage ob name text learning source support review for name learning source support verdict mind to name text learning source support pass be write do
+  su name learning source support return stage ob name text learning source support pass be text do
+prah
+
 su name learning distillation example be refinery def
   su name source text stage from filename of ob of source become wo text to name text source text be read do
 
@@ -48,9 +109,12 @@ su name learning distillation example be refinery def
   ob name text source text to name learning request be plus do
 
   su name teaching stage ob name text learning request fromtext name learning distillation prompt for name mind to name text teaching out be write do
+  su name learning source support verify stage from text of ob of source text with text of ob of teaching out to name text learning source support pass be learning source support do
+  ob text of ob of learning source support pass be equally from text "FAIL" then
+  ob bool lie fromtext text "learning source support defective" be guarantee do
   su name ollama discharge stage as wo ollama be discharge do
   su name teaching return stage ob name text teaching out be text do
 prah
 
 from name learning distillation example to name text teaching final be refinery do
-su name result out ob name text teaching final be write do
+su name result out ob text of ob of teaching final be write do
