@@ -167,7 +167,12 @@ function splitTextParagraphs(text = "") {
 function splitTextSentences(text = "") {
   const source = String(text ?? "").replace(/\r\n/g, "\n").trim();
   if (!source) return [];
-  const normalized = source.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = source
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    // Drop markdown emphasis/code markers that can break sentence boundary detection.
+    .replace(/(\*\*|__|~~|`+)/g, "")
+    .trim();
   if (!normalized) return [];
   const protectedRefs = normalized
     .replace(/(\d)\s*\.\s*(\d)/g, "$1§$2")

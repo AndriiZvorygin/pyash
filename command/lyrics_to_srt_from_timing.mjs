@@ -161,6 +161,9 @@ function buildTimingRows(lyricsCuts, timingCuts) {
   const tokens = buildTimingTokens(cuts);
   let tokenCursor = 0;
   let runningLyricWords = 0;
+  let acceptedMatchLines = 0;
+  const avgTimingWordsPerLine = Math.max(1, Math.floor(totalTimingWords / Math.max(1, lines.length)));
+  const maxIndexDrift = Math.max(24, avgTimingWordsPerLine * 4);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const words = Math.max(1, countWords(line));
@@ -197,15 +200,37 @@ function buildTimingRows(lyricsCuts, timingCuts) {
         const matchedUntil = Math.max(matchedSince + 0.06, Number(tokens[lastIdx].until ?? until));
         const matchedSpan = matchedUntil - matchedSince;
         const fallbackSpan = Math.max(0.06, until - since);
+        const indexDrift = Math.abs(firstIdx - expectedTokenIndex);
+        const matchedTokenSpan = (lastIdx - firstIdx) + 1;
+        const maxLineTokenSpan = Math.max(24, lineWords.length * 6);
         const looksOutlier = matchedSpan > Math.max(12, fallbackSpan * 3.5);
-        if (!looksOutlier) {
+        const looksTooFar = indexDrift > maxIndexDrift;
+        const looksTokenWide = matchedTokenSpan > maxLineTokenSpan;
+        const looksCompressed = matchedSpan < Math.max(0.12, Math.min(2.5, fallbackSpan * 0.20));
+        const timeDrift = Math.abs(matchedSince - since);
+        const looksTimeDrifted = timeDrift > Math.max(8, fallbackSpan * 2.5);
+        if (!looksOutlier && !looksTooFar && !looksTokenWide && !looksCompressed && !looksTimeDrifted) {
           since = matchedSince;
           until = matchedUntil;
-          tokenCursor = Math.max(tokenCursor, firstIdx);
+          tokenCursor = Math.max(tokenCursor, lastIdx + 1);
+          acceptedMatchLines += 1;
         }
       }
     }
     rows.push({ index: i + 1, since, until, text: line });
+  }
+  for (const row of rows) {
+    const wordCount = Math.max(1, countWords(row.text));
+    const duration = Math.max(0, Number(row.until) - Number(row.since));
+    const minLineDuration = wordCount <= 3 ? 0.6 : Math.min(2.4, 0.28 * wordCount);
+    const maxLineDuration = Math.max(4.5, Math.min(9.5, 1.25 * wordCount));
+    if (duration < minLineDuration) {
+      row.until = Number(row.since) + minLineDuration;
+      continue;
+    }
+    if (duration > maxLineDuration) {
+      row.until = Number(row.since) + maxLineDuration;
+    }
   }
   const timelineStart = Number(cueWordPositions[0]?.since ?? 0);
   const timelineEnd = Number(cueWordPositions[cueWordPositions.length - 1]?.until ?? timelineStart);
@@ -225,14 +250,59 @@ function buildTimingRows(lyricsCuts, timingCuts) {
     for (const row of rows) {
       const scaledSince = timelineStart + ((row.since - timelineStart) * scale);
       const scaledUntil = timelineStart + ((row.until - timelineStart) * scale);
+      const scaledMin = Math.min(1.8, Math.max(0.22, 0.18 * Math.max(1, countWords(row.text))));
       row.since = Math.max(cursor, scaledSince);
-      row.until = Math.max(row.since + 0.04, scaledUntil);
+      row.until = Math.max(row.since + scaledMin, scaledUntil);
       cursor = row.until;
     }
     rows[rows.length - 1].until = timelineEnd;
   }
 
-  return rows;
+  // Final stabilization pass: ensure post-scale rows remain readable in karaoke mode.
+  let stabilizeCursor = timelineStart;
+  for (const row of rows) {
+    const words = Math.max(1, countWords(row.text));
+    const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
+    row.since = Math.max(stabilizeCursor, Number(row.since ?? 0));
+    row.until = Math.max(row.since + minReadable, Number(row.until ?? row.since + minReadable));
+    stabilizeCursor = row.until;
+  }
+  if (rows.length && stabilizeCursor > timelineEnd) {
+    const overflow = stabilizeCursor - timelineEnd;
+    const adjustable = rows.map((row) => {
+      const words = Math.max(1, countWords(row.text));
+      const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
+      const duration = Math.max(0, Number(row.until) - Number(row.since));
+      return Math.max(0, duration - minReadable);
+    });
+    const totalAdjustable = adjustable.reduce((sum, value) => sum + value, 0);
+    if (totalAdjustable > 0) {
+      const shrinkRatio = Math.min(1, overflow / totalAdjustable);
+      let cursor = timelineStart;
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+        const words = Math.max(1, countWords(row.text));
+        const minReadable = Math.min(1.8, Math.max(0.22, 0.18 * words));
+        const duration = Math.max(0, Number(row.until) - Number(row.since));
+        const shrink = adjustable[i] * shrinkRatio;
+        const nextDuration = Math.max(minReadable, duration - shrink);
+        row.since = Math.max(cursor, Number(row.since));
+        row.until = row.since + nextDuration;
+        cursor = row.until;
+      }
+    }
+    if (rows.length) {
+      rows[rows.length - 1].until = timelineEnd;
+    }
+  }
+
+  return {
+    rows,
+    stats: {
+      lines: lines.length,
+      acceptedMatchLines
+    }
+  };
 }
 
 async function main() {
@@ -248,7 +318,18 @@ async function main() {
   const timingText = await fs.readFile(timingSrtPath, "utf8");
   const lyricCuts = normalizeLyricsCuts(lyricsText, { includeSections });
   const timingCuts = parseSrtToCuts(timingText);
-  const rows = buildTimingRows(lyricCuts, timingCuts);
+  const aligned = buildTimingRows(lyricCuts, timingCuts);
+  const rows = aligned.rows;
+  const stats = aligned.stats ?? { lines: rows.length, acceptedMatchLines: 0 };
+  const lineCount = Number(stats.lines || 0);
+  const minAccepted = lineCount <= 4
+    ? 1
+    : Math.max(2, Math.ceil(lineCount * 0.35));
+  if (Number(stats.acceptedMatchLines || 0) < minAccepted) {
+    throw new Error(
+      `lyrics to srt defective: lyrics mismatch accepted=${Number(stats.acceptedMatchLines || 0)} min=${minAccepted} lines=${Number(stats.lines || 0)}`
+    );
+  }
 
   const out = [];
   for (const row of rows) {
