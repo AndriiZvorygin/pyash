@@ -8,6 +8,10 @@ import { recordMindAnswer } from "./series.mjs";
 import { resolveConfigNum, resolveConfigText } from "../../configure/env.mjs";
 import { remember } from "../../remember/index.mjs";
 
+let mockResponseQueueRaw = null;
+let mockResponseQueue = null;
+let mockResponseQueueIndex = 0;
+
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
   const lines = [];
@@ -40,6 +44,35 @@ function extractBackendResponseText(backendResponse) {
     ?? backendResponse?.text
     ?? "";
   return String(text ?? "");
+}
+
+function nextMockGenerateResponse(mockResponseRaw) {
+  if (!mockResponseRaw) return null;
+  if (mockResponseRaw !== mockResponseQueueRaw) {
+    mockResponseQueueRaw = mockResponseRaw;
+    mockResponseQueue = null;
+    mockResponseQueueIndex = 0;
+    try {
+      const parsed = JSON.parse(mockResponseRaw);
+      if (Array.isArray(parsed)) {
+        mockResponseQueue = parsed;
+      }
+    } catch {
+      // Use the raw string when it is not a JSON array fixture.
+    }
+  }
+  if (Array.isArray(mockResponseQueue) && mockResponseQueue.length > 0) {
+    const idx = Math.min(mockResponseQueueIndex, mockResponseQueue.length - 1);
+    mockResponseQueueIndex += 1;
+    return mockResponseQueue[idx];
+  }
+  return mockResponseRaw;
+}
+
+function extractMockResponseText(mockResponse) {
+  if (mockResponse == null) return "";
+  if (typeof mockResponse === "string") return String(mockResponse);
+  return extractBackendResponseText(mockResponse);
 }
 
 function isLoadingBackendResponse(backendResponse, backendErrorText) {
@@ -126,7 +159,7 @@ export async function runGenerate({
     }
     messages.push(userMessage);
   }
-  const mockResponse = resolveConfigText("mind response", { rememberFn: remember });
+  const mockResponseRaw = resolveConfigText("mind response", { rememberFn: remember });
 
   if (aspect === "stream") {
     if (typeof checkInterrupted === "function") {
@@ -146,8 +179,10 @@ export async function runGenerate({
     (async () => {
       let streamedText = "";
       try {
+        const mockResponse = nextMockGenerateResponse(mockResponseRaw);
         if (mockResponse) {
-          const chunks = String(mockResponse ?? "")
+          const finalText = extractMockResponseText(mockResponse).trim();
+          const chunks = String(finalText ?? "")
             .split(/\s+/)
             .filter(Boolean)
             .map(word => `${word} `);
@@ -158,7 +193,6 @@ export async function runGenerate({
               process.stdout.write(chunk);
             }
           }
-          const finalText = String(mockResponse ?? "").trim();
           recordMindJson({ targetName: mindName, label: "response", payload: stripContext({ response: finalText, chunks }) });
           if (mindDebug) {
             // eslint-disable-next-line no-console
@@ -234,6 +268,7 @@ export async function runGenerate({
   if (typeof checkInterrupted === "function") {
     await checkInterrupted();
   }
+  const mockResponse = nextMockGenerateResponse(mockResponseRaw);
   if (mockResponse) {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
@@ -243,7 +278,7 @@ export async function runGenerate({
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
-    responseText = mockResponse;
+    responseText = extractMockResponseText(mockResponse);
   } else {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);

@@ -167,6 +167,32 @@ test("mind invocation uses configured mind model when per-mind model is absent",
   }
 });
 
+test("mind invocation consumes queued json fixture responses across calls", async () => {
+  forget();
+  resetMindLogs();
+  const original = process.env.PYA_MIND_RESPONSE;
+  process.env.PYA_MIND_RESPONSE = JSON.stringify([
+    { message: { content: "first reply" } },
+    { message: { content: "second reply" } }
+  ]);
+
+  try {
+    await interpret(parse('exists su helper be mind via state "qwen3:8b" ya'));
+    await interpret(parse('be write ob text "first prompt" for name helper to name text helper-out do'));
+    await interpret(parse('be write ob text "second prompt" for name helper to name text helper-out do'));
+
+    const mem = allRemember();
+    const firstAnswer = mem.find(s => s.su?.name === "helper answer 1");
+    const secondAnswer = mem.find(s => s.su?.name === "helper answer 2");
+
+    assert.equal(firstAnswer?.ob?.text, "first reply");
+    assert.equal(secondAnswer?.ob?.text, "second reply");
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
 test("mind history can be injected from a series via accordingto", async () => {
   forget();
   resetMindLogs();
