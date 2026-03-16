@@ -1,0 +1,56 @@
+ob ve filename text source text text learning_focus be input ya
+
+exists su name learning distillation prompt ob text quoted.text.You are distilling source material into a reusable educational teaching artifact.
+
+Task:
+Given SOURCE TEXT and LEARNING FOCUS, return one plain-text teaching block with these exact headings in this exact order:
+
+SEED CONCEPT
+CARDINAL TRAINING SENTENCE
+ORTHOGONAL FEATURES
+AFFAIRS OR ACTIVITIES
+CAUSATIVE AND CONSEQUENCE
+CARDINAL SCENES AND IDIOMS
+BRIEF MEMORY PHRASES
+
+Rules:
+- Stay faithful to the source text.
+- Use the learning focus as a lens, not a license to invent unsupported teaching.
+- If the requested focus is only partly supported, stay with the nearest supported teaching lane.
+- If the focus is absent, say so plainly inside the teaching block rather than hallucinating details.
+- Prefer plain language and teaching clarity over decorative summary.
+- Remove greetings, speaker labels, transcript clutter, and side tangents.
+- Prefer concrete practices, causes, and results over vague inspiration.
+- Prefer the source's own symbolic world over generic spiritual filler.
+
+Section rules:
+- SEED CONCEPT: 1 short paragraph or 1-2 sentences.
+- CARDINAL TRAINING SENTENCE: exactly 1 sentence, clear enough for a 12 year old.
+- ORTHOGONAL FEATURES: 3-5 short lines.
+- AFFAIRS OR ACTIVITIES: 2-5 short lines.
+- CAUSATIVE AND CONSEQUENCE: 2-5 short lines showing practice and result.
+- CARDINAL SCENES AND IDIOMS: 2-6 short lines.
+- BRIEF MEMORY PHRASES: 4-10 short lines, each 2-8 words.
+
+Formatting rules:
+- Plain text only.
+- Use the exact headings above.
+- Put each list item on its own line beginning with "- ".
+- No markdown beyond those simple heading lines and dash list items.
+- No extra headings, no commentary before or after the block..text.quoted be text ya
+
+su name learning distillation example be refinery def
+  su name source text stage from filename of ob of source become wo text to name text source text be read do
+
+  su name learning request begin stage ob text "LEARNING FOCUS:\n" to name text learning request be text do
+  ob text of ob of learning_focus to name learning request be plus do
+  ob text "\n\nSOURCE TEXT:\n" to name learning request be plus do
+  ob name text source text to name learning request be plus do
+
+  su name teaching stage ob name text learning request fromtext name learning distillation prompt for name mind to name text teaching out be write do
+  su name ollama discharge stage as wo ollama be discharge do
+  su name teaching return stage ob name text teaching out be text do
+prah
+
+from name learning distillation example to name text teaching final be refinery do
+su name result out ob name text teaching final be write do
