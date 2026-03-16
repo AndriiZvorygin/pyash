@@ -570,7 +570,7 @@ prah
 
 su name hymn bridge checks be series def
   su name word_min ob num 8 ya
-  su name word_max ob num 16 ya
+  su name word_max ob num 20 ya
   su name line_count_min ob num 2 ya
   su name line_count_max ob num 2 ya
 prah
@@ -814,12 +814,6 @@ su name hymn hook pool retry fromindex num 0 toindex num 0 be ceremony def
   ob text "false" to name text hymn hook shape pass be text do
   su name hymn hook affirmative retry stage from text of ob of hook out to name text hymn hook affirmative pass be hymn positive language do
   su name hymn hook source fit retry stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
-  ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook affirmative pass be text do
-  ob text "false" to name text hymn hook source fit pass be text do
-  ob name text hymn hook shape pass be equally from text false then
-  ob text "false" to name text hymn hook affirmative pass be text do
-  ob text "false" to name text hymn hook source fit pass be text do
   su name hymn hook copied pass ret
 prah
 
@@ -892,12 +886,6 @@ su name hymn manuscript draft checked from text source with text hook hint to na
   ob text "false" to name text hymn hook shape pass be text do
   su name hymn hook affirmative final stage from text of ob of hook out to name text hymn hook affirmative pass be hymn positive language do
   su name hymn hook source final stage from text of ob of hymn source with text of ob of hook out to name text hymn hook source fit pass be hymn hook source fit do
-  ob name text hymn hook copied pass be equally from text false then
-  ob text "false" to name text hymn hook affirmative pass be text do
-  ob text "false" to name text hymn hook source fit pass be text do
-  ob name text hymn hook shape pass be equally from text false then
-  ob text "false" to name text hymn hook affirmative pass be text do
-  ob text "false" to name text hymn hook source fit pass be text do
   ob name text hymn hook shape pass be equally from text false then
   su name hymn hook shape guarantee stage ob bool lie fromtext text "hymn hook shape defective" be guarantee do
   ob name text hymn hook affirmative pass be equally from text false then
