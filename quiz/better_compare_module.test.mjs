@@ -40,7 +40,7 @@ test("better compare module registers clause-based signature", async () => {
   assert.ok(String(resolved).endsWith("better compare"), `unexpected target: ${resolved}`);
 });
 
-test("better compare returns incumbent after two A wins", async () => {
+test("better compare returns incumbent after two A wins against fresh challengers", async () => {
   const original = process.env.PYA_MIND_RESPONSE;
   process.env.PYA_MIND_RESPONSE = "A";
   try {
@@ -52,14 +52,14 @@ test("better compare returns incumbent after two A wins", async () => {
     await run('su name run from la ob text "task" to name text scratch be draft gen do ko ob text "pick better" to name text winner atmost num 6 be better compare do');
 
     assert.equal(remember("winner")?.ob?.text, "draft1");
-    assert.equal(remember("draft count")?.ob?.num, 2);
+    assert.equal(remember("draft count")?.ob?.num, 3);
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
   }
 });
 
-test("better compare promotes B and continues until cap", async () => {
+test("better compare promotes B across fresh challengers", async () => {
   const original = process.env.PYA_MIND_RESPONSE;
   process.env.PYA_MIND_RESPONSE = "B";
   try {
@@ -70,8 +70,8 @@ test("better compare promotes B and continues until cap", async () => {
 
     await run('su name run from la ob text "task" to name text scratch be draft gen do ko ob text "pick better" to name text winner atmost num 3 be better compare do');
 
-    assert.equal(remember("winner")?.ob?.text, "draft4");
-    assert.equal(remember("draft count")?.ob?.num, 4);
+    assert.equal(remember("winner")?.ob?.text, "draft6");
+    assert.equal(remember("draft count")?.ob?.num, 6);
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
