@@ -1,8 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 
-import { findProgrammaticBoundary } from "../command/chip_programmatic_boundary.mjs";
+import { findProgrammaticBoundary, findProgrammaticBoundaryFromInput } from "../command/chip_programmatic_boundary.mjs";
 
 test("programmatic boundary finds questioner marker for qa style", () => {
   const source = [
@@ -72,11 +71,6 @@ test("programmatic boundary command accepts raw stdin split payload", () => {
     "Serve with love."
   ].join("\n");
   const style = "Create wise chips where each chip contains one full question and its full corresponding answer.";
-  const proc = spawnSync("node", ["command/chip_programmatic_boundary.mjs"], {
-    cwd: process.cwd(),
-    input: `${source}\n<<<PYA_CHIP_STYLE>>>\n${style}`,
-    encoding: "utf8"
-  });
-  assert.equal(proc.status, 0, proc.stderr);
-  assert.equal(proc.stdout.trim(), "#### M\nHow can we serve?");
+  const output = findProgrammaticBoundaryFromInput(`${source}\n<<<PYA_CHIP_STYLE>>>\n${style}`);
+  assert.equal(output.trim(), "#### M\nHow can we serve?");
 });

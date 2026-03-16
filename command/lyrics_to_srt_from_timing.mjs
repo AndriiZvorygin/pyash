@@ -306,7 +306,14 @@ function buildTimingRows(lyricsCuts, timingCuts) {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  await runLyricsToSrt(process.argv.slice(2));
+}
+
+export async function runLyricsToSrt(args = process.argv.slice(2), {
+  readFile = fs.readFile,
+  writeFile = fs.writeFile,
+  writeOut = (text) => process.stdout.write(text)
+} = {}) {
   const includeSections = args.includes("--include-sections");
   const positional = args.filter((part) => part !== "--include-sections");
   const [lyricsPath, timingSrtPath, outputPath] = positional;
@@ -314,8 +321,8 @@ async function main() {
     throw new Error(usage());
   }
 
-  const lyricsText = await fs.readFile(lyricsPath, "utf8");
-  const timingText = await fs.readFile(timingSrtPath, "utf8");
+  const lyricsText = await readFile(lyricsPath, "utf8");
+  const timingText = await readFile(timingSrtPath, "utf8");
   const lyricCuts = normalizeLyricsCuts(lyricsText, { includeSections });
   const timingCuts = parseSrtToCuts(timingText);
   const aligned = buildTimingRows(lyricCuts, timingCuts);
@@ -338,11 +345,13 @@ async function main() {
     out.push(String(row.text));
     out.push("");
   }
-  await fs.writeFile(outputPath, `${out.join("\n")}\n`, "utf8");
-  process.stdout.write(`${outputPath}\n`);
+  await writeFile(outputPath, `${out.join("\n")}\n`, "utf8");
+  writeOut(`${outputPath}\n`);
 }
 
-main().catch((err) => {
-  process.stderr.write(`${err?.message ?? String(err)}\n`);
-  process.exit(1);
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    process.stderr.write(`${err?.message ?? String(err)}\n`);
+    process.exit(1);
+  });
+}

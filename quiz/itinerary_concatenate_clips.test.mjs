@@ -33,7 +33,10 @@ function createClip(filename, color) {
 }
 
 test("concatenate can merge section clip itinerary rows", async (t) => {
-  if (!ffmpegAvailable()) t.skip("ffmpeg is required");
+  if (!ffmpegAvailable()) {
+    t.skip("ffmpeg is required");
+    return;
+  }
   forget();
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-concat-clips-"));
   const clipOne = path.join(tmp, "section-1.mp4");
@@ -93,7 +96,10 @@ test("concatenate can merge section clip itinerary rows", async (t) => {
 });
 
 test("concatenate resolves from name series signature", async (t) => {
-  if (!ffmpegAvailable()) t.skip("ffmpeg is required");
+  if (!ffmpegAvailable()) {
+    t.skip("ffmpeg is required");
+    return;
+  }
   forget();
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-concat-series-sig-"));
   const clipOne = path.join(tmp, "section-1.mp4");

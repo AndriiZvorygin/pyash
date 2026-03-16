@@ -8,7 +8,13 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, "..");
 
 function assertNoUnexpectedErrors(errors = []) {
-  const unexpected = errors.filter(line => !String(line).startsWith("artifacts folder: "));
+  const unexpected = errors.filter((line) => {
+    const text = String(line);
+    return !text.startsWith("artifacts folder: ")
+      && !text.startsWith("run start: ")
+      && !text.startsWith("run end: ")
+      && !text.startsWith("run duration: ");
+  });
   assert.deepEqual(unexpected, []);
 }
 

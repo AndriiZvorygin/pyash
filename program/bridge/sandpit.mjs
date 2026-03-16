@@ -85,6 +85,20 @@ function registerValue(reg, { state, memory } = {}) {
   return null;
 }
 
+function cloneSentenceValue(value) {
+  if (Array.isArray(value)) return value.map((entry) => cloneSentenceValue(entry));
+  if (!value || typeof value !== "object") return value;
+  const cloned = { ...value };
+  for (const [key, entry] of Object.entries(cloned)) {
+    if (key === "chain" && Array.isArray(entry)) {
+      cloned[key] = [...entry];
+      continue;
+    }
+    cloned[key] = cloneSentenceValue(entry);
+  }
+  return cloned;
+}
+
 export async function invokeLoop({ defEntry, sentence, state, memory, interpret, recordSandpitTrace }) {
   const prevEvoke = state.currentEvoke;
   const prevEvokeRef = state.currentEvokeRef;
@@ -95,21 +109,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
   if (initialIndex == null) throw new Error("fromindex is required to loop");
   const untilSeed = registerValue(sentence.toindex, { state, memory });
 
-  const cloneSentence = (step) => {
-    if (!step || typeof step !== "object") return step;
-    const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "for", "among", "with", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "ret", "consequence", "alternative"];
-    for (const field of fields) {
-      if (step[field] && typeof step[field] === "object") {
-        const next = { ...step[field] };
-        if (next.genitive?.chain) {
-          next.genitive = { ...next.genitive, chain: [...next.genitive.chain] };
-        }
-        cloned[field] = next;
-      }
-    }
-    return cloned;
-  };
+  const cloneSentence = (step) => cloneSentenceValue(step);
 
   const baseBody = memory.allRemember()
     .slice(defEntry.index + 1, defEntry.end)
@@ -227,21 +227,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const prevExecutingBody = state.executingBody;
   const prevLastCondition = state.lastCondition;
   const { to } = sentence;
-  const cloneSentence = (step) => {
-    if (!step || typeof step !== "object") return step;
-    const cloned = { ...step };
-    const fields = ["su", "ob", "from", "to", "for", "among", "with", "by", "at", "fromindex", "toindex", "atindex", "this", "as", "via", "during", "become", "accordingto", "fromtext", "vyah", "ret", "consequence", "alternative"];
-    for (const field of fields) {
-      if (step[field] && typeof step[field] === "object") {
-        const next = { ...step[field] };
-        if (next.genitive?.chain) {
-          next.genitive = { ...next.genitive, chain: [...next.genitive.chain] };
-        }
-        cloned[field] = next;
-      }
-    }
-    return cloned;
-  };
+  const cloneSentence = (step) => cloneSentenceValue(step);
   const body = memory.allRemember().slice(defEntry.index + 1, defEntry.end); // skip prah (end is exclusive)
   const defSigWords = memory.allRemember()[defEntry.index]?.signatureWords;
   let lastResult;

@@ -112,6 +112,7 @@ function splitOversizedCut(cut = {}, targetSeconds = 6) {
   if (!(Number.isFinite(span) && span > target + 1e-6) || !text) return [cut];
 
   const sentenceSections = splitTextSentences(text).filter(Boolean);
+  if (sentenceSections.length < 2 && sectionWordTokens(text).length < 8) return [cut];
   const sections = sentenceSections.length > 1 ? sentenceSections : text.split(/\s+/u).filter(Boolean);
   if (sections.length < 2) return [cut];
 

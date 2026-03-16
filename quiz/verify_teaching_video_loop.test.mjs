@@ -48,7 +48,10 @@ function concatVideos(out, clips) {
 }
 
 test("teaching video loop verifier passes when section midpoints differ", async (t) => {
-  if (!ffmpegAvailable()) t.skip("ffmpeg and ffprobe are required");
+  if (!ffmpegAvailable()) {
+    t.skip("ffmpeg and ffprobe are required");
+    return;
+  }
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-loop-pass-"));
   const artifact = path.join(root, "artifacts-pass");
   await fs.mkdir(path.join(artifact, "sections", "paragraph-1"), { recursive: true });
@@ -72,7 +75,10 @@ test("teaching video loop verifier passes when section midpoints differ", async 
 });
 
 test("teaching video loop verifier fails when final video repeats the first section clip", async (t) => {
-  if (!ffmpegAvailable()) t.skip("ffmpeg and ffprobe are required");
+  if (!ffmpegAvailable()) {
+    t.skip("ffmpeg and ffprobe are required");
+    return;
+  }
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-video-loop-fail-"));
   const artifact = path.join(root, "artifacts-fail");
   await fs.mkdir(path.join(artifact, "sections", "paragraph-1"), { recursive: true });

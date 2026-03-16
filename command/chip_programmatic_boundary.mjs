@@ -163,12 +163,16 @@ function parseStdinPayload(input) {
   };
 }
 
+export function findProgrammaticBoundaryFromInput(input) {
+  const payload = parseStdinPayload(input);
+  return findProgrammaticBoundary(payload.sourceText ?? "", payload.styleText ?? "");
+}
+
 async function main() {
   const [chipFilename, styleFilename] = process.argv.slice(2);
   if (!chipFilename && !styleFilename) {
     const input = await readStdinText();
-    const payload = parseStdinPayload(input);
-    const marker = findProgrammaticBoundary(payload.sourceText ?? "", payload.styleText ?? "");
+    const marker = findProgrammaticBoundaryFromInput(input);
     process.stdout.write(marker);
     return;
   }
