@@ -567,6 +567,9 @@ async function main() {
 
   const full = fullFlag;
   const verbose = verboseFlag;
+  const priorRunVerbose = process.env.PYA_RUN_VERBOSE;
+  if (verbose) process.env.PYA_RUN_VERBOSE = "1";
+  else delete process.env.PYA_RUN_VERBOSE;
   if (full) {
     console.log("Program:");
     if (gross) {
@@ -911,6 +914,8 @@ async function main() {
     return { artifactFile, knowProduceFiles };
   };
   if (runError) {
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printRunTimingHint();
     printArtifactsFolderHint();
     throw runError;
@@ -925,6 +930,8 @@ async function main() {
   const showResult = showResultFlag || showResultConfig === true;
 
   if (gross) {
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -933,6 +940,8 @@ async function main() {
   }
 
   if (!showResult && !full && !verbose) {
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -949,6 +958,8 @@ async function main() {
     } catch {
       console.log(finalResult ? JSON.stringify(finalResult, null, 2) : "(no result)");
     }
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -958,6 +969,8 @@ async function main() {
   // If the result is a compiled artifact with a text payload, stream it directly.
   if (result?.ob?.text && !full) {
     console.log(result.ob.text);
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -967,6 +980,8 @@ async function main() {
   // Surface series payloads in block form so entry boundaries are visible.
   if (result?.be === "series" && Array.isArray(result?.ob?.series)) {
     console.log(renderSeriesSentence(result));
+    if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
     printProduceFileHint();
     printRunTimingHint();
     printArtifactsFolderHint();
@@ -984,6 +999,8 @@ async function main() {
   } catch {
     console.log(result ? JSON.stringify(result, null, 2) : "(no result)");
   }
+  if (priorRunVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+  else process.env.PYA_RUN_VERBOSE = priorRunVerbose;
   printProduceFileHint();
   printRunTimingHint();
   printArtifactsFolderHint();
