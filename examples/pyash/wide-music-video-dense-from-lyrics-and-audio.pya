@@ -1,0 +1,139 @@
+ob ve filename text audio filename text lyrics be input ya
+from filename "../../module/video_common.pya" ob name video heading burn to name video heading burn be import do
+from filename "../../module/video_common.pya" ob name footnote mode to name footnote mode be import do
+
+exists su name draw size widescreen be map def
+su name width ob num 1280 ya
+su name height ob num 720 ya
+su name negative prompt ob text "text, letters, words, typography, watermark, logo, caption, subtitle, signature, brand name, label, poster, UI, interface, numbers, signage, title card, meme text, overlaid text, chinese characters, hanzi, kanji, kana, korean characters, hangul, glyphs, symbols, calligraphy" ya
+prah
+
+exists su name draw system prompt ob text "Educational lyrical illustration, non-photorealistic, no visible text or letters, no watermark. Stylized painterly composition, expressive emotion, high detail. There is no text." be text ya
+exists su name hear backend default ob text "qwen" be default ya
+exists su name subtitle margin ratio override ob num 0.10 be num ya
+exists su name opening heading text ob text "" be default ya
+exists su name opening heading instruction ob text "Create one short opening heading for this music video. Must be 3-6 words only. Plain text only. One line. No quotes, hashtags, or punctuation." be default ya
+exists su name video title instruction ob text "Create a compelling video title (max 90 chars). Plain text only." be default ya
+exists su name video summary instruction ob text "Write one concise summary sentence for this song video in plain text (max 180 chars)." be default ya
+exists su name video tags instruction ob text "Write comma-separated tags for this song video. Plain text only, no hashtags." be default ya
+exists su name audio cue text ob text "Sound On 🎧" be default ya
+exists su name opening heading y ratio ob num 0.60 be default ya
+exists su name audio cue y ratio ob num 0.68 be default ya
+exists su name audio cue font scale ob num 0.42 be default ya
+exists su name lyric promptify packet ob text quoted.text.instruction: Turn current_cut into one concise image prompt for a dense music-lyric video.
+current_cut: [[current_cut]]
+previous_cut: [[previous_cut]]
+next_cut: [[next_cut]]
+full_script: [[full_script]]
+previous_prompt_1: [[previous_prompt_1]]
+previous_prompt_2: [[previous_prompt_2]].text.quoted be text ya
+exists su name lyric promptify instruction ob text quoted.text.You receive labeled fields: instruction, current_cut, previous_cut, next_cut, full_script, previous_prompt_1, previous_prompt_2.
+Focus on current_cut and output only one concise image-generation prompt line (about 18-45 words), no quotes, no markdown, no explanation, no visible text in scene. Treat each cut as its own lyric moment and hard switch scenes when the lyric changes..text.quoted be text ya
+exists su name refinery name ob text "wide music video dense lyrics audio" be text ya
+
+su name wide music video dense lyrics audio be refinery def
+ob name run root to name text workspace root be text do
+ob text "curl -sS -m 5 -X POST \"http://localhost:8000/discharge\" -H \"content-type: application/json\" -d '{}' >/dev/null 2>&1 || true" to name text whisperx preflight discharge cmd be text do
+su name whisperx preflight discharge stage ob name text whisperx preflight discharge cmd be command do
+su name mind preflight discharge stage as wo mind be discharge do
+su name draw preflight discharge stage as wo draw be discharge do
+su name hear preflight discharge stage as wo hear be discharge do
+su name qwen say preflight discharge stage as wo "qwen say" be discharge do
+su name ollama preflight discharge stage as wo ollama be discharge do
+su name run id text stage ob name run id to name text run id text be text do
+ob text "artifacts/" to name text artifacts root be text do
+ob name text run id text to name artifacts root be plus do
+ob text "mkdir -p \"" to name text run root ensure cmd be text do
+ob name text artifacts root to name run root ensure cmd be plus do
+ob text "\"" to name run root ensure cmd be plus do
+su name run root ensure stage ob name text run root ensure cmd be command do
+
+su name lyrics text stage from filename of ob of lyrics become wo text to name text lyrics text be read do
+su name opening heading text stage ob name text lyrics text fromtext name opening heading instruction for name mind to name text opening heading text be write do
+su name video title stage ob name text lyrics text fromtext name video title instruction for name mind to name text video title be write do
+su name video summary stage ob name text lyrics text fromtext name video summary instruction for name mind to name text video summary be write do
+su name video tags stage ob name text lyrics text fromtext name video tags instruction for name mind to name text video tags be write do
+
+su name audio wav path stage ob name text artifacts root to name text audio wav path be text do
+su name input audio filename stage ob name audio to name filename input audio filename be filename do
+su name input audio path stage ob name input audio filename to name text input audio path be text do
+ob text "/audio.wav" to name audio wav path be plus do
+ob text "ffmpeg -y -i \"" to name text audio wav cmd be text do
+ob name text input audio path to name audio wav cmd be plus do
+ob text "\" -ac 2 -ar 48000 \"" to name audio wav cmd be plus do
+ob name text audio wav path to name audio wav cmd be plus do
+ob text "\"" to name audio wav cmd be plus do
+su name wav stage ob name text audio wav cmd be command do
+
+su name captions path stage ob name text artifacts root to name text captions path be text do
+su name captions timing path stage ob name text artifacts root to name text captions timing path be text do
+ob text "/captions.srt" to name captions path be plus do
+ob text "/captions-timing.srt" to name captions timing path be plus do
+su name captions filename stage ob name text captions path to name filename captions filename be filename do
+su name captions timing filename stage ob name text captions timing path to name filename captions timing filename be filename do
+su name audio wav filename stage ob name text audio wav path to name filename audio wav filename be filename do
+su name lyrics filename stage ob name lyrics to name filename lyrics filename be filename do
+su name captions text path stage ob name captions filename to name text captions text path be text do
+su name captions timing text path stage ob name captions timing filename to name text captions timing text path be text do
+su name lyrics text path stage ob name lyrics filename to name text lyrics text path be text do
+su name hear stage from filename of ob of audio wav filename become wo srt to filename of ob of captions timing filename stage be hear do
+su name hear discharge stage as wo hear be discharge do
+ob text "node " to name text captions cmd be text do
+ob name text workspace root to name captions cmd be plus do
+ob text "/command/lyrics_to_srt_from_timing.mjs \"" to name captions cmd be plus do
+ob name text lyrics text path to name captions cmd be plus do
+ob text "\" \"" to name captions cmd be plus do
+ob name text captions timing text path to name captions cmd be plus do
+ob text "\" \"" to name captions cmd be plus do
+ob name text captions text path to name captions cmd be plus do
+ob text "\"" to name captions cmd be plus do
+su name captions stage ob name text captions cmd be command do
+su name cut stage from filename of ob of captions filename stage to name itinerary lyric cuts be cut do
+
+su name draw discharge pre mind stage as wo draw be discharge do
+su name prompt stage from name itinerary lyric cuts ob text "Turn current_cut into one concise image prompt for a dense music-lyric video." fromtext name lyric promptify instruction for name mind to name itinerary lyric draw prompts be promptify do
+su name mind discharge stage as wo mind be discharge do
+su name ollama discharge stage as wo ollama be discharge do
+su name mind discharge settle stage ob text "sleep 3" be command do
+
+su name draw out dir stage ob name text artifacts root to name text draw out dir be text do
+ob text "/draw" to name draw out dir be plus do
+su name lyric draw stage from name itinerary lyric draw prompts fromtext name draw system prompt ob text "Create one illustration representing this lyric moment:" fromstate wo text become wo photograph with name draw size widescreen to filename of ob of draw out dir be draw do
+su name draw discharge after render stage as wo draw be discharge do
+
+su name video cuts audio filename ob name text audio wav path be text do
+su name video cuts images directory ob name text draw out dir be text do
+su name video cuts prefix ob text "lyric-draw-stage" be text do
+
+su name video output path stage ob name text artifacts root to name text video output path be text do
+ob text "/music-video.mp4" to name video output path be plus do
+su name video output filename stage ob name text video output path to name filename video output filename be filename do
+su name result stage from ve name itinerary lyric cuts name lyric draw stage name wav stage name video cuts audio filename name video cuts images directory name video cuts prefix name video output filename stage fromstate wo itinerary become wo video to filename of ob of video output filename stage be concatenate do
+
+su name footnote output path stage ob name text artifacts root to name text footnote output path be text do
+ob text "/music-video-footnote.mp4" to name footnote output path be plus do
+su name footnote filename stage ob name text footnote output path to name filename footnote filename be filename do
+su name footnote stage from filename of ob of captions filename stage with filename of ob of result stage to filename of ob of footnote filename stage by num of ob of subtitle margin ratio override as text "karaoke" be footnote mode do
+su name opening heading burn stage from filename of ob of footnote filename stage with name text opening heading text to filename of ob of footnote filename stage by num of ob of opening heading y ratio be video heading burn do
+ob text of ob of footnote filename stage to name text opened video path be text do
+ob text "printf '%s' '" to name text audio cue cmd be text do
+ob name text audio cue text to name audio cue cmd be plus do
+ob text "' | node \"" to name audio cue cmd be plus do
+ob name text workspace root to name audio cue cmd be plus do
+ob text "/command/video_heading_burn.mjs\" \"" to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
+ob text "\" \"" to name audio cue cmd be plus do
+ob name text opened video path to name audio cue cmd be plus do
+ob text "\" --text-stdin --seconds 1 --y-ratio " to name audio cue cmd be plus do
+ob num of ob of audio cue y ratio to name audio cue cmd be plus do
+ob text " --max-width-ratio 0.82 --font-scale " to name audio cue cmd be plus do
+ob num of ob of audio cue font scale to name audio cue cmd be plus do
+su name audio cue stage ob name text audio cue cmd be command do
+su name hear final discharge stage as wo hear be discharge do
+su name mind final discharge stage as wo mind be discharge do
+su name ollama final discharge stage as wo ollama be discharge do
+
+su name result out stage ob filename of ob of footnote filename stage to name filename result out be filename do
+prah
+
+su name result out ob name result out stage be write do
