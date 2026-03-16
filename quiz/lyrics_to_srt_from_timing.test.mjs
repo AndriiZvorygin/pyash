@@ -1,0 +1,251 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+
+function parseSrtRows(text) {
+  const blocks = String(text ?? "").trim().split(/\n\s*\n/u).filter(Boolean);
+  return blocks.map((block) => {
+    const lines = block.split("\n");
+    const timeLine = lines[1] ?? "";
+    const m = /(\d{2}):(\d{2}):(\d{2}),(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2}),(\d{3})/u.exec(timeLine);
+    if (!m) return null;
+    const since = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000;
+    const until = Number(m[5]) * 3600 + Number(m[6]) * 60 + Number(m[7]) + Number(m[8]) / 1000;
+    return { since, until, text: (lines[2] ?? "").trim() };
+  }).filter(Boolean);
+}
+
+test("lyrics_to_srt_from_timing keeps repeated chorus lines distributed across timeline", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-repeat.txt");
+  const timingPath = path.join(dir, "timing-repeat.srt");
+  const outputPath = path.join(dir, "lyrics-repeat.out.srt");
+
+  const lyrics = [
+    "Go forth in your armor of light",
+    "We polish armor until the light shines bright and clear.",
+    "Go forth in your armor of light",
+    "Steel shields reflect the morning's golden rays today.",
+    "Go forth in your armor of light",
+    "Ride forth with truth and compassion"
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:03,000",
+    "go forth in your armor of light",
+    "",
+    "2",
+    "00:00:06,000 --> 00:00:10,000",
+    "we polish armor until the light shines bright and clear",
+    "",
+    "3",
+    "00:00:12,000 --> 00:00:15,000",
+    "go forth in your armor of light",
+    "",
+    "4",
+    "00:00:26,000 --> 00:00:30,000",
+    "steel shields reflect the morning's golden rays today",
+    "",
+    "5",
+    "00:00:32,000 --> 00:00:36,000",
+    "go forth in your armor of light ride forth with truth and compassion"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
+    encoding: "utf8"
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 6);
+  assert.ok(rows[0].since < 2, "first line should stay near start");
+  assert.ok(rows[rows.length - 1].until > 34, "last line should stay near end");
+
+  let tinyTailRows = 0;
+  for (const row of rows) {
+    if (row.since >= 30 && row.until <= 36.5) tinyTailRows += 1;
+  }
+  assert.ok(tinyTailRows <= 3, "rows should not collapse to song tail window");
+});
+
+test("lyrics_to_srt_from_timing fails fast on obvious lyrics mismatch", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-mismatch.txt");
+  const timingPath = path.join(dir, "timing-mismatch.srt");
+  const outputPath = path.join(dir, "lyrics-mismatch.out.srt");
+
+  const lyrics = [
+    "quantum pineapple zephyr",
+    "crystalline marsupial echo",
+    "nebula toaster lattice"
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:00,000 --> 00:00:03,000",
+    "go forth in your armor of light",
+    "",
+    "2",
+    "00:00:03,000 --> 00:00:06,000",
+    "ride forth with truth and compassion"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
+    encoding: "utf8"
+  });
+  assert.notEqual(run.status, 0);
+  assert.match(String(run.stderr || run.stdout), /lyrics mismatch/u);
+});
+
+test("lyrics_to_srt_from_timing avoids chorus freeze from overly wide repeated-token matches", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-chorus-freeze.txt");
+  const timingPath = path.join(dir, "timing-chorus-freeze.srt");
+  const outputPath = path.join(dir, "lyrics-chorus-freeze.out.srt");
+
+  const lyrics = [
+    "Polish the armor of light",
+    "We find the love hiding inside us all.",
+    "Polish the armor of light"
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:36,000 --> 00:00:36,560",
+    "Polish",
+    "",
+    "2",
+    "00:00:36,640 --> 00:00:36,680",
+    "the",
+    "",
+    "3",
+    "00:00:36,960 --> 00:00:38,240",
+    "armor of",
+    "",
+    "4",
+    "00:00:41,920 --> 00:00:44,400",
+    "We find the love hiding",
+    "",
+    "5",
+    "00:00:44,401 --> 00:00:48,400",
+    "inside us all",
+    "",
+    "6",
+    "00:00:48,800 --> 00:00:49,280",
+    "Polish",
+    "",
+    "7",
+    "00:00:49,440 --> 00:00:49,480",
+    "the",
+    "",
+    "8",
+    "00:00:49,680 --> 00:00:50,880",
+    "armor",
+    "",
+    "9",
+    "00:00:51,081 --> 00:00:54,400",
+    "light"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
+    encoding: "utf8"
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 3);
+  const firstDur = rows[0].until - rows[0].since;
+  assert.ok(firstDur < 10, `first chorus line should not freeze, got ${firstDur.toFixed(3)}s`);
+});
+
+test("lyrics_to_srt_from_timing keeps repeated dense chorus windows bounded", async () => {
+  const dir = path.resolve("quiz/sandpit");
+  await fs.mkdir(dir, { recursive: true });
+  const lyricsPath = path.join(dir, "lyrics-dense-chorus.txt");
+  const timingPath = path.join(dir, "timing-dense-chorus.srt");
+  const outputPath = path.join(dir, "lyrics-dense-chorus.out.srt");
+
+  const lyrics = [
+    "Polish the armor of light",
+    "We polish the armor of light each day,",
+    "To find the love hiding inside us all.",
+    "Our hearts open wide and let fear fade away,",
+    "Riding forward with joy toward the truth.",
+    "Polish the armor of light",
+    "We find the love hiding inside us all.",
+    "Polish the armor of light"
+  ].join("\n");
+
+  const timing = [
+    "1",
+    "00:00:04,720 --> 00:00:10,960",
+    "polish",
+    "",
+    "2",
+    "00:00:10,961 --> 00:00:13,120",
+    "the armor of light",
+    "",
+    "3",
+    "00:00:13,600 --> 00:00:21,280",
+    "each day to find the love hiding inside us all",
+    "",
+    "4",
+    "00:00:22,000 --> 00:00:32,000",
+    "our hearts open wide and let fear fade away riding forward with joy toward the truth",
+    "",
+    "5",
+    "00:00:36,000 --> 00:00:38,280",
+    "polish the armor of",
+    "",
+    "6",
+    "00:00:41,920 --> 00:00:44,400",
+    "we find the love hiding",
+    "",
+    "7",
+    "00:00:44,401 --> 00:00:48,400",
+    "inside us all",
+    "",
+    "8",
+    "00:00:48,800 --> 00:00:54,400",
+    "polish the armor of light"
+  ].join("\n");
+
+  await fs.writeFile(lyricsPath, `${lyrics}\n`, "utf8");
+  await fs.writeFile(timingPath, `${timing}\n`, "utf8");
+
+  const run = spawnSync("node", ["command/lyrics_to_srt_from_timing.mjs", lyricsPath, timingPath, outputPath], {
+    encoding: "utf8"
+  });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+
+  const outText = await fs.readFile(outputPath, "utf8");
+  const rows = parseSrtRows(outText);
+  assert.equal(rows.length, 8);
+
+  const maxDuration = rows.reduce((max, row) => Math.max(max, row.until - row.since), 0);
+  assert.ok(maxDuration <= 10, `dense chorus cue should stay bounded, got ${maxDuration.toFixed(3)}s`);
+
+  const chorusRows = rows.filter((row) => /polish the armor of light/i.test(row.text));
+  assert.ok(chorusRows.length >= 3);
+  for (const row of chorusRows) {
+    const duration = row.until - row.since;
+    assert.ok(duration <= 8.5, `chorus line should not freeze, got ${duration.toFixed(3)}s`);
+  }
+});
