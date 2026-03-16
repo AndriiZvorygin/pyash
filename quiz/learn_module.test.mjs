@@ -21,6 +21,7 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /node command\/extract_learn_pipeline_result\.mjs/u);
   assert.match(text, /su name learn from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn from filename source with text learning focus to name text teaching out be ceremony def/u);
+  assert.equal((text.match(/su name ollama discharge stage as wo ollama be discharge do/gu) ?? []).length, 1);
   assert.match(text, /learning source support defective/u);
   assert.match(text, /exists su name learn extract card be export ya/u);
   assert.match(text, /exists su name learn merge cards be export ya/u);
