@@ -32,6 +32,7 @@ function resolveCommandText(ob = {}, { rememberFn } = {}) {
 
 function canRunDirect(cmd) {
   if (typeof cmd !== "string") return false;
+  if (/^\s*[A-Za-z_][A-Za-z0-9_]*=/.test(cmd)) return false;
   return !/[|&;<>()$`\\]/.test(cmd) && !/["']/.test(cmd);
 }
 
@@ -563,6 +564,14 @@ function resolveStreamOutputPath(sentence) {
   return path.join("artifacts", "command", `${base}.stream.txt`);
 }
 
+function parseCommandTimeoutOverride(cmd) {
+  const match = String(cmd ?? "").match(/(?:^|\s)PYA_COMMAND_TIMEOUT_MS=(\d+)(?:\s|$)/u);
+  if (!match) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.max(1, Math.trunc(value));
+}
+
 function startFileTail({ filename, onLine }) {
   let offset = 0;
   let pending = "";
@@ -589,7 +598,7 @@ function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes } = {}) {
+async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes, onStdout, onStderr } = {}) {
   return new Promise((resolve, reject) => {
     let proc;
     const spawnOptions = {
@@ -620,11 +629,15 @@ async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes 
       proc.kill("SIGKILL");
     };
     proc.stdout.on("data", data => {
-      stdout += data.toString("utf8");
+      const text = data.toString("utf8");
+      stdout += text;
+      if (typeof onStdout === "function" && text) onStdout(text);
       checkOutputLimit();
     });
     proc.stderr.on("data", data => {
-      stderr += data.toString("utf8");
+      const text = data.toString("utf8");
+      stderr += text;
+      if (typeof onStderr === "function" && text) onStderr(text);
       checkOutputLimit();
     });
     proc.on("error", (err) => {
@@ -891,12 +904,20 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     return { ob: { text: outputText }, be: "command" };
   }
 
+  const effectiveTimeoutMs = parseCommandTimeoutOverride(cmd) ?? sandbox.timeoutMs;
   const res = await runCommandText(cmd, {
     input,
-    timeoutMs: sandbox.timeoutMs,
+    timeoutMs: effectiveTimeoutMs,
     cwd: sandbox.cwd,
     env: commandEnv,
-    maxOutputBytes: sandbox.maxOutputBytes
+    maxOutputBytes: sandbox.maxOutputBytes,
+    onStderr: process.env.PYA_RUN_VERBOSE === "1"
+      ? (text) => {
+          try {
+            process.stderr.write(text);
+          } catch {}
+        }
+      : null
   });
   if (debug) {
     const stdout = String(res.stdout ?? "");

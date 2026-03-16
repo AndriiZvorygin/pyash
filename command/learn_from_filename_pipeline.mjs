@@ -2,10 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { spawn } from "node:child_process";
 
 export const DEFAULT_CHUNK_SIZE = 16 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
@@ -20,7 +17,7 @@ function isVerbose() {
 
 function logVerbose(line = "") {
   if (!isVerbose()) return;
-  process.stdout.write(`${line}\n`);
+  process.stderr.write(`${line}\n`);
 }
 
 function oneLine(text) {
@@ -157,6 +154,19 @@ function parseProduceFilePath(outputText) {
   return matches[matches.length - 1][1].trim();
 }
 
+function streamChildText(text, { traceLabel = "stage", channel = "stdout" } = {}) {
+  if (!isVerbose()) return;
+  const normalized = String(text ?? "").replace(/\r\n?/gu, "\n");
+  if (!normalized) return;
+  const prefix = `[learn pipeline][${traceLabel}][${channel}] `;
+  const endsWithNewline = normalized.endsWith("\n");
+  const lines = normalized.split("\n");
+  if (endsWithNewline) lines.pop();
+  for (const line of lines) {
+    process.stderr.write(`${prefix}${line}\n`);
+  }
+}
+
 function resolvePipelineArtifactRoot() {
   const runId = String(process.env.PYA_RUN_ID ?? "").trim();
   if (!runId) return "";
@@ -169,17 +179,41 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
     runArgs.push("--verbose", "--run-id", `learn-pipeline-${traceLabel}`);
   }
   runArgs.push("--no-checkpoint");
-  const { stdout, stderr } = await execFileAsync("./run", runArgs, {
-    cwd: "/workplace",
-    env: {
-      ...process.env,
-      PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
-      ...envOverrides
-    },
-    maxBuffer: 20 * 1024 * 1024
+  const childEnv = {
+    ...process.env,
+    PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
+    ...envOverrides
+  };
+  const { stdoutText, stderrText } = await new Promise((resolve, reject) => {
+    const proc = spawn("./run", runArgs, {
+      cwd: "/workplace",
+      env: childEnv,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => {
+      const text = data.toString("utf8");
+      stdout += text;
+      streamChildText(text, { traceLabel, channel: "stdout" });
+    });
+    proc.stderr.on("data", (data) => {
+      const text = data.toString("utf8");
+      stderr += text;
+      streamChildText(text, { traceLabel, channel: "stderr" });
+    });
+    proc.on("error", reject);
+    proc.on("close", (code, signal) => {
+      if (code === 0) {
+        resolve({ stdoutText: stdout, stderrText: stderr });
+        return;
+      }
+      const err = new Error(`child run defective: status=${code ?? 0} signal=${signal ?? ""}`);
+      err.stdout = stdout;
+      err.stderr = stderr;
+      reject(err);
+    });
   });
-  const stdoutText = String(stdout ?? "");
-  const stderrText = String(stderr ?? "");
   const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
   let traceFilename = "";
   let resultText = stdoutText.trim();
@@ -187,7 +221,7 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
     traceFilename = path.join(traceDir, `${traceLabel}.trace.txt`);
     await fsp.writeFile(traceFilename, combinedText, "utf8");
   }
-  const produceFile = parseProduceFilePath(stderrText);
+  const produceFile = parseProduceFilePath(combinedText);
   if (produceFile) {
     const producedText = await fsp.readFile(produceFile, "utf8");
     resultText = producedText.trim();

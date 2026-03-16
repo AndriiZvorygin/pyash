@@ -217,7 +217,7 @@ su name learn from text source with text learning focus to name text teaching ou
 prah
 
 su name learn from filename source with text learning focus to name text teaching out be ceremony def
-  su name learning pipeline cmd begin stage ob text "node command/learn_from_filename_pipeline.mjs \"" to name text learning pipeline cmd be text do
+  su name learning pipeline cmd begin stage ob text "PYA_COMMAND_TIMEOUT_MS=900000 node command/learn_from_filename_pipeline.mjs \"" to name text learning pipeline cmd be text do
   ob text of from of this to name learning pipeline cmd be plus do
   ob text "\" \"" to name learning pipeline cmd be plus do
   ob text of with of this to name learning pipeline cmd be plus do
