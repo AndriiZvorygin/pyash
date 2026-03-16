@@ -174,6 +174,10 @@ function resolvePipelineArtifactRoot() {
   return path.resolve(process.cwd(), "artifacts", runId, "learn-pipeline");
 }
 
+export function resolveRunProgramPath(cwd = process.cwd()) {
+  return path.resolve(String(cwd ?? process.cwd()), "run");
+}
+
 async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage" } = {}) {
   const runArgs = [examplePath, ...args];
   if (isVerbose()) {
@@ -186,8 +190,9 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
     ...envOverrides
   };
   const { stdoutText, stderrText } = await new Promise((resolve, reject) => {
-    const proc = spawn("./run", runArgs, {
-      cwd: "/workplace",
+    const runPath = resolveRunProgramPath(process.cwd());
+    const proc = spawn(runPath, runArgs, {
+      cwd: process.cwd(),
       env: childEnv,
       stdio: ["ignore", "pipe", "pipe"]
     });
