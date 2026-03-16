@@ -162,3 +162,45 @@ test("command timeout surfaces as command defective instead of empty success", a
     /command defective: status=0 signal=SIGKILL stderr=\"timeout after 10ms\"/
   );
 });
+
+test("command mirrors stderr live during verbose runs", async () => {
+  const priorVerbose = process.env.PYA_RUN_VERBOSE;
+  const originalWrite = process.stderr.write;
+  let mirrored = "";
+  process.env.PYA_RUN_VERBOSE = "1";
+  process.stderr.write = (chunk, encoding, callback) => {
+    mirrored += String(chunk ?? "");
+    if (typeof encoding === "function") encoding();
+    if (typeof callback === "function") callback();
+    return true;
+  };
+  try {
+    const sentence = parse("ob text \"node -e \\\"process.stderr.write('live stderr\\\\n')\\\"\" be command do");
+    const result = await command(sentence, { remember: () => null });
+    assertCommandSucceeded(result);
+    assert.match(mirrored, /live stderr/u);
+  } finally {
+    process.stderr.write = originalWrite;
+    if (priorVerbose === undefined) delete process.env.PYA_RUN_VERBOSE;
+    else process.env.PYA_RUN_VERBOSE = priorVerbose;
+  }
+});
+
+test("command honors inline timeout override", async () => {
+  const rememberFn = (name) => {
+    if (name !== "sandbox configure") return null;
+    return {
+      ob: {
+        map: {
+          "timeout ms": { ob: { num: 10 } },
+          cwd: { ob: { filename: process.cwd() } },
+          "writable roots": { ob: { ve: { type: "filename", values: [process.cwd(), "/tmp"] } } },
+          "command env allowlist": { ob: { ve: { type: "text", values: ["PATH", "HOME", "PWD", "SHELL"] } } }
+        }
+      }
+    };
+  };
+  const sentence = parse("ob text \"PYA_COMMAND_TIMEOUT_MS=1000 sleep 0.05\" be command do");
+  const result = await command(sentence, { remember: rememberFn });
+  assertCommandSucceeded(result);
+});
