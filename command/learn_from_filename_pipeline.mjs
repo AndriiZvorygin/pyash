@@ -2,10 +2,8 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { spawn } from "node:child_process";
+import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 
 export const DEFAULT_CHUNK_SIZE = 16 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
@@ -20,7 +18,7 @@ function isVerbose() {
 
 function logVerbose(line = "") {
   if (!isVerbose()) return;
-  process.stdout.write(`${line}\n`);
+  process.stderr.write(`${line}\n`);
 }
 
 function oneLine(text) {
@@ -42,6 +40,19 @@ function summarizeCard(text) {
   if (seed) parts.push(`seed=${seed}`);
   if (memory) parts.push(`memory=${memory}`);
   return parts.join(" | ") || "(empty)";
+}
+
+function normalizeStageResult(result) {
+  if (result && typeof result === "object" && "resultText" in result) {
+    return {
+      resultText: String(result.resultText ?? ""),
+      traceFilename: String(result.traceFilename ?? "")
+    };
+  }
+  return {
+    resultText: String(result ?? ""),
+    traceFilename: ""
+  };
 }
 
 function createMindFixtureAllocator(raw) {
@@ -138,17 +149,96 @@ export function splitIntoOverlappingChunks(text, chunkSize = DEFAULT_CHUNK_SIZE,
   return chunks;
 }
 
-async function runPyashExample(examplePath, args, envOverrides = {}) {
-  const { stdout } = await execFileAsync("./run", [examplePath, ...args, "--no-checkpoint"], {
-    cwd: "/workplace",
-    env: {
-      ...process.env,
-      PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
-      ...envOverrides
-    },
-    maxBuffer: 20 * 1024 * 1024
+function parseProduceFilePath(outputText) {
+  const matches = [...String(outputText ?? "").matchAll(/^produce file:\s+(.+)$/gmu)];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1][1].trim();
+}
+
+function streamChildText(text, { traceLabel = "stage", channel = "stdout" } = {}) {
+  if (!isVerbose()) return;
+  const normalized = String(text ?? "").replace(/\r\n?/gu, "\n");
+  if (!normalized) return;
+  const prefix = `[learn pipeline][${traceLabel}][${channel}] `;
+  const endsWithNewline = normalized.endsWith("\n");
+  const lines = normalized.split("\n");
+  if (endsWithNewline) lines.pop();
+  for (const line of lines) {
+    process.stderr.write(`${prefix}${line}\n`);
+  }
+}
+
+function resolvePipelineArtifactRoot() {
+  const runId = String(process.env.PYA_RUN_ID ?? "").trim();
+  if (!runId) return "";
+  return path.resolve(process.cwd(), "artifacts", runId, "learn-pipeline");
+}
+
+export function resolveRunProgramPath(cwd = process.cwd()) {
+  return path.resolve(String(cwd ?? process.cwd()), "run");
+}
+
+async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir = "", traceLabel = "stage" } = {}) {
+  const runArgs = [examplePath, ...args];
+  if (isVerbose()) {
+    runArgs.push("--verbose", "--run-id", `learn-pipeline-${traceLabel}`);
+  }
+  runArgs.push("--no-checkpoint");
+  const childEnv = {
+    ...process.env,
+    PYA_OLLAMA_REQUEST_TIMEOUT_MS: process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS || CHILD_OLLAMA_TIMEOUT_MS,
+    ...envOverrides
+  };
+  const { stdoutText, stderrText } = await new Promise((resolve, reject) => {
+    const runPath = resolveRunProgramPath(process.cwd());
+    const proc = spawn(runPath, runArgs, {
+      cwd: process.cwd(),
+      env: childEnv,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => {
+      const text = data.toString("utf8");
+      stdout += text;
+      streamChildText(text, { traceLabel, channel: "stdout" });
+    });
+    proc.stderr.on("data", (data) => {
+      const text = data.toString("utf8");
+      stderr += text;
+      streamChildText(text, { traceLabel, channel: "stderr" });
+    });
+    proc.on("error", reject);
+    proc.on("close", (code, signal) => {
+      if (code === 0) {
+        resolve({ stdoutText: stdout, stderrText: stderr });
+        return;
+      }
+      const err = new Error(`child run defective: status=${code ?? 0} signal=${signal ?? ""}`);
+      err.stdout = stdout;
+      err.stderr = stderr;
+      reject(err);
+    });
   });
-  return String(stdout ?? "").trim();
+  const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
+  let traceFilename = "";
+  let resultText = extractFinalResult(stdoutText);
+  if (isVerbose() && traceDir) {
+    traceFilename = path.join(traceDir, `${traceLabel}.trace.txt`);
+    await fsp.writeFile(traceFilename, combinedText, "utf8");
+  }
+  const produceFile = parseProduceFilePath(combinedText);
+  if (produceFile) {
+    const producedText = await fsp.readFile(produceFile, "utf8");
+    resultText = producedText.trim();
+  } else if (!resultText) {
+    resultText = extractFinalResult(combinedText);
+  }
+  if (traceDir) {
+    const produceCopyFilename = path.join(traceDir, `${traceLabel}.produce.txt`);
+    await fsp.writeFile(produceCopyFilename, resultText.endsWith("\n") ? resultText : `${resultText}\n`, "utf8");
+  }
+  return { resultText, traceFilename };
 }
 
 export async function runLearnFilenamePipeline({
@@ -157,24 +247,31 @@ export async function runLearnFilenamePipeline({
   readFileFn = (file) => fsp.readFile(file, "utf8"),
   mkdtempFn = (prefix) => fsp.mkdtemp(prefix),
   writeFileFn = (file, text) => fsp.writeFile(file, text),
-  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides),
-  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides)
+  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
+  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel }),
+  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel })
 }) {
   const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
   const sourceText = await readFileFn(sourceFilename);
+  const artifactRoot = resolvePipelineArtifactRoot();
   logVerbose(`[learn pipeline] source filename: ${sourceFilename}`);
   logVerbose(`[learn pipeline] learning focus: ${learningFocus || "(empty)"}`);
   logVerbose(`[learn pipeline] source chars: ${sourceText.length}`);
+  const tempRoot = artifactRoot || await mkdtempFn(path.join(os.tmpdir(), "pyash-learn-chunks-"));
+  await fsp.mkdir(tempRoot, { recursive: true });
+  logVerbose(`[learn pipeline] trace root: ${tempRoot}`);
   if (sourceText.length <= DEFAULT_CHUNK_SIZE) {
     logVerbose("[learn pipeline] mode: single-pass");
-    const direct = await runDirectFn({
+    const direct = normalizeStageResult(await runDirectFn({
       sourceFilename,
       learningFocus,
-      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE }
-    });
-    logVerbose(`[learn pipeline] refined card: ${summarizeCard(direct)}`);
-    return direct;
+      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
+      traceDir: tempRoot,
+      traceLabel: "direct"
+    }));
+    if (direct.traceFilename) logVerbose(`[learn pipeline] direct trace: ${direct.traceFilename}`);
+    logVerbose(`[learn pipeline] refined card: ${summarizeCard(direct.resultText)}`);
+    return direct.resultText;
   }
 
   const chunks = splitIntoOverlappingChunks(sourceText, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
@@ -183,19 +280,21 @@ export async function runLearnFilenamePipeline({
   logVerbose(`[learn pipeline] chunk overlap chars: ${DEFAULT_CHUNK_OVERLAP}`);
   logVerbose(`[learn pipeline] chunk count: ${chunks.length}`);
   logVerbose(`[learn pipeline] chunk sizes: first=${chunks[0]?.length ?? 0} last=${chunks.at(-1)?.length ?? 0}`);
-  const tempRoot = await mkdtempFn(path.join(os.tmpdir(), "pyash-learn-chunks-"));
   const chunkCards = [];
   for (let idx = 0; idx < chunks.length; idx += 1) {
     const chunkFilename = path.join(tempRoot, `chunk-${String(idx + 1).padStart(3, "0")}.txt`);
     await writeFileFn(chunkFilename, chunks[idx]);
     logVerbose(`[learn pipeline] extracting chunk ${idx + 1}/${chunks.length} (${chunks[idx].length} chars)`);
-    const card = await runExtractFn({
+    const card = normalizeStageResult(await runExtractFn({
       sourceFilename: chunkFilename,
       learningFocus,
-      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE }
-    });
+      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE },
+      traceDir: tempRoot,
+      traceLabel: `chunk-${String(idx + 1).padStart(3, "0")}`
+    }));
+    if (card.traceFilename) logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} trace: ${card.traceFilename}`);
     logVerbose(`[learn pipeline] chunk ${idx + 1}/${chunks.length} ok`);
-    chunkCards.push(card);
+    chunkCards.push(card.resultText);
   }
 
   const cardsText = chunkCards
@@ -204,14 +303,17 @@ export async function runLearnFilenamePipeline({
   const cardsFilename = path.join(tempRoot, "chunk-cards.txt");
   await writeFileFn(cardsFilename, cardsText);
   logVerbose("[learn pipeline] merge/refine starting");
-  const finalCard = await runMergeRefineFn({
+  const finalCard = normalizeStageResult(await runMergeRefineFn({
     sourceFilename,
     cardsFilename,
     learningFocus,
-    envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE }
-  });
-  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCard)}`);
-  return finalCard;
+    envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
+    traceDir: tempRoot,
+    traceLabel: "merge-refine"
+  }));
+  if (finalCard.traceFilename) logVerbose(`[learn pipeline] merge/refine trace: ${finalCard.traceFilename}`);
+  logVerbose(`[learn pipeline] final card: ${summarizeCard(finalCard.resultText)}`);
+  return finalCard.resultText;
 }
 
 async function main() {

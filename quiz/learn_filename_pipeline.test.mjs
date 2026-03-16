@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseLearningPipelineRequest, splitIntoOverlappingChunks, runLearnFilenamePipeline, DEFAULT_CHUNK_SIZE } from "../command/learn_from_filename_pipeline.mjs";
+import { parseLearningPipelineRequest, splitIntoOverlappingChunks, runLearnFilenamePipeline, DEFAULT_CHUNK_SIZE, resolveRunProgramPath } from "../command/learn_from_filename_pipeline.mjs";
 
 test("parseLearningPipelineRequest reads labeled stdin payload", () => {
   const parsed = parseLearningPipelineRequest("SOURCE_FILENAME:\nknow/input/source.txt\n\nLEARNING_FOCUS:\nhumility");
@@ -24,6 +24,10 @@ test("splitIntoOverlappingChunks creates two overlapping chunks for just-over-li
   assert.ok(chunks[1].length <= (16 * 1024) + 2200);
   const overlapNeedle = chunks[0].slice(-300);
   assert.ok(chunks[1].includes(overlapNeedle.slice(0, 120)), "expected overlapping carryover between neighbouring chunks");
+});
+
+test("resolveRunProgramPath follows the current checkout root", () => {
+  assert.equal(resolveRunProgramPath("/tmp/example-repo"), "/tmp/example-repo/run");
 });
 
 test("runLearnFilenamePipeline uses direct path for small sources", async () => {
