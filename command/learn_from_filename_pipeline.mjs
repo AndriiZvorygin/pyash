@@ -11,6 +11,38 @@ export const DEFAULT_CHUNK_SIZE = 16 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 
+function createMindFixtureAllocator(raw) {
+  const source = String(raw ?? "").trim();
+  if (!source) {
+    return () => null;
+  }
+  let queue = null;
+  try {
+    const parsed = JSON.parse(source);
+    if (Array.isArray(parsed)) {
+      queue = parsed;
+    }
+  } catch {
+    // Leave queue null so the caller can use the raw fixture unchanged.
+  }
+  if (!queue) {
+    return () => source;
+  }
+  let index = 0;
+  return (count) => {
+    const needed = Math.max(0, Number(count) || 0);
+    if (needed === 0) return JSON.stringify([]);
+    if (queue.length === 0) return JSON.stringify([]);
+    const taken = [];
+    for (let i = 0; i < needed; i += 1) {
+      const item = queue[Math.min(index, queue.length - 1)];
+      taken.push(item);
+      if (index < queue.length - 1) index += 1;
+    }
+    return JSON.stringify(taken);
+  };
+}
+
 export function parseLearningPipelineRequest(text) {
   const raw = String(text ?? "").replace(/\r\n?/gu, "\n");
   const lines = raw.split("\n");
@@ -73,10 +105,10 @@ export function splitIntoOverlappingChunks(text, chunkSize = DEFAULT_CHUNK_SIZE,
   return chunks;
 }
 
-async function runPyashExample(examplePath, args) {
+async function runPyashExample(examplePath, args, envOverrides = {}) {
   const { stdout } = await execFileAsync("./run", [examplePath, ...args, "--no-checkpoint"], {
     cwd: "/workplace",
-    env: process.env,
+    env: { ...process.env, ...envOverrides },
     maxBuffer: 20 * 1024 * 1024
   });
   return String(stdout ?? "").trim();
@@ -88,13 +120,18 @@ export async function runLearnFilenamePipeline({
   readFileFn = (file) => fsp.readFile(file, "utf8"),
   mkdtempFn = (prefix) => fsp.mkdtemp(prefix),
   writeFileFn = (file, text) => fsp.writeFile(file, text),
-  runDirectFn = ({ sourceFilename: file, learningFocus: focus }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus]),
-  runExtractFn = ({ sourceFilename: file, learningFocus: focus }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus]),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus])
+  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides),
+  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides),
+  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides)
 }) {
+  const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
   const sourceText = await readFileFn(sourceFilename);
   if (sourceText.length <= DEFAULT_CHUNK_SIZE) {
-    return runDirectFn({ sourceFilename, learningFocus });
+    return runDirectFn({
+      sourceFilename,
+      learningFocus,
+      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE }
+    });
   }
 
   const chunks = splitIntoOverlappingChunks(sourceText, DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP);
@@ -103,7 +140,11 @@ export async function runLearnFilenamePipeline({
   for (let idx = 0; idx < chunks.length; idx += 1) {
     const chunkFilename = path.join(tempRoot, `chunk-${String(idx + 1).padStart(3, "0")}.txt`);
     await writeFileFn(chunkFilename, chunks[idx]);
-    const card = await runExtractFn({ sourceFilename: chunkFilename, learningFocus });
+    const card = await runExtractFn({
+      sourceFilename: chunkFilename,
+      learningFocus,
+      envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(1) ?? process.env.PYA_MIND_RESPONSE }
+    });
     chunkCards.push(card);
   }
 
@@ -112,7 +153,12 @@ export async function runLearnFilenamePipeline({
     .join("\n\n=====\n\n");
   const cardsFilename = path.join(tempRoot, "chunk-cards.txt");
   await writeFileFn(cardsFilename, cardsText);
-  return runMergeRefineFn({ sourceFilename, cardsFilename, learningFocus });
+  return runMergeRefineFn({
+    sourceFilename,
+    cardsFilename,
+    learningFocus,
+    envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE }
+  });
 }
 
 async function main() {
