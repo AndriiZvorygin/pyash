@@ -1,0 +1,6 @@
+from filename "../../module/learn.pya" to name learn be import do
+
+ob ve filename text source text text learning_focus be input ya
+
+su name teaching final from filename of ob of source with text of ob of learning_focus to name text teaching final be learn do
+su name result out ob text of ob of teaching final be write do
