@@ -16,10 +16,12 @@ test("learn module exports text and filename learning ceremonies", async () => {
   assert.match(text, /su name learn merge cards from text cards with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn refine card from text card with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /node command\/learn_from_filename_pipeline\.mjs/u);
+  assert.match(text, /PYA_COMMAND_TIMEOUT_MS=900000 node command\/learn_from_filename_pipeline\.mjs/u);
   assert.match(text, /su name teaching raw stage ob text of ob of learning pipeline cmd to name text teaching raw be command do/u);
   assert.match(text, /node command\/extract_learn_pipeline_result\.mjs/u);
   assert.match(text, /su name learn from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn from filename source with text learning focus to name text teaching out be ceremony def/u);
+  assert.equal((text.match(/su name ollama discharge stage as wo ollama be discharge do/gu) ?? []).length, 1);
   assert.match(text, /learning source support defective/u);
   assert.match(text, /exists su name learn extract card be export ya/u);
   assert.match(text, /exists su name learn merge cards be export ya/u);
