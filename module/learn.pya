@@ -222,7 +222,8 @@ su name learn from filename source with text learning focus to name text teachin
   ob text "\" \"" to name learning pipeline cmd be plus do
   ob text of with of this to name learning pipeline cmd be plus do
   ob text "\"" to name learning pipeline cmd be plus do
-  su name teaching stage ob text of ob of learning pipeline cmd to name text teaching out be command do
+  su name teaching raw stage ob text of ob of learning pipeline cmd to name text teaching raw be command do
+  ob text "node command/extract_learn_pipeline_result.mjs" fromtext name teaching raw to name text teaching out be command do
   su name teaching out ret
 prah
 
