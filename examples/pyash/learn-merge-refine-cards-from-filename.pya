@@ -1,0 +1,14 @@
+from filename "../../module/learn.pya" to name learn be import do
+
+ob filename text source be input ya
+ob filename text cards be input ya
+ob text text learning_focus be input ya
+
+su name source stage from filename of ob of source become wo text to name text learn source text be read do
+su name cards stage from filename of ob of cards become wo text to name text learn cards text be read do
+su name merged card stage from text of ob of learn cards text with text of ob of learning_focus to name text merged card be learn merge cards do
+su name refined card stage from text of ob of merged card with text of ob of learning_focus to name text refined card be learn refine card do
+su name learning source support verify stage from text of ob of learn source text with text of ob of refined card to name text learning source support pass be learning source support do
+ob text of ob of learning source support pass be equally from text "FAIL" then
+ob bool lie fromtext text "learning source support defective" be guarantee do
+su name result out ob text of ob of refined card be write do

@@ -6,9 +6,23 @@ test("learn module exports text and filename learning ceremonies", async () => {
   const text = await fs.readFile(new URL("../module/learn.pya", import.meta.url), "utf8");
 
   assert.match(text, /exists su name learning source support verify mind be mind fromtext name learning source support verify prompt ya/u);
+  assert.match(text, /Prefer communal declarative phrasing that states what is true, practiced, or learned\./u);
+  assert.match(text, /Avoid direct second-person instruction and bare imperative phrasing when a declarative teaching line will do\./u);
+  assert.match(text, /Each section should default to declarative teaching statements, not advice commands\./u);
+  assert.match(text, /BRIEF MEMORY PHRASES: 4-10 short lines, each 2-8 words, preferably short declarative refrain-like phrases rather than commands\./u);
+  assert.match(text, /exists su name learning merge prompt ob text quoted\.text\./u);
+  assert.match(text, /exists su name learning refine prompt ob text quoted\.text\./u);
+  assert.match(text, /su name learn extract card from text source with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /su name learn merge cards from text cards with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /su name learn refine card from text card with text learning focus to name text teaching out be ceremony def/u);
+  assert.match(text, /node command\/learn_from_filename_pipeline\.mjs/u);
+  assert.match(text, /su name teaching stage ob text of ob of learning pipeline cmd to name text teaching out be command do/u);
   assert.match(text, /su name learn from text source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /su name learn from filename source with text learning focus to name text teaching out be ceremony def/u);
   assert.match(text, /learning source support defective/u);
+  assert.match(text, /exists su name learn extract card be export ya/u);
+  assert.match(text, /exists su name learn merge cards be export ya/u);
+  assert.match(text, /exists su name learn refine card be export ya/u);
   assert.match(text, /exists su name learn be export ya/u);
 });
 
