@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { extractFinalResult } from "./extract_learn_pipeline_result.mjs";
 
 export const DEFAULT_CHUNK_SIZE = 16 * 1024;
 export const DEFAULT_CHUNK_OVERLAP = 1800;
@@ -216,7 +217,7 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
   });
   const combinedText = [stdoutText, stderrText].filter(Boolean).join("\n");
   let traceFilename = "";
-  let resultText = stdoutText.trim();
+  let resultText = extractFinalResult(stdoutText);
   if (isVerbose() && traceDir) {
     traceFilename = path.join(traceDir, `${traceLabel}.trace.txt`);
     await fsp.writeFile(traceFilename, combinedText, "utf8");
@@ -225,6 +226,8 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
   if (produceFile) {
     const producedText = await fsp.readFile(produceFile, "utf8");
     resultText = producedText.trim();
+  } else if (!resultText) {
+    resultText = extractFinalResult(combinedText);
   }
   if (traceDir) {
     const produceCopyFilename = path.join(traceDir, `${traceLabel}.produce.txt`);
